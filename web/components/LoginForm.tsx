@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui";
 import { api, MOCK_MODE } from "@/lib/api/client";
@@ -14,6 +14,20 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Only follow same-site paths.
+  const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/documents";
+
+  // Already signed in (e.g. by Google IAP in front of the app): skip the form.
+  useEffect(() => {
+    let live = true;
+    api
+      .GET("/v1/me")
+      .then(({ response }) => live && response.ok && router.replace(target))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [router, target]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -25,8 +39,7 @@ export function LoginForm() {
         setError(response.status === 401 ? "Invalid email or password." : "Login failed.");
         return;
       }
-      // Only follow same-site paths.
-      router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/documents");
+      router.push(target);
     } catch {
       setError("Cannot reach the API.");
     } finally {

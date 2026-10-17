@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle.auth import service
+from oracle.auth import iap, service
 from oracle.auth.models import User
 from oracle.config import get_settings
 from oracle.tenancy import tenant_session
@@ -50,16 +50,43 @@ def _unauthorized() -> HTTPException:
     )
 
 
+async def _iap_user(request: Request) -> User | None:
+    """The IAP-signed-in user, ``None`` without an assertion or with IAP SSO off.
+
+    A present but invalid assertion, or a valid one for a user who may not sign in,
+    is a 401 even if another credential is sent.
+    """
+    audiences = get_settings().iap_audiences
+    assertion = request.headers.get(iap.ASSERTION_HEADER)
+    if not audiences or not assertion:
+        return None
+    try:
+        claims = await iap.verify_assertion(assertion, audiences)
+    except iap.InvalidAssertion:
+        raise _unauthorized() from None
+    except iap.KeysUnavailable:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Cannot verify the sign-in right now"
+        ) from None
+    user = await iap.user_for_claims(claims)
+    if user is None:
+        raise _unauthorized()
+    return user
+
+
 async def get_principal(
     request: Request,
     bearer: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     cookie: Annotated[str | None, Depends(_cookie)],
 ) -> Principal:
+    iap_user = await _iap_user(request)
     if bearer is not None:
         token = await service.resolve_api_token(bearer.credentials)
         if token is None:
             raise _unauthorized()
         return Principal(tenant_id=token.tenant_id, kind="token", token_id=token.id)
+    if iap_user is not None:
+        return Principal(tenant_id=iap_user.tenant_id, kind="user", user_id=iap_user.id)
     if cookie:
         ids = service.read_session_cookie(cookie)
         if ids is not None:

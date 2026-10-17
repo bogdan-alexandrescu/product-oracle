@@ -18,6 +18,12 @@ test("login: rejects a wrong password, then signs in", async ({ page }) => {
   await expect(page.getByTestId("signed-in-as")).toHaveText("admin@example.com");
 });
 
+test("login page skips the form when already signed in (e.g. by IAP)", async ({ page }) => {
+  await login(page);
+  await page.goto("/login?next=/documents/checkout-redesign");
+  await expect(page).toHaveURL(/\/documents\/checkout-redesign$/);
+});
+
 test("open a version: sections in order with citation chips", async ({ page }) => {
   await login(page);
   await page.getByRole("link", { name: "Checkout redesign PRD" }).click();

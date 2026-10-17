@@ -107,5 +107,32 @@ npx playwright test -c playwright.real.config.ts
 
 Settings are environment variables with the `ORACLE_` prefix (see
 `api/oracle/config.py`): `ORACLE_DATABASE_URL`, `ORACLE_SECRET_KEY` (signs the session
-cookie; set it outside local dev), `ORACLE_COOKIE_SECURE`, `ORACLE_CORS_ORIGINS`.
+cookie; set it outside local dev), `ORACLE_COOKIE_SECURE`, `ORACLE_CORS_ORIGINS`, and the `ORACLE_IAP_*` settings below.
 The web app reads `API_INTERNAL_URL` (default `http://localhost:8000`) at build time.
+
+## Google sign-in (IAP)
+
+Behind a Google Cloud HTTPS load balancer with Identity-Aware Proxy, the app signs
+people in with their Google identity and skips its own login form. The API verifies the
+signed `x-goog-iap-jwt-assertion` header on every request (ES256 signature against
+Google's public keys, issuer, audience, expiry); the unsigned
+`x-goog-authenticated-user-email` header is never trusted. Session cookies and API
+tokens keep working, so the agent track can call the API with its Bearer token.
+
+| Variable | Meaning |
+|----------|---------|
+| `ORACLE_IAP_AUDIENCES` | JSON list of accepted audiences, e.g. `'["/projects/123456789/global/backendServices/987654321"]'`. Empty (default) turns IAP sign-in off and the header is ignored. |
+| `ORACLE_IAP_ALLOWED_DOMAINS` | JSON list of email domains, e.g. `'["example.com"]'`, whose users are created on their first visit. Empty: only users that already exist can sign in. |
+| `ORACLE_IAP_AUTO_PROVISION` | `true` (default) creates those users; `false` only signs in existing ones. |
+
+The audience is `/projects/<PROJECT_NUMBER>/global/backendServices/<BACKEND_SERVICE_ID>`:
+
+```sh
+gcloud projects describe <project-id> --format='value(projectNumber)'
+gcloud compute backend-services describe <backend-service-name> --global --format='value(id)'
+```
+
+Users are matched by lowercased email in the seeded tenant (run `make seed` first) and
+created as owners; roles come later. A present but invalid assertion is a 401. *Sign
+out* sends the browser to IAP's `?gcp-iap-mode=CLEAR_LOGIN_COOKIE`, which clears the
+IAP session.

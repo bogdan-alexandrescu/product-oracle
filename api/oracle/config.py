@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     # Origins allowed to call the API with credentials (the web app in dev).
     cors_origins: list[str] = ["http://localhost:3000"]
     sql_echo: bool = False
+    # Google IAP single sign-on. Empty audiences = off: the IAP header is ignored.
+    # Audience: /projects/<PROJECT_NUMBER>/global/backendServices/<BACKEND_SERVICE_ID>.
+    iap_audiences: list[str] = []
+    # Email domains (e.g. ["example.com"]) whose IAP users are created on first visit.
+    iap_allowed_domains: list[str] = []
+    iap_auto_provision: bool = True
 
 
 @lru_cache

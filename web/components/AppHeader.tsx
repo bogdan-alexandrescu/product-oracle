@@ -25,6 +25,15 @@ export function AppHeader() {
 
   async function signOut() {
     await api.POST("/v1/auth/logout").catch(() => undefined);
+    // Still signed in after dropping the session cookie: Google IAP signs this browser
+    // in. Ask IAP to clear its own cookie, which leads to Google's sign-in.
+    const still = await api.GET("/v1/me").catch(() => undefined);
+    if (still?.response.ok) {
+      // A full page load on purpose: IAP answers this URL, it never reaches Next.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign("/?gcp-iap-mode=CLEAR_LOGIN_COOKIE");
+      return;
+    }
     setEmail(null);
     router.push("/login");
   }
