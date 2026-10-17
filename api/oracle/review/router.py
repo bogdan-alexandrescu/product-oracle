@@ -5,10 +5,12 @@ Logic lives in :mod:`oracle.review.service`; each handler commits once.
 
 import uuid
 from collections.abc import Awaitable
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from oracle.auth.deps import CurrentPrincipal, TenantDB
+from oracle.auth.deps import Principal, TenantDB
+from oracle.authz import require_role
 from oracle.docs.schemas import VersionSummary
 from oracle.review import service
 from oracle.review.schemas import (
@@ -26,10 +28,18 @@ from oracle.review.schemas import (
     SectionReviewOut,
 )
 
-router = APIRouter(prefix="/v1", tags=["review"])
+# Viewers read everything; commenters comment, reply and resolve their own threads;
+# approvers set verdicts, triage feedback and approve versions.
+router = APIRouter(prefix="/v1", tags=["review"], dependencies=[Depends(require_role("viewer"))])
+Commenter = Annotated[Principal, Depends(require_role("commenter"))]
+Approver = Annotated[Principal, Depends(require_role("approver"))]
 VERSION = "/documents/{doc}/versions/{n}"
 
-_STATUS = {"not_found": status.HTTP_404_NOT_FOUND, "invalid": 422}
+_STATUS = {
+    "not_found": status.HTTP_404_NOT_FOUND,
+    "invalid": 422,
+    "forbidden": status.HTTP_403_FORBIDDEN,
+}
 
 
 async def _call[T](op: Awaitable[T]) -> T:
@@ -41,7 +51,7 @@ async def _call[T](op: Awaitable[T]) -> T:
 
 @router.post(VERSION + "/comments", response_model=CommentOut, status_code=status.HTTP_201_CREATED)
 async def create_comment(
-    doc: str, n: int, body: CommentCreate, principal: CurrentPrincipal, db: TenantDB
+    doc: str, n: int, body: CommentCreate, principal: Commenter, db: TenantDB
 ) -> CommentOut:
     out = await _call(
         service.create_comment(db, principal, doc, n, body.section_key, body.anchor, body.body)
@@ -62,7 +72,7 @@ async def list_comments(doc: str, n: int, db: TenantDB) -> list[CommentOut]:
     status_code=status.HTTP_201_CREATED,
 )
 async def reply_to_comment(
-    comment_id: uuid.UUID, body: ReplyCreate, principal: CurrentPrincipal, db: TenantDB
+    comment_id: uuid.UUID, body: ReplyCreate, principal: Commenter, db: TenantDB
 ) -> CommentOut:
     out = await _call(service.reply_to_comment(db, principal, comment_id, body.body))
     await db.commit()
@@ -71,7 +81,7 @@ async def reply_to_comment(
 
 @router.patch("/comments/{comment_id}", response_model=CommentOut)
 async def update_comment(
-    comment_id: uuid.UUID, body: CommentPatch, principal: CurrentPrincipal, db: TenantDB
+    comment_id: uuid.UUID, body: CommentPatch, principal: Commenter, db: TenantDB
 ) -> CommentOut:
     out = await _call(service.update_comment(db, principal, comment_id, body.resolved, body.body))
     await db.commit()
@@ -80,7 +90,7 @@ async def update_comment(
 
 @router.put(VERSION + "/sections/{key}/review", response_model=SectionReviewOut)
 async def review_section(
-    doc: str, n: int, key: str, body: SectionReviewIn, principal: CurrentPrincipal, db: TenantDB
+    doc: str, n: int, key: str, body: SectionReviewIn, principal: Approver, db: TenantDB
 ) -> SectionReviewOut:
     review, item = await _call(
         service.review_section(db, principal, doc, n, key, body.verdict, body.note)
@@ -103,7 +113,7 @@ async def list_feedback(
 
 @router.patch("/feedback/{feedback_id}", response_model=FeedbackItemOut)
 async def update_feedback(
-    feedback_id: uuid.UUID, body: FeedbackPatch, principal: CurrentPrincipal, db: TenantDB
+    feedback_id: uuid.UUID, body: FeedbackPatch, principal: Approver, db: TenantDB
 ) -> FeedbackItemOut:
     fields = body.model_dump(exclude_unset=True)
     out = await _call(service.update_feedback(db, principal, feedback_id, fields))
@@ -122,9 +132,7 @@ async def get_resolution_report(doc: str, n: int, db: TenantDB) -> ResolutionRep
 
 
 @router.post(VERSION + "/approve", response_model=ApproveOut)
-async def approve_version(
-    doc: str, n: int, principal: CurrentPrincipal, db: TenantDB
-) -> ApproveOut:
+async def approve_version(doc: str, n: int, principal: Approver, db: TenantDB) -> ApproveOut:
     document, version = await _call(service.approve_version(db, principal, doc, n))
     await db.commit()
     return ApproveOut(

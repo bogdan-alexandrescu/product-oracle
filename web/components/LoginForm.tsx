@@ -90,7 +90,8 @@ export function LoginForm() {
       {MOCK_MODE && (
         <p className="mt-6 rounded-md border border-dashed border-neutral-300 px-3 py-2 text-xs text-neutral-500">
           Mock mode: sign in with <span className="font-mono">{MOCK_LOGIN.email}</span> /{" "}
-          <span className="font-mono">{MOCK_LOGIN.password}</span>.
+          <span className="font-mono">{MOCK_LOGIN.password}</span>. To try a role, use approver@, commenter@ or
+          viewer@example.com with the same password.
         </p>
       )}
     </div>

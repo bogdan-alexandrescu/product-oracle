@@ -4,7 +4,8 @@ Behind IAP every request carries ``x-goog-iap-jwt-assertion``, an ES256 JWT sign
 Google. It is verified here (signature against Google's published keys, issuer,
 audience, expiry); the unsigned ``x-goog-authenticated-user-email`` header is never
 read. A verified email maps to a user of the default tenant, created on first visit
-when its domain is allowed.
+when its domain is allowed: with the role of its open invite, else the company's
+``iap_default_role`` setting (commenter when unset). Existing users keep their role.
 """
 
 import asyncio
@@ -23,6 +24,7 @@ from oracle.audit import record
 from oracle.auth.models import User
 from oracle.auth.service import hash_password
 from oracle.config import get_settings
+from oracle.members import service as members
 from oracle.models import Tenant
 from oracle.tenancy import tenant_session, unscoped_session
 
@@ -143,18 +145,25 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
         if not settings.iap_auto_provision or domain not in allowed:
             log.info("IAP sign-in for %s refused: unknown user, not provisioned", email)
             return None
+        # An open invite for this email sets the role (and is accepted); otherwise the
+        # company's iap_default_role setting does.
+        invite = await members.claim_open_invite(s, email)
+        role = invite.role if invite is not None else await members.iap_default_role(s)
         # No password sign-in for these users: the hash is of a secret nobody keeps.
-        # Every provisioned user is an owner until roles exist.
-        user = User(
-            email=email, password_hash=hash_password(secrets.token_urlsafe(32)), role="owner"
-        )
+        user = User(email=email, password_hash=hash_password(secrets.token_urlsafe(32)), role=role)
         s.add(user)
         try:
             await s.flush()
             from oracle.auth.deps import Principal
 
             principal = Principal(tenant_id=tenant_id, kind="user", role=user.role, user_id=user.id)
-            await record(s, principal, "provision", "user", user.id, {"via": "iap"})
+            data = {"via": "iap", "role": role}
+            if invite is not None:
+                data["invite_id"] = str(invite.id)
+                await record(
+                    s, principal, "invite.accept", "invite", invite.id, {"user_id": str(user.id)}
+                )
+            await record(s, principal, "provision", "user", user.id, data)
             await s.commit()
         except IntegrityError:
             # A concurrent request provisioned the same user first.

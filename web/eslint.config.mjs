@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // Playwright builds (mock and real-stack) and output.
     ".next-mock/**",
     ".next-e2e/**",
+    ".next-local/**",
+    ".next-check/**",
     "test-results/**",
     "playwright-report/**",
   ]),

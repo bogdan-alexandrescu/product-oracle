@@ -2,14 +2,15 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from starlette.concurrency import run_in_threadpool
 
 from oracle.auth.deps import TenantDB
+from oracle.authz import require_role
 from oracle.export.pdf import PdfUnavailable, html_to_pdf
 from oracle.export.render import NotFound, load_export_version, render_html, render_markdown
 
-router = APIRouter(prefix="/v1", tags=["export"])
+router = APIRouter(prefix="/v1", tags=["export"], dependencies=[Depends(require_role("viewer"))])
 
 MEDIA_TYPES = {
     "html": "text/html; charset=utf-8",

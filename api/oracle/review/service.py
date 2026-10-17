@@ -22,6 +22,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
+from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import FEEDBACK_STATUSES, Comment, FeedbackItem, SectionReview
 from oracle.review.schemas import (
@@ -54,7 +55,7 @@ class ReviewError(Exception):
     """A request the review service refuses; the router maps ``kind`` to an HTTP status."""
 
     def __init__(self, kind: str, message: str):
-        self.kind = kind  # "not_found" | "invalid"
+        self.kind = kind  # "not_found" | "invalid" | "forbidden"
         self.message = message
         super().__init__(message)
 
@@ -315,8 +316,12 @@ async def update_comment(
     Resolving is thread state for the UI; the feedback item keeps its own status (it is
     closed by the next draft's ``resolutions`` or ``PATCH /v1/feedback/{id}``). Editing
     the body of a top-level comment refreshes its item's summary while the item is open.
+
+    Below the approver role a principal may only change its own comments.
     """
     comment = await _get_comment(session, comment_id)
+    if comment.author_id != principal.id and not has_role(principal.role, "approver"):
+        raise ReviewError("forbidden", "Only the author or an approver can change this comment")
     changes: dict[str, object] = {}
     if resolved is not None:
         if comment.parent_id is not None:

@@ -1,0 +1,129 @@
+import { expect, test, type Page } from "@playwright/test";
+
+import { login, section, selectText } from "./helpers";
+
+const memberRow = (page: Page, email: string) => page.getByTestId("member-row").filter({ hasText: email });
+
+test("members: an owner changes a role, and the last owner is protected", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  await expect(page.getByRole("heading", { level: 1, name: "Members" })).toBeVisible();
+  await expect(page.getByTestId("member-row")).toHaveCount(4);
+  await expect(memberRow(page, "admin@example.com")).toContainText("(you)");
+
+  const viewer = page.getByLabel("Role for viewer@example.com");
+  await expect(viewer).toHaveValue("viewer");
+  await viewer.selectOption("commenter");
+  await expect(viewer).toHaveValue("commenter");
+  await page.reload();
+  await expect(page.getByLabel("Role for viewer@example.com")).toHaveValue("commenter");
+
+  // The only owner cannot step down: the API refuses and the selector snaps back.
+  const self = page.getByLabel("Role for admin@example.com");
+  await self.selectOption("approver");
+  await expect(page.getByRole("alert").filter({ hasText: "last owner" })).toBeVisible();
+  await expect(self).toHaveValue("owner");
+});
+
+test("members: invite someone, then revoke the invite", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  const invites = page.getByTestId("invite-row");
+  await expect(invites).toHaveCount(1);
+  await expect(invites.first()).toContainText("new.hire@example.com");
+
+  await page.getByLabel("Email").fill("Pat@Example.com");
+  await page.getByLabel("Role", { exact: true }).selectOption("approver");
+  await page.getByRole("button", { name: "Invite", exact: true }).click();
+  await expect(invites).toHaveCount(2);
+  await expect(invites.first()).toContainText("pat@example.com");
+  await expect(invites.first()).toContainText("Approver");
+  await expect(page.getByLabel("Email")).toHaveValue("");
+
+  // An existing member cannot be invited.
+  await page.getByLabel("Email").fill("viewer@example.com");
+  await page.getByRole("button", { name: "Invite", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "already a member" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Revoke invite for pat@example.com" }).click();
+  await expect(invites).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByTestId("invite-row")).toHaveCount(1);
+  await expect(page.getByText("pat@example.com")).toHaveCount(0);
+});
+
+test("members: non-owners see a note instead of the member list", async ({ page }) => {
+  await login(page, "approver@example.com");
+  await page.goto("/settings/members");
+  await expect(page.getByTestId("role-note")).toContainText("Only owners");
+  await expect(page.getByTestId("member-row")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Invite", exact: true })).toHaveCount(0);
+});
+
+test("roles: a viewer reads and exports but has no comment, verdict or approve controls", async ({ page }) => {
+  await login(page, "viewer@example.com");
+  await page.goto("/documents/checkout-redesign/v/2");
+  await expect(page.getByTestId("role-note")).toContainText("read-only access (viewer)");
+  await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
+  await expect(section(page, "problem").getByTestId("verdict-state")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Export MD" })).toBeEnabled();
+
+  // Selecting text offers no comment button; existing threads have no reply or resolve.
+  await selectText(page, "s-5-3", "Choosing a card fills the form");
+  await page.waitForTimeout(200);
+  await expect(page.getByRole("button", { name: /^Comment/ })).toHaveCount(0);
+  const thread = page.getByTestId("comment").first();
+  await expect(thread).toBeVisible();
+  await expect(thread.getByRole("button", { name: "Reply" })).toHaveCount(0);
+  await expect(thread.getByRole("button", { name: "Resolve" })).toHaveCount(0);
+});
+
+test("roles: a commenter comments and resolves their own thread, not others'", async ({ page }) => {
+  await login(page, "commenter@example.com");
+  await page.goto("/documents/checkout-redesign/v/2");
+  await expect(page.getByTestId("role-note")).toContainText("need the approver role");
+  await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+
+  // Someone else's thread: reply yes, resolve no.
+  const theirs = page.getByTestId("comment").first();
+  await expect(theirs.getByRole("button", { name: "Reply" })).toBeVisible();
+  await expect(theirs.getByRole("button", { name: "Resolve" })).toHaveCount(0);
+
+  await expect(section(page, "scope")).toBeVisible();
+  await selectText(page, "scope", "the order review page");
+  await page.getByRole("button", { name: /^Comment/ }).click();
+  const dialog = page.getByRole("dialog", { name: "New comment" });
+  await dialog.getByLabel("Comment").fill("Which month is this from?");
+  await dialog.getByLabel("Comment").press("Control+Enter");
+  await expect(dialog).toBeHidden();
+  const mine = page.getByTestId("comment").filter({ hasText: "Which month is this from?" });
+  await expect(mine).toBeVisible();
+  await mine.getByRole("button", { name: "Resolve" }).click();
+  await expect(mine).toHaveCount(0); // resolved threads are hidden by default
+});
+
+test("roles: an approver sets verdicts and approves, but cannot manage members", async ({ page }) => {
+  await login(page, "approver@example.com");
+  await page.goto("/documents/checkout-redesign/v/2");
+  await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toBeVisible();
+  await expect(page.getByTestId("role-note")).toHaveCount(0);
+  await expect(page.getByTestId("comment").first().getByRole("button", { name: "Resolve" })).toBeVisible();
+  await page.getByRole("button", { name: "Approve version" }).click();
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByText(/Approved/).first()).toBeVisible();
+});
+
+test("roles: a role change shows up on the reviewer's next page load", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  await page.getByLabel("Role for viewer@example.com").selectOption("approver");
+  await expect(page.getByLabel("Role for viewer@example.com")).toHaveValue("approver");
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+
+  await login(page, "viewer@example.com");
+  await page.goto("/documents/checkout-redesign/v/2");
+  await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toBeVisible();
+});

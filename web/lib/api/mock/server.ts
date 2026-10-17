@@ -7,7 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
-import { DOCUMENTS, MOCK_LOGIN, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, type DocumentSeed, type VersionSeed } from "./fixtures";
 
 type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
 type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
@@ -16,11 +16,18 @@ type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
 type ReviewRow = Schemas["SectionReviewOut"];
 type FeedbackRow = Schemas["FeedbackItemOut"];
+type MemberRow = Schemas["MemberOut"];
+type InviteRow = Schemas["InviteOut"];
+type Role = MemberRow["role"];
 
 interface Db {
+  /** Email of the signed-in mock member. */
   session: string | null;
   tenant_id: string;
+  /** The seed owner (admin@example.com): author of the seeded comments and verdicts. */
   user_id: string;
+  members: MemberRow[];
+  invites: InviteRow[];
   documents: DocumentRow[];
   versions: VersionRow[];
   comments: CommentRow[];
@@ -28,7 +35,7 @@ interface Db {
   feedback: FeedbackRow[];
 }
 
-const STORAGE_KEY = "po-mock-db-v1";
+const STORAGE_KEY = "po-mock-db-v2";
 const LATENCY_MS = 60;
 
 let counter = 0;
@@ -91,12 +98,23 @@ function seed(): Db {
     session: null,
     tenant_id: uuid(),
     user_id: uuid(),
+    members: [],
+    invites: [],
     documents: [],
     versions: [],
     comments: [],
     reviews: [],
     feedback: [],
   };
+  db.members = MOCK_MEMBERS.map((m) => ({ ...m, id: m.email === MOCK_LOGIN.email ? db.user_id : uuid() }));
+  db.invites = MOCK_INVITES.map((i) => ({
+    ...i,
+    id: uuid(),
+    status: "open",
+    invited_by: db.user_id,
+    accepted_at: null,
+    revoked_at: null,
+  }));
   const docs = new Map<string, DocumentRow>();
   for (const d of DOCUMENTS as DocumentSeed[]) {
     const last = d.versions[d.versions.length - 1];
@@ -292,7 +310,12 @@ function touch(db: Db, documentId: string) {
   if (d.status === "draft") d.status = "in_review";
 }
 
-function addComment(db: Db, v: VersionRow, body: Schemas["CommentCreate"], opts?: { created_at?: string }) {
+function addComment(
+  db: Db,
+  v: VersionRow,
+  body: Schemas["CommentCreate"],
+  opts?: { created_at?: string; author_id?: string },
+) {
   const created_at = opts?.created_at ?? now();
   const feedbackId = uuid();
   const c: CommentRow = {
@@ -301,7 +324,7 @@ function addComment(db: Db, v: VersionRow, body: Schemas["CommentCreate"], opts?
     section_key: body.section_key,
     anchor: body.anchor,
     body: body.body,
-    author_id: db.user_id,
+    author_id: opts?.author_id ?? db.user_id,
     parent_id: null,
     resolved_at: null,
     created_at,
@@ -332,7 +355,7 @@ function addReview(
   v: VersionRow,
   key: string,
   body: Schemas["SectionReviewIn"],
-  opts?: { created_at?: string },
+  opts?: { created_at?: string; reviewer_id?: string },
 ): ReviewRow {
   const created_at = opts?.created_at ?? now();
   // As the API does: a later verdict on the same section supersedes the open verdict
@@ -356,7 +379,7 @@ function addReview(
     section_key: key,
     verdict: body.verdict,
     note: body.note ?? null,
-    reviewer_id: db.user_id,
+    reviewer_id: opts?.reviewer_id ?? db.user_id,
     created_at,
     feedback_item_id: null,
   };
@@ -470,6 +493,72 @@ function json(status: number, body: unknown): Response {
 
 const notFound = (what: string) => json(404, { detail: `${what} not found` });
 
+const ROLE_ORDER: Role[] = ["viewer", "commenter", "approver", "owner"];
+const atLeast = (role: Role, min: Role) => ROLE_ORDER.indexOf(role) >= ROLE_ORDER.indexOf(min);
+const forbidden = (min: Role) => json(403, { detail: `Requires the ${min} role` });
+
+function meOut(db: Db, m: MemberRow): Schemas["Me"] {
+  return { kind: "user", tenant_id: db.tenant_id, user_id: m.id, email: m.email, role: m.role };
+}
+
+/** Members, invites: owners only, as in the API. */
+async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): Promise<Response> {
+  if (!atLeast(me.role, "owner")) return forbidden("owner");
+  const m = req.method;
+  const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
+  if (p[1] === "members") {
+    if (!p[2] && m === "GET") return json(200, db.members);
+    const target = db.members.find((x) => x.id === p[2]);
+    if (!target) return notFound("Member");
+    if (m === "PATCH") {
+      const { role } = await body<Schemas["MemberPatch"]>();
+      if (target.role === "owner" && role !== "owner" && db.members.filter((x) => x.role === "owner").length <= 1) {
+        return json(409, { detail: "Cannot demote the last owner; make someone else owner" });
+      }
+      target.role = role;
+      return json(200, target);
+    }
+  }
+  if (p[1] === "invites") {
+    if (!p[2] && m === "GET") {
+      const status = new URL(req.url).searchParams.get("status") ?? "open";
+      return json(
+        200,
+        db.invites.filter((i) => status === "all" || i.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)),
+      );
+    }
+    if (!p[2] && m === "POST") {
+      const input = await body<Schemas["InviteCreate"]>();
+      const email = input.email.trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(422, { detail: "Not an email address" });
+      if (db.members.some((x) => x.email === email)) return json(409, { detail: `${email} is already a member` });
+      if (db.invites.some((i) => i.email === email && i.status === "open")) {
+        return json(409, { detail: `${email} already has an open invite; revoke it first` });
+      }
+      const invite: InviteRow = {
+        id: uuid(),
+        email,
+        role: input.role,
+        status: "open",
+        invited_by: me.id,
+        created_at: now(),
+        accepted_at: null,
+        revoked_at: null,
+      };
+      db.invites.push(invite);
+      return json(201, invite);
+    }
+    const invite = db.invites.find((i) => i.id === p[2]);
+    if (!invite) return notFound("Invite");
+    if (m === "DELETE") {
+      if (invite.status === "accepted") return json(409, { detail: "This invite was already accepted" });
+      if (invite.status === "open") Object.assign(invite, { status: "revoked", revoked_at: now() });
+      return json(204, undefined);
+    }
+  }
+  return notFound("Route");
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -482,18 +571,29 @@ async function route(db: Db, req: Request): Promise<Response> {
 
   if (p[1] === "auth" && p[2] === "login" && m === "POST") {
     const { email, password } = await body<Schemas["LoginRequest"]>();
-    if (email.trim().toLowerCase() !== MOCK_LOGIN.email || password !== MOCK_LOGIN.password) {
+    const member = db.members.find((x) => x.email === email.trim().toLowerCase());
+    if (!member || password !== MOCK_LOGIN.password) {
       return json(401, { detail: "Invalid credentials" });
     }
-    db.session = email;
-    return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email, role: "owner" });
+    db.session = member.email;
+    return json(200, meOut(db, member));
   }
   if (p[1] === "auth" && p[2] === "logout" && m === "POST") {
     db.session = null;
     return json(204, undefined);
   }
-  if (!db.session) return json(401, { detail: "Not authenticated" });
-  if (p[1] === "me") return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email: db.session, role: "owner" });
+  const me = db.members.find((x) => x.email === db.session);
+  if (!me) return json(401, { detail: "Not authenticated" });
+  if (p[1] === "me") return json(200, meOut(db, me));
+  if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
+  // The API's role checks: viewers read, commenters comment, approvers decide.
+  const need: Role | null =
+    m === "GET"
+      ? null
+      : p[1] === "comments" || (p[5] === "comments" && m === "POST")
+        ? "commenter"
+        : "approver";
+  if (need && !atLeast(me.role, need)) return forbidden(need);
 
   if (p[1] === "comments" && p[2]) {
     const c = db.comments.find((x) => x.id === p[2]);
@@ -506,7 +606,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         section_key: c.section_key,
         anchor: null,
         body: text,
-        author_id: db.user_id,
+        author_id: me.id,
         parent_id: c.id,
         resolved_at: null,
         created_at: now(),
@@ -516,6 +616,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       return json(201, commentOut(db, r));
     }
     if (m === "PATCH") {
+      if (c.author_id !== me.id && !atLeast(me.role, "approver")) {
+        return json(403, { detail: "Only the author or an approver can change this comment" });
+      }
       const patch = await body<Schemas["CommentPatch"]>();
       if (patch.resolved != null) c.resolved_at = patch.resolved ? now() : null;
       if (patch.body != null) c.body = patch.body;
@@ -580,7 +683,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (m === "POST") {
       const input = await body<Schemas["CommentCreate"]>();
       if (!v.sections.some((s) => s.section_key === input.section_key)) return notFound("Section");
-      const c = addComment(db, v, input);
+      const c = addComment(db, v, input, { author_id: me.id });
       touch(db, doc.id);
       return json(201, commentOut(db, c));
     }
@@ -594,7 +697,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (sub === "sections" && p[7] === "review" && m === "PUT") {
     if (!v.sections.some((s) => s.section_key === p[6])) return notFound("Section");
-    const r = addReview(db, v, p[6], await body<Schemas["SectionReviewIn"]>());
+    const r = addReview(db, v, p[6], await body<Schemas["SectionReviewIn"]>(), { reviewer_id: me.id });
     touch(db, doc.id);
     return json(200, r);
   }

@@ -3,10 +3,13 @@
 ``{doc}`` is a document slug or id; ``{n}`` is a version number.
 """
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from oracle.auth.deps import CurrentPrincipal, TenantDB
+from oracle.auth.deps import Principal, TenantDB
+from oracle.authz import require_role
 from oracle.docs import service
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import (
@@ -19,7 +22,11 @@ from oracle.docs.schemas import (
     VersionSummary,
 )
 
-router = APIRouter(prefix="/v1/documents", tags=["documents"])
+# Every route needs at least a viewer; importing a version needs an approver.
+router = APIRouter(
+    prefix="/v1/documents", tags=["documents"], dependencies=[Depends(require_role("viewer"))]
+)
+Approver = Annotated[Principal, Depends(require_role("approver"))]
 
 
 def _not_found(exc: service.NotFoundError) -> HTTPException:
@@ -62,7 +69,7 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
     },
 )
 async def import_version(
-    doc: str, request: Request, principal: CurrentPrincipal, db: TenantDB
+    doc: str, request: Request, principal: Approver, db: TenantDB
 ) -> VersionOut | JSONResponse:
     """Import a draft (markdown + YAML front matter). Creates the document on first import."""
     raw = await request.body()

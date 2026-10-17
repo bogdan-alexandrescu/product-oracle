@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
 import { CommentsPanel, type PlacedComment } from "@/components/CommentsPanel";
 import { DocToolbar } from "@/components/DocToolbar";
+import { RoleNote } from "@/components/RoleNote";
 import { FeedbackPanel, ResolutionPanel } from "@/components/FeedbackPanel";
 import type { Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
@@ -17,6 +18,7 @@ import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/li
 import { api, unwrap, type CitationOut, type Verdict } from "@/lib/api/client";
 import { formatDate, formatDateTime, SOURCE_LABEL } from "@/lib/format";
 import { blocksText, parseBlocks } from "@/lib/markdown";
+import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 type Selection = { sectionKey: string; anchor: TextQuoteSelector; rect: PageRect };
@@ -47,6 +49,10 @@ function readSelection(): Selection | null {
 
 export function VersionView({ doc, n }: { doc: string; n: number }) {
   const router = useRouter();
+  const { me, role } = useMe();
+  // Viewers read; commenters also comment; approvers also set verdicts and approve.
+  const canComment = hasRole(role, "commenter");
+  const canDecide = hasRole(role, "approver");
   const docQ = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
   const verQ = useQuery(`ver|${doc}|${n}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })),
@@ -118,7 +124,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
 
   // Track the text selection (mouse or keyboard) while no composer is open.
   useEffect(() => {
-    if (composing || readOnly) return;
+    if (composing || readOnly || !canComment) return;
     let frame = 0;
     const onChange = () => {
       cancelAnimationFrame(frame);
@@ -129,7 +135,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       cancelAnimationFrame(frame);
       document.removeEventListener("selectionchange", onChange);
     };
-  }, [composing, readOnly]);
+  }, [composing, readOnly, canComment]);
 
   const openComposer = useCallback(() => {
     if (!selection) return;
@@ -252,7 +258,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           </Link>
         )}
         <ExportButtons doc={doc} n={n} />
-        {version && (
+        {version && (version.approved_at || canDecide) && (
           <ApproveButton
             doc={doc}
             n={n}
@@ -306,10 +312,12 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                   )}
                 </div>
               ))}
-              {readOnly && (
+              {readOnly ? (
                 <p className="mb-3 text-sm text-neutral-600">
                   This version was approved on {formatDate(version.approved_at!)}; review is closed.
                 </p>
+              ) : (
+                <RoleNote role={role} />
               )}
               <div className="divide-y divide-neutral-100">
                 {version.sections.map((s) => (
@@ -320,7 +328,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                     citations={citations}
                     highlights={highlights.get(s.section_key) ?? NO_HIGHLIGHTS}
                     activeCommentId={activeId}
-                    readOnly={readOnly}
+                    readOnly={readOnly || !canDecide}
                     changedLock={changedLocks.has(s.section_key)}
                     onHighlightClick={onHighlightClick}
                     onVerdict={onVerdict}
@@ -390,6 +398,9 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                   comments={placed}
                   activeId={activeId}
                   readOnly={readOnly}
+                  canComment={canComment}
+                  canResolveAny={canDecide}
+                  userId={me?.user_id ?? me?.token_id ?? null}
                   onSelect={scrollToComment}
                   onReply={reply}
                   onResolve={resolve}
@@ -404,9 +415,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             <span>
               <Kbd>j</Kbd>/<Kbd>k</Kbd> sections
             </span>
-            <span>
-              <Kbd>c</Kbd> comment on selection
-            </span>
+            {canComment && (
+              <span>
+                <Kbd>c</Kbd> comment on selection
+              </span>
+            )}
             <span>
               <Kbd>[</Kbd>/<Kbd>]</Kbd> versions
             </span>

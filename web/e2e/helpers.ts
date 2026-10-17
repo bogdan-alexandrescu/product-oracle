@@ -4,9 +4,10 @@ import { MOCK_LOGIN } from "../lib/api/mock/fixtures";
 
 export const ADMIN = MOCK_LOGIN;
 
-export async function login(page: Page) {
+/** Signs in as the mock owner, or as the mock member with `email` (one per role). */
+export async function login(page: Page, email: string = ADMIN.email) {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(ADMIN.email);
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(ADMIN.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/documents$/);

@@ -309,3 +309,13 @@ export const DOCUMENTS: DocumentSeed[] = [
 // Built from pieces so no credential-shaped literal sits in the source.
 const MOCK_PASS = ["de", "mo"].join("");
 export const MOCK_LOGIN = { email: "admin@example.com", password: MOCK_PASS };
+
+/** Mock members, one per role; each signs in with the mock password. */
+export const MOCK_MEMBERS = [
+  { email: "admin@example.com", role: "owner", created_at: "2026-09-01T09:00:00Z" },
+  { email: "approver@example.com", role: "approver", created_at: "2026-09-02T09:00:00Z" },
+  { email: "commenter@example.com", role: "commenter", created_at: "2026-09-03T09:00:00Z" },
+  { email: "viewer@example.com", role: "viewer", created_at: "2026-09-04T09:00:00Z" },
+] as const;
+
+export const MOCK_INVITES = [{ email: "new.hire@example.com", role: "commenter", created_at: "2026-10-15T09:00:00Z" }] as const;

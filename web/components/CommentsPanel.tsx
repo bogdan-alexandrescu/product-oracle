@@ -66,13 +66,22 @@ export function CommentsPanel({
   comments,
   activeId,
   readOnly,
+  canComment,
+  canResolveAny,
+  userId,
   onSelect,
   onReply,
   onResolve,
 }: {
   comments: PlacedComment[];
   activeId: string | null;
+  /** The version is approved: no replies or resolving. */
   readOnly: boolean;
+  /** Commenter or above: may reply, and resolve their own threads. */
+  canComment: boolean;
+  /** Approver or above: may resolve anyone's thread. */
+  canResolveAny: boolean;
+  userId: string | null;
   onSelect: (c: PlacedComment) => void;
   onReply: (id: string, body: string) => Promise<void>;
   onResolve: (id: string, resolved: boolean) => Promise<void>;
@@ -93,7 +102,7 @@ export function CommentsPanel({
     <div className="flex flex-col gap-3">
       {comments.length === 0 && (
         <p className="text-sm text-neutral-500">
-          No comments on this version yet. Select text in a section to comment on it.
+          No comments on this version yet.{canComment && !readOnly && " Select text in a section to comment on it."}
         </p>
       )}
       <ol ref={listRef} className="flex flex-col gap-2" aria-label="Comments">
@@ -137,12 +146,14 @@ export function CommentsPanel({
                 ))}
               </ol>
             )}
-            {!readOnly && (
+            {!readOnly && canComment && (
               <div className="mt-1 flex flex-wrap items-center gap-1">
                 <Reply onReply={(body) => onReply(c.id, body)} />
-                <Button size="sm" variant="ghost" onClick={() => onResolve(c.id, !c.resolved_at)}>
-                  {c.resolved_at ? "Reopen" : "Resolve"}
-                </Button>
+                {(canResolveAny || (userId !== null && c.author_id === userId)) && (
+                  <Button size="sm" variant="ghost" onClick={() => onResolve(c.id, !c.resolved_at)}>
+                    {c.resolved_at ? "Reopen" : "Resolve"}
+                  </Button>
+                )}
               </div>
             )}
           </li>

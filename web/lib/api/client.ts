@@ -30,6 +30,8 @@ export type Verdict = Schemas["SectionReviewIn"]["verdict"];
 export type FeedbackStatus = FeedbackItem["status"];
 export type DiffOut = Schemas["DiffOut"];
 export type SectionDiff = Schemas["SectionDiff"];
+export type Member = Schemas["MemberOut"];
+export type Invite = Schemas["InviteOut"];
 
 /** A failed API call, carrying the HTTP status so pages can react (401 → login). */
 export class ApiError extends Error {

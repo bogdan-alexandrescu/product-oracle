@@ -2,6 +2,8 @@
 
 import json
 import time
+import uuid
+from datetime import UTC, datetime
 
 import jwt
 import pytest
@@ -11,9 +13,11 @@ from sqlalchemy import func, select
 from oracle.auth import iap
 from oracle.auth.models import User
 from oracle.config import get_settings
+from oracle.members.models import Invite
 from oracle.models import AuditEvent
 from oracle.seed import seed
 from oracle.tenancy import tenant_session, unscoped_session
+from oracle.tenant_settings import TenantSetting
 
 AUDIENCE = "/projects/123456789/global/backendServices/987654321"
 KID = "test-key"
@@ -83,10 +87,10 @@ async def test_valid_assertion_provisions_user(client, fetches):
 
     async with tenant_session(r.tenant_id) as s:
         user = await s.scalar(select(User).where(User.email == "dana@example.com"))
-        assert user.role == "owner"
+        assert user.role == "commenter"  # iap_default_role unset
         events = (await s.scalars(select(AuditEvent))).all()
         assert [(e.action, e.entity_id, e.data) for e in events] == [
-            ("provision", user.id, {"via": "iap"})
+            ("provision", user.id, {"via": "iap", "role": "commenter"})
         ]
 
     # Second request: same user, no new row, keys served from the cache.
@@ -234,3 +238,86 @@ async def test_key_endpoint_down_is_503(client, monkeypatch):
     resp = await client.get("/v1/me", headers={HEADER: assertion("admin@example.com")})
     assert resp.status_code == 503
     iap._keys.clear()
+
+
+# --- Roles on provisioning (Lane A) ----------------------------------------------------------
+
+
+async def _invite(tenant_id, email: str, role: str, **fields) -> uuid.UUID:
+    async with tenant_session(tenant_id) as s:
+        invite = Invite(email=email, role=role, **fields)
+        s.add(invite)
+        await s.commit()
+        return invite.id
+
+
+async def _set_default_role(tenant_id, value) -> None:
+    async with tenant_session(tenant_id) as s:
+        s.add(TenantSetting(key="iap_default_role", value=value))
+        await s.commit()
+
+
+async def test_invited_email_gets_the_invite_role(client, fetches):
+    r = await seed()
+    invite_id = await _invite(r.tenant_id, "pat@example.com", "approver")
+    await _set_default_role(r.tenant_id, "viewer")  # the invite wins over the default
+
+    resp = await client.get("/v1/me", headers={HEADER: assertion("Pat@Example.com")})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["role"] == "approver"
+
+    async with tenant_session(r.tenant_id) as s:
+        invite = await s.get(Invite, invite_id)
+        assert invite.accepted_at is not None
+        user = await s.scalar(select(User).where(User.email == "pat@example.com"))
+        events = (await s.scalars(select(AuditEvent).order_by(AuditEvent.action))).all()
+        assert [(e.action, e.entity_id, e.data) for e in events] == [
+            ("invite.accept", invite_id, {"user_id": str(user.id)}),
+            (
+                "provision",
+                user.id,
+                {"via": "iap", "role": "approver", "invite_id": str(invite_id)},
+            ),
+        ]
+    # The member can now use approver endpoints; the invite is no longer open.
+    resp = await client.get("/v1/me", headers={HEADER: assertion("pat@example.com")})
+    assert resp.json()["role"] == "approver"
+
+
+@pytest.mark.parametrize(
+    ("setting", "role"),
+    [("viewer", "viewer"), ("owner", "owner"), ("admin", "commenter"), (None, "commenter")],
+)
+async def test_uninvited_email_gets_the_company_default(client, fetches, setting, role):
+    r = await seed()
+    if setting is not None:
+        await _set_default_role(r.tenant_id, setting)
+    resp = await client.get("/v1/me", headers={HEADER: assertion("lee@example.com")})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["role"] == role
+
+
+async def test_revoked_and_accepted_invites_are_ignored(client, fetches):
+    r = await seed()
+    await _invite(r.tenant_id, "kim@example.com", "owner", revoked_at=datetime.now(UTC))
+    await _invite(r.tenant_id, "kim@example.com", "approver", accepted_at=datetime.now(UTC))
+    resp = await client.get("/v1/me", headers={HEADER: assertion("kim@example.com")})
+    assert resp.json()["role"] == "commenter"
+
+
+async def test_existing_user_keeps_role_despite_invite(client, fetches):
+    r = await seed()  # admin@example.com is an owner
+    invite_id = await _invite(r.tenant_id, "admin@example.com", "viewer")
+    resp = await client.get("/v1/me", headers={HEADER: assertion("admin@example.com")})
+    assert resp.json()["role"] == "owner"
+    async with tenant_session(r.tenant_id) as s:
+        assert (await s.get(Invite, invite_id)).accepted_at is None
+
+
+async def test_invite_does_not_admit_a_disallowed_domain(client, fetches):
+    r = await seed()
+    invite_id = await _invite(r.tenant_id, "guest@elsewhere.test", "approver")
+    resp = await client.get("/v1/me", headers={HEADER: assertion("guest@elsewhere.test")})
+    assert resp.status_code == 401
+    async with tenant_session(r.tenant_id) as s:
+        assert (await s.get(Invite, invite_id)).accepted_at is None
