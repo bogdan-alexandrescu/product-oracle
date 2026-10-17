@@ -32,6 +32,7 @@ ITEM_KINDS = (
     "milestone",
     "readme",
     "doc",
+    "transcript",
 )
 # The generated full-text column of source_item_versions (kept in step with migration 0002).
 SEARCH_EXPRESSION = "to_tsvector('english'::regconfig, coalesce(title, '') || ' ' || content)"

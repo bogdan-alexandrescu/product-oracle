@@ -20,6 +20,11 @@ down_revision: str | None = "0002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+_ITEM_KINDS = (
+    "'file', 'page', 'message', 'thread', 'issue', 'pull_request', 'release', 'milestone', "
+    "'readme', 'doc'"
+)
+
 
 def upgrade() -> None:
     op.create_table(
@@ -209,6 +214,12 @@ def upgrade() -> None:
         "sources",
         "kind IN ('upload', 'github', 'slack', 'notion', 'fireflies', 'google_docs')",
     )
+    op.drop_constraint(op.f("ck_source_items_kind"), "source_items", type_="check")
+    op.create_check_constraint(
+        op.f("ck_source_items_kind"),
+        "source_items",
+        f"kind IN ({_ITEM_KINDS}, 'transcript')",
+    )
     op.create_check_constraint(op.f("ck_documents_kind"), "documents", "kind IN ('prd', 'roadmap')")
     op.create_check_constraint(op.f("ck_templates_kind"), "templates", "kind IN ('prd', 'roadmap')")
     for table in ("evidence", "entities", "edges"):
@@ -220,6 +231,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_constraint(op.f("ck_source_items_kind"), "source_items", type_="check")
+    op.execute("DELETE FROM source_items WHERE kind = 'transcript'")
+    op.create_check_constraint(
+        op.f("ck_source_items_kind"),
+        "source_items",
+        f"kind IN ({_ITEM_KINDS})",
+    )
     op.drop_constraint(op.f("ck_sources_kind"), "sources", type_="check")
     op.execute("DELETE FROM sources WHERE kind IN ('fireflies', 'google_docs')")
     op.create_check_constraint(
