@@ -12,6 +12,7 @@ from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
+from oracle.mcp.server import mount_mcp
 from oracle.members.router import router as members_router
 from oracle.priorities.router import router as priorities_router
 from oracle.review.router import router as review_router
@@ -71,6 +72,8 @@ def create_app() -> FastAPI:
     app.include_router(priorities_router)
     app.include_router(templates_router)
     app.include_router(runs_router)
+    # Every REST operation above (and any added later) is also an MCP tool here.
+    mount_mcp(app)
     return app
 
 
