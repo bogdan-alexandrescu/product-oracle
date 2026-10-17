@@ -1,11 +1,16 @@
-"""Comments, section verdicts, feedback, approval. Lane 2 implements; stubs return 501."""
+"""Comments, section verdicts, feedback, approval.
+
+Logic lives in :mod:`oracle.review.service`; each handler commits once.
+"""
 
 import uuid
+from collections.abc import Awaitable
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 
 from oracle.auth.deps import CurrentPrincipal, TenantDB
-from oracle.http import not_implemented
+from oracle.docs.schemas import VersionSummary
+from oracle.review import service
 from oracle.review.schemas import (
     ApproveOut,
     CommentCreate,
@@ -24,18 +29,31 @@ from oracle.review.schemas import (
 router = APIRouter(prefix="/v1", tags=["review"])
 VERSION = "/documents/{doc}/versions/{n}"
 
+_STATUS = {"not_found": status.HTTP_404_NOT_FOUND, "invalid": 422}
+
+
+async def _call[T](op: Awaitable[T]) -> T:
+    try:
+        return await op
+    except service.ReviewError as e:
+        raise HTTPException(_STATUS[e.kind], e.message) from e
+
 
 @router.post(VERSION + "/comments", response_model=CommentOut, status_code=status.HTTP_201_CREATED)
 async def create_comment(
     doc: str, n: int, body: CommentCreate, principal: CurrentPrincipal, db: TenantDB
 ) -> CommentOut:
-    raise not_implemented("2")
+    out = await _call(
+        service.create_comment(db, principal, doc, n, body.section_key, body.anchor, body.body)
+    )
+    await db.commit()
+    return out
 
 
 @router.get(VERSION + "/comments", response_model=list[CommentOut])
 async def list_comments(doc: str, n: int, db: TenantDB) -> list[CommentOut]:
     """Top-level comments with their replies nested."""
-    raise not_implemented("2")
+    return await _call(service.list_comments(db, doc, n))
 
 
 @router.post(
@@ -46,21 +64,31 @@ async def list_comments(doc: str, n: int, db: TenantDB) -> list[CommentOut]:
 async def reply_to_comment(
     comment_id: uuid.UUID, body: ReplyCreate, principal: CurrentPrincipal, db: TenantDB
 ) -> CommentOut:
-    raise not_implemented("2")
+    out = await _call(service.reply_to_comment(db, principal, comment_id, body.body))
+    await db.commit()
+    return out
 
 
 @router.patch("/comments/{comment_id}", response_model=CommentOut)
 async def update_comment(
     comment_id: uuid.UUID, body: CommentPatch, principal: CurrentPrincipal, db: TenantDB
 ) -> CommentOut:
-    raise not_implemented("2")
+    out = await _call(service.update_comment(db, principal, comment_id, body.resolved, body.body))
+    await db.commit()
+    return out
 
 
 @router.put(VERSION + "/sections/{key}/review", response_model=SectionReviewOut)
 async def review_section(
     doc: str, n: int, key: str, body: SectionReviewIn, principal: CurrentPrincipal, db: TenantDB
 ) -> SectionReviewOut:
-    raise not_implemented("2")
+    review, item = await _call(
+        service.review_section(db, principal, doc, n, key, body.verdict, body.note)
+    )
+    await db.commit()
+    out = SectionReviewOut.model_validate(review)
+    out.feedback_item_id = item.id if item else None
+    return out
 
 
 @router.get("/documents/{doc}/feedback", response_model=list[FeedbackItemOut])
@@ -70,28 +98,37 @@ async def list_feedback(
     status: FeedbackStatus | None = None,
     version: int | None = None,
 ) -> list[FeedbackItemOut]:
-    raise not_implemented("2")
+    return await _call(service.list_feedback(db, doc, status, version))
 
 
 @router.patch("/feedback/{feedback_id}", response_model=FeedbackItemOut)
 async def update_feedback(
     feedback_id: uuid.UUID, body: FeedbackPatch, principal: CurrentPrincipal, db: TenantDB
 ) -> FeedbackItemOut:
-    raise not_implemented("2")
+    fields = body.model_dump(exclude_unset=True)
+    out = await _call(service.update_feedback(db, principal, feedback_id, fields))
+    await db.commit()
+    return out
 
 
 @router.get(VERSION + "/feedback-package", response_model=FeedbackPackage)
 async def get_feedback_package(doc: str, n: int, db: TenantDB) -> FeedbackPackage:
-    raise not_implemented("2")
+    return await _call(service.feedback_package(db, doc, n))
 
 
 @router.get(VERSION + "/resolution-report", response_model=ResolutionReport)
 async def get_resolution_report(doc: str, n: int, db: TenantDB) -> ResolutionReport:
-    raise not_implemented("2")
+    return await _call(service.resolution_report(db, doc, n))
 
 
 @router.post(VERSION + "/approve", response_model=ApproveOut)
 async def approve_version(
     doc: str, n: int, principal: CurrentPrincipal, db: TenantDB
 ) -> ApproveOut:
-    raise not_implemented("2")
+    document, version = await _call(service.approve_version(db, principal, doc, n))
+    await db.commit()
+    return ApproveOut(
+        document_id=document.id,
+        document_status=document.status,
+        version=VersionSummary.model_validate(version),
+    )

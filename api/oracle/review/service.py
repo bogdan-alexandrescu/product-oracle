@@ -8,15 +8,35 @@ Contract with Lane 1 (document import), in the import transaction:
     await apply_resolutions(db, document.id, version.id, resolutions)
 
 Neither function commits; the caller owns the transaction.
+
+Everything else here backs ``oracle.review.router``. Service functions flush but never
+commit; the router commits once per request. Every mutation writes an audit event.
 """
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle.review.models import FeedbackItem
-from oracle.review.schemas import Resolution
+from oracle import audit
+from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.review.models import FEEDBACK_STATUSES, Comment, FeedbackItem, SectionReview
+from oracle.review.schemas import (
+    CommentOut,
+    FeedbackItemOut,
+    FeedbackPackage,
+    Resolution,
+    ResolutionReport,
+    TextQuoteSelector,
+)
+
+if TYPE_CHECKING:
+    from oracle.auth.deps import Principal
+
+VERDICT_LABELS = {"changes_requested": "Changes requested", "rejected": "Rejected"}
 
 
 class UnknownFeedbackItemsError(ValueError):
@@ -28,6 +48,480 @@ class UnknownFeedbackItemsError(ValueError):
     def __init__(self, feedback_ids: Sequence[uuid.UUID]):
         self.feedback_ids = list(feedback_ids)
         super().__init__(f"unknown feedback items: {', '.join(map(str, self.feedback_ids))}")
+
+
+class ReviewError(Exception):
+    """A request the review service refuses; the router maps ``kind`` to an HTTP status."""
+
+    def __init__(self, kind: str, message: str):
+        self.kind = kind  # "not_found" | "invalid"
+        self.message = message
+        super().__init__(message)
+
+
+def _now() -> datetime:
+    # Wall clock, not the transaction's now(): verdict order must hold even when two
+    # verdicts land in one transaction.
+    return datetime.now(UTC)
+
+
+# --- Lookups -----------------------------------------------------------------------------
+
+
+async def get_document(session: AsyncSession, doc: str) -> Document:
+    """Document by slug or id."""
+    cond = Document.slug == doc
+    try:
+        cond = or_(cond, Document.id == uuid.UUID(doc))
+    except ValueError:
+        pass
+    document = await session.scalar(select(Document).where(cond))
+    if document is None:
+        raise ReviewError("not_found", f"Document {doc!r} not found")
+    return document
+
+
+async def get_version(session: AsyncSession, doc: str, n: int) -> DocumentVersion:
+    document = await get_document(session, doc)
+    version = await session.scalar(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id, DocumentVersion.number == n
+        )
+    )
+    if version is None:
+        raise ReviewError("not_found", f"Version {n} of {document.slug!r} not found")
+    return version
+
+
+async def _get_section(session: AsyncSession, version: DocumentVersion, key: str) -> Section:
+    section = await session.scalar(
+        select(Section).where(Section.version_id == version.id, Section.section_key == key)
+    )
+    if section is None:
+        raise ReviewError("invalid", f"Section {key!r} does not exist in version {version.number}")
+    return section
+
+
+async def _get_comment(session: AsyncSession, comment_id: uuid.UUID) -> Comment:
+    comment = await session.get(Comment, comment_id)
+    if comment is None:
+        raise ReviewError("not_found", f"Comment {comment_id} not found")
+    return comment
+
+
+async def _comment_document(session: AsyncSession, comment: Comment) -> Document:
+    version = await session.get(DocumentVersion, comment.version_id)
+    return await session.get(Document, version.document_id)
+
+
+async def _mark_in_review(session: AsyncSession, document: Document) -> None:
+    if document.status == "draft":
+        document.status = "in_review"
+
+
+# --- Serialisation -----------------------------------------------------------------------
+
+
+def _comment_out(
+    comment: Comment,
+    replies: Iterable[Comment] = (),
+    feedback_item_id: uuid.UUID | None = None,
+) -> CommentOut:
+    return CommentOut(
+        id=comment.id,
+        version_id=comment.version_id,
+        section_key=comment.section_key,
+        anchor=TextQuoteSelector(**comment.anchor) if comment.anchor else None,
+        body=comment.body,
+        author_id=comment.author_id,
+        parent_id=comment.parent_id,
+        resolved_at=comment.resolved_at,
+        created_at=comment.created_at,
+        replies=[_comment_out(r) for r in replies],
+        feedback_item_id=feedback_item_id,
+    )
+
+
+async def feedback_out(
+    session: AsyncSession, items: Sequence[FeedbackItem]
+) -> list[FeedbackItemOut]:
+    """Items with the anchor / verdict of their comment / section review copied in."""
+    comment_ids = {i.comment_id for i in items if i.comment_id}
+    review_ids = {i.section_review_id for i in items if i.section_review_id}
+    anchors: dict[uuid.UUID, dict | None] = {}
+    verdicts: dict[uuid.UUID, str] = {}
+    if comment_ids:
+        rows = await session.execute(
+            select(Comment.id, Comment.anchor).where(Comment.id.in_(comment_ids))
+        )
+        anchors = {k: v for k, v in rows}
+    if review_ids:
+        rows = await session.execute(
+            select(SectionReview.id, SectionReview.verdict).where(SectionReview.id.in_(review_ids))
+        )
+        verdicts = {k: v for k, v in rows}
+    out = []
+    for item in items:
+        anchor = anchors.get(item.comment_id) if item.comment_id else None
+        out.append(
+            FeedbackItemOut(
+                id=item.id,
+                document_id=item.document_id,
+                raised_on_version=item.raised_on_version,
+                kind=item.kind,
+                comment_id=item.comment_id,
+                section_review_id=item.section_review_id,
+                section_key=item.section_key,
+                summary=item.summary,
+                anchor=TextQuoteSelector(**anchor) if anchor else None,
+                verdict=verdicts.get(item.section_review_id) if item.section_review_id else None,
+                status=item.status,
+                addressed_in_version=item.addressed_in_version,
+                resolution_note=item.resolution_note,
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+            )
+        )
+    return out
+
+
+def _feedback_order():
+    return (FeedbackItem.raised_on_version, FeedbackItem.created_at, FeedbackItem.id)
+
+
+# --- Comments ----------------------------------------------------------------------------
+
+
+async def create_comment(
+    session: AsyncSession,
+    principal: "Principal",
+    doc: str,
+    n: int,
+    section_key: str,
+    anchor: TextQuoteSelector,
+    body: str,
+) -> CommentOut:
+    """Top-level inline comment; also opens a ``comment`` feedback item."""
+    version = await get_version(session, doc, n)
+    await _get_section(session, version, section_key)
+    comment = Comment(
+        version_id=version.id,
+        section_key=section_key,
+        anchor=anchor.model_dump(),
+        body=body,
+        author_id=principal.id,
+        created_at=_now(),
+    )
+    session.add(comment)
+    await session.flush()
+    item = FeedbackItem(
+        document_id=version.document_id,
+        raised_on_version=version.number,
+        kind="comment",
+        comment_id=comment.id,
+        section_key=section_key,
+        summary=body,
+        status="open",
+        created_at=comment.created_at,
+    )
+    session.add(item)
+    await session.flush()
+    await _mark_in_review(session, await session.get(Document, version.document_id))
+    await audit.record(
+        session,
+        principal,
+        "comment.create",
+        "comment",
+        comment.id,
+        {"version": version.number, "section_key": section_key, "feedback_item_id": str(item.id)},
+    )
+    await audit.record(
+        session,
+        principal,
+        "feedback.create",
+        "feedback_item",
+        item.id,
+        {"kind": "comment", "comment_id": str(comment.id), "raised_on_version": version.number},
+    )
+    return _comment_out(comment, feedback_item_id=item.id)
+
+
+async def list_comments(session: AsyncSession, doc: str, n: int) -> list[CommentOut]:
+    """Top-level comments of a version, oldest first, with their replies nested."""
+    version = await get_version(session, doc, n)
+    comments = (
+        await session.scalars(
+            select(Comment)
+            .where(Comment.version_id == version.id)
+            .order_by(Comment.created_at, Comment.id)
+        )
+    ).all()
+    top_ids = [c.id for c in comments if c.parent_id is None]
+    items: dict[uuid.UUID, uuid.UUID] = {}
+    if top_ids:
+        rows = await session.execute(
+            select(FeedbackItem.comment_id, FeedbackItem.id).where(
+                FeedbackItem.comment_id.in_(top_ids)
+            )
+        )
+        items = {k: v for k, v in rows}
+    replies: dict[uuid.UUID, list[Comment]] = {}
+    for c in comments:
+        if c.parent_id is not None:
+            replies.setdefault(c.parent_id, []).append(c)
+    return [
+        _comment_out(c, replies.get(c.id, []), items.get(c.id))
+        for c in comments
+        if c.parent_id is None
+    ]
+
+
+async def reply_to_comment(
+    session: AsyncSession, principal: "Principal", comment_id: uuid.UUID, body: str
+) -> CommentOut:
+    """Reply in a thread. Replying to a reply attaches to the thread's top-level comment.
+
+    Replies are discussion, not new feedback: they open no feedback item.
+    """
+    parent = await _get_comment(session, comment_id)
+    if parent.parent_id is not None:
+        parent = await _get_comment(session, parent.parent_id)
+    reply = Comment(
+        version_id=parent.version_id,
+        section_key=parent.section_key,
+        anchor=None,
+        body=body,
+        author_id=principal.id,
+        parent_id=parent.id,
+        created_at=_now(),
+    )
+    session.add(reply)
+    await session.flush()
+    await audit.record(
+        session, principal, "comment.reply", "comment", reply.id, {"parent_id": str(parent.id)}
+    )
+    return _comment_out(reply)
+
+
+async def update_comment(
+    session: AsyncSession,
+    principal: "Principal",
+    comment_id: uuid.UUID,
+    resolved: bool | None,
+    body: str | None,
+) -> CommentOut:
+    """Resolve / reopen a thread and/or edit a comment's text.
+
+    Resolving is thread state for the UI; the feedback item keeps its own status (it is
+    closed by the next draft's ``resolutions`` or ``PATCH /v1/feedback/{id}``). Editing
+    the body of a top-level comment refreshes its item's summary while the item is open.
+    """
+    comment = await _get_comment(session, comment_id)
+    changes: dict[str, object] = {}
+    if resolved is not None:
+        if comment.parent_id is not None:
+            raise ReviewError("invalid", "Replies cannot be resolved; resolve the thread")
+        if resolved and comment.resolved_at is None:
+            comment.resolved_at = _now()
+            changes["resolved"] = True
+        elif not resolved and comment.resolved_at is not None:
+            comment.resolved_at = None
+            changes["resolved"] = False
+    if body is not None and body != comment.body:
+        comment.body = body
+        changes["body"] = body
+        if comment.parent_id is None:
+            item = await session.scalar(
+                select(FeedbackItem).where(FeedbackItem.comment_id == comment.id)
+            )
+            if item is not None and item.status == "open":
+                item.summary = body
+    await session.flush()
+    item_id = None
+    replies: list[Comment] = []
+    if comment.parent_id is None:
+        item_id = await session.scalar(
+            select(FeedbackItem.id).where(FeedbackItem.comment_id == comment.id)
+        )
+        replies = list(
+            (
+                await session.scalars(
+                    select(Comment)
+                    .where(Comment.parent_id == comment.id)
+                    .order_by(Comment.created_at, Comment.id)
+                )
+            ).all()
+        )
+    if changes:
+        await audit.record(session, principal, "comment.update", "comment", comment.id, changes)
+    return _comment_out(comment, replies, item_id)
+
+
+# --- Section verdicts --------------------------------------------------------------------
+
+
+async def latest_verdicts(session: AsyncSession, version_id: uuid.UUID) -> dict[str, SectionReview]:
+    """Latest verdict per section key in a version (Lane 1 can use it for VersionOut)."""
+    reviews = (
+        await session.scalars(
+            select(SectionReview)
+            .where(SectionReview.version_id == version_id)
+            .order_by(SectionReview.created_at, SectionReview.id)
+        )
+    ).all()
+    return {r.section_key: r for r in reviews}  # later rows overwrite earlier ones
+
+
+async def review_section(
+    session: AsyncSession,
+    principal: "Principal",
+    doc: str,
+    n: int,
+    section_key: str,
+    verdict: str,
+    note: str | None,
+) -> tuple[SectionReview, FeedbackItem | None]:
+    """Record a verdict (history is kept; the latest wins).
+
+    Any still-open ``section_review`` item for the same section, raised on this or an
+    earlier version, becomes ``superseded``. A non-approved verdict opens a new item.
+    """
+    version = await get_version(session, doc, n)
+    await _get_section(session, version, section_key)
+    review = SectionReview(
+        version_id=version.id,
+        section_key=section_key,
+        verdict=verdict,
+        note=note,
+        reviewer_id=principal.id,
+        created_at=_now(),
+    )
+    session.add(review)
+    await session.flush()
+    await audit.record(
+        session,
+        principal,
+        "section_review.create",
+        "section_review",
+        review.id,
+        {"version": version.number, "section_key": section_key, "verdict": verdict},
+    )
+
+    earlier = (
+        await session.scalars(
+            select(FeedbackItem).where(
+                FeedbackItem.document_id == version.document_id,
+                FeedbackItem.kind == "section_review",
+                FeedbackItem.section_key == section_key,
+                FeedbackItem.status == "open",
+                FeedbackItem.raised_on_version <= version.number,
+            )
+        )
+    ).all()
+    for old in earlier:
+        old.status = "superseded"
+        old.resolution_note = (
+            f"Superseded by a later '{verdict}' verdict on version {version.number}"
+        )
+        await audit.record(
+            session,
+            principal,
+            "feedback.supersede",
+            "feedback_item",
+            old.id,
+            {"by_section_review_id": str(review.id)},
+        )
+
+    item = None
+    if verdict != "approved":
+        label = VERDICT_LABELS[verdict]
+        item = FeedbackItem(
+            document_id=version.document_id,
+            raised_on_version=version.number,
+            kind="section_review",
+            section_review_id=review.id,
+            section_key=section_key,
+            summary=f"{label}: {note}" if note else f"{label} (section {section_key})",
+            status="open",
+            created_at=review.created_at,
+        )
+        session.add(item)
+        await session.flush()
+        await audit.record(
+            session,
+            principal,
+            "feedback.create",
+            "feedback_item",
+            item.id,
+            {
+                "kind": "section_review",
+                "section_review_id": str(review.id),
+                "raised_on_version": version.number,
+            },
+        )
+    await _mark_in_review(session, await session.get(Document, version.document_id))
+    await session.flush()
+    return review, item
+
+
+# --- Feedback ----------------------------------------------------------------------------
+
+
+async def list_feedback(
+    session: AsyncSession, doc: str, status: str | None = None, version: int | None = None
+) -> list[FeedbackItemOut]:
+    """Feedback items of a document; ``version`` filters on the version they were raised on."""
+    document = await get_document(session, doc)
+    stmt = select(FeedbackItem).where(FeedbackItem.document_id == document.id)
+    if status is not None:
+        stmt = stmt.where(FeedbackItem.status == status)
+    if version is not None:
+        stmt = stmt.where(FeedbackItem.raised_on_version == version)
+    items = (await session.scalars(stmt.order_by(*_feedback_order()))).all()
+    return await feedback_out(session, items)
+
+
+async def update_feedback(
+    session: AsyncSession,
+    principal: "Principal",
+    feedback_id: uuid.UUID,
+    fields: dict[str, object],
+) -> FeedbackItemOut:
+    """Set status / resolution note / addressed_in_version (only the fields given).
+
+    Reopening an item (``status=open``) clears ``addressed_in_version`` unless one is given.
+    """
+    item = await session.get(FeedbackItem, feedback_id)
+    if item is None:
+        raise ReviewError("not_found", f"Feedback item {feedback_id} not found")
+    if fields.get("status") is None:
+        fields.pop("status", None)
+    number = fields.get("addressed_in_version")
+    if number is not None:
+        exists = await session.scalar(
+            select(DocumentVersion.id).where(
+                DocumentVersion.document_id == item.document_id, DocumentVersion.number == number
+            )
+        )
+        if exists is None:
+            raise ReviewError("invalid", f"Version {number} does not exist for this document")
+    if fields.get("status") == "open" and "addressed_in_version" not in fields:
+        fields["addressed_in_version"] = None
+    before = {k: getattr(item, k) for k in fields}
+    for key, value in fields.items():
+        setattr(item, key, value)
+    await session.flush()
+    if fields:
+        await audit.record(
+            session,
+            principal,
+            "feedback.update",
+            "feedback_item",
+            item.id,
+            {"before": before, "after": fields},
+        )
+    await session.refresh(item)
+    return (await feedback_out(session, [item]))[0]
 
 
 async def apply_resolutions(
@@ -43,7 +537,41 @@ async def apply_resolutions(
     Validates all ids first and raises :class:`UnknownFeedbackItemsError` without
     changing anything if any is unknown for ``document_id``. Returns the updated items.
     """
-    raise NotImplementedError("lane 2: review.service.apply_resolutions")
+    if not resolutions:
+        return []
+    ids = list(dict.fromkeys(r.feedback_id for r in resolutions))
+    found = {
+        item.id: item
+        for item in (
+            await session.scalars(
+                select(FeedbackItem).where(
+                    FeedbackItem.document_id == document_id, FeedbackItem.id.in_(ids)
+                )
+            )
+        ).all()
+    }
+    missing = [i for i in ids if i not in found]
+    if missing:
+        raise UnknownFeedbackItemsError(missing)
+    version = await session.get(DocumentVersion, version_id)
+    if version is None or version.document_id != document_id:
+        raise ValueError(f"version {version_id} does not belong to document {document_id}")
+    for res in resolutions:  # a repeated id: the last entry wins
+        item = found[res.feedback_id]
+        before = item.status
+        item.status = res.status
+        item.resolution_note = res.note
+        item.addressed_in_version = version.number
+        await audit.record(
+            session,
+            None,
+            "feedback.resolve",
+            "feedback_item",
+            item.id,
+            {"from": before, "to": res.status, "version": version.number, "note": res.note},
+        )
+    await session.flush()
+    return [found[i] for i in ids]
 
 
 async def locked_section_keys(session: AsyncSession, version_id: uuid.UUID) -> set[str]:
@@ -52,4 +580,99 @@ async def locked_section_keys(session: AsyncSession, version_id: uuid.UUID) -> s
     Lane 1 compares these against the next draft to emit ``locked_section_changed``;
     the feedback package reports them as ``locked_section_keys``.
     """
-    raise NotImplementedError("lane 2: review.service.locked_section_keys")
+    return {
+        k
+        for k, r in (await latest_verdicts(session, version_id)).items()
+        if r.verdict == "approved"
+    }
+
+
+async def feedback_package(session: AsyncSession, doc: str, n: int) -> FeedbackPackage:
+    """Version markdown, every item still open (raised on this or an earlier version) and
+    the locked (approved) section keys, in document order."""
+    version = await get_version(session, doc, n)
+    document = await session.get(Document, version.document_id)
+    items = (
+        await session.scalars(
+            select(FeedbackItem)
+            .where(
+                FeedbackItem.document_id == document.id,
+                FeedbackItem.status == "open",
+                FeedbackItem.raised_on_version <= n,
+            )
+            .order_by(*_feedback_order())
+        )
+    ).all()
+    locked = await locked_section_keys(session, version.id)
+    ordered = (
+        await session.scalars(
+            select(Section.section_key)
+            .where(Section.version_id == version.id)
+            .order_by(Section.ordinal)
+        )
+    ).all()
+    return FeedbackPackage(
+        document_id=document.id,
+        slug=document.slug,
+        title=document.title,
+        version=version.number,
+        markdown=version.markdown,
+        open_items=await feedback_out(session, items),
+        locked_section_keys=[k for k in ordered if k in locked],
+        generated_at=_now(),
+    )
+
+
+async def resolution_report(session: AsyncSession, doc: str, n: int) -> ResolutionReport:
+    """Every item raised on a version before ``n`` with its current outcome."""
+    version = await get_version(session, doc, n)
+    items = (
+        await session.scalars(
+            select(FeedbackItem)
+            .where(
+                FeedbackItem.document_id == version.document_id,
+                FeedbackItem.raised_on_version < n,
+            )
+            .order_by(*_feedback_order())
+        )
+    ).all()
+    counts = dict.fromkeys(FEEDBACK_STATUSES, 0)
+    for item in items:
+        counts[item.status] += 1
+    return ResolutionReport(
+        document_id=version.document_id,
+        version=n,
+        items=await feedback_out(session, items),
+        counts=counts,
+    )
+
+
+# --- Approval ----------------------------------------------------------------------------
+
+
+async def approve_version(
+    session: AsyncSession, principal: "Principal", doc: str, n: int
+) -> tuple[Document, DocumentVersion]:
+    """Stamp the version's ``approved_at`` (kept if already set); document -> approved."""
+    version = await get_version(session, doc, n)
+    document = await session.get(Document, version.document_id)
+    already = version.approved_at is not None
+    if not already:
+        version.approved_at = _now()
+    previous_status = document.status
+    document.status = "approved"
+    await session.flush()
+    await audit.record(
+        session,
+        principal,
+        "version.approve",
+        "document_version",
+        version.id,
+        {
+            "document_id": str(document.id),
+            "version": version.number,
+            "previous_status": previous_status,
+            "already_approved": already,
+        },
+    )
+    return document, version
