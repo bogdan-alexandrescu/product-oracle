@@ -142,28 +142,35 @@ Every table is `TenantScoped` unless noted.
 
 ## Claude accounts (Bogdan, 2026-10-17)
 
-Oracle's own Claude calls run on a **pool of Claude accounts**, managed the way
-SwarmCloud manages its account pool (the design is copied; nothing is shared between
-the products). It replaces the per-user Claude plan in Lane K; data connections stay
-per user. The pool starts with the owner's personal account.
+Oracle's own Claude calls run on a **pool of Claude accounts with exactly SwarmCloud's
+account management** (Bogdan: "use the EXACT account management functionality as in
+SwarmCloud ... local personal use"). The behaviour is ported from SwarmCloud's public
+repo (`apps/quota-broker/quota_broker/`: accounts, accountstore, oauth, credentials,
+usage, usagepoll; `apps/agent-worker/agent_worker/accountlease.py` and
+`runners/cliagent.py`; `apps/swarm-ui/src/Accounts.tsx`; `apps/swarm-mcp/swarm_mcp/sc.py`
+and `render.py`); nothing is shared at runtime. It replaces the per-user Claude plan
+in Lane K; data connections stay per user. The pool starts with the owner's account.
 
-- **Accounts:** label (`^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$`), provider `anthropic`,
-  state `available | paused | draining | reauth_required` (only available takes new
-  calls), reason, quota windows (`five_hour`, `seven_day`: utilisation 0–1, resets_at,
-  observed_at), current holders, last assigned. Owner-managed.
-- **Adding:** paste a `claude setup-token` value (long-lived, no refresh) or Claude
-  Code's saved login JSON (with a refresh token; Oracle is then the single writer that
-  refreshes it). No browser sign-in that borrows Claude Code's login client.
-- **Calls:** run through Claude Code headless with `CLAUDE_CODE_OAUTH_TOKEN` set for
-  that call; readings come from Claude Code's stream-json `rate_limit_event`. A reading
-  older than 30 minutes is stale (`~N%`), a window never read is `—` (unknown, never 0).
-- **Choice:** among available accounts, the most headroom (minimum remaining across
-  windows, stale readings halved, at least 0.15), then fewest holders, then label. No
-  account free: the call waits for the next reset or fails clearly; never silently
-  falls back. Draining moves work off at the next turn boundary.
-- **Screens:** Settings > Claude accounts: ACCOUNT | 5H USED | 7D USED | CLEARS | STATE,
-  detail with holders and history, actions add / pause / resume / drain / sign in again
-  / remove (type the label to confirm).
+Same as SwarmCloud: account label rule, states `available | paused | draining |
+reauth_required` (only available takes new work; previous state kept for reauth
+recovery), quota windows with utilisation/resets_at/observed_at, holds with a TTL and a
+hold log, the browser sign-in (PKCE, pasted `code#state`, token exchange) and the paste
+route for Claude Code's saved login JSON (refresh token required; a setup-token goes to
+the fallback credential instead), the single-writer refresh sweep (within 3 h of
+expiry, deferred to 30 min for held accounts, new pair saved before the access token is
+used, 400/401/invalid_grant marks reauth_required), usage polling of at most 3 accounts
+per sweep plus readings from Claude Code's `rate_limit_event`, 30-minute staleness,
+assignment (headroom >= 0.15, stale halved, never-read counts full, then fewest holders,
+then label; reasons `no_accounts_registered`, `no_account_available` with
+`next_reset_at`, `pool_paused`, `no_recent_reading`), swap at a turn boundary on
+exhaustion or drain, pause/resume/drain/remove semantics, the accounts screen (rows,
+tiles 5h/7d/Clears, holders and history tabs, owner actions, remove by typing the label)
+and the CLI (`oracle account add|pause|resume|drain|remove`, `oracle accounts`).
+
+Adapted for a local, single-company app: no lending between companies; credentials
+are encrypted in Oracle's database (`oracle.crypto`) instead of Secret Manager; the
+sweep runs from `oracle tick` / a local scheduler instead of Cloud Scheduler; calls run
+through Claude Code headless with `CLAUDE_CODE_OAUTH_TOKEN` set for that call.
 
 ## Confidence
 
