@@ -31,6 +31,7 @@ class Document(TenantScoped, Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "slug"),
         CheckConstraint(_in("status", DOCUMENT_STATUSES), name="status"),
+        CheckConstraint("kind IN ('prd', 'roadmap')", name="kind"),
     )
 
     slug: Mapped[str] = mapped_column(Text, nullable=False)
@@ -38,6 +39,9 @@ class Document(TenantScoped, Base):
     status: Mapped[str] = mapped_column(Text, nullable=False, default="draft")
     template: Mapped[str | None] = mapped_column(Text)
     template_version: Mapped[str | None] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(Text, nullable=False, server_default="prd")
+    # Theme key (oracle.templates.models.Theme), picked when the draft starts.
+    theme: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

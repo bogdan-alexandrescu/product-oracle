@@ -8,8 +8,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
-    Integer,
-    LargeBinary,
     Text,
     UniqueConstraint,
     Uuid,
@@ -21,7 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-SOURCE_KINDS = ("upload", "github", "slack", "notion")
+SOURCE_KINDS = ("upload", "github", "slack", "notion", "fireflies", "google_docs")
 SOURCE_STATUSES = ("active", "paused", "error")
 ITEM_KINDS = (
     "file",
@@ -40,16 +38,29 @@ SEARCH_EXPRESSION = "to_tsvector('english'::regconfig, coalesce(title, '') || ' 
 
 
 class Source(TenantScoped, Base):
+    """What one user pulls in through one of their connections (S5, per user).
+
+    Visible only to its owner (S3 revised 2026-10-17): items reach other users only
+    as evidence the owner adds to the shared baseline.
+    """
+
     __tablename__ = "sources"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "name"),
+        UniqueConstraint("owner_user_id", "name"),
         CheckConstraint(_in("kind", SOURCE_KINDS), name="kind"),
         CheckConstraint(_in("status", SOURCE_STATUSES), name="status"),
     )
 
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # The owner's connection the connector syncs with; null for uploads.
+    connection_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("connections.id", ondelete="SET NULL"), index=True
+    )
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    # The admin allowlist: repos, channel ids, root pages. Never secrets.
+    # The owner's allowlist: repos, channel ids, root pages. Never secrets.
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     status: Mapped[str] = mapped_column(Text, nullable=False, default="active")
     last_error: Mapped[str | None] = mapped_column(Text)
@@ -59,18 +70,6 @@ class Source(TenantScoped, Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
-
-
-class SourceCredential(TenantScoped, Base):
-    """Encrypted connector secret (oracle.crypto). Never returned by any endpoint."""
-
-    __tablename__ = "source_credentials"
-
-    source_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, unique=True
-    )
-    ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    key_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class SourceItem(TenantScoped, Base):

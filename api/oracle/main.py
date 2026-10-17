@@ -8,6 +8,7 @@ from sqlalchemy import text
 from oracle.auth.router import router as auth_router
 from oracle.baseline.router import router as baseline_router
 from oracle.config import get_settings
+from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(export_router)
     # v1 lanes add their routes to these (empty until then).
     app.include_router(members_router)
+    app.include_router(connections_router)
     app.include_router(sources_router)
     app.include_router(baseline_router)
     app.include_router(priorities_router)

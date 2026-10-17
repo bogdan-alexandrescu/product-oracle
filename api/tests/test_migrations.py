@@ -1,4 +1,4 @@
-"""Migration 0002: upgrade, downgrade and upgrade again on a scratch database.
+"""Migrations 0002 and 0003: upgrade, downgrade and upgrade again on a scratch database.
 
 Sync tests on purpose: Alembic's env.py runs its own event loop.
 """
@@ -23,7 +23,9 @@ V1_TABLES = {
     "invites",
     "run_tokens",
     "sources",
-    "source_credentials",
+    "connections",
+    "tenant_settings",
+    "themes",
     "source_items",
     "source_item_versions",
     "snapshots",

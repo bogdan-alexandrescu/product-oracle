@@ -6,18 +6,36 @@ import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
+from oracle.auth.models import User
 from oracle.baseline.models import Edge, Entity, Evidence, Proposal
+from oracle.connections.models import Connection
 from oracle.members.models import Invite
 from oracle.runs.models import Checkpoint, Run
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 from oracle.templates.defaults import DEFAULT_TEMPLATE_KEY, ensure_default_template
-from oracle.templates.models import Template, TemplateVersion
+from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.tenancy import TenantMismatchError, tenant_session
 from tests.conftest import make_tenant
 
 
-def _source() -> Source:
-    return Source(kind="github", name="storefront", config={"repos": ["example-org/storefront"]})
+async def _owner(db) -> User:
+    user = User(email="owner@example.com", password_hash="x", role="owner")
+    db.add(user)
+    await db.flush()
+    return user
+
+
+def _source(owner: User) -> Source:
+    return Source(
+        owner_user_id=owner.id,
+        kind="github",
+        name="storefront",
+        config={"repos": ["example-org/storefront"]},
+    )
+
+
+def _theme() -> Theme:
+    return Theme(key="clean", name="Clean")
 
 
 def _entity(key: str = "activation") -> Entity:
@@ -29,7 +47,7 @@ def _run() -> Run:
 
 
 @pytest.mark.parametrize(
-    "make", [_source, _entity, _run, lambda: Invite(email="pm@example.com", role="viewer")]
+    "make", [_theme, _entity, _run, lambda: Invite(email="pm@example.com", role="viewer")]
 )
 async def test_rows_are_invisible_and_unwritable_across_tenants(make):
     a, b = await make_tenant("A"), await make_tenant("B")
@@ -60,8 +78,8 @@ async def test_rows_are_invisible_and_unwritable_across_tenants(make):
 @pytest.mark.parametrize(
     "make",
     [
-        lambda: Source(kind="dropbox", name="x"),
-        lambda: Source(kind="upload", name="x", status="broken"),
+        lambda: Template(key="x", name="X", kind="wiki"),
+        lambda: Theme(key="x", name="X", kind="slides"),
         lambda: Entity(type="epic", key="x", title="X", origin="user"),
         lambda: Entity(type="goal", key="x", title="X", origin="robot"),
         lambda: Entity(type="goal", key="x", title="X", origin="user", status="maybe"),
@@ -130,7 +148,7 @@ async def test_checkpoint_defaults_to_approver(db):
 
 
 async def test_item_versions_get_a_search_vector(db):
-    source = _source()
+    source = _source(await _owner(db))
     db.add(source)
     await db.flush()
     item = SourceItem(source_id=source.id, external_id="issue-1", kind="issue", title="Checkout")
@@ -176,3 +194,67 @@ async def test_seed_gives_the_tenant_the_default_template():
     r = await seed()
     async with tenant_session(r.tenant_id) as s:
         assert await s.scalar(select(Template.key)) == DEFAULT_TEMPLATE_KEY
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [{"kind": "dropbox"}, {"status": "broken"}],
+)
+async def test_source_enum_columns_are_checked(db, fields):
+    source = _source(await _owner(db))
+    for key, value in fields.items():
+        setattr(source, key, value)
+    db.add(source)
+    with pytest.raises(IntegrityError, match="ck_sources"):
+        await db.flush()
+
+
+async def test_sources_belong_to_one_user(db):
+    """Integrations are per user: a source has an owner, and names are unique per owner."""
+    db.add(Source(kind="upload", name="no owner"))
+    with pytest.raises(IntegrityError, match="owner_user_id"):
+        await db.flush()
+    await db.rollback()
+
+    owner = await _owner(db)
+    other = User(email="other@example.com", password_hash="x", role="commenter")
+    db.add(other)
+    await db.flush()
+    db.add_all([_source(owner), _source(other)])
+    await db.flush()  # the same name under two owners is fine
+    db.add(_source(owner))
+    with pytest.raises(IntegrityError, match="uq_sources_owner_user_id_name"):
+        await db.flush()
+
+
+async def test_connections_are_checked(db):
+    owner = await _owner(db)
+
+    def conn(**over) -> Connection:
+        fields = dict(
+            user_id=owner.id,
+            provider="github",
+            auth_mode="token",
+            account_id="1",
+            ciphertext=b"x",
+            key_version=1,
+        )
+        return Connection(**{**fields, **over})
+
+    db.add(conn())
+    await db.flush()
+    for bad in ({"provider": "dropbox"}, {"auth_mode": "password"}, {"status": "lost"}):
+        async with db.begin_nested():
+            db.add(conn(account_id="2", **bad))
+            with pytest.raises(IntegrityError, match="ck_connections"):
+                await db.flush()
+
+
+@pytest.mark.parametrize("value", ["-0.1", "1.001"])
+async def test_confidence_is_between_zero_and_one(db, value):
+    entity = _entity()
+    db.add(entity)
+    await db.flush()
+    db.add(Evidence(entity_id=entity.id, excerpt="x", confidence=value))
+    with pytest.raises(IntegrityError, match="ck_evidence_confidence"):
+        await db.flush()

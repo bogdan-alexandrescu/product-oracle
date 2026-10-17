@@ -40,6 +40,7 @@ from oracle.baseline.models import (  # noqa: E402
     Evidence,
     Proposal,
 )
+from oracle.connections.models import Connection  # noqa: E402
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
 from oracle.members.models import Invite  # noqa: E402
 from oracle.priorities.models import PrioritySnapshot  # noqa: E402
@@ -49,11 +50,11 @@ from oracle.runtokens import RunToken  # noqa: E402
 from oracle.sources.models import (  # noqa: E402
     Snapshot,
     Source,
-    SourceCredential,
     SourceItem,
     SourceItemVersion,
 )
-from oracle.templates.models import Template, TemplateVersion  # noqa: E402
+from oracle.templates.models import Template, TemplateVersion, Theme  # noqa: E402
+from oracle.tenant_settings import TenantSetting  # noqa: E402
 
 __all__ = [
     "ApiToken",
@@ -61,6 +62,7 @@ __all__ = [
     "Checkpoint",
     "Citation",
     "Comment",
+    "Connection",
     "Conflict",
     "Document",
     "DocumentVersion",
@@ -79,11 +81,12 @@ __all__ = [
     "SectionReview",
     "Snapshot",
     "Source",
-    "SourceCredential",
     "SourceItem",
     "SourceItemVersion",
     "Template",
     "TemplateVersion",
     "Tenant",
+    "TenantSetting",
+    "Theme",
     "User",
 ]

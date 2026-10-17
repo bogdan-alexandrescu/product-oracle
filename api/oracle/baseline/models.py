@@ -6,6 +6,7 @@ constraint enforces it (proposals may point at neither: a proposed new item).
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -13,6 +14,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Numeric,
     Text,
     UniqueConstraint,
     Uuid,
@@ -33,6 +35,7 @@ PROPOSAL_STATUSES = ("open", "accepted", "rejected")
 CONFLICT_STATUSES = ("open", "resolved", "logged")
 
 EXACTLY_ONE_TARGET = "(entity_id IS NULL) <> (edge_id IS NULL)"
+CONFIDENCE_RANGE = "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)"
 AT_MOST_ONE_TARGET = "entity_id IS NULL OR edge_id IS NULL"
 
 
@@ -55,6 +58,7 @@ class Entity(TenantScoped, Base):
         CheckConstraint(_in("type", ENTITY_TYPES), name="type"),
         CheckConstraint(_in("status", NODE_STATUSES), name="status"),
         CheckConstraint(_in("origin", ORIGINS), name="origin"),
+        CheckConstraint(CONFIDENCE_RANGE, name="confidence"),
     )
 
     type: Mapped[str] = mapped_column(Text, nullable=False)
@@ -74,6 +78,8 @@ class Entity(TenantScoped, Base):
     # User id or API token id; no FK because it can be either.
     locked_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Aggregate of its evidence's confidence (oracle.baseline confidence scoring).
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
     run_id: Mapped[uuid.UUID | None] = _run_fk()
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
@@ -88,6 +94,7 @@ class Edge(TenantScoped, Base):
         CheckConstraint(_in("status", NODE_STATUSES), name="status"),
         CheckConstraint(_in("origin", ORIGINS), name="origin"),
         CheckConstraint("src_id <> dst_id", name="not_self"),
+        CheckConstraint(CONFIDENCE_RANGE, name="confidence"),
     )
 
     src_id: Mapped[uuid.UUID] = mapped_column(
@@ -106,6 +113,8 @@ class Edge(TenantScoped, Base):
     )
     locked_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Aggregate of its evidence's confidence (oracle.baseline confidence scoring).
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
     run_id: Mapped[uuid.UUID | None] = _run_fk()
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
@@ -114,7 +123,10 @@ class Edge(TenantScoped, Base):
 
 class Evidence(TenantScoped, Base):
     __tablename__ = "evidence"
-    __table_args__ = (CheckConstraint(EXACTLY_ONE_TARGET, name="one_target"),)
+    __table_args__ = (
+        CheckConstraint(EXACTLY_ONE_TARGET, name="one_target"),
+        CheckConstraint(CONFIDENCE_RANGE, name="confidence"),
+    )
 
     entity_id: Mapped[uuid.UUID | None] = _entity_fk()
     edge_id: Mapped[uuid.UUID | None] = _edge_fk()
@@ -125,6 +137,13 @@ class Evidence(TenantScoped, Base):
     excerpt: Mapped[str | None] = mapped_column(Text)
     ref: Mapped[str | None] = mapped_column(Text)
     retrieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 0-1: how much this evidence counts in outputs (freshness, source kind, mentions,
+    # goal impact); the inputs and their weights are kept in confidence_factors.
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    confidence_factors: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    scored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class EntityRevision(TenantScoped, Base):
