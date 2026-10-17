@@ -1,0 +1,130 @@
+/* Product Oracle PRD export: one clean, print-friendly stylesheet (screen + WeasyPrint). */
+
+@page {
+  size: A4;
+  margin: 22mm 20mm 22mm 20mm;
+  @bottom-left {
+    content: string(doc-title) " \00B7  " string(doc-version) " \00B7  " string(doc-status);
+    font: 8pt "DejaVu Sans", sans-serif;
+    color: #6b7280;
+  }
+  @bottom-right {
+    content: "Page " counter(page) " of " counter(pages);
+    font: 8pt "DejaVu Sans", sans-serif;
+    color: #6b7280;
+  }
+}
+
+:root {
+  --ink: #1f2933;
+  --muted: #6b7280;
+  --rule: #d9dde3;
+  --accent: #2f5bd3;
+}
+
+html {
+  color: var(--ink);
+  font-family: "DejaVu Serif", Georgia, "Times New Roman", serif;
+  font-size: 11pt;
+  line-height: 1.5;
+}
+
+body {
+  max-width: 46rem;
+  margin: 2rem auto;
+  padding: 0 1.25rem;
+}
+
+/* Version banner */
+/* Inline spans, not flex: WeasyPrint does not run string-set on flex items. */
+.version-banner {
+  padding: 0.55rem 0.8rem;
+  margin-bottom: 1.75rem;
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--accent);
+  font: 9pt/1.4 "DejaVu Sans", Helvetica, Arial, sans-serif;
+  color: var(--muted);
+}
+.version-banner > span { display: inline-block; margin-right: 1rem; }
+/* Repeated in every PDF page footer. */
+.version-banner .banner-doc { font-weight: bold; color: var(--ink); string-set: doc-title content(text); }
+.version-banner .banner-version { color: var(--ink); string-set: doc-version content(text); }
+.version-banner .banner-status {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: bold;
+  string-set: doc-status content(text);
+}
+.status-approved { border-left-color: #1f8a4c; }
+.status-approved .banner-status { color: #1f8a4c; }
+.status-superseded { border-left-color: #9ca3af; }
+.status-in_review { border-left-color: #c27c0e; }
+.status-in_review .banner-status { color: #c27c0e; }
+
+/* Body */
+h1, h2, h3, h4, h5, h6 {
+  font-family: "DejaVu Sans", Helvetica, Arial, sans-serif;
+  line-height: 1.25;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+h1 { font-size: 20pt; margin: 0 0 1rem; }
+h2 { font-size: 14pt; margin: 1.6rem 0 0.5rem; padding-bottom: 0.2rem; border-bottom: 1px solid var(--rule); }
+h3 { font-size: 12pt; margin: 1.2rem 0 0.4rem; }
+h4, h5, h6 { font-size: 11pt; margin: 1rem 0 0.3rem; }
+
+p, ul, ol, table, blockquote, pre { margin: 0 0 0.75rem; }
+p, li { orphans: 3; widows: 3; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, pre { font-family: "DejaVu Sans Mono", Menlo, Consolas, monospace; font-size: 9pt; }
+code { background: #f3f4f6; padding: 0 0.2em; border-radius: 2px; }
+pre { background: #f3f4f6; padding: 0.6rem 0.8rem; white-space: pre-wrap; break-inside: avoid; }
+pre code { background: none; padding: 0; }
+
+blockquote { margin-left: 0; padding-left: 0.8rem; border-left: 3px solid var(--rule); color: #4b5563; }
+
+table { border-collapse: collapse; width: 100%; font-size: 10pt; break-inside: auto; }
+th, td { border: 1px solid var(--rule); padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+th { background: #f3f4f6; }
+tr { break-inside: avoid; }
+
+/* Citations */
+sup.cite { font-size: 0.7em; line-height: 0; font-family: "DejaVu Sans", sans-serif; }
+sup.cite a { padding: 0 0.05em; }
+.cite-missing { color: #b42318; font-size: 0.85em; }
+
+.citations {
+  margin-top: 2.5rem;
+  padding-top: 0.5rem;
+  border-top: 2px solid var(--ink);
+  font: 9pt/1.45 "DejaVu Sans", Helvetica, Arial, sans-serif;
+}
+.citations h2 { font-size: 11pt; border: none; margin-top: 0.5rem; }
+.footnotes { padding-left: 1.6rem; }
+.footnotes li { margin-bottom: 0.6rem; break-inside: avoid; }
+.fn-title { font-weight: bold; }
+.fn-source {
+  margin-left: 0.4rem;
+  padding: 0 0.3rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.fn-retrieved { margin-left: 0.4rem; color: var(--muted); }
+.fn-excerpt { margin: 0.2rem 0; font-style: italic; }
+.fn-excerpt::before { content: "\201C"; }
+.fn-excerpt::after { content: "\201D"; }
+.fn-ref { display: block; color: var(--muted); word-break: break-all; font-size: 8pt; }
+.fn-back { margin-left: 0.3rem; }
+
+@media print {
+  body { max-width: none; margin: 0; padding: 0; }
+  a { color: inherit; }
+  sup.cite a { color: var(--accent); }
+  .fn-back { display: none; }
+}

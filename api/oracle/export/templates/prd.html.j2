@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Product Oracle">
+<title>{{ title }} — v{{ number }}</title>
+<style>
+{{ css }}
+</style>
+</head>
+<body>
+<header class="version-banner status-{{ status }}" role="note" aria-label="Version">
+  <span class="banner-doc">{{ title }}</span>
+  <span class="banner-version">Version {{ number }}</span>
+  <span class="banner-status">{{ status | replace("_", " ") | capitalize }}</span>
+  <span class="banner-date">
+    {%- if approved_at %}Approved {{ approved_at }}{% else %}Imported {{ imported_at }}{% endif -%}
+  </span>
+  {% if snapshot %}<span class="banner-snapshot">Sources as of {{ snapshot }}</span>{% endif %}
+</header>
+<main class="prd">
+{% if not has_title_section %}
+  <h1 class="doc-title">{{ title }}</h1>
+{% endif %}
+{% for s in sections %}
+  <section id="{{ s.key }}" class="prd-section level-{{ s.level }}" data-section-key="{{ s.key }}">
+    <h{{ s.level }}>{{ s.heading }}</h{{ s.level }}>
+    {{ s.body }}
+  </section>
+{% endfor %}
+</main>
+{% if footnotes %}
+<footer class="citations">
+  <h2 id="citations">Sources</h2>
+  <ol class="footnotes">
+  {% for f in footnotes %}
+    <li id="fn-{{ f.number }}" value="{{ f.number }}" data-cite-key="{{ f.key }}">
+      <span class="fn-title">
+        {%- if f.href %}<a href="{{ f.href }}">{{ f.title }}</a>{% else %}{{ f.title }}{% endif -%}
+      </span>
+      <span class="fn-source">{{ f.source }}</span>
+      {% if f.retrieved_at %}<span class="fn-retrieved">retrieved {{ f.retrieved_at }}</span>{% endif %}
+      {% if f.excerpt %}<blockquote class="fn-excerpt">{{ f.excerpt }}</blockquote>{% endif %}
+      <span class="fn-ref">{{ f.ref }}</span>
+      {% if f.backref %}<a class="fn-back" href="#{{ f.backref }}" aria-label="Back to text">↩</a>{% endif %}
+    </li>
+  {% endfor %}
+  </ol>
+</footer>
+{% endif %}
+</body>
+</html>

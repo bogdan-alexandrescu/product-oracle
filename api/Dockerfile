@@ -1,6 +1,11 @@
 FROM python:3.12-slim
 
-# Lane 3 adds the WeasyPrint system packages (pango etc.) here.
+# WeasyPrint (PDF export) needs Pango/HarfBuzz at runtime, plus fonts: the slim image
+# ships none, and the export stylesheet uses DejaVu.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fontconfig fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
