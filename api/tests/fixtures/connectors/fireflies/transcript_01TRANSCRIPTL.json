@@ -1,0 +1,27 @@
+{
+  "data": {
+    "transcript": {
+      "id": "01TRANSCRIPTL",
+      "title": "Product design crit",
+      "date": 1791414000000,
+      "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPTL",
+      "organizer_email": "ada@example.com",
+      "participants": [
+        "lin@example.com"
+      ],
+      "meeting_attendees": [],
+      "sentences": [
+        {
+          "index": 0,
+          "speaker_name": "Lin Example",
+          "text": "Design crit notes."
+        }
+      ],
+      "summary": {
+        "overview": "Design crit.",
+        "action_items": null,
+        "keywords": null
+      }
+    }
+  }
+}

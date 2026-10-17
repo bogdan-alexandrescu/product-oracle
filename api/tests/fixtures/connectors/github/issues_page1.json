@@ -1,0 +1,90 @@
+[
+  {
+    "url": "https://api.github.com/repos/example-org/widgets/issues/1",
+    "html_url": "https://github.com/example-org/widgets/issues/1",
+    "id": 9001,
+    "number": 1,
+    "title": "Bulk import of orders",
+    "user": {
+      "login": "example-user",
+      "id": 1001,
+      "type": "User",
+      "html_url": "https://github.com/example-user",
+      "url": "https://api.github.com/users/example-user"
+    },
+    "labels": [
+      {
+        "id": 4748,
+        "name": "feature",
+        "color": "ededed",
+        "description": null
+      },
+      {
+        "id": 4667,
+        "name": "import",
+        "color": "ededed",
+        "description": null
+      }
+    ],
+    "state": "open",
+    "locked": false,
+    "assignee": null,
+    "assignees": [],
+    "milestone": {
+      "url": "https://api.github.com/repos/example-org/widgets/milestones/1",
+      "html_url": "https://github.com/example-org/widgets/milestone/1",
+      "id": 7001,
+      "number": 1,
+      "title": "Beta",
+      "state": "open"
+    },
+    "comments": 0,
+    "created_at": "2026-09-01T10:00:00Z",
+    "updated_at": "2026-09-02T10:00:00Z",
+    "closed_at": null,
+    "author_association": "MEMBER",
+    "body": "Customers want to import orders from a CSV file.",
+    "state_reason": null
+  },
+  {
+    "url": "https://api.github.com/repos/example-org/widgets/issues/2",
+    "html_url": "https://github.com/example-org/widgets/pull/2",
+    "id": 9002,
+    "number": 2,
+    "title": "Add CSV importer",
+    "user": {
+      "login": "example-user",
+      "id": 1001,
+      "type": "User",
+      "html_url": "https://github.com/example-user",
+      "url": "https://api.github.com/users/example-user"
+    },
+    "labels": [
+      {
+        "id": 4748,
+        "name": "feature",
+        "color": "ededed",
+        "description": null
+      }
+    ],
+    "state": "closed",
+    "locked": false,
+    "assignee": null,
+    "assignees": [],
+    "milestone": null,
+    "comments": 0,
+    "created_at": "2026-09-01T10:00:00Z",
+    "updated_at": "2026-09-03T10:00:00Z",
+    "closed_at": "2026-09-03T09:00:00Z",
+    "author_association": "MEMBER",
+    "body": "Implements #1.",
+    "state_reason": null,
+    "pull_request": {
+      "url": "https://api.github.com/repos/example-org/widgets/pulls/2",
+      "html_url": "https://github.com/example-org/widgets/pull/2",
+      "diff_url": "https://github.com/example-org/widgets/pull/2.diff",
+      "patch_url": "https://github.com/example-org/widgets/pull/2.patch",
+      "merged_at": "2026-09-03T09:00:00Z"
+    }
+  }
+]

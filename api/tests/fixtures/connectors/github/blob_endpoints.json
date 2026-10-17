@@ -1,0 +1,8 @@
+{
+  "sha": "a000000000000000000000000000000000000003",
+  "node_id": "B_example",
+  "size": 41,
+  "url": "https://api.github.com/repos/example-org/widgets/git/blobs/a000000000000000000000000000000000000003",
+  "content": "IyBFbmRwb2ludHMKCmBHRVQgL29yZGVyc2AgbGlzdHMgb3JkZXJzLgo=\n",
+  "encoding": "base64"
+}

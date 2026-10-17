@@ -1,0 +1,98 @@
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "page",
+      "id": "44444444-4444-4444-8444-444444444442",
+      "created_time": "2026-09-01T10:00:00.000Z",
+      "last_edited_time": "2026-09-04T11:00:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "66666666-6666-4666-8666-666666666666"
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "66666666-6666-4666-8666-666666666666"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+        "type": "database_id",
+        "database_id": "33333333-3333-4333-8333-333333333333"
+      },
+      "archived": false,
+      "in_trash": false,
+      "properties": {
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Dark mode",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "Dark mode",
+              "href": null
+            }
+          ]
+        },
+        "Status": {
+          "id": "s%3A",
+          "type": "status",
+          "status": {
+            "id": "st1",
+            "name": "Idea",
+            "color": "blue"
+          }
+        },
+        "Tags": {
+          "id": "t%3A",
+          "type": "multi_select",
+          "multi_select": []
+        },
+        "Due": {
+          "id": "d%3A",
+          "type": "date",
+          "date": null
+        },
+        "Votes": {
+          "id": "v%3A",
+          "type": "number",
+          "number": 12
+        },
+        "Owner": {
+          "id": "o%3A",
+          "type": "people",
+          "people": [
+            {
+              "object": "user",
+              "id": "66666666-6666-4666-8666-666666666666",
+              "name": "Alex Example"
+            }
+          ]
+        },
+        "Edited": {
+          "id": "e%3A",
+          "type": "last_edited_time",
+          "last_edited_time": "2026-09-04T11:00:00.000Z"
+        }
+      },
+      "url": "https://www.notion.so/Dark-mode-44444444444444448444444444444442",
+      "public_url": null
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false,
+  "type": "page_or_database",
+  "page_or_database": {}
+}

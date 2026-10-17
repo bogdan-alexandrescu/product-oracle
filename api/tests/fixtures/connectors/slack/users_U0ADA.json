@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "user": {
+    "id": "U0ADA",
+    "name": "ada",
+    "real_name": "Ada Example",
+    "profile": {
+      "display_name": "Ada",
+      "real_name": "Ada Example"
+    }
+  }
+}

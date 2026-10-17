@@ -1,0 +1,24 @@
+{
+  "files": [
+    {
+      "id": "1DocSpecExample",
+      "name": "Plan picker spec",
+      "mimeType": "application/vnd.google-apps.document",
+      "trashed": false,
+      "webViewLink": "https://docs.google.com/document/d/1DocSpecExample/edit",
+      "createdTime": "2026-09-01T09:00:00.000Z",
+      "modifiedTime": "2026-09-28T10:00:00.000Z",
+      "shared": false,
+      "owners": [
+        {
+          "displayName": "Ada Example",
+          "emailAddress": "ada@example.com"
+        }
+      ],
+      "lastModifyingUser": {
+        "displayName": "Ada Example",
+        "emailAddress": "ada@example.com"
+      }
+    }
+  ]
+}

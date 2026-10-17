@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "subtype": "bot_message",
+      "bot_id": "B0DEPLOY",
+      "username": "deploybot",
+      "text": "Released 2.4.0 to staging",
+      "ts": "1760000300.000300"
+    },
+    {
+      "type": "message",
+      "user": "U0LIN",
+      "text": "Should onboarding v2 ship before the pricing change?",
+      "ts": "1760000200.000200",
+      "thread_ts": "1760000200.000200",
+      "reply_count": 2,
+      "reply_users": [
+        "U0ADA",
+        "U0LIN"
+      ],
+      "latest_reply": "1760000260.000600"
+    },
+    {
+      "type": "message",
+      "subtype": "channel_join",
+      "user": "U0LIN",
+      "text": "<@U0LIN> has joined the channel",
+      "ts": "1760000150.000150"
+    }
+  ],
+  "has_more": true,
+  "pin_count": 0,
+  "response_metadata": {
+    "next_cursor": "bmV4dF90czoxNzYwMDAwMTAw"
+  }
+}

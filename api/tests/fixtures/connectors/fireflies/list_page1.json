@@ -1,0 +1,27 @@
+{
+  "data": {
+    "transcripts": [
+      {
+        "id": "01TRANSCRIPT4",
+        "title": "Product review: onboarding v2",
+        "date": 1791644400000,
+        "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT4",
+        "organizer_email": "ada@example.com",
+        "participants": [
+          "ada@example.com",
+          "lin@example.com"
+        ]
+      },
+      {
+        "id": "01TRANSCRIPT3",
+        "title": "Pricing sync",
+        "date": 1791451800000,
+        "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT3",
+        "organizer_email": "ada@example.com",
+        "participants": [
+          "ada@example.com,sam@example.com"
+        ]
+      }
+    ]
+  }
+}

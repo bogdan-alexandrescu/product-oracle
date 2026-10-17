@@ -1,0 +1,14 @@
+{
+  "error": {
+    "code": 404,
+    "message": "File not found: 1DocGoneExample.",
+    "errors": [
+      {
+        "message": "File not found: 1DocGoneExample.",
+        "domain": "global",
+        "reason": "notFound"
+      }
+    ],
+    "status": "NOT_FOUND"
+  }
+}

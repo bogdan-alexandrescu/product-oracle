@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "channel": {
+    "id": "G0MPIM",
+    "name": "mpdm-ada--lin--sam-1",
+    "is_channel": false,
+    "is_group": true,
+    "is_im": false,
+    "is_mpim": true,
+    "is_private": true,
+    "is_archived": false,
+    "created": 1750000000
+  }
+}

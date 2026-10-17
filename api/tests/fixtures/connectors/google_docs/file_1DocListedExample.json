@@ -1,0 +1,20 @@
+{
+  "id": "1DocListedExample",
+  "name": "Pricing strategy",
+  "mimeType": "application/vnd.google-apps.document",
+  "trashed": false,
+  "webViewLink": "https://docs.google.com/document/d/1DocListedExample/edit",
+  "createdTime": "2026-09-01T09:00:00.000Z",
+  "modifiedTime": "2026-09-15T10:00:00.000Z",
+  "shared": false,
+  "owners": [
+    {
+      "displayName": "Lin Example",
+      "emailAddress": "lin@example.com"
+    }
+  ],
+  "lastModifyingUser": {
+    "displayName": "Ada Example",
+    "emailAddress": "ada@example.com"
+  }
+}

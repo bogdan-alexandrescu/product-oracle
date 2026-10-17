@@ -1,0 +1,26 @@
+{
+  "data": {
+    "transcripts": [
+      {
+        "id": "01TRANSCRIPT2",
+        "title": "Daily standup",
+        "date": 1791187200000,
+        "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT2",
+        "organizer_email": "ada@example.com",
+        "participants": [
+          "ada@example.com"
+        ]
+      },
+      {
+        "id": "01TRANSCRIPT1",
+        "title": "Product kickoff",
+        "date": 1789912800000,
+        "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT1",
+        "organizer_email": "ada@example.com",
+        "participants": [
+          "ada@example.com"
+        ]
+      }
+    ]
+  }
+}

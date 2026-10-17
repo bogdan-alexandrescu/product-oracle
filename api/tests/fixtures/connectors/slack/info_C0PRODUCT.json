@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "channel": {
+    "id": "C0PRODUCT",
+    "name": "product",
+    "is_channel": true,
+    "is_group": false,
+    "is_im": false,
+    "is_mpim": false,
+    "is_private": false,
+    "is_archived": false,
+    "created": 1750000000
+  }
+}

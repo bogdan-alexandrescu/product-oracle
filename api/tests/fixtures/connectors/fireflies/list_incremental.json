@@ -1,0 +1,46 @@
+{
+  "data": {
+    "transcripts": [
+      {
+        "id": "01TRANSCRIPT5",
+        "title": "Product roadmap planning",
+        "date": 1791799200000,
+        "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT5",
+        "organizer_email": "ada@example.com",
+        "participants": [
+          "ada@example.com"
+        ]
+      },
+      {
+        "id": "01TRANSCRIPT3",
+        "title": "Pricing sync",
+        "date": 1791451800000,
+        "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT3",
+        "organizer_email": "ada@example.com",
+        "participants": [
+          "ada@example.com,sam@example.com"
+        ]
+      },
+      {
+        "id": "01TRANSCRIPTL",
+        "title": "Product design crit",
+        "date": 1791414000000,
+        "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPTL",
+        "organizer_email": "ada@example.com",
+        "participants": [
+          "lin@example.com"
+        ]
+      },
+      {
+        "id": "01TRANSCRIPT0",
+        "title": "Product offsite",
+        "date": 1790845200000,
+        "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT0",
+        "organizer_email": "ada@example.com",
+        "participants": [
+          "ada@example.com"
+        ]
+      }
+    ]
+  }
+}

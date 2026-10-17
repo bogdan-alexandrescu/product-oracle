@@ -1,0 +1,8 @@
+{
+  "login": "example-user",
+  "id": 1001,
+  "type": "User",
+  "html_url": "https://github.com/example-user",
+  "url": "https://api.github.com/users/example-user",
+  "name": "Example User"
+}

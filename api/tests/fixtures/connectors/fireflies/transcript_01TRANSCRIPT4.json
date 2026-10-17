@@ -1,0 +1,56 @@
+{
+  "data": {
+    "transcript": {
+      "id": "01TRANSCRIPT4",
+      "title": "Product review: onboarding v2",
+      "date": 1791644400000,
+      "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT4",
+      "organizer_email": "ada@example.com",
+      "participants": [
+        "ada@example.com",
+        "lin@example.com"
+      ],
+      "meeting_attendees": [
+        {
+          "displayName": "Lin Example",
+          "email": "lin@example.com"
+        },
+        {
+          "displayName": "Guest",
+          "email": "guest@example.org"
+        }
+      ],
+      "sentences": [
+        {
+          "index": 0,
+          "speaker_name": "Ada Example",
+          "text": "Let's review onboarding v2."
+        },
+        {
+          "index": 1,
+          "speaker_name": "Ada Example",
+          "text": "The plan picker is done."
+        },
+        {
+          "index": 2,
+          "speaker_name": "Lin Example",
+          "text": "Pricing copy still needs legal."
+        },
+        {
+          "index": 3,
+          "speaker_name": "Ada Example",
+          "text": "Then we ship next sprint."
+        }
+      ],
+      "summary": {
+        "overview": "The team reviewed onboarding v2 and agreed to ship next sprint.",
+        "action_items": "**Lin Example**\nGet legal sign-off on pricing copy (01:12)\n**Ada Example**\nSchedule the launch (02:30)",
+        "keywords": [
+          "onboarding",
+          "pricing",
+          "plan picker"
+        ]
+      }
+    }
+  }
+}

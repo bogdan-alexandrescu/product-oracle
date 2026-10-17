@@ -1,0 +1,36 @@
+[
+  {
+    "url": "https://api.github.com/repos/example-org/widgets/issues/3",
+    "html_url": "https://github.com/example-org/widgets/issues/3",
+    "id": 9003,
+    "number": 3,
+    "title": "Importer drops empty rows",
+    "user": {
+      "login": "another-user",
+      "id": 1001,
+      "type": "User",
+      "html_url": "https://github.com/another-user",
+      "url": "https://api.github.com/users/another-user"
+    },
+    "labels": [
+      {
+        "id": 4318,
+        "name": "bug",
+        "color": "ededed",
+        "description": null
+      }
+    ],
+    "state": "closed",
+    "locked": false,
+    "assignee": null,
+    "assignees": [],
+    "milestone": null,
+    "comments": 0,
+    "created_at": "2026-09-01T10:00:00Z",
+    "updated_at": "2026-09-04T10:00:00Z",
+    "closed_at": "2026-09-04T09:00:00Z",
+    "author_association": "MEMBER",
+    "body": null,
+    "state_reason": "completed"
+  }
+]

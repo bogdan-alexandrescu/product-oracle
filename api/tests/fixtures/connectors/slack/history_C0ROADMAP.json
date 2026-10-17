@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "U0ADA",
+      "text": "Q3 roadmap draft is up for review.",
+      "ts": "1760000500.000500"
+    }
+  ],
+  "has_more": false,
+  "response_metadata": {
+    "next_cursor": ""
+  }
+}

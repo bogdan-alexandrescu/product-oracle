@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "U0ADA",
+      "text": "Kickoff notes for the onboarding revamp are in the doc.",
+      "ts": "1760000100.000100",
+      "team": "T0EXAMPLE"
+    }
+  ],
+  "has_more": false,
+  "pin_count": 0,
+  "response_metadata": {
+    "next_cursor": ""
+  }
+}

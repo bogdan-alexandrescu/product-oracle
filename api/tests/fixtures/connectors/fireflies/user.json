@@ -1,0 +1,9 @@
+{
+  "data": {
+    "user": {
+      "user_id": "01EXAMPLEUSER",
+      "email": "ada@example.com",
+      "name": "Ada Example"
+    }
+  }
+}

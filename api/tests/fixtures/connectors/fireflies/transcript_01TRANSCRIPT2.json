@@ -1,0 +1,27 @@
+{
+  "data": {
+    "transcript": {
+      "id": "01TRANSCRIPT2",
+      "title": "Daily standup",
+      "date": 1791187200000,
+      "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT2",
+      "organizer_email": "ada@example.com",
+      "participants": [
+        "ada@example.com"
+      ],
+      "meeting_attendees": [],
+      "sentences": [
+        {
+          "index": 0,
+          "speaker_name": "Ada Example",
+          "text": "Nothing blocking."
+        }
+      ],
+      "summary": {
+        "overview": null,
+        "action_items": null,
+        "keywords": null
+      }
+    }
+  }
+}

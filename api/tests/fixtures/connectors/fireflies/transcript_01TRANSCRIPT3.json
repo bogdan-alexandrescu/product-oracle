@@ -1,0 +1,27 @@
+{
+  "data": {
+    "transcript": {
+      "id": "01TRANSCRIPT3",
+      "title": "Pricing sync",
+      "date": 1791451800000,
+      "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT3",
+      "organizer_email": "ada@example.com",
+      "participants": [
+        "ada@example.com,sam@example.com"
+      ],
+      "meeting_attendees": [],
+      "sentences": [
+        {
+          "index": 0,
+          "speaker_name": "Sam Example",
+          "text": "Annual plans get a discount."
+        }
+      ],
+      "summary": {
+        "overview": "Pricing discussion.",
+        "action_items": null,
+        "keywords": null
+      }
+    }
+  }
+}

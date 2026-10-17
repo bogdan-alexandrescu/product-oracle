@@ -1,0 +1,24 @@
+{
+  "id": 3002,
+  "name": "gadgets",
+  "full_name": "example-org/gadgets",
+  "private": false,
+  "visibility": "public",
+  "owner": {
+    "login": "example-org",
+    "id": 2001,
+    "type": "Organization"
+  },
+  "html_url": "https://github.com/example-org/gadgets",
+  "default_branch": "main",
+  "has_issues": true,
+  "archived": false,
+  "url": "https://api.github.com/repos/example-org/gadgets",
+  "permissions": {
+    "admin": false,
+    "maintain": false,
+    "push": false,
+    "triage": false,
+    "pull": true
+  }
+}

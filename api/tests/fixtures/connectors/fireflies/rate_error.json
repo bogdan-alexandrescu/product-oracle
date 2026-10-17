@@ -1,0 +1,16 @@
+{
+  "data": null,
+  "errors": [
+    {
+      "message": "Too many requests. Please retry after 1:00:00 AM (UTC)",
+      "code": "too_many_requests",
+      "extensions": {
+        "code": "too_many_requests",
+        "status": 429,
+        "metadata": {
+          "retryAfter": 1760000000000
+        }
+      }
+    }
+  ]
+}

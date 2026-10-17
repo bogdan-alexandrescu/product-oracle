@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "U0LIN",
+      "text": "Should onboarding v2 ship before the pricing change?",
+      "ts": "1760000200.000200",
+      "thread_ts": "1760000200.000200",
+      "reply_count": 3,
+      "reply_users": [
+        "U0ADA",
+        "U0LIN"
+      ],
+      "latest_reply": "1760000350.000700"
+    },
+    {
+      "type": "message",
+      "user": "U0ADA",
+      "text": "Yes, <@U0LIN>: pricing depends on the new plan picker.",
+      "ts": "1760000230.000500",
+      "thread_ts": "1760000200.000200",
+      "parent_user_id": "U0LIN"
+    },
+    {
+      "type": "message",
+      "user": "U0LIN",
+      "text": "Agreed, onboarding v2 first.",
+      "ts": "1760000260.000600",
+      "thread_ts": "1760000200.000200",
+      "parent_user_id": "U0LIN"
+    },
+    {
+      "type": "message",
+      "user": "U0ADA",
+      "text": "Update: legal signed off on the pricing copy.",
+      "ts": "1760000350.000700",
+      "thread_ts": "1760000200.000200",
+      "parent_user_id": "U0LIN"
+    }
+  ],
+  "has_more": false,
+  "response_metadata": {
+    "next_cursor": ""
+  }
+}

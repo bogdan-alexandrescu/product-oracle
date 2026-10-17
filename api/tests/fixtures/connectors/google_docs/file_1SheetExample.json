@@ -1,0 +1,20 @@
+{
+  "id": "1SheetExample",
+  "name": "Metrics",
+  "mimeType": "application/vnd.google-apps.spreadsheet",
+  "trashed": false,
+  "webViewLink": "https://drive.google.com/drive/folders/1SheetExample",
+  "createdTime": "2026-09-01T09:00:00.000Z",
+  "modifiedTime": "2026-10-01T10:00:00.000Z",
+  "shared": false,
+  "owners": [
+    {
+      "displayName": "Ada Example",
+      "emailAddress": "ada@example.com"
+    }
+  ],
+  "lastModifyingUser": {
+    "displayName": "Ada Example",
+    "emailAddress": "ada@example.com"
+  }
+}

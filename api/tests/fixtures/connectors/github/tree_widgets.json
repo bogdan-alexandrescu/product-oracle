@@ -1,0 +1,67 @@
+{
+  "sha": "7ree000000000000000000000000000000000001",
+  "url": "https://api.github.com/repos/example-org/widgets/git/trees/7ree000000000000000000000000000000000001",
+  "tree": [
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a000000000000000000000000000000000000001",
+      "size": 120,
+      "url": "https://api.github.com/repos/example-org/widgets/git/blobs/a000000000000000000000000000000000000001"
+    },
+    {
+      "path": "docs",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d0c5000000000000000000000000000000000001"
+    },
+    {
+      "path": "src",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "5c00000000000000000000000000000000000001"
+    },
+    {
+      "path": "docs/guide.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a000000000000000000000000000000000000002",
+      "size": 120,
+      "url": "https://api.github.com/repos/example-org/widgets/git/blobs/a000000000000000000000000000000000000002"
+    },
+    {
+      "path": "docs/api/endpoints.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a000000000000000000000000000000000000003",
+      "size": 120,
+      "url": "https://api.github.com/repos/example-org/widgets/git/blobs/a000000000000000000000000000000000000003"
+    },
+    {
+      "path": "docs/diagram.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a000000000000000000000000000000000000004",
+      "size": 4000,
+      "url": "https://api.github.com/repos/example-org/widgets/git/blobs/a000000000000000000000000000000000000004"
+    },
+    {
+      "path": "src/app.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a000000000000000000000000000000000000005",
+      "size": 120,
+      "url": "https://api.github.com/repos/example-org/widgets/git/blobs/a000000000000000000000000000000000000005"
+    },
+    {
+      "path": "src/README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a000000000000000000000000000000000000006",
+      "size": 120,
+      "url": "https://api.github.com/repos/example-org/widgets/git/blobs/a000000000000000000000000000000000000006"
+    }
+  ],
+  "truncated": false
+}

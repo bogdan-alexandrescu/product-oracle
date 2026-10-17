@@ -1,0 +1,27 @@
+{
+  "data": {
+    "transcript": {
+      "id": "01TRANSCRIPT1",
+      "title": "Product kickoff",
+      "date": 1789912800000,
+      "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT1",
+      "organizer_email": "ada@example.com",
+      "participants": [
+        "ada@example.com"
+      ],
+      "meeting_attendees": [],
+      "sentences": [
+        {
+          "index": 0,
+          "speaker_name": "Ada Example",
+          "text": "Welcome to the kickoff."
+        }
+      ],
+      "summary": {
+        "overview": "Kickoff.",
+        "action_items": null,
+        "keywords": null
+      }
+    }
+  }
+}

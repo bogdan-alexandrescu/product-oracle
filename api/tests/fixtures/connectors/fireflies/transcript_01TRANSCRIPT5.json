@@ -1,0 +1,27 @@
+{
+  "data": {
+    "transcript": {
+      "id": "01TRANSCRIPT5",
+      "title": "Product roadmap planning",
+      "date": 1791799200000,
+      "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT5",
+      "organizer_email": "ada@example.com",
+      "participants": [
+        "ada@example.com"
+      ],
+      "meeting_attendees": [],
+      "sentences": [
+        {
+          "index": 0,
+          "speaker_name": "Ada Example",
+          "text": "Roadmap for Q1."
+        }
+      ],
+      "summary": {
+        "overview": "Q1 roadmap.",
+        "action_items": null,
+        "keywords": null
+      }
+    }
+  }
+}
