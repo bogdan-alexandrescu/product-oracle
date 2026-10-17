@@ -118,25 +118,65 @@ Every table is `TenantScoped` unless noted.
   prd_review | eng_review`), status (`pending | approved | changes_requested |
   skipped`), approver_role, decided_by, decided_at, note, payload (jsonb).
 
+## Amendments (migration 0003, 2026-10-17)
+
+- **Connections are per user** (`connections`): one row per user per provider account
+  (`github | slack | notion | fireflies | google | claude`), credential encrypted with
+  `oracle.crypto`, `auth_mode` `oauth` (provider OAuth, refreshed) or `token` (a
+  pasted personal token, or `claude setup-token` for a Claude plan). Replaces
+  `source_credentials`.
+- **Sources are owned and private** (`sources.owner_user_id`, `connection_id`): what
+  a user's connections pull in is visible only to that user (S3 revised). Others see
+  it only as evidence the owner adds to the shared baseline (excerpt, url, ref), and a
+  run or an MCP call reads the items of the user it acts for. Source kinds add
+  `fireflies` and `google_docs`.
+- **Confidence** (`evidence.confidence` + `confidence_factors` + `scored_at`,
+  `entities.confidence`, `edges.confidence`): see the next section.
+- **Templates and themes**: `templates.kind` (`prd | roadmap`), `description`,
+  `builtin`, `archived_at` (delete = archive, so documents keep resolving); new
+  `themes` (design tokens + CSS for app, HTML and PDF); `documents.kind` and
+  `documents.theme`. Starting a PRD or roadmap draft asks for a template and a theme.
+- **Company settings** (`tenant_settings`, key → JSON): `iap_default_role`
+  (`commenter`), `default_claude_connection_id` (the Claude plan used when a user has
+  none; the owner's own plan first), `confidence_weights`.
+
+## Confidence
+
+`api/oracle/confidence.py` (shared, already on `main`) scores a source item or a piece
+of evidence from four factors, each 0–1, as a weighted mean so every number can be
+explained: **source** kind (code and releases highest, then tracker, docs, meetings,
+chat; planning documents get a bonus), **freshness** (halves every N days after the
+latest timestamp, per kind, with a floor), **mentions** (independent sources stating
+the same claim), and **goal impact** (the contribution of the goal link it supports).
+Defaults live in `DEFAULTS`; a company overrides them in the `confidence_weights`
+setting. The score sets how much a source weighs in outputs: search ranking
+(`rank_weight`), conflict resolution (`prefer`, falling back to precedence on a tie),
+a feature's priority confidence (mean of its evidence), the PRD's data-points table,
+and agent guidance (claims under `low` are flagged).
+
 ## Lanes
 
 Each lane is one SwarmCloud `claude-code` task, strategy `collect`, cloned from
-`main` after Lane 0 is merged. A lane owns only the paths listed; it may read
-anything. No lane edits migrations or models (Lane 0 owns them): a lane that needs
-a column stops and says so in its report. Every lane runs the full API suite, ruff
-(check + format), `make openapi`, web lint and build, and writes a report to
-`$SWARM_ARTIFACTS_DIR/<lane>-report.md`.
+`main` at a pinned commit. A lane owns only the paths listed; it may read anything.
+No lane edits migrations or models, except Lane D2 which owns migration 0004 for its
+OAuth tables; a lane that needs another column stops and says so in its report. Every
+lane runs the full API suite, ruff (check + format), `make openapi`, web lint and
+build, and writes a report to `$SWARM_ARTIFACTS_DIR/<lane>-report.md`. Product Oracle
+words only: one company's Oracle, its users and their roles.
 
 | Lane | Owns | Delivers |
 |---|---|---|
-| 0 Foundation | `api/migrations/`, models, `api/oracle/authz.py`, `api/oracle/crypto.py`, `api/oracle/runtokens.py`, `api/oracle/sources/base.py`, package skeletons, `api/pyproject.toml` + locks, app navigation (`web/app/layout.tsx`, nav, route stubs) | Migration 0002 and models above; `require_role()`; credential encryption; run-token mint/verify; the `Connector` protocol; router stubs; app navigation |
-| A Members | `api/oracle/members/`, role checks in `docs/`, `review/`, `export/`, IAP provisioning by invite, `web/app/settings/members/` | Roles enforced everywhere; members + invites API and UI |
-| B1 Sources | `api/oracle/sources/` (not `connectors/`), `oracle sync` CLI, `web/app/settings/sources/`, `web/app/sources/` | Source registry, credentials, sync engine with versions and snapshots, uploads, search API + UI |
-| B2 Connectors | `api/oracle/sources/connectors/` | GitHub, Slack, Notion connectors on the `Connector` protocol, tested on recorded fixtures |
-| C Baseline | `api/oracle/baseline/`, `oracle baseline push/pull`, `web/app/baseline/` | Graph API, locks, proposals, conflicts, traceability, YAML import/export, Baseline screen |
-| D MCP | `api/oracle/mcp/` | `/mcp` Streamable HTTP server, token + run-token auth, read and propose tools, contract tests |
-| E Runs | `api/oracle/runs/`, `api/oracle/swarm/`, `oracle tick` CLI, `web/app/runs/`, `web/app/inbox/` | Flow templates, estimates and approval, segment execution against SwarmCloud (fake in tests), checkpoints, Runs + Inbox screens |
-| F Priorities | `api/oracle/priorities/`, `api/oracle/templates/`, `web/app/priorities/`, `web/app/settings/templates/` | Scoring methods with explanations, dependency order, snapshots; template registry |
+| 0 Foundation (merged) | migrations 0002–0003, models, `authz`, `crypto`, `runtokens`, `confidence`, `sources/base.py`, app navigation | Data model, roles helper, encryption, run tokens, Connector protocol, router stubs |
+| A Members | `api/oracle/members/`, role checks in `docs/`, `review/`, `export/`, `auth/iap.py` provisioning, `web/app/settings/members/` | Roles enforced everywhere; members + invites; Google sign-in without an invite gets `iap_default_role` (commenter) |
+| K Connections | `api/oracle/connections/`, `api/oracle/llm/`, `api/oracle/tenant_settings*`, `web/app/settings/connections/` | Per-user connect / reconnect / disconnect (OAuth PKCE where configured, pasted token otherwise), token refresh, the Claude plan connection and a Messages-API gateway that uses the user's plan or the default plan, company settings API |
+| B1 Sources | `api/oracle/sources/` (not `connectors/`), `oracle sync` CLI, `web/app/settings/sources/`, `web/app/sources/` | Owner-scoped source registry, sync engine with versions and snapshots, uploads, item confidence, search ranked by relevance × confidence |
+| B2a GitHub + Notion | `api/oracle/sources/connectors/github.py`, `notion.py` (+ fixtures, tests) | Connectors on the protocol, provider OAuth metadata, recorded-fixture tests |
+| B2b Slack + Fireflies + Google Docs | `api/oracle/sources/connectors/slack.py`, `fireflies.py`, `google_docs.py` (+ fixtures, tests) | Same; Slack never ingests DMs |
+| C Baseline | `api/oracle/baseline/`, `oracle baseline push/pull`, `web/app/baseline/` | Graph API, locks, proposals, conflicts resolved by confidence then precedence, evidence scoring, traceability, YAML import/export, Baseline screen |
+| D1 MCP | `api/oracle/mcp/` (not `oauth/`) | `/mcp` Streamable HTTP; every REST operation as a tool (generated from the routes, so parity holds as routes are added) plus curated tools; API-token and run-token auth with scope checks |
+| D2 MCP OAuth | `api/oracle/mcp/oauth/`, migration 0004, `web/app/oauth/` | OAuth 2.1 authorization server for MCP clients: metadata, dynamic client registration, authorization code + PKCE with a consent screen behind Google sign-in, tokens, refresh, revoke |
+| E Runs | `api/oracle/runs/`, `api/oracle/swarm/`, `oracle tick` CLI, `web/app/runs/`, `web/app/inbox/` | Flow templates, estimates and approval, segments against a fake agent runtime until SwarmCloud #1433 lands, checkpoints, Runs + Inbox screens |
+| F Priorities + templates | `api/oracle/priorities/`, `api/oracle/templates/`, `web/app/priorities/`, `web/app/settings/templates/`, `web/app/settings/themes/`, new-draft picker | Scoring methods with explanations (confidence from evidence), dependency order, snapshots; PRD + roadmap templates and themes (add / edit / delete) with built-ins from `docs/research/`; template + theme picker when a draft starts |
 
-Merge order after the parallel lanes: A, B1, B2, C, F, D, E, then one integration pass
+Merge order: A, K, B1, B2a, B2b, C, F, D1, D2, E, then one integration pass
 (regenerate OpenAPI types, wire run artifacts into baseline import, end-to-end test).

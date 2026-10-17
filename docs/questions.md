@@ -1,4 +1,4 @@
-# Product Idea Pipeline — open questions
+# Product Oracle — decision log
 
 Working description (2026-10-16): an AI head of product. It turns a company's code,
 conversations and docs into a **baseline** that links company goals to products to
