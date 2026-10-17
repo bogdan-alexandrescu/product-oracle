@@ -2,6 +2,7 @@
 
     oracle push <draft.md> [--doc slug]
     oracle pull <doc> --version N [--out dir]
+    oracle sync [--source ID]
 
 Configuration comes from the environment (flags override it):
     ORACLE_URL        API base URL (default http://localhost:8000)
@@ -163,6 +164,52 @@ def pull(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: T
     return 0
 
 
+def _sync_line(result: dict[str, Any]) -> str:
+    source = result.get("source") or {}
+    name = source.get("name") or result.get("source_id")
+    counts = (
+        f"{result.get('upserted', 0)} item(s) seen, {result.get('versions_written', 0)} new "
+        f"version(s), {result.get('deleted', 0)} deleted"
+    )
+    outcome = result.get("outcome")
+    if outcome == "rate_limited":
+        wait = result.get("retry_after")
+        after = f", retry after {wait:g}s" if isinstance(wait, int | float) else ""
+        return f"{name}: rate limited, resumes from the saved position ({counts}{after})"
+    if outcome == "error":
+        return f"{name}: error: {result.get('error')}"
+    return f"{name}: synced ({counts})"
+
+
+def sync(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: TextIO) -> int:
+    with _client(args, transport) as client:
+        if args.source:
+            ids = [args.source]
+        else:
+            resp = _send(client, "GET", "/v1/sources")
+            if resp.status_code != 200:
+                raise _api_error(resp)
+            sources = resp.json()
+            # Uploads have nothing to pull; paused sources wait for a resume.
+            ids = [s["id"] for s in sources if s["kind"] != "upload" and s["status"] != "paused"]
+            if not ids:
+                print("No sources to sync", file=out)
+                return 0
+        failed = 0
+        for source_id in ids:
+            resp = _send(client, "POST", f"/v1/sources/{quote(str(source_id), safe='')}/sync")
+            if resp.status_code != 200:
+                if args.source:
+                    raise _api_error(resp)
+                print(f"{source_id}: {_api_error(resp)}", file=out)
+                failed += 1
+                continue
+            result = resp.json()
+            print(_sync_line(result), file=out)
+            failed += result.get("outcome") == "error"
+    return 1 if failed else 0
+
+
 def _json(value: Any) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
 
@@ -173,7 +220,7 @@ def _json(value: Any) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="oracle",
-        description="Push PRD drafts to Product Oracle and pull review feedback.",
+        description="Push PRD drafts to Product Oracle, pull review feedback, sync sources.",
         epilog="Environment: ORACLE_URL (default http://localhost:8000), ORACLE_API_TOKEN.",
     )
     common = argparse.ArgumentParser(add_help=False)
@@ -191,6 +238,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", type=int, required=True, help="version number")
     p.add_argument("--out", "-o", default=".", help="output directory (default: .)")
     p.set_defaults(func=pull)
+
+    p = sub.add_parser("sync", parents=[common], help="sync your sources now")
+    p.add_argument("--source", help="source id (default: every active source of yours)")
+    p.set_defaults(func=sync)
     return parser
 
 

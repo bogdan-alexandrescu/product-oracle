@@ -8,6 +8,7 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { DOCUMENTS, MOCK_LOGIN, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 
 type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
 type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
@@ -216,6 +217,7 @@ function save(db: Db) {
 /** Drops all mock state (used by the "Reset mock data" control). */
 export function resetMockData() {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(SOURCES_STORAGE_KEY);
 }
 
 // ---------------------------------------------------------------- domain helpers
@@ -494,6 +496,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (!db.session) return json(401, { detail: "Not authenticated" });
   if (p[1] === "me") return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email: db.session, role: "owner" });
+
+  if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
 
   if (p[1] === "comments" && p[2]) {
     const c = db.comments.find((x) => x.id === p[2]);
