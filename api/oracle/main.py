@@ -18,6 +18,7 @@ from oracle.review.router import router as review_router
 from oracle.runs.router import router as runs_router
 from oracle.sources.router import router as sources_router
 from oracle.templates.router import router as templates_router
+from oracle.tenant_settings_api import router as settings_router
 
 
 @asynccontextmanager
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     # v1 lanes add their routes to these (empty until then).
     app.include_router(members_router)
     app.include_router(connections_router)
+    app.include_router(settings_router)
     app.include_router(sources_router)
     app.include_router(baseline_router)
     app.include_router(priorities_router)

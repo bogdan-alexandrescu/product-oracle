@@ -17,6 +17,7 @@ test("workspace nav: hidden when signed out, lists every area once signed in", a
     ["nav-roadmap", "Roadmap"],
     ["nav-inbox", "Inbox"],
     ["nav-members", "Members"],
+    ["nav-connections", "Connections"],
     ["nav-sources", "Sources"],
     ["nav-templates", "Templates"],
   ]) {
@@ -44,6 +45,7 @@ test("workspace nav: each entry routes to its page", async ({ page }) => {
     ["nav-runs", "/runs", "Runs"],
     ["nav-inbox", "/inbox", "Inbox"],
     ["nav-members", "/settings/members", "Members"],
+    ["nav-connections", "/settings/connections", "Connections"],
     ["nav-sources", "/settings/sources", "Sources"],
     ["nav-templates", "/settings/templates", "Templates"],
     ["nav-prds", "/documents", "Documents"],

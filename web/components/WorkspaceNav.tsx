@@ -18,6 +18,7 @@ const MAIN: Item[] = [
 
 const SETTINGS: Item[] = [
   { label: "Members", href: "/settings/members", testId: "nav-members" },
+  { label: "Connections", href: "/settings/connections", testId: "nav-connections" },
   { label: "Sources", href: "/settings/sources", testId: "nav-sources" },
   { label: "Templates", href: "/settings/templates", testId: "nav-templates" },
 ];

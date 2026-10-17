@@ -7,6 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
+import { connectionsRoute } from "./connections";
 import { DOCUMENTS, MOCK_LOGIN, type DocumentSeed, type VersionSeed } from "./fixtures";
 
 type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
@@ -529,6 +530,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     Object.assign(f, await body<Schemas["FeedbackPatch"]>(), { updated_at: now() });
     return json(200, f);
   }
+
+  const connections = await connectionsRoute(req, p);
+  if (connections) return connections;
 
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) return json(200, db.documents.map((d) => documentSummary(db, d)));
