@@ -2,9 +2,9 @@
   "title": "oracle v1 integration",
   "label": "oracle-v1-integration",
   "repository_url": "https://github.com/bogdan-alexandrescu/product-oracle",
-  "repository_ref": "main",
-  "strategy": "direct-pr",
-  "on_step_failure": "stop",
+  "repository_ref": "d1f0af6a18660e8ca297a982bd91ebd7dad89339",
+  "strategy": "integrate",
+  "on_step_failure": "fail_workflow",
   "steps": [
     {
       "step_id": "integrate",
