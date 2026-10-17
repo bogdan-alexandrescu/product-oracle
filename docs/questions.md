@@ -34,6 +34,7 @@ Status: `open` · `answered` · `default` (engineering default I propose; veto a
 | P2 | Agent runtime: Claude Agent SDK in-app, SwarmCloud, Claude Managed Agents, or a workflow engine? | answered | **SwarmCloud** (https://swarm.saga.xyz), developed separately. Oracle orchestrates; the agents that do the work run as SwarmCloud tasks/workflows. |
 | P3 | Models and cost: Claude only or multi-provider; cost ceiling per pipeline run? | answered | Models: Claude only (default; SwarmCloud's codex profile is disabled). Cost: every run shows an estimate first; runs over **$50** wait for approval; live spend vs estimate; overrun > 1.5x estimate pauses and asks. |
 | P3b | Which Claude account pays for Oracle's own model calls | answered | A pool of Claude accounts with exactly SwarmCloud's account management (browser sign-in, refresh sweep, usage polling, states, holds, most-headroom choice, swap, drain, accounts screen and CLI), ported, not shared; for local personal experimental use. No lending; credentials encrypted in Oracle's database. Data connections stay per user. |
+| P3c | What a run's budget does, and what an overrun does | answered | The budget gates the estimate only (a run estimated over budget cannot start); spend is governed by the 1.5x overrun pause, which lets the running segment finish and keeps its output; an owner resumes or cancels. |
 | P4 | Stack and repo: language/framework, which GitHub org, monorepo? | answered | Python (FastAPI, async SQLAlchemy, Alembic) + Next.js/Tailwind. Standalone repo; ai-studio patterns may be copied, no shared code. Repo location: P4b. |
 | P4b | Which GitHub org/repo? | answered | `bogdan-alexandrescu/product-oracle`, next to SwarmCloud. This folder becomes the local checkout. |
 | R0 | Repo visibility for bogdan-alexandrescu/product-oracle | answered | **Public.** Company/customer data never committed (`private/` is gitignored). |
@@ -104,6 +105,7 @@ Facts checked against SwarmCloud's live catalogue on 2026-10-16 (`swarm_profiles
 |----|----------|--------|--------|
 | I1 | API: REST + OpenAPI with webhooks for run/draft/approval events | default | |
 | I2 | MCP: remote (Streamable HTTP + OAuth) with full parity, or read-only first? | answered | Full parity with the REST API, plus OAuth 2.1 (dynamic client registration, PKCE) for external MCP clients, in v1. |
+| I2b | Default scope for an MCP client that asks for none | answered | oracle:read and oracle:write, shown on the consent screen and capped by the user's role. |
 | I3 | UI: web only? Existing brand/design system, or design one? | open | |
 | I4 | Primary UX: chat with the head-of-product persona, or a document-and-pipeline workspace? | answered | Workspace (Baseline, Runs, PRDs, Roadmap, Inbox) with a head-of-product chat docked beside every screen, aware of what is on screen. |
 
