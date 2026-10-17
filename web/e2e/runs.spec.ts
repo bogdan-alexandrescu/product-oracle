@@ -1,0 +1,124 @@
+import { expect, test, type Page } from "@playwright/test";
+
+import { login } from "./helpers";
+
+/** The run's status badge (Next keeps the list page mounted but hidden). */
+function status(page: Page) {
+  return page.getByTestId("run-status").filter({ visible: true });
+}
+
+async function openRuns(page: Page) {
+  await login(page);
+  await page.getByTestId("nav-runs").click();
+  await expect(page.getByRole("heading", { level: 1, name: "Runs" })).toBeVisible();
+}
+
+test("runs list shows each run with its status, estimate and spend", async ({ page }) => {
+  await openRuns(page);
+  const rows = page.getByTestId("run-row");
+  await expect(rows).toHaveCount(4);
+  const waiting = rows.filter({ hasText: "team-onboarding" });
+  await expect(waiting).toContainText("Waiting for review");
+  await expect(waiting).toContainText("Confirm the baseline");
+  await expect(waiting).toContainText("$26.50");
+  await expect(rows.filter({ hasText: "usage-alerts-v2" })).toContainText("Awaiting cost approval");
+  await expect(rows.filter({ hasText: "team-workspaces" })).toContainText("Paused: over budget");
+});
+
+test("run detail: approve each checkpoint through to the imported PRD", async ({ page }) => {
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByTestId("run-notes")).toContainText("Local agent runtime");
+  await expect(page.getByTestId("run-spent")).toHaveText("$6.30");
+
+  // The baseline's artifacts can be read before deciding.
+  const baseline = page.getByTestId("segment-baseline");
+  await baseline.getByRole("button", { name: "baseline.yaml" }).click();
+  await expect(page.getByTestId("artifact-content")).toContainText("confidence");
+
+  // Requesting changes needs a note; the segment runs again.
+  const cp = page.getByTestId("checkpoint-baseline_confirm");
+  await expect(cp.getByRole("button", { name: "Request changes" })).toBeDisabled();
+  await cp.getByLabel("Note for the agents").fill("Add a target for G2");
+  await cp.getByRole("button", { name: "Request changes" }).click();
+  await expect(baseline).toContainText("attempt 2");
+  await expect(status(page)).toHaveText("Running");
+
+  const segments = ["baseline", "feature_set", "priority", "prd_draft"];
+  const checkpoints = ["baseline_confirm", "feature_set", "priority_order", "prd_review"];
+  for (const [i, kind] of checkpoints.entries()) {
+    await page.getByRole("button", { name: "Check agents now" }).click();
+    const row = page.getByTestId(`segment-${segments[i]}`).getByTestId(`checkpoint-${kind}`).filter({ hasText: "Waiting" });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "Approve and continue" }).click();
+    await expect(row).toHaveCount(0);
+  }
+  await expect(status(page)).toHaveText("Succeeded");
+  const prd = page.getByTestId("segment-prd_draft");
+  await expect(prd).toContainText("Imported as team-onboarding v1");
+  await prd.getByRole("link", { name: "team-onboarding v1" }).click();
+  await expect(page).toHaveURL(/\/documents\/team-onboarding\/v\/1$/);
+});
+
+test("new run: knobs, estimate before start, skipped checkpoints", async ({ page }) => {
+  await openRuns(page);
+  await page.getByRole("button", { name: "New run" }).click();
+  const dialog = page.getByRole("dialog", { name: "New run" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId("runtime-notes")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Start run" })).toBeDisabled();
+
+  await dialog.getByPlaceholder("new-prd-slug or an existing document").fill("billing-revamp");
+  await dialog.getByLabel("Stop for Feature set and dependencies").uncheck();
+  await dialog.getByLabel("Stop for Priority order").uncheck();
+  await dialog.getByRole("button", { name: "Estimate" }).click();
+  await expect(dialog.getByTestId("estimate-total")).toHaveText("$26.50");
+
+  // Changing a knob clears the estimate until it is re-run.
+  await dialog.getByLabel("Depth").selectOption("quick");
+  await expect(dialog.getByTestId("estimate")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Estimate" }).click();
+  await expect(dialog.getByTestId("estimate-total")).toHaveText("$13.25");
+
+  await dialog.getByRole("button", { name: "Start run" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await expect(status(page)).toHaveText("Running");
+  await expect(page.getByTestId("segment-feature_set")).toContainText("Feature set and dependencies: off");
+
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
+  // Feature set and priority order are off: two ticks run straight to the PRD draft.
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  await expect(page.getByTestId("segment-feature_set").getByTestId("checkpoint-feature_set")).toContainText("Skipped");
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  await expect(page.getByTestId("checkpoint-prd_review")).toContainText("Waiting");
+});
+
+test("new run over $50 waits for an owner's approval", async ({ page }) => {
+  await openRuns(page);
+  await page.getByRole("button", { name: "New run" }).click();
+  const dialog = page.getByRole("dialog", { name: "New run" });
+  await dialog.getByPlaceholder("new-prd-slug or an existing document").fill("platform-prd");
+  await dialog.getByLabel("Depth").selectOption("deep");
+  await dialog.getByRole("button", { name: "Estimate" }).click();
+  await expect(dialog.getByTestId("estimate-total")).toHaveText("$53.00");
+  await expect(dialog).toContainText("an owner approves the cost");
+  await dialog.getByRole("button", { name: "Ask an owner to approve" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+
+  await expect(status(page)).toHaveText("Awaiting cost approval");
+  await page.getByRole("button", { name: "Approve $53.00 and start" }).click();
+  await expect(status(page)).toHaveText("Running");
+});
+
+test("cancel a run", async ({ page }) => {
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Cancel run" }).click();
+  await expect(status(page)).toHaveText("Cancelled");
+  await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Skipped");
+  await expect(page.getByRole("button", { name: "Cancel run" })).toHaveCount(0);
+});

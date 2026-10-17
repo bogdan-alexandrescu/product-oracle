@@ -8,6 +8,7 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { DOCUMENTS, MOCK_LOGIN, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 
 type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
 type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
@@ -26,6 +27,8 @@ interface Db {
   comments: CommentRow[];
   reviews: ReviewRow[];
   feedback: FeedbackRow[];
+  /** Runs, checkpoints and their artifacts (./runs.ts); absent in data saved before runs existed. */
+  runs?: RunsDb;
 }
 
 const STORAGE_KEY = "po-mock-db-v1";
@@ -192,7 +195,42 @@ function seed(): Db {
   for (const s of a1.sections) addReview(db, a1, s.section_key, { verdict: "approved", note: null }, at("2026-10-03T10:00:00Z"));
   a1.approved_at = "2026-10-03T10:05:00Z";
   docs.get("usage-alerts")!.status = "approved";
+  db.runs = seedRuns(runsContext(db));
   return db;
+}
+
+function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
+  return {
+    db: db.runs,
+    userId: db.user_id,
+    feedback: db.feedback,
+    documents: db.documents,
+    latestVersion: (id) => {
+      const doc = db.documents.find((d) => d.id === id);
+      const vs = doc ? docVersions(db, doc) : [];
+      return vs.length ? vs[vs.length - 1].number : null;
+    },
+    // A run's draft becomes the next version: a copy of the latest one (or of the
+    // first fixture for a new document), so the review screens have something to show.
+    importDraft: (slug) => {
+      let doc = findDocument(db, slug);
+      if (!doc) {
+        doc = { id: uuid(), slug, title: "Example product PRD", status: "draft", template: null, template_version: null, created_at: now(), updated_at: now() };
+        db.documents.push(doc);
+      }
+      const latest = docVersions(db, doc).pop();
+      const seed = (DOCUMENTS as DocumentSeed[])[0].versions[0];
+      const base = latest
+        ? { number: latest.number + 1, created_at: now(), sections: latest.sections.map((x) => ({ key: x.section_key, level: x.level, heading: x.heading, body: x.body_md })), citations: [] }
+        : { ...seed, number: 1, created_at: now() };
+      const v = buildVersion(doc, base);
+      db.versions.push(v);
+      touch(db, doc.id);
+      return { document_id: doc.id, slug: doc.slug, version: v.number };
+    },
+    uuid,
+    now,
+  };
 }
 
 function load(): Db {
@@ -529,6 +567,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     Object.assign(f, await body<Schemas["FeedbackPatch"]>(), { updated_at: now() });
     return json(200, f);
   }
+
+  db.runs ??= seedRuns(runsContext(db));
+  const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
+  if (runs) return runs;
 
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) return json(200, db.documents.map((d) => documentSummary(db, d)));

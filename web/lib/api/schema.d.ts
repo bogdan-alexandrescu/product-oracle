@@ -352,10 +352,260 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/flows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Flows
+         * @description The built-in flows with their segments, checkpoints, agent roles and cost table.
+         */
+        get: operations["list_flows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Runs */
+        get: operations["list_runs"];
+        put?: never;
+        /**
+         * Create Run
+         * @description Create a draft run. Nothing runs and nothing is spent until it is started.
+         */
+        post: operations["create_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run */
+        get: operations["get_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Run
+         * @description Change a draft's document or knobs; its estimate is cleared.
+         */
+        patch: operations["update_run"];
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Estimate Run
+         * @description Per-segment cost estimate from the cost table; stored on the run.
+         */
+        post: operations["estimate_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Run
+         * @description Pin a snapshot and submit the first segment, or wait for an owner when the
+         *     estimate is over the approval threshold ($50).
+         */
+        post: operations["start_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Run
+         * @description Approve the cost of a run awaiting approval and start it.
+         */
+        post: operations["approve_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Run
+         * @description Resume a run paused on overrun; it may spend another half of its estimate.
+         */
+        post: operations["resume_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Run */
+        post: operations["cancel_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Checkpoint
+         * @description Approve a checkpoint (the next segment starts) or request changes (the segment
+         *     runs again with the note).
+         */
+        post: operations["decide_checkpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/segments/{seq}/artifacts/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Artifact */
+        get: operations["get_run_artifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Inbox
+         * @description What waits on me: checkpoints for my role, runs waiting for an owner's approval
+         *     or overrun decision, and open feedback on documents I can approve.
+         */
+        get: operations["get_inbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/internal/tick": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tick
+         * @description Advance this company's active runs (``oracle tick`` calls it on a schedule).
+         */
+        post: operations["tick"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AgentRoleOut */
+        AgentRoleOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Base Usd */
+            base_usd: number;
+        };
         /** ApproveOut */
         ApproveOut: {
             /**
@@ -369,6 +619,66 @@ export interface components {
              */
             document_status: "draft" | "in_review" | "approved";
             version: components["schemas"]["VersionSummary"];
+        };
+        /** CheckpointDecision */
+        CheckpointDecision: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approved" | "changes_requested";
+            /** Note */
+            note?: string | null;
+        };
+        /** CheckpointOut */
+        CheckpointOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "changes_requested" | "skipped";
+            /**
+             * Approver Role
+             * @enum {string}
+             */
+            approver_role: "viewer" | "commenter" | "approver" | "owner";
+            /** Segment Seq */
+            segment_seq?: number | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
         };
         /** CitationOut */
         CitationOut: {
@@ -529,6 +839,49 @@ export interface components {
              */
             updated_at: string;
         };
+        /** DraftImport */
+        DraftImport: {
+            /** Document Id */
+            document_id?: string | null;
+            /** Slug */
+            slug?: string | null;
+            /** Version */
+            version?: number | null;
+            /** Created */
+            created?: boolean | null;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
+            /** Error */
+            error?: string | null;
+        };
+        /** EstimateOut */
+        EstimateOut: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Depth
+             * @enum {string}
+             */
+            depth: "quick" | "standard" | "deep";
+            /** Total Usd */
+            total_usd: number;
+            /** Segments */
+            segments: components["schemas"]["SegmentEstimate"][];
+            /** Approval Threshold Usd */
+            approval_threshold_usd: number;
+            /** Needs Approval */
+            needs_approval: boolean;
+            /** Budget Usd */
+            budget_usd?: number | null;
+            /** Within Budget */
+            within_budget: boolean;
+        };
         /** FeedbackItemOut */
         FeedbackItemOut: {
             /**
@@ -616,6 +969,64 @@ export interface components {
             /** Addressed In Version */
             addressed_in_version?: number | null;
         };
+        /** FlowCatalog */
+        FlowCatalog: {
+            /** Flows */
+            flows: components["schemas"]["FlowOut"][];
+            /** Roles */
+            roles: components["schemas"]["AgentRoleOut"][];
+            /** Depths */
+            depths: {
+                [key: string]: number;
+            };
+            /** Approval Threshold Usd */
+            approval_threshold_usd: number;
+            /** Overrun Factor */
+            overrun_factor: number;
+            /** Runtime */
+            runtime: string;
+            /** Runtime Notes */
+            runtime_notes: string[];
+        };
+        /** FlowOut */
+        FlowOut: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "baseline_to_prd" | "feedback_loop";
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Requires Document */
+            requires_document: boolean;
+            /** Segments */
+            segments: components["schemas"]["FlowSegmentOut"][];
+        };
+        /** FlowSegmentOut */
+        FlowSegmentOut: {
+            /** Name */
+            name: string;
+            /** Title */
+            title: string;
+            /** Roles */
+            roles: string[];
+            /** Scopes */
+            scopes: string[];
+            /** Outputs */
+            outputs: string[];
+            /**
+             * Checkpoint
+             * @enum {string}
+             */
+            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review";
+            /**
+             * Approver Role
+             * @enum {string}
+             */
+            approver_role: "viewer" | "commenter" | "approver" | "owner";
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -650,6 +1061,160 @@ export interface components {
             cite_key?: string | null;
             /** Line */
             line?: number | null;
+        };
+        /** InboxCheckpoint */
+        InboxCheckpoint: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "changes_requested" | "skipped";
+            /**
+             * Approver Role
+             * @enum {string}
+             */
+            approver_role: "viewer" | "commenter" | "approver" | "owner";
+            /** Segment Seq */
+            segment_seq?: number | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            /**
+             * Flow
+             * @enum {string}
+             */
+            flow: "baseline_to_prd" | "feedback_loop";
+            /** Flow Title */
+            flow_title: string;
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Segment Title */
+            segment_title?: string | null;
+        };
+        /** InboxDocument */
+        InboxDocument: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Latest Version */
+            latest_version?: number | null;
+            /** Open Count */
+            open_count: number;
+            /** Items */
+            items: components["schemas"]["InboxFeedbackItem"][];
+        };
+        /** InboxFeedbackItem */
+        InboxFeedbackItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Summary */
+            summary: string;
+            /** Section Key */
+            section_key?: string | null;
+            /** Raised On Version */
+            raised_on_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** InboxOut */
+        InboxOut: {
+            /** Checkpoints */
+            checkpoints: components["schemas"]["InboxCheckpoint"][];
+            /** Approvals */
+            approvals: components["schemas"]["RunSummary"][];
+            /** Overruns */
+            overruns: components["schemas"]["RunSummary"][];
+            /** Feedback */
+            feedback: components["schemas"]["InboxDocument"][];
+            /** Total */
+            total: number;
+        };
+        /** KnobsIn */
+        KnobsIn: {
+            /**
+             * Depth
+             * @default standard
+             * @enum {string}
+             */
+            depth: "quick" | "standard" | "deep";
+            /**
+             * Roles
+             * @default {}
+             */
+            roles: {
+                [key: string]: string[];
+            };
+            /**
+             * Checkpoints
+             * @default {}
+             */
+            checkpoints: {
+                [key: string]: boolean;
+            };
+            /** Budget Usd */
+            budget_usd?: number | null;
+        };
+        /** KnobsOut */
+        KnobsOut: {
+            /**
+             * Depth
+             * @enum {string}
+             */
+            depth: "quick" | "standard" | "deep";
+            /** Roles */
+            roles: {
+                [key: string]: string[];
+            };
+            /** Checkpoints */
+            checkpoints: {
+                [key: string]: boolean;
+            };
+            /** Budget Usd */
+            budget_usd?: number | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -707,6 +1272,137 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+        };
+        /** RunCreate */
+        RunCreate: {
+            /**
+             * Flow
+             * @enum {string}
+             */
+            flow: "baseline_to_prd" | "feedback_loop";
+            /** Document */
+            document?: string | null;
+            /**
+             * @default {
+             *       "depth": "standard",
+             *       "roles": {},
+             *       "checkpoints": {}
+             *     }
+             */
+            knobs: components["schemas"]["KnobsIn"];
+        };
+        /** RunOut */
+        RunOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Flow
+             * @enum {string}
+             */
+            flow: "baseline_to_prd" | "feedback_loop";
+            /** Flow Title */
+            flow_title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "awaiting_approval" | "running" | "awaiting_checkpoint" | "paused_overrun" | "succeeded" | "failed" | "cancelled";
+            /** Document Id */
+            document_id?: string | null;
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Estimate Usd */
+            estimate_usd?: number | null;
+            /** Spent Usd */
+            spent_usd: number;
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Waiting On */
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review") | null;
+            /** Error */
+            error?: string | null;
+            knobs: components["schemas"]["KnobsOut"];
+            /** Snapshot Id */
+            snapshot_id?: string | null;
+            /** Snapshot As Of */
+            snapshot_as_of?: string | null;
+            /** Approved By */
+            approved_by?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Needs Approval */
+            needs_approval: boolean;
+            /** Overrun Ceiling Usd */
+            overrun_ceiling_usd?: number | null;
+            /** Runtime */
+            runtime: string;
+            /** Notes */
+            notes: string[];
+            /** Segments */
+            segments: components["schemas"]["SegmentOut"][];
+            /** Checkpoints */
+            checkpoints: components["schemas"]["CheckpointOut"][];
+        };
+        /** RunPatch */
+        RunPatch: {
+            /** Document */
+            document?: string | null;
+            knobs?: components["schemas"]["KnobsIn"] | null;
+        };
+        /** RunSummary */
+        RunSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Flow
+             * @enum {string}
+             */
+            flow: "baseline_to_prd" | "feedback_loop";
+            /** Flow Title */
+            flow_title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "awaiting_approval" | "running" | "awaiting_checkpoint" | "paused_overrun" | "succeeded" | "failed" | "cancelled";
+            /** Document Id */
+            document_id?: string | null;
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Estimate Usd */
+            estimate_usd?: number | null;
+            /** Spent Usd */
+            spent_usd: number;
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Waiting On */
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review") | null;
+            /** Error */
+            error?: string | null;
         };
         /** SectionDiff */
         SectionDiff: {
@@ -822,6 +1518,84 @@ export interface components {
              */
             created_at: string;
         };
+        /** SegmentAttempt */
+        SegmentAttempt: {
+            /** Attempt */
+            attempt: number;
+            /** Workflow Id */
+            workflow_id?: string | null;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /**
+             * Cost Usd
+             * @default 0
+             */
+            cost_usd: number;
+            /** Note */
+            note?: string | null;
+            /** State */
+            state?: string | null;
+        };
+        /** SegmentEstimate */
+        SegmentEstimate: {
+            /** Seq */
+            seq: number;
+            /** Name */
+            name: string;
+            /** Title */
+            title: string;
+            /** Roles */
+            roles: string[];
+            /** Estimate Usd */
+            estimate_usd: number;
+        };
+        /** SegmentOut */
+        SegmentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Seq */
+            seq: number;
+            /** Name */
+            name: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Roles */
+            roles: string[];
+            /** Scopes */
+            scopes: string[];
+            /**
+             * Checkpoint
+             * @enum {string}
+             */
+            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review";
+            /** Checkpoint On */
+            checkpoint_on: boolean;
+            /** Estimate Usd */
+            estimate_usd?: number | null;
+            /** Cost Usd */
+            cost_usd: number;
+            /** Workflow Id */
+            workflow_id?: string | null;
+            /** Artifacts */
+            artifacts: string[];
+            /** Attempts */
+            attempts: components["schemas"]["SegmentAttempt"][];
+            draft_import?: components["schemas"]["DraftImport"] | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Error */
+            error?: string | null;
+        };
         /**
          * TextQuoteSelector
          * @description W3C Web Annotation TextQuoteSelector, relative to the section's body_text.
@@ -839,6 +1613,19 @@ export interface components {
              * @default
              */
             suffix: string;
+        };
+        /** TickOut */
+        TickOut: {
+            /** Runs Checked */
+            runs_checked: number;
+            /** Segments Finished */
+            segments_finished: number;
+            /** Runs Advanced */
+            runs_advanced: number;
+            /** Runs Paused */
+            runs_paused: number;
+            /** Errors */
+            errors: string[];
         };
         /** ValidationError */
         ValidationError: {
@@ -1658,6 +2445,420 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_flows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlowCatalog"];
+                };
+            };
+        };
+    };
+    list_runs: {
+        parameters: {
+            query?: {
+                status?: ("draft" | "awaiting_approval" | "running" | "awaiting_checkpoint" | "paused_overrun" | "succeeded" | "failed" | "cancelled") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estimate_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstimateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_checkpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckpointDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_artifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                seq: number;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_inbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxOut"];
+                };
+            };
+        };
+    };
+    tick: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TickOut"];
                 };
             };
         };

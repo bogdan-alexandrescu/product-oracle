@@ -126,10 +126,10 @@ def test_v1_routers_are_mounted_and_empty():
     from oracle.baseline.router import router as baseline
     from oracle.members.router import router as members
     from oracle.priorities.router import router as priorities
-    from oracle.runs.router import router as runs
     from oracle.sources.router import router as sources
     from oracle.templates.router import router as templates
 
-    for router in (members, sources, baseline, priorities, templates, runs):
+    # runs (Lane E) has landed: tests/test_runs.py covers its routes.
+    for router in (members, sources, baseline, priorities, templates):
         assert router.routes == []
     assert app.openapi()["paths"]  # the app still builds its schema

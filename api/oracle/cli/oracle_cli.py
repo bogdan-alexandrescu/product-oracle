@@ -2,6 +2,7 @@
 
     oracle push <draft.md> [--doc slug]
     oracle pull <doc> --version N [--out dir]
+    oracle tick [--every SECONDS]
 
 Configuration comes from the environment (flags override it):
     ORACLE_URL        API base URL (default http://localhost:8000)
@@ -14,6 +15,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any, TextIO
 from urllib.parse import quote
@@ -163,6 +165,27 @@ def pull(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: T
     return 0
 
 
+def tick(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: TextIO) -> int:
+    """Advance active runs once, or every ``--every`` seconds until interrupted."""
+    with _client(args, transport) as client:
+        while True:
+            resp = _send(client, "POST", "/v1/internal/tick")
+            if resp.status_code != 200:
+                raise _api_error(resp)
+            r = resp.json()
+            print(
+                f"Checked {r['runs_checked']} run(s): {r['segments_finished']} segment(s) "
+                f"finished, {r['runs_advanced']} advanced, {r['runs_paused']} paused on overrun",
+                file=out,
+            )
+            for error in r.get("errors") or []:
+                print(f"  error: {error}", file=out)
+            if not args.every:
+                return 0
+            out.flush()
+            time.sleep(args.every)
+
+
 def _json(value: Any) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
 
@@ -173,7 +196,7 @@ def _json(value: Any) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="oracle",
-        description="Push PRD drafts to Product Oracle and pull review feedback.",
+        description="Push PRD drafts to Product Oracle, pull review feedback, advance runs.",
         epilog="Environment: ORACLE_URL (default http://localhost:8000), ORACLE_API_TOKEN.",
     )
     common = argparse.ArgumentParser(add_help=False)
@@ -191,6 +214,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", type=int, required=True, help="version number")
     p.add_argument("--out", "-o", default=".", help="output directory (default: .)")
     p.set_defaults(func=pull)
+
+    p = sub.add_parser("tick", parents=[common], help="advance active runs (poll their agents)")
+    p.add_argument("--every", type=float, metavar="SECONDS", help="repeat until interrupted")
+    p.set_defaults(func=tick)
     return parser
 
 
