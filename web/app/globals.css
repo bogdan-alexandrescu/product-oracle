@@ -17,3 +17,139 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* Document prose: section bodies rendered by MarkdownBody. */
+.doc-body {
+  font-size: 15.5px;
+  line-height: 1.75;
+  color: var(--color-neutral-800);
+}
+.doc-body > * + * {
+  margin-top: 0.85em;
+}
+.doc-body h4 {
+  font-weight: 600;
+  color: var(--color-neutral-900);
+}
+.doc-body ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}
+.doc-body ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+}
+.doc-body li + li {
+  margin-top: 0.3em;
+}
+.doc-body strong {
+  font-weight: 600;
+  color: var(--color-neutral-900);
+}
+.doc-body a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.doc-body code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-neutral-100);
+  border-radius: 3px;
+  padding: 0.05em 0.3em;
+}
+.doc-body pre {
+  background: var(--color-neutral-100);
+  border-radius: 6px;
+  padding: 0.75em 1em;
+  overflow-x: auto;
+}
+.doc-body pre code {
+  background: none;
+  padding: 0;
+}
+.doc-body blockquote {
+  border-left: 2px solid var(--color-neutral-300);
+  padding-left: 1em;
+  color: var(--color-neutral-600);
+}
+.doc-body .table-wrap {
+  overflow-x: auto;
+}
+.doc-body table {
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.doc-body th,
+.doc-body td {
+  border: 1px solid var(--color-neutral-200);
+  padding: 0.35em 0.75em;
+  text-align: left;
+}
+.doc-body th {
+  background: var(--color-neutral-50);
+  font-weight: 600;
+}
+
+/* Citation chip. */
+.cite-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25em;
+  margin: 0 0.1em;
+  padding: 0 0.4em;
+  border: 1px solid var(--color-neutral-300);
+  border-radius: 4px;
+  background: white;
+  font-size: 11.5px;
+  line-height: 1.6;
+  font-weight: 500;
+  color: var(--color-neutral-600);
+  vertical-align: 0.1em;
+  cursor: pointer;
+  user-select: none;
+}
+.cite-chip:hover,
+.cite-chip[aria-expanded="true"] {
+  border-color: var(--color-neutral-500);
+  color: var(--color-neutral-900);
+}
+.cite-chip:focus-visible {
+  outline: 2px solid var(--color-neutral-400);
+  outline-offset: 1px;
+}
+.cite-chip-missing {
+  border-color: var(--color-rose-300);
+  color: var(--color-rose-700);
+}
+
+/* Comment highlights. */
+mark.hl-comment {
+  background: var(--color-amber-100);
+  border-bottom: 2px solid var(--color-amber-300);
+  color: inherit;
+  cursor: pointer;
+}
+mark.hl-active {
+  background: var(--color-amber-200);
+  border-bottom-color: var(--color-amber-500);
+}
+mark.hl-pending {
+  background: var(--color-sky-100);
+  color: inherit;
+}
+
+/* Word-level diff. */
+.diff-ins {
+  background: var(--color-emerald-100);
+  color: var(--color-emerald-900);
+  text-decoration: none;
+  border-radius: 2px;
+}
+.diff-del {
+  background: var(--color-rose-100);
+  color: var(--color-rose-900);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-rose-400);
+  border-radius: 2px;
+}

@@ -1,65 +1,65 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 
-import { api, type DocumentSummary } from "@/lib/api/client";
-
-type State =
-  | { kind: "loading" }
-  | { kind: "ready"; documents: DocumentSummary[] }
-  | { kind: "error"; message: string };
+import { DocStatusBadge, ErrorNote, Loading } from "@/components/ui";
+import { api, unwrap } from "@/lib/api/client";
+import { formatDateTime } from "@/lib/format";
+import { useQuery } from "@/lib/use-query";
 
 export default function DocumentsPage() {
-  const router = useRouter();
-  const [state, setState] = useState<State>({ kind: "loading" });
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, response } = await api.GET("/v1/documents");
-      if (cancelled) return;
-      if (response.status === 401) {
-        router.replace("/login");
-      } else if (data) {
-        setState({ kind: "ready", documents: data });
-      } else if (response.status === 501) {
-        // Backend not implemented yet (lane 1): show the empty state.
-        setState({ kind: "ready", documents: [] });
-      } else {
-        setState({ kind: "error", message: `Could not load documents (${response.status}).` });
-      }
-    })().catch(() => !cancelled && setState({ kind: "error", message: "Cannot reach the API." }));
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+  const q = useQuery("documents", () => unwrap(api.GET("/v1/documents")));
+  const documents = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
   return (
-    <div>
-      <h1 className="mb-6 text-2xl font-semibold">Documents</h1>
-      {state.kind === "loading" && <p className="text-neutral-500">Loading…</p>}
-      {state.kind === "error" && <p className="text-red-700">{state.message}</p>}
-      {state.kind === "ready" && state.documents.length === 0 && (
+    <div className="mx-auto max-w-4xl px-6 py-8">
+      <h1 className="mb-6 text-2xl font-semibold tracking-tight text-neutral-900">Documents</h1>
+      {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {q.loading && <Loading />}
+      {q.data && documents.length === 0 && (
         <p className="text-neutral-600">
-          No documents yet. Import a draft with <code>POST /v1/documents/&#123;doc&#125;/versions</code>.
+          No documents yet. Import a draft with <code>POST /v1/documents/&#123;doc&#125;/versions</code> or{" "}
+          <code>oracle push draft.md</code>.
         </p>
       )}
-      {state.kind === "ready" && state.documents.length > 0 && (
-        <ul className="divide-y divide-neutral-200 rounded border border-neutral-200 bg-white">
-          {state.documents.map((d) => (
-            <li key={d.id} className="flex items-center justify-between px-4 py-3">
-              <Link href={`/documents/${d.slug}`} className="font-medium hover:underline">
-                {d.title}
-              </Link>
-              <span className="text-sm text-neutral-500">
-                {d.status}
-                {d.latest_version != null && ` · v${d.latest_version}`}
-              </span>
-            </li>
-          ))}
-        </ul>
+      {documents.length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
+            <tr>
+              <th className="px-4 py-2 font-medium">Document</th>
+              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium">Latest</th>
+              <th className="px-4 py-2 font-medium">Updated</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-200">
+            {documents.map((d) => (
+              <tr key={d.id} className="hover:bg-neutral-50">
+                <td className="px-4 py-3">
+                  <Link href={`/documents/${d.slug}`} className="font-medium text-neutral-900 hover:underline">
+                    {d.title}
+                  </Link>
+                  <div className="font-mono text-[11px] text-neutral-400">{d.slug}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <DocStatusBadge status={d.status} />
+                </td>
+                <td className="px-4 py-3 text-neutral-700">
+                  {d.latest_version != null ? (
+                    <Link href={`/documents/${d.slug}/v/${d.latest_version}`} className="hover:underline">
+                      v{d.latest_version}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-4 py-3 text-neutral-500">{formatDateTime(d.updated_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </div>
       )}
     </div>
   );
