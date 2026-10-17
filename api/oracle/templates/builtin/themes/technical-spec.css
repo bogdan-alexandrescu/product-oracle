@@ -1,0 +1,8 @@
+/* Technical spec: numbered headings, monospace blocks at full width, wide tables
+   with pass/fail cells, threshold callouts as left-ruled blockquotes. */
+body { max-width: 56rem; }
+pre { border-left: 3px solid var(--color-accent); }
+table { font-size: 0.85em; }
+th { white-space: nowrap; }
+blockquote { border-left-color: var(--color-accent); background: var(--color-surface); color: var(--color-text); padding: 0.4rem 0.8rem; }
+.prd-section[data-section-key="design"] { break-before: page; }

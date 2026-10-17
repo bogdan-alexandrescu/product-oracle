@@ -1254,6 +1254,1289 @@
           }
         }
       }
+    },
+    "/v1/priorities": {
+      "get": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "Get Priorities",
+        "description": "Rank the baseline's features by ``method``, in dependency order.\n\nFeatures that serve no confirmed goal sink to the bottom and are flagged;\ndependency cycles are listed in ``cycles`` and their members flagged.",
+        "operationId": "get_priorities",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "goal_weighted",
+                "rice",
+                "moscow",
+                "wsjf"
+              ],
+              "type": "string",
+              "default": "goal_weighted",
+              "title": "Method"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriorityRanking"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/priorities/snapshots": {
+      "post": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "Create Priority Snapshot",
+        "operationId": "create_priority_snapshot",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnapshotCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "List Priority Snapshots",
+        "operationId": "list_priority_snapshots",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SnapshotSummary"
+                  },
+                  "title": "Response List Priority Snapshots"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/priorities/snapshots/{snapshot_id}": {
+      "get": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "Get Priority Snapshot",
+        "operationId": "get_priority_snapshot",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "snapshot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Snapshot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/templates": {
+      "get": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "List Templates",
+        "description": "Live templates (built-ins seeded on first use); archived ones on request.",
+        "operationId": "list_templates",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "prd",
+                    "roadmap"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateSummary"
+                  },
+                  "title": "Response List Templates"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Create Template",
+        "operationId": "create_template",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation problems",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemsResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Key taken"
+          }
+        }
+      }
+    },
+    "/v1/templates/validate": {
+      "post": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Validate Template",
+        "description": "Check a body without saving it: heading ids, citations only in the final\nSources and data points section, that section present.",
+        "operationId": "validate_template",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateValidateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateValidateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/templates/{key}": {
+      "get": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Get Template",
+        "description": "A template with every version, archived or not (documents keep resolving).",
+        "operationId": "get_template",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Update Template",
+        "description": "Rename or describe in place; a changed body adds a new immutable version.",
+        "operationId": "update_template",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation problems",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Archive Template",
+        "description": "Delete = archive: hidden from pickers, still readable by the documents using it.",
+        "operationId": "archive_template",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/templates/{key}/versions/{n}": {
+      "get": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Get Template Version",
+        "operationId": "get_template_version",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateVersionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/templates/{key}/restore": {
+      "post": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Restore Template",
+        "operationId": "restore_template",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/themes": {
+      "get": {
+        "tags": [
+          "templates",
+          "themes"
+        ],
+        "summary": "List Themes",
+        "description": "Live themes for a document kind (themes of kind ``any`` included).",
+        "operationId": "list_themes",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "prd",
+                    "roadmap",
+                    "any"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ThemeOut"
+                  },
+                  "title": "Response List Themes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "templates",
+          "themes"
+        ],
+        "summary": "Create Theme",
+        "description": "Rejected (422) when a text colour misses WCAG AA contrast on the background.",
+        "operationId": "create_theme",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThemeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation problems",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemsResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Key taken"
+          }
+        }
+      }
+    },
+    "/v1/themes/validate": {
+      "post": {
+        "tags": [
+          "templates",
+          "themes"
+        ],
+        "summary": "Validate Theme",
+        "operationId": "validate_theme",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThemeValidateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeValidateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/themes/preview": {
+      "post": {
+        "tags": [
+          "templates",
+          "themes"
+        ],
+        "summary": "Preview Theme",
+        "description": "A sample document rendered with unsaved tokens and CSS, for the live preview.",
+        "operationId": "preview_theme",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThemePreviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/themes/{key}": {
+      "get": {
+        "tags": [
+          "templates",
+          "themes"
+        ],
+        "summary": "Get Theme",
+        "operationId": "get_theme",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "templates",
+          "themes"
+        ],
+        "summary": "Update Theme",
+        "operationId": "update_theme",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThemeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation problems",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "templates",
+          "themes"
+        ],
+        "summary": "Archive Theme",
+        "description": "Delete = archive: documents that use the theme still export with it.",
+        "operationId": "archive_theme",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/themes/{key}/restore": {
+      "post": {
+        "tags": [
+          "templates",
+          "themes"
+        ],
+        "summary": "Restore Theme",
+        "operationId": "restore_theme",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/drafts/recommend": {
+      "post": {
+        "tags": [
+          "templates",
+          "drafts"
+        ],
+        "summary": "Recommend Draft",
+        "description": "The template (with a one-line reason) and theme to start a PRD or roadmap with,\nfrom the picker answers; plus every live template and theme to override it.",
+        "operationId": "recommend_draft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recommendation"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/drafts": {
+      "post": {
+        "tags": [
+          "templates",
+          "drafts"
+        ],
+        "summary": "Start Draft",
+        "description": "Create the document (kind, template + version, theme) and its version 1 from the\ntemplate skeleton.",
+        "operationId": "start_draft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartDraftIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation problems",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemsResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Slug taken"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/drafts/defaults": {
+      "get": {
+        "tags": [
+          "templates",
+          "drafts"
+        ],
+        "summary": "Get Draft Defaults",
+        "description": "The company default template and theme per document kind.",
+        "operationId": "get_draft_defaults",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftDefaults"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "templates",
+          "drafts"
+        ],
+        "summary": "Set Draft Defaults",
+        "operationId": "set_draft_defaults",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftDefaults"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftDefaults"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation problems",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1285,6 +2568,30 @@
           "version"
         ],
         "title": "ApproveOut"
+      },
+      "Choice": {
+        "properties": {
+          "template": {
+            "type": "string",
+            "title": "Template"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          }
+        },
+        "type": "object",
+        "required": [
+          "template"
+        ],
+        "title": "Choice"
       },
       "CitationOut": {
         "properties": {
@@ -1512,6 +2819,43 @@
         "type": "object",
         "title": "CommentPatch"
       },
+      "ConfidenceUsed": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "evidence",
+              "baseline",
+              "attrs",
+              "default"
+            ],
+            "title": "Source"
+          },
+          "explain": {
+            "type": "string",
+            "title": "Explain"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceUsed"
+            },
+            "type": "array",
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "source",
+          "explain",
+          "evidence"
+        ],
+        "title": "ConfidenceUsed"
+      },
       "DiffOut": {
         "properties": {
           "document_id": {
@@ -1709,6 +3053,135 @@
           "updated_at"
         ],
         "title": "DocumentSummary"
+      },
+      "DraftDefaults": {
+        "properties": {
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Choice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Choice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "DraftDefaults",
+        "description": "Company default per document kind (tenant setting ``draft_defaults``)."
+      },
+      "EvidenceUsed": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "confidence",
+          "ref"
+        ],
+        "title": "EvidenceUsed"
+      },
+      "Explanation": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "goal_weighted",
+              "rice",
+              "moscow",
+              "wsjf"
+            ],
+            "title": "Method"
+          },
+          "formula": {
+            "type": "string",
+            "title": "Formula"
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inputs"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/ConfidenceUsed"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/GoalTerm"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "order": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "formula",
+          "inputs",
+          "confidence",
+          "goals",
+          "missing",
+          "steps"
+        ],
+        "title": "Explanation"
       },
       "FeedbackItemOut": {
         "properties": {
@@ -1958,6 +3431,61 @@
         "type": "object",
         "title": "FeedbackPatch"
       },
+      "GoalTerm": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          },
+          "weight_assumed": {
+            "type": "boolean",
+            "title": "Weight Assumed"
+          },
+          "contribution": {
+            "type": "integer",
+            "title": "Contribution"
+          },
+          "contribution_assumed": {
+            "type": "boolean",
+            "title": "Contribution Assumed"
+          },
+          "link_status": {
+            "type": "string",
+            "title": "Link Status"
+          },
+          "term": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal",
+          "title",
+          "weight",
+          "weight_assumed",
+          "contribution",
+          "contribution_assumed",
+          "link_status",
+          "term"
+        ],
+        "title": "GoalTerm"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2176,6 +3704,458 @@
         ],
         "title": "Me"
       },
+      "PrdAnswers": {
+        "properties": {
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "start_or_not",
+                  "commit_build",
+                  "bet_fixed_time",
+                  "choose_between",
+                  "technical_design"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "small_change",
+                  "new_feature",
+                  "new_product"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "readers": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "founder",
+                  "product_eng",
+                  "leadership",
+                  "engineers_or_agents"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readers"
+          },
+          "model_driven": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Driven"
+          }
+        },
+        "type": "object",
+        "title": "PrdAnswers",
+        "description": "At most four questions (docs/research/prd-formats.md, template picker)."
+      },
+      "PriorityRanking": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "goal_weighted",
+              "rice",
+              "moscow",
+              "wsjf"
+            ],
+            "title": "Method"
+          },
+          "formula": {
+            "type": "string",
+            "title": "Formula"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/RankedFeature"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "cycles": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Cycles"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/RankingCounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "formula",
+          "generated_at",
+          "features",
+          "cycles",
+          "counts"
+        ],
+        "title": "PriorityRanking"
+      },
+      "Problem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "Problem"
+      },
+      "ProblemsResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "type": "array",
+            "title": "Problems"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "problems"
+        ],
+        "title": "ProblemsResponse",
+        "description": "422 body when a template or theme fails validation: every problem at once."
+      },
+      "RankedFeature": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "score_rank": {
+            "type": "integer",
+            "title": "Score Rank"
+          },
+          "entity_id": {
+            "type": "string",
+            "title": "Entity Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "serves_goal": {
+            "type": "boolean",
+            "title": "Serves Goal"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "dependents": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dependents"
+          },
+          "explanation": {
+            "$ref": "#/components/schemas/Explanation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "score_rank",
+          "entity_id",
+          "key",
+          "title",
+          "status",
+          "score",
+          "serves_goal",
+          "flags",
+          "depends_on",
+          "dependents",
+          "explanation"
+        ],
+        "title": "RankedFeature"
+      },
+      "RankingCounts": {
+        "properties": {
+          "features": {
+            "type": "integer",
+            "title": "Features"
+          },
+          "no_goal": {
+            "type": "integer",
+            "title": "No Goal"
+          },
+          "unscored": {
+            "type": "integer",
+            "title": "Unscored"
+          },
+          "in_cycles": {
+            "type": "integer",
+            "title": "In Cycles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "features",
+          "no_goal",
+          "unscored",
+          "in_cycles"
+        ],
+        "title": "RankingCounts"
+      },
+      "RecommendIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrdAnswers"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoadmapAnswers"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "RecommendIn"
+      },
+      "Recommendation": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "template": {
+            "$ref": "#/components/schemas/TemplateOption"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThemeOption"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "theme_reason": {
+            "type": "string",
+            "title": "Theme Reason"
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variant"
+          },
+          "group_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group By"
+          },
+          "show_capacity": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Show Capacity"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "confirmed_goals": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Goals"
+          },
+          "company_default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Choice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateOption"
+            },
+            "type": "array",
+            "title": "Templates"
+          },
+          "themes": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeOption"
+            },
+            "type": "array",
+            "title": "Themes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "template",
+          "reason",
+          "theme",
+          "theme_reason",
+          "warnings",
+          "templates",
+          "themes"
+        ],
+        "title": "Recommendation"
+      },
       "ReplyCreate": {
         "properties": {
           "body": {
@@ -2233,6 +4213,130 @@
         ],
         "title": "ResolutionReport",
         "description": "How each feedback item raised on earlier versions was handled, as of ``version``."
+      },
+      "RoadmapAnswers": {
+        "properties": {
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "board",
+                  "team",
+                  "engineering",
+                  "public"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
+          "external_dates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Dates"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "one_cycle",
+                  "one_two_quarters",
+                  "up_to_two_years"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon"
+          },
+          "planning_style": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "cycles",
+                  "sprints",
+                  "continuous"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planning Style"
+          },
+          "tracker_connected": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Connected"
+          },
+          "confirmed_goals": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Goals"
+          },
+          "teams": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Teams"
+          },
+          "show_capacity": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Show Capacity"
+          },
+          "public_version": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Version"
+          }
+        },
+        "type": "object",
+        "title": "RoadmapAnswers",
+        "description": "docs/research/roadmap-formats.md, questions the template picker should ask."
       },
       "SectionDiff": {
         "properties": {
@@ -2541,6 +4645,849 @@
         "title": "SectionVerdict",
         "description": "Latest verdict for a section in this version."
       },
+      "SnapshotCreate": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "goal_weighted",
+              "rice",
+              "moscow",
+              "wsjf"
+            ],
+            "title": "Method",
+            "default": "goal_weighted"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "SnapshotCreate"
+      },
+      "SnapshotOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "goal_weighted",
+              "rice",
+              "moscow",
+              "wsjf"
+            ],
+            "title": "Method"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "feature_count": {
+            "type": "integer",
+            "title": "Feature Count"
+          },
+          "top": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Top"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          },
+          "ranking": {
+            "items": {
+              "$ref": "#/components/schemas/RankedFeature"
+            },
+            "type": "array",
+            "title": "Ranking"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "method",
+          "created_by",
+          "created_at",
+          "note",
+          "feature_count",
+          "top",
+          "params",
+          "ranking"
+        ],
+        "title": "SnapshotOut"
+      },
+      "SnapshotSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "goal_weighted",
+              "rice",
+              "moscow",
+              "wsjf"
+            ],
+            "title": "Method"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "feature_count": {
+            "type": "integer",
+            "title": "Feature Count"
+          },
+          "top": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Top"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "method",
+          "created_by",
+          "created_at",
+          "note",
+          "feature_count",
+          "top"
+        ],
+        "title": "SnapshotSummary"
+      },
+      "StartDraftIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "template": {
+            "type": "string",
+            "title": "Template"
+          },
+          "template_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Version"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "template"
+        ],
+        "title": "StartDraftIn"
+      },
+      "StartDraftOut": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "template": {
+            "type": "string",
+            "title": "Template"
+          },
+          "template_version": {
+            "type": "integer",
+            "title": "Template Version"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "slug",
+          "title",
+          "kind",
+          "template",
+          "template_version",
+          "theme",
+          "version"
+        ],
+        "title": "StartDraftOut"
+      },
+      "TemplateCreate": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "required_sections": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "kind",
+          "body"
+        ],
+        "title": "TemplateCreate"
+      },
+      "TemplateOption": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "latest_version": {
+            "type": "integer",
+            "title": "Latest Version"
+          },
+          "suggested_theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Theme"
+          },
+          "suggest_when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest When"
+          },
+          "builtin": {
+            "type": "boolean",
+            "title": "Builtin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "description",
+          "latest_version",
+          "suggested_theme",
+          "suggest_when",
+          "builtin"
+        ],
+        "title": "TemplateOption"
+      },
+      "TemplateOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "builtin": {
+            "type": "boolean",
+            "title": "Builtin"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "latest_version": {
+            "type": "integer",
+            "title": "Latest Version"
+          },
+          "suggested_theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Theme"
+          },
+          "suggest_when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest When"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateVersionOut"
+            },
+            "type": "array",
+            "title": "Versions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "name",
+          "kind",
+          "description",
+          "builtin",
+          "archived_at",
+          "created_at",
+          "latest_version",
+          "suggested_theme",
+          "suggest_when",
+          "versions"
+        ],
+        "title": "TemplateOut"
+      },
+      "TemplateSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "builtin": {
+            "type": "boolean",
+            "title": "Builtin"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "latest_version": {
+            "type": "integer",
+            "title": "Latest Version"
+          },
+          "suggested_theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Theme"
+          },
+          "suggest_when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest When"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "name",
+          "kind",
+          "description",
+          "builtin",
+          "archived_at",
+          "created_at",
+          "latest_version",
+          "suggested_theme",
+          "suggest_when"
+        ],
+        "title": "TemplateSummary"
+      },
+      "TemplateUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "required_sections": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Sections"
+          }
+        },
+        "type": "object",
+        "title": "TemplateUpdate",
+        "description": "Name and description change in place; a new body (or required sections) adds an\nimmutable version."
+      },
+      "TemplateValidateIn": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Body"
+          },
+          "required_sections": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "TemplateValidateIn"
+      },
+      "TemplateValidateOut": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "type": "array",
+            "title": "Problems"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys"
+          },
+          "suggested_theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Theme"
+          },
+          "suggest_when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest When"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid",
+          "problems",
+          "section_keys",
+          "suggested_theme",
+          "suggest_when"
+        ],
+        "title": "TemplateValidateOut"
+      },
+      "TemplateVersionOut": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "required_sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Sections"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "suggested_theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Theme"
+          },
+          "suggest_when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest When"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "body",
+          "required_sections",
+          "created_by",
+          "created_at"
+        ],
+        "title": "TemplateVersionOut"
+      },
       "TextQuoteSelector": {
         "properties": {
           "exact": {
@@ -2565,6 +5512,499 @@
         ],
         "title": "TextQuoteSelector",
         "description": "W3C Web Annotation TextQuoteSelector, relative to the section's body_text."
+      },
+      "ThemeCreate": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap",
+              "any"
+            ],
+            "title": "Kind",
+            "default": "any"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/ThemeTokens"
+          },
+          "css": {
+            "type": "string",
+            "maxLength": 100000,
+            "title": "Css",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "ThemeCreate"
+      },
+      "ThemeFeatures": {
+        "properties": {
+          "toc": {
+            "type": "boolean",
+            "title": "Toc",
+            "default": false
+          },
+          "status_header": {
+            "type": "boolean",
+            "title": "Status Header",
+            "default": true
+          },
+          "page_fit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "one_page"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Fit"
+          },
+          "numbered_headings": {
+            "type": "boolean",
+            "title": "Numbered Headings",
+            "default": false
+          },
+          "legend": {
+            "type": "boolean",
+            "title": "Legend",
+            "default": false
+          },
+          "appendix_break": {
+            "type": "boolean",
+            "title": "Appendix Break",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ThemeFeatures"
+      },
+      "ThemeFonts": {
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "heading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading"
+          },
+          "mono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mono"
+          }
+        },
+        "type": "object",
+        "title": "ThemeFonts"
+      },
+      "ThemeOption": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap",
+              "any"
+            ],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "description",
+          "kind"
+        ],
+        "title": "ThemeOption"
+      },
+      "ThemeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap",
+              "any"
+            ],
+            "title": "Kind"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/ThemeTokens"
+          },
+          "css": {
+            "type": "string",
+            "title": "Css"
+          },
+          "builtin": {
+            "type": "boolean",
+            "title": "Builtin"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "name",
+          "kind",
+          "description",
+          "tokens",
+          "css",
+          "builtin",
+          "archived_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ThemeOut"
+      },
+      "ThemePage": {
+        "properties": {
+          "size": {
+            "type": "string",
+            "enum": [
+              "A4",
+              "Letter"
+            ],
+            "title": "Size",
+            "default": "A4"
+          },
+          "orientation": {
+            "type": "string",
+            "enum": [
+              "portrait",
+              "landscape"
+            ],
+            "title": "Orientation",
+            "default": "portrait"
+          }
+        },
+        "type": "object",
+        "title": "ThemePage"
+      },
+      "ThemePreviewIn": {
+        "properties": {
+          "tokens": {
+            "$ref": "#/components/schemas/ThemeTokens"
+          },
+          "css": {
+            "type": "string",
+            "maxLength": 100000,
+            "title": "Css",
+            "default": ""
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind",
+            "default": "prd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tokens"
+        ],
+        "title": "ThemePreviewIn"
+      },
+      "ThemeSpacing": {
+        "properties": {
+          "base_size_pt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Size Pt"
+          },
+          "line_height": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Height"
+          },
+          "page_margin_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Margin Mm"
+          },
+          "section_gap_rem": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Gap Rem"
+          }
+        },
+        "type": "object",
+        "title": "ThemeSpacing"
+      },
+      "ThemeTokens": {
+        "properties": {
+          "fonts": {
+            "$ref": "#/components/schemas/ThemeFonts"
+          },
+          "colors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Colors"
+          },
+          "spacing": {
+            "$ref": "#/components/schemas/ThemeSpacing"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ThemePage"
+          },
+          "features": {
+            "$ref": "#/components/schemas/ThemeFeatures"
+          }
+        },
+        "type": "object",
+        "title": "ThemeTokens"
+      },
+      "ThemeUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "prd",
+                  "roadmap",
+                  "any"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tokens": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThemeTokens"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "css": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Css"
+          }
+        },
+        "type": "object",
+        "title": "ThemeUpdate"
+      },
+      "ThemeValidateIn": {
+        "properties": {
+          "tokens": {
+            "$ref": "#/components/schemas/ThemeTokens"
+          },
+          "css": {
+            "type": "string",
+            "maxLength": 100000,
+            "title": "Css",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "tokens"
+        ],
+        "title": "ThemeValidateIn"
+      },
+      "ThemeValidateOut": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "type": "array",
+            "title": "Problems"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid",
+          "problems"
+        ],
+        "title": "ThemeValidateOut"
       },
       "ValidationError": {
         "properties": {

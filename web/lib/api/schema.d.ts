@@ -352,6 +352,331 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/priorities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Priorities
+         * @description Rank the baseline's features by ``method``, in dependency order.
+         *
+         *     Features that serve no confirmed goal sink to the bottom and are flagged;
+         *     dependency cycles are listed in ``cycles`` and their members flagged.
+         */
+        get: operations["get_priorities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/priorities/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Priority Snapshots */
+        get: operations["list_priority_snapshots"];
+        put?: never;
+        /** Create Priority Snapshot */
+        post: operations["create_priority_snapshot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/priorities/snapshots/{snapshot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Priority Snapshot */
+        get: operations["get_priority_snapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Templates
+         * @description Live templates (built-ins seeded on first use); archived ones on request.
+         */
+        get: operations["list_templates"];
+        put?: never;
+        /** Create Template */
+        post: operations["create_template"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Template
+         * @description Check a body without saving it: heading ids, citations only in the final
+         *     Sources and data points section, that section present.
+         */
+        post: operations["validate_template"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Template
+         * @description A template with every version, archived or not (documents keep resolving).
+         */
+        get: operations["get_template"];
+        put?: never;
+        post?: never;
+        /**
+         * Archive Template
+         * @description Delete = archive: hidden from pickers, still readable by the documents using it.
+         */
+        delete: operations["archive_template"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Template
+         * @description Rename or describe in place; a changed body adds a new immutable version.
+         */
+        patch: operations["update_template"];
+        trace?: never;
+    };
+    "/v1/templates/{key}/versions/{n}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Template Version */
+        get: operations["get_template_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates/{key}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Template */
+        post: operations["restore_template"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/themes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Themes
+         * @description Live themes for a document kind (themes of kind ``any`` included).
+         */
+        get: operations["list_themes"];
+        put?: never;
+        /**
+         * Create Theme
+         * @description Rejected (422) when a text colour misses WCAG AA contrast on the background.
+         */
+        post: operations["create_theme"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/themes/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Theme */
+        post: operations["validate_theme"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/themes/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Theme
+         * @description A sample document rendered with unsaved tokens and CSS, for the live preview.
+         */
+        post: operations["preview_theme"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/themes/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Theme */
+        get: operations["get_theme"];
+        put?: never;
+        post?: never;
+        /**
+         * Archive Theme
+         * @description Delete = archive: documents that use the theme still export with it.
+         */
+        delete: operations["archive_theme"];
+        options?: never;
+        head?: never;
+        /** Update Theme */
+        patch: operations["update_theme"];
+        trace?: never;
+    };
+    "/v1/themes/{key}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Theme */
+        post: operations["restore_theme"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/drafts/recommend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recommend Draft
+         * @description The template (with a one-line reason) and theme to start a PRD or roadmap with,
+         *     from the picker answers; plus every live template and theme to override it.
+         */
+        post: operations["recommend_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Draft
+         * @description Create the document (kind, template + version, theme) and its version 1 from the
+         *     template skeleton.
+         */
+        post: operations["start_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/drafts/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Draft Defaults
+         * @description The company default template and theme per document kind.
+         */
+        get: operations["get_draft_defaults"];
+        /** Set Draft Defaults */
+        put: operations["set_draft_defaults"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -369,6 +694,13 @@ export interface components {
              */
             document_status: "draft" | "in_review" | "approved";
             version: components["schemas"]["VersionSummary"];
+        };
+        /** Choice */
+        Choice: {
+            /** Template */
+            template: string;
+            /** Theme */
+            theme?: string | null;
         };
         /** CitationOut */
         CitationOut: {
@@ -443,6 +775,20 @@ export interface components {
             resolved?: boolean | null;
             /** Body */
             body?: string | null;
+        };
+        /** ConfidenceUsed */
+        ConfidenceUsed: {
+            /** Value */
+            value: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "evidence" | "baseline" | "attrs" | "default";
+            /** Explain */
+            explain: string;
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceUsed"][];
         };
         /** DiffOut */
         DiffOut: {
@@ -528,6 +874,46 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * DraftDefaults
+         * @description Company default per document kind (tenant setting ``draft_defaults``).
+         */
+        DraftDefaults: {
+            prd?: components["schemas"]["Choice"] | null;
+            roadmap?: components["schemas"]["Choice"] | null;
+        };
+        /** EvidenceUsed */
+        EvidenceUsed: {
+            /** Id */
+            id: string;
+            /** Confidence */
+            confidence: number | null;
+            /** Ref */
+            ref: string | null;
+        };
+        /** Explanation */
+        Explanation: {
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "goal_weighted" | "rice" | "moscow" | "wsjf";
+            /** Formula */
+            formula: string;
+            /** Inputs */
+            inputs: {
+                [key: string]: unknown;
+            };
+            confidence: components["schemas"]["ConfidenceUsed"];
+            /** Goals */
+            goals: components["schemas"]["GoalTerm"][];
+            /** Missing */
+            missing: string[];
+            /** Steps */
+            steps: string[];
+            /** Order */
+            order?: string[];
         };
         /** FeedbackItemOut */
         FeedbackItemOut: {
@@ -616,6 +1002,25 @@ export interface components {
             /** Addressed In Version */
             addressed_in_version?: number | null;
         };
+        /** GoalTerm */
+        GoalTerm: {
+            /** Goal */
+            goal: string;
+            /** Title */
+            title: string;
+            /** Weight */
+            weight: number;
+            /** Weight Assumed */
+            weight_assumed: boolean;
+            /** Contribution */
+            contribution: number;
+            /** Contribution Assumed */
+            contribution_assumed: boolean;
+            /** Link Status */
+            link_status: string;
+            /** Term */
+            term: number | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -684,6 +1089,137 @@ export interface components {
             /** Token Name */
             token_name?: string | null;
         };
+        /**
+         * PrdAnswers
+         * @description At most four questions (docs/research/prd-formats.md, template picker).
+         */
+        PrdAnswers: {
+            /** Decision */
+            decision?: ("start_or_not" | "commit_build" | "bet_fixed_time" | "choose_between" | "technical_design") | null;
+            /** Size */
+            size?: ("small_change" | "new_feature" | "new_product") | null;
+            /** Readers */
+            readers?: ("founder" | "product_eng" | "leadership" | "engineers_or_agents") | null;
+            /** Model Driven */
+            model_driven?: boolean | null;
+        };
+        /** PriorityRanking */
+        PriorityRanking: {
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "goal_weighted" | "rice" | "moscow" | "wsjf";
+            /** Formula */
+            formula: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Features */
+            features: components["schemas"]["RankedFeature"][];
+            /** Cycles */
+            cycles: string[][];
+            counts: components["schemas"]["RankingCounts"];
+        };
+        /** Problem */
+        Problem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Line */
+            line?: number | null;
+            /** Section Key */
+            section_key?: string | null;
+        };
+        /**
+         * ProblemsResponse
+         * @description 422 body when a template or theme fails validation: every problem at once.
+         */
+        ProblemsResponse: {
+            /** Detail */
+            detail: string;
+            /** Problems */
+            problems: components["schemas"]["Problem"][];
+        };
+        /** RankedFeature */
+        RankedFeature: {
+            /** Rank */
+            rank: number;
+            /** Score Rank */
+            score_rank: number;
+            /** Entity Id */
+            entity_id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Score */
+            score: number | null;
+            /** Serves Goal */
+            serves_goal: boolean;
+            /** Flags */
+            flags: string[];
+            /** Depends On */
+            depends_on: string[];
+            /** Dependents */
+            dependents: string[];
+            explanation: components["schemas"]["Explanation"];
+        };
+        /** RankingCounts */
+        RankingCounts: {
+            /** Features */
+            features: number;
+            /** No Goal */
+            no_goal: number;
+            /** Unscored */
+            unscored: number;
+            /** In Cycles */
+            in_cycles: number;
+        };
+        /** RecommendIn */
+        RecommendIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
+            prd?: components["schemas"]["PrdAnswers"] | null;
+            roadmap?: components["schemas"]["RoadmapAnswers"] | null;
+        };
+        /** Recommendation */
+        Recommendation: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
+            template: components["schemas"]["TemplateOption"];
+            /** Reason */
+            reason: string;
+            theme: components["schemas"]["ThemeOption"] | null;
+            /** Theme Reason */
+            theme_reason: string;
+            /** Variant */
+            variant?: string | null;
+            /** Group By */
+            group_by?: string | null;
+            /** Show Capacity */
+            show_capacity?: boolean | null;
+            /** Warnings */
+            warnings: string[];
+            /** Confirmed Goals */
+            confirmed_goals?: number | null;
+            company_default?: components["schemas"]["Choice"] | null;
+            /** Templates */
+            templates: components["schemas"]["TemplateOption"][];
+            /** Themes */
+            themes: components["schemas"]["ThemeOption"][];
+        };
         /** ReplyCreate */
         ReplyCreate: {
             /** Body */
@@ -707,6 +1243,30 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+        };
+        /**
+         * RoadmapAnswers
+         * @description docs/research/roadmap-formats.md, questions the template picker should ask.
+         */
+        RoadmapAnswers: {
+            /** Audience */
+            audience?: ("board" | "team" | "engineering" | "public") | null;
+            /** External Dates */
+            external_dates?: boolean | null;
+            /** Horizon */
+            horizon?: ("one_cycle" | "one_two_quarters" | "up_to_two_years") | null;
+            /** Planning Style */
+            planning_style?: ("cycles" | "sprints" | "continuous") | null;
+            /** Tracker Connected */
+            tracker_connected?: boolean | null;
+            /** Confirmed Goals */
+            confirmed_goals?: number | null;
+            /** Teams */
+            teams?: number | null;
+            /** Show Capacity */
+            show_capacity?: boolean | null;
+            /** Public Version */
+            public_version?: boolean | null;
         };
         /** SectionDiff */
         SectionDiff: {
@@ -822,6 +1382,278 @@ export interface components {
              */
             created_at: string;
         };
+        /** SnapshotCreate */
+        SnapshotCreate: {
+            /**
+             * Method
+             * @default goal_weighted
+             * @enum {string}
+             */
+            method: "goal_weighted" | "rice" | "moscow" | "wsjf";
+            /** Note */
+            note?: string | null;
+        };
+        /** SnapshotOut */
+        SnapshotOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "goal_weighted" | "rice" | "moscow" | "wsjf";
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Note */
+            note: string | null;
+            /** Feature Count */
+            feature_count: number;
+            /** Top */
+            top: string[];
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Ranking */
+            ranking: components["schemas"]["RankedFeature"][];
+        };
+        /** SnapshotSummary */
+        SnapshotSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "goal_weighted" | "rice" | "moscow" | "wsjf";
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Note */
+            note: string | null;
+            /** Feature Count */
+            feature_count: number;
+            /** Top */
+            top: string[];
+        };
+        /** StartDraftIn */
+        StartDraftIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
+            /** Title */
+            title: string;
+            /** Slug */
+            slug?: string | null;
+            /** Template */
+            template: string;
+            /** Template Version */
+            template_version?: number | null;
+            /** Theme */
+            theme?: string | null;
+        };
+        /** StartDraftOut */
+        StartDraftOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
+            /** Template */
+            template: string;
+            /** Template Version */
+            template_version: number;
+            /** Theme */
+            theme: string | null;
+            /** Version */
+            version: number;
+        };
+        /** TemplateCreate */
+        TemplateCreate: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
+            /** Description */
+            description?: string | null;
+            /** Body */
+            body: string;
+            /** Required Sections */
+            required_sections?: string[] | null;
+        };
+        /** TemplateOption */
+        TemplateOption: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Latest Version */
+            latest_version: number;
+            /** Suggested Theme */
+            suggested_theme: string | null;
+            /** Suggest When */
+            suggest_when: string | null;
+            /** Builtin */
+            builtin: boolean;
+        };
+        /** TemplateOut */
+        TemplateOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
+            /** Description */
+            description: string | null;
+            /** Builtin */
+            builtin: boolean;
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Latest Version */
+            latest_version: number;
+            /** Suggested Theme */
+            suggested_theme: string | null;
+            /** Suggest When */
+            suggest_when: string | null;
+            /** Versions */
+            versions: components["schemas"]["TemplateVersionOut"][];
+        };
+        /** TemplateSummary */
+        TemplateSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
+            /** Description */
+            description: string | null;
+            /** Builtin */
+            builtin: boolean;
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Latest Version */
+            latest_version: number;
+            /** Suggested Theme */
+            suggested_theme: string | null;
+            /** Suggest When */
+            suggest_when: string | null;
+        };
+        /**
+         * TemplateUpdate
+         * @description Name and description change in place; a new body (or required sections) adds an
+         *     immutable version.
+         */
+        TemplateUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Body */
+            body?: string | null;
+            /** Required Sections */
+            required_sections?: string[] | null;
+        };
+        /** TemplateValidateIn */
+        TemplateValidateIn: {
+            /** Body */
+            body: string;
+            /** Required Sections */
+            required_sections?: string[] | null;
+        };
+        /** TemplateValidateOut */
+        TemplateValidateOut: {
+            /** Valid */
+            valid: boolean;
+            /** Problems */
+            problems: components["schemas"]["Problem"][];
+            /** Section Keys */
+            section_keys: string[];
+            /** Suggested Theme */
+            suggested_theme: string | null;
+            /** Suggest When */
+            suggest_when: string | null;
+        };
+        /** TemplateVersionOut */
+        TemplateVersionOut: {
+            /** Version */
+            version: number;
+            /** Body */
+            body: string;
+            /** Required Sections */
+            required_sections: string[];
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Suggested Theme */
+            suggested_theme?: string | null;
+            /** Suggest When */
+            suggest_when?: string | null;
+        };
         /**
          * TextQuoteSelector
          * @description W3C Web Annotation TextQuoteSelector, relative to the section's body_text.
@@ -839,6 +1671,196 @@ export interface components {
              * @default
              */
             suffix: string;
+        };
+        /** ThemeCreate */
+        ThemeCreate: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @default any
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap" | "any";
+            /** Description */
+            description?: string | null;
+            tokens?: components["schemas"]["ThemeTokens"];
+            /**
+             * Css
+             * @default
+             */
+            css: string;
+        };
+        /** ThemeFeatures */
+        ThemeFeatures: {
+            /**
+             * Toc
+             * @default false
+             */
+            toc: boolean;
+            /**
+             * Status Header
+             * @default true
+             */
+            status_header: boolean;
+            /** Page Fit */
+            page_fit?: "one_page" | null;
+            /**
+             * Numbered Headings
+             * @default false
+             */
+            numbered_headings: boolean;
+            /**
+             * Legend
+             * @default false
+             */
+            legend: boolean;
+            /**
+             * Appendix Break
+             * @default false
+             */
+            appendix_break: boolean;
+        };
+        /** ThemeFonts */
+        ThemeFonts: {
+            /** Body */
+            body?: string | null;
+            /** Heading */
+            heading?: string | null;
+            /** Mono */
+            mono?: string | null;
+        };
+        /** ThemeOption */
+        ThemeOption: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap" | "any";
+        };
+        /** ThemeOut */
+        ThemeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap" | "any";
+            /** Description */
+            description: string | null;
+            tokens: components["schemas"]["ThemeTokens"];
+            /** Css */
+            css: string;
+            /** Builtin */
+            builtin: boolean;
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ThemePage */
+        ThemePage: {
+            /**
+             * Size
+             * @default A4
+             * @enum {string}
+             */
+            size: "A4" | "Letter";
+            /**
+             * Orientation
+             * @default portrait
+             * @enum {string}
+             */
+            orientation: "portrait" | "landscape";
+        };
+        /** ThemePreviewIn */
+        ThemePreviewIn: {
+            tokens: components["schemas"]["ThemeTokens"];
+            /**
+             * Css
+             * @default
+             */
+            css: string;
+            /**
+             * Kind
+             * @default prd
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
+        };
+        /** ThemeSpacing */
+        ThemeSpacing: {
+            /** Base Size Pt */
+            base_size_pt?: number | null;
+            /** Line Height */
+            line_height?: number | null;
+            /** Page Margin Mm */
+            page_margin_mm?: number | null;
+            /** Section Gap Rem */
+            section_gap_rem?: number | null;
+        };
+        /** ThemeTokens */
+        ThemeTokens: {
+            fonts?: components["schemas"]["ThemeFonts"];
+            /** Colors */
+            colors?: {
+                [key: string]: string;
+            };
+            spacing?: components["schemas"]["ThemeSpacing"];
+            page?: components["schemas"]["ThemePage"];
+            features?: components["schemas"]["ThemeFeatures"];
+        };
+        /** ThemeUpdate */
+        ThemeUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Kind */
+            kind?: ("prd" | "roadmap" | "any") | null;
+            /** Description */
+            description?: string | null;
+            tokens?: components["schemas"]["ThemeTokens"] | null;
+            /** Css */
+            css?: string | null;
+        };
+        /** ThemeValidateIn */
+        ThemeValidateIn: {
+            tokens: components["schemas"]["ThemeTokens"];
+            /**
+             * Css
+             * @default
+             */
+            css: string;
+        };
+        /** ThemeValidateOut */
+        ThemeValidateOut: {
+            /** Valid */
+            valid: boolean;
+            /** Problems */
+            problems: components["schemas"]["Problem"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -1658,6 +2680,789 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_priorities: {
+        parameters: {
+            query?: {
+                method?: "goal_weighted" | "rice" | "moscow" | "wsjf";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriorityRanking"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_priority_snapshots: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_priority_snapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnapshotCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_priority_snapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                snapshot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates: {
+        parameters: {
+            query?: {
+                kind?: ("prd" | "roadmap") | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"];
+                };
+            };
+            /** @description Key taken */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation problems */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsResponse"];
+                };
+            };
+        };
+    };
+    validate_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateValidateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateValidateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"];
+                };
+            };
+            /** @description Validation problems */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsResponse"];
+                };
+            };
+        };
+    };
+    get_template_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateVersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_themes: {
+        parameters: {
+            query?: {
+                kind?: ("prd" | "roadmap" | "any") | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_theme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeOut"];
+                };
+            };
+            /** @description Key taken */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation problems */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsResponse"];
+                };
+            };
+        };
+    };
+    validate_theme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeValidateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeValidateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_theme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemePreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_theme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_theme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_theme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeOut"];
+                };
+            };
+            /** @description Validation problems */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsResponse"];
+                };
+            };
+        };
+    };
+    restore_theme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recommend_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecommendIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recommendation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartDraftIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartDraftOut"];
+                };
+            };
+            /** @description Slug taken */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation problems */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsResponse"];
+                };
+            };
+        };
+    };
+    get_draft_defaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftDefaults"];
+                };
+            };
+        };
+    };
+    set_draft_defaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftDefaults"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftDefaults"];
+                };
+            };
+            /** @description Validation problems */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsResponse"];
                 };
             };
         };

@@ -1,0 +1,166 @@
+/* Product Oracle themed export: the shared layout every theme builds on.
+   A theme supplies tokens (written as the CSS variables below, plus the @page rule)
+   and its own CSS, which comes after this file. Screen + WeasyPrint. */
+
+:root {
+  --font-body: "DejaVu Serif", Georgia, serif;
+  --font-heading: "DejaVu Sans", Helvetica, Arial, sans-serif;
+  --font-mono: "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --color-text: #1f2933;
+  --color-heading: #111827;
+  --color-muted: #5b6472;
+  --color-accent: #2f5bd3;
+  --color-background: #ffffff;
+  --color-rule: #d9dde3;
+  --color-surface: #f3f4f6;
+  --size-base: 11pt;
+  --line-height: 1.5;
+  --section-gap: 1.6rem;
+  --page-margin: 20mm;
+}
+
+html {
+  color: var(--color-text);
+  background: var(--color-background);
+  font-family: var(--font-body);
+  font-size: var(--size-base);
+  line-height: var(--line-height);
+}
+body { max-width: 50rem; margin: 2rem auto; padding: 0 1.25rem; }
+body.orientation-landscape { max-width: 76rem; }
+
+/* As-of / version / approval header. Spans, not flex: WeasyPrint runs string-set
+   only on block and inline boxes. */
+.doc-header {
+  margin-bottom: 1.5rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--color-rule);
+  border-left: 4px solid var(--color-accent);
+  font: 9pt/1.45 var(--font-heading);
+  color: var(--color-muted);
+}
+.doc-header .header-line > span { display: inline-block; margin-right: 1rem; }
+.doc-header .banner-doc { font-weight: bold; color: var(--color-heading); string-set: doc-title content(text); }
+.doc-header .banner-version { color: var(--color-text); string-set: doc-version content(text); }
+.doc-header .banner-status {
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  string-set: doc-status content(text);
+}
+.doc-header .banner-asof { string-set: doc-asof content(text); }
+.status-approved { border-left-color: #1f7a45; }
+.status-approved .banner-status { color: #1f7a45; }
+.status-in_review .banner-status { color: #9a5b00; }
+.status-table { margin: 0.5rem 0 0; font-size: 8.5pt; width: auto; }
+.status-table th, .status-table td { padding: 0.15rem 0.6rem 0.15rem 0; border: none; background: none; }
+.status-table th { color: var(--color-muted); font-weight: normal; }
+.status-table td { color: var(--color-text); }
+
+.legend { margin-top: 0.4rem; font-size: 8pt; }
+.legend > span { display: inline-block; margin-right: 1rem; }
+
+@page {
+  @bottom-left {
+    content: string(doc-title) " \00B7  " string(doc-version) " \00B7  " string(doc-status);
+    font: 7.5pt "DejaVu Sans", sans-serif;
+    color: #5b6472;
+  }
+  @bottom-right {
+    content: "Page " counter(page) " of " counter(pages);
+    font: 7.5pt "DejaVu Sans", sans-serif;
+    color: #5b6472;
+  }
+}
+
+.fit-warning {
+  margin: 0 0 1rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #b42318;
+  color: #8a1c13;
+  font: bold 9pt var(--font-heading);
+}
+
+/* Table of contents */
+.toc { margin: 0 0 1.5rem; padding: 0.6rem 0.9rem; background: var(--color-surface); font: 9.5pt/1.5 var(--font-heading); }
+.toc h2 { margin: 0 0 0.3rem; font-size: 10pt; border: none; padding: 0; }
+.toc ul { margin: 0; padding: 0; list-style: none; }
+.toc .toc-level-3 { padding-left: 1rem; }
+.toc a { color: var(--color-text); }
+
+/* Body */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--color-heading);
+  font-family: var(--font-heading);
+  line-height: 1.25;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+h1 { font-size: 1.8em; margin: 0 0 1rem; }
+h2 { font-size: 1.3em; margin: var(--section-gap) 0 0.5rem; padding-bottom: 0.2rem; border-bottom: 1px solid var(--color-rule); }
+h3 { font-size: 1.1em; margin: calc(var(--section-gap) * 0.75) 0 0.4rem; }
+h4, h5, h6 { font-size: 1em; margin: 1rem 0 0.3rem; }
+p, ul, ol, table, blockquote, pre { margin: 0 0 0.75rem; }
+p, li { orphans: 3; widows: 3; }
+a { color: var(--color-accent); text-decoration: none; }
+code, pre { font-family: var(--font-mono); font-size: 0.85em; }
+code { background: var(--color-surface); padding: 0 0.2em; border-radius: 2px; }
+pre { background: var(--color-surface); padding: 0.6rem 0.8rem; white-space: pre-wrap; break-inside: avoid; }
+pre code { background: none; padding: 0; }
+blockquote { margin-left: 0; padding-left: 0.8rem; border-left: 3px solid var(--color-rule); color: var(--color-muted); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
+th, td { border: 1px solid var(--color-rule); padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+th { background: var(--color-surface); }
+tr { break-inside: avoid; }
+.req-id {
+  display: inline-block;
+  padding: 0 0.3em;
+  border: 1px solid var(--color-accent);
+  border-radius: 3px;
+  color: var(--color-accent);
+  font: bold 0.8em var(--font-mono);
+}
+td.cell-pass { background: #e7f5ec; color: #14532d; font-weight: bold; }
+td.cell-fail { background: #fdecea; color: #7f1d1d; font-weight: bold; }
+.flag-no-goal { border: 2px solid #b42318; padding: 0.3rem 0.6rem; }
+.flag-no-goal > h3::before, .flag-no-goal > h2::before { content: "\2691  "; color: #b42318; }
+
+/* Numbered headings (tokens.features.numbered_headings) */
+body.numbered main { counter-reset: h2; }
+body.numbered main h2 { counter-increment: h2; counter-reset: h3; }
+body.numbered main h2::before { content: counter(h2) ". "; color: var(--color-muted); }
+body.numbered main h3 { counter-increment: h3; }
+body.numbered main h3::before { content: counter(h2) "." counter(h3) " "; color: var(--color-muted); }
+
+/* Sources and data points: an appendix in smaller type, grouped by section. */
+.sources-appendix {
+  margin-top: 2.5rem;
+  padding-top: 0.5rem;
+  border-top: 2px solid var(--color-heading);
+  font: 8.5pt/1.45 var(--font-heading);
+}
+body.appendix-break .sources-appendix { break-before: page; border-top: none; }
+.sources-appendix h2 { font-size: 11pt; border: none; margin-top: 0.4rem; }
+.sources-appendix h3 { font-size: 9.5pt; margin-top: 0.9rem; }
+.sources-appendix .by-section > li { margin-bottom: 0.35rem; break-inside: avoid; }
+.sources-appendix .section-link { font-weight: bold; }
+.source-list { padding-left: 1.6rem; }
+.source-list li { margin-bottom: 0.45rem; break-inside: avoid; }
+.src-title { font-weight: bold; }
+.src-kind {
+  margin-left: 0.4rem;
+  padding: 0 0.3rem;
+  border: 1px solid var(--color-rule);
+  border-radius: 2px;
+  font-size: 7pt;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+.src-retrieved { margin-left: 0.4rem; color: var(--color-muted); }
+.src-excerpt { margin: 0.15rem 0; font-style: italic; }
+.src-ref { display: block; color: var(--color-muted); word-break: break-all; font-size: 7.5pt; }
+
+@media print {
+  body { max-width: none; margin: 0; padding: 0; }
+  a { color: inherit; }
+}

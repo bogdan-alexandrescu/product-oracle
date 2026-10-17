@@ -1,0 +1,10 @@
+/* One-page brief: dense type, short answers under question headings, no page
+   furniture. The PDF export checks that the result fits one page. */
+body { max-width: 44rem; }
+.doc-header { margin-bottom: 0.6rem; padding: 0.3rem 0.6rem; }
+.status-table { display: none; }
+h1 { font-size: 1.5em; margin-bottom: 0.4rem; }
+h2 { font-size: 1.05em; margin: 0.6rem 0 0.15rem; padding: 0; border: none; color: var(--color-accent); }
+h3 { font-size: 1em; margin: 0.4rem 0 0.1rem; }
+p, ul, ol, table, blockquote, pre { margin-bottom: 0.35rem; }
+.sources-appendix { margin-top: 0.8rem; font-size: 7.5pt; }

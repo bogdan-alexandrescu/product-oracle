@@ -12,6 +12,7 @@ const MAIN: Item[] = [
   { label: "Baseline", href: "/baseline", testId: "nav-baseline" },
   { label: "Runs", href: "/runs", testId: "nav-runs" },
   { label: "PRDs", href: "/documents", testId: "nav-prds" },
+  { label: "Priorities", href: "/priorities", testId: "nav-priorities" },
   { label: "Roadmap", testId: "nav-roadmap", soon: "v1.1" },
   { label: "Inbox", href: "/inbox", testId: "nav-inbox" },
 ];
@@ -20,6 +21,7 @@ const SETTINGS: Item[] = [
   { label: "Members", href: "/settings/members", testId: "nav-members" },
   { label: "Sources", href: "/settings/sources", testId: "nav-sources" },
   { label: "Templates", href: "/settings/templates", testId: "nav-templates" },
+  { label: "Themes", href: "/settings/themes", testId: "nav-themes" },
 ];
 
 function isActive(pathname: string, href: string): boolean {

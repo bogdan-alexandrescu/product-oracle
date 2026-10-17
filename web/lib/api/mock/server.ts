@@ -8,16 +8,17 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { DOCUMENTS, MOCK_LOGIN, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { laneF, type LaneFState } from "./lane-f";
 
-type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
-type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
+export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
+export type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
   sections: Omit<Schemas["SectionOut"], "verdict">[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
 type ReviewRow = Schemas["SectionReviewOut"];
 type FeedbackRow = Schemas["FeedbackItemOut"];
 
-interface Db {
+export interface Db {
   session: string | null;
   tenant_id: string;
   user_id: string;
@@ -26,6 +27,8 @@ interface Db {
   comments: CommentRow[];
   reviews: ReviewRow[];
   feedback: FeedbackRow[];
+  /** Priorities, templates, themes and draft defaults (lane-f.ts), seeded on first use. */
+  lane_f?: LaneFState;
 }
 
 const STORAGE_KEY = "po-mock-db-v1";
@@ -529,6 +532,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     Object.assign(f, await body<Schemas["FeedbackPatch"]>(), { updated_at: now() });
     return json(200, f);
   }
+
+  const handled = await laneF(db, req, p, m);
+  if (handled) return handled;
 
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) return json(200, db.documents.map((d) => documentSummary(db, d)));

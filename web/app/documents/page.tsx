@@ -13,12 +13,26 @@ export default function DocumentsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight text-neutral-900">Documents</h1>
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <h1 className="mr-auto text-2xl font-semibold tracking-tight text-neutral-900">Documents</h1>
+        <Link
+          href="/documents/new?kind=prd"
+          className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+        >
+          New PRD
+        </Link>
+        <Link
+          href="/documents/new?kind=roadmap"
+          className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+        >
+          New roadmap
+        </Link>
+      </div>
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {q.loading && <Loading />}
       {q.data && documents.length === 0 && (
         <p className="text-neutral-600">
-          No documents yet. Import a draft with <code>POST /v1/documents/&#123;doc&#125;/versions</code> or{" "}
+          No documents yet. Start one with New PRD or New roadmap, import a draft with <code>POST /v1/documents/&#123;doc&#125;/versions</code> or{" "}
           <code>oracle push draft.md</code>.
         </p>
       )}

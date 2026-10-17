@@ -316,7 +316,7 @@ async def test_pdf_without_system_libraries_is_503(client, fx, monkeypatch):
     def missing():
         raise PdfUnavailable("PDF export is unavailable: no Pango")
 
-    monkeypatch.setattr(pdf_module, "_weasyprint_html", missing)
+    monkeypatch.setattr(pdf_module, "_weasyprint", missing)
     resp = await client.get(
         URL.format(doc="checkout-redesign", n=2), params={"format": "pdf"}, headers=fx.headers
     )
