@@ -123,13 +123,13 @@ async def test_me_reports_the_token_role(client):
 
 
 def test_v1_routers_are_mounted_and_empty():
-    from oracle.baseline.router import router as baseline
+    # Baseline (lane C) is filled in; tests/test_baseline_*.py cover it.
     from oracle.members.router import router as members
     from oracle.priorities.router import router as priorities
     from oracle.runs.router import router as runs
     from oracle.sources.router import router as sources
     from oracle.templates.router import router as templates
 
-    for router in (members, sources, baseline, priorities, templates, runs):
+    for router in (members, sources, priorities, templates, runs):
         assert router.routes == []
     assert app.openapi()["paths"]  # the app still builds its schema

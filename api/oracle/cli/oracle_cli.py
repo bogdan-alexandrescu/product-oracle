@@ -2,6 +2,8 @@
 
     oracle push <draft.md> [--doc slug]
     oracle pull <doc> --version N [--out dir]
+    oracle baseline push <graph.yaml>
+    oracle baseline pull [--out graph.yaml]
 
 Configuration comes from the environment (flags override it):
     ORACLE_URL        API base URL (default http://localhost:8000)
@@ -61,7 +63,7 @@ def _api_error(resp: httpx.Response) -> CliError:
         detail = "API token rejected (check ORACLE_API_TOKEN)"
     lines = [f"error {resp.status_code}: {detail or resp.text.strip() or resp.reason_phrase}"]
     for err in (body.get("errors") or []) if isinstance(body, dict) else []:
-        where = err.get("section_key") or err.get("cite_key")
+        where = err.get("section_key") or err.get("cite_key") or err.get("where")
         line = f"  - [{err.get('code')}] {err.get('message')}"
         if where:
             line += f" ({where})"
@@ -163,6 +165,57 @@ def pull(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: T
     return 0
 
 
+def baseline_push(
+    args: argparse.Namespace, transport: httpx.BaseTransport | None, out: TextIO
+) -> int:
+    path = Path(args.file)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise CliError(f"cannot read {path}: {e.strerror}", 2) from e
+    with _client(args, transport) as client:
+        resp = _send(
+            client,
+            "POST",
+            "/v1/baseline/yaml",
+            content=text.encode("utf-8"),
+            headers={"Content-Type": "application/yaml; charset=utf-8"},
+        )
+    if resp.status_code != 200:
+        raise _api_error(resp)
+    r = resp.json()
+    print(
+        f"Imported {path.name}: {r['created']} created, {r['updated']} updated, "
+        f"{r['unchanged']} unchanged, {r['evidence_added']} evidence added",
+        file=out,
+    )
+    if r["proposals"]:
+        print(f"{r['proposals']} change(s) to locked items became proposals", file=out)
+    for note in r.get("notes") or []:
+        where = f" ({note['where']})" if note.get("where") else ""
+        print(f"note [{note['code']}]: {note['message']}{where}", file=out)
+    return 0
+
+
+def baseline_pull(
+    args: argparse.Namespace, transport: httpx.BaseTransport | None, out: TextIO
+) -> int:
+    with _client(args, transport) as client:
+        resp = _send(client, "GET", "/v1/baseline/yaml")
+    if resp.status_code != 200:
+        raise _api_error(resp)
+    if args.out == "-":
+        out.write(resp.text)
+        return 0
+    path = Path(args.out)
+    try:
+        path.write_text(resp.text, encoding="utf-8")
+    except OSError as e:
+        raise CliError(f"cannot write {path}: {e.strerror}", 2) from e
+    print(f"Pulled the baseline to {path}", file=out)
+    return 0
+
+
 def _json(value: Any) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
 
@@ -173,7 +226,7 @@ def _json(value: Any) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="oracle",
-        description="Push PRD drafts to Product Oracle and pull review feedback.",
+        description="Push PRD drafts and the baseline to Product Oracle; pull them back.",
         epilog="Environment: ORACLE_URL (default http://localhost:8000), ORACLE_API_TOKEN.",
     )
     common = argparse.ArgumentParser(add_help=False)
@@ -191,6 +244,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", type=int, required=True, help="version number")
     p.add_argument("--out", "-o", default=".", help="output directory (default: .)")
     p.set_defaults(func=pull)
+
+    p = sub.add_parser("baseline", help="push or pull the baseline graph as YAML")
+    bsub = p.add_subparsers(dest="baseline_command", required=True)
+    b = bsub.add_parser(
+        "push", parents=[common], help="merge a YAML graph in (locked items get proposals)"
+    )
+    b.add_argument("file", help="baseline YAML file")
+    b.set_defaults(func=baseline_push)
+    b = bsub.add_parser("pull", parents=[common], help="write the whole graph as YAML")
+    b.add_argument(
+        "--out",
+        "-o",
+        default="baseline.yaml",
+        help="output file, - for stdout (default: baseline.yaml)",
+    )
+    b.set_defaults(func=baseline_pull)
     return parser
 
 

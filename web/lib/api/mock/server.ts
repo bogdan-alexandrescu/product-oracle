@@ -7,6 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
+import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { DOCUMENTS, MOCK_LOGIN, type DocumentSeed, type VersionSeed } from "./fixtures";
 
 type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
@@ -26,9 +27,18 @@ interface Db {
   comments: CommentRow[];
   reviews: ReviewRow[];
   feedback: FeedbackRow[];
+  baseline: BaselineState;
 }
 
-const STORAGE_KEY = "po-mock-db-v1";
+const STORAGE_KEY = "po-mock-db-v2";
+/** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
+export const MOCK_ROLE_KEY = "po-mock-role";
+const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
+
+function mockRole(): Schemas["Me"]["role"] {
+  const role = localStorage.getItem(MOCK_ROLE_KEY) as Schemas["Me"]["role"] | null;
+  return role && ROLES.includes(role) ? role : "owner";
+}
 const LATENCY_MS = 60;
 
 let counter = 0;
@@ -96,6 +106,7 @@ function seed(): Db {
     comments: [],
     reviews: [],
     feedback: [],
+    baseline: seedBaseline(uuid),
   };
   const docs = new Map<string, DocumentRow>();
   for (const d of DOCUMENTS as DocumentSeed[]) {
@@ -486,14 +497,14 @@ async function route(db: Db, req: Request): Promise<Response> {
       return json(401, { detail: "Invalid credentials" });
     }
     db.session = email;
-    return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email, role: "owner" });
+    return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email, role: mockRole() });
   }
   if (p[1] === "auth" && p[2] === "logout" && m === "POST") {
     db.session = null;
     return json(204, undefined);
   }
   if (!db.session) return json(401, { detail: "Not authenticated" });
-  if (p[1] === "me") return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email: db.session, role: "owner" });
+  if (p[1] === "me") return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email: db.session, role: mockRole() });
 
   if (p[1] === "comments" && p[2]) {
     const c = db.comments.find((x) => x.id === p[2]);
@@ -530,6 +541,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, f);
   }
 
+  if (p[1] === "baseline") {
+    return routeBaseline(db.baseline, { userId: db.user_id, role: mockRole() }, req, p.slice(2), q);
+  }
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) return json(200, db.documents.map((d) => documentSummary(db, d)));
 

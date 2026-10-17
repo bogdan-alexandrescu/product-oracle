@@ -352,6 +352,441 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Graph
+         * @description Every entity and edge (no evidence bodies): what the Baseline screen draws.
+         */
+        get: operations["get_graph"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Entities */
+        get: operations["list_entities"];
+        put?: never;
+        /** Create Entity */
+        post: operations["create_entity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Entity */
+        get: operations["get_entity"];
+        put?: never;
+        post?: never;
+        /** Delete Entity */
+        delete: operations["delete_entity"];
+        options?: never;
+        head?: never;
+        /** Update Entity */
+        patch: operations["update_entity"];
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Entity
+         * @description Confirm a proposed entity; goals are confirmed this way only (B2).
+         */
+        post: operations["confirm_entity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Entity */
+        post: operations["reject_entity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock Entity
+         * @description Let agents write to it again.
+         */
+        post: operations["unlock_entity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Entity Revisions */
+        get: operations["list_entity_revisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/edges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Edges */
+        get: operations["list_edges"];
+        put?: never;
+        /** Create Edge */
+        post: operations["create_edge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/edges/{edge_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Edge */
+        get: operations["get_edge"];
+        put?: never;
+        post?: never;
+        /** Delete Edge */
+        delete: operations["delete_edge"];
+        options?: never;
+        head?: never;
+        /** Update Edge */
+        patch: operations["update_edge"];
+        trace?: never;
+    };
+    "/v1/baseline/edges/{edge_id}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlock Edge */
+        post: operations["unlock_edge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/edges/{edge_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Edge Revisions */
+        get: operations["list_edge_revisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Evidence */
+        get: operations["list_evidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Entity Evidence
+         * @description Cite one of your own source items (its url, ref and an excerpt are copied), or
+         *     a free-standing url / ref / excerpt.
+         */
+        post: operations["add_entity_evidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/edges/{edge_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Edge Evidence */
+        post: operations["add_edge_evidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/evidence/{evidence_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Evidence */
+        delete: operations["remove_evidence"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/rescore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rescore
+         * @description Rescore all evidence, e.g. after changing the confidence_weights setting.
+         */
+        post: operations["rescore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Proposals */
+        get: operations["list_proposals"];
+        put?: never;
+        /**
+         * Create Proposal
+         * @description Suggest a change; an approver accepts or rejects it.
+         */
+        post: operations["create_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/proposals/{proposal_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Proposal
+         * @description Apply the change as your own edit (it locks the item).
+         */
+        post: operations["accept_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/proposals/{proposal_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Proposal */
+        post: operations["reject_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Conflicts */
+        get: operations["list_conflicts"];
+        put?: never;
+        /**
+         * Record Conflict
+         * @description Record competing claims. Resolved by confidence, then precedence; material ones
+         *     (a feature's status, a goal link, a priority input) stay open for an approver.
+         */
+        post: operations["record_conflict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/conflicts/{conflict_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Conflict */
+        post: operations["resolve_conflict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Trace
+         * @description Features that serve no confirmed goal, or rest on weak evidence; goal coverage.
+         */
+        get: operations["get_trace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/yaml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Yaml
+         * @description The whole graph (entities, edges, evidence) as YAML.
+         */
+        get: operations["export_yaml"];
+        put?: never;
+        /**
+         * Import Yaml
+         * @description Merge a YAML graph in, idempotent by (type, key); locked items get proposals.
+         */
+        post: operations["import_yaml"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -392,6 +827,20 @@ export interface components {
             excerpt?: string | null;
             /** Retrieved At */
             retrieved_at?: string | null;
+        };
+        /** ClaimIn */
+        ClaimIn: {
+            /** Value */
+            value: unknown;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Source Kind */
+            source_kind?: string | null;
+            /** Observed At */
+            observed_at?: string | null;
         };
         /** CommentCreate */
         CommentCreate: {
@@ -443,6 +892,62 @@ export interface components {
             resolved?: boolean | null;
             /** Body */
             body?: string | null;
+        };
+        /** ConflictCreate */
+        ConflictCreate: {
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Edge Id */
+            edge_id?: string | null;
+            /** Field */
+            field: string;
+            /** Claims */
+            claims: components["schemas"]["ClaimIn"][];
+            /** Run Id */
+            run_id?: string | null;
+        };
+        /** ConflictOut */
+        ConflictOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Edge Id */
+            edge_id?: string | null;
+            /** Field */
+            field: string;
+            /** Claims */
+            claims: {
+                [key: string]: unknown;
+            }[];
+            /** Resolution */
+            resolution?: {
+                [key: string]: unknown;
+            } | null;
+            /** Material */
+            material: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "resolved" | "logged";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ConflictResolve */
+        ConflictResolve: {
+            /** Claim */
+            claim?: number | null;
+            /** Value */
+            value?: unknown;
+            /** Note */
+            note?: string | null;
         };
         /** DiffOut */
         DiffOut: {
@@ -528,6 +1033,461 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** EdgeCreate */
+        EdgeCreate: {
+            /**
+             * Src Id
+             * Format: uuid
+             */
+            src_id: string;
+            /**
+             * Dst Id
+             * Format: uuid
+             */
+            dst_id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "supports" | "depends_on" | "blocks" | "part_of" | "owned_by";
+            /**
+             * Attrs
+             * @default {}
+             */
+            attrs: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status?: ("proposed" | "confirmed" | "rejected") | null;
+            /**
+             * Origin
+             * @default user
+             * @enum {string}
+             */
+            origin: "user" | "agent";
+            /** Run Id */
+            run_id?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** EdgeDetail */
+        EdgeDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Src Id
+             * Format: uuid
+             */
+            src_id: string;
+            /**
+             * Dst Id
+             * Format: uuid
+             */
+            dst_id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "supports" | "depends_on" | "blocks" | "part_of" | "owned_by";
+            /** Attrs */
+            attrs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "confirmed" | "rejected";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "user" | "agent" | "import";
+            /** Locked */
+            locked: boolean;
+            /** Locked By */
+            locked_by?: string | null;
+            /** Locked At */
+            locked_at?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * Evidence Count
+             * @default 0
+             */
+            evidence_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["EvidenceOut"][];
+        };
+        /** EdgeOut */
+        EdgeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Src Id
+             * Format: uuid
+             */
+            src_id: string;
+            /**
+             * Dst Id
+             * Format: uuid
+             */
+            dst_id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "supports" | "depends_on" | "blocks" | "part_of" | "owned_by";
+            /** Attrs */
+            attrs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "confirmed" | "rejected";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "user" | "agent" | "import";
+            /** Locked */
+            locked: boolean;
+            /** Locked By */
+            locked_by?: string | null;
+            /** Locked At */
+            locked_at?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * Evidence Count
+             * @default 0
+             */
+            evidence_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** EdgePatch */
+        EdgePatch: {
+            /** Attrs */
+            attrs?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status?: ("proposed" | "confirmed" | "rejected") | null;
+            /**
+             * Origin
+             * @default user
+             * @enum {string}
+             */
+            origin: "user" | "agent";
+            /** Run Id */
+            run_id?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** EdgeWriteOut */
+        EdgeWriteOut: {
+            /** Applied */
+            applied: boolean;
+            edge?: components["schemas"]["EdgeOut"] | null;
+            proposal?: components["schemas"]["ProposalOut"] | null;
+        };
+        /** EntityCreate */
+        EntityCreate: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person";
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body?: string | null;
+            /**
+             * Attrs
+             * @default {}
+             */
+            attrs: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status?: ("proposed" | "confirmed" | "rejected") | null;
+            /**
+             * Origin
+             * @default user
+             * @enum {string}
+             */
+            origin: "user" | "agent";
+            /** Run Id */
+            run_id?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** EntityDetail */
+        EntityDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person";
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body?: string | null;
+            /** Attrs */
+            attrs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "confirmed" | "rejected";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "user" | "agent" | "import";
+            /** Locked */
+            locked: boolean;
+            /** Locked By */
+            locked_by?: string | null;
+            /** Locked At */
+            locked_at?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * Evidence Count
+             * @default 0
+             */
+            evidence_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["EvidenceOut"][];
+            /**
+             * Edges Out
+             * @default []
+             */
+            edges_out: components["schemas"]["EdgeOut"][];
+            /**
+             * Edges In
+             * @default []
+             */
+            edges_in: components["schemas"]["EdgeOut"][];
+            /**
+             * Open Proposals
+             * @default 0
+             */
+            open_proposals: number;
+        };
+        /** EntityOut */
+        EntityOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person";
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body?: string | null;
+            /** Attrs */
+            attrs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "confirmed" | "rejected";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "user" | "agent" | "import";
+            /** Locked */
+            locked: boolean;
+            /** Locked By */
+            locked_by?: string | null;
+            /** Locked At */
+            locked_at?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * Evidence Count
+             * @default 0
+             */
+            evidence_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** EntityPatch */
+        EntityPatch: {
+            /** Title */
+            title?: string | null;
+            /** Body */
+            body?: string | null;
+            /** Attrs */
+            attrs?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status?: ("proposed" | "confirmed" | "rejected") | null;
+            /**
+             * Origin
+             * @default user
+             * @enum {string}
+             */
+            origin: "user" | "agent";
+            /** Run Id */
+            run_id?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * EntityWriteOut
+         * @description A write either applied (``entity``) or became a proposal (the item is locked).
+         */
+        EntityWriteOut: {
+            /** Applied */
+            applied: boolean;
+            entity?: components["schemas"]["EntityOut"] | null;
+            proposal?: components["schemas"]["ProposalOut"] | null;
+        };
+        /**
+         * EvidenceCreate
+         * @description Evidence from one of your own source items (url, ref and an excerpt are copied
+         *     from it unless given), or free-standing (url / ref / excerpt only).
+         */
+        EvidenceCreate: {
+            /** Source Item Id */
+            source_item_id?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Ref */
+            ref?: string | null;
+            /** Retrieved At */
+            retrieved_at?: string | null;
+        };
+        /** EvidenceOut */
+        EvidenceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Edge Id */
+            edge_id?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Ref */
+            ref?: string | null;
+            /** Retrieved At */
+            retrieved_at?: string | null;
+            /** Source Kind */
+            source_kind: string;
+            source_item?: components["schemas"]["SourceItemRef"] | null;
+            /**
+             * Source Item Private
+             * @default false
+             */
+            source_item_private: boolean;
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Confidence Factors
+             * @default {}
+             */
+            confidence_factors: {
+                [key: string]: unknown;
+            };
+            /** Scored At */
+            scored_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** FeedbackItemOut */
         FeedbackItemOut: {
@@ -616,6 +1576,13 @@ export interface components {
             /** Addressed In Version */
             addressed_in_version?: number | null;
         };
+        /** GraphOut */
+        GraphOut: {
+            /** Entities */
+            entities: components["schemas"]["EntityOut"][];
+            /** Edges */
+            edges: components["schemas"]["EdgeOut"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -637,6 +1604,15 @@ export interface components {
             detail: string;
             /** Errors */
             errors: components["schemas"]["ImportProblem"][];
+        };
+        /** ImportIssue */
+        ImportIssue: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Where */
+            where?: string | null;
         };
         /** ImportProblem */
         ImportProblem: {
@@ -684,10 +1660,89 @@ export interface components {
             /** Token Name */
             token_name?: string | null;
         };
+        /**
+         * ProposalCreate
+         * @description Suggest a change for an approver to accept: commenters and agents use this.
+         */
+        ProposalCreate: {
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "create" | "update" | "delete";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "entity" | "edge";
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Edge Id */
+            edge_id?: string | null;
+            /**
+             * Fields
+             * @default {}
+             */
+            fields: {
+                [key: string]: unknown;
+            };
+            /** Run Id */
+            run_id?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** ProposalDecision */
+        ProposalDecision: {
+            /** Note */
+            note?: string | null;
+        };
+        /** ProposalOut */
+        ProposalOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Edge Id */
+            edge_id?: string | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Run Id */
+            run_id?: string | null;
+            /** Actor */
+            actor?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "accepted" | "rejected";
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** ReplyCreate */
         ReplyCreate: {
             /** Body */
             body: string;
+        };
+        /** RescoreResult */
+        RescoreResult: {
+            /** Evidence */
+            evidence: number;
+            /** Entities */
+            entities: number;
+            /** Edges */
+            edges: number;
         };
         /**
          * ResolutionReport
@@ -707,6 +1762,35 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+        };
+        /** RevisionOut */
+        RevisionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Edge Id */
+            edge_id?: string | null;
+            /** Before */
+            before?: {
+                [key: string]: unknown;
+            } | null;
+            /** After */
+            after?: {
+                [key: string]: unknown;
+            } | null;
+            /** Actor */
+            actor: string;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** SectionDiff */
         SectionDiff: {
@@ -823,6 +1907,30 @@ export interface components {
             created_at: string;
         };
         /**
+         * SourceItemRef
+         * @description The item behind a piece of evidence. Only its owner ever sees this.
+         */
+        SourceItemRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Source Kind */
+            source_kind: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /**
          * TextQuoteSelector
          * @description W3C Web Annotation TextQuoteSelector, relative to the section's body_text.
          */
@@ -839,6 +1947,113 @@ export interface components {
              * @default
              */
             suffix: string;
+        };
+        /** TraceFeature */
+        TraceFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "confirmed" | "rejected";
+            /** Confidence */
+            confidence?: number | null;
+            /** Evidence Count */
+            evidence_count: number;
+            /** Goals */
+            goals: components["schemas"]["TraceGoalLink"][];
+            /** Flags */
+            flags: string[];
+        };
+        /** TraceGoal */
+        TraceGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "confirmed" | "rejected";
+            /** Weight */
+            weight?: number | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Features */
+            features: components["schemas"]["TraceGoalFeature"][];
+            /** Coverage */
+            coverage: number;
+        };
+        /** TraceGoalFeature */
+        TraceGoalFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Contribution */
+            contribution: number;
+        };
+        /** TraceGoalLink */
+        TraceGoalLink: {
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Contribution */
+            contribution: number;
+        };
+        /** TraceReport */
+        TraceReport: {
+            /** Low */
+            low: number;
+            /** Features */
+            features: components["schemas"]["TraceFeature"][];
+            /** Flagged */
+            flagged: components["schemas"]["TraceFeature"][];
+            /** Goals */
+            goals: components["schemas"]["TraceGoal"][];
+            summary: components["schemas"]["TraceSummary"];
+        };
+        /** TraceSummary */
+        TraceSummary: {
+            /** Features */
+            features: number;
+            /** Flagged */
+            flagged: number;
+            /** Serves No Goal */
+            serves_no_goal: number;
+            /** Weak Evidence */
+            weak_evidence: number;
+            /** Goals */
+            goals: number;
+            /** Confirmed Goals */
+            confirmed_goals: number;
+            /** Uncovered Goals */
+            uncovered_goals: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -960,6 +2175,46 @@ export interface components {
             op: "equal" | "insert" | "delete";
             /** Text */
             text: string;
+        };
+        /** YamlImportError */
+        YamlImportError: {
+            /** Detail */
+            detail: string;
+            /** Errors */
+            errors: components["schemas"]["ImportIssue"][];
+        };
+        /** YamlImportResult */
+        YamlImportResult: {
+            /**
+             * Created
+             * @default 0
+             */
+            created: number;
+            /**
+             * Updated
+             * @default 0
+             */
+            updated: number;
+            /**
+             * Unchanged
+             * @default 0
+             */
+            unchanged: number;
+            /**
+             * Proposals
+             * @default 0
+             */
+            proposals: number;
+            /**
+             * Evidence Added
+             * @default 0
+             */
+            evidence_added: number;
+            /**
+             * Notes
+             * @default []
+             */
+            notes: components["schemas"]["ImportIssue"][];
         };
     };
     responses: never;
@@ -1658,6 +2913,1053 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_graph: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphOut"];
+                };
+            };
+        };
+    };
+    list_entities: {
+        parameters: {
+            query?: {
+                type?: ("goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person") | null;
+                status?: ("proposed" | "confirmed" | "rejected") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_entity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityWriteOut"];
+                };
+            };
+            /** @description The item is locked: the change became a proposal */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_entity: {
+        parameters: {
+            query?: {
+                origin?: "user" | "agent";
+                run_id?: string | null;
+            };
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Locked: became a proposal */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_entity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityWriteOut"];
+                };
+            };
+            /** @description The item is locked: the change became a proposal */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_entity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProposalDecision"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_entity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProposalDecision"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlock_entity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_entity_revisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_edges: {
+        parameters: {
+            query?: {
+                type?: ("supports" | "depends_on" | "blocks" | "part_of" | "owned_by") | null;
+                entity_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_edge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeWriteOut"];
+                };
+            };
+            /** @description The item is locked: the change became a proposal */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_edge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                edge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_edge: {
+        parameters: {
+            query?: {
+                origin?: "user" | "agent";
+                run_id?: string | null;
+            };
+            header?: never;
+            path: {
+                edge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Locked: became a proposal */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_edge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                edge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeWriteOut"];
+                };
+            };
+            /** @description The item is locked: the change became a proposal */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlock_edge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                edge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_edge_revisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                edge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_evidence: {
+        parameters: {
+            query?: {
+                entity_id?: string | null;
+                edge_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_entity_evidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_edge_evidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                edge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_evidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                evidence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rescore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RescoreResult"];
+                };
+            };
+        };
+    };
+    list_proposals: {
+        parameters: {
+            query?: {
+                status?: ("open" | "accepted" | "rejected") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProposalDecision"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProposalDecision"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_conflicts: {
+        parameters: {
+            query?: {
+                status?: ("open" | "resolved" | "logged") | null;
+                material?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_conflict: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConflictCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_conflict: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conflict_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConflictResolve"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceReport"];
+                };
+            };
+        };
+    };
+    export_yaml: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                    "application/yaml": string;
+                };
+            };
+        };
+    };
+    import_yaml: {
+        parameters: {
+            query?: {
+                run_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/yaml": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YamlImportResult"];
+                };
+            };
+            /** @description File rejected */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YamlImportError"];
                 };
             };
         };
