@@ -140,37 +140,16 @@ Every table is `TenantScoped` unless noted.
   (`commenter`), `default_claude_connection_id` (the Claude plan used when a user has
   none; the owner's own plan first), `confidence_weights`.
 
-## Claude accounts (Bogdan, 2026-10-17)
+## Agents and model calls (Bogdan, 2026-10-17)
 
-Oracle's own Claude calls run on a **pool of Claude accounts with exactly SwarmCloud's
-account management** (Bogdan: "use the EXACT account management functionality as in
-SwarmCloud ... local personal use"). The behaviour is ported from SwarmCloud's public
-repo (`apps/quota-broker/quota_broker/`: accounts, accountstore, oauth, credentials,
-usage, usagepoll; `apps/agent-worker/agent_worker/accountlease.py` and
-`runners/cliagent.py`; `apps/swarm-ui/src/Accounts.tsx`; `apps/swarm-mcp/swarm_mcp/sc.py`
-and `render.py`); nothing is shared at runtime. It replaces the per-user Claude plan
-in Lane K; data connections stay per user. The pool starts with the owner's account.
-
-Same as SwarmCloud: account label rule, states `available | paused | draining |
-reauth_required` (only available takes new work; previous state kept for reauth
-recovery), quota windows with utilisation/resets_at/observed_at, holds with a TTL and a
-hold log, the browser sign-in (PKCE, pasted `code#state`, token exchange) and the paste
-route for Claude Code's saved login JSON (refresh token required; a setup-token goes to
-the fallback credential instead), the single-writer refresh sweep (within 3 h of
-expiry, deferred to 30 min for held accounts, new pair saved before the access token is
-used, 400/401/invalid_grant marks reauth_required), usage polling of at most 3 accounts
-per sweep plus readings from Claude Code's `rate_limit_event`, 30-minute staleness,
-assignment (headroom >= 0.15, stale halved, never-read counts full, then fewest holders,
-then label; reasons `no_accounts_registered`, `no_account_available` with
-`next_reset_at`, `pool_paused`, `no_recent_reading`), swap at a turn boundary on
-exhaustion or drain, pause/resume/drain/remove semantics, the accounts screen (rows,
-tiles 5h/7d/Clears, holders and history tabs, owner actions, remove by typing the label)
-and the CLI (`oracle account add|pause|resume|drain|remove`, `oracle accounts`).
-
-Adapted for a local, single-company app: no lending between companies; credentials
-are encrypted in Oracle's database (`oracle.crypto`) instead of Secret Manager; the
-sweep runs from `oracle tick` / a local scheduler instead of Cloud Scheduler; calls run
-through Claude Code headless with `CLAUDE_CODE_OAUTH_TOKEN` set for that call.
+Product Oracle orchestrates **all** of its agents in SwarmCloud, not in its own
+environment or a separate runtime, and those agents use SwarmCloud's LLM providers and
+its account management. Oracle holds no model credentials, runs no model or Claude
+Code itself, and has no account pool of its own. Runs execute as SwarmCloud workflows
+(one per segment until #1436); any smaller piece of model work Oracle needs becomes a
+short SwarmCloud task through the same runtime adapter. Until #1433 lands, agents
+cannot yet reach Oracle's data through `/mcp`. Data connections (GitHub, Slack, Notion,
+Fireflies, Google) stay per user in Oracle.
 
 ## Confidence
 
@@ -200,7 +179,7 @@ words only: one company's Oracle, its users and their roles.
 |---|---|---|
 | 0 Foundation (merged) | migrations 0002–0003, models, `authz`, `crypto`, `runtokens`, `confidence`, `sources/base.py`, app navigation | Data model, roles helper, encryption, run tokens, Connector protocol, router stubs |
 | A Members | `api/oracle/members/`, role checks in `docs/`, `review/`, `export/`, `auth/iap.py` provisioning, `web/app/settings/members/` | Roles enforced everywhere; members + invites; Google sign-in without an invite gets `iap_default_role` (commenter) |
-| K Connections | `api/oracle/connections/`, `api/oracle/llm/`, `api/oracle/tenant_settings*`, `web/app/settings/connections/` | Per-user connect / reconnect / disconnect (OAuth PKCE where configured, pasted token otherwise), token refresh, company settings API; its per-user Claude plan is superseded by the Claude account pool (integration workflow) |
+| K Connections | `api/oracle/connections/`, `api/oracle/llm/`, `api/oracle/tenant_settings*`, `web/app/settings/connections/` | Per-user connect / reconnect / disconnect (OAuth PKCE where configured, pasted token otherwise), token refresh, company settings API; its per-user Claude plan and model gateway are removed by the integration workflow (agents and model calls run in SwarmCloud) |
 | B1 Sources | `api/oracle/sources/` (not `connectors/`), `oracle sync` CLI, `web/app/settings/sources/`, `web/app/sources/` | Owner-scoped source registry, sync engine with versions and snapshots, uploads, item confidence, search ranked by relevance × confidence |
 | B2a GitHub + Notion | `api/oracle/sources/connectors/github.py`, `notion.py` (+ fixtures, tests) | Connectors on the protocol, provider OAuth metadata, recorded-fixture tests |
 | B2b Slack + Fireflies + Google Docs | `api/oracle/sources/connectors/slack.py`, `fireflies.py`, `google_docs.py` (+ fixtures, tests) | Same; Slack never ingests DMs |
