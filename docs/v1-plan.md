@@ -14,8 +14,12 @@ From the design's phasing table (v1 row), in build order:
 1. **Members and roles (C2 Approvals).** Roles owner / approver / commenter /
    viewer, enforced on every endpoint; invites that pre-assign a role to an email,
    so a Google (IAP) sign-in lands with the right role.
-2. **Sources (S1–S5).** A source registry with an admin allowlist; connectors for
-   uploads, GitHub, Slack and Notion; incremental sync with cursors; item versions
+2. **Connections and sources (S1–S5).** Integrations are **per user** (S5, revised
+   2026-10-17): each person connects their own GitHub, Slack, Notion, Fireflies and
+   Google Docs accounts, through each tool's OAuth or a personal token, and picks what
+   to pull in. A Claude plan connects the same way and pays for Oracle's own Claude
+   calls. Connectors for uploads, GitHub, Slack, Notion, Fireflies and Google Docs;
+   incremental sync with cursors; item versions
    so a run can pin the snapshot it started on (S4 Freshness); full-text search.
    DMs are never ingested; source ACL metadata is stored (S3 Visibility).
 3. **Baseline graph (B1–B3).** Typed entities (goal, product, feature, requirement,
@@ -25,8 +29,12 @@ From the design's phasing table (v1 row), in build order:
    tracker > docs > chat; newer beats older) with only material ones escalated, and
    a traceability report: features that serve no confirmed goal are flagged.
 4. **Prioritization (O3) and templates (O1).** Goal-weighted scoring by default,
-   RICE / MoSCoW / WSJF selectable, dependency-ordered, every number explained;
-   PRD templates with versions.
+   RICE / MoSCoW / WSJF selectable, dependency-ordered, every number explained.
+   PRD **and roadmap** templates that users add, edit and delete, each versioned,
+   with a set of built-ins drawn from `docs/research/` (popular formats in use
+   today); starting a new PRD or roadmap draft asks which template to use. Every
+   template follows O1c: no evidence in the body, a final Sources and data points
+   section.
 5. **MCP server (X1).** Streamable HTTP at `/mcp`, authenticated by API tokens and
    run-scoped, expiring run tokens; tools to search sources, read the baseline and
    documents, and propose changes.
@@ -35,12 +43,21 @@ From the design's phasing table (v1 row), in build order:
    SwarmCloud workflow per segment between checkpoints until `await_input` (#1436)
    lands; cost estimate first, runs over $50 wait for approval, overrun past 1.5×
    the estimate pauses; an Inbox of checkpoints waiting on you.
-7. **Workspace shell (I4).** Navigation: Baseline, Runs, PRDs, Roadmap (v1.1),
+7. **App navigation (I4).** Screens: Baseline, Runs, PRDs, Roadmap (v1.1),
    Inbox, Settings (Members, Sources, Templates).
+
+## Boundary with SwarmCloud
+
+Product Oracle and SwarmCloud are separate products. The only shared surface is how
+agents running in SwarmCloud talk to Oracle: Oracle's MCP server (`/mcp`, run tokens)
+and Oracle's calls to SwarmCloud's task and workflow API, all behind
+`api/oracle/swarm/`. Oracle has no SwarmCloud accounts, tenancy, pool or vocabulary in
+its product, data model, UI or docs; SwarmCloud is one agent runtime behind that
+adapter, and it also happens to build Oracle's code lanes, as any CI service would.
 
 Later batches: Slack pings and thread feedback (C1), the docked head-of-product chat
 (I4), the roadmap flow and its HTML/PDF (v1.1), share links (O5), engineering
-alignment (E1), Fireflies and Google Docs connectors, SVG flows and wireframes (O2),
+alignment (E1), SVG flows and wireframes (O2),
 the GitHub code indexer via SwarmCloud's `indexer` profile (S2), the quality bar (T2).
 
 ## Data model added by Lane 0 (migration 0002)
@@ -112,7 +129,7 @@ a column stops and says so in its report. Every lane runs the full API suite, ru
 
 | Lane | Owns | Delivers |
 |---|---|---|
-| 0 Foundation | `api/migrations/`, models, `api/oracle/authz.py`, `api/oracle/crypto.py`, `api/oracle/runtokens.py`, `api/oracle/sources/base.py`, package skeletons, `api/pyproject.toml` + locks, web shell (`web/app/layout.tsx`, nav, route stubs) | Migration 0002 and models above; `require_role()`; credential encryption; run-token mint/verify; the `Connector` protocol; router stubs; workspace navigation |
+| 0 Foundation | `api/migrations/`, models, `api/oracle/authz.py`, `api/oracle/crypto.py`, `api/oracle/runtokens.py`, `api/oracle/sources/base.py`, package skeletons, `api/pyproject.toml` + locks, app navigation (`web/app/layout.tsx`, nav, route stubs) | Migration 0002 and models above; `require_role()`; credential encryption; run-token mint/verify; the `Connector` protocol; router stubs; app navigation |
 | A Members | `api/oracle/members/`, role checks in `docs/`, `review/`, `export/`, IAP provisioning by invite, `web/app/settings/members/` | Roles enforced everywhere; members + invites API and UI |
 | B1 Sources | `api/oracle/sources/` (not `connectors/`), `oracle sync` CLI, `web/app/settings/sources/`, `web/app/sources/` | Source registry, credentials, sync engine with versions and snapshots, uploads, search API + UI |
 | B2 Connectors | `api/oracle/sources/connectors/` | GitHub, Slack, Notion connectors on the `Connector` protocol, tested on recorded fixtures |
