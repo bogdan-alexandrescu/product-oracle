@@ -1,33 +1,49 @@
-"""Documents and versions. Lane 1 implements; stubs return 501.
+"""Documents and versions: import, read, diff.
 
 ``{doc}`` is a document slug or id; ``{n}`` is a version number.
 """
 
-from fastapi import APIRouter, Query, Request, status
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from oracle.auth.deps import CurrentPrincipal, TenantDB
+from oracle.docs import service
+from oracle.docs.parser import DraftError
 from oracle.docs.schemas import (
     DiffOut,
     DocumentOut,
     DocumentSummary,
     ImportErrorResponse,
+    ImportProblem,
     VersionOut,
     VersionSummary,
 )
-from oracle.http import not_implemented
 
 router = APIRouter(prefix="/v1/documents", tags=["documents"])
 
 
+def _not_found(exc: service.NotFoundError) -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+
+
+def _draft_rejected(exc: DraftError) -> JSONResponse:
+    body = ImportErrorResponse(
+        detail=f"draft rejected: {len(exc.problems)} problem(s)", errors=exc.problems
+    )
+    return JSONResponse(body.model_dump(mode="json"), 422)
+
+
 @router.get("", response_model=list[DocumentSummary])
 async def list_documents(db: TenantDB) -> list[DocumentSummary]:
-    raise not_implemented("1")
+    return await service.list_documents(db)
 
 
 @router.get("/{doc}", response_model=DocumentOut)
 async def get_document(doc: str, db: TenantDB) -> DocumentOut:
-    raise not_implemented("1")
+    try:
+        return await service.read_document(db, doc)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
 
 
 @router.post(
@@ -47,19 +63,46 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
 )
 async def import_version(
     doc: str, request: Request, principal: CurrentPrincipal, db: TenantDB
-) -> VersionOut:
+) -> VersionOut | JSONResponse:
     """Import a draft (markdown + YAML front matter). Creates the document on first import."""
-    raise not_implemented("1")
+    raw = await request.body()
+    try:
+        markdown = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _draft_rejected(
+            DraftError([ImportProblem(code="invalid_encoding", message="body must be UTF-8")])
+        )
+    try:
+        result = await service.import_draft(db, doc, markdown, principal)
+    except DraftError as exc:
+        return _draft_rejected(exc)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
+    except service.ImportConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return JSONResponse(
+        result.version.model_dump(mode="json"),
+        status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,
+    )
 
 
 @router.get("/{doc}/versions", response_model=list[VersionSummary])
 async def list_versions(doc: str, db: TenantDB) -> list[VersionSummary]:
-    raise not_implemented("1")
+    try:
+        document = await service.get_document_or_404(db, doc)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
+    return await service.list_versions(db, document)
 
 
 @router.get("/{doc}/versions/{n}", response_model=VersionOut)
 async def get_version(doc: str, n: int, db: TenantDB) -> VersionOut:
-    raise not_implemented("1")
+    try:
+        document = await service.get_document_or_404(db, doc)
+        version = await service.get_version_row(db, document, n)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
+    return await service.read_version(db, version)
 
 
 @router.get(
@@ -68,7 +111,12 @@ async def get_version(doc: str, n: int, db: TenantDB) -> VersionOut:
     responses={200: {"content": {"text/markdown": {"schema": {"type": "string"}}}}},
 )
 async def get_version_markdown(doc: str, n: int, db: TenantDB) -> PlainTextResponse:
-    raise not_implemented("1")
+    try:
+        document = await service.get_document_or_404(db, doc)
+        version = await service.get_version_row(db, document, n)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
+    return PlainTextResponse(version.markdown, media_type="text/markdown; charset=utf-8")
 
 
 @router.get("/{doc}/diff", response_model=DiffOut)
@@ -78,4 +126,7 @@ async def diff_versions(
     from_: int = Query(alias="from", ge=1),
     to: int = Query(ge=1),
 ) -> DiffOut:
-    raise not_implemented("1")
+    try:
+        return await service.diff(db, doc, from_, to)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
