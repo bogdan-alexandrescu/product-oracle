@@ -338,7 +338,7 @@ recommended template with a one-line reason and let the user override.
 Optional knobs shown after the choice: requirements style (user stories vs job
 stories), include launch plan, include post-launch recap, visuals (SVG flow,
 wireframes; O2), prioritization method (O3: goal-weighted, RICE, MoSCoW, WSJF).
-Remember the last choice per document type, and let the user set a workspace default.
+Remember the last choice per document type, and let the user set a company default.
 
 ## 5. Presentation conventions (input to visual themes)
 
