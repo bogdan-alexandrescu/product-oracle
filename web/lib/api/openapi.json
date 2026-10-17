@@ -1254,6 +1254,472 @@
           }
         }
       }
+    },
+    "/.well-known/oauth-protected-resource": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Oauth Protected Resource",
+        "description": "RFC 9728 metadata for ``/mcp``, at both the root and the path-suffixed location.",
+        "operationId": "oauth_protected_resource",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtectedResourceMetadata"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/oauth-authorization-server": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Oauth Authorization Server",
+        "description": "RFC 8414 authorization server metadata.",
+        "operationId": "oauth_authorization_server",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationServerMetadata"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/register": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Oauth Register",
+        "description": "RFC 7591 dynamic registration of a public client (no secret; PKCE required).",
+        "operationId": "oauth_register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientRegistrationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientRegistrationOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/authorize": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Oauth Authorize",
+        "description": "Validate an authorization request and send the browser to the consent screen.\n\nA browser without a signed-in user goes to sign-in first, then to the consent screen.",
+        "operationId": "oauth_authorize",
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Client Id"
+            }
+          },
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Redirect Uri"
+            }
+          },
+          {
+            "name": "response_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Response Type"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "code_challenge",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code Challenge"
+            }
+          },
+          {
+            "name": "code_challenge_method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code Challenge Method"
+            }
+          },
+          {
+            "name": "resource",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resource"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "To the consent screen, sign-in, or back to the client"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/authorize/request": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Oauth Consent Request",
+        "description": "The pending authorization request behind a consent URL, for the signed-in user.",
+        "operationId": "oauth_consent_request",
+        "parameters": [
+          {
+            "name": "request",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentRequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/authorize/decision": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Oauth Consent Decision",
+        "description": "Approve (a 10-minute, single-use code) or deny; returns where the browser goes.",
+        "operationId": "oauth_consent_decision",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentDecisionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/token": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Oauth Token",
+        "description": "Authorization code (with PKCE) or refresh token (rotated) for an access token.",
+        "operationId": "oauth_token",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_oauth_token"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/revoke": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Oauth Revoke",
+        "description": "RFC 7009. Ends the grant the token belongs to; unknown tokens are not an error.",
+        "operationId": "oauth_revoke",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_oauth_revoke"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1285,6 +1751,233 @@
           "version"
         ],
         "title": "ApproveOut"
+      },
+      "AuthorizationServerMetadata": {
+        "properties": {
+          "issuer": {
+            "type": "string",
+            "title": "Issuer"
+          },
+          "authorization_endpoint": {
+            "type": "string",
+            "title": "Authorization Endpoint"
+          },
+          "token_endpoint": {
+            "type": "string",
+            "title": "Token Endpoint"
+          },
+          "registration_endpoint": {
+            "type": "string",
+            "title": "Registration Endpoint"
+          },
+          "revocation_endpoint": {
+            "type": "string",
+            "title": "Revocation Endpoint"
+          },
+          "scopes_supported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scopes Supported"
+          },
+          "response_types_supported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Response Types Supported"
+          },
+          "response_modes_supported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Response Modes Supported"
+          },
+          "grant_types_supported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Grant Types Supported"
+          },
+          "code_challenge_methods_supported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Code Challenge Methods Supported"
+          },
+          "token_endpoint_auth_methods_supported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Token Endpoint Auth Methods Supported"
+          },
+          "revocation_endpoint_auth_methods_supported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Revocation Endpoint Auth Methods Supported"
+          },
+          "authorization_response_iss_parameter_supported": {
+            "type": "boolean",
+            "title": "Authorization Response Iss Parameter Supported"
+          }
+        },
+        "type": "object",
+        "required": [
+          "issuer",
+          "authorization_endpoint",
+          "token_endpoint",
+          "registration_endpoint",
+          "revocation_endpoint",
+          "scopes_supported",
+          "response_types_supported",
+          "response_modes_supported",
+          "grant_types_supported",
+          "code_challenge_methods_supported",
+          "token_endpoint_auth_methods_supported",
+          "revocation_endpoint_auth_methods_supported",
+          "authorization_response_iss_parameter_supported"
+        ],
+        "title": "AuthorizationServerMetadata"
+      },
+      "Body_oauth_revoke": {
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "token_type_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Type Hint"
+          }
+        },
+        "type": "object",
+        "title": "Body_oauth_revoke"
+      },
+      "Body_oauth_token": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "redirect_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redirect Uri"
+          },
+          "code_verifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Verifier"
+          },
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          }
+        },
+        "type": "object",
+        "title": "Body_oauth_token"
       },
       "CitationOut": {
         "properties": {
@@ -1357,6 +2050,145 @@
           "ref"
         ],
         "title": "CitationOut"
+      },
+      "ClientRegistrationIn": {
+        "properties": {
+          "redirect_uris": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redirect Uris"
+          },
+          "client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Name"
+          },
+          "token_endpoint_auth_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Endpoint Auth Method"
+          },
+          "grant_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Types"
+          },
+          "response_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Types"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          }
+        },
+        "type": "object",
+        "title": "ClientRegistrationIn"
+      },
+      "ClientRegistrationOut": {
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "client_id_issued_at": {
+            "type": "integer",
+            "title": "Client Id Issued At"
+          },
+          "client_name": {
+            "type": "string",
+            "title": "Client Name"
+          },
+          "redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Redirect Uris"
+          },
+          "grant_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Grant Types"
+          },
+          "response_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Response Types"
+          },
+          "token_endpoint_auth_method": {
+            "type": "string",
+            "const": "none",
+            "title": "Token Endpoint Auth Method"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_id",
+          "client_id_issued_at",
+          "client_name",
+          "redirect_uris",
+          "grant_types",
+          "response_types",
+          "token_endpoint_auth_method",
+          "scope"
+        ],
+        "title": "ClientRegistrationOut"
       },
       "CommentCreate": {
         "properties": {
@@ -1511,6 +2343,103 @@
         },
         "type": "object",
         "title": "CommentPatch"
+      },
+      "ConsentDecisionIn": {
+        "properties": {
+          "request": {
+            "type": "string",
+            "title": "Request",
+            "description": "The signed request handle from the consent URL"
+          },
+          "approve": {
+            "type": "boolean",
+            "title": "Approve"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request",
+          "approve"
+        ],
+        "title": "ConsentDecisionIn"
+      },
+      "ConsentDecisionOut": {
+        "properties": {
+          "redirect_to": {
+            "type": "string",
+            "title": "Redirect To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "redirect_to"
+        ],
+        "title": "ConsentDecisionOut",
+        "description": "Where the browser goes next: the client's redirect URI with a code or an error."
+      },
+      "ConsentRequestOut": {
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "client_name": {
+            "type": "string",
+            "title": "Client Name"
+          },
+          "redirect_uri": {
+            "type": "string",
+            "title": "Redirect Uri"
+          },
+          "redirect_host": {
+            "type": "string",
+            "title": "Redirect Host"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeOut"
+            },
+            "type": "array",
+            "title": "Scopes"
+          },
+          "user_email": {
+            "type": "string",
+            "title": "User Email"
+          },
+          "user_role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "User Role"
+          },
+          "effective_role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Effective Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_id",
+          "client_name",
+          "redirect_uri",
+          "redirect_host",
+          "scopes",
+          "user_email",
+          "user_role",
+          "effective_role"
+        ],
+        "title": "ConsentRequestOut",
+        "description": "What the consent screen shows for a pending authorization request."
       },
       "DiffOut": {
         "properties": {
@@ -2176,6 +3105,72 @@
         ],
         "title": "Me"
       },
+      "OAuthErrorOut": {
+        "properties": {
+          "error": {
+            "type": "string",
+            "title": "Error"
+          },
+          "error_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "OAuthErrorOut"
+      },
+      "ProtectedResourceMetadata": {
+        "properties": {
+          "resource": {
+            "type": "string",
+            "title": "Resource"
+          },
+          "authorization_servers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Authorization Servers"
+          },
+          "scopes_supported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scopes Supported"
+          },
+          "bearer_methods_supported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Bearer Methods Supported"
+          },
+          "resource_name": {
+            "type": "string",
+            "title": "Resource Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource",
+          "authorization_servers",
+          "scopes_supported",
+          "bearer_methods_supported",
+          "resource_name"
+        ],
+        "title": "ProtectedResourceMetadata"
+      },
       "ReplyCreate": {
         "properties": {
           "body": {
@@ -2233,6 +3228,24 @@
         ],
         "title": "ResolutionReport",
         "description": "How each feedback item raised on earlier versions was handled, as of ``version``."
+      },
+      "ScopeOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "ScopeOut"
       },
       "SectionDiff": {
         "properties": {
@@ -2565,6 +3578,40 @@
         ],
         "title": "TextQuoteSelector",
         "description": "W3C Web Annotation TextQuoteSelector, relative to the section's body_text."
+      },
+      "TokenOut": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "const": "Bearer",
+            "title": "Token Type"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "refresh_token",
+          "scope"
+        ],
+        "title": "TokenOut"
       },
       "ValidationError": {
         "properties": {

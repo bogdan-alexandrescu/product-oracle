@@ -12,6 +12,7 @@ from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
+from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.members.router import router as members_router
 from oracle.priorities.router import router as priorities_router
 from oracle.review.router import router as review_router
@@ -71,6 +72,8 @@ def create_app() -> FastAPI:
     app.include_router(priorities_router)
     app.include_router(templates_router)
     app.include_router(runs_router)
+    # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
+    app.include_router(oauth_router)
     return app
 
 

@@ -352,6 +352,168 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/.well-known/oauth-protected-resource": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Protected Resource
+         * @description RFC 9728 metadata for ``/mcp``, at both the root and the path-suffixed location.
+         */
+        get: operations["oauth_protected_resource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/oauth-authorization-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Authorization Server
+         * @description RFC 8414 authorization server metadata.
+         */
+        get: operations["oauth_authorization_server"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Oauth Register
+         * @description RFC 7591 dynamic registration of a public client (no secret; PKCE required).
+         */
+        post: operations["oauth_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Authorize
+         * @description Validate an authorization request and send the browser to the consent screen.
+         *
+         *     A browser without a signed-in user goes to sign-in first, then to the consent screen.
+         */
+        get: operations["oauth_authorize"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/authorize/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Consent Request
+         * @description The pending authorization request behind a consent URL, for the signed-in user.
+         */
+        get: operations["oauth_consent_request"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/authorize/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Oauth Consent Decision
+         * @description Approve (a 10-minute, single-use code) or deny; returns where the browser goes.
+         */
+        post: operations["oauth_consent_decision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Oauth Token
+         * @description Authorization code (with PKCE) or refresh token (rotated) for an access token.
+         */
+        post: operations["oauth_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Oauth Revoke
+         * @description RFC 7009. Ends the grant the token belongs to; unknown tokens are not an error.
+         */
+        post: operations["oauth_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -369,6 +531,63 @@ export interface components {
              */
             document_status: "draft" | "in_review" | "approved";
             version: components["schemas"]["VersionSummary"];
+        };
+        /** AuthorizationServerMetadata */
+        AuthorizationServerMetadata: {
+            /** Issuer */
+            issuer: string;
+            /** Authorization Endpoint */
+            authorization_endpoint: string;
+            /** Token Endpoint */
+            token_endpoint: string;
+            /** Registration Endpoint */
+            registration_endpoint: string;
+            /** Revocation Endpoint */
+            revocation_endpoint: string;
+            /** Scopes Supported */
+            scopes_supported: string[];
+            /** Response Types Supported */
+            response_types_supported: string[];
+            /** Response Modes Supported */
+            response_modes_supported: string[];
+            /** Grant Types Supported */
+            grant_types_supported: string[];
+            /** Code Challenge Methods Supported */
+            code_challenge_methods_supported: string[];
+            /** Token Endpoint Auth Methods Supported */
+            token_endpoint_auth_methods_supported: string[];
+            /** Revocation Endpoint Auth Methods Supported */
+            revocation_endpoint_auth_methods_supported: string[];
+            /** Authorization Response Iss Parameter Supported */
+            authorization_response_iss_parameter_supported: boolean;
+        };
+        /** Body_oauth_revoke */
+        Body_oauth_revoke: {
+            /** Client Id */
+            client_id?: string | null;
+            /** Token */
+            token?: string | null;
+            /** Token Type Hint */
+            token_type_hint?: string | null;
+        };
+        /** Body_oauth_token */
+        Body_oauth_token: {
+            /** Grant Type */
+            grant_type?: string | null;
+            /** Client Id */
+            client_id?: string | null;
+            /** Code */
+            code?: string | null;
+            /** Redirect Uri */
+            redirect_uri?: string | null;
+            /** Code Verifier */
+            code_verifier?: string | null;
+            /** Refresh Token */
+            refresh_token?: string | null;
+            /** Scope */
+            scope?: string | null;
+            /** Resource */
+            resource?: string | null;
         };
         /** CitationOut */
         CitationOut: {
@@ -392,6 +611,43 @@ export interface components {
             excerpt?: string | null;
             /** Retrieved At */
             retrieved_at?: string | null;
+        };
+        /** ClientRegistrationIn */
+        ClientRegistrationIn: {
+            /** Redirect Uris */
+            redirect_uris?: string[] | null;
+            /** Client Name */
+            client_name?: string | null;
+            /** Token Endpoint Auth Method */
+            token_endpoint_auth_method?: string | null;
+            /** Grant Types */
+            grant_types?: string[] | null;
+            /** Response Types */
+            response_types?: string[] | null;
+            /** Scope */
+            scope?: string | null;
+        };
+        /** ClientRegistrationOut */
+        ClientRegistrationOut: {
+            /** Client Id */
+            client_id: string;
+            /** Client Id Issued At */
+            client_id_issued_at: number;
+            /** Client Name */
+            client_name: string;
+            /** Redirect Uris */
+            redirect_uris: string[];
+            /** Grant Types */
+            grant_types: string[];
+            /** Response Types */
+            response_types: string[];
+            /**
+             * Token Endpoint Auth Method
+             * @constant
+             */
+            token_endpoint_auth_method: "none";
+            /** Scope */
+            scope: string;
         };
         /** CommentCreate */
         CommentCreate: {
@@ -443,6 +699,52 @@ export interface components {
             resolved?: boolean | null;
             /** Body */
             body?: string | null;
+        };
+        /** ConsentDecisionIn */
+        ConsentDecisionIn: {
+            /**
+             * Request
+             * @description The signed request handle from the consent URL
+             */
+            request: string;
+            /** Approve */
+            approve: boolean;
+        };
+        /**
+         * ConsentDecisionOut
+         * @description Where the browser goes next: the client's redirect URI with a code or an error.
+         */
+        ConsentDecisionOut: {
+            /** Redirect To */
+            redirect_to: string;
+        };
+        /**
+         * ConsentRequestOut
+         * @description What the consent screen shows for a pending authorization request.
+         */
+        ConsentRequestOut: {
+            /** Client Id */
+            client_id: string;
+            /** Client Name */
+            client_name: string;
+            /** Redirect Uri */
+            redirect_uri: string;
+            /** Redirect Host */
+            redirect_host: string;
+            /** Scopes */
+            scopes: components["schemas"]["ScopeOut"][];
+            /** User Email */
+            user_email: string;
+            /**
+             * User Role
+             * @enum {string}
+             */
+            user_role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Effective Role
+             * @enum {string}
+             */
+            effective_role: "viewer" | "commenter" | "approver" | "owner";
         };
         /** DiffOut */
         DiffOut: {
@@ -684,6 +986,26 @@ export interface components {
             /** Token Name */
             token_name?: string | null;
         };
+        /** OAuthErrorOut */
+        OAuthErrorOut: {
+            /** Error */
+            error: string;
+            /** Error Description */
+            error_description?: string | null;
+        };
+        /** ProtectedResourceMetadata */
+        ProtectedResourceMetadata: {
+            /** Resource */
+            resource: string;
+            /** Authorization Servers */
+            authorization_servers: string[];
+            /** Scopes Supported */
+            scopes_supported: string[];
+            /** Bearer Methods Supported */
+            bearer_methods_supported: string[];
+            /** Resource Name */
+            resource_name: string;
+        };
         /** ReplyCreate */
         ReplyCreate: {
             /** Body */
@@ -707,6 +1029,13 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+        };
+        /** ScopeOut */
+        ScopeOut: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
         };
         /** SectionDiff */
         SectionDiff: {
@@ -839,6 +1168,22 @@ export interface components {
              * @default
              */
             suffix: string;
+        };
+        /** TokenOut */
+        TokenOut: {
+            /** Access Token */
+            access_token: string;
+            /**
+             * Token Type
+             * @constant
+             */
+            token_type: "Bearer";
+            /** Expires In */
+            expires_in: number;
+            /** Refresh Token */
+            refresh_token: string;
+            /** Scope */
+            scope: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -1649,6 +1994,299 @@ export interface operations {
                     "text/html": string;
                     "application/pdf": string;
                     "text/markdown": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_protected_resource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtectedResourceMetadata"];
+                };
+            };
+        };
+    };
+    oauth_authorization_server: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizationServerMetadata"];
+                };
+            };
+        };
+    };
+    oauth_register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientRegistrationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientRegistrationOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_authorize: {
+        parameters: {
+            query?: {
+                client_id?: string | null;
+                redirect_uri?: string | null;
+                response_type?: string | null;
+                scope?: string | null;
+                state?: string | null;
+                code_challenge?: string | null;
+                code_challenge_method?: string | null;
+                resource?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description To the consent screen, sign-in, or back to the client */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_consent_request: {
+        parameters: {
+            query: {
+                request: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentRequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_consent_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentDecisionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["Body_oauth_token"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["Body_oauth_revoke"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorOut"];
                 };
             };
             /** @description Validation Error */
