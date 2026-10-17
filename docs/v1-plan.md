@@ -140,6 +140,31 @@ Every table is `TenantScoped` unless noted.
   (`commenter`), `default_claude_connection_id` (the Claude plan used when a user has
   none; the owner's own plan first), `confidence_weights`.
 
+## Claude accounts (Bogdan, 2026-10-17)
+
+Oracle's own Claude calls run on a **pool of Claude accounts**, managed the way
+SwarmCloud manages its account pool (the design is copied; nothing is shared between
+the products). It replaces the per-user Claude plan in Lane K; data connections stay
+per user. The pool starts with the owner's personal account.
+
+- **Accounts:** label (`^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$`), provider `anthropic`,
+  state `available | paused | draining | reauth_required` (only available takes new
+  calls), reason, quota windows (`five_hour`, `seven_day`: utilisation 0–1, resets_at,
+  observed_at), current holders, last assigned. Owner-managed.
+- **Adding:** paste a `claude setup-token` value (long-lived, no refresh) or Claude
+  Code's saved login JSON (with a refresh token; Oracle is then the single writer that
+  refreshes it). No browser sign-in that borrows Claude Code's login client.
+- **Calls:** run through Claude Code headless with `CLAUDE_CODE_OAUTH_TOKEN` set for
+  that call; readings come from Claude Code's stream-json `rate_limit_event`. A reading
+  older than 30 minutes is stale (`~N%`), a window never read is `—` (unknown, never 0).
+- **Choice:** among available accounts, the most headroom (minimum remaining across
+  windows, stale readings halved, at least 0.15), then fewest holders, then label. No
+  account free: the call waits for the next reset or fails clearly; never silently
+  falls back. Draining moves work off at the next turn boundary.
+- **Screens:** Settings > Claude accounts: ACCOUNT | 5H USED | 7D USED | CLEARS | STATE,
+  detail with holders and history, actions add / pause / resume / drain / sign in again
+  / remove (type the label to confirm).
+
 ## Confidence
 
 `api/oracle/confidence.py` (shared, already on `main`) scores a source item or a piece
@@ -168,7 +193,7 @@ words only: one company's Oracle, its users and their roles.
 |---|---|---|
 | 0 Foundation (merged) | migrations 0002–0003, models, `authz`, `crypto`, `runtokens`, `confidence`, `sources/base.py`, app navigation | Data model, roles helper, encryption, run tokens, Connector protocol, router stubs |
 | A Members | `api/oracle/members/`, role checks in `docs/`, `review/`, `export/`, `auth/iap.py` provisioning, `web/app/settings/members/` | Roles enforced everywhere; members + invites; Google sign-in without an invite gets `iap_default_role` (commenter) |
-| K Connections | `api/oracle/connections/`, `api/oracle/llm/`, `api/oracle/tenant_settings*`, `web/app/settings/connections/` | Per-user connect / reconnect / disconnect (OAuth PKCE where configured, pasted token otherwise), token refresh, the Claude plan connection and a Messages-API gateway that uses the user's plan or the default plan, company settings API |
+| K Connections | `api/oracle/connections/`, `api/oracle/llm/`, `api/oracle/tenant_settings*`, `web/app/settings/connections/` | Per-user connect / reconnect / disconnect (OAuth PKCE where configured, pasted token otherwise), token refresh, company settings API; its per-user Claude plan is superseded by the Claude account pool (integration workflow) |
 | B1 Sources | `api/oracle/sources/` (not `connectors/`), `oracle sync` CLI, `web/app/settings/sources/`, `web/app/sources/` | Owner-scoped source registry, sync engine with versions and snapshots, uploads, item confidence, search ranked by relevance × confidence |
 | B2a GitHub + Notion | `api/oracle/sources/connectors/github.py`, `notion.py` (+ fixtures, tests) | Connectors on the protocol, provider OAuth metadata, recorded-fixture tests |
 | B2b Slack + Fireflies + Google Docs | `api/oracle/sources/connectors/slack.py`, `fireflies.py`, `google_docs.py` (+ fixtures, tests) | Same; Slack never ingests DMs |
