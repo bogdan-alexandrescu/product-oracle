@@ -1,0 +1,22 @@
+# Root dev environment so tools can run the API tests from the repo root:
+#   uv run pytest api/tests
+# The API itself is the self-contained project in api/ (its own uv.lock, used by Docker).
+[project]
+name = "product-oracle-dev"
+version = "0.0.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["product-oracle-api"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+product-oracle-api = { path = "api", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "pytest-xdist>=3.6",
+    "ruff>=0.5",
+]

@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oracle
+          POSTGRES_PASSWORD: oracle
+          POSTGRES_DB: oracle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oracle -d oracle_test"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    defaults:
+      run:
+        working-directory: api
+    env:
+      ORACLE_TEST_DATABASE_URL: postgresql+asyncpg://oracle:oracle@localhost:5432/oracle_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - name: Generated API types are up to date
+        working-directory: .
+        run: |
+          (cd api && uv sync --frozen)
+          make openapi
+          git diff --exit-code -- web/lib/api || (echo "Run 'make openapi' and commit the result" && exit 1)
+      - run: npm run lint
+      - run: npm run build

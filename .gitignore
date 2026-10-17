@@ -1,2 +1,13 @@
 # Local-only working data (company/customer specifics). Never commit.
 private/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.env
+
+# Node / Next.js (web/.gitignore has the rest)
+node_modules/
