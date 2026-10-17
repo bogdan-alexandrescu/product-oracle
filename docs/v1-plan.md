@@ -142,14 +142,29 @@ Every table is `TenantScoped` unless noted.
 
 ## Agents and model calls (Bogdan, 2026-10-17)
 
-Product Oracle orchestrates **all** of its agents in SwarmCloud, not in its own
-environment or a separate runtime, and those agents use SwarmCloud's LLM providers and
-its account management. Oracle holds no model credentials, runs no model or Claude
-Code itself, and has no account pool of its own. Runs execute as SwarmCloud workflows
-(one per segment until #1436); any smaller piece of model work Oracle needs becomes a
-short SwarmCloud task through the same runtime adapter. Until #1433 lands, agents
-cannot yet reach Oracle's data through `/mcp`. Data connections (GitHub, Slack, Notion,
-Fireflies, Google) stay per user in Oracle.
+- **Agents run in SwarmCloud.** Product Oracle orchestrates all of its agents in
+  SwarmCloud, not in its own environment or a separate runtime; those agents use
+  SwarmCloud's LLM providers. Runs execute as SwarmCloud workflows (one per segment
+  until #1436). Until #1433 lands, agents cannot yet reach Oracle's data through `/mcp`.
+- **Built-in model jobs run in Oracle.** Review-comment handling (classify, group,
+  suggest resolutions, push back once per C1b), reporting (resolution reports, what
+  changed since version N) and refinement (revise a section from accepted
+  suggestions, keeping ids, O1c and O1e) run directly in Oracle as jobs.
+- **Their provider is Oracle's Claude account pool,** managed exactly like SwarmCloud's
+  account management (ported, for local personal use): see the next section.
+- Data connections (GitHub, Slack, Notion, Fireflies, Google) stay per user.
+
+## Claude accounts
+
+The pool behind Oracle's built-in model jobs copies SwarmCloud's account management
+exactly: the label rule, states `available | paused | draining | reauth_required`,
+quota windows, holds and the hold log, browser sign-in with PKCE and a pasted code, the
+paste route for Claude Code's saved login, the single-writer refresh sweep, usage
+polling and `rate_limit_event` readings, staleness, the assignment policy and its
+no-account reasons, swap and drain, the accounts screen and the CLI. Adapted for a
+local, single-company app: no lending; credentials encrypted in Oracle's database; the
+sweep runs from `oracle tick`; calls run through Claude Code headless with
+`CLAUDE_CODE_OAUTH_TOKEN` set per call. The pool starts with the owner's account.
 
 ## Confidence
 
@@ -179,7 +194,7 @@ words only: one company's Oracle, its users and their roles.
 |---|---|---|
 | 0 Foundation (merged) | migrations 0002–0003, models, `authz`, `crypto`, `runtokens`, `confidence`, `sources/base.py`, app navigation | Data model, roles helper, encryption, run tokens, Connector protocol, router stubs |
 | A Members | `api/oracle/members/`, role checks in `docs/`, `review/`, `export/`, `auth/iap.py` provisioning, `web/app/settings/members/` | Roles enforced everywhere; members + invites; Google sign-in without an invite gets `iap_default_role` (commenter) |
-| K Connections | `api/oracle/connections/`, `api/oracle/llm/`, `api/oracle/tenant_settings*`, `web/app/settings/connections/` | Per-user connect / reconnect / disconnect (OAuth PKCE where configured, pasted token otherwise), token refresh, company settings API; its per-user Claude plan and model gateway are removed by the integration workflow (agents and model calls run in SwarmCloud) |
+| K Connections | `api/oracle/connections/`, `api/oracle/llm/`, `api/oracle/tenant_settings*`, `web/app/settings/connections/` | Per-user connect / reconnect / disconnect (OAuth PKCE where configured, pasted token otherwise), token refresh, company settings API; its per-user Claude plan is replaced by the Claude account pool (integration workflow) |
 | B1 Sources | `api/oracle/sources/` (not `connectors/`), `oracle sync` CLI, `web/app/settings/sources/`, `web/app/sources/` | Owner-scoped source registry, sync engine with versions and snapshots, uploads, item confidence, search ranked by relevance × confidence |
 | B2a GitHub + Notion | `api/oracle/sources/connectors/github.py`, `notion.py` (+ fixtures, tests) | Connectors on the protocol, provider OAuth metadata, recorded-fixture tests |
 | B2b Slack + Fireflies + Google Docs | `api/oracle/sources/connectors/slack.py`, `fireflies.py`, `google_docs.py` (+ fixtures, tests) | Same; Slack never ingests DMs |
