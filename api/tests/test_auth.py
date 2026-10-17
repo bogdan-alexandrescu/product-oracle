@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from oracle.auth.models import ApiToken, User
 from oracle.models import AuditEvent
-from oracle.seed import seed
+from oracle.seed import format_result, seed
 from oracle.tenancy import tenant_session
 
 
@@ -34,6 +34,16 @@ async def test_seed_generates_password_when_missing(client):
         "/v1/auth/login", json={"email": "admin@example.com", "password": r.password}
     )
     assert resp.status_code == 200
+
+
+async def test_seed_output_shows_secrets_only_when_new():
+    first = format_result(await seed())
+    assert "password   " in first and "<- generated, shown once" in first
+    assert "export ORACLE_API_TOKEN=" in first
+
+    again = format_result(await seed())
+    assert "generated" not in again and "(unchanged" in again
+    assert "export ORACLE_API_TOKEN=" in again  # every run mints a new token
 
 
 async def test_login_cookie_me_and_logout(client):

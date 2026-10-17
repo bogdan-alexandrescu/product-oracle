@@ -10,7 +10,8 @@
     "build:mock": "NEXT_PUBLIC_API_MOCKS=1 NEXT_DIST_DIR=.next-mock next build",
     "start:mock": "NEXT_PUBLIC_API_MOCKS=1 NEXT_DIST_DIR=.next-mock next start",
     "dev:mock": "NEXT_PUBLIC_API_MOCKS=1 next dev",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:real": "playwright test -c playwright.real.config.ts"
   },
   "dependencies": {
     "next": "16.4.2",

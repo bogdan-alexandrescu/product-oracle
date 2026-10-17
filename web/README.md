@@ -22,7 +22,8 @@ link reseeds it. Sign in with `admin@example.com` / `demo`.
 
 ```bash
 npx playwright install chromium
-npm run test:e2e   # builds a mock-mode app into .next-mock and runs e2e/ against it
+npm run test:e2e        # builds a mock-mode app into .next-mock and runs e2e/ against it
+npm run test:e2e:real   # e2e/real against the real API + Postgres (see the root README, `make e2e`)
 ```
 
 ## Notes

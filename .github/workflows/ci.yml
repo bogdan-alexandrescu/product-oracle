@@ -62,3 +62,37 @@ jobs:
           git diff --exit-code -- web/lib/api || (echo "Run 'make openapi' and commit the result" && exit 1)
       - run: npm run lint
       - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oracle
+          POSTGRES_PASSWORD: oracle
+          POSTGRES_DB: oracle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oracle -d oracle"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: cd web && npm ci && npx playwright install --with-deps chromium
+      # Postgres is the service above, so the target must not start the compose one.
+      - run: make e2e E2E_POSTGRES=
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: web/test-results/

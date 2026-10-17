@@ -72,6 +72,31 @@ async def seed(
     )
 
 
+def format_result(r: SeedResult, *, password_given: bool = False) -> str:
+    """What ``make seed`` prints: sign-in details and the new token, shown only here."""
+    if r.password:
+        admin_note = f"{r.password}   <- generated, shown once"
+    elif r.user_created and password_given:
+        admin_note = "(as given on the command line)"
+    else:
+        admin_note = "(unchanged; set when the admin was first seeded)"
+    tenant = "created" if r.tenant_created else "existing"
+    admin = "created" if r.user_created else "existing"
+    return "\n".join(
+        [
+            f"Seeded tenant {r.tenant_id} ({tenant}), admin {r.user_email} ({admin}).",
+            "",
+            "Web UI (http://localhost:3000):",
+            f"  email      {r.user_email}",
+            f"  password   {admin_note}",
+            "",
+            f"API token '{r.token_name}' for the agent track (shown once, only its hash is kept):",
+            f"  export ORACLE_API_TOKEN={r.token}",
+            "",
+        ]
+    )
+
+
 async def _main(args: argparse.Namespace) -> None:
     try:
         r = await seed(
@@ -82,14 +107,7 @@ async def _main(args: argparse.Namespace) -> None:
         )
     finally:
         await dispose_engine()
-    print(f"tenant   {r.tenant_id} ({'created' if r.tenant_created else 'existing'})")
-    if r.user_created:
-        print(f"admin    {r.user_email} (created)")
-        if r.password:
-            print(f"password {r.password}   <- generated, shown once")
-    else:
-        print(f"admin    {r.user_email} (existing, password unchanged)")
-    print(f"token    {r.token}   <- '{r.token_name}', shown once; use as Bearer")
+    print(format_result(r, password_given=bool(args.password)))
 
 
 def main() -> None:

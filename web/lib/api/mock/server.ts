@@ -335,16 +335,18 @@ function addReview(
   opts?: { created_at?: string },
 ): ReviewRow {
   const created_at = opts?.created_at ?? now();
-  // A later verdict on the same section supersedes the earlier open item.
+  // As the API does: a later verdict on the same section supersedes the open verdict
+  // items raised on this or an earlier version.
   for (const f of db.feedback) {
     if (
       f.kind === "section_review" &&
       f.document_id === v.document_id &&
-      f.raised_on_version === v.number &&
+      f.raised_on_version <= v.number &&
       f.section_key === key &&
       f.status === "open"
     ) {
       f.status = "superseded";
+      f.resolution_note = `Superseded by a later '${body.verdict}' verdict on version ${v.number}`;
       f.updated_at = created_at;
     }
   }
@@ -603,7 +605,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       title: doc.title,
       version: v.number,
       markdown: versionMarkdown(doc, v),
-      open_items: db.feedback.filter((f) => f.document_id === doc.id && f.status === "open"),
+      open_items: db.feedback.filter(
+        (f) => f.document_id === doc.id && f.status === "open" && f.raised_on_version <= v.number,
+      ),
       locked_section_keys: lockedKeys(db, v),
       generated_at: now(),
     });

@@ -5,10 +5,10 @@ import type { NextConfig } from "next";
 const apiUrl = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
-  // The Playwright suite builds a mock-mode app into its own directory and serves it
-  // with `next start` (see playwright.config.ts); the Docker image uses standalone.
+  // The Playwright suites build into their own directories (.next-mock, .next-e2e) and
+  // serve them with `next start`; the default build (Docker image) is standalone.
   distDir: process.env.NEXT_DIST_DIR || ".next",
-  output: process.env.NEXT_PUBLIC_API_MOCKS === "1" ? undefined : "standalone",
+  output: process.env.NEXT_DIST_DIR ? undefined : "standalone",
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

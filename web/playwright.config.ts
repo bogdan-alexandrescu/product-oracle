@@ -9,6 +9,8 @@ const PORT = Number(process.env.E2E_PORT ?? 3100);
  */
 export default defineConfig({
   testDir: "./e2e",
+  // e2e/real runs against the real stack: playwright.real.config.ts (`make e2e`).
+  testIgnore: "real/**",
   fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,
   forbidOnly: !!process.env.CI,

@@ -1,0 +1,117 @@
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { expect, test, type Page } from "@playwright/test";
+
+import { section, selectText } from "../helpers";
+import { oracle, stackState } from "./stack";
+
+const DOC = "e2e-team-invoices";
+const FIXTURES = path.join(__dirname, "fixtures");
+
+async function login(page: Page) {
+  const { email, password } = stackState();
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/documents$/);
+}
+
+type OpenItem = { id: string; kind: string; section_key: string | null; status: string };
+
+test("full loop: push, review, pull, push v2 with resolutions, diff, approve, export", async ({ page }) => {
+  const work = await mkdtemp(path.join(tmpdir(), "oracle-e2e-"));
+
+  // The agent track imports v1.
+  expect(await oracle("push", path.join(FIXTURES, "draft_v1.md"))).toContain(`Imported ${DOC} version 1`);
+
+  // The reviewer comments inline and gives two section verdicts.
+  await login(page);
+  await page.getByRole("link", { name: "Team invoices PRD" }).click();
+  await page.getByRole("link", { name: "Version 1" }).click();
+  await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/v/1$`));
+
+  await expect(section(page, "solution")).toBeVisible();
+  await selectText(page, "solution", "Each row has a download link");
+  await page.getByRole("button", { name: /^Comment/ }).click();
+  const dialog = page.getByRole("dialog", { name: "New comment" });
+  await dialog.getByLabel("Comment").fill("Finance leads need many invoices at once. Can they download in bulk?");
+  await dialog.getByRole("button", { name: /^Comment/ }).click();
+  await expect(dialog).toBeHidden();
+  await expect(section(page, "solution").locator("mark.hl-comment")).toHaveText("Each row has a download link");
+
+  const goal = section(page, "goal").getByTestId("review-bar");
+  await goal.getByRole("button", { name: "Approve" }).click();
+  await goal.getByRole("button", { name: /^Save/ }).click();
+  await expect(goal.getByTestId("verdict-state")).toContainText("Locked");
+
+  const metrics = section(page, "metrics").getByTestId("review-bar");
+  await metrics.getByRole("button", { name: "Request changes" }).click();
+  await metrics.getByLabel(/What should change/).fill("Give the ticket metric a number and a deadline.");
+  await metrics.getByRole("button", { name: /^Save/ }).click();
+  await expect(metrics.getByTestId("verdict-state")).toContainText("Changes requested");
+
+  // Both survive a reload, i.e. they are stored by the API.
+  await page.reload();
+  await expect(section(page, "solution").locator("mark.hl-comment")).toHaveText("Each row has a download link");
+  await expect(section(page, "metrics").getByTestId("verdict-state")).toContainText("Changes requested");
+
+  // The agent track pulls the feedback package: two open items, the goal locked.
+  const pulled = await oracle("pull", DOC, "--version", "1", "--out", work);
+  expect(pulled).toContain("2 open item(s), 1 locked section(s) (goal)");
+  const items: OpenItem[] = JSON.parse(await readFile(path.join(work, `${DOC}-v1.open-items.json`), "utf8"));
+  expect(items.map((i) => [i.kind, i.section_key, i.status]).sort()).toEqual([
+    ["comment", "solution", "open"],
+    ["section_review", "metrics", "open"],
+  ]);
+  expect(JSON.parse(await readFile(path.join(work, `${DOC}-v1.locked.json`), "utf8"))).toEqual(["goal"]);
+
+  // v2 answers both items.
+  const byKind = (kind: string) => items.find((i) => i.kind === kind)!.id;
+  const v2 = (await readFile(path.join(FIXTURES, "draft_v2.md"), "utf8"))
+    .replace("{{COMMENT_ITEM}}", byKind("comment"))
+    .replace("{{VERDICT_ITEM}}", byKind("section_review"));
+  await writeFile(path.join(work, "draft_v2.md"), v2);
+  const pushed = await oracle("push", path.join(work, "draft_v2.md"));
+  expect(pushed).toContain(`Imported ${DOC} version 2`);
+  expect(pushed).toContain("No warnings");
+
+  // The diff shows the changed sections, word by word.
+  await page.goto(`/documents/${DOC}/v/2`);
+  await page.getByRole("link", { name: "Compare with v1" }).click();
+  await expect(page).toHaveURL(/\/diff\?from=1&to=2$/);
+  const diffOf = (k: string) => page.getByTestId("diff-section").filter({ hasText: `#${k}` });
+  await expect(diffOf("solution")).toHaveAttribute("data-status", "changed");
+  await expect(diffOf("solution").getByTestId("word-diff").locator("ins").first()).toContainText("zip archive");
+  await expect(diffOf("metrics")).toHaveAttribute("data-status", "changed");
+  await expect(diffOf("goal")).toHaveCount(0);
+
+  // The resolution report on v2 shows both items addressed.
+  await page.goto(`/documents/${DOC}/v/2`);
+  await page.getByRole("tab", { name: "Resolutions" }).click();
+  const report = page.getByRole("tabpanel");
+  const rows = report.getByTestId("feedback-item");
+  await expect(rows).toHaveCount(2);
+  for (const note of ["bulk download as a zip archive", "numeric target for support tickets"]) {
+    const row = rows.filter({ hasText: note });
+    await expect(row).toContainText("Addressed");
+    await expect(row).toContainText("addressed in v2");
+  }
+
+  // Approve v2, then export it.
+  await page.getByRole("button", { name: "Approve version" }).click();
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByText(/✓ Approved/)).toBeVisible();
+  await expect(page.getByText(/review is closed/)).toBeVisible();
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export PDF" }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe(`${DOC}-v2.pdf`);
+  const pdf = await readFile((await file.path())!);
+  expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  expect(pdf.subarray(-1024).toString("latin1")).toContain("%%EOF");
+  expect(pdf.length).toBeGreaterThan(2_000);
+});
