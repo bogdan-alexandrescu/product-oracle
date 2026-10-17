@@ -486,14 +486,14 @@ async function route(db: Db, req: Request): Promise<Response> {
       return json(401, { detail: "Invalid credentials" });
     }
     db.session = email;
-    return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email });
+    return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email, role: "owner" });
   }
   if (p[1] === "auth" && p[2] === "logout" && m === "POST") {
     db.session = null;
     return json(204, undefined);
   }
   if (!db.session) return json(401, { detail: "Not authenticated" });
-  if (p[1] === "me") return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email: db.session });
+  if (p[1] === "me") return json(200, { kind: "user", tenant_id: db.tenant_id, user_id: db.user_id, email: db.session, role: "owner" });
 
   if (p[1] === "comments" && p[2]) {
     const c = db.comments.find((x) => x.id === p[2]);

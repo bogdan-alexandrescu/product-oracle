@@ -14,7 +14,7 @@ from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBea
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth import iap, service
-from oracle.auth.models import User
+from oracle.auth.models import Role, User
 from oracle.config import get_settings
 from oracle.tenancy import tenant_session
 
@@ -28,6 +28,8 @@ _cookie = APIKeyCookie(
 class Principal:
     tenant_id: uuid.UUID
     kind: Literal["user", "token"]
+    # The user's role, or the API token's role. Checked by oracle.authz.require_role.
+    role: Role
     user_id: uuid.UUID | None = None
     token_id: uuid.UUID | None = None
 
@@ -84,16 +86,23 @@ async def get_principal(
         token = await service.resolve_api_token(bearer.credentials)
         if token is None:
             raise _unauthorized()
-        return Principal(tenant_id=token.tenant_id, kind="token", token_id=token.id)
+        return Principal(
+            tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id
+        )
     if iap_user is not None:
-        return Principal(tenant_id=iap_user.tenant_id, kind="user", user_id=iap_user.id)
+        return Principal(
+            tenant_id=iap_user.tenant_id, kind="user", role=iap_user.role, user_id=iap_user.id
+        )
     if cookie:
         ids = service.read_session_cookie(cookie)
         if ids is not None:
             user_id, tenant_id = ids
             async with tenant_session(tenant_id) as s:
-                if await s.get(User, user_id) is not None:
-                    return Principal(tenant_id=tenant_id, kind="user", user_id=user_id)
+                user = await s.get(User, user_id)
+                if user is not None:
+                    return Principal(
+                        tenant_id=tenant_id, kind="user", role=user.role, user_id=user_id
+                    )
     raise _unauthorized()
 
 

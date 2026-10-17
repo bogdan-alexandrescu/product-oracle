@@ -670,6 +670,11 @@ export interface components {
              * Format: uuid
              */
             tenant_id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
             /** User Id */
             user_id?: string | null;
             /** Email */

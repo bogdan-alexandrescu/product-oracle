@@ -1,27 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { resetMockData } from "@/lib/api/mock/server";
+import { useMe } from "@/lib/me";
 
 export function AppHeader() {
-  const pathname = usePathname();
   const router = useRouter();
-  const [email, setEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    api
-      .GET("/v1/me")
-      .then(({ data }) => live && setEmail(data?.email ?? data?.token_name ?? null))
-      .catch(() => live && setEmail(null));
-    return () => {
-      live = false;
-    };
-  }, [pathname]);
+  const { me, clear } = useMe();
+  const email = me?.email ?? me?.token_name ?? null;
 
   async function signOut() {
     await api.POST("/v1/auth/logout").catch(() => undefined);
@@ -34,7 +23,7 @@ export function AppHeader() {
       window.location.assign("/?gcp-iap-mode=CLEAR_LOGIN_COOKIE");
       return;
     }
-    setEmail(null);
+    clear();
     router.push("/login");
   }
 
@@ -77,9 +66,6 @@ export function HeaderShell({ children }: { children?: React.ReactNode }) {
       <nav className="mx-auto flex h-12 max-w-[1400px] items-center gap-6 px-6">
         <Link href="/documents" className="font-semibold tracking-tight text-neutral-900">
           Product Oracle
-        </Link>
-        <Link href="/documents" className="text-sm text-neutral-600 hover:text-neutral-900">
-          Documents
         </Link>
         <div className="ml-auto flex items-center gap-4">{children}</div>
       </nav>

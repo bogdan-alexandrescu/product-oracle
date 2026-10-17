@@ -27,10 +27,14 @@ async def login(body: LoginRequest, response: Response) -> Me:
         path="/",
     )
     async with tenant_session(user.tenant_id) as s:
-        principal = Principal(tenant_id=user.tenant_id, kind="user", user_id=user.id)
+        principal = Principal(
+            tenant_id=user.tenant_id, kind="user", role=user.role, user_id=user.id
+        )
         await record(s, principal, "login", "user", user.id)
         await s.commit()
-    return Me(kind="user", tenant_id=user.tenant_id, user_id=user.id, email=user.email)
+    return Me(
+        kind="user", tenant_id=user.tenant_id, role=user.role, user_id=user.id, email=user.email
+    )
 
 
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -43,6 +47,18 @@ async def logout(response: Response) -> None:
 async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
     if principal.kind == "user":
         user = await db.get(User, principal.user_id)
-        return Me(kind="user", tenant_id=principal.tenant_id, user_id=user.id, email=user.email)
+        return Me(
+            kind="user",
+            tenant_id=principal.tenant_id,
+            role=principal.role,
+            user_id=user.id,
+            email=user.email,
+        )
     token = await db.get(ApiToken, principal.token_id)
-    return Me(kind="token", tenant_id=principal.tenant_id, token_id=token.id, token_name=token.name)
+    return Me(
+        kind="token",
+        tenant_id=principal.tenant_id,
+        role=principal.role,
+        token_id=token.id,
+        token_name=token.name,
+    )

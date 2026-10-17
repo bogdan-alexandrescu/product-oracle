@@ -6,11 +6,17 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from oracle.auth.router import router as auth_router
+from oracle.baseline.router import router as baseline_router
 from oracle.config import get_settings
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
+from oracle.members.router import router as members_router
+from oracle.priorities.router import router as priorities_router
 from oracle.review.router import router as review_router
+from oracle.runs.router import router as runs_router
+from oracle.sources.router import router as sources_router
+from oracle.templates.router import router as templates_router
 
 
 @asynccontextmanager
@@ -56,6 +62,13 @@ def create_app() -> FastAPI:
     app.include_router(docs_router)
     app.include_router(review_router)
     app.include_router(export_router)
+    # v1 lanes add their routes to these (empty until then).
+    app.include_router(members_router)
+    app.include_router(sources_router)
+    app.include_router(baseline_router)
+    app.include_router(priorities_router)
+    app.include_router(templates_router)
+    app.include_router(runs_router)
     return app
 
 

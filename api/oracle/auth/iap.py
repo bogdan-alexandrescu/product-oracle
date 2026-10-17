@@ -153,7 +153,7 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
             await s.flush()
             from oracle.auth.deps import Principal
 
-            principal = Principal(tenant_id=tenant_id, kind="user", user_id=user.id)
+            principal = Principal(tenant_id=tenant_id, kind="user", role=user.role, user_id=user.id)
             await record(s, principal, "provision", "user", user.id, {"via": "iap"})
             await s.commit()
         except IntegrityError:

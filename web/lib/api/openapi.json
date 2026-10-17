@@ -2111,6 +2111,16 @@
             "format": "uuid",
             "title": "Tenant Id"
           },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
           "user_id": {
             "anyOf": [
               {
@@ -2161,7 +2171,8 @@
         "type": "object",
         "required": [
           "kind",
-          "tenant_id"
+          "tenant_id",
+          "role"
         ],
         "title": "Me"
       },

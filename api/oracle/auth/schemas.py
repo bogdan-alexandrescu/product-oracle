@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from oracle.auth.models import Role
+
 
 class LoginRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
@@ -12,6 +14,7 @@ class LoginRequest(BaseModel):
 class Me(BaseModel):
     kind: Literal["user", "token"]
     tenant_id: uuid.UUID
+    role: Role
     user_id: uuid.UUID | None = None
     email: str | None = None
     token_id: uuid.UUID | None = None

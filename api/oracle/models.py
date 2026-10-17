@@ -32,19 +32,58 @@ class AuditEvent(TenantScoped, Base):
 
 
 from oracle.auth.models import ApiToken, User  # noqa: E402
+from oracle.baseline.models import (  # noqa: E402
+    Conflict,
+    Edge,
+    Entity,
+    EntityRevision,
+    Evidence,
+    Proposal,
+)
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
+from oracle.members.models import Invite  # noqa: E402
+from oracle.priorities.models import PrioritySnapshot  # noqa: E402
 from oracle.review.models import Comment, FeedbackItem, SectionReview  # noqa: E402
+from oracle.runs.models import Checkpoint, Run, RunSegment  # noqa: E402
+from oracle.runtokens import RunToken  # noqa: E402
+from oracle.sources.models import (  # noqa: E402
+    Snapshot,
+    Source,
+    SourceCredential,
+    SourceItem,
+    SourceItemVersion,
+)
+from oracle.templates.models import Template, TemplateVersion  # noqa: E402
 
 __all__ = [
     "ApiToken",
     "AuditEvent",
+    "Checkpoint",
     "Citation",
     "Comment",
+    "Conflict",
     "Document",
     "DocumentVersion",
+    "Edge",
+    "Entity",
+    "EntityRevision",
+    "Evidence",
     "FeedbackItem",
+    "Invite",
+    "PrioritySnapshot",
+    "Proposal",
+    "Run",
+    "RunSegment",
+    "RunToken",
     "Section",
     "SectionReview",
+    "Snapshot",
+    "Source",
+    "SourceCredential",
+    "SourceItem",
+    "SourceItemVersion",
+    "Template",
+    "TemplateVersion",
     "Tenant",
     "User",
 ]

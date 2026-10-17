@@ -101,3 +101,13 @@ export function ErrorNote({ children }: { children: ReactNode }) {
 export function Loading({ label = "Loading…" }: { label?: string }) {
   return <p className="text-sm text-neutral-500">{label}</p>;
 }
+
+/** Empty state of a page: its heading plus a sentence or two on what will appear here. */
+export function EmptyState({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="mx-auto max-w-4xl px-6 py-8">
+      <h1 className="mb-6 text-2xl font-semibold tracking-tight text-neutral-900">{title}</h1>
+      <div className="space-y-2 text-neutral-600">{children}</div>
+    </div>
+  );
+}

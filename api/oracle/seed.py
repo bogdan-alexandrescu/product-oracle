@@ -1,4 +1,4 @@
-"""Seed the single tenant, the admin user and a new API token.
+"""Seed the single tenant, the admin user, a new API token and the default PRD template.
 
     python -m oracle.seed [--email admin@example.com] [--password ...] [--token-name ...]
 
@@ -19,6 +19,7 @@ from oracle.auth.models import User
 from oracle.auth.service import create_api_token, create_user
 from oracle.db import dispose_engine
 from oracle.models import Tenant
+from oracle.templates.defaults import ensure_default_template
 from oracle.tenancy import tenant_session, unscoped_session
 
 
@@ -59,6 +60,7 @@ async def seed(
                 password = generated = secrets.token_urlsafe(12)
             await create_user(s, email, password)
         _, raw = await create_api_token(s, token_name)
+        await ensure_default_template(s)
         await s.commit()
 
     return SeedResult(

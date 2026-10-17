@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { AppHeader, HeaderShell } from "@/components/AppHeader";
+import { WorkspaceNav } from "@/components/WorkspaceNav";
+import { MeProvider, MeSync } from "@/lib/me";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,10 +15,20 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">
-        <Suspense fallback={<HeaderShell />}>
-          <AppHeader />
-        </Suspense>
-        <main className="w-full flex-1">{children}</main>
+        <MeProvider>
+          <Suspense fallback={null}>
+            <MeSync />
+          </Suspense>
+          <Suspense fallback={<HeaderShell />}>
+            <AppHeader />
+          </Suspense>
+          <div className="flex w-full flex-1">
+            <Suspense fallback={null}>
+              <WorkspaceNav />
+            </Suspense>
+            <main className="min-w-0 flex-1">{children}</main>
+          </div>
+        </MeProvider>
       </body>
     </html>
   );
