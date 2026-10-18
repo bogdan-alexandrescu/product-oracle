@@ -25,6 +25,7 @@ dependencies = [
     "python-multipart>=0.0.20",  # multipart uploads
     "cryptography>=45",  # Fernet + HKDF for source credentials
     "pypdf>=6.21.0",  # PDF uploads (was a dev dependency for export tests)
+    "python-pptx>=1.0",  # Deck export (O1f): the brief layer as PPTX slides
 ]
 
 [project.scripts]

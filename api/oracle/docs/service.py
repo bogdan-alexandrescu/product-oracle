@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
+from oracle.docs import layers
 from oracle.docs.diff import diff_sections
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, ParsedDraft, is_uuid, parse_draft
@@ -31,6 +32,7 @@ from oracle.docs.schemas import (
 )
 from oracle.review import service as review_service
 from oracle.review.models import SectionReview
+from oracle.templates.models import Template, TemplateVersion
 
 
 class NotFoundError(LookupError):
@@ -123,6 +125,37 @@ async def _latest_verdicts(db: AsyncSession, version_id: uuid.UUID) -> dict[str,
     return {r.section_key: SectionVerdict.model_validate(r) for r in rows}
 
 
+async def template_body(
+    db: AsyncSession, template: str | None, template_version: str | None
+) -> str | None:
+    """The body of a template version a draft names, if it exists (archived too)."""
+    if not template or not template_version or not template_version.isdigit():
+        return None
+    return await db.scalar(
+        select(TemplateVersion.body)
+        .join(Template, Template.id == TemplateVersion.template_id)
+        .where(Template.key == template, TemplateVersion.version == int(template_version))
+    )
+
+
+def _template_meta(body: str):
+    # Cached per body (versions are immutable); imported late: templates imports docs.
+    from oracle.templates.service import version_meta
+
+    return version_meta(body)
+
+
+async def version_guidance(db: AsyncSession, version: DocumentVersion) -> dict[str, str]:
+    """Guidance per section id from the template version this version names."""
+    fm = version.front_matter or {}
+    body = await template_body(db, fm.get("template"), _str(fm.get("template_version")))
+    return layers.section_guidance(body) if body else {}
+
+
+def _str(value: object) -> str | None:
+    return None if value is None else str(value)
+
+
 async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut:
     sections = list(
         await db.scalars(
@@ -135,11 +168,20 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
         )
     )
     verdicts = await _latest_verdicts(db, version.id)
+    has_brief = any(s.layer == "brief" for s in sections)
+    guidance = await version_guidance(db, version) if has_brief else {}
     return VersionOut(
         **VersionSummary.model_validate(version).model_dump(),
         front_matter=version.front_matter,
         sections=[
-            SectionOut.model_validate(s).model_copy(update={"verdict": verdicts.get(s.section_key)})
+            SectionOut.model_validate(s).model_copy(
+                update={
+                    "verdict": verdicts.get(s.section_key),
+                    "notes": layers.presenter_notes(s.body_md, guidance.get(s.section_key))
+                    if s.layer == "brief"
+                    else None,
+                }
+            )
             for s in sections
         ],
         citations=[CitationOut.model_validate(c) for c in citations],
@@ -232,6 +274,24 @@ async def import_draft(
                     )
                 )
 
+    # O1f: the brief layer, from the draft, else its template's markers, else a
+    # "Full version" heading.
+    template_brief = None
+    if draft.brief is None:
+        named = (
+            (draft.template, draft.template_version)
+            if draft.template
+            else (document.template, document.template_version)
+        )
+        body = await template_body(db, *named)
+        template_brief = _template_meta(body).marked_brief if body else None
+    brief, brief_source = layers.resolve_brief(
+        [layers.SectionRef(s.section_key, s.level) for s in draft.sections],
+        draft_brief=draft.brief,
+        template_brief=template_brief,
+    )
+    layer_of = layers.layers((s.section_key for s in draft.sections), brief)
+
     version = DocumentVersion(
         document_id=document.id,
         number=(previous.number + 1) if previous else 1,
@@ -241,6 +301,7 @@ async def import_draft(
         snapshot=draft.snapshot,
         warnings=[w.model_dump() for w in warnings],
         imported_by=principal.id,
+        brief_source=brief_source,
     )
     db.add(version)
     try:
@@ -260,6 +321,7 @@ async def import_draft(
             body_text=s.body_text,
             content_hash=s.content_hash,
             citation_keys=s.citation_keys,
+            layer=layer_of[s.section_key],
         )
         for s in draft.sections
     )
@@ -310,6 +372,7 @@ async def import_draft(
             "content_hash": version.content_hash,
             "resolutions": len(draft.resolutions),
             "warnings": [w.code for w in warnings],
+            "brief_source": brief_source,
         },
     )
     await db.commit()

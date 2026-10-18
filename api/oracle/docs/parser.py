@@ -19,6 +19,7 @@ from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from oracle.docs import layers
 from oracle.docs.schemas import CitationSource, ImportProblem
 from oracle.review.schemas import Resolution
 
@@ -79,6 +80,8 @@ class ParsedDraft:
     sections: list[ParsedSection]
     markdown: str
     content_hash: str
+    # O1f: the front matter's ``brief: [section ids]``; None when the draft has none.
+    brief: list[str] | None = None
     problems: list[ImportProblem] = field(default_factory=list)
 
 
@@ -350,6 +353,10 @@ def parse_draft(markdown: str) -> ParsedDraft:
     resolutions = _parse_resolutions(fm.get("resolutions"), problems)
     sections = _parse_sections(body, offset, problems)
     _check_citations(sections, citations, problems)
+    for code, message, key in layers.brief_problems(
+        fm.get("brief"), [s.section_key for s in sections]
+    ):
+        problems.append(ImportProblem(code=code, message=message, section_key=key))
 
     document = _optional_str(fm.get("document"))
     if document is not None and not SLUG_RE.match(document):
@@ -377,6 +384,7 @@ def parse_draft(markdown: str) -> ParsedDraft:
         sections=sections,
         markdown=text,
         content_hash=sha256(text),
+        brief=layers.marked_brief(fm),
     )
 
 

@@ -3,10 +3,48 @@ document: new-pr-faq
 title: "<Product> PR/FAQ"
 template: pr-faq
 template_version: "1"
+brief: [summary, goal-trace, problem, brief-items, brief-roadmap, not-doing, top-risks, decisions]
 ---
 
 # <Product> PR/FAQ {#title}
 <!-- Working Backwards: write the launch announcement first, as if the product already shipped, then answer the hard questions. Press release under one page, whole document about six. Plain language, no internal jargon. -->
+
+## Summary {#summary}
+<!-- Brief: fits one slide; plain language for an all-hands. Three sentences: the product, the customer and the benefit they get, and the decision asked of the reader. Presenter notes for this slide, if any, go in a fenced ```notes block at the end of the section. -->
+
+## Goal trace {#goal-trace}
+<!-- Brief: fits one slide; plain language for an all-hands. Confirmed company goals served, horizon and expected contribution, one line each. If none, say so. -->
+
+## Problem {#problem}
+<!-- Brief: fits one slide; plain language for an all-hands. The customer problem in one or two sentences, as the customer would put it. No solution words. -->
+
+## Features by milestone {#brief-items}
+<!-- Brief: fits one slide; plain language for an all-hands. One row per feature, one line each. Rows are grouped by milestone in delivery order, and the milestone is named only on the first row of its group. Columns: | Milestone | Feature | Goal | Outcome |. The milestone cell links to the milestone's detail section under Milestones and the feature cell links to the feature's detail section under Feature detail, using in-document links such as [Beta](#milestone-beta) and [Bulk import](#feature-bulk-import); the detail section ids must match the links. -->
+
+| Milestone | Feature | Goal | Outcome |
+|---|---|---|---|
+| [<Milestone>](#milestone-item) | [<Feature>](#feature-item) | <goal> | <one-line outcome> |
+
+## Roadmap {#brief-roadmap}
+<!-- Brief: fits one slide; plain language for an all-hands. One line per milestone, in order: the milestone linked to its detail section, then the outcome it delivers for customers or the business, not the features in it. -->
+
+- [<Milestone>](#milestone-item): <outcome this milestone delivers>
+
+## Not doing {#not-doing}
+<!-- Brief: fits one slide; plain language for an all-hands. Two or three things a customer might expect the product to do that it will not, one line each with the reason. -->
+
+## Top risks {#top-risks}
+<!-- Brief: fits one slide; plain language for an all-hands. The three biggest risks, one line each with its mitigation. The full answer lives in the internal FAQ. -->
+
+- <Risk>: <mitigation>. See [What are the biggest risks?](#faq-risks)
+
+## Decisions needed {#decisions}
+<!-- Brief: fits one slide; plain language for an all-hands. The decisions asked of this audience, one line each with the owner and the date the decision is needed by. -->
+
+- <Decision>: owner <name>, needed by <date>
+
+# Full version {#full}
+<!-- Everything below is the full document: the detail behind each brief section. -->
 
 ## Press release {#press-release}
 <!-- Written as a future-dated announcement aimed at customers. No numbers that need a source; keep claims to what the customer would experience. -->
@@ -61,6 +99,18 @@ template_version: "1"
 
 ### How will we know it worked? {#faq-success}
 <!-- Measurable outcomes with targets and a time frame. -->
+
+## Feature detail {#feature-detail}
+<!-- One level-3 section per feature, id feature-<slug>, in priority order; the brief table links to each. Each holds the feature's user stories, acceptance criteria, flows and dependencies. -->
+
+### <Feature> {#feature-item}
+<!-- Repeat per feature. What it does for the customer, the goal it serves, user stories, acceptance criteria, key flow, dependencies on other features or teams. -->
+
+## Milestones {#milestones}
+<!-- One level-3 section per milestone, id milestone-<slug>, in date order; the brief table and roadmap link to each. -->
+
+### <Milestone> {#milestone-item}
+<!-- Repeat per milestone. Scope (the features it contains), exit criteria, the date and its source (tracker estimate, external date, or not yet dated). -->
 
 ## Sources and data points {#sources}
 <!-- The only place for sources, numbers and evidence. The body above states conclusions only. List each source with its citation id from the front matter as plain text; no inline citation markers anywhere. -->

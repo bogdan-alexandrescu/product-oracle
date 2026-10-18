@@ -4,11 +4,58 @@ title: Quarterly timeline roadmap
 template: quarterly-timeline
 template_version: 1
 kind: roadmap
+brief: [summary, goals, problems, brief-items, brief-roadmap, not-doing, top-risks, decisions]
 ---
 
 # {{product}} quarterly roadmap {#roadmap}
 
 <!-- Time-axis view (O4 "Quarterly timeline") for audiences who need "when": leadership, sales, marketing, finance. Only Now-horizon work carries dates; later work spans its quarters without end dates. One line under the title: as-of date, approved version, audience variant. -->
+
+## Summary {#summary}
+
+<!-- Brief: fits one slide; plain language for an all-hands. Three to five sentences: the key dates in the period, what they depend on, and what is planned but not yet dated. Presenter notes for this slide, if any, go in a fenced ```notes block at the end of the section. -->
+
+## Goals served {#goals}
+
+<!-- Brief: fits one slide; plain language for an all-hands. Confirmed goals with codes (G1, G2...), metric, target and owner; codes are used as chips on bars. -->
+
+## Problems we are solving {#problems}
+
+<!-- Brief: fits one slide; plain language for an all-hands. The two to four customer or business problems this roadmap addresses, one line each in the customer's terms, with the goal each one moves. -->
+
+## Items by quarter {#brief-items}
+
+<!-- Brief: fits one slide; plain language for an all-hands. One row per item, one line each. Rows are grouped by milestone (in this roadmap, the quarter) in order, and the milestone is named only on the first row of its group. Columns: | Quarter | Item | Goal | Outcome |. The milestone cell links to the milestone's detail section and the item cell links to the item's detail section, using in-document links such as [Q3](#timeline) and [Bulk import](#lane-payments); the detail section ids must match the links. Items have no section of their own here: link each quarter to the Timeline (#timeline) and each item to the section of the swimlane that holds its detail (lane ids such as lane-<slug>). Now items may add their end date to the outcome. -->
+
+| Quarter | Item | Goal | Outcome |
+|---|---|---|---|
+| [{{quarter}}](#timeline) | [{{item_title}}](#lane) | {{goal_code}} | {{one_line_outcome}} |
+
+## Outcomes by quarter {#brief-roadmap}
+
+<!-- Brief: fits one slide; plain language for an all-hands. One line per quarter: the quarter linked to the Timeline, then the outcome it delivers for customers or the business, not the items in it. Name any dated key milestone in the line and link it to Key milestones. -->
+
+- [{{quarter}}](#timeline): {{outcome}}, by [{{milestone_name}}](#milestones) on {{milestone_date}}
+
+## Not doing {#not-doing}
+
+<!-- Brief: fits one slide; plain language for an all-hands. Items deliberately dropped or pushed out of the period this version, one line each with the reason. -->
+
+## Top risks {#top-risks}
+
+<!-- Brief: fits one slide; plain language for an all-hands. The three biggest risks, one line each with its mitigation. The full list lives in Dependencies. -->
+
+- {{risk}}: {{mitigation}}. See [Dependencies](#dependencies).
+
+## Decisions needed {#decisions}
+
+<!-- Brief: fits one slide; plain language for an all-hands. The decisions asked of this audience, one line each with the owner and the date the decision is needed by. -->
+
+- {{decision}}: owner {{owner}}, needed by {{date}}
+
+# Full version {#full}
+
+<!-- Everything below is the full document: the detail behind each brief section. -->
 
 ## Layout {#layout}
 
@@ -57,14 +104,6 @@ layout:
     engineering: {show: [effort, tracker_links, drift], axis_unit: month}
     public: {group_by: theme, allow: [public_title, public_summary, announced_quarter], bars_only_if: announced, require_disclaimer: true}
 ```
-
-## Summary {#summary}
-
-<!-- Three to five sentences: the key dates in the period, what they depend on, and what is planned but not yet dated. -->
-
-## Goals served {#goals}
-
-<!-- Confirmed goals with codes (G1, G2...), metric, target and owner; codes are used as chips on bars. -->
 
 ## Timeline {#timeline}
 

@@ -19,6 +19,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from oracle.db import Base, TenantScoped
 
 DOCUMENT_STATUSES = ("draft", "in_review", "approved")
+# O1f: a section belongs to the brief layer or is detail (oracle.docs.layers).
+SECTION_LAYERS = ("brief", "detail")
+BRIEF_SOURCES = ("draft", "template", "full_heading", "none")
 CITATION_SOURCES = ("slack", "notion", "gdocs", "github", "fireflies", "upload", "web")
 
 
@@ -61,6 +64,7 @@ class DocumentVersion(TenantScoped, Base):
     __table_args__ = (
         UniqueConstraint("document_id", "number"),
         UniqueConstraint("document_id", "content_hash"),
+        CheckConstraint(_in("brief_source", BRIEF_SOURCES), name="brief_source"),
     )
 
     document_id: Mapped[uuid.UUID] = mapped_column(
@@ -78,6 +82,9 @@ class DocumentVersion(TenantScoped, Base):
     # User id or API token id; no FK because it can be either.
     imported_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Where the brief layer came from: the draft's front matter, its template's markers,
+    # a "Full version" heading, or none (the version opens on the full document).
+    brief_source: Mapped[str] = mapped_column(Text, nullable=False, server_default="none")
 
     document: Mapped[Document] = relationship(back_populates="versions")
     sections: Mapped[list["Section"]] = relationship(
@@ -88,7 +95,10 @@ class DocumentVersion(TenantScoped, Base):
 
 class Section(TenantScoped, Base):
     __tablename__ = "sections"
-    __table_args__ = (UniqueConstraint("version_id", "section_key"),)
+    __table_args__ = (
+        UniqueConstraint("version_id", "section_key"),
+        CheckConstraint(_in("layer", SECTION_LAYERS), name="layer"),
+    )
 
     version_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False, index=True
@@ -103,6 +113,7 @@ class Section(TenantScoped, Base):
     citation_keys: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, server_default="{}"
     )
+    layer: Mapped[str] = mapped_column(Text, nullable=False, server_default="detail")
 
 
 class Citation(TenantScoped, Base):

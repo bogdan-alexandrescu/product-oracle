@@ -6,31 +6,57 @@ import { Badge, Button } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 
-const FORMATS = [
-  { format: "html", label: "HTML" },
-  { format: "pdf", label: "PDF" },
-  { format: "md", label: "MD" },
+// O1f: Full (as before), Brief and Deck. Full keeps its labels ("Export PDF").
+const GROUPS = [
+  {
+    layer: "full",
+    label: "Full",
+    formats: [
+      { format: "html", label: "HTML" },
+      { format: "pdf", label: "PDF" },
+      { format: "md", label: "MD" },
+    ],
+  },
+  {
+    layer: "brief",
+    label: "Brief",
+    formats: [
+      { format: "pdf", label: "PDF" },
+      { format: "html", label: "HTML" },
+    ],
+  },
+  {
+    layer: "deck",
+    label: "Deck",
+    formats: [
+      { format: "pdf", label: "PDF" },
+      { format: "pptx", label: "PPTX" },
+    ],
+  },
 ] as const;
 
+type Layer = (typeof GROUPS)[number]["layer"];
+type Format = "html" | "pdf" | "md" | "pptx";
+
 /** Downloads an export (with version banner) through the typed client. */
-export function ExportButtons({ doc, n }: { doc: string; n: number }) {
+export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: number; hasBrief?: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function download(format: (typeof FORMATS)[number]["format"]) {
-    setBusy(format);
+  async function download(layer: Layer, format: Format) {
+    setBusy(`${layer}.${format}`);
     setError(null);
     try {
       const blob = await unwrap<Blob>(
         api.GET("/v1/documents/{doc}/versions/{n}/export", {
-          params: { path: { doc, n }, query: { format } },
+          params: { path: { doc, n }, query: { format, layer } },
           parseAs: "blob",
         }),
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${doc}-v${n}.${format}`;
+      a.download = `${doc}-v${n}${layer === "full" ? "" : `-${layer}`}.${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -42,23 +68,27 @@ export function ExportButtons({ doc, n }: { doc: string; n: number }) {
     }
   }
 
+  const groups = GROUPS.filter((g) => hasBrief || g.layer === "full");
   return (
     <div className="flex items-center gap-2">
-      <div role="group" aria-label="Export" className="flex items-center">
-        <span className="mr-2 text-sm text-neutral-600">Export</span>
-        {FORMATS.map((f, i) => (
-          <Button
-            key={f.format}
-            size="sm"
-            className={`${i > 0 ? "-ml-px rounded-l-none" : ""} ${i < FORMATS.length - 1 ? "rounded-r-none" : ""}`}
-            disabled={busy !== null}
-            onClick={() => download(f.format)}
-            aria-label={`Export ${f.label}`}
-          >
-            {busy === f.format ? "…" : f.label}
-          </Button>
-        ))}
-      </div>
+      <span className="text-sm text-neutral-600">Export</span>
+      {groups.map((g) => (
+        <div key={g.layer} role="group" aria-label={`Export ${g.label.toLowerCase()}`} className="flex items-center">
+          {hasBrief && <span className="mr-1 text-xs text-neutral-500">{g.label}</span>}
+          {g.formats.map((f, i) => (
+            <Button
+              key={f.format}
+              size="sm"
+              className={`${i > 0 ? "-ml-px rounded-l-none" : ""} ${i < g.formats.length - 1 ? "rounded-r-none" : ""}`}
+              disabled={busy !== null}
+              onClick={() => download(g.layer, f.format)}
+              aria-label={g.layer === "full" ? `Export ${f.label}` : `Export ${g.layer} ${f.label}`}
+            >
+              {busy === `${g.layer}.${f.format}` ? "…" : f.label}
+            </Button>
+          ))}
+        </div>
+      ))}
       {error && (
         <span role="alert" className="text-xs text-rose-700">
           {error}

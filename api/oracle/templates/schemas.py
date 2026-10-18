@@ -37,6 +37,11 @@ class TemplateVersionOut(BaseModel):
     # From the body's front matter.
     suggested_theme: str | None = None
     suggest_when: str | None = None
+    # O1f: the brief layer's section ids (front matter ``brief``, else the sections
+    # before a ``Full version {#full}`` heading); every other section is detail.
+    brief_sections: list[str] = []
+    # Non-blocking findings, e.g. no_brief_sections.
+    warnings: list[Problem] = []
 
 
 class TemplateSummary(BaseModel):
@@ -85,6 +90,9 @@ class TemplateValidateIn(BaseModel):
 class TemplateValidateOut(BaseModel):
     valid: bool
     problems: list[Problem]
+    # Reported without blocking the save: no_brief_sections (O1f).
+    warnings: list[Problem] = []
+    brief_sections: list[str] = []
     section_keys: list[str]
     suggested_theme: str | None
     suggest_when: str | None

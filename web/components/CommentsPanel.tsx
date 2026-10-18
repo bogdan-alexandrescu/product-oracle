@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui";
+import { Button, LayerBadge } from "@/components/ui";
 import type { CommentOut } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 
@@ -72,7 +72,10 @@ export function CommentsPanel({
   onSelect,
   onReply,
   onResolve,
+  showLayer = false,
 }: {
+  /** Say whether each comment is on a brief or a detail section (O1f). */
+  showLayer?: boolean;
   comments: PlacedComment[];
   activeId: string | null;
   /** The version is approved: no replies or resolving. */
@@ -121,7 +124,10 @@ export function CommentsPanel({
               onClick={() => onSelect(c)}
               aria-label={`Show comment in ${c.heading}`}
             >
-              <span className="block text-xs text-neutral-500">{c.heading}</span>
+              <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+                {c.heading}
+                {showLayer && <LayerBadge layer={c.layer} />}
+              </span>
               {c.anchor && (
                 <span className="mt-1 line-clamp-2 block border-l-2 border-amber-300 pl-2 text-xs text-neutral-600">
                   {c.anchor.exact}

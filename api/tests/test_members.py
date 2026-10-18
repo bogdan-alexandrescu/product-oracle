@@ -21,8 +21,10 @@ from oracle.tenancy import tenant_session
 from tests.test_review import ANCHOR, add_version
 
 V = "/v1/documents/{doc}/versions/{n}"
+# The one section is brief (O1f), so the deck route has slides to return.
 DRAFT = (
-    "---\ndocument: checkout-redesign\ntitle: Checkout redesign PRD\n---\n# Checkout {#t}\nBody.\n"
+    "---\ndocument: checkout-redesign\ntitle: Checkout redesign PRD\nbrief: [t]\n---\n"
+    "# Checkout {#t}\nBody.\n"
 )
 
 
@@ -167,6 +169,7 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", V2 + "/resolution-report", "viewer", {}),
     ("POST", V2 + "/approve", "approver", {}),
     ("GET", V + "/export", "viewer", {"params": {"format": "md"}}),
+    ("GET", V + "/deck", "viewer", {}),
     ("GET", "/v1/members", "owner", {}),
     ("PATCH", "/v1/members/{user_id}", "owner", {"json": {"role": "commenter"}}),
     ("GET", "/v1/invites", "owner", {}),

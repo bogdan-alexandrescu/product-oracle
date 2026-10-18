@@ -9,6 +9,11 @@ company default for its kind) the export follows O1c: the body renders without
 citation markers, and the ``Sources and data points`` section becomes an appendix in
 smaller type, grouped by section, under an as-of / version / approval header. The
 theme's tokens become CSS variables and its CSS comes last.
+
+O1f: an export is of the full layer (every section, as before) or of the brief layer
+(the version's brief sections, then the Sources and data points appendix). In a brief
+export, links to detail sections that are not in it keep their text and lose the
+link. The deck (oracle.export.deck) is built from the brief layer too.
 """
 
 import re
@@ -27,6 +32,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import CITATION_STRIP_RE
 from oracle.templates.models import Template, TemplateVersion, Theme
@@ -45,6 +51,13 @@ class NotFound(LookupError):
     pass
 
 
+class NoBrief(ValueError):
+    """A brief or deck export of a version that has no brief sections."""
+
+
+LAYER_LABEL = {"full": "Full", "brief": "Brief", "deck": "Deck"}
+
+
 @dataclass
 class ExportVersion:
     """Everything an export needs, loaded once from the database."""
@@ -58,6 +71,10 @@ class ExportVersion:
     # How the theme was chosen: "document", "template" or "company_default".
     theme_source: str | None = None
     template_name: str | None = None
+    # O1f: "full" (every section), "brief" or "deck" (brief sections + the appendix).
+    layer: str = "full"
+    # Every section of the version, whatever the layer (the deck expands detail).
+    all_sections: list[Section] = field(default_factory=list)
 
     @property
     def status(self) -> str:
@@ -76,7 +93,59 @@ class ExportVersion:
     @property
     def filename_stem(self) -> str:
         slug = re.sub(r"[^A-Za-z0-9._-]+", "-", self.document.slug).strip("-") or "document"
-        return f"{slug}-v{self.version.number}"
+        suffix = "" if self.layer == "full" else f"-{self.layer}"
+        return f"{slug}-v{self.version.number}{suffix}"
+
+    @property
+    def layer_label(self) -> str:
+        return LAYER_LABEL.get(self.layer, self.layer)
+
+
+def sources_keys(sections: list[Section]) -> set[str]:
+    """The Sources and data points section and its sub-sections."""
+    out: set[str] = set()
+    level = None
+    for s in sections:
+        if s.section_key == SOURCES_KEY:
+            level = s.level
+            out.add(s.section_key)
+        elif level is not None:
+            if s.level <= level:
+                break
+            out.add(s.section_key)
+    return out
+
+
+def apply_layer(ev: ExportVersion, layer: str) -> ExportVersion:
+    """Restrict the export to a layer. Raises NoBrief for a version without a brief."""
+    ev.layer = layer
+    if layer == "full":
+        return ev
+    brief = [s for s in ev.all_sections if s.layer == layers.BRIEF]
+    if not brief:
+        raise NoBrief(
+            f"version {ev.version.number} of '{ev.document.slug}' has no brief sections; "
+            "export the full document instead"
+        )
+    appendix = sources_keys(ev.all_sections)
+    ev.sections = [
+        s for s in ev.all_sections if s.layer == layers.BRIEF or s.section_key in appendix
+    ]
+    return ev
+
+
+_SECTION_LINK = re.compile(r'<a href="#([^"]+)">(.*?)</a>', re.S)
+
+
+def unlink_missing(html: str, present: set[str]) -> str:
+    """Links to sections that are not in this export keep their text, lose the link."""
+
+    def sub(m: re.Match[str]) -> str:
+        if m.group(1) in present or m.group(1).startswith(("src-", "fn-", "ref-")):
+            return m.group(0)
+        return f'<span class="detail-ref" data-section-ref="{m.group(1)}">{m.group(2)}</span>'
+
+    return _SECTION_LINK.sub(sub, html)
 
 
 async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersion:
@@ -99,12 +168,14 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
     latest = await db.scalar(
         select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == document.id)
     )
+    ordered = sorted(version.sections, key=lambda s: s.ordinal)
     ev = ExportVersion(
         document=document,
         version=version,
-        sections=sorted(version.sections, key=lambda s: s.ordinal),
+        sections=list(ordered),
         citations=list(version.citations),
         latest_number=latest or version.number,
+        all_sections=ordered,
     )
     await _resolve_theme(db, ev)
     return ev
@@ -253,6 +324,7 @@ def build_context(ev: ExportVersion) -> dict:
     notes = _Footnotes(by_key={c.cite_key: c for c in ev.citations})
     env = {"footnotes": notes}
     sections = []
+    present = {s.section_key for s in ev.sections}
     for s in ev.sections:
         heading = _HEADING_ID.sub("", s.heading)
         sections.append(
@@ -260,7 +332,7 @@ def build_context(ev: ExportVersion) -> dict:
                 key=s.section_key,
                 level=min(max(s.level, 1), 6),
                 heading=Markup(md.renderInline(heading, env)),
-                body=Markup(md.render(s.body_md or "", env)),
+                body=Markup(unlink_missing(md.render(s.body_md or "", env), present)),
             )
         )
     # Unused citations go last, in front-matter order.
@@ -296,6 +368,8 @@ def build_context(ev: ExportVersion) -> dict:
         "sections": sections,
         "footnotes": footnotes,
         "css": Markup(stylesheet()),
+        "layer": ev.layer,
+        "layer_label": ev.layer_label,
     }
 
 
@@ -383,14 +457,21 @@ def token_css(tokens: dict) -> str:
     Tokens are validated on save (hex colours, plain font stacks, numeric spacing,
     known page sizes), so they are safe to write into CSS here.
     """
-    fonts = tokens.get("fonts") or {}
-    colors = tokens.get("colors") or {}
     spacing = tokens.get("spacing") or {}
     page = tokens.get("page") or {}
     size = page.get("size", "A4")
     orientation = page.get("orientation", "portrait")
     margin = spacing.get("page_margin_mm", 20)
-    lines = [f"@page {{ size: {size} {orientation}; margin: {margin}mm; }}", ":root {"]
+    return f"@page {{ size: {size} {orientation}; margin: {margin}mm; }}\n" + token_vars(tokens)
+
+
+def token_vars(tokens: dict, selector: str = ":root") -> str:
+    """Theme tokens as CSS custom properties on ``selector``."""
+    fonts = tokens.get("fonts") or {}
+    colors = tokens.get("colors") or {}
+    spacing = tokens.get("spacing") or {}
+    margin = spacing.get("page_margin_mm", 20)
+    lines = [f"{selector} {{"]
     for name in ("body", "heading", "mono"):
         if fonts.get(name):
             lines.append(f"  --font-{name}: {fonts[name]};")
@@ -445,6 +526,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
 
     plain, linked = _themed_markdown(False), _themed_markdown(True)
     env = {"numbers": numbers}
+    present = {s.section_key for s in ev.sections} | {"sources"}
 
     def render(s: Section, md: MarkdownIt) -> ThemedSection:
         heading = _HEADING_ID.sub("", s.heading)
@@ -452,7 +534,9 @@ def build_themed_context(ev: ExportVersion) -> dict:
             key=s.section_key,
             level=min(max(s.level, 1), 6),
             heading=Markup(md.renderInline(heading, env)),
-            body=Markup(_decorate(md.render(_body_md(s, md is plain), env))),
+            body=Markup(
+                unlink_missing(_decorate(md.render(_body_md(s, md is plain), env)), present)
+            ),
             # Roadmap items (cards) that say they serve no confirmed goal get the flag.
             flagged=ev.document.kind == "roadmap"
             and s.level == 3
@@ -460,7 +544,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
         )
 
     def _body_md(s: Section, strip: bool) -> str:
-        text = _COMMENT.sub("", s.body_md or "")
+        # Guidance comments and presenter notes are never exported.
+        text = layers.slide_body(s.body_md or "")
         # O1c: the body renders without citation markers (and the space before them).
         return CITATION_STRIP_RE.sub("", text) if strip else text
 
@@ -561,6 +646,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "css": Markup(themed_stylesheet()),
         "token_css": Markup(token_css(tokens)),
         "theme_css": Markup(theme.css or ""),
+        "layer": ev.layer,
+        "layer_label": ev.layer_label,
     }
 
 
@@ -578,13 +665,15 @@ def banner_line(ev: ExportVersion) -> str:
         f"status {ev.status}",
         f"imported {_format_dt(ev.version.created_at)}",
     ]
+    if ev.layer != "full":
+        parts.insert(2, ev.layer_label.lower())
     if ev.version.approved_at is not None:
         parts.append(f"approved {_format_dt(ev.version.approved_at)}")
     # "--" would end the HTML comment early.
     return "Product Oracle export: " + " · ".join(parts).replace("--", "- -")
 
 
-def render_markdown(ev: ExportVersion) -> str:
+def render_markdown(ev: ExportVersion) -> str:  # full layer only
     """The stored markdown with a banner comment.
 
     The comment goes after the YAML front matter (front matter must stay first), so

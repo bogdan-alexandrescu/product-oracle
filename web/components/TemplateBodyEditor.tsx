@@ -12,6 +12,7 @@ export type TemplateCheck = Schemas["TemplateValidateOut"];
 export const TEMPLATE_SKELETON = `---
 theme: clean-document
 suggest_when: "Describe when this template is the right pick"
+brief: [problem, solution]
 ---
 
 # <Title> {#title}
@@ -32,6 +33,17 @@ export function ProblemList({ problems, testId = "problems" }: { problems: Probl
     <ul data-testid={testId} className="space-y-1 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
       {problems.map((p, i) => (
         <li key={i}>{problemText(p)}</li>
+      ))}
+    </ul>
+  );
+}
+
+/** Findings that do not block saving, e.g. a template with no brief sections (O1f). */
+export function WarningList({ warnings }: { warnings: Problem[] }) {
+  return (
+    <ul data-testid="template-warnings" className="mt-1 space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+      {warnings.map((w, i) => (
+        <li key={i}>{problemText(w)}</li>
       ))}
     </ul>
   );
@@ -82,8 +94,15 @@ export function TemplateBodyEditor({
                 · suggested theme <span className="font-mono text-xs">{check.suggested_theme}</span>
               </>
             )}
+            {check.brief_sections.length > 0 && (
+              <>
+                {" "}
+                · brief <span data-testid="brief-sections" className="font-mono text-xs">{check.brief_sections.join(", ")}</span>
+              </>
+            )}
           </p>
         )}
+        {check && check.warnings.length > 0 && <WarningList warnings={check.warnings} />}
         {check && !check.valid && (
           <div className="space-y-1">
             <p className="font-medium text-rose-800">

@@ -4,11 +4,60 @@ title: Outcome roadmap
 template: outcome-roadmap
 template_version: 1
 kind: roadmap
+brief: [summary, goals, problems, brief-items, brief-roadmap, not-doing, top-risks, decisions]
 ---
 
 # {{product}} outcome roadmap {#roadmap}
 
 <!-- Goal-first view (O4 "Outcome roadmap"). Rows are confirmed company goals; columns are horizons. Answers "are we working on the right things?" before "what ships when". One line under the title: as-of date, approved version, audience variant. -->
+
+## Summary {#summary}
+
+<!-- Brief: fits one slide; plain language for an all-hands. Three to five sentences: the goals that matter most this period, where investment is concentrated, and which goal is under-served. Presenter notes for this slide, if any, go in a fenced ```notes block at the end of the section. -->
+
+## Goals {#goals}
+
+<!-- Brief: fits one slide; plain language for an all-hands. One line per confirmed goal, in weight order: code, title, the metric's current value and target, and whether anything in Now serves it. The full picture per goal lives under [Goal detail](#goal-detail). -->
+
+## Problems we are solving {#problems}
+
+<!-- Brief: fits one slide; plain language for an all-hands. The two to four customer or business problems this roadmap addresses, one line each in the customer's terms, with the goal each one moves. -->
+
+## Items by horizon {#brief-items}
+
+<!-- Brief: fits one slide; plain language for an all-hands. One row per item, one line each. Rows are grouped by milestone (in this roadmap, the horizon: Now, Next, Later) in order, and the milestone is named only on the first row of its group. Columns: | Horizon | Item | Goal | Outcome |. The milestone cell links to the milestone's detail section and the item cell links to the item's detail section, using in-document links such as [Now](#now) and [Bulk import](#now-bulk-import); the detail section ids must match the links. Link each horizon to its section (#now, #next, #later) and each item to its item section under that horizon (ids now-<slug>, next-<slug>, later-<slug>). The Outcome column is the expected change in the goal metric. -->
+
+| Horizon | Item | Goal | Outcome |
+|---|---|---|---|
+| [Now](#now) | [{{item_title}}](#now-item) | {{goal_code}} | {{one_line_outcome}} |
+
+## Outcomes by horizon {#brief-roadmap}
+
+<!-- Brief: fits one slide; plain language for an all-hands. One line per horizon: the horizon linked to its section, then the change in goal metrics it is meant to deliver, not the items in it. -->
+
+- [Now](#now): {{outcome}}
+- [Next](#next): {{outcome}}
+- [Later](#later): {{outcome}}
+
+## Not doing {#not-doing}
+
+<!-- Brief: fits one slide; plain language for an all-hands. Initiatives deliberately dropped or parked this version, including items that served no confirmed goal and were dropped, one line each with the reason. -->
+
+## Top risks {#top-risks}
+
+<!-- Brief: fits one slide; plain language for an all-hands. The three biggest risks, one line each with its mitigation. The full list lives in Risks and dependencies. -->
+
+- {{risk}}: {{mitigation}}. See [Risks and dependencies](#risks).
+
+## Decisions needed {#decisions}
+
+<!-- Brief: fits one slide; plain language for an all-hands. The decisions asked of this audience, one line each with the owner and the date the decision is needed by. -->
+
+- {{decision}}: owner {{owner}}, needed by {{date}}
+
+# Full version {#full}
+
+<!-- Everything below is the full document: the detail behind each brief section. -->
 
 ## Layout {#layout}
 
@@ -55,17 +104,37 @@ layout:
     public: {not_supported: true, fallback_template: now-next-later}
 ```
 
-## Summary {#summary}
-
-<!-- Three to five sentences: the goals that matter most this period, where investment is concentrated, and which goal is under-served. -->
-
-## Goals {#goals}
+## Goal detail {#goal-detail}
 
 <!-- One subsection per confirmed goal, in weight order. -->
 
 ### {{goal_code}}: {{goal_title}} {#goal}
 
 <!-- Metric, current value, target, horizon, owner. Then the initiatives under Now / Next / Later that support it, each with its expected outcome, contribution (0-3) and confidence. Say plainly if a goal has nothing in Now. -->
+
+## Now {#now}
+
+<!-- Initiatives in progress or starting this horizon, one section each; the goal sections above say which goals they serve. -->
+
+### {{item_title}} {#now-item}
+
+<!-- Repeat per initiative (id now-<slug>). Expected outcome, goals supported with contribution (0-3), confidence, owner, dependencies, and milestones with dates and their source. -->
+
+## Next {#next}
+
+<!-- Initiatives planned for the next horizon, one section each. No dates. -->
+
+### {{item_title}} {#next-item}
+
+<!-- Repeat per initiative (id next-<slug>). Expected outcome, goals supported with contribution (0-3), confidence, and what must be learned first. -->
+
+## Later {#later}
+
+<!-- Bets for the long horizon, one section each. No dates, no owners required. -->
+
+### {{item_title}} {#later-item}
+
+<!-- Repeat per initiative (id later-<slug>). The outcome it would deliver and the goal it would serve. -->
 
 ## Serves no confirmed goal {#no-goal}
 

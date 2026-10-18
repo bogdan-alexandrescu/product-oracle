@@ -1,0 +1,4 @@
+/* Clean document, slide variant: white, a thin accent rule above the title. */
+.theme-clean-document .slide-title { border-top: 4px solid var(--color-accent); padding-top: 14px; }
+.theme-clean-document h1.slide-title { border-top: 0; padding-top: 0; }
+.theme-clean-document .slide-body tbody tr:nth-child(even) td { background: var(--color-surface); }

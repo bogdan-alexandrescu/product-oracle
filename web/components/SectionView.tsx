@@ -4,10 +4,10 @@ import { memo, useMemo } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 
-import { MarkdownBody, type Highlight } from "@/components/MarkdownBody";
+import { MarkdownBody, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
-import { LockIcon } from "@/components/ui";
+import { LayerBadge, LockIcon } from "@/components/ui";
 import type { CitationOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
 import type { Block } from "@/lib/markdown";
 
@@ -29,6 +29,9 @@ export const SectionView = memo(function SectionView({
   refine,
   onHighlightClick,
   onVerdict,
+  expand,
+  nested = false,
+  showLayer = true,
 }: {
   section: SectionOut;
   blocks: Block[];
@@ -43,6 +46,12 @@ export const SectionView = memo(function SectionView({
   refine?: { doc: string; n: number };
   onHighlightClick: (id: string) => void;
   onVerdict: (key: string, verdict: Verdict, note: string) => Promise<void>;
+  /** Brief view: Expand controls on links to detail sections (O1f). */
+  expand?: ExpandCtx;
+  /** A detail section shown in place inside a brief section. */
+  nested?: boolean;
+  /** Label the section Brief or Detail (versions that have a brief layer). */
+  showLayer?: boolean;
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
   const locked = section.verdict?.verdict === "approved";
@@ -59,14 +68,19 @@ export const SectionView = memo(function SectionView({
       data-section-key={section.section_key}
       tabIndex={-1}
       aria-labelledby={`h-${section.section_key}`}
-      className={`scroll-mt-24 rounded-lg py-5 outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 ${
-        section.level >= 3 ? "pl-4" : ""
-      }`}
+      data-layer={section.layer}
+      className={`scroll-mt-24 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 ${
+        nested ? "py-3" : "py-5"
+      } ${section.level >= 3 && !nested ? "pl-4" : ""}`}
     >
       <div className="mb-2 flex items-baseline gap-2">
-        <Heading id={`h-${section.section_key}`} className={`${HEADING_CLASS[Math.min(section.level, 3)]} text-neutral-900`}>
+        <Heading
+          id={`h-${section.section_key}`}
+          className={`${nested ? HEADING_CLASS[3] : HEADING_CLASS[Math.min(section.level, 3)]} text-neutral-900`}
+        >
           {section.heading}
         </Heading>
+        <LayerBadge layer={showLayer ? section.layer : null} />
         {locked && (
           <span className="text-neutral-500" title="Locked: approved sections are reported as locked to the agent track">
             <LockIcon className="h-4 w-4" />
@@ -85,6 +99,7 @@ export const SectionView = memo(function SectionView({
           activeId={activeCommentId}
           citations={citations}
           onHighlightClick={onHighlightClick}
+          expand={expand}
         />
       </div>
       {evidenceTargets && (

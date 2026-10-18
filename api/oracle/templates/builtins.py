@@ -8,16 +8,18 @@ pre-existing ``oracle-default`` v1 stays; the research skeleton becomes its v2.
 Themes: derived from the research's presentation conventions (prd-formats.md section
 5, roadmap-formats.md "Visual conventions").
 
-Seeding never overwrites what a company changed: a built-in that exists (edited or
-archived) is left alone, and a skeleton is only added as a new version when no
-version of that template has exactly that body.
+Seeding never overwrites what a company changed: a built-in that was edited (its
+latest version was created by a user) or archived is left alone, and a skeleton is
+only added as a new version when no version of that template has exactly that body.
 """
 
+import hashlib
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.templates.defaults import DEFAULT_TEMPLATE_KEY, ensure_default_template
@@ -158,6 +160,7 @@ def _yaml_str(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+@cache
 def builtin_body(t: BuiltinTemplate) -> str:
     """The research skeleton with the template's own metadata added to its front matter:
     the suggested theme and when to suggest it (both versioned with the body)."""
@@ -311,11 +314,47 @@ BUILTIN_THEMES_BY_KEY = {t.key: t for t in BUILTIN_THEMES}
 DEFAULT_THEME_FOR_KIND = {"prd": "clean-document", "roadmap": "roadmap-board"}
 
 
+async def _stale_builtins(session: AsyncSession) -> list[str]:
+    """Keys of built-in templates whose packaged body is not yet a version and which the
+    company has not edited (latest version seeded, not created by a user) or archived."""
+    rows = (
+        await session.execute(
+            select(
+                Template.key,
+                TemplateVersion.version,
+                TemplateVersion.created_by,
+                func.md5(TemplateVersion.body),
+            )
+            .join(TemplateVersion, TemplateVersion.template_id == Template.id)
+            .where(Template.builtin.is_(True), Template.archived_at.is_(None))
+            .order_by(Template.key, TemplateVersion.version)
+        )
+    ).all()
+    hashes: dict[str, set[str]] = {}
+    latest_by_user: dict[str, bool] = {}
+    for key, _, created_by, digest in rows:
+        hashes.setdefault(key, set()).add(digest)
+        latest_by_user[key] = created_by is not None
+    return [
+        t.key
+        for t in BUILTIN_TEMPLATES
+        if t.key in hashes
+        and not latest_by_user[t.key]
+        and _md5(builtin_body(t)) not in hashes[t.key]
+    ]
+
+
+def _md5(text_: str) -> str:
+    return hashlib.md5(text_.encode("utf-8")).hexdigest()
+
+
 async def ensure_builtins(session: AsyncSession) -> bool:
     """Seed the built-in themes and templates into the session's company (no commit).
 
-    Returns True when something was added. Concurrent callers are serialised by a
-    transaction-scoped advisory lock on the company id.
+    A packaged skeleton that changed (O1f added the brief layer) becomes the next
+    version of a built-in the company has not edited or archived. Returns True when
+    something was added. Concurrent callers are serialised by a transaction-scoped
+    advisory lock on the company id.
     """
     tenant_id = current_tenant(session)
     theme_keys = set(await session.scalars(select(Theme.key)))
@@ -333,7 +372,8 @@ async def ensure_builtins(session: AsyncSession) -> bool:
                 .where(Template.key == DEFAULT_TEMPLATE_KEY)
             )
         )
-    if not missing_themes and not missing_templates and default_has_research:
+    stale = await _stale_builtins(session)
+    if not missing_themes and not missing_templates and default_has_research and not stale:
         return False
 
     await session.execute(
@@ -370,6 +410,15 @@ async def ensure_builtins(session: AsyncSession) -> bool:
         template.builtin = True
     if default_body not in {v.body for v in versions}:
         session.add(_version(template, max(v.version for v in versions) + 1, default_body))
+    await session.flush()
+
+    for key in await _stale_builtins(session):
+        row = await session.scalar(select(Template).where(Template.key == key))
+        assert row is not None
+        latest = await session.scalar(
+            select(func.max(TemplateVersion.version)).where(TemplateVersion.template_id == row.id)
+        )
+        session.add(_version(row, (latest or 0) + 1, builtin_body(BUILTIN_TEMPLATES_BY_KEY[key])))
 
     existing = set(await session.scalars(select(Template.key)))
     for t in BUILTIN_TEMPLATES:

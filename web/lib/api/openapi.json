@@ -110,6 +110,83 @@
         ]
       }
     },
+    "/v1/me/preferences": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get Preferences",
+        "operationId": "get_preferences",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Update Preferences",
+        "description": "Any signed-in user, viewers included, keeps their own choices.",
+        "operationId": "update_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/documents": {
       "get": {
         "tags": [
@@ -1176,6 +1253,7 @@
           "export"
         ],
         "summary": "Export Version",
+        "description": "Full: html, pdf, md. Brief: html, pdf. Deck: pdf, pptx (html: the printable\nslides).",
         "operationId": "export_version",
         "security": [
           {
@@ -1212,11 +1290,27 @@
               "enum": [
                 "html",
                 "pdf",
-                "md"
+                "md",
+                "pptx"
               ],
               "type": "string",
               "default": "html",
               "title": "Format"
+            }
+          },
+          {
+            "name": "layer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "full",
+                "brief",
+                "deck"
+              ],
+              "type": "string",
+              "default": "full",
+              "title": "Layer"
             }
           }
         ],
@@ -1238,6 +1332,65 @@
               "text/markdown": {
                 "schema": {
                   "type": "string"
+                }
+              },
+              "application/vnd.openxmlformats-officedocument.presentationml.presentation": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Format not offered for the layer, or the version has no brief"
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/deck": {
+      "get": {
+        "tags": [
+          "export"
+        ],
+        "summary": "Get Deck",
+        "description": "The brief layer as slides in the document's theme (its slide variant), with\npresenter notes and the detail each slide can expand. 422 when the version has no\nbrief sections.",
+        "operationId": "get_deck",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeckOut"
                 }
               }
             }
@@ -10345,6 +10498,21 @@
               }
             ],
             "title": "Feedback Item Id"
+          },
+          "layer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "brief",
+                  "detail"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layer"
           }
         },
         "type": "object",
@@ -10865,6 +11033,98 @@
         ],
         "title": "ConsentRequestOut",
         "description": "What the consent screen shows for a pending authorization request."
+      },
+      "DeckOut": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "latest_number": {
+            "type": "integer",
+            "title": "Latest Number"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of"
+          },
+          "banner": {
+            "type": "string",
+            "title": "Banner"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
+          "theme_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Name"
+          },
+          "theme_class": {
+            "type": "string",
+            "title": "Theme Class"
+          },
+          "css": {
+            "type": "string",
+            "title": "Css"
+          },
+          "slides": {
+            "items": {
+              "$ref": "#/components/schemas/SlideOut"
+            },
+            "type": "array",
+            "title": "Slides"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "slug",
+          "title",
+          "number",
+          "latest_number",
+          "status",
+          "as_of",
+          "banner",
+          "theme",
+          "theme_name",
+          "theme_class",
+          "css",
+          "slides"
+        ],
+        "title": "DeckOut",
+        "description": "The brief layer as slides, for Present mode: one slide per brief section after a\ntitle slide, Sources and data points slides last when the version has sources."
       },
       "DiffOut": {
         "properties": {
@@ -12573,6 +12833,30 @@
           "code"
         ],
         "title": "ExchangeIn"
+      },
+      "ExpandOut": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "html": {
+            "type": "string",
+            "title": "Html"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_key",
+          "heading",
+          "html"
+        ],
+        "title": "ExpandOut",
+        "description": "A detail section (and its sub-sections) a slide links to, for the Expand overlay."
       },
       "Explanation": {
         "properties": {
@@ -15137,6 +15421,43 @@
         "title": "PrdAnswers",
         "description": "At most four questions (docs/research/prd-formats.md, template picker)."
       },
+      "Preferences": {
+        "properties": {
+          "document_view": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "full"
+            ],
+            "title": "Document View",
+            "default": "brief"
+          }
+        },
+        "type": "object",
+        "title": "Preferences",
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document."
+      },
+      "PreferencesUpdate": {
+        "properties": {
+          "document_view": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "brief",
+                  "full"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document View"
+          }
+        },
+        "type": "object",
+        "title": "PreferencesUpdate"
+      },
       "PriorityRanking": {
         "properties": {
           "method": {
@@ -17355,6 +17676,36 @@
             ],
             "title": "To Heading"
           },
+          "from_layer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "brief",
+                  "detail"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Layer"
+          },
+          "to_layer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "brief",
+                  "detail"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Layer"
+          },
           "words": {
             "anyOf": [
               {
@@ -17429,6 +17780,26 @@
                 "type": "null"
               }
             ]
+          },
+          "layer": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "detail"
+            ],
+            "title": "Layer",
+            "default": "detail"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
           }
         },
         "type": "object",
@@ -17537,6 +17908,21 @@
               }
             ],
             "title": "Feedback Item Id"
+          },
+          "layer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "brief",
+                  "detail"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layer"
           }
         },
         "type": "object",
@@ -17904,6 +18290,69 @@
           "is_default"
         ],
         "title": "SettingOut"
+      },
+      "SlideOut": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "title",
+              "section",
+              "sources"
+            ],
+            "title": "Kind"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "html": {
+            "type": "string",
+            "title": "Html"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "expand": {
+            "items": {
+              "$ref": "#/components/schemas/ExpandOut"
+            },
+            "type": "array",
+            "title": "Expand",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "kind",
+          "heading",
+          "html"
+        ],
+        "title": "SlideOut"
       },
       "SnapshotCreate": {
         "properties": {
@@ -19368,6 +19817,22 @@
             "type": "array",
             "title": "Problems"
           },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          },
+          "brief_sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Brief Sections",
+            "default": []
+          },
           "section_keys": {
             "items": {
               "type": "string"
@@ -19463,6 +19928,22 @@
               }
             ],
             "title": "Suggest When"
+          },
+          "brief_sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Brief Sections",
+            "default": []
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
           }
         },
         "type": "object",
@@ -20514,6 +20995,17 @@
             ],
             "title": "Approved At"
           },
+          "brief_source": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "template",
+              "full_heading",
+              "none"
+            ],
+            "title": "Brief Source",
+            "default": "none"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -20687,6 +21179,17 @@
               }
             ],
             "title": "Approved At"
+          },
+          "brief_source": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "template",
+              "full_heading",
+              "none"
+            ],
+            "title": "Brief Source",
+            "default": "none"
           },
           "created_at": {
             "type": "string",

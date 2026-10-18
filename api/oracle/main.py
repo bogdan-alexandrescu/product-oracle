@@ -21,6 +21,7 @@ from oracle.jobs.worker import get_worker_settings, run_worker
 from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
 from oracle.members.router import router as members_router
+from oracle.preferences.router import router as preferences_router
 from oracle.priorities.router import router as priorities_router
 from oracle.review.router import router as review_router
 from oracle.runs.router import router as runs_router
@@ -82,6 +83,7 @@ def create_app() -> FastAPI:
         return Health(status="ok", database="ok")
 
     app.include_router(auth_router)
+    app.include_router(preferences_router)
     app.include_router(docs_router)
     app.include_router(review_router)
     app.include_router(export_router)

@@ -61,6 +61,7 @@ title: Checkout redesign PRD
 template: oracle-default             # optional
 template_version: "1"                # optional
 snapshot: 2026-10-16T14:00Z          # optional source snapshot label
+brief: [summary, goal-trace]         # optional: the brief layer's section ids (O1f)
 citations:
   - id: c1
     source: slack                    # slack | notion | gdocs | github | fireflies | upload | web
@@ -93,6 +94,9 @@ Rules:
   note and `addressed_in_version`.
 - If a section that was **approved** in the previous version changes, the import
   succeeds but the version carries a `locked_section_changed` warning listing ids.
+- Brief layer (O1f, see `docs/brief-and-full.md`): the sections named in `brief`, else
+  the template version's `brief` markers, else the sections before a level-1
+  `# Full version {#full}` heading; unknown ids in `brief` fail the import.
 
 ## Data model
 
@@ -105,8 +109,8 @@ All tables: `id uuid pk`, `tenant_id uuid not null` (indexed, FK tenants),
 | `users` | `email` (unique per tenant), `password_hash`, `role` (`owner`) |
 | `api_tokens` | `name`, `token_hash`, `last_used_at`, `revoked_at` |
 | `documents` | `slug` (unique per tenant), `title`, `status` (`draft`/`in_review`/`approved`), `template`, `template_version`, `updated_at` |
-| `document_versions` | `document_id`, `number` (unique per document), `markdown`, `content_hash` (unique per document), `front_matter jsonb`, `snapshot`, `warnings jsonb`, `imported_by` (user or token id), `approved_at` |
-| `sections` | `version_id`, `section_key` (unique per version), `ordinal`, `level`, `heading`, `body_md`, `body_text`, `content_hash`, `citation_keys text[]` |
+| `document_versions` | `document_id`, `number` (unique per document), `markdown`, `content_hash` (unique per document), `front_matter jsonb`, `snapshot`, `warnings jsonb`, `imported_by` (user or token id), `approved_at`, `brief_source` (`draft`/`template`/`full_heading`/`none`) |
+| `sections` | `version_id`, `section_key` (unique per version), `ordinal`, `level`, `heading`, `body_md`, `body_text`, `content_hash`, `citation_keys text[]`, `layer` (`brief`/`detail`) |
 | `citations` | `version_id`, `cite_key` (unique per version), `source`, `ref`, `title`, `excerpt`, `retrieved_at` |
 | `comments` | `version_id`, `section_key`, `anchor jsonb` (`{exact, prefix, suffix}`, W3C TextQuoteSelector), `body`, `author_id`, `parent_id`, `resolved_at` |
 | `section_reviews` | `version_id`, `section_key`, `verdict` (`approved`/`changes_requested`/`rejected`), `note`, `reviewer_id` (history kept; latest per section wins) |
@@ -134,7 +138,9 @@ verdict on the same section supersedes the earlier item.
 | `GET .../versions/{n}/feedback-package` | for the agent track: version markdown, open items, locked section ids |
 | `GET .../versions/{n}/resolution-report` | how each item was handled |
 | `POST .../versions/{n}/approve` | approve version; document -> `approved` |
-| `GET .../versions/{n}/export?format=html\|pdf\|md` | export with version banner |
+| `GET .../versions/{n}/export?format=html\|pdf\|md\|pptx&layer=full\|brief\|deck` | export with version banner: Full (html, pdf, md), Brief (html, pdf), Deck (pdf, pptx) |
+| `GET .../versions/{n}/deck` | the brief as slides for Present mode (theme CSS, notes, expandable detail) |
+| `GET /v1/me/preferences`, `PATCH /v1/me/preferences` | per-user choices: `document_view` (`brief`/`full`) |
 | `GET /healthz` | liveness + DB check |
 
 Agent track uses `Authorization: Bearer <api token>`; the UI uses the session cookie.

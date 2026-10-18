@@ -204,6 +204,10 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
           </div>
           <p className="mb-2 text-xs text-neutral-500">
             Required sections: <span className="font-mono">{shown.required_sections.join(", ") || "none"}</span>
+            {" · "}Brief:{" "}
+            <span data-testid="version-brief" className="font-mono">
+              {shown.brief_sections.join(", ") || "none"}
+            </span>
           </p>
           <pre
             data-testid="version-body"

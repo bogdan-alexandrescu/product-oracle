@@ -1,11 +1,27 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { CitationChip } from "@/components/CitationChip";
+import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut } from "@/lib/api/client";
 import type { Block, Inline } from "@/lib/markdown";
 
 /** A highlighted span of a section's anchorable text. */
 export type Highlight = { start: number; end: number; id: string; kind: "comment" | "pending" };
+
+/**
+ * O1f: in the brief, a link to a detail section (`[Save cart](#feature-save-cart)` in a
+ * feature row or milestone) gets an Expand control that shows that section in place:
+ * under its table row, list item or paragraph.
+ */
+export type ExpandCtx = {
+  keys: Set<string>;
+  /** Open detail section -> the brief section it is shown in (one place at a time). */
+  open: Map<string, string>;
+  /** The brief section being rendered. */
+  origin: string;
+  toggle: (key: string, origin: string) => void;
+  render: (key: string) => ReactNode;
+};
 
 type Ctx = {
   pos: number;
@@ -13,7 +29,30 @@ type Ctx = {
   activeId: string | null;
   citations: Map<string, { citation: CitationOut; number: number }>;
   onHighlightClick?: (id: string) => void;
+  expand?: ExpandCtx;
+  /** Detail sections linked from the block being rendered, in order. */
+  found: string[];
+  /** Detail sections already shown in this body (a key linked twice shows once). */
+  shown: Set<string>;
 };
+
+const ignore = { [IGNORE_ATTR]: "" };
+
+function label(nodes: Inline[]): string {
+  return nodes.map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" ? "" : label(n.c))).join("");
+}
+
+/** The detail sections opened from the links of the block just rendered. */
+function opened(ctx: Ctx): string[] {
+  const keys = ctx.found.filter((k) => isOpen(ctx, k) && !ctx.shown.has(k));
+  keys.forEach((k) => ctx.shown.add(k));
+  ctx.found = [];
+  return keys;
+}
+
+function isOpen(ctx: Ctx, key: string): boolean {
+  return !!ctx.expand && ctx.expand.open.get(key) === ctx.expand.origin;
+}
 
 function renderText(text: string, ctx: Ctx, key: string): ReactNode {
   const start = ctx.pos;
@@ -66,12 +105,42 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
         return <strong key={k}>{renderInline(n.c, ctx, k)}</strong>;
       case "em":
         return <em key={k}>{renderInline(n.c, ctx, k)}</em>;
-      case "link":
+      case "link": {
+        if (!n.href.startsWith("#")) {
+          return (
+            <a key={k} href={n.href} target="_blank" rel="noopener noreferrer">
+              {renderInline(n.c, ctx, k)}
+            </a>
+          );
+        }
+        const target = n.href.slice(1);
+        if (!ctx.expand?.keys.has(target)) {
+          return (
+            <a key={k} href={`#s-${target}`}>
+              {renderInline(n.c, ctx, k)}
+            </a>
+          );
+        }
+        ctx.found.push(target);
+        const open = isOpen(ctx, target);
+        const { toggle, origin } = ctx.expand;
         return (
-          <a key={k} href={n.href} target="_blank" rel="noopener noreferrer">
+          <span key={k} className="detail-link">
             {renderInline(n.c, ctx, k)}
-          </a>
+            <button
+              {...ignore}
+              type="button"
+              className="expand-btn"
+              aria-expanded={open}
+              aria-controls={open ? `x-${target}` : undefined}
+              aria-label={`${open ? "Collapse" : "Expand"} ${label(n.c)}`}
+              onClick={() => toggle(target, origin)}
+            >
+              {open ? "Collapse" : "Expand"}
+            </button>
+          </span>
         );
+      }
       case "cite": {
         const c = ctx.citations.get(n.key);
         return <CitationChip key={k} citeKey={n.key} citation={c?.citation} number={c?.number} />;
@@ -85,25 +154,51 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
  * anchorable text, so the output's text nodes (outside citation chips) are exactly
  * `blocksText(blocks)`.
  */
+function Detail({ keys, expand }: { keys: string[]; expand?: ExpandCtx }) {
+  if (!keys.length || !expand) return null;
+  return (
+    <>
+      {keys.map((key) => (
+        <div key={key} id={`x-${key}`} {...ignore} className="detail-inline" data-testid="detail-inline" data-detail={key}>
+          {expand.render(key)}
+        </div>
+      ))}
+    </>
+  );
+}
+
 export function MarkdownBody({
   blocks,
   highlights,
   activeId,
   citations,
   onHighlightClick,
-}: Omit<Ctx, "pos"> & { blocks: Block[] }) {
-  const ctx: Ctx = { pos: 0, highlights, activeId, citations, onHighlightClick };
+  expand,
+}: Omit<Ctx, "pos" | "found" | "shown"> & { blocks: Block[] }) {
+  const ctx: Ctx = { pos: 0, highlights, activeId, citations, onHighlightClick, expand, found: [], shown: new Set() };
+  // Renders a block, then the detail its links opened.
+  const withDetail = (k: string, node: ReactNode) => {
+    const keys = opened(ctx);
+    return keys.length ? (
+      <Fragment key={k}>
+        {node}
+        <Detail keys={keys} expand={expand} />
+      </Fragment>
+    ) : (
+      node
+    );
+  };
   return (
     <>
       {blocks.map((b, i) => {
         const k = String(i);
         switch (b.t) {
           case "p":
-            return <p key={k}>{renderInline(b.c, ctx, k)}</p>;
+            return withDetail(k, <p key={k}>{renderInline(b.c, ctx, k)}</p>);
           case "h":
             return <h4 key={k}>{renderInline(b.c, ctx, k)}</h4>;
           case "quote":
-            return <blockquote key={k}>{renderInline(b.c, ctx, k)}</blockquote>;
+            return withDetail(k, <blockquote key={k}>{renderInline(b.c, ctx, k)}</blockquote>);
           case "pre":
             return (
               <pre key={k}>
@@ -115,9 +210,15 @@ export function MarkdownBody({
             const List = b.t;
             return (
               <List key={k}>
-                {b.items.map((it, j) => (
-                  <li key={j}>{renderInline(it, ctx, `${k}.${j}`)}</li>
-                ))}
+                {b.items.map((it, j) => {
+                  const content = renderInline(it, ctx, `${k}.${j}`);
+                  return (
+                    <li key={j}>
+                      {content}
+                      <Detail keys={opened(ctx)} expand={expand} />
+                    </li>
+                  );
+                })}
               </List>
             );
           }
@@ -133,13 +234,22 @@ export function MarkdownBody({
                     </tr>
                   </thead>
                   <tbody>
-                    {b.rows.map((r, j) => (
-                      <tr key={j}>
-                        {r.map((c, x) => (
-                          <td key={x}>{renderInline(c, ctx, `${k}.${j}.${x}`)}</td>
-                        ))}
-                      </tr>
-                    ))}
+                    {b.rows.map((r, j) => {
+                      const cells = r.map((c, x) => <td key={x}>{renderInline(c, ctx, `${k}.${j}.${x}`)}</td>);
+                      const keys = opened(ctx);
+                      return (
+                        <Fragment key={j}>
+                          <tr>{cells}</tr>
+                          {keys.length > 0 && (
+                            <tr {...ignore} className="detail-row">
+                              <td colSpan={Math.max(b.head.length, r.length)}>
+                                <Detail keys={keys} expand={expand} />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

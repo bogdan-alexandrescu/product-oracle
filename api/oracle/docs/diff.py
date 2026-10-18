@@ -79,6 +79,11 @@ def _lcs(a: list[str], b: list[str]) -> set[str]:
     return keep
 
 
+def _layer(section: SectionLike) -> str | None:
+    # Sections stored before O1f, and test doubles, may not carry a layer.
+    return getattr(section, "layer", None)
+
+
 def _diff_text(section: SectionLike) -> str:
     return f"{section.heading}\n{section.body_text}"
 
@@ -107,6 +112,7 @@ def diff_sections(old: Sequence[SectionLike], new: Sequence[SectionLike]) -> lis
                 status="removed",
                 from_ordinal=s.ordinal,
                 from_heading=s.heading,
+                from_layer=_layer(s),
             )
         )
 
@@ -120,6 +126,7 @@ def diff_sections(old: Sequence[SectionLike], new: Sequence[SectionLike]) -> lis
                     status="added",
                     to_ordinal=s.ordinal,
                     to_heading=s.heading,
+                    to_layer=_layer(s),
                 )
             )
             continue
@@ -133,6 +140,8 @@ def diff_sections(old: Sequence[SectionLike], new: Sequence[SectionLike]) -> lis
                 to_ordinal=s.ordinal,
                 from_heading=before.heading,
                 to_heading=s.heading,
+                from_layer=_layer(before),
+                to_layer=_layer(s),
                 words=word_diff(_diff_text(before), _diff_text(s)) if changed else None,
             )
         )
