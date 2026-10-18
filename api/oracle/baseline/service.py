@@ -51,6 +51,10 @@ class ConflictError(BaselineError):
     status_code = 409
 
 
+class ForbiddenError(BaselineError):
+    status_code = 403
+
+
 @dataclass(frozen=True)
 class Writer:
     principal: Principal | None

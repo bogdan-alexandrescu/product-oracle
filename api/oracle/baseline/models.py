@@ -152,6 +152,8 @@ class Evidence(TenantScoped, Base):
     kind: Mapped[str | None] = mapped_column(Text)
     # Why the person who added a public link cites it.
     note: Mapped[str | None] = mapped_column(Text)
+    # User or API token that added it; the author of link evidence may remove it (C2c).
+    added_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
 
 class EvidenceLinkSnapshot(TenantScoped, Base):

@@ -42,8 +42,11 @@ V1_TABLES = {
     "run_segments",
     "checkpoints",
 }
-SCRATCH_URL = str(
-    make_url(TEST_DATABASE_URL).set(database=make_url(TEST_DATABASE_URL).database + "_migrations")
+# render_as_string keeps the password; str(url) masks it as "***" (CI's Postgres has one).
+SCRATCH_URL = (
+    make_url(TEST_DATABASE_URL)
+    .set(database=make_url(TEST_DATABASE_URL).database + "_migrations")
+    .render_as_string(hide_password=False)
 )
 
 

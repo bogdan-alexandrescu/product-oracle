@@ -502,7 +502,7 @@ async def refresh_link_evidence(
 
 
 @router.delete("/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_evidence(evidence_id: uuid.UUID, principal: Approver, db: TenantDB) -> Response:
+async def remove_evidence(evidence_id: uuid.UUID, principal: Commenter, db: TenantDB) -> Response:
     try:
         await evidence.detach(db, principal, evidence_id)
     except service.BaselineError as exc:

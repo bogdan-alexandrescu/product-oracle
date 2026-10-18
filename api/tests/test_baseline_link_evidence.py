@@ -138,7 +138,7 @@ async def test_google_doc_and_web_links_and_edges(client, ctx, web):
 
     page = (await add(client, ctx, who="approver", entity_id=feat["id"], url=WEB_URL)).json()
     assert page["kind"] == "web"
-    assert page["confidence_factors"]["breakdown"]["source"]["value"] == 0.55
+    assert page["confidence_factors"]["breakdown"]["source"]["value"] == 0.7
     # Freshness from the page's stated last change, not from when it was fetched.
     assert page["link"]["last_modified"] == "2026-09-15T10:30:00Z"
     assert page["confidence_factors"]["inputs"]["latest_at"].startswith("2026-09-15T10:30:00")
@@ -265,13 +265,21 @@ async def test_roles(client, ctx, web):
     refresh = f"{B}/evidence/{ev['id']}/refresh"
     assert (await client.post(refresh, headers=ctx.as_("viewer"))).status_code == 403
     assert (await client.post(refresh, headers=ctx.as_("commenter"))).status_code == 200
-    # Removing evidence stays with approvers.
-    gone = await client.delete(f"{B}/evidence/{ev['id']}", headers=ctx.as_("commenter"))
+    # The commenter who added a link may remove it (C2c); a viewer may not.
+    gone = await client.delete(f"{B}/evidence/{ev['id']}", headers=ctx.as_("viewer"))
     assert gone.status_code == 403
+    gone = await client.delete(f"{B}/evidence/{ev['id']}", headers=ctx.as_("commenter"))
+    assert gone.status_code == 204
     for who in ("approver", "owner", "token"):
         other = await entity(client, ctx, type="feature", key=f"f-{who}")
         resp = await add(client, ctx, who=who, entity_id=other["id"], url=NOTION_URL)
         assert resp.status_code == 201, who
+        assert resp.json()["id"]
+    # ...but not someone else's link, and not other evidence.
+    theirs = await entity(client, ctx, type="feature", key="f-theirs")
+    ev2 = (await add(client, ctx, who="approver", entity_id=theirs["id"], url=WEB_URL)).json()
+    gone = await client.delete(f"{B}/evidence/{ev2['id']}", headers=ctx.as_("commenter"))
+    assert gone.status_code == 403
 
 
 async def test_refresh_updates_the_snapshot_and_rescores(client, ctx, web):

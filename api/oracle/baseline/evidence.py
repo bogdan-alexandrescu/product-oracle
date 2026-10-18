@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
+from oracle.authz import has_role
 from oracle.baseline import public_links, scoring, service
 from oracle.baseline.models import Edge, Entity, Evidence, EvidenceLinkSnapshot
 from oracle.baseline.schemas import (
@@ -30,7 +31,7 @@ from oracle.baseline.schemas import (
     LinkTarget,
     SourceItemRef,
 )
-from oracle.baseline.service import ConflictError, InvalidError, NotFoundError
+from oracle.baseline.service import ConflictError, ForbiddenError, InvalidError, NotFoundError
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 
 EXCERPT_CHARS = 500
@@ -73,6 +74,7 @@ async def attach(
         excerpt=data.excerpt,
         ref=data.ref,
         retrieved_at=data.retrieved_at,
+        added_by=principal.id,
     )
     if data.source_item_id:
         item, source, version = await _own_item(db, principal, data.source_item_id)
@@ -114,6 +116,11 @@ async def detach(db: AsyncSession, principal: Principal, evidence_id: uuid.UUID)
     ev = await db.get(Evidence, evidence_id)
     if ev is None:
         raise NotFoundError("Evidence not found")
+    # Approvers remove any evidence; a commenter removes only link evidence they added (C2c).
+    if not has_role(principal.role, "approver") and not (
+        ev.kind is not None and ev.added_by == principal.id
+    ):
+        raise ForbiddenError("Only approvers, or the person who added this link, can remove it.")
     entity_id, edge_id = ev.entity_id, ev.edge_id
     await audit.record(
         db,
@@ -234,6 +241,7 @@ async def add_link(
         ref=page.title or page.url,
         note=(data.note or "").strip() or None,
         retrieved_at=page.fetched_at,
+        added_by=principal.id,
     )
     db.add(ev)
     await db.flush()

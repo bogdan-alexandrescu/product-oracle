@@ -40,7 +40,7 @@ DEFAULTS: dict[str, Any] = {
         "slack": 0.5,
         # A public web page cited through a link (Notion and Google Docs links count as
         # their own kinds above).
-        "web": 0.55,
+        "web": 0.7,
     },
     # A planning or feature document (item acl/attrs "doc_type": "planning") gets this
     # much on top of its kind, capped at 1.
