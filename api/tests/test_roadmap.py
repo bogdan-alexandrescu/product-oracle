@@ -898,9 +898,37 @@ async def test_a_run_without_a_template_takes_the_company_default(client, owner,
     assert run["template"] == "now-next-later"
 
 
-def test_app_links_default_to_the_public_url():
+def test_app_links_default_to_the_public_url(monkeypatch):
+    from oracle.config import Settings
     from oracle.swarm.settings import get_runtime_settings
 
-    assert get_settings().app_url == ""
+    assert Settings.model_fields["app_url"].default == ""
+    monkeypatch.setattr(render, "get_settings", lambda: Settings(app_url=""))
     base = get_runtime_settings().public_url.rstrip("/")
     assert render.app_url("/documents/x/v/1") == f"{base}/documents/x/v/1"
+    monkeypatch.setattr(render, "get_settings", lambda: Settings(app_url="https://o.example/"))
+    assert render.app_url("/documents/x/v/1") == "https://o.example/documents/x/v/1"
+
+
+async def test_a_new_document_takes_its_kind_from_the_draft_and_stays_importable(client, owner):
+    _, auth = owner
+    # No kind line: the roadmap template makes it a roadmap, and it takes new versions.
+    first = ROADMAP_MD.replace("kind: roadmap\n", "")
+    assert (await import_draft(client, auth, first, doc=ROADMAP)).status_code == 201
+    doc = (await client.get(f"/v1/documents/{ROADMAP}", headers=auth)).json()
+    assert doc["kind"] == "roadmap"
+    second = first.replace("title: Checkout roadmap", "title: Checkout roadmap, second pass")
+    assert (await import_draft(client, auth, second, doc=ROADMAP)).status_code == 201
+
+
+async def test_a_draft_pushed_before_the_import_still_gets_its_provenance(client, owner, runtime):
+    _, auth = owner
+    await approved_prd(client, auth)
+    # The same roadmap.md arrived first by another path (an agent's push).
+    assert (await import_draft(client, auth, ROADMAP_MD, doc=ROADMAP)).status_code == 201
+    run = await built_roadmap(client, auth, runtime)
+    imp = run["segments"][-1]["draft_import"]
+    assert imp["created"] is False and imp["version"] == 1
+    assert imp["source"]["slug"] == PRD and imp["source"]["version"] == 1
+    doc = (await client.get(f"/v1/documents/{ROADMAP}", headers=auth)).json()
+    assert doc["versions"][0]["source"]["version"] == 1

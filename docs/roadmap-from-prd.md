@@ -72,7 +72,7 @@ resolve to a section of the source version (`draft_import.prd_links`).
 
 ## Provenance
 
-`document_versions.source_version_id` (migration 0011) records the PRD version a roadmap
+`document_versions.source_version_id` (migration 0012) records the PRD version a roadmap
 version came from. Documents and versions return it as `source` (document id, slug, title,
 kind, version, approval); runs return the run's `source`. The app shows "From <PRD title>
 v<n>" linking to it, and every export's version banner (HTML, PDF, markdown, deck) says

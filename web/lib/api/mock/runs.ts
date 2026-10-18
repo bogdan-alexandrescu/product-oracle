@@ -85,7 +85,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       source_kind: "prd",
       segments: [
         { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
-        { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
+        { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
       ],
     },
   ],
@@ -244,7 +244,8 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   const cp: CheckpointOut = {
     id: ctx.uuid(),
     run_id: r.id,
-    kind: def.checkpoint,
+    // As the API: the feedback loop on a roadmap is a roadmap review.
+    kind: def.checkpoint === "prd_review" && r.document_kind === "roadmap" ? "roadmap_review" : def.checkpoint,
     status: on ? "pending" : "skipped",
     approver_role: "approver",
     segment_seq: s.seq,

@@ -1177,6 +1177,14 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             return {"error": f"{name} was rejected: {problems}"}
         except (docs_service.NotFoundError, docs_service.ImportConflictError) as exc:
             return {"error": f"{name} was not imported: {exc}"}
+        if not result.created and source_id and result.version.source is None:
+            # The same draft was already imported (an agent pushed it) without its
+            # provenance: record it now.
+            row = await s.get(DocumentVersion, result.version.id)
+            if row is not None and row.source_version_id is None:
+                row.source_version_id = source_id
+                await s.commit()
+                result.version = await docs_service.read_version(s, row)
         document = await s.get(Document, result.version.document_id)
         out: dict[str, Any] = {
             "document_id": str(result.version.document_id),
