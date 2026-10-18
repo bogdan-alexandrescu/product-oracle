@@ -42,10 +42,15 @@ async def create_user(session: AsyncSession, email: str, password: str) -> User:
     return user
 
 
-async def create_api_token(session: AsyncSession, name: str) -> tuple[ApiToken, str]:
-    """Create a token in the session's tenant. Returns (row, raw token); show raw once."""
+async def create_api_token(
+    session: AsyncSession, name: str, *, user_id: uuid.UUID | None = None
+) -> tuple[ApiToken, str]:
+    """Create a token in the session's tenant. Returns (row, raw token); show raw once.
+
+    With ``user_id`` the token acts as that user (their role and their own data).
+    """
     raw = TOKEN_PREFIX + secrets.token_urlsafe(32)
-    token = ApiToken(name=name, token_hash=hash_token(raw))
+    token = ApiToken(name=name, token_hash=hash_token(raw), user_id=user_id)
     session.add(token)
     await session.flush()
     return token, raw

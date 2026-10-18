@@ -1,0 +1,20 @@
+/* Roadmap board: landscape pages, the as-of header and legend repeated on every
+   PDF page, horizon sections laid out as columns of cards that never split. */
+.section-group > .group-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+.section-group > .group-body > .prd-section {
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--color-rule);
+  border-top: 3px solid var(--color-accent);
+  border-radius: 4px;
+  break-inside: avoid;
+}
+.section-group > .group-body > .prd-section > h3 { margin-top: 0; font-size: 1em; }
+.section-group > .group-body > .flag-no-goal { border: 2px solid #b42318; }
+.prd-section[data-section-key="now"] > h2::after { content: "  high confidence ●●●"; font-size: 0.6em; color: var(--color-muted); }
+.prd-section[data-section-key="next"] > h2::after { content: "  medium ●●○"; font-size: 0.6em; color: var(--color-muted); }
+.prd-section[data-section-key="later"] > h2::after { content: "  low ●○○"; font-size: 0.6em; color: var(--color-muted); }
+@media print {
+  .doc-header { position: running(docheader); margin: 0; }
+  @page { @top-center { content: element(docheader); width: 100%; } margin-top: 30mm; }
+}

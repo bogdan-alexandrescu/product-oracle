@@ -76,6 +76,36 @@ async def _iap_user(request: Request) -> User | None:
     return user
 
 
+async def _bearer_principal(raw: str) -> Principal:
+    """An API token, or an MCP client's OAuth access token (role capped by its scope)."""
+    from oracle.mcp.oauth.service import ACCESS_PREFIX
+
+    if raw.startswith(ACCESS_PREFIX):
+        from oracle.mcp.oauth.verify import verify_access_token
+
+        principal = await verify_access_token(raw)
+        if principal is None:
+            raise _unauthorized()
+        return principal
+    token = await service.resolve_api_token(raw)
+    if token is None:
+        raise _unauthorized()
+    if token.user_id is not None:
+        # A token for a user acts as that user: the user's role and own data.
+        async with tenant_session(token.tenant_id) as s:
+            user = await s.get(User, token.user_id)
+        if user is None:
+            raise _unauthorized()
+        return Principal(
+            tenant_id=token.tenant_id,
+            kind="user",
+            role=user.role,
+            user_id=user.id,
+            token_id=token.id,
+        )
+    return Principal(tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id)
+
+
 async def get_principal(
     request: Request,
     bearer: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
@@ -83,12 +113,7 @@ async def get_principal(
 ) -> Principal:
     iap_user = await _iap_user(request)
     if bearer is not None:
-        token = await service.resolve_api_token(bearer.credentials)
-        if token is None:
-            raise _unauthorized()
-        return Principal(
-            tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id
-        )
+        return await _bearer_principal(bearer.credentials)
     if iap_user is not None:
         return Principal(
             tenant_id=iap_user.tenant_id, kind="user", role=iap_user.role, user_id=iap_user.id

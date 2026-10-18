@@ -209,7 +209,9 @@ async def test_unsigned_email_header_ignored_when_enabled(client, fetches):
 async def test_cookie_and_bearer_still_work_when_enabled(client, fetches):
     r = await seed(password="correct horse", token_name="ci")
     bearer = await client.get("/v1/me", headers={"Authorization": f"Bearer {r.token}"})
-    assert bearer.status_code == 200 and bearer.json()["kind"] == "token"
+    # The seeded token acts as the admin.
+    assert bearer.status_code == 200 and bearer.json()["kind"] == "user"
+    assert bearer.json()["token_name"] == "ci"
 
     await client.post(
         "/v1/auth/login", json={"email": "admin@example.com", "password": "correct horse"}

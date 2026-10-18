@@ -82,6 +82,9 @@ export function Button({
   );
 }
 
+/** Class names of a text input, select or textarea in a settings form. */
+export const INPUT = "w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm text-neutral-900";
+
 export function Kbd({ children }: { children: ReactNode }) {
   return (
     <kbd className="rounded border border-neutral-300 bg-neutral-50 px-1 font-mono text-[11px] text-neutral-600">

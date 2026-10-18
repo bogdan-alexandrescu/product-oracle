@@ -7,10 +7,15 @@ import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
+import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { connectionsRoute } from "./connections";
 import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { laneF, type LaneFState } from "./lane-f";
+import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 
-type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
-type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
+export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
+export type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
   sections: Omit<Schemas["SectionOut"], "verdict">[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
@@ -20,7 +25,7 @@ type MemberRow = Schemas["MemberOut"];
 type InviteRow = Schemas["InviteOut"];
 type Role = MemberRow["role"];
 
-interface Db {
+export interface Db {
   /** Email of the signed-in mock member. */
   session: string | null;
   tenant_id: string;
@@ -33,9 +38,23 @@ interface Db {
   comments: CommentRow[];
   reviews: ReviewRow[];
   feedback: FeedbackRow[];
+  baseline: BaselineState;
+  /** Priorities, templates, themes and draft defaults (lane-f.ts), seeded on first use. */
+  lane_f?: LaneFState;
+  /** Runs, checkpoints and their artifacts (./runs.ts); absent in data saved before runs existed. */
+  runs?: RunsDb;
 }
 
 const STORAGE_KEY = "po-mock-db-v2";
+/** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
+export const MOCK_ROLE_KEY = "po-mock-role";
+const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
+
+/** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
+function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
+  const role = localStorage.getItem(MOCK_ROLE_KEY) as Schemas["Me"]["role"] | null;
+  return role && ROLES.includes(role) ? { ...member, role } : member;
+}
 const LATENCY_MS = 60;
 
 let counter = 0;
@@ -105,6 +124,7 @@ function seed(): Db {
     comments: [],
     reviews: [],
     feedback: [],
+    baseline: seedBaseline(uuid),
   };
   db.members = MOCK_MEMBERS.map((m) => ({ ...m, id: m.email === MOCK_LOGIN.email ? db.user_id : uuid() }));
   db.invites = MOCK_INVITES.map((i) => ({
@@ -210,7 +230,42 @@ function seed(): Db {
   for (const s of a1.sections) addReview(db, a1, s.section_key, { verdict: "approved", note: null }, at("2026-10-03T10:00:00Z"));
   a1.approved_at = "2026-10-03T10:05:00Z";
   docs.get("usage-alerts")!.status = "approved";
+  db.runs = seedRuns(runsContext(db));
   return db;
+}
+
+function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
+  return {
+    db: db.runs,
+    userId: db.user_id,
+    feedback: db.feedback,
+    documents: db.documents,
+    latestVersion: (id) => {
+      const doc = db.documents.find((d) => d.id === id);
+      const vs = doc ? docVersions(db, doc) : [];
+      return vs.length ? vs[vs.length - 1].number : null;
+    },
+    // A run's draft becomes the next version: a copy of the latest one (or of the
+    // first fixture for a new document), so the review screens have something to show.
+    importDraft: (slug) => {
+      let doc = findDocument(db, slug);
+      if (!doc) {
+        doc = { id: uuid(), slug, title: "Example product PRD", status: "draft", template: null, template_version: null, created_at: now(), updated_at: now() };
+        db.documents.push(doc);
+      }
+      const latest = docVersions(db, doc).pop();
+      const seed = (DOCUMENTS as DocumentSeed[])[0].versions[0];
+      const base = latest
+        ? { number: latest.number + 1, created_at: now(), sections: latest.sections.map((x) => ({ key: x.section_key, level: x.level, heading: x.heading, body: x.body_md })), citations: [] }
+        : { ...seed, number: 1, created_at: now() };
+      const v = buildVersion(doc, base);
+      db.versions.push(v);
+      touch(db, doc.id);
+      return { document_id: doc.id, slug: doc.slug, version: v.number };
+    },
+    uuid,
+    now,
+  };
 }
 
 function load(): Db {
@@ -234,6 +289,7 @@ function save(db: Db) {
 /** Drops all mock state (used by the "Reset mock data" control). */
 export function resetMockData() {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(SOURCES_STORAGE_KEY);
 }
 
 // ---------------------------------------------------------------- domain helpers
@@ -576,16 +632,25 @@ async function route(db: Db, req: Request): Promise<Response> {
       return json(401, { detail: "Invalid credentials" });
     }
     db.session = member.email;
-    return json(200, meOut(db, member));
+    return json(200, meOut(db, withMockRole(member)));
   }
   if (p[1] === "auth" && p[2] === "logout" && m === "POST") {
     db.session = null;
     return json(204, undefined);
   }
-  const me = db.members.find((x) => x.email === db.session);
-  if (!me) return json(401, { detail: "Not authenticated" });
+  const member = db.members.find((x) => x.email === db.session);
+  if (!member) return json(401, { detail: "Not authenticated" });
+  const me = withMockRole(member);
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
+  // The baseline mock checks roles itself (commenters propose, approvers decide).
+  if (p[1] === "baseline") {
+    return routeBaseline(db.baseline, { userId: me.id, role: me.role }, req, p.slice(2), q);
+  }
+  // Sources and connections belong to each user: every role manages their own.
+  if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  const connections = await connectionsRoute(req, p);
+  if (connections) return connections;
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
@@ -632,6 +697,13 @@ async function route(db: Db, req: Request): Promise<Response> {
     Object.assign(f, await body<Schemas["FeedbackPatch"]>(), { updated_at: now() });
     return json(200, f);
   }
+
+  const handled = await laneF(db, req, p, m);
+  if (handled) return handled;
+
+  db.runs ??= seedRuns(runsContext(db));
+  const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
+  if (runs) return runs;
 
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) return json(200, db.documents.map((d) => documentSummary(db, d)));

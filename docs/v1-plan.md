@@ -140,6 +140,21 @@ Every table is `TenantScoped` unless noted.
   (`commenter`), `default_claude_connection_id` (the Claude plan used when a user has
   none; the owner's own plan first), `confidence_weights`.
 
+## Integration (migrations 0004-0005, 2026-10-17)
+
+- **0004** (Lane D2): OAuth clients, codes and tokens for MCP clients. An OAuth access
+  token (`poa_...`) works on `/mcp` and on the REST API as the approving user, with the
+  role capped by the granted scope.
+- **0005**: `api_tokens.user_id` (nullable). A token with a user acts as that user (their
+  role, connections and sources), so `oracle sync` works with `ORACLE_API_TOKEN`; `make
+  seed` mints its token for the admin. Tokens without a user act with their own role.
+- A sync whose credential is rejected also marks the user's connection `expired` (with
+  `last_error`). Disconnect revokes a grant Oracle obtained through GitHub, Slack or
+  Google OAuth (best effort) before deleting Oracle's copy.
+- A run's `baseline` segment merges its `baseline.yaml` through the baseline's YAML import
+  as agent writes (locked items become proposals); priorities score unscored evidence
+  through the baseline's confidence.
+
 ## Agents and model calls (Bogdan, 2026-10-17)
 
 - **Agents run in SwarmCloud.** Product Oracle orchestrates all of its agents in

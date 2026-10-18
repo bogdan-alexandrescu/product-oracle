@@ -1,7 +1,8 @@
+import uuid
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import CheckConstraint, DateTime, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
@@ -31,7 +32,11 @@ class ApiToken(TenantScoped, Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     # sha256 hex of the raw token; globally unique so a Bearer token resolves its tenant.
     token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    # The role the token acts with.
+    # The role the token acts with (ignored when the token acts for a user).
     role: Mapped[str] = mapped_column(Text, nullable=False, default="owner", server_default="owner")
+    # A token with a user acts as that user: their role, connections and sources.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

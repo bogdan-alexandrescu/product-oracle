@@ -2,23 +2,26 @@ import { expect, test } from "@playwright/test";
 
 import { login } from "./helpers";
 
-test("workspace nav: hidden when signed out, lists every area once signed in", async ({ page }) => {
+test("app nav: hidden when signed out, lists every area once signed in", async ({ page }) => {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Workspace" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Oracle" })).toHaveCount(0);
 
   await login(page);
-  const nav = page.getByRole("navigation", { name: "Workspace" });
+  const nav = page.getByRole("navigation", { name: "Oracle" });
   await expect(nav).toBeVisible();
   for (const [id, label] of [
     ["nav-baseline", "Baseline"],
     ["nav-runs", "Runs"],
     ["nav-prds", "PRDs"],
+    ["nav-priorities", "Priorities"],
     ["nav-roadmap", "Roadmap"],
     ["nav-inbox", "Inbox"],
     ["nav-members", "Members"],
+    ["nav-connections", "Connections"],
     ["nav-sources", "Sources"],
     ["nav-templates", "Templates"],
+    ["nav-themes", "Themes"],
   ]) {
     await expect(nav.getByTestId(id)).toContainText(label);
   }
@@ -35,17 +38,20 @@ test("workspace nav: hidden when signed out, lists every area once signed in", a
   await expect(nav.getByRole("link", { name: /Roadmap/ })).toHaveCount(0);
 });
 
-test("workspace nav: each entry routes to its page", async ({ page }) => {
+test("app nav: each entry routes to its page", async ({ page }) => {
   await login(page);
-  const nav = page.getByRole("navigation", { name: "Workspace" });
+  const nav = page.getByRole("navigation", { name: "Oracle" });
 
   for (const [id, path, heading] of [
     ["nav-baseline", "/baseline", "Baseline"],
     ["nav-runs", "/runs", "Runs"],
+    ["nav-priorities", "/priorities", "Priorities"],
     ["nav-inbox", "/inbox", "Inbox"],
     ["nav-members", "/settings/members", "Members"],
+    ["nav-connections", "/settings/connections", "Connections"],
     ["nav-sources", "/settings/sources", "Sources"],
     ["nav-templates", "/settings/templates", "Templates"],
+    ["nav-themes", "/settings/themes", "Themes"],
     ["nav-prds", "/documents", "Documents"],
   ]) {
     await nav.getByTestId(id).click();

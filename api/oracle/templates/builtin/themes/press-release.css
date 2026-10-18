@@ -1,0 +1,20 @@
+/* Press release: the first page reads like an announcement (dateline, large
+   headline, subheading), the FAQs read as bold questions with short answers. */
+.prd-section[data-section-key="press-release"] > h2 {
+  font-size: 0.8em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  border-bottom: 3px double var(--color-heading);
+}
+.prd-section[data-section-key="headline"] > h3 { display: none; }
+.prd-section[data-section-key="headline"] p { font: bold 2em/1.15 var(--font-heading); margin: 0.6rem 0 0.4rem; }
+.prd-section[data-section-key="subheading"] > h3 { display: none; }
+.prd-section[data-section-key="subheading"] p { font-size: 1.2em; font-style: italic; color: var(--color-muted); }
+.prd-section[data-section-key="pr-summary"] > h3 { display: none; }
+.prd-section[data-section-key="pr-summary"] p:first-child::first-line { font-weight: bold; }
+.prd-section[data-section-key="customer-faq"] { break-before: page; }
+.prd-section[data-section-key="customer-faq"] h3,
+.prd-section[data-section-key="internal-faq"] h3,
+.prd-section.faq > h3 { font-size: 1em; }
+.prd-section[data-section-key^="faq-"] > h3::before { content: "Q. "; color: var(--color-accent); }

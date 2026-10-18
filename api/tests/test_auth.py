@@ -85,7 +85,9 @@ async def test_bearer_token_auth(client):
     resp = await client.get("/v1/me", headers={"Authorization": f"Bearer {r.token}"})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["kind"] == "token" and body["token_name"] == "ci"
+    # The seeded token acts as the admin (tokens without a user report kind "token").
+    assert body["kind"] == "user" and body["token_name"] == "ci"
+    assert body["email"] == "admin@example.com"
     assert body["tenant_id"] == str(r.tenant_id)
 
     async with tenant_session(r.tenant_id) as s:

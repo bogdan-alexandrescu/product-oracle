@@ -1,0 +1,10 @@
+/* Editorial memo: print-first prose. Serif, long lines kept short, generous
+   leading, the appendix and sources on their own page. */
+body { max-width: 38rem; }
+h1 { font-size: 1.9em; font-weight: normal; letter-spacing: -0.01em; }
+h2 { font-size: 1.2em; font-weight: normal; font-style: italic; border: none; }
+h3 { font-size: 1.05em; font-weight: normal; font-variant: small-caps; }
+p { text-align: justify; hyphens: auto; }
+main p + p { text-indent: 1.4em; margin-top: -0.4rem; }
+.prd-section[data-section-key="appendix"] { break-before: page; }
+.doc-header { border-left-width: 1px; }

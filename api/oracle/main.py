@@ -12,12 +12,15 @@ from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
+from oracle.mcp.oauth.routes import router as oauth_router
+from oracle.mcp.server import mount_mcp
 from oracle.members.router import router as members_router
 from oracle.priorities.router import router as priorities_router
 from oracle.review.router import router as review_router
 from oracle.runs.router import router as runs_router
 from oracle.sources.router import router as sources_router
 from oracle.templates.router import router as templates_router
+from oracle.tenant_settings_api import router as settings_router
 
 
 @asynccontextmanager
@@ -66,11 +69,16 @@ def create_app() -> FastAPI:
     # v1 lanes add their routes to these (empty until then).
     app.include_router(members_router)
     app.include_router(connections_router)
+    app.include_router(settings_router)
     app.include_router(sources_router)
     app.include_router(baseline_router)
     app.include_router(priorities_router)
     app.include_router(templates_router)
     app.include_router(runs_router)
+    # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
+    app.include_router(oauth_router)
+    # Every REST operation above (and any added later) is also an MCP tool here.
+    mount_mcp(app)
     return app
 
 

@@ -12,22 +12,25 @@ const MAIN: Item[] = [
   { label: "Baseline", href: "/baseline", testId: "nav-baseline" },
   { label: "Runs", href: "/runs", testId: "nav-runs" },
   { label: "PRDs", href: "/documents", testId: "nav-prds" },
+  { label: "Priorities", href: "/priorities", testId: "nav-priorities" },
   { label: "Roadmap", testId: "nav-roadmap", soon: "v1.1" },
   { label: "Inbox", href: "/inbox", testId: "nav-inbox" },
 ];
 
 const SETTINGS: Item[] = [
   { label: "Members", href: "/settings/members", testId: "nav-members" },
+  { label: "Connections", href: "/settings/connections", testId: "nav-connections" },
   { label: "Sources", href: "/settings/sources", testId: "nav-sources" },
   { label: "Templates", href: "/settings/templates", testId: "nav-templates" },
+  { label: "Themes", href: "/settings/themes", testId: "nav-themes" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/** Left navigation of the signed-in workspace. Hidden on /login and when signed out. */
-export function WorkspaceNav() {
+/** Left navigation of the signed-in Oracle. Hidden on /login and when signed out. */
+export function AppNav() {
   const pathname = usePathname();
   const { me } = useMe();
   if (!me || pathname === "/login" || pathname.startsWith("/login/")) return null;
@@ -70,12 +73,12 @@ export function WorkspaceNav() {
 
   return (
     <aside className="w-52 shrink-0 border-r border-neutral-200 bg-white">
-      <nav aria-label="Workspace" data-testid="workspace-nav" className="sticky top-0 px-3 py-4 text-sm">
+      <nav aria-label="Oracle" data-testid="app-nav" className="sticky top-0 px-3 py-4 text-sm">
         <ul className="flex flex-col gap-0.5">{MAIN.map(row)}</ul>
-        <p className="mt-6 mb-1 px-2.5 text-xs font-medium text-neutral-500" id="workspace-nav-settings">
+        <p className="mt-6 mb-1 px-2.5 text-xs font-medium text-neutral-500" id="app-nav-settings">
           Settings
         </p>
-        <ul className="flex flex-col gap-0.5" aria-labelledby="workspace-nav-settings" data-testid="nav-settings">
+        <ul className="flex flex-col gap-0.5" aria-labelledby="app-nav-settings" data-testid="nav-settings">
           {SETTINGS.map(row)}
         </ul>
       </nav>
