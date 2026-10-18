@@ -13,9 +13,9 @@ from oracle.export.render import load_export_version, render_html
 from oracle.main import app
 from oracle.mcp.tools import app_operations
 from oracle.models import AuditEvent
-from oracle.templates.builtins import BUILTIN_TEMPLATES, builtin_body
+from oracle.templates.builtins import BUILTIN_TEMPLATES, BUILTIN_THEMES, builtin_body
 from oracle.templates.models import Template, TemplateVersion, Theme
-from oracle.templates.validation import check_template
+from oracle.templates.validation import check_template, check_theme_css
 from oracle.tenancy import tenant_session
 from tests.test_brief import BRIEF_KEYS, DRAFT, _import, _seeded, requires_pdf
 from tests.test_priorities import _token
@@ -157,7 +157,6 @@ async def test_template_roles_are_unchanged(client, tenant_id):
         '.slide { background-image: image-set("https://evil.example/p.png" 1x); }',
         '.slide { background-image: -webkit-image-set("https://evil.example/p.png" 1x); }',
         '.slide { background: cross-fade("https://evil.example/a.png", red 50%); }',
-        ".slide { background: element(#title); }",
         '.slide { background: image("https://evil.example/p.png"); }',
     ],
 )
@@ -182,16 +181,45 @@ async def test_slide_css_is_checked_like_the_theme_css(client, tenant_id, bad):
     assert (await client.get("/v1/themes/brand", headers=h)).json()["slide_css"] is None
 
 
-async def test_slide_css_may_not_style_the_host(client, tenant_id):
+@pytest.mark.parametrize(
+    "bad",
+    [
+        ":host { position: fixed; inset: 0; z-index: 2147483647; }",
+        ":/**/host { position: fixed; }",
+    ],
+)
+async def test_slide_css_may_not_style_the_host(client, tenant_id, bad):
     h = await _token(tenant_id, "approver")
-    bad = ":host { position: fixed; inset: 0; z-index: 2147483647; }"
     resp = await client.post("/v1/themes", json={**THEME, "slide_css": bad}, headers=h)
     assert resp.status_code == 422
     assert [p["message"] for p in resp.json()["problems"]] == ["slide CSS: :host is not allowed"]
-    # Ordinary image properties still pass.
-    ok = ".slide { background-image: linear-gradient(#fff, #eee); }"
+
+
+@pytest.mark.parametrize(
+    "ok",
+    [
+        ".slide { background-image: linear-gradient(#fff, #eee); }",
+        ".slide { list-style-image: none; border-image: none; mask-image: none; }",
+        '.slide h2::after { content: "see image (left)"; }',
+        "@page { @top-center { content: element(docheader); } }",
+    ],
+)
+async def test_ordinary_slide_css_still_passes(client, tenant_id, ok):
+    h = await _token(tenant_id, "approver")
     resp = await client.post("/v1/themes", json={**THEME, "slide_css": ok}, headers=h)
     assert resp.status_code == 201, resp.text
+
+
+@pytest.mark.parametrize("theme", BUILTIN_THEMES, ids=lambda t: t.key)
+def test_every_builtin_theme_css_passes_the_check(theme):
+    assert check_theme_css(theme.css or "") == []
+
+
+async def test_a_builtin_theme_stays_editable(client, tenant_id):
+    h = await _token(tenant_id, "approver")
+    await client.get("/v1/themes", headers=h)
+    resp = await client.patch("/v1/themes/roadmap-board", json={"description": "Ours"}, headers=h)
+    assert resp.status_code == 200, resp.text
 
 
 async def test_slide_css_is_stored_updated_cleared_and_audited(client, tenant_id):
