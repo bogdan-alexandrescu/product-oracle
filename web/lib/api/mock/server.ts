@@ -11,13 +11,14 @@ import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
-import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 
-export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
+/** latest_version, approved_version and source are read off the versions. */
+export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
 export type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
   sections: Omit<Schemas["SectionOut"], "verdict">[];
 };
@@ -154,8 +155,10 @@ function seed(): Db {
       slug: d.slug,
       title: d.title,
       status: "draft",
+      kind: d.kind ?? "prd",
       template: d.template ?? null,
       template_version: d.template_version ?? null,
+      theme: d.theme ?? null,
       created_at: d.versions[0].created_at,
       updated_at: last.created_at,
     };
@@ -258,6 +261,14 @@ function seed(): Db {
   for (const s of a1.sections) addReview(db, a1, s.section_key, { verdict: "approved", note: null }, at("2026-10-03T10:00:00Z"));
   a1.approved_at = "2026-10-03T10:05:00Z";
   docs.get("usage-alerts")!.status = "approved";
+
+  // Provenance (O4b): roadmap versions record the approved PRD version they came from.
+  for (const d of DOCUMENTS as DocumentSeed[]) {
+    for (const v of d.versions) {
+      if (v.source) ver(d.slug, v.number).source = versionSource(docs.get(v.source.slug)!, ver(v.source.slug, v.source.version));
+    }
+  }
+  docs.get("usage-alerts-roadmap")!.status = "in_review";
   db.runs = seedRuns(runsContext(db));
   db.llm = seedLlm(llmContext(db, db.user_id, "owner"));
   return db;
@@ -329,23 +340,69 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       const vs = doc ? docVersions(db, doc) : [];
       return vs.length ? vs[vs.length - 1].number : null;
     },
-    // A run's draft becomes the next version: a copy of the latest one (or of the
-    // first fixture for a new document), so the review screens have something to show.
-    importDraft: (slug) => {
+    sectionKeys: (versionId) => db.versions.find((v) => v.id === versionId)?.sections.map((s) => s.section_key) ?? [],
+    // The approved version a roadmap is built from: the one named, else the latest approved.
+    sourceVersion: (documentId, number) => {
+      const doc = findDocument(db, documentId)!;
+      const vs = docVersions(db, doc);
+      if (number != null) {
+        const v = vs.find((x) => x.number === number);
+        if (!v) return `version ${number} of '${doc.slug}' not found`;
+        if (!v.approved_at) return `version ${number} of '${doc.slug}' is not approved: a roadmap is built from an approved PRD version`;
+        return versionSource(doc, v);
+      }
+      const v = vs.filter((x) => x.approved_at).pop();
+      return v ? versionSource(doc, v) : `'${doc.slug}' has no approved version: approve a version of the PRD before building its roadmap`;
+    },
+    // A run's draft becomes the next version: a copy of the latest one (or of the first
+    // fixture for a new document); a roadmap draft is built from its PRD version. So the
+    // review screens have something to show.
+    importDraft: (slug, run) => {
+      const prd = run.source ? db.versions.find((v) => v.id === run.source!.version_id) : undefined;
+      const fromPrd =
+        prd &&
+        roadmapFromPrd({
+          slug: run.source!.slug,
+          title: run.source!.title,
+          version: prd.number,
+          sections: prd.sections.map((s) => ({ key: s.section_key, level: s.level, heading: s.heading })),
+        });
       let doc = findDocument(db, slug);
       if (!doc) {
-        doc = { id: uuid(), slug, title: "Example product PRD", status: "draft", template: null, template_version: null, created_at: now(), updated_at: now() };
+        doc = {
+          id: uuid(),
+          slug,
+          title: fromPrd?.title ?? "Example product PRD",
+          status: "draft",
+          kind: run.document_kind ?? "prd",
+          template: run.template ?? null,
+          template_version: run.template ? "1" : null,
+          theme: run.theme ?? null,
+          created_at: now(),
+          updated_at: now(),
+        };
         db.documents.push(doc);
       }
       const latest = docVersions(db, doc).pop();
       const seed = (DOCUMENTS as DocumentSeed[])[0].versions[0];
-      const base = latest
-        ? { number: latest.number + 1, created_at: now(), sections: latest.sections.map((x) => ({ key: x.section_key, level: x.level, heading: x.heading, body: x.body_md })), citations: [] }
-        : { ...seed, number: 1, created_at: now() };
+      const number = (latest?.number ?? 0) + 1;
+      const base = fromPrd
+        ? { number, created_at: now(), sections: fromPrd.sections, citations: [], brief: fromPrd.brief }
+        : latest
+          ? { number, created_at: now(), sections: latest.sections.map((x) => ({ key: x.section_key, level: x.level, heading: x.heading, body: x.body_md })), citations: [] }
+          : { ...seed, number, created_at: now() };
       const v = buildVersion(doc, base);
+      v.source = run.source ?? null;
       db.versions.push(v);
       touch(db, doc.id);
-      return { document_id: doc.id, slug: doc.slug, version: v.number };
+      return {
+        document_id: doc.id,
+        slug: doc.slug,
+        kind: doc.kind,
+        version: v.number,
+        source: v.source,
+        prd_links: prd ? prdLinks(v, run.source!.slug, prd) : null,
+      };
     },
     uuid,
     now,
@@ -390,6 +447,33 @@ function docVersions(db: Db, doc: DocumentRow) {
   return db.versions.filter((v) => v.document_id === doc.id).sort((a, b) => a.number - b.number);
 }
 
+function versionSource(doc: DocumentRow, v: VersionRow): Schemas["VersionSource"] {
+  return {
+    document_id: doc.id,
+    slug: doc.slug,
+    title: doc.title,
+    kind: doc.kind,
+    version: v.number,
+    version_id: v.id,
+    approved_at: v.approved_at,
+  };
+}
+
+const DOC_LINK = /\]\((\/documents\/([A-Za-z0-9][\w.-]*)\/v\/(\d+)(?:#([A-Za-z0-9][\w.:-]*))?)\)/g;
+
+/** A roadmap draft's links to its PRD version's sections, resolved or not (O4b). */
+function prdLinks(v: VersionRow, slug: string, prd: VersionRow): Schemas["PrdLinks"] {
+  const keys = new Set(prd.sections.map((s) => s.section_key));
+  const out: Schemas["PrdLinks"] = { resolved: 0, unresolved: [] };
+  for (const s of v.sections) {
+    for (const m of s.body_md.matchAll(DOC_LINK)) {
+      if (m[2] === slug && Number(m[3]) === prd.number && (!m[4] || keys.has(m[4]))) out.resolved += 1;
+      else out.unresolved.push(m[1]);
+    }
+  }
+  return out;
+}
+
 function summary(v: VersionRow): Schemas["VersionSummary"] {
   return {
     id: v.id,
@@ -401,6 +485,7 @@ function summary(v: VersionRow): Schemas["VersionSummary"] {
     imported_by: v.imported_by,
     approved_at: v.approved_at,
     brief_source: v.brief_source ?? "none",
+    source: v.source ?? null,
     created_at: v.created_at,
   };
 }
@@ -411,7 +496,14 @@ function sectionLayer(db: Db, versionId: string, key: string): Schemas["SectionO
 
 function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
   const vs = docVersions(db, d);
-  return { ...d, latest_version: vs.length ? vs[vs.length - 1].number : null };
+  const latest = vs[vs.length - 1];
+  return {
+    ...d,
+    kind: d.kind ?? "prd",
+    latest_version: latest?.number ?? null,
+    approved_version: vs.filter((v) => v.approved_at).pop()?.number ?? null,
+    source: latest?.source ?? null,
+  };
 }
 
 function latestReview(db: Db, versionId: string, key: string): ReviewRow | undefined {
@@ -814,7 +906,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (runs) return runs;
 
   if (p[1] !== "documents") return notFound("Route");
-  if (p.length === 2) return json(200, db.documents.map((d) => documentSummary(db, d)));
+  if (p.length === 2) {
+    const kind = q.get("kind");
+    return json(200, db.documents.map((d) => documentSummary(db, d)).filter((d) => !kind || d.kind === kind));
+  }
 
   const doc = findDocument(db, p[2]);
   if (!doc) return notFound("Document");
@@ -930,6 +1025,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         latest: versions[versions.length - 1].number,
         status: v.approved_at ? "approved" : doc.status,
         created_at: v.created_at,
+        source: v.source ?? null,
         sections: v.sections,
         citations: v.citations,
       }),

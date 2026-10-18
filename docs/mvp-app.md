@@ -125,7 +125,7 @@ verdict on the same section supersedes the earlier item.
 | Method + path | Purpose |
 |---------------|---------|
 | `POST /v1/auth/login`, `POST /v1/auth/logout`, `GET /v1/me` | UI session |
-| `GET /v1/documents`, `GET /v1/documents/{doc}` | list / read documents (by slug or id) |
+| `GET /v1/documents?kind=prd\|roadmap`, `GET /v1/documents/{doc}` | list / read documents (by slug or id), with kind, latest and latest approved version, and provenance (`source`, see docs/roadmap-from-prd.md) |
 | `POST /v1/documents/{doc}/versions` | import a draft (`text/markdown` body); creates the document on first import |
 | `GET /v1/documents/{doc}/versions`, `GET .../versions/{n}` | list / read a version (sections, citations, warnings, verdicts) |
 | `GET .../versions/{n}/markdown` | raw markdown |

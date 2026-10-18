@@ -26,6 +26,8 @@ SEGMENT_FILES: dict[str, tuple[str, ...]] = {
     "priority": ("priority.yaml",),
     "prd_draft": ("prd.md",),
     "next_draft": ("prd.md", "resolutions.yaml"),
+    "roadmap_items": ("roadmap_items.yaml",),
+    "roadmap_draft": ("roadmap.md",),
 }
 
 
@@ -52,9 +54,14 @@ class _Record:
     cancelled: bool = False
 
 
-def _default_files(segment: str, attempt: int) -> dict[str, str]:
+def _default_files(segment: str, attempt: int, outputs: tuple[str, ...] = ()) -> dict[str, str]:
     files = {}
-    for name in SEGMENT_FILES.get(segment, ("summary.md",)):
+    names = SEGMENT_FILES.get(segment, ("summary.md",))
+    # A segment whose draft file depends on the document's kind (the feedback loop on a
+    # roadmap writes roadmap.md): the spec's outputs say which.
+    if "roadmap.md" in outputs:
+        names = tuple("roadmap.md" if n == "prd.md" else n for n in names)
+    for name in names:
         files[name] = _default_content(name, segment, attempt)
     return files
 
@@ -77,6 +84,44 @@ def _default_content(name: str, segment: str, attempt: int) -> str:
             "2. Keep form state on back navigation.\n\n"
             "## Open questions {#open-questions}\n\n"
             "- None yet.\n"
+        )
+    if name == "roadmap.md":
+        return (
+            "---\n"
+            "title: Example product roadmap\n"
+            "kind: roadmap\n"
+            "template: now-next-later\n"
+            "brief: [summary, brief-items]\n"
+            "---\n\n"
+            "# Example product roadmap {#roadmap}\n\n"
+            "## Summary {#summary}\n\n"
+            f"Draft {attempt} written by the local agent runtime.\n\n"
+            "## Items by horizon {#brief-items}\n\n"
+            "| Horizon | Item | Outcome |\n|---|---|---|\n"
+            "| [Now](#now) | [Show the price early](#now-price) | Fewer drop-offs |\n\n"
+            "# Full version {#full}\n\n"
+            "## Now {#now}\n\n"
+            "### Show the price early {#now-price}\n\n"
+            "Buyers see the full price before checkout.\n\n"
+            "## Next {#next}\n\n"
+            "## Later {#later}\n\n"
+            "## Sources and data points {#sources}\n\n"
+            "- None yet.\n"
+        )
+    if name == "roadmap_items.yaml":
+        return (
+            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            "version: 1\n"
+            "items:\n"
+            "  - id: price-early\n"
+            "    title: Show the price early\n"
+            "    outcome: Fewer buyers drop off at checkout\n"
+            "    horizon: now\n"
+            "    milestone: Beta\n"
+            "    depends_on: []\n"
+            "    priority: {score: 1, rank: 1, explanation: local agent runtime}\n"
+            "    confidence: medium\n"
+            "    prd_section: features\n"
         )
     if name == "baseline.yaml":
         # The baseline YAML format (oracle.baseline.yaml_io); nothing to propose.
@@ -165,7 +210,8 @@ class FakeRuntime:
         record = self._record(workflow_id)
         if record.outcome.artifacts is not None:
             return dict(record.outcome.artifacts)
-        return _default_files(record.segment, record.attempt)
+        outputs = tuple(record.spec.outputs) if record.spec is not None else ()
+        return _default_files(record.segment, record.attempt, outputs)
 
     async def cancel(self, workflow_id: str) -> None:
         self._record(workflow_id).cancelled = True

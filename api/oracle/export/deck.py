@@ -31,6 +31,7 @@ from oracle.export.render import (
     _format_dt,
     _jinja,
     _themed_markdown,
+    absolute_doc_links,
     sources_keys,
     token_vars,
     unlink_missing,
@@ -82,6 +83,8 @@ class Deck:
     tokens: dict
     css: Markup
     slides: list[Slide]
+    # Provenance (O4b): "From <PRD title> v<n>".
+    source_label: str | None = None
 
 
 @cache
@@ -104,7 +107,7 @@ def _plain_heading(s: Section) -> str:
 def _render_md(md_text: str, present: set[str]) -> Markup:
     md = _themed_markdown(False)
     html = md.render(CITATION_STRIP_RE.sub("", md_text), {"numbers": {}})
-    return Markup(_mark_expand(unlink_missing(_decorate(html), present)))
+    return Markup(_mark_expand(absolute_doc_links(unlink_missing(_decorate(html), present))))
 
 
 _DETAIL_REF = re.compile(r'<span class="detail-ref" data-section-ref="([^"]+)">(.*?)</span>', re.S)
@@ -128,6 +131,8 @@ def _banner(ev: ExportVersion) -> str:
         parts.append(f"approved {_format_dt(ev.version.approved_at)}")
     else:
         parts.append(f"imported {_format_dt(ev.version.created_at)}")
+    if ev.source_label:
+        parts.append(ev.source_label)
     return " · ".join(parts)
 
 
@@ -219,6 +224,7 @@ def build_deck(ev: ExportVersion, guidance: dict[str, str] | None = None) -> Dec
         status=ev.status,
         as_of=ev.version.snapshot or _format_dt(ev.date),
         banner=_banner(ev),
+        source_label=ev.source_label,
         theme_key=theme.key if theme else None,
         theme_name=theme.name if theme else None,
         tokens=tokens,

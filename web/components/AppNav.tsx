@@ -13,7 +13,7 @@ const MAIN: Item[] = [
   { label: "Runs", href: "/runs", testId: "nav-runs" },
   { label: "PRDs", href: "/documents", testId: "nav-prds" },
   { label: "Priorities", href: "/priorities", testId: "nav-priorities" },
-  { label: "Roadmap", testId: "nav-roadmap", soon: "v1.1" },
+  { label: "Roadmap", href: "/roadmap", testId: "nav-roadmap" },
   { label: "Inbox", href: "/inbox", testId: "nav-inbox" },
 ];
 

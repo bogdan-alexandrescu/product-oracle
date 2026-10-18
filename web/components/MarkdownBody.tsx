@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 
 import { CitationChip } from "@/components/CitationChip";
@@ -37,6 +38,18 @@ type Ctx = {
 };
 
 const ignore = { [IGNORE_ATTR]: "" };
+
+/**
+ * O4b: a cross-document link to a version's section, as a roadmap draft links each item
+ * to its PRD section: `/documents/<slug>/v/<n>#<section>`.
+ */
+const DOC_LINK = /^\/documents\/([A-Za-z0-9][\w.-]*)\/v\/(\d+)(?:#([A-Za-z0-9][\w.:-]*))?$/;
+
+/** The app's path for a cross-document link: the version view, at the section (`#s-<key>`). */
+function docLinkHref(href: string): string | null {
+  const m = DOC_LINK.exec(href);
+  return m ? `/documents/${m[1]}/v/${m[2]}${m[3] ? `#s-${m[3]}` : ""}` : null;
+}
 
 function label(nodes: Inline[]): string {
   return nodes.map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" ? "" : label(n.c))).join("");
@@ -106,6 +119,14 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
       case "em":
         return <em key={k}>{renderInline(n.c, ctx, k)}</em>;
       case "link": {
+        const doc = docLinkHref(n.href);
+        if (doc) {
+          return (
+            <Link key={k} href={doc}>
+              {renderInline(n.c, ctx, k)}
+            </Link>
+          );
+        }
         if (!n.href.startsWith("#")) {
           return (
             <a key={k} href={n.href} target="_blank" rel="noopener noreferrer">

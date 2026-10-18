@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { SourceLink } from "@/components/BuildRoadmap";
 import { Badge, Button, ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
@@ -82,6 +83,17 @@ export function RunDetail({ id }: { id: string }) {
                   ) : (
                     <span className="font-mono">{run.document_slug} (new)</span>
                   ))}
+                {run.source && (
+                  <span>
+                    · <SourceLink source={run.source} />
+                  </span>
+                )}
+                {run.template && (
+                  <span>
+                    · template {run.template}
+                    {run.theme && `, theme ${run.theme}`}
+                  </span>
+                )}
                 <span>· depth {run.knobs.depth}</span>
                 <span>· created {formatDateTime(run.created_at)}</span>
                 {run.snapshot_as_of && <span>· sources as of {formatDateTime(run.snapshot_as_of)}</span>}
@@ -213,9 +225,10 @@ function SegmentCard({
           {usd(s.cost_usd)} <span className="text-neutral-400">/ {usd(s.estimate_usd)}</span>
         </span>
       </div>
-      {(s.artifacts.length > 0 || s.draft_import || s.error) && (
+      {(s.artifacts.length > 0 || s.draft_import || s.items_check || s.error) && (
         <div className="space-y-2 border-t border-neutral-100 px-4 py-2.5 text-sm">
           {s.error && <p className="text-rose-700">{s.error}</p>}
+          {s.items_check && <ItemsCheckLine check={s.items_check} />}
           {s.draft_import && <DraftImportLine imp={s.draft_import} />}
           {s.artifacts.length > 0 && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} />}
         </div>
@@ -247,7 +260,39 @@ function DraftImportLine({ imp }: { imp: NonNullable<SegmentOut["draft_import"]>
       </Link>
       {imp.created === false && " (same content as an existing version)"}
       {imp.warnings.length > 0 && <span className="text-amber-700"> · {imp.warnings.join(", ")}</span>}
+      {imp.prd_links && (
+        <span data-testid="prd-links">
+          {" "}
+          · {imp.prd_links.resolved} link{imp.prd_links.resolved === 1 ? "" : "s"} to PRD sections
+          {imp.prd_links.unresolved.length > 0 && (
+            <span className="text-amber-700">
+              , {imp.prd_links.unresolved.length} not found: {imp.prd_links.unresolved.join(", ")}
+            </span>
+          )}
+        </span>
+      )}
     </p>
+  );
+}
+
+/** O4b: the check of roadmap_items.yaml, counts by horizon and every problem found. */
+function ItemsCheckLine({ check }: { check: NonNullable<SegmentOut["items_check"]> }) {
+  const horizons = Object.entries(check.by_horizon).map(([h, n]) => `${n} ${h}`);
+  return (
+    <div data-testid="items-check">
+      <p className="text-neutral-700">
+        {check.items} roadmap item{check.items === 1 ? "" : "s"}
+        {horizons.length > 0 && `: ${horizons.join(", ")}`}
+        {check.problems.length === 0 && " · no problems"}
+      </p>
+      {check.problems.length > 0 && (
+        <ul className="mt-1 space-y-0.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-900">
+          {check.problems.map((p, i) => (
+            <li key={i}>{p.message}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

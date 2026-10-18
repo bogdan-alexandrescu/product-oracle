@@ -100,7 +100,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Documents */
+        /**
+         * List Documents
+         * @description Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries
+         *     its latest and latest approved version and the latest version's provenance.
+         */
         get: operations["list_documents"];
         put?: never;
         post?: never;
@@ -2815,7 +2819,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
             /**
              * Status
              * @enum {string}
@@ -3230,6 +3234,7 @@ export interface components {
             as_of: string;
             /** Banner */
             banner: string;
+            source?: components["schemas"]["VersionSource"] | null;
             /** Theme */
             theme: string | null;
             /** Theme Name */
@@ -3271,12 +3276,23 @@ export interface components {
              * @enum {string}
              */
             status: "draft" | "in_review" | "approved";
+            /**
+             * Kind
+             * @default prd
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
             /** Template */
             template?: string | null;
             /** Template Version */
             template_version?: string | null;
+            /** Theme */
+            theme?: string | null;
             /** Latest Version */
             latest_version?: number | null;
+            /** Approved Version */
+            approved_version?: number | null;
+            source?: components["schemas"]["VersionSource"] | null;
             /**
              * Created At
              * Format: date-time
@@ -3309,12 +3325,23 @@ export interface components {
              * @enum {string}
              */
             status: "draft" | "in_review" | "approved";
+            /**
+             * Kind
+             * @default prd
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
             /** Template */
             template?: string | null;
             /** Template Version */
             template_version?: string | null;
+            /** Theme */
+            theme?: string | null;
             /** Latest Version */
             latest_version?: number | null;
+            /** Approved Version */
+            approved_version?: number | null;
+            source?: components["schemas"]["VersionSource"] | null;
             /**
              * Created At
              * Format: date-time
@@ -3340,6 +3367,8 @@ export interface components {
             document_id?: string | null;
             /** Slug */
             slug?: string | null;
+            /** Kind */
+            kind?: ("prd" | "roadmap") | null;
             /** Version */
             version?: number | null;
             /** Created */
@@ -3351,6 +3380,8 @@ export interface components {
             warnings: string[];
             /** Error */
             error?: string | null;
+            source?: components["schemas"]["VersionSource"] | null;
+            prd_links?: components["schemas"]["PrdLinks"] | null;
         };
         /** EdgeCreate */
         EdgeCreate: {
@@ -4039,13 +4070,17 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
             /** Title */
             title: string;
             /** Description */
             description: string;
             /** Requires Document */
             requires_document: boolean;
+            /** Target Kind */
+            target_kind?: ("prd" | "roadmap") | null;
+            /** Source Kind */
+            source_kind?: ("prd" | "roadmap") | null;
             /** Segments */
             segments: components["schemas"]["FlowSegmentOut"][];
         };
@@ -4065,7 +4100,7 @@ export interface components {
              * Checkpoint
              * @enum {string}
              */
-            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review";
+            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
             /**
              * Approver Role
              * @enum {string}
@@ -4206,7 +4241,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
             /**
              * Status
              * @enum {string}
@@ -4243,7 +4278,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -4431,6 +4466,29 @@ export interface components {
             /** Fetched At */
             fetched_at: string | null;
             confidence: components["schemas"]["ConfidenceOut"];
+        };
+        /**
+         * ItemsCheck
+         * @description The check of roadmap_items.yaml (oracle.runs.roadmap).
+         */
+        ItemsCheck: {
+            /** Items */
+            items: number;
+            /** By Horizon */
+            by_horizon: {
+                [key: string]: number;
+            };
+            /** Problems */
+            problems: components["schemas"]["ItemsProblem"][];
+        };
+        /** ItemsProblem */
+        ItemsProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Item */
+            item?: string | null;
         };
         /**
          * JobCreate
@@ -4779,6 +4837,22 @@ export interface components {
             readers?: ("founder" | "product_eng" | "leadership" | "engineers_or_agents") | null;
             /** Model Driven */
             model_driven?: boolean | null;
+        };
+        /**
+         * PrdLinks
+         * @description Cross-document links from a roadmap draft to its PRD version's sections.
+         */
+        PrdLinks: {
+            /**
+             * Resolved
+             * @default 0
+             */
+            resolved: number;
+            /**
+             * Unresolved
+             * @default []
+             */
+            unresolved: string[];
         };
         /**
          * Preferences
@@ -5321,9 +5395,17 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
             /** Document */
             document?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Source Version */
+            source_version?: number | null;
+            /** Template */
+            template?: string | null;
+            /** Theme */
+            theme?: string | null;
             /**
              * @default {
              *       "depth": "standard",
@@ -5344,7 +5426,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
             /** Flow Title */
             flow_title: string;
             /**
@@ -5356,6 +5438,13 @@ export interface components {
             document_id?: string | null;
             /** Document Slug */
             document_slug?: string | null;
+            /** Document Kind */
+            document_kind?: ("prd" | "roadmap") | null;
+            source?: components["schemas"]["VersionSource"] | null;
+            /** Template */
+            template?: string | null;
+            /** Theme */
+            theme?: string | null;
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Spent Usd */
@@ -5372,7 +5461,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
             /** Error */
             error?: string | null;
             knobs: components["schemas"]["KnobsOut"];
@@ -5401,6 +5490,14 @@ export interface components {
         RunPatch: {
             /** Document */
             document?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Source Version */
+            source_version?: number | null;
+            /** Template */
+            template?: string | null;
+            /** Theme */
+            theme?: string | null;
             knobs?: components["schemas"]["KnobsIn"] | null;
         };
         /** RunSummary */
@@ -5414,7 +5511,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap";
             /** Flow Title */
             flow_title: string;
             /**
@@ -5426,6 +5523,13 @@ export interface components {
             document_id?: string | null;
             /** Document Slug */
             document_slug?: string | null;
+            /** Document Kind */
+            document_kind?: ("prd" | "roadmap") | null;
+            source?: components["schemas"]["VersionSource"] | null;
+            /** Template */
+            template?: string | null;
+            /** Theme */
+            theme?: string | null;
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Spent Usd */
@@ -5442,7 +5546,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
             /** Error */
             error?: string | null;
         };
@@ -5657,7 +5761,7 @@ export interface components {
              * Checkpoint
              * @enum {string}
              */
-            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review";
+            checkpoint: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review";
             /** Checkpoint On */
             checkpoint_on: boolean;
             /** Estimate Usd */
@@ -5671,6 +5775,7 @@ export interface components {
             /** Attempts */
             attempts: components["schemas"]["SegmentAttempt"][];
             draft_import?: components["schemas"]["DraftImport"] | null;
+            items_check?: components["schemas"]["ItemsCheck"] | null;
             /** Started At */
             started_at?: string | null;
             /** Finished At */
@@ -6666,6 +6771,7 @@ export interface components {
              * @enum {string}
              */
             brief_source: "draft" | "template" | "full_heading" | "none";
+            source?: components["schemas"]["VersionSource"] | null;
             /**
              * Created At
              * Format: date-time
@@ -6706,6 +6812,36 @@ export interface components {
             changes?: components["schemas"]["ChangesReport"] | null;
             latest_job?: components["schemas"]["LlmJobOut"] | null;
         };
+        /**
+         * VersionSource
+         * @description Provenance: the document version this version was built from (a roadmap's
+         *     approved PRD version, O4b).
+         */
+        VersionSource: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd" | "roadmap";
+            /** Version */
+            version: number;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Approved At */
+            approved_at?: string | null;
+        };
         /** VersionSummary */
         VersionSummary: {
             /**
@@ -6739,6 +6875,7 @@ export interface components {
              * @enum {string}
              */
             brief_source: "draft" | "template" | "full_heading" | "none";
+            source?: components["schemas"]["VersionSource"] | null;
             /**
              * Created At
              * Format: date-time
@@ -6991,7 +7128,9 @@ export interface operations {
     };
     list_documents: {
         parameters: {
-            query?: never;
+            query?: {
+                kind?: ("prd" | "roadmap") | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -7005,6 +7144,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

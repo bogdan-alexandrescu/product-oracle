@@ -14,6 +14,7 @@ from oracle.docs import service
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import (
     DiffOut,
+    DocumentKind,
     DocumentOut,
     DocumentSummary,
     ImportErrorResponse,
@@ -42,8 +43,10 @@ def _draft_rejected(exc: DraftError) -> JSONResponse:
 
 
 @router.get("", response_model=list[DocumentSummary])
-async def list_documents(db: TenantDB) -> list[DocumentSummary]:
-    return await service.list_documents(db)
+async def list_documents(db: TenantDB, kind: DocumentKind | None = None) -> list[DocumentSummary]:
+    """Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries
+    its latest and latest approved version and the latest version's provenance."""
+    return await service.list_documents(db, kind)
 
 
 @router.get("/{doc}", response_model=DocumentOut)

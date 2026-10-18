@@ -20,7 +20,7 @@ from oracle.auth.models import ROLES
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-FLOWS = ("baseline_to_prd", "feedback_loop")
+FLOWS = ("baseline_to_prd", "feedback_loop", "prd_to_roadmap")
 RUN_STATUSES = (
     "draft",
     "awaiting_approval",
@@ -32,7 +32,15 @@ RUN_STATUSES = (
     "cancelled",
 )
 SEGMENT_STATUSES = ("pending", "running", "succeeded", "failed", "cancelled")
-CHECKPOINT_KINDS = ("baseline_confirm", "feature_set", "priority_order", "prd_review", "eng_review")
+CHECKPOINT_KINDS = (
+    "baseline_confirm",
+    "feature_set",
+    "priority_order",
+    "prd_review",
+    "eng_review",
+    "roadmap_items",
+    "roadmap_review",
+)
 CHECKPOINT_STATUSES = ("pending", "approved", "changes_requested", "skipped")
 
 # US dollars to four decimal places: enough for per-call model costs.

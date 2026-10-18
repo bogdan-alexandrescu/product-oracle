@@ -14,6 +14,10 @@ O1f: an export is of the full layer (every section, as before) or of the brief l
 (the version's brief sections, then the Sources and data points appendix). In a brief
 export, links to detail sections that are not in it keep their text and lose the
 link. The deck (oracle.export.deck) is built from the brief layer too.
+
+O4b: links to another document's version (``/documents/<slug>/v/<n>#<section>``, a
+roadmap's links to its PRD) become absolute URLs to that section in the app, and a
+version built from another one (a roadmap from its PRD version) says so in its banner.
 """
 
 import re
@@ -32,9 +36,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import CITATION_STRIP_RE
+from oracle.docs.schemas import VersionSource
 from oracle.templates.models import Template, TemplateVersion, Theme
 
 HERE = Path(__file__).resolve().parent
@@ -75,6 +81,21 @@ class ExportVersion:
     layer: str = "full"
     # Every section of the version, whatever the layer (the deck expands detail).
     all_sections: list[Section] = field(default_factory=list)
+    # Provenance (O4b): the document version this one was built from.
+    source: VersionSource | None = None
+
+    @property
+    def source_label(self) -> str | None:
+        """ "From <PRD title> v<n>" for a version built from another document's."""
+        if self.source is None:
+            return None
+        return f"From {self.source.title} v{self.source.version}"
+
+    @property
+    def source_url(self) -> str | None:
+        if self.source is None:
+            return None
+        return app_url(f"/documents/{self.source.slug}/v/{self.source.version}")
 
     @property
     def status(self) -> str:
@@ -135,6 +156,23 @@ def apply_layer(ev: ExportVersion, layer: str) -> ExportVersion:
 
 
 _SECTION_LINK = re.compile(r'<a href="#([^"]+)">(.*?)</a>', re.S)
+# A link to another document's version in rendered HTML, with its optional section.
+_DOC_LINK = re.compile(r'href="(/documents/[A-Za-z0-9][A-Za-z0-9_.-]*/v/\d+)(?:#([^"]*))?"')
+
+
+def app_url(path: str) -> str:
+    return get_settings().app_url.rstrip("/") + path
+
+
+def absolute_doc_links(html: str) -> str:
+    """Links to another document's version open that version in the app, at the
+    section (the app's section anchors are ``s-<id>``)."""
+
+    def sub(m: re.Match[str]) -> str:
+        fragment = f"#s-{m.group(2)}" if m.group(2) else ""
+        return f'href="{escape(app_url(m.group(1)))}{fragment}"'
+
+    return _DOC_LINK.sub(sub, html)
 
 
 def unlink_missing(html: str, present: set[str]) -> str:
@@ -177,6 +215,11 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
         latest_number=latest or version.number,
         all_sections=ordered,
     )
+    if version.source_version_id is not None:
+        from oracle.docs.service import version_sources
+
+        sources = await version_sources(db, [version.source_version_id])
+        ev.source = sources.get(version.source_version_id)
     await _resolve_theme(db, ev)
     return ev
 
@@ -332,7 +375,9 @@ def build_context(ev: ExportVersion) -> dict:
                 key=s.section_key,
                 level=min(max(s.level, 1), 6),
                 heading=Markup(md.renderInline(heading, env)),
-                body=Markup(unlink_missing(md.render(s.body_md or "", env), present)),
+                body=Markup(
+                    absolute_doc_links(unlink_missing(md.render(s.body_md or "", env), present))
+                ),
             )
         )
     # Unused citations go last, in front-matter order.
@@ -370,6 +415,8 @@ def build_context(ev: ExportVersion) -> dict:
         "css": Markup(stylesheet()),
         "layer": ev.layer,
         "layer_label": ev.layer_label,
+        "source_label": ev.source_label,
+        "source_url": ev.source_url,
     }
 
 
@@ -535,7 +582,9 @@ def build_themed_context(ev: ExportVersion) -> dict:
             level=min(max(s.level, 1), 6),
             heading=Markup(md.renderInline(heading, env)),
             body=Markup(
-                unlink_missing(_decorate(md.render(_body_md(s, md is plain), env)), present)
+                absolute_doc_links(
+                    unlink_missing(_decorate(md.render(_body_md(s, md is plain), env)), present)
+                )
             ),
             # Roadmap items (cards) that say they serve no confirmed goal get the flag.
             flagged=ev.document.kind == "roadmap"
@@ -648,6 +697,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "theme_css": Markup(theme.css or ""),
         "layer": ev.layer,
         "layer_label": ev.layer_label,
+        "source_label": ev.source_label,
+        "source_url": ev.source_url,
     }
 
 
@@ -669,6 +720,8 @@ def banner_line(ev: ExportVersion) -> str:
         parts.insert(2, ev.layer_label.lower())
     if ev.version.approved_at is not None:
         parts.append(f"approved {_format_dt(ev.version.approved_at)}")
+    if ev.source is not None:
+        parts.append(f"from {ev.source.title} ({ev.source.slug}) version {ev.source.version}")
     # "--" would end the HTML comment early.
     return "Product Oracle export: " + " · ".join(parts).replace("--", "- -")
 

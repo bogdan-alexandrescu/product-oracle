@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
 import { CommentsPanel, type PlacedComment } from "@/components/CommentsPanel";
 import { DocToolbar } from "@/components/DocToolbar";
@@ -399,6 +400,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           </>
         )}
         <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
+        {document_?.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
         {version && (version.approved_at || canDecide) && (
           <ApproveButton
             doc={doc}
@@ -422,6 +424,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
               <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
                 <span className="font-medium text-neutral-800">Version {version.number}</span>
                 <span>Imported {formatDateTime(version.created_at)}</span>
+                {version.source && <SourceLink source={version.source} />}
                 {version.snapshot && <span>Sources as of {version.snapshot}</span>}
                 <span>
                   {reviewedCount}/{version.sections.length} sections reviewed · {lockedCount} locked

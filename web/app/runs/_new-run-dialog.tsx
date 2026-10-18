@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -7,7 +8,7 @@ import { Button, ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CHECKPOINT_LABEL, RunsWhere, usd, type EstimateOut, type FlowCatalog } from "./_lib";
+import { CHECKPOINT_LABEL, EstimateSummary, RunsWhere, usd, type EstimateOut, type FlowCatalog } from "./_lib";
 
 type Flow = FlowCatalog["flows"][number];
 type Depth = "quick" | "standard" | "deep";
@@ -29,7 +30,10 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const flow = catalog.data?.flows.find((f) => f.key === flowKey);
+  // A flow that reads an approved document (prd_to_roadmap) starts from the Roadmap screen,
+  // where the PRD is picked; this dialog offers the others.
+  const flows = useMemo(() => catalog.data?.flows.filter((f) => !f.source_kind) ?? [], [catalog.data]);
+  const flow = flows.find((f) => f.key === flowKey);
 
   // Choices on top of the flow's defaults; a new flow starts from its defaults again.
   const segmentRoles = (s: Flow["segments"][number]) => roles[s.name] ?? s.roles;
@@ -131,7 +135,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
               <fieldset>
                 <legend className="mb-1.5 font-medium text-neutral-800">Flow</legend>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {catalog.data.flows.map((f) => (
+                  {flows.map((f) => (
                     <label
                       key={f.key}
                       className={`cursor-pointer rounded-md border px-3 py-2 ${f.key === flowKey ? "border-neutral-900 bg-neutral-50" : "border-neutral-200"}`}
@@ -149,11 +153,20 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                     </label>
                   ))}
                 </div>
+                {catalog.data.flows.some((f) => f.source_kind) && (
+                  <p className="mt-1.5 text-xs text-neutral-500" data-testid="roadmap-flow-note">
+                    A roadmap from an approved PRD starts from the{" "}
+                    <Link href="/roadmap" className="underline underline-offset-2">
+                      Roadmap
+                    </Link>{" "}
+                    screen.
+                  </p>
+                )}
               </fieldset>
 
               <label className="block">
                 <span className="mb-1 block font-medium text-neutral-800">
-                  {flow.requires_document ? "PRD to revise" : "PRD document"}
+                  {flow.requires_document ? "PRD or roadmap to revise" : "PRD document"}
                 </span>
                 {flow.requires_document ? (
                   <select className={inputCls} value={document} onChange={(e) => change(setDocument)(e.target.value)}>
@@ -161,6 +174,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                     {docOptions.map((d) => (
                       <option key={d.id} value={d.slug}>
                         {d.title}
+                        {d.kind === "roadmap" ? " (roadmap)" : ""}
                       </option>
                     ))}
                   </select>
@@ -174,7 +188,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                       onChange={(e) => change(setDocument)(e.target.value)}
                     />
                     <datalist id="run-documents">
-                      {docOptions.map((d) => (
+                      {docOptions.filter((d) => d.kind === "prd").map((d) => (
                         <option key={d.id} value={d.slug}>
                           {d.title}
                         </option>
@@ -251,35 +265,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                 </ol>
               </fieldset>
 
-              {estimate && (
-                <section aria-label="Estimate" className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2.5" data-testid="estimate">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {estimate.segments.map((s) => (
-                        <tr key={s.seq}>
-                          <td className="py-0.5 text-neutral-700">{s.title}</td>
-                          <td className="py-0.5 text-right tabular-nums text-neutral-700">{usd(s.estimate_usd)}</td>
-                        </tr>
-                      ))}
-                      <tr className="border-t border-neutral-200 font-semibold">
-                        <td className="pt-1.5">Estimate</td>
-                        <td className="pt-1.5 text-right tabular-nums" data-testid="estimate-total">
-                          {usd(estimate.total_usd)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  {estimate.needs_approval && (
-                    <p className="mt-2 text-xs text-amber-800">
-                      Over {usd(estimate.approval_threshold_usd)}: an owner approves the cost before the run starts.
-                    </p>
-                  )}
-                  {!estimate.within_budget && (
-                    <p className="mt-2 text-xs text-rose-700">Over the budget: lower the depth or roles, or raise the budget.</p>
-                  )}
-                  <p className="mt-1 text-xs text-neutral-500">Spending past 1.5× the estimate pauses the run and asks an owner.</p>
-                </section>
-              )}
+              {estimate && <EstimateSummary estimate={estimate} />}
               {error && <ErrorNote>{error}</ErrorNote>}
             </>
           )}

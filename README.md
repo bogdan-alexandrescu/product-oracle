@@ -109,7 +109,9 @@ npx playwright test -c playwright.real.config.ts
 
 Settings are environment variables with the `ORACLE_` prefix (see
 `api/oracle/config.py`): `ORACLE_DATABASE_URL`, `ORACLE_SECRET_KEY` (signs the session
-cookie; set it outside local dev), `ORACLE_COOKIE_SECURE`, `ORACLE_CORS_ORIGINS`, and the `ORACLE_IAP_*` settings below.
+cookie; set it outside local dev), `ORACLE_COOKIE_SECURE`, `ORACLE_CORS_ORIGINS`, `ORACLE_APP_URL`
+(where people open the web app, default `http://localhost:3000`; exports turn a roadmap's
+links to its PRD's sections into absolute URLs under it), and the `ORACLE_IAP_*` settings below.
 The web app reads `API_INTERNAL_URL` (default `http://localhost:8000`) at build time.
 
 ## Google sign-in (IAP)

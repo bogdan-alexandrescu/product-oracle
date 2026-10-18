@@ -7,6 +7,11 @@ next segment's prompt. Each segment's run token carries only the scopes it needs
 
 Knobs: ``depth`` (quick | standard | deep), agent ``roles`` per segment, which
 ``checkpoints`` are on (all by default) and ``budget_usd`` (a cap on the estimate).
+
+A segment that imports a draft writes ``<kind>.md`` (``prd.md`` or ``roadmap.md``) for
+the run's target document; ``{draft}`` and ``{doc}`` in a segment's outputs and task
+stand for that file and the document kind's name, so the feedback loop works on PRDs
+and roadmaps alike.
 """
 
 from dataclasses import dataclass, field
@@ -32,7 +37,10 @@ MCP_TOOLS = {
     "get_source_item": "one source item at the run's pinned snapshot, with its confidence",
     "get_baseline": "the baseline graph: goals, products, features, edges, evidence",
     "trace_feature": "features traced to goals; those serving no confirmed goal flagged",
-    "get_document": "a PRD and its versions",
+    "get_document": "a document (PRD or roadmap) and its versions, with their provenance",
+    "get_document_markdown": "a document version as markdown (the latest unless one is given)",
+    "get_priorities": "the features ranked by goal-weighted priority, every number explained, "
+    "with each feature's depends_on and dependents",
     "get_feedback_package": "a version's open feedback items and locked sections",
     "propose_change": "propose a baseline change (locked items become proposals)",
     "push_draft": "hand back a draft for import as the document's next version",
@@ -75,11 +83,28 @@ class SegmentDef:
     task: str
     # The lowest role that may decide this segment's checkpoint.
     approver_role: str = "approver"
-    # Import prd.md as the document's next version when the segment succeeds.
-    imports_prd: bool = False
+    # Import the draft (``prd.md`` or ``roadmap.md``, the target's kind) as the target
+    # document's next version when the segment succeeds.
+    imports_draft: bool = False
     # Merge the segment's baseline.yaml into the baseline (locked items get proposals).
     imports_baseline: bool = False
     tools: tuple[str, ...] = ()
+
+    def outputs_for(self, kind: str) -> tuple[str, ...]:
+        """The files the segment writes for a target document of ``kind``."""
+        return tuple(o.replace("{draft}", draft_file(kind)) for o in self.outputs)
+
+    def task_for(self, kind: str) -> str:
+        return self.task.replace("{draft}", draft_file(kind)).replace("{doc}", KIND_NAMES[kind])
+
+
+# Document kinds a run writes, and how prompts name them.
+KIND_NAMES = {"prd": "PRD", "roadmap": "roadmap"}
+
+
+def draft_file(kind: str) -> str:
+    """The draft file a segment writes for a document of ``kind``."""
+    return f"{kind}.md"
 
 
 @dataclass(frozen=True)
@@ -90,6 +115,11 @@ class FlowDef:
     segments: tuple[SegmentDef, ...]
     # True: the run needs an existing document with at least one version.
     requires_document: bool = False
+    # The kind of document the run writes; None: the existing document's kind.
+    target_kind: str | None = "prd"
+    # The kind of the approved document the run reads (prd_to_roadmap: a PRD); None:
+    # the run reads no source document.
+    source_kind: str | None = None
 
     def segment(self, name: str) -> SegmentDef:
         return next(s for s in self.segments if s.name == name)
@@ -163,7 +193,7 @@ FLOWS: dict[str, FlowDef] = {
                     scopes=(*READ, "read:documents", "write:drafts"),
                     outputs=("prd.md",),
                     checkpoint="prd_review",
-                    imports_prd=True,
+                    imports_draft=True,
                     task="Write the PRD draft for the approved, ordered feature set as prd.md: "
                     "markdown with YAML front matter (title, template, citations) and a "
                     "{#id} on every heading. Every claim cites; no evidence in the body, a "
@@ -181,24 +211,95 @@ FLOWS: dict[str, FlowDef] = {
         FlowDef(
             key="feedback_loop",
             title="Feedback loop",
-            description="Pull open feedback on the PRD, write the next draft, review it.",
+            description="Pull open feedback on a PRD or roadmap, write the next draft, review it.",
             requires_document=True,
+            target_kind=None,
             segments=(
                 SegmentDef(
                     name="next_draft",
                     title="Next draft",
                     roles=("analyst", "writer"),
                     scopes=(*READ, "read:documents", "write:drafts"),
-                    outputs=("prd.md",),
+                    outputs=("{draft}",),
                     checkpoint="prd_review",
-                    imports_prd=True,
+                    imports_draft=True,
                     task="Address every open feedback item listed below in the next draft of "
-                    "the PRD. Do not change locked sections unless an item asks for it. "
-                    "Write the draft as prd.md with a resolutions list in its front matter "
+                    "the {doc}. Do not change locked sections unless an item asks for it. "
+                    "Keep the document's template, its front matter (document, kind, "
+                    "template, template_version, brief) and its section ids. Write the "
+                    "draft as {draft} with a resolutions list in its front matter "
                     "(feedback_id, status addressed | declined, note) for every item.",
                     tools=(
                         "get_document",
+                        "get_document_markdown",
                         "get_feedback_package",
+                        "get_baseline",
+                        "search",
+                        "get_source_item",
+                        "push_draft",
+                    ),
+                ),
+            ),
+        ),
+        FlowDef(
+            key="prd_to_roadmap",
+            title="Roadmap from an approved PRD",
+            description="Roadmap items from an approved PRD version (horizon, milestone, "
+            "dependencies, priority), then a roadmap draft in the chosen template.",
+            target_kind="roadmap",
+            source_kind="prd",
+            segments=(
+                SegmentDef(
+                    name="roadmap_items",
+                    title="Roadmap items",
+                    roles=("analyst", "prioritizer"),
+                    scopes=(*READ, "read:documents"),
+                    outputs=("roadmap_items.yaml",),
+                    checkpoint="roadmap_items",
+                    task="Turn the approved PRD version below into roadmap items. One item "
+                    "per PRD feature or milestone, each with: id (a slug), title, outcome "
+                    "(the change for customers or the business, not a feature name), "
+                    "horizon (now | next | later, on the company's horizons below), "
+                    "milestone (name; a date only in now and only when a source gives a "
+                    "date or an estimate, with that source as date_source), depends_on "
+                    "(ids of other items, from the depends_on / blocks edges), priority "
+                    "(score and rank from the priority order, with the explanation), "
+                    "confidence (high | medium | low) and prd_section (the id of the PRD "
+                    "section it comes from). List items in an order that respects "
+                    "dependencies: an item comes after the items it depends on and is "
+                    "never in an earlier horizon than them. Write roadmap_items.yaml: "
+                    "version: 1, prd: {document, version}, items: [...].",
+                    tools=(
+                        "get_document",
+                        "get_document_markdown",
+                        "get_baseline",
+                        "trace_feature",
+                        "get_priorities",
+                        "search",
+                        "get_source_item",
+                    ),
+                ),
+                SegmentDef(
+                    name="roadmap_draft",
+                    title="Roadmap draft",
+                    roles=("writer", "critic"),
+                    scopes=(*READ, "read:documents", "write:drafts"),
+                    outputs=("roadmap.md",),
+                    checkpoint="roadmap_review",
+                    imports_draft=True,
+                    task="Write the roadmap draft from the approved roadmap_items.yaml as "
+                    "roadmap.md in the roadmap template below: keep its front matter "
+                    "(document, title, kind: roadmap, template, template_version, theme, "
+                    "brief) and a {#id} on every heading; fill the brief sections in plain "
+                    "language and put the detail under Full version. No citations, quotes "
+                    "or evidence in the body; a final Sources and data points section "
+                    "lists every source, every data point (value, as of, source) and the "
+                    "evidence by section, with citations in the front matter. Each item "
+                    "links back to the PRD section it comes from with a cross-document "
+                    "link of the form given below.",
+                    tools=(
+                        "get_document",
+                        "get_document_markdown",
                         "get_baseline",
                         "search",
                         "get_source_item",
@@ -274,6 +375,49 @@ def segment_estimate(segment: SegmentDef, knobs: Knobs) -> Decimal:
 
 
 @dataclass(frozen=True)
+class SourceContext:
+    """The approved PRD version a roadmap run reads, with what the agents need from the
+    baseline: confirmed goals and horizons (B2), the priority order and the edges."""
+
+    slug: str
+    title: str
+    version: int
+    markdown: str
+    # (section id, heading) in document order.
+    sections: list[tuple[str, str]] = field(default_factory=list)
+    # The priority order: rank, key, title, score, flags, depends_on, explanation.
+    priorities: list[dict[str, Any]] = field(default_factory=list)
+    priority_method: str = "goal_weighted"
+    # depends_on and blocks edges between baseline entities: src, type, dst.
+    edges: list[dict[str, str]] = field(default_factory=list)
+    # Confirmed goals: key, title, metric, target, horizon.
+    goals: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RoadmapContext:
+    slug: str
+    template: str
+    template_version: int
+    theme: str | None
+    skeleton: str
+
+
+# B2 horizons (defaults, veto any time) and the roadmap columns they map to (O4).
+HORIZONS = (
+    ("now", "short", "the current quarter"),
+    ("next", "medium", "the next two quarters"),
+    ("later", "long", "12 to 24 months"),
+)
+
+
+def prd_link(slug: str, version: int, section: str) -> str:
+    """A cross-document link to a PRD section: the app opens it in the PRD view, exports
+    make it absolute (oracle.export.render)."""
+    return f"/documents/{slug}/v/{version}#{section}"
+
+
+@dataclass(frozen=True)
 class PromptContext:
     run_id: str
     document: str | None
@@ -291,9 +435,16 @@ class PromptContext:
     change_request: str | None = None
     # False until the runtime can attach Oracle's MCP server (SwarmCloud #1433).
     mcp_reachable: bool = True
+    # The kind of the document the run writes (prd | roadmap).
+    kind: str = "prd"
+    # prd_to_roadmap: the approved PRD version the roadmap is built from.
+    source: SourceContext | None = None
+    # prd_to_roadmap: the target roadmap's template, theme and starting skeleton.
+    roadmap: RoadmapContext | None = None
 
 
 MAX_PRIOR_CHARS = 20_000
+MAX_SOURCE_CHARS = 30_000
 
 
 def step_prompt(
@@ -305,11 +456,11 @@ def step_prompt(
         f"You are the {r.title.lower()} ({r.description.lower()}) in Product Oracle's "
         f"{flow.title} flow, segment '{segment.title}'.",
         f"Run {ctx.run_id}"
-        + (f", PRD document '{ctx.document}'" if ctx.document else "")
+        + (f", {KIND_NAMES[ctx.kind]} document '{ctx.document}'" if ctx.document else "")
         + (f", sources pinned at {ctx.snapshot_as_of}" if ctx.snapshot_as_of else "")
         + ".",
         "",
-        "Task: " + segment.task,
+        "Task: " + segment.task_for(ctx.kind),
         DEPTH_GUIDANCE[ctx.depth],
         "",
     ]
@@ -332,7 +483,9 @@ def step_prompt(
         f"{ctx.low_confidence:g} as low confidence instead of stating it as fact.",
     ]
     if last:
-        lines.append("Write these files as artifacts: " + ", ".join(segment.outputs) + ".")
+        lines.append(
+            "Write these files as artifacts: " + ", ".join(segment.outputs_for(ctx.kind)) + "."
+        )
     else:
         lines.append(f"Write your working notes to {role}.md for the next step.")
     if ctx.change_request:
@@ -348,6 +501,10 @@ def step_prompt(
         ]
     if ctx.locked_sections:
         lines += ["", "Locked (approved) sections: " + ", ".join(ctx.locked_sections)]
+    if ctx.source is not None:
+        lines += source_lines(ctx.source)
+    if ctx.roadmap is not None:
+        lines += roadmap_lines(ctx.roadmap, ctx.source)
     if ctx.prior_outputs:
         lines += ["", "Outputs of earlier segments:"]
         budget = MAX_PRIOR_CHARS
@@ -359,6 +516,68 @@ def step_prompt(
                 lines.append("(truncated)")
                 break
     return "\n".join(lines)
+
+
+def source_lines(src: SourceContext) -> list[str]:
+    """The prd_to_roadmap prompt's inputs: the PRD version, horizons, goals, priority
+    order and dependency edges."""
+    lines = [
+        "",
+        f"Source: approved PRD '{src.title}' ({src.slug}), version {src.version}. Read it "
+        f"with get_document_markdown(doc={src.slug}, version={src.version}); it is below too.",
+        "PRD section ids: " + ", ".join(f"{k} ({h})" for k, h in src.sections),
+        "",
+        "Horizons (B2): "
+        + "; ".join(f"{col} = {name} term, {span}" for col, name, span in HORIZONS)
+        + ". Dated milestones only in now, and only from a source that gives a date or an "
+        "estimate (O4).",
+    ]
+    if src.goals:
+        lines += ["", "Confirmed goals:"]
+        for g in src.goals:
+            extra = ", ".join(f"{k} {g[k]}" for k in ("metric", "target", "horizon") if g.get(k))
+            lines.append(f"- {g['key']}: {g['title']}" + (f" ({extra})" if extra else ""))
+    else:
+        lines += ["", "Confirmed goals: none yet; say so where an item serves no goal."]
+    lines += ["", f"Priority order ({src.priority_method}, dependencies respected):"]
+    if src.priorities:
+        for p in src.priorities:
+            score = "unscored" if p.get("score") is None else f"score {p['score']:g}"
+            flags = f" [{', '.join(p['flags'])}]" if p.get("flags") else ""
+            deps = f"; depends on {', '.join(p['depends_on'])}" if p.get("depends_on") else ""
+            why = f" Why: {p['explanation']}" if p.get("explanation") else ""
+            lines.append(f"{p['rank']}. {p['key']} ({p['title']}), {score}{flags}{deps}.{why}")
+    else:
+        lines.append("- No features in the baseline yet: take the order from the PRD.")
+    lines += ["", "Dependency edges (depends_on / blocks):"]
+    if src.edges:
+        lines += [f"- {e['src']} {e['type']} {e['dst']}" for e in src.edges]
+    else:
+        lines.append("- none recorded")
+    text = src.markdown[:MAX_SOURCE_CHARS]
+    lines += ["", f"--- PRD {src.slug} v{src.version} ---", text]
+    if len(text) < len(src.markdown):
+        lines.append("(truncated: read the rest with get_document_markdown)")
+    return lines
+
+
+def roadmap_lines(rm: RoadmapContext, src: SourceContext | None) -> list[str]:
+    lines = [
+        "",
+        f"Roadmap document '{rm.slug}': template {rm.template} version {rm.template_version}"
+        + (f", theme {rm.theme}" if rm.theme else "")
+        + ". Front matter: document, title, kind: roadmap, template, template_version"
+        + (", theme" if rm.theme else "")
+        + " and the template's brief list, as in the skeleton below.",
+    ]
+    if src is not None:
+        example = prd_link(src.slug, src.version, src.sections[0][0] if src.sections else "id")
+        lines.append(
+            "Link each item to its PRD section as a markdown link to "
+            f"{prd_link(src.slug, src.version, '<section id>')}, e.g. [PRD]({example})."
+        )
+    lines += ["", "--- template skeleton ---", rm.skeleton]
+    return lines
 
 
 def build_steps(

@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from oracle.docs.schemas import VersionSource
+
 ExportLayer = Literal["full", "brief", "deck"]
 ExportFormat = Literal["html", "pdf", "md", "pptx"]
 # O1f: what each layer exports to.
@@ -46,6 +48,8 @@ class DeckOut(BaseModel):
     status: str
     as_of: str
     banner: str
+    # Provenance (O4b): the document version this one was built from.
+    source: VersionSource | None = None
     theme: str | None
     theme_name: str | None
     # Class to put on the element that wraps a slide (next to "deck").

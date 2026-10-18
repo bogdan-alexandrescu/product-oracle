@@ -16,7 +16,7 @@ from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.docs import layers
 from oracle.docs.diff import diff_sections
-from oracle.docs.models import Citation, Document, DocumentVersion, Section
+from oracle.docs.models import DOCUMENT_KINDS, Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, ParsedDraft, is_uuid, parse_draft
 from oracle.docs.schemas import (
     CitationOut,
@@ -27,6 +27,7 @@ from oracle.docs.schemas import (
     SectionOut,
     SectionVerdict,
     VersionOut,
+    VersionSource,
     VersionSummary,
     VersionWarning,
 )
@@ -87,33 +88,122 @@ async def _latest_numbers(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.U
     return dict(rows.all())
 
 
-def _summary(document: Document, latest: int | None) -> dict:
+async def _approved_numbers(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(DocumentVersion.document_id, func.max(DocumentVersion.number))
+        .where(DocumentVersion.document_id.in_(ids), DocumentVersion.approved_at.is_not(None))
+        .group_by(DocumentVersion.document_id)
+    )
+    return dict(rows.all())
+
+
+async def version_sources(
+    db: AsyncSession, source_ids: list[uuid.UUID | None]
+) -> dict[uuid.UUID, VersionSource]:
+    """Provenance by source version id: the document and version each one is."""
+    ids = {i for i in source_ids if i is not None}
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(DocumentVersion, Document)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .where(DocumentVersion.id.in_(ids))
+    )
     return {
-        **DocumentSummary.model_validate(document).model_dump(exclude={"latest_version"}),
-        "latest_version": latest,
+        v.id: VersionSource(
+            document_id=d.id,
+            slug=d.slug,
+            title=d.title,
+            kind=d.kind,  # type: ignore[arg-type]
+            version=v.number,
+            version_id=v.id,
+            approved_at=v.approved_at,
+        )
+        for v, d in rows.all()
     }
 
 
-async def list_documents(db: AsyncSession) -> list[DocumentSummary]:
-    documents = list(await db.scalars(select(Document).order_by(Document.updated_at.desc())))
-    latest = await _latest_numbers(db, [d.id for d in documents])
-    return [DocumentSummary(**_summary(d, latest.get(d.id))) for d in documents]
+def _summary(
+    document: Document,
+    latest: int | None,
+    approved: int | None = None,
+    source: VersionSource | None = None,
+) -> dict:
+    return {
+        **DocumentSummary.model_validate(document).model_dump(
+            exclude={"latest_version", "approved_version", "source"}
+        ),
+        "latest_version": latest,
+        "approved_version": approved,
+        "source": source,
+    }
+
+
+async def list_documents(db: AsyncSession, kind: str | None = None) -> list[DocumentSummary]:
+    stmt = select(Document).order_by(Document.updated_at.desc())
+    if kind:
+        stmt = stmt.where(Document.kind == kind)
+    documents = list(await db.scalars(stmt))
+    ids = [d.id for d in documents]
+    latest = await _latest_numbers(db, ids)
+    approved = await _approved_numbers(db, ids)
+    # The latest version's provenance.
+    latest_sources: dict[uuid.UUID, uuid.UUID | None] = {}
+    if latest:
+        rows = await db.execute(
+            select(DocumentVersion.document_id, DocumentVersion.source_version_id)
+            .where(
+                DocumentVersion.document_id.in_(ids),
+                DocumentVersion.source_version_id.is_not(None),
+            )
+            .order_by(DocumentVersion.number)
+        )
+        for doc_id, source_id in rows.all():
+            latest_sources[doc_id] = source_id
+    sources = await version_sources(db, list(latest_sources.values()))
+    return [
+        DocumentSummary(
+            **_summary(
+                d,
+                latest.get(d.id),
+                approved.get(d.id),
+                sources.get(latest_sources.get(d.id)),  # type: ignore[arg-type]
+            )
+        )
+        for d in documents
+    ]
 
 
 async def list_versions(db: AsyncSession, document: Document) -> list[VersionSummary]:
-    rows = await db.scalars(
-        select(DocumentVersion)
-        .where(DocumentVersion.document_id == document.id)
-        .order_by(DocumentVersion.number)
+    rows = list(
+        await db.scalars(
+            select(DocumentVersion)
+            .where(DocumentVersion.document_id == document.id)
+            .order_by(DocumentVersion.number)
+        )
     )
-    return [VersionSummary.model_validate(v) for v in rows]
+    sources = await version_sources(db, [v.source_version_id for v in rows])
+    return [
+        VersionSummary.model_validate(v).model_copy(
+            update={"source": sources.get(v.source_version_id)}  # type: ignore[arg-type]
+        )
+        for v in rows
+    ]
 
 
 async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
     document = await get_document_or_404(db, doc)
     versions = await list_versions(db, document)
-    latest = versions[-1].number if versions else None
-    return DocumentOut(**_summary(document, latest), versions=versions)
+    latest = versions[-1] if versions else None
+    approved = max((v.number for v in versions if v.approved_at), default=None)
+    return DocumentOut(
+        **_summary(
+            document, latest.number if latest else None, approved, latest.source if latest else None
+        ),
+        versions=versions,
+    )
 
 
 async def _latest_verdicts(db: AsyncSession, version_id: uuid.UUID) -> dict[str, SectionVerdict]:
@@ -170,8 +260,12 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
     verdicts = await _latest_verdicts(db, version.id)
     has_brief = any(s.layer == "brief" for s in sections)
     guidance = await version_guidance(db, version) if has_brief else {}
+    source = (await version_sources(db, [version.source_version_id])).get(
+        version.source_version_id  # type: ignore[arg-type]
+    )
     return VersionOut(
-        **VersionSummary.model_validate(version).model_dump(),
+        **VersionSummary.model_validate(version).model_dump(exclude={"source"}),
+        source=source,
         front_matter=version.front_matter,
         sections=[
             SectionOut.model_validate(s).model_copy(
@@ -200,15 +294,42 @@ def _document_mismatch(slug: str, draft: ParsedDraft) -> DraftError:
     )
 
 
+def _kind_mismatch(slug: str, kind: str, expected: str) -> DraftError:
+    return DraftError(
+        [
+            ImportProblem(
+                code="kind_mismatch",
+                message=f"document '{slug}' is a {kind}, not a {expected}",
+            )
+        ]
+    )
+
+
 async def import_draft(
-    db: AsyncSession, doc: str, markdown: str, principal: Principal
+    db: AsyncSession,
+    doc: str,
+    markdown: str,
+    principal: Principal,
+    *,
+    kind: str | None = None,
+    theme: str | None = None,
+    template: tuple[str, str] | None = None,
+    source_version_id: uuid.UUID | None = None,
 ) -> ImportResult:
     """Import a draft as the next version of ``doc``.
+
+    ``kind`` (a run's target kind) is the kind of a document the import creates, and an
+    existing document must be of it; without it a new document takes the front matter's
+    ``kind`` (prd by default). ``theme`` is a new document's theme; ``template`` (key,
+    version) is the document's template when the draft names none. ``source_version_id``
+    is the version's provenance (a roadmap's PRD version).
 
     Raises :class:`DraftError` (422), :class:`NotFoundError` (404, ``doc`` is an
     unknown id) or :class:`ImportConflictError` (409, lost a concurrent import race).
     """
     draft = parse_draft(markdown)
+    if draft.template is None and template is not None:
+        draft.template, draft.template_version = template
 
     document = await find_document(db, doc, for_update=True)
     if document is None:
@@ -216,12 +337,15 @@ async def import_draft(
             raise NotFoundError(f"document '{doc}' not found")
         if draft.document is not None and draft.document != doc:
             raise _document_mismatch(doc, draft)
+        named_kind = draft.front_matter.get("kind")
         document = Document(
             slug=doc,
             title=draft.title,
             status="draft",
+            kind=kind or (named_kind if named_kind in DOCUMENT_KINDS else "prd"),
             template=draft.template,
             template_version=draft.template_version,
+            theme=theme,
         )
         db.add(document)
         try:
@@ -233,6 +357,8 @@ async def import_draft(
     else:
         if draft.document is not None and draft.document != document.slug:
             raise _document_mismatch(document.slug, draft)
+        if kind is not None and document.kind != kind:
+            raise _kind_mismatch(document.slug, document.kind, kind)
         existing = await db.scalar(
             select(DocumentVersion).where(
                 DocumentVersion.document_id == document.id,
@@ -302,6 +428,7 @@ async def import_draft(
         warnings=[w.model_dump() for w in warnings],
         imported_by=principal.id,
         brief_source=brief_source,
+        source_version_id=source_version_id,
     )
     db.add(version)
     try:
@@ -373,6 +500,7 @@ async def import_draft(
             "resolutions": len(draft.resolutions),
             "warnings": [w.code for w in warnings],
             "brief_source": brief_source,
+            **({"source_version_id": str(source_version_id)} if source_version_id else {}),
         },
     )
     await db.commit()

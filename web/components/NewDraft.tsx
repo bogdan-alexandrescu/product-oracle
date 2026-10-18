@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useId, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import { ThemeThumbnail } from "@/components/ThemePreview";
 import { Badge, Button, ErrorNote, INPUT, Loading } from "@/components/ui";
@@ -188,36 +188,27 @@ function useLastChoice(kind: Kind): Choice | null {
   }, [raw]);
 }
 
-// ---------------------------------------------------------------- picker
+// ---------------------------------------------------------------- template and theme choice
 
 type Pick = { key: string | null; source: "user" | "company" };
 
 const recommend = (body: Schemas["RecommendIn"]) => unwrap(api.POST("/v1/drafts/recommend", { body }));
 
-/** New-draft picker: a few questions, the recommended template and theme, overrides, create. */
-export function NewDraft({ kind }: { kind: Kind }) {
-  const router = useRouter();
-  const { role } = useMe();
-  const isOwner = role === "owner";
-  const label = kind === "prd" ? "PRD" : "roadmap";
-  const [prd, setPrd] = useState<PrdAnswers>({});
-  const [roadmap, setRoadmap] = useState<RoadmapAnswers>({});
+/**
+ * The recommended template and theme for `input`, with the user's overrides: shared by
+ * the new-draft picker and Build roadmap (O4b). Before any answer the last choice wins.
+ */
+export function useDraftChoice(input: Schemas["RecommendIn"]) {
+  const kind = input.kind;
   const [templatePick, setTemplatePick] = useState<Pick | null>(null);
   const [themePick, setThemePick] = useState<Pick | null>(null);
-  const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState<"create" | "default" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const last = useLastChoice(kind);
 
-  const input: Schemas["RecommendIn"] = kind === "prd" ? { kind, prd } : { kind, roadmap };
   const live = useLive(input, recommend, 250);
   const rec = live.data;
   const themes = useQuery(`themes|${kind}`, () => unwrap(api.GET("/v1/themes", { params: { query: { kind } } })));
-  const defaults = useQuery("draft-defaults", () => unwrap(api.GET("/v1/drafts/defaults")));
-  const company = defaults.data?.[kind] ?? null;
 
-  const answered = Object.values(kind === "prd" ? prd : roadmap).some((v) => v != null);
+  const answered = Object.values((kind === "prd" ? input.prd : input.roadmap) ?? {}).some((v) => v != null);
   const templates = rec?.templates ?? [];
   const has = (k: string | null | undefined) => !!k && templates.some((t) => t.key === k);
   const themeKeys = new Set((themes.data ?? []).map((t) => t.key));
@@ -237,6 +228,140 @@ export function NewDraft({ kind }: { kind: Kind }) {
   else if (templateKey === rec?.template.key) themeKey = rec?.theme?.key ?? null;
   else if (hasTheme(template?.suggested_theme)) themeKey = template!.suggested_theme;
   else themeKey = rec?.theme?.key ?? null;
+
+  return { kind, live, rec, themes, templates, template, templateKey, templateSource, themeKey, themePick, setTemplatePick, setThemePick };
+}
+
+type DraftChoice = ReturnType<typeof useDraftChoice>;
+
+/** The template cards and theme thumbnails of a draft choice, with the recommended marks. */
+export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
+  const { kind, rec, themes, templates, templateKey, templateSource, themeKey, themePick, setTemplatePick, setThemePick } = choice;
+  // Unique per picker: Next keeps visited pages mounted, and same-named radios would share a group.
+  const id = useId();
+  return (
+    <>
+      <section aria-labelledby={`${id}-template`}>
+        <div className="mb-2 flex flex-wrap items-center gap-3">
+          <h2 id={`${id}-template`} className="text-sm font-semibold text-neutral-700">
+            Template
+          </h2>
+          {templateSource === "last" && <Badge tone="blue">Your last choice</Badge>}
+          {templateSource === "company" && <Badge tone="blue">Company default</Badge>}
+          {rec && templateKey !== rec.template.key && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setTemplatePick({ key: rec.template.key, source: "user" });
+                setThemePick(null);
+              }}
+            >
+              Use the recommended template
+            </Button>
+          )}
+        </div>
+        <div role="radiogroup" aria-labelledby={`${id}-template`} className="grid gap-2 sm:grid-cols-2">
+          {templates.map((t) => {
+            const checked = t.key === templateKey;
+            return (
+              <label
+                key={t.key}
+                data-testid={`template-option-${t.key}`}
+                className={`flex cursor-pointer gap-2.5 rounded-lg border bg-white p-3 text-sm ${
+                  checked ? "border-neutral-900 ring-1 ring-neutral-900" : "border-neutral-200 hover:border-neutral-400"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`${id}-template`}
+                  className="mt-0.5"
+                  checked={checked}
+                  onChange={() => {
+                    setTemplatePick({ key: t.key, source: "user" });
+                    if (themePick?.source !== "user") setThemePick(null);
+                  }}
+                />
+                <span className="min-w-0">
+                  <span className="font-medium text-neutral-900">{t.name}</span>
+                  {rec?.template.key === t.key && (
+                    <>
+                      {" "}
+                      <Badge tone="green">Recommended</Badge>
+                    </>
+                  )}
+                  {t.description && <span className="mt-0.5 block text-xs text-neutral-600">{t.description}</span>}
+                  {t.suggest_when && <span className="mt-0.5 block text-xs text-neutral-400">When: {t.suggest_when}</span>}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </section>
+
+      <section aria-labelledby={`${id}-theme`}>
+        <h2 id={`${id}-theme`} className="mb-1 text-sm font-semibold text-neutral-700">
+          Theme
+        </h2>
+        {rec && themeKey === rec.theme?.key && rec.theme_reason && (
+          <p className="mb-2 text-xs text-neutral-500">{rec.theme_reason}</p>
+        )}
+        {themes.error && <ErrorNote>{themes.error}</ErrorNote>}
+        {themes.loading && <Loading />}
+        <div role="radiogroup" aria-labelledby={`${id}-theme`} className="flex flex-wrap gap-3">
+          {themes.data?.map((t) => {
+            const checked = t.key === themeKey;
+            return (
+              <label
+                key={t.key}
+                data-testid={`theme-option-${t.key}`}
+                className={`flex w-[178px] cursor-pointer flex-col gap-1.5 rounded-lg border bg-white p-2 text-sm ${
+                  checked ? "border-neutral-900 ring-1 ring-neutral-900" : "border-neutral-200 hover:border-neutral-400"
+                }`}
+              >
+                <ThemeThumbnail tokens={t.tokens} css={t.css} kind={kind} />
+                <span className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name={`${id}-theme`}
+                    checked={checked}
+                    onChange={() => setThemePick({ key: t.key, source: "user" })}
+                  />
+                  <span className="font-medium text-neutral-900">{t.name}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </section>
+    </>
+  );
+}
+
+/** Remembers a draft's template and theme as the user's last choice for the kind. */
+function saveLastChoice(kind: Kind, template: string, theme: string | null) {
+  localStorage.setItem(storageKey(kind), JSON.stringify({ template, theme }));
+}
+
+// ---------------------------------------------------------------- picker
+
+/** New-draft picker: a few questions, the recommended template and theme, overrides, create. */
+export function NewDraft({ kind }: { kind: Kind }) {
+  const router = useRouter();
+  const { role } = useMe();
+  const isOwner = role === "owner";
+  const label = kind === "prd" ? "PRD" : "roadmap";
+  const [prd, setPrd] = useState<PrdAnswers>({});
+  const [roadmap, setRoadmap] = useState<RoadmapAnswers>({});
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState<"create" | "default" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const choice = useDraftChoice(kind === "prd" ? { kind, prd } : { kind, roadmap });
+  const { live, rec, themes, templates, template, templateKey, themeKey, setTemplatePick, setThemePick } = choice;
+  const defaults = useQuery("draft-defaults", () => unwrap(api.GET("/v1/drafts/defaults")));
+  const company = defaults.data?.[kind] ?? null;
 
   const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => setPrd((a) => ({ ...a, [k]: v }));
   const setRoad = <K extends keyof RoadmapAnswers>(k: K, v: RoadmapAnswers[K]) => setRoadmap((a) => ({ ...a, [k]: v }));
@@ -277,7 +402,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
       const out = await unwrapProblems(
         api.POST("/v1/drafts", { body: { kind, title: title.trim(), template: templateKey, theme: themeKey } }),
       );
-      localStorage.setItem(storageKey(kind), JSON.stringify({ template: templateKey, theme: themeKey }));
+      saveLastChoice(kind, templateKey, themeKey);
       router.push(`/documents/${out.slug}`);
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : errorMessage(err));
@@ -291,8 +416,8 @@ export function NewDraft({ kind }: { kind: Kind }) {
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <p className="mb-2 text-sm">
-        <Link href="/documents" className="text-neutral-500 hover:text-neutral-900 hover:underline">
-          ← Documents
+        <Link href={kind === "roadmap" ? "/roadmap" : "/documents"} className="text-neutral-500 hover:text-neutral-900 hover:underline">
+          {kind === "roadmap" ? "← Roadmap" : "← Documents"}
         </Link>
       </p>
       <h1 className="mb-1 text-2xl font-semibold tracking-tight text-neutral-900">New {label}</h1>
@@ -393,99 +518,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
           )}
         </section>
 
-        <section aria-labelledby="template-heading">
-          <div className="mb-2 flex flex-wrap items-center gap-3">
-            <h2 id="template-heading" className="text-sm font-semibold text-neutral-700">
-              Template
-            </h2>
-            {templateSource === "last" && <Badge tone="blue">Your last choice</Badge>}
-            {templateSource === "company" && <Badge tone="blue">Company default</Badge>}
-            {rec && templateKey !== rec.template.key && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setTemplatePick({ key: rec.template.key, source: "user" });
-                  setThemePick(null);
-                }}
-              >
-                Use the recommended template
-              </Button>
-            )}
-          </div>
-          <div role="radiogroup" aria-labelledby="template-heading" className="grid gap-2 sm:grid-cols-2">
-            {templates.map((t) => {
-              const checked = t.key === templateKey;
-              return (
-                <label
-                  key={t.key}
-                  data-testid={`template-option-${t.key}`}
-                  className={`flex cursor-pointer gap-2.5 rounded-lg border bg-white p-3 text-sm ${
-                    checked ? "border-neutral-900 ring-1 ring-neutral-900" : "border-neutral-200 hover:border-neutral-400"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="template"
-                    className="mt-0.5"
-                    checked={checked}
-                    onChange={() => {
-                      setTemplatePick({ key: t.key, source: "user" });
-                      if (themePick?.source !== "user") setThemePick(null);
-                    }}
-                  />
-                  <span className="min-w-0">
-                    <span className="font-medium text-neutral-900">{t.name}</span>
-                    {rec?.template.key === t.key && (
-                      <>
-                        {" "}
-                        <Badge tone="green">Recommended</Badge>
-                      </>
-                    )}
-                    {t.description && <span className="mt-0.5 block text-xs text-neutral-600">{t.description}</span>}
-                    {t.suggest_when && <span className="mt-0.5 block text-xs text-neutral-400">When: {t.suggest_when}</span>}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        </section>
-
-        <section aria-labelledby="theme-heading">
-          <h2 id="theme-heading" className="mb-1 text-sm font-semibold text-neutral-700">
-            Theme
-          </h2>
-          {rec && themeKey === rec.theme?.key && rec.theme_reason && (
-            <p className="mb-2 text-xs text-neutral-500">{rec.theme_reason}</p>
-          )}
-          {themes.error && <ErrorNote>{themes.error}</ErrorNote>}
-          {themes.loading && <Loading />}
-          <div role="radiogroup" aria-labelledby="theme-heading" className="flex flex-wrap gap-3">
-            {themes.data?.map((t) => {
-              const checked = t.key === themeKey;
-              return (
-                <label
-                  key={t.key}
-                  data-testid={`theme-option-${t.key}`}
-                  className={`flex w-[178px] cursor-pointer flex-col gap-1.5 rounded-lg border bg-white p-2 text-sm ${
-                    checked ? "border-neutral-900 ring-1 ring-neutral-900" : "border-neutral-200 hover:border-neutral-400"
-                  }`}
-                >
-                  <ThemeThumbnail tokens={t.tokens} css={t.css} kind={kind} />
-                  <span className="flex items-center gap-1.5">
-                    <input
-                      type="radio"
-                      name="theme"
-                      checked={checked}
-                      onChange={() => setThemePick({ key: t.key, source: "user" })}
-                    />
-                    <span className="font-medium text-neutral-900">{t.name}</span>
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        </section>
+        <TemplateThemePicker choice={choice} />
 
         <section className="rounded-lg border border-neutral-200 bg-white p-4">
           <label className="block text-sm">

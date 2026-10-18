@@ -31,12 +31,8 @@ test("app nav: hidden when signed out, lists every area once signed in", async (
   // On /documents the PRDs entry is the active one.
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
 
-  // Roadmap is a v1.1 placeholder: not a link, marked disabled.
-  const roadmap = nav.getByTestId("nav-roadmap");
-  await expect(roadmap).toHaveAttribute("aria-disabled", "true");
-  await expect(roadmap).toContainText("v1.1");
-  await expect(roadmap).not.toHaveAttribute("href");
-  await expect(nav.getByRole("link", { name: /Roadmap/ })).toHaveCount(0);
+  // Roadmap (O4b) is a link to its own screen.
+  await expect(nav.getByRole("link", { name: "Roadmap" })).toHaveAttribute("href", "/roadmap");
 });
 
 test("app nav: each entry routes to its page", async ({ page }) => {
@@ -47,6 +43,7 @@ test("app nav: each entry routes to its page", async ({ page }) => {
     ["nav-baseline", "/baseline", "Baseline"],
     ["nav-runs", "/runs", "Runs"],
     ["nav-priorities", "/priorities", "Priorities"],
+    ["nav-roadmap", "/roadmap", "Roadmap"],
     ["nav-inbox", "/inbox", "Inbox"],
     ["nav-members", "/settings/members", "Members"],
     ["nav-connections", "/settings/connections", "Connections"],

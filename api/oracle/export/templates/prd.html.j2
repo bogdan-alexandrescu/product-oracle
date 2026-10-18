@@ -16,6 +16,7 @@
   <span class="banner-version">Version {{ number }}</span>
   {% if layer != "full" %}<span class="banner-layer">{{ layer_label }}: the full document has the detail</span>{% endif %}
   <span class="banner-status">{{ status | replace("_", " ") | capitalize }}</span>
+  {% if source_label %}<span class="banner-source"><a href="{{ source_url }}">{{ source_label }}</a></span>{% endif %}
   <span class="banner-date">
     {%- if approved_at %}Approved {{ approved_at }}{% else %}Imported {{ imported_at }}{% endif -%}
   </span>

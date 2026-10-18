@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Origins allowed to call the API with credentials (the web app in dev).
     cors_origins: list[str] = ["http://localhost:3000"]
     sql_echo: bool = False
+    # Where people open the web app: exports turn the app's own links (a roadmap's links
+    # to its PRD's sections) into absolute URLs under it.
+    app_url: str = "http://localhost:3000"
     # Google IAP single sign-on. Empty audiences = off: the IAP header is ignored.
     # Audience: /projects/<PROJECT_NUMBER>/global/backendServices/<BACKEND_SERVICE_ID>.
     iap_audiences: list[str] = []
