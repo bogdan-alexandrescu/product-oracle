@@ -101,8 +101,8 @@ class SectionOut(ORM):
     citation_keys: list[str] = []
     verdict: SectionVerdict | None = None
     layer: Layer = "detail"
-    # Presenter notes: the section's fenced ``notes`` block, else its guidance text
-    # (from the draft, else from its template version).
+    # Presenter notes: the section's fenced ``notes`` block only; guidance is never used
+    # (O1g).
     notes: str | None = None
 
 

@@ -360,8 +360,16 @@ _CSS_FORBIDDEN = [
     (re.compile(r"expression\s*\(", re.I), "expression() is not allowed"),
     (re.compile(r"javascript:", re.I), "javascript: URLs are not allowed"),
     (re.compile(r"\\"), "backslash escapes are not allowed"),
+    # These take a quoted URL without url(), and browsers fetch it (Present mode).
+    (
+        re.compile(r"(?:image-set|cross-fade|element|\bimage)\s*\(", re.I),
+        "image-set(), image(), cross-fade() and element() are not allowed",
+    ),
 ]
 _CSS_URL = re.compile(r"url\s*\(\s*(['\"]?)\s*([^'\")\s]*)", re.I)
+# Slide CSS runs in a shadow root inside the app: :host would restyle the presenter's
+# own controls.
+_SLIDE_CSS_HOST = re.compile(r":host\b", re.I)
 
 
 def check_theme_css(css: str) -> list[Problem]:
@@ -383,4 +391,7 @@ def check_slide_css(css: str | None) -> list[Problem]:
     """A theme's slide CSS (O1g): the same checks as its CSS, named as slide CSS."""
     if not css:
         return []
-    return [Problem(p.code, f"slide CSS: {p.message}") for p in check_theme_css(css)]
+    problems = [Problem(p.code, f"slide CSS: {p.message}") for p in check_theme_css(css)]
+    if _SLIDE_CSS_HOST.search(css):
+        problems.append(Problem("unsafe_css", "slide CSS: :host is not allowed"))
+    return problems

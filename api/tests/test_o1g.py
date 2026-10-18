@@ -154,6 +154,11 @@ async def test_template_roles_are_unchanged(client, tenant_id):
         ".slide { color: red; } </style><script>alert(1)</script>",
         ".slide { color: red;",
         ".slide { content: '\\41'; }",
+        '.slide { background-image: image-set("https://evil.example/p.png" 1x); }',
+        '.slide { background-image: -webkit-image-set("https://evil.example/p.png" 1x); }',
+        '.slide { background: cross-fade("https://evil.example/a.png", red 50%); }',
+        ".slide { background: element(#title); }",
+        '.slide { background: image("https://evil.example/p.png"); }',
     ],
 )
 async def test_slide_css_is_checked_like_the_theme_css(client, tenant_id, bad):
@@ -175,6 +180,18 @@ async def test_slide_css_is_checked_like_the_theme_css(client, tenant_id, bad):
     resp = await client.patch("/v1/themes/brand", json={"slide_css": bad}, headers=h)
     assert resp.status_code == 422
     assert (await client.get("/v1/themes/brand", headers=h)).json()["slide_css"] is None
+
+
+async def test_slide_css_may_not_style_the_host(client, tenant_id):
+    h = await _token(tenant_id, "approver")
+    bad = ":host { position: fixed; inset: 0; z-index: 2147483647; }"
+    resp = await client.post("/v1/themes", json={**THEME, "slide_css": bad}, headers=h)
+    assert resp.status_code == 422
+    assert [p["message"] for p in resp.json()["problems"]] == ["slide CSS: :host is not allowed"]
+    # Ordinary image properties still pass.
+    ok = ".slide { background-image: linear-gradient(#fff, #eee); }"
+    resp = await client.post("/v1/themes", json={**THEME, "slide_css": ok}, headers=h)
+    assert resp.status_code == 201, resp.text
 
 
 async def test_slide_css_is_stored_updated_cleared_and_audited(client, tenant_id):
