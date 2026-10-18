@@ -2,6 +2,7 @@
 come only from a ``notes`` block."""
 
 import io
+import time
 
 import pytest
 from pptx import Presentation
@@ -15,7 +16,7 @@ from oracle.mcp.tools import app_operations
 from oracle.models import AuditEvent
 from oracle.templates.builtins import BUILTIN_TEMPLATES, BUILTIN_THEMES, builtin_body
 from oracle.templates.models import Template, TemplateVersion, Theme
-from oracle.templates.validation import check_template, check_theme_css
+from oracle.templates.validation import check_slide_css, check_template, check_theme_css
 from oracle.tenancy import tenant_session
 from tests.test_brief import BRIEF_KEYS, DRAFT, _import, _seeded, requires_pdf
 from tests.test_priorities import _token
@@ -199,7 +200,17 @@ async def test_slide_css_may_not_style_the_host(client, tenant_id, bad):
     h = await _token(tenant_id, "approver")
     resp = await client.post("/v1/themes", json={**THEME, "slide_css": bad}, headers=h)
     assert resp.status_code == 422
-    assert [p["message"] for p in resp.json()["problems"]] == ["slide CSS: :host is not allowed"]
+    assert [p["message"] for p in resp.json()["problems"]] == [
+        "slide CSS: :host is not allowed, nor a comment straight after ':'"
+    ]
+
+
+def test_the_host_check_is_linear():
+    # Many comments after a colon with no host: a backtracking pattern takes minutes.
+    started = time.perf_counter()
+    assert check_slide_css(":" + "/**/" * 40 + "x")
+    assert check_slide_css(":/*" * 25_000) and check_slide_css("a:hover{}" * 10_000) == []
+    assert time.perf_counter() - started < 0.1
 
 
 @pytest.mark.parametrize(
