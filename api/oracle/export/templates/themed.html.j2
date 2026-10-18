@@ -26,7 +26,7 @@
 </style>
 </head>
 <body class="{{ body_class }}">
-<header class="doc-header status-{{ status }}" role="note" aria-label="Version">
+<header class="doc-header status-{{ status }}{% if running_header %} doc-header--running{% endif %}" role="note" aria-label="Version">
   <div class="header-line">
     <span class="banner-doc">{{ title }}</span>
     <span class="banner-asof">As of {{ as_of }}</span>
