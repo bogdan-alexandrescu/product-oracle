@@ -35,8 +35,8 @@ test("templates: view a version, live validation, save a new version, archive an
   const save = page.getByRole("button", { name: "Save as new version" });
   await expect(save).toBeDisabled();
 
-  // Fix it and save: a new immutable version.
-  const body = "# Idea {#title}\n\n## Problem {#problem}\n\n## Risks {#risks}\n\n## Sources and data points {#sources}\n";
+  // Fix it (ids, sources last, and the brief it presents) and save: a new immutable version.
+  const body = "---\nbrief: [problem]\n---\n# Idea {#title}\n\n## Problem {#problem}\n\n## Risks {#risks}\n\n## Sources and data points {#sources}\n";
   await editor.fill(body);
   await expect(page.getByTestId("validation-ok")).toContainText("title, problem, risks, sources");
   await expect(save).toBeEnabled();

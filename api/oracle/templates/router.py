@@ -166,7 +166,8 @@ async def list_themes(
     tags=["themes"],
 )
 async def create_theme(data: ThemeCreate, db: TenantDB, principal: Approver):
-    """Rejected (422) when a text colour misses WCAG AA contrast on the background."""
+    """Rejected (422) when a text colour misses WCAG AA contrast on the background, or
+    the CSS or slide CSS loads anything from outside the export."""
     try:
         return ThemeOut.model_validate(await service.create_theme(db, data, principal))
     except service.InvalidError as e:
@@ -177,7 +178,7 @@ async def create_theme(data: ThemeCreate, db: TenantDB, principal: Approver):
 
 @router.post("/themes/validate", response_model=ThemeValidateOut, tags=["themes"])
 async def validate_theme(data: ThemeValidateIn, _: CurrentPrincipal) -> ThemeValidateOut:
-    problems = service.check_theme(data.tokens, data.css)
+    problems = service.check_theme(data.tokens, data.css, data.slide_css)
     return ThemeValidateOut(valid=not problems, problems=problems)
 
 
@@ -188,9 +189,14 @@ async def validate_theme(data: ThemeValidateIn, _: CurrentPrincipal) -> ThemeVal
     tags=["themes"],
 )
 async def preview_theme(data: ThemePreviewIn, _: CurrentPrincipal) -> HTMLResponse:
-    """A sample document rendered with unsaved tokens and CSS, for the live preview."""
-    from oracle.templates.preview import render_preview
+    """A sample document rendered with unsaved tokens and CSS, for the live preview;
+    with ``view: slides``, the sample's brief as Present mode slides with the slide CSS."""
+    from oracle.templates.preview import render_preview, render_slide_preview
 
+    if data.view == "slides":
+        return HTMLResponse(
+            render_slide_preview(data.tokens, data.slide_css, data.kind, data.slide_variant)
+        )
     return HTMLResponse(render_preview(data.tokens, data.css, data.kind))
 
 

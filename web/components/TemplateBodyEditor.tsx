@@ -38,7 +38,7 @@ export function ProblemList({ problems, testId = "problems" }: { problems: Probl
   );
 }
 
-/** Findings that do not block saving, e.g. a template with no brief sections (O1f). */
+/** Findings on a body or a stored version that do not block anything by themselves. */
 export function WarningList({ warnings }: { warnings: Problem[] }) {
   return (
     <ul data-testid="template-warnings" className="mt-1 space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -46,6 +46,25 @@ export function WarningList({ warnings }: { warnings: Problem[] }) {
         <li key={i}>{problemText(w)}</li>
       ))}
     </ul>
+  );
+}
+
+/** How to fix `no_brief_sections` (O1g): every template marks the sections it presents. */
+export function BriefFix() {
+  return (
+    <div data-testid="brief-fix" className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700">
+      <p className="font-medium text-neutral-800">Mark the brief: the sections Present mode shows, one per slide. Either:</p>
+      <ul className="mt-1 list-disc space-y-1 pl-5">
+        <li>
+          list their ids in the front matter, e.g. <code className="font-mono text-xs">brief: [summary, problem, decisions]</code>
+          ; or
+        </li>
+        <li>
+          put a level-1 <code className="font-mono text-xs">{"# Full version {#full}"}</code> heading after them: the sections
+          before it (except the title) are the brief.
+        </li>
+      </ul>
+    </div>
   );
 }
 
@@ -110,6 +129,7 @@ export function TemplateBodyEditor({
               {live.pending ? " (checking…)" : ""}:
             </p>
             <ProblemList problems={check.problems} />
+            {check.problems.some((p) => p.code === "no_brief_sections") && <BriefFix />}
           </div>
         )}
       </div>

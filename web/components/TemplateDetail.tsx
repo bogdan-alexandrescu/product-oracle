@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { ProblemList, TemplateBodyEditor } from "@/components/TemplateBodyEditor";
+import { ProblemList, TemplateBodyEditor, WarningList } from "@/components/TemplateBodyEditor";
 import { Badge, Button, ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
@@ -209,6 +209,15 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               {shown.brief_sections.join(", ") || "none"}
             </span>
           </p>
+          {shown.warnings.some((w) => w.code === "no_brief_sections") && (
+            <div className="mb-2 space-y-1 text-sm">
+              <p data-testid="version-no-brief" className="text-amber-900">
+                Saved before templates had to mark a brief. Documents drafted from it keep working; the next version must add
+                brief markers.
+              </p>
+              <WarningList warnings={shown.warnings} />
+            </div>
+          )}
           <pre
             data-testid="version-body"
             className="max-h-[32rem] overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 font-mono text-[12px] leading-5 whitespace-pre-wrap text-neutral-800"

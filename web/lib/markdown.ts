@@ -1,7 +1,8 @@
 /**
  * A deliberately small markdown subset for PRD section bodies: paragraphs, lists,
  * blockquotes, fenced code, tables, minor headings, and inline code / strong /
- * emphasis / links / `[c:<id>]` citations.
+ * emphasis / links / `[c:<id>]` citations. Fenced ```notes blocks (presenter notes)
+ * are left out.
  *
  * The UI renders this tree itself (rather than via an HTML string) so comment
  * highlights can be placed by text offset: the text of a section is the
@@ -53,6 +54,7 @@ export function parseInline(src: string): Inline[] {
 const UL = /^\s*[-*+]\s+(.*)$/;
 const OL = /^\s*\d+[.)]\s+(.*)$/;
 const HEADING = /^(#{1,6})\s+(.*?)\s*(\{#[\w.-]+\})?\s*$/;
+const NOTES_FENCE = /^```[ \t]*notes[ \t]*$/;
 const TABLE_SEP = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 
 function cells(row: string): Inline[][] {
@@ -90,7 +92,8 @@ export function parseBlocks(md: string): Block[] {
       i++;
       while (i < lines.length && !lines[i].startsWith("```")) body.push(lines[i++]);
       i++;
-      blocks.push({ t: "pre", v: body.join("\n") });
+      // Presenter notes (O1f) belong to Present mode, not to the document.
+      if (!NOTES_FENCE.test(line)) blocks.push({ t: "pre", v: body.join("\n") });
       continue;
     }
     const h = HEADING.exec(line);

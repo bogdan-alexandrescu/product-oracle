@@ -29,7 +29,11 @@ test("brief: a document opens on its brief; Show full document switches, and the
   await expect(topHeadings(page)).toHaveText(BRIEF);
   await expect(page.getByTestId("view-note")).toContainText("Brief: 8 of 20 sections");
   await expect(section(page, "summary").getByTestId("layer-badge").first()).toHaveText("Brief");
-  // Presenter notes stay in the document as a code block; the detail is not shown.
+  // Presenter notes belong to Present mode: the document does not show the notes block.
+  await expect(section(page, "summary").first()).toContainText("approve the beta scope");
+  await expect(section(page, "summary").first()).not.toContainText("Open with how many carts");
+  await expect(section(page, "summary").first().locator("pre")).toHaveCount(0);
+  // The detail is not shown.
   await expect(section(page, "feature-detail")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Show full document" }).click();
@@ -176,6 +180,21 @@ test("present: one brief section per slide, keyboard and click navigation, Expan
   await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2$/);
 });
 
+test("present: a slide without a notes block says so in the presenter view", async ({ page }) => {
+  await login(page);
+  // Slide 2 (Summary) has a notes block; Problem (slide 4) and the title slide do not.
+  await page.goto("/documents/saved-carts/v/2/present?view=presenter&slide=2");
+  const notes = page.getByTestId("presenter-notes");
+  await expect(notes).toHaveText("Open with how many carts are lost when a session ends.");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId("slide-counter")).toHaveText("4 / 10");
+  await expect(page.getByTestId("presenter-view").getByRole("region", { name: "Slide 4 of 10: Problem" })).toBeVisible();
+  await expect(notes).toHaveText("No notes for this slide.");
+  await page.keyboard.press("Home");
+  await expect(notes).toHaveText("No notes for this slide.");
+});
+
 test("present: viewers present too; a version without a brief has nothing to present", async ({ page }) => {
   await login(page, "viewer@example.com");
   await page.goto("/documents/saved-carts/v/2/present?view=presenter&slide=4");
@@ -223,17 +242,29 @@ test("diff: each section says its layer, and the brief can be compared alone", a
   await expect(page.getByTestId("diff-section")).toHaveCount(8);
 });
 
-test("templates: the editor shows the brief sections and reports a template without any", async ({ page }) => {
+test("templates: the editor shows the brief sections and refuses a template without any", async ({ page }) => {
   await login(page);
   await page.goto("/settings/templates/new");
+  await page.getByLabel("Key").fill("no-brief");
+  await page.getByLabel("Name").fill("No brief");
   const body = page.getByLabel("Body");
+  const create = page.getByRole("button", { name: "Create template" });
   await expect(page.getByTestId("brief-sections")).toHaveText("problem, solution");
-  await expect(page.getByTestId("template-warnings")).toHaveCount(0);
+  await expect(create).toBeEnabled();
   await body.fill((await body.inputValue()).replace("brief: [problem, solution]\n", ""));
-  await expect(page.getByTestId("template-warnings")).toContainText("marks no brief sections");
-  // Valid all the same: a template without a brief can be saved; its documents open full.
-  await expect(page.getByTestId("validation-ok")).toBeVisible();
+  // O1g: a template without brief sections is refused, and the editor says how to fix it.
+  await expect(page.getByTestId("problems")).toContainText("marks no brief sections");
+  await expect(page.getByTestId("validation-ok")).toHaveCount(0);
+  const fix = page.getByTestId("brief-fix");
+  await expect(fix).toContainText("brief: [summary, problem, decisions]");
+  await expect(fix).toContainText("# Full version {#full}");
+  await expect(create).toBeDisabled();
+  // Either fix works: a heading after the brief sections...
   await body.fill((await body.inputValue()).replace("## Solution {#solution}", "# Full version {#full}\n\n## Solution {#solution}"));
   await expect(page.getByTestId("brief-sections")).toHaveText("problem");
-  await expect(page.getByTestId("template-warnings")).toHaveCount(0);
+  await expect(page.getByTestId("brief-fix")).toHaveCount(0);
+  await expect(create).toBeEnabled();
+  await create.click();
+  await expect(page).toHaveURL(/\/settings\/templates\/no-brief$/);
+  await expect(page.getByTestId("version-brief")).toHaveText("problem");
 });

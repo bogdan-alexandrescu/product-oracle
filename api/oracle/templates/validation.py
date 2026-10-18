@@ -7,8 +7,9 @@ section (id ``sources``), which must be present and last.
 
 O1f: the front matter's ``brief: [section ids]`` marks the brief layer (everything
 else is detail); without it, the sections before a level-1 ``Full version {#full}``
-heading are the brief. A template with no brief sections is valid but gets a
-``no_brief_sections`` warning: its documents open on the full document.
+heading are the brief. O1g: a template with no brief sections is refused
+(``no_brief_sections``). Versions saved before that keep resolving; their next edit
+must add brief markers.
 
 A theme's colour tokens must reach WCAG AA contrast for body text (4.5:1) against
 the background, and its CSS may not load anything from outside the export.
@@ -26,6 +27,7 @@ from oracle.docs.parser import CITATION_RE, SECTION_ID_RE, split_front_matter
 
 SOURCES_SECTION_ID = "sources"
 SOURCES_HEADING = "Sources and data points"
+NO_BRIEF_SECTIONS = "no_brief_sections"
 # Front matter keys a template may carry for itself; they are dropped from drafts.
 TEMPLATE_META_KEYS = ("theme", "suggest_when", "brief")
 
@@ -52,7 +54,7 @@ class Heading:
 @dataclass
 class TemplateCheck:
     problems: list[Problem] = field(default_factory=list)
-    # Findings that do not block saving (no_brief_sections).
+    # Findings that do not block saving (none today; no_brief_sections blocks, O1g).
     warnings: list[Problem] = field(default_factory=list)
     front_matter: dict[str, Any] = field(default_factory=dict)
     headings: list[Heading] = field(default_factory=list)
@@ -219,18 +221,18 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
                 )
             )
 
-    # O1f: brief markers name real sections; a template without a brief is reported.
+    # O1f: brief markers name real sections. O1g: a template without a brief is refused.
     for code, message, key in layers.brief_problems(
         result.front_matter.get("brief"), result.section_keys
     ):
         problems.append(Problem(code, message, None, key))
     if headings and not result.brief_sections:
-        result.warnings.append(
+        problems.append(
             Problem(
-                "no_brief_sections",
+                NO_BRIEF_SECTIONS,
                 "the template marks no brief sections: add 'brief: [section ids]' to its "
-                f"front matter (or a '# {layers.FULL_HEADING} {{#{layers.FULL_SECTION_ID}}}' "
-                "heading after the brief); documents from it open on the full document",
+                f"front matter, or a level-1 '# {layers.FULL_HEADING} "
+                f"{{#{layers.FULL_SECTION_ID}}}' heading after the brief sections",
             )
         )
 
@@ -375,3 +377,10 @@ def check_theme_css(css: str) -> list[Problem]:
     if css.count("{") != css.count("}"):
         problems.append(Problem("invalid_css", "unbalanced braces in CSS"))
     return problems
+
+
+def check_slide_css(css: str | None) -> list[Problem]:
+    """A theme's slide CSS (O1g): the same checks as its CSS, named as slide CSS."""
+    if not css:
+        return []
+    return [Problem(p.code, f"slide CSS: {p.message}") for p in check_theme_css(css)]

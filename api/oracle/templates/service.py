@@ -137,7 +137,11 @@ def _version_out(v: TemplateVersion) -> TemplateVersionOut:
         suggested_theme=meta.suggested_theme,
         suggest_when=meta.suggest_when,
         brief_sections=meta.brief_sections,
-        warnings=_problems(meta.warnings),
+        # A version saved before O1g may have no brief: it keeps resolving, and the
+        # template's next edit must add brief markers.
+        warnings=_problems(
+            meta.warnings + [p for p in meta.problems if p.code == validation.NO_BRIEF_SECTIONS]
+        ),
     )
 
 
@@ -311,15 +315,21 @@ async def set_template_archived(
 # --- themes -------------------------------------------------------------------------
 
 
-def _check_theme(tokens: ThemeTokens, css: str) -> list[Problem]:
+def _check_theme(tokens: ThemeTokens, css: str, slide_css: str | None = None) -> list[Problem]:
     return _problems(
         validation.check_theme_tokens(tokens.model_dump(exclude_none=True))
         + validation.check_theme_css(css)
+        + validation.check_slide_css(slide_css)
     )
 
 
-def check_theme(tokens: ThemeTokens, css: str) -> list[Problem]:
-    return _check_theme(tokens, css)
+def check_theme(tokens: ThemeTokens, css: str, slide_css: str | None = None) -> list[Problem]:
+    return _check_theme(tokens, css, slide_css)
+
+
+def _slide_css(value: str | None) -> str | None:
+    """Blank slide CSS is stored as null: the theme uses the shared slide layout."""
+    return value if value and value.strip() else None
 
 
 def _raise_if(problems: list[Problem], what: str) -> None:
@@ -353,7 +363,7 @@ async def theme_or_404(db: AsyncSession, key: str) -> Theme:
 
 
 async def create_theme(db: AsyncSession, data: ThemeCreate, principal: Principal) -> Theme:
-    _raise_if(_check_theme(data.tokens, data.css), "theme")
+    _raise_if(_check_theme(data.tokens, data.css, data.slide_css), "theme")
     if await db.scalar(select(Theme.id).where(Theme.key == data.key)):
         raise ConflictError(f"a theme with key '{data.key}' exists (archived ones too)")
     theme = Theme(
@@ -363,6 +373,7 @@ async def create_theme(db: AsyncSession, data: ThemeCreate, principal: Principal
         description=data.description,
         tokens=data.tokens.model_dump(exclude_none=True),
         css=data.css,
+        slide_css=_slide_css(data.slide_css),
         builtin=False,
         created_by=principal.id,
     )
@@ -382,7 +393,18 @@ async def update_theme(db: AsyncSession, key: str, data: ThemeUpdate, principal:
     theme = await theme_or_404(db, key)
     tokens = data.tokens if data.tokens is not None else ThemeTokens.model_validate(theme.tokens)
     css = data.css if data.css is not None else theme.css
-    _raise_if(_check_theme(tokens, css), "theme")
+    slide_set = "slide_css" in data.model_fields_set
+    slide_css = _slide_css(data.slide_css) if slide_set else theme.slide_css
+    problems = _check_theme(tokens, css, slide_css)
+    if theme.builtin and slide_set and slide_css is not None:
+        problems.append(
+            Problem(
+                code="builtin_slide_css",
+                message="a built-in theme keeps its own slide design; create a company "
+                "theme to write slide CSS",
+            )
+        )
+    _raise_if(problems, "theme")
     changed = []
     for field in ("name", "kind", "description"):
         if field in data.model_fields_set and getattr(data, field) is not None:
@@ -394,6 +416,9 @@ async def update_theme(db: AsyncSession, key: str, data: ThemeUpdate, principal:
     if data.css is not None:
         theme.css = css
         changed.append("css")
+    if slide_set and slide_css != theme.slide_css:
+        theme.slide_css = slide_css
+        changed.append("slide_css")
     if changed:
         await audit.record(db, principal, "theme.updated", "theme", theme.id, {"fields": changed})
         await db.commit()

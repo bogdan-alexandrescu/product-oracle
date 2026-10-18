@@ -10,9 +10,13 @@
 @page { size: 254mm 142.875mm; margin: 0; }
 html, body { margin: 0; padding: 0; }
 {{ deck.css }}
+{% if preview %}
+body.deck-preview { background: #e5e7eb; padding: 16px 0; }
+body.deck-preview .slide { margin: 0 auto 16px; box-shadow: 0 1px 4px rgba(0, 0, 0, .2); }
+{% endif %}
 </style>
 </head>
-<body class="deck deck-print {{ theme_class }}">
+<body class="deck {{ 'deck-preview' if preview else 'deck-print' }} {{ theme_class }}">
 {% for s in deck.slides %}{{ s.html }}{% endfor %}
 </body>
 </html>
