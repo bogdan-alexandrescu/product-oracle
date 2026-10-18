@@ -259,6 +259,9 @@ async def create_template(db: AsyncSession, data: TemplateCreate, principal: Pri
 async def update_template(
     db: AsyncSession, key: str, data: TemplateUpdate, principal: Principal
 ) -> TemplateOut:
+    # Seed first: an upgrade seeded after ``latest`` is read would take its version number.
+    if await ensure_builtins(db):
+        await db.commit()
     template = await _template_or_404(db, key)
     latest = await db.scalar(
         select(TemplateVersion)
