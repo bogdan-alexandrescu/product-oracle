@@ -1,5 +1,14 @@
 # What Oracle needs from SwarmCloud: caller MCP access (#1433) and waiting for input (#1436)
 
+> **Superseded (2026-10-18).** SwarmCloud had already built both features to designs
+> Bogdan approved, and Oracle adapts to SwarmCloud's shapes: an MCP server registered
+> once in Oracle's tenant and named per step, with a short-lived per-run credential
+> SwarmCloud injects as the Authorization header (#1433); an await-input step answered
+> through an API call, 409 on a second answer, at most 24 h, with review rounds unrolled
+> as later steps gated on the answer instead of loops (#1436). Both stay switched off
+> until their acceptance lanes pass. This page is rewritten from the exact shapes once
+> SwarmCloud sends them; until then the proposal below is history, not the contract.
+
 Product Oracle runs its agents in SwarmCloud, behind `api/oracle/swarm/`. The two
 products share only this interface: Oracle's calls to SwarmCloud's workflow API, and
 Oracle's MCP server that agents call back. This page is the contract for the two
