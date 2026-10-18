@@ -252,11 +252,16 @@ class ClaudeCodeTransport:
                 raise LlmAuthError(message or "Claude rejected the token")
             raise LlmUnavailable(message or f"Claude Code failed ({out.get('subtype')})")
         models = list((out.get("modelUsage") or {}).keys())
+        usage = dict(out.get("usage") or {})
+        # What Claude Code reports the call cost, for the job's record.
+        cost = out.get("total_cost_usd")
+        if isinstance(cost, int | float) and not isinstance(cost, bool):
+            usage["total_cost_usd"] = cost
         return TransportResult(
             text=message,
             model=models[0] if models else request.model,
             stop_reason=out.get("stop_reason"),
-            usage=out.get("usage") or {},
+            usage=usage,
             readings=readings,
         )
 

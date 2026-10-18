@@ -352,3 +352,18 @@ def test_render_prompt_for_multi_turn():
     assert render_prompt(turns) == (
         "<user>\nA?\n</user>\n\n<assistant>\nB.\n</assistant>\n\n<user>\nC?\n</user>"
     )
+
+
+def test_claude_code_transport_passes_the_reported_cost_on():
+    stdout = json.dumps(
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "result": "ok",
+            "usage": {"input_tokens": 10, "output_tokens": 2},
+            "total_cost_usd": 0.0123,
+        }
+    ).encode()
+    out = ClaudeCodeTransport.parse(stdout, b"", _request())
+    assert out.usage == {"input_tokens": 10, "output_tokens": 2, "total_cost_usd": 0.0123}

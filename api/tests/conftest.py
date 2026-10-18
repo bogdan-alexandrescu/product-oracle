@@ -22,6 +22,8 @@ TEST_DATABASE_URL = f"{BASE_TEST_DATABASE_URL}_{_WORKER}" if _WORKER else BASE_T
 os.environ["ORACLE_DATABASE_URL"] = TEST_DATABASE_URL
 # No background sweep of the Claude account pool while tests run; tests call it.
 os.environ["ORACLE_CLAUDE_SWEEP_SECONDS"] = "0"
+# Nor the built-in job worker; tests run jobs themselves.
+os.environ["ORACLE_LLM_JOBS_WORKER_SECONDS"] = "0"
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402

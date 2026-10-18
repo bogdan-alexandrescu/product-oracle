@@ -352,6 +352,273 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/llm-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Llm Jobs
+         * @description The document's built-in jobs, newest first.
+         */
+        get: operations["list_llm_jobs"];
+        put?: never;
+        /**
+         * Create Llm Job
+         * @description Queue review comments or reporting by hand (they also queue themselves).
+         */
+        post: operations["create_llm_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/llm-jobs/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Llm Job Settings */
+        get: operations["get_llm_job_settings"];
+        /**
+         * Put Llm Job Settings
+         * @description Turn each built-in job kind on or off for this document.
+         */
+        put: operations["put_llm_job_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/llm-jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Llm Job */
+        get: operations["get_llm_job"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/llm-jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Llm Job */
+        post: operations["cancel_llm_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/llm-jobs/{job_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Llm Job */
+        post: operations["retry_llm_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/sections/{key}/refine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refine Section
+         * @description Queue a refinement of one section from accepted suggestions and/or an instruction.
+         *
+         *     Locked (approved) sections are refused (409).
+         */
+        post: operations["refine_section"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/llm-jobs/{job_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Refinement
+         * @description The revised section and its word diff against the current text.
+         */
+        get: operations["preview_refinement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/llm-jobs/{job_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Refinement
+         * @description Accept a refinement: import it as the next version, with its resolutions.
+         */
+        post: operations["apply_refinement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Suggestions */
+        get: operations["list_suggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/suggestions/{suggestion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit Suggestion */
+        patch: operations["edit_suggestion"];
+        trace?: never;
+    };
+    "/v1/suggestions/{suggestion_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Suggestion
+         * @description Accept (optionally with an edit). Nothing changes the document until a refinement
+         *     built from it is accepted.
+         */
+        post: operations["accept_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/suggestions/{suggestion_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Suggestion */
+        post: operations["dismiss_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version Reports
+         * @description The resolution report and 'what changed' summary of a version.
+         */
+        get: operations["get_version_reports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/reports/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Version Reports */
+        get: operations["export_version_reports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/members": {
         parameters: {
             query?: never;
@@ -2118,8 +2385,8 @@ export interface paths {
         put?: never;
         /**
          * Tick
-         * @description Advance this company's active runs and sweep its Claude account pool (``oracle tick``
-         *     calls it on a schedule).
+         * @description Advance this company's active runs, sweep its Claude account pool and run its
+         *     queued built-in model jobs (``oracle tick`` calls it on a schedule).
          */
         post: operations["tick"];
         delete?: never;
@@ -2446,6 +2713,34 @@ export interface components {
              * @description .md, .txt or .pdf files
              */
             files: string[];
+        };
+        /** ChangedSection */
+        ChangedSection: {
+            /** Section Key */
+            section_key: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "removed" | "changed";
+            /** Heading */
+            heading: string;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+        };
+        /** ChangesReport */
+        ChangesReport: {
+            /** Since */
+            since?: number | null;
+            /** Summary */
+            summary: string;
+            /** Sections */
+            sections: components["schemas"]["ChangedSection"][];
+            /** New Sources */
+            new_sources: components["schemas"]["NewSource"][];
         };
         /** CheckpointDecision */
         CheckpointDecision: {
@@ -3583,6 +3878,7 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            suggestion?: components["schemas"]["SuggestionOut"] | null;
         };
         /**
          * FeedbackPackage
@@ -4039,6 +4335,42 @@ export interface components {
             fetched_at: string | null;
             confidence: components["schemas"]["ConfidenceOut"];
         };
+        /**
+         * JobCreate
+         * @description Queue a job by hand. Refinement has its own route (``.../sections/{key}/refine``).
+         */
+        JobCreate: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "review_comments" | "reporting";
+            /** Version */
+            version?: number | null;
+            /** Since */
+            since?: number | null;
+        };
+        /**
+         * JobSettings
+         * @description Which built-in jobs run on this document (all on by default).
+         */
+        JobSettings: {
+            /**
+             * Review Comments
+             * @default true
+             */
+            review_comments: boolean;
+            /**
+             * Reporting
+             * @default true
+             */
+            reporting: boolean;
+            /**
+             * Refinement
+             * @default true
+             */
+            refinement: boolean;
+        };
         /** KnobsIn */
         KnobsIn: {
             /**
@@ -4171,6 +4503,88 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** LlmJobOut */
+        LlmJobOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "review_comments" | "reporting" | "refinement";
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Version Number */
+            version_number?: number | null;
+            /** Section Key */
+            section_key?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /**
+             * Input
+             * @default {}
+             */
+            input: {
+                [key: string]: unknown;
+            };
+            /** Output */
+            output?: {
+                [key: string]: unknown;
+            } | null;
+            /** Account Label */
+            account_label?: string | null;
+            /** Via */
+            via?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Input Tokens */
+            input_tokens?: number | null;
+            /** Output Tokens */
+            output_tokens?: number | null;
+            /** Cost Usd */
+            cost_usd?: number | null;
+            /** Attempts */
+            attempts: number;
+            /** Error */
+            error?: string | null;
+            /** Error Reason */
+            error_reason?: string | null;
+            /** Next Reset At */
+            next_reset_at?: string | null;
+            /** Requested By */
+            requested_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+        };
+        /** LlmJobsTick */
+        LlmJobsTick: {
+            /** Ran */
+            ran: number;
+            /** Succeeded */
+            succeeded: number;
+            /** Failed */
+            failed: number;
+            /** Retried */
+            retried: number;
+            /** Errors */
+            errors: string[];
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -4231,6 +4645,22 @@ export interface components {
              * @enum {string}
              */
             role: "viewer" | "commenter" | "approver" | "owner";
+        };
+        /** NewSource */
+        NewSource: {
+            /** Title */
+            title: string;
+            /** Kind */
+            kind: string;
+            /** About */
+            about?: string | null;
+            /** Url */
+            url?: string | null;
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
         };
         /** OAuthErrorOut */
         OAuthErrorOut: {
@@ -4461,6 +4891,31 @@ export interface components {
             /** Token Help */
             token_help: string;
         };
+        /** Pushback */
+        Pushback: {
+            /** Reason */
+            reason: string;
+            /** Sources */
+            sources: components["schemas"]["PushbackSource"][];
+        };
+        /** PushbackSource */
+        PushbackSource: {
+            /** Ref */
+            ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "goal" | "evidence";
+            /** Title */
+            title: string;
+            /** Url */
+            url?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+        };
         /** RankedFeature */
         RankedFeature: {
             /** Rank */
@@ -4548,6 +5003,37 @@ export interface components {
             /** Authorize Url */
             authorize_url?: string | null;
         };
+        /** RefineIn */
+        RefineIn: {
+            /** Suggestion Ids */
+            suggestion_ids?: string[] | null;
+            /** Instruction */
+            instruction?: string | null;
+        };
+        /**
+         * RefinementApply
+         * @description Accept a refinement, optionally with the approver's own edit of it.
+         */
+        RefinementApply: {
+            /** Heading */
+            heading?: string | null;
+            /** Body Md */
+            body_md?: string | null;
+        };
+        /**
+         * RefinementPreview
+         * @description What accepting a refinement would change: a word diff of the section.
+         */
+        RefinementPreview: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Body Md */
+            body_md: string;
+            /** Words */
+            words: components["schemas"]["WordOp"][];
+        };
         /** RefreshOut */
         RefreshOut: {
             refresh: components["schemas"]["RefreshResult"];
@@ -4599,6 +5085,29 @@ export interface components {
             /** Body */
             body: string;
         };
+        /** ReportItem */
+        ReportItem: {
+            /**
+             * Feedback Id
+             * Format: uuid
+             */
+            feedback_id: string;
+            /** Summary */
+            summary: string;
+            /** Section Key */
+            section_key?: string | null;
+            /** Status */
+            status: string;
+            /** Resolution Note */
+            resolution_note?: string | null;
+            /** Addressed In Version */
+            addressed_in_version?: number | null;
+            /**
+             * Explanation
+             * @default
+             */
+            explanation: string;
+        };
         /** RescoreResult */
         RescoreResult: {
             /** Evidence */
@@ -4607,6 +5116,17 @@ export interface components {
             entities: number;
             /** Edges */
             edges: number;
+        };
+        /** ResolutionNarrative */
+        ResolutionNarrative: {
+            /** Summary */
+            summary: string;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Items */
+            items: components["schemas"]["ReportItem"][];
         };
         /**
          * ResolutionReport
@@ -5273,6 +5793,96 @@ export interface components {
             /** Moving */
             moving: number;
         };
+        /** SuggestionAccept */
+        SuggestionAccept: {
+            /** Text */
+            text?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** SuggestionDismiss */
+        SuggestionDismiss: {
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Decline
+             * @default false
+             */
+            decline: boolean;
+        };
+        /** SuggestionOut */
+        SuggestionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /**
+             * Feedback Item Id
+             * Format: uuid
+             */
+            feedback_item_id: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Classification
+             * @enum {string}
+             */
+            classification: "question" | "change_request" | "factual_correction" | "approval" | "other";
+            /** Group Key */
+            group_key?: string | null;
+            /** Duplicate Of */
+            duplicate_of?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "section_text" | "answer" | "none" | "duplicate";
+            /** Section Key */
+            section_key?: string | null;
+            /** Text */
+            text?: string | null;
+            /** Edited Text */
+            edited_text?: string | null;
+            /** Rationale */
+            rationale?: string | null;
+            pushback?: components["schemas"]["Pushback"] | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "accepted" | "dismissed" | "applied" | "superseded";
+            /** Override Reason */
+            override_reason?: string | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Applied In Version */
+            applied_in_version?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** SuggestionPatch */
+        SuggestionPatch: {
+            /** Text */
+            text: string;
+        };
         /** SweepOut */
         SweepOut: {
             /** Result */
@@ -5699,6 +6309,7 @@ export interface components {
             /** Errors */
             errors: string[];
             claude_accounts?: components["schemas"]["ClaudeSweepSummary"] | null;
+            llm_jobs?: components["schemas"]["LlmJobsTick"] | null;
         };
         /** TokenIn */
         TokenIn: {
@@ -5899,6 +6510,23 @@ export interface components {
              * @default []
              */
             citations: components["schemas"]["CitationOut"][];
+        };
+        /** VersionReports */
+        VersionReports: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Version */
+            version: number;
+            /** Report Job Id */
+            report_job_id?: string | null;
+            /** Generated At */
+            generated_at?: string | null;
+            resolution?: components["schemas"]["ResolutionNarrative"] | null;
+            changes?: components["schemas"]["ChangesReport"] | null;
+            latest_job?: components["schemas"]["LlmJobOut"] | null;
         };
         /** VersionSummary */
         VersionSummary: {
@@ -6712,6 +7340,540 @@ export interface operations {
                     "text/html": string;
                     "application/pdf": string;
                     "text/markdown": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_llm_jobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_llm_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_llm_job_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_llm_job_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_llm_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_llm_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_llm_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refine_section: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefineIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_refinement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefinementPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_refinement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefinementApply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_suggestions: {
+        parameters: {
+            query?: {
+                status?: ("open" | "accepted" | "dismissed" | "applied" | "superseded") | null;
+                section_key?: string | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestionAccept"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestionDismiss"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_reports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionReports"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_version_reports: {
+        parameters: {
+            query?: {
+                format?: "md" | "html";
+            };
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version's reports, exportable with the version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown": string;
+                    "text/html": string;
                 };
             };
             /** @description Validation Error */

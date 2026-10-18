@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { DocToolbar } from "@/components/DocToolbar";
+import { JobsPanel } from "@/components/JobsPanel";
 import { Badge, ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
@@ -67,6 +68,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 ))}
               </ul>
             )}
+            <h2 className="mt-8 mb-3 text-sm font-semibold text-neutral-700">Jobs</h2>
+            <JobsPanel doc={doc} />
           </>
         )}
       </div>

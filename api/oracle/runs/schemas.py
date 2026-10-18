@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from oracle.jobs.schemas import LlmJobsTick
+
 Flow = Literal["baseline_to_prd", "feedback_loop"]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -226,6 +228,7 @@ class TickOut(BaseModel):
     runs_paused: int
     errors: list[str]
     claude_accounts: ClaudeSweepSummary | None = None
+    llm_jobs: LlmJobsTick | None = None
 
 
 class InboxCheckpoint(CheckpointOut):

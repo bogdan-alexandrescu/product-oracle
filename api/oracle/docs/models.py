@@ -42,6 +42,11 @@ class Document(TenantScoped, Base):
     kind: Mapped[str] = mapped_column(Text, nullable=False, server_default="prd")
     # Theme key (oracle.templates.models.Theme), picked when the draft starts.
     theme: Mapped[str | None] = mapped_column(Text)
+    # Built-in model jobs (oracle.jobs) an owner turned off for this document; all on
+    # by default.
+    disabled_llm_jobs: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default="{}"
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

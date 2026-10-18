@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from oracle.docs.schemas import DocumentStatus, Verdict, VersionSummary
+from oracle.jobs.schemas import SuggestionOut
 
 FeedbackStatus = Literal["open", "addressed", "declined", "superseded"]
 FeedbackKind = Literal["comment", "section_review", "general"]
@@ -84,6 +85,8 @@ class FeedbackItemOut(ORM):
     resolution_note: str | None = None
     created_at: datetime
     updated_at: datetime
+    # What Oracle's review-comments job suggests for this item (not superseded), if any.
+    suggestion: SuggestionOut | None = None
 
 
 class FeedbackPatch(BaseModel):

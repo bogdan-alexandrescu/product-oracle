@@ -31,6 +31,14 @@ export type FeedbackStatus = FeedbackItem["status"];
 export type DiffOut = Schemas["DiffOut"];
 export type SectionDiff = Schemas["SectionDiff"];
 export type Member = Schemas["MemberOut"];
+
+// Built-in model jobs (/v1/.../llm-jobs, suggestions, reports).
+export type LlmJob = Schemas["LlmJobOut"];
+export type LlmJobKind = LlmJob["kind"];
+export type JobSettings = Schemas["JobSettings"];
+export type Suggestion = Schemas["SuggestionOut"];
+export type VersionReports = Schemas["VersionReports"];
+export type RefinementPreview = Schemas["RefinementPreview"];
 export type Invite = Schemas["InviteOut"];
 
 // Baseline graph (/v1/baseline/...).

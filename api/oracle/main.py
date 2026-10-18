@@ -16,6 +16,8 @@ from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
+from oracle.jobs.router import router as llm_jobs_router
+from oracle.jobs.worker import get_worker_settings, run_worker
 from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
 from oracle.members.router import router as members_router
@@ -32,9 +34,14 @@ async def lifespan(app: FastAPI):
     # The Claude account pool's local scheduler (SwarmCloud runs its sweep from Cloud
     # Scheduler); `oracle tick` sweeps too. ORACLE_CLAUDE_SWEEP_SECONDS=0 turns it off.
     interval = get_pool_settings().sweep_seconds
-    task = asyncio.create_task(run_scheduler(interval)) if interval > 0 else None
+    tasks = [asyncio.create_task(run_scheduler(interval))] if interval > 0 else []
+    # The local worker for built-in model jobs; `oracle tick` runs them too.
+    # ORACLE_LLM_JOBS_WORKER_SECONDS=0 turns it off.
+    every = get_worker_settings().worker_seconds
+    if every > 0:
+        tasks.append(asyncio.create_task(run_worker(every)))
     yield
-    if task is not None:
+    for task in tasks:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
@@ -78,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(docs_router)
     app.include_router(review_router)
     app.include_router(export_router)
+    app.include_router(llm_jobs_router)
     # v1 lanes add their routes to these (empty until then).
     app.include_router(members_router)
     app.include_router(connections_router)

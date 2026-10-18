@@ -52,3 +52,23 @@ def test_tick_needs_a_token(monkeypatch):
     monkeypatch.delenv("ORACLE_API_TOKEN", raising=False)
     code, _, err, _ = _run(["tick"], lambda r: httpx.Response(200, json=RESULT))
     assert code == 2 and "ORACLE_API_TOKEN" in err
+
+
+def test_tick_prints_the_built_in_jobs(monkeypatch):
+    monkeypatch.setenv("ORACLE_URL", "http://oracle.test:8000")
+    monkeypatch.setenv("ORACLE_API_TOKEN", "po_secret")
+    result = {
+        **RESULT,
+        "errors": [],
+        "llm_jobs": {
+            "ran": 3,
+            "succeeded": 1,
+            "failed": 1,
+            "retried": 1,
+            "errors": ["job j1: No Claude account can take this call: the pool is paused"],
+        },
+    }
+    code, out, err, _ = _run(["tick"], lambda r: httpx.Response(200, json=result))
+    assert code == 0, err
+    assert "Built-in jobs: 3 ran, 1 succeeded, 1 failed, 1 retried" in out
+    assert "  error: job j1: No Claude account can take this call" in out

@@ -5,6 +5,7 @@ import { memo, useMemo } from "react";
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 
 import { MarkdownBody, type Highlight } from "@/components/MarkdownBody";
+import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
 import { LockIcon } from "@/components/ui";
 import type { CitationOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
@@ -25,6 +26,7 @@ export const SectionView = memo(function SectionView({
   readOnly,
   changedLock,
   evidenceTargets,
+  refine,
   onHighlightClick,
   onVerdict,
 }: {
@@ -37,6 +39,8 @@ export const SectionView = memo(function SectionView({
   changedLock: boolean;
   /** Baseline items a commenter may cite a public link on; undefined hides the control. */
   evidenceTargets?: EntityOut[];
+  /** Set for approvers on the latest version: offers "Refine section" (never on locked ones). */
+  refine?: { doc: string; n: number };
   onHighlightClick: (id: string) => void;
   onVerdict: (key: string, verdict: Verdict, note: string) => Promise<void>;
 }) {
@@ -100,6 +104,11 @@ export const SectionView = memo(function SectionView({
         readOnly={readOnly}
         onSubmit={(v, note) => onVerdict(section.section_key, v, note)}
       />
+      {refine && !locked && (
+        <div className="mt-2">
+          <RefineSection doc={refine.doc} n={refine.n} sectionKey={section.section_key} heading={section.heading} />
+        </div>
+      )}
     </section>
   );
 });

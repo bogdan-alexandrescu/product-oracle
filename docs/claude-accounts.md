@@ -1,7 +1,8 @@
 # Claude accounts
 
 The Claude subscriptions Oracle's built-in model jobs run on: review comments,
-reporting and refinement (`oracle.llm.gateway.JOBS`). The pool copies SwarmCloud's
+reporting and refinement (`oracle.llm.gateway.JOBS`; the jobs themselves:
+[llm-jobs.md](llm-jobs.md)). The pool copies SwarmCloud's
 account management (questions P3b, the owner's instruction: "use the EXACT account
 management functionality as in SwarmCloud"); the code says which SwarmCloud file each
 part comes from. Agent workflows do not use it: runs execute in SwarmCloud, on

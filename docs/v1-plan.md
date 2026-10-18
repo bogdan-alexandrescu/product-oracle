@@ -202,6 +202,11 @@ the link", and plain public web pages.
   suggestions, keeping ids, O1c and O1e) run directly in Oracle as jobs.
 - **Their provider is Oracle's Claude account pool,** managed exactly like SwarmCloud's
   account management (ported, for local personal use): see the next section.
+- **Built (migration 0008):** `api/oracle/jobs/` (job queue run by `oracle tick` and a
+  local worker, one job at a time per document, retry once, a clear failure when no
+  Claude account can take the call), suggestions on feedback items, version reports, and
+  section refinement imported as the next version; each kind can be turned off per
+  document. See [llm-jobs.md](llm-jobs.md).
 - Data connections (GitHub, Slack, Notion, Fireflies, Google) stay per user.
 
 ## Claude accounts

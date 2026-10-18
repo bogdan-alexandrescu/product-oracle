@@ -297,6 +297,15 @@ def tick(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: T
                     print(f"  needs a sign-in: {account_id}", file=out)
                 for error in pool.get("errors") or []:
                     print(f"  error: {error}", file=out)
+            jobs = r.get("llm_jobs")
+            if jobs:
+                print(
+                    f"Built-in jobs: {jobs['ran']} ran, {jobs['succeeded']} succeeded, "
+                    f"{jobs['failed']} failed, {jobs['retried']} retried",
+                    file=out,
+                )
+                for error in jobs.get("errors") or []:
+                    print(f"  error: {error}", file=out)
             if not args.every:
                 return 0
             out.flush()
@@ -553,7 +562,9 @@ def build_parser() -> argparse.ArgumentParser:
     b.set_defaults(func=baseline_pull)
 
     p = sub.add_parser(
-        "tick", parents=[common], help="advance active runs and sweep the Claude account pool"
+        "tick",
+        parents=[common],
+        help="advance active runs, sweep the Claude account pool, run queued built-in jobs",
     )
     p.add_argument("--every", type=float, metavar="SECONDS", help="repeat until interrupted")
     p.set_defaults(func=tick)
