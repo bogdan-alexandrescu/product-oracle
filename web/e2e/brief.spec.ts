@@ -16,6 +16,12 @@ const BRIEF = [
   "Decisions needed",
 ];
 
+/** Wait until the mock (which runs in the page) has saved this member's view choice. */
+const savedView = (page: Page, view: "brief" | "full") =>
+  expect
+    .poll(() => page.evaluate((v) => localStorage.getItem("po-mock-db-v2")?.includes(`"document_view":"${v}"`), view))
+    .toBe(true);
+
 const sections = (page: Page) => page.getByTestId("document-sections").filter({ visible: true });
 const topHeadings = (page: Page) =>
   sections(page).locator(":scope > section[data-section-key] > div > :is(h1,h2,h3)");
@@ -44,15 +50,14 @@ test("brief: a document opens on its brief; Show full document switches, and the
 
   // Remembered for this user: after a reload and on another version. The mock saves the
   // choice inside the page, so wait for it before reloading.
-  await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("po-mock-db-v2")?.includes('"document_view":"full"')))
-    .toBe(true);
+  await savedView(page, "full");
   await page.reload();
   await expect(sections(page)).toHaveAttribute("data-view", "full");
   await page.goto("/documents/saved-carts/v/1");
   await expect(sections(page)).toHaveAttribute("data-view", "full");
   await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Brief" }).click();
   await expect(sections(page)).toHaveAttribute("data-view", "brief");
+  await savedView(page, "brief");
   await page.reload();
   await expect(sections(page)).toHaveAttribute("data-view", "brief");
   await page.keyboard.press("v");
