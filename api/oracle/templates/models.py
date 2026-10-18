@@ -83,6 +83,9 @@ class Theme(TenantScoped, Base):
     # Design tokens: fonts, colours, spacing, page size.
     tokens: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     css: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    # O1g: a company theme's slide CSS, applied after the shared slide layout in Present
+    # mode and the deck PDF. Built-in themes keep their slide variants in code (null).
+    slide_css: Mapped[str | None] = mapped_column(Text)
     builtin: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )

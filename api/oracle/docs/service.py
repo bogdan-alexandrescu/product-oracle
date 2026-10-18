@@ -236,17 +236,6 @@ def _template_meta(body: str):
     return version_meta(body)
 
 
-async def version_guidance(db: AsyncSession, version: DocumentVersion) -> dict[str, str]:
-    """Guidance per section id from the template version this version names."""
-    fm = version.front_matter or {}
-    body = await template_body(db, fm.get("template"), _str(fm.get("template_version")))
-    return layers.section_guidance(body) if body else {}
-
-
-def _str(value: object) -> str | None:
-    return None if value is None else str(value)
-
-
 async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut:
     sections = list(
         await db.scalars(
@@ -259,8 +248,6 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
         )
     )
     verdicts = await _latest_verdicts(db, version.id)
-    has_brief = any(s.layer == "brief" for s in sections)
-    guidance = await version_guidance(db, version) if has_brief else {}
     source = (await version_sources(db, [version.source_version_id])).get(
         version.source_version_id  # type: ignore[arg-type]
     )
@@ -272,9 +259,8 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
             SectionOut.model_validate(s).model_copy(
                 update={
                     "verdict": verdicts.get(s.section_key),
-                    "notes": layers.presenter_notes(s.body_md, guidance.get(s.section_key))
-                    if s.layer == "brief"
-                    else None,
+                    # O1g: computed on read, so every version follows the same rule.
+                    "notes": layers.presenter_notes(s.body_md) if s.layer == "brief" else None,
                 }
             )
             for s in sections

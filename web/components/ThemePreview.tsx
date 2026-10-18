@@ -6,7 +6,12 @@ import { useLive } from "@/lib/use-live";
 type PreviewIn = { tokens: Schemas["ThemeTokens"]; css: string; kind: "prd" | "roadmap" };
 
 const loadPreview = (body: PreviewIn) =>
-  unwrap<string>(api.POST("/v1/themes/preview", { body, parseAs: "text" }));
+  unwrap<string>(
+    api.POST("/v1/themes/preview", {
+      body: { ...body, view: "document", slide_css: null, slide_variant: null },
+      parseAs: "text",
+    }),
+  );
 
 /**
  * A sample document rendered by POST /v1/themes/preview with unsaved tokens and CSS,
@@ -14,21 +19,96 @@ const loadPreview = (body: PreviewIn) =>
  */
 export function ThemePreview({ tokens, css, kind, title = "Theme preview" }: PreviewIn & { title?: string }) {
   const live = useLive<PreviewIn, string>({ tokens, css, kind }, loadPreview, 300);
+  return <PreviewFrame html={live.data} pending={live.pending} error={live.error} title={title} testId="theme-preview" />;
+}
+
+type SlidePreviewIn = {
+  tokens: Schemas["ThemeTokens"];
+  slide_css: string | null;
+  kind: "prd" | "roadmap";
+  view: "slides";
+  slide_variant: string | null;
+};
+
+const loadSlidePreview = (body: SlidePreviewIn) =>
+  unwrap<string>(api.POST("/v1/themes/preview", { body: { ...body, css: "" }, parseAs: "text" }));
+
+/**
+ * The sample's brief as Present mode slides with unsaved tokens and slide CSS (O1g).
+ * `variant` names a built-in theme, whose slide design is in code and is used instead.
+ */
+export function SlidePreview({
+  tokens,
+  slideCss,
+  kind,
+  variant = null,
+}: {
+  tokens: Schemas["ThemeTokens"];
+  slideCss: string | null;
+  kind: "prd" | "roadmap";
+  variant?: string | null;
+}) {
+  const live = useLive<SlidePreviewIn, string>(
+    { tokens, slide_css: slideCss, kind, view: "slides", slide_variant: variant },
+    loadSlidePreview,
+    300,
+  );
+  return (
+    <PreviewFrame
+      html={live.data}
+      pending={live.pending}
+      error={live.error}
+      title="Slide preview"
+      testId="slide-preview"
+      // 960 px slides shown at half size.
+      scale={0.5}
+    />
+  );
+}
+
+function PreviewFrame({
+  html,
+  pending,
+  error,
+  title,
+  testId,
+  scale = 1,
+}: {
+  html: string | undefined;
+  pending: boolean;
+  error: string | null | undefined;
+  title: string;
+  testId: string;
+  scale?: number;
+}) {
   return (
     <div className="relative">
-      <iframe
-        title={title}
-        data-testid="theme-preview"
-        sandbox=""
-        srcDoc={live.data ?? ""}
-        className="h-[34rem] w-full rounded-md border border-neutral-200 bg-white"
-      />
-      {(live.pending || !live.data) && !live.error && (
+      {scale === 1 ? (
+        <iframe
+          title={title}
+          data-testid={testId}
+          sandbox=""
+          srcDoc={html ?? ""}
+          className="h-[34rem] w-full rounded-md border border-neutral-200 bg-white"
+        />
+      ) : (
+        <div className="h-[34rem] w-full overflow-hidden rounded-md border border-neutral-200 bg-neutral-200">
+          <iframe
+            title={title}
+            data-testid={testId}
+            sandbox=""
+            srcDoc={html ?? ""}
+            className="border-0"
+            style={{ width: `${100 / scale}%`, height: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left" }}
+          />
+        </div>
+      )}
+      {(pending || !html) && !error && (
         <span className="absolute top-2 right-2 rounded bg-white/90 px-1.5 py-0.5 text-[11px] text-neutral-500">
           Updating…
         </span>
       )}
-      {live.error && <p className="mt-1 text-xs text-rose-800">Preview failed: {live.error}</p>}
+      {error && <p className="mt-1 text-xs text-rose-800">Preview failed: {error}</p>}
     </div>
   );
 }

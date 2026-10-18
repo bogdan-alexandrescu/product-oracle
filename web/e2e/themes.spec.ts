@@ -73,3 +73,58 @@ test("themes: create a new one from a copy", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Company brand" })).toBeVisible();
   await expect(page.getByLabel("Accent", { exact: true })).toHaveValue("#0f5e8c");
 });
+
+test("themes: a company theme's slide CSS, with a live slide preview", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/themes/new");
+  await page.getByLabel("Key").fill("company-brand");
+  await page.getByLabel("Name").fill("Company brand");
+  await page.getByRole("button", { name: "Create theme" }).click();
+  await expect(page).toHaveURL(/\/settings\/themes\/company-brand$/);
+
+  // Focusing the Slide CSS field switches the preview to the sample's brief as slides.
+  const slideCss = page.getByLabel("Slide CSS");
+  await expect(slideCss).toHaveValue("");
+  await slideCss.focus();
+  await expect(page.getByRole("button", { name: "Slides" })).toHaveAttribute("aria-pressed", "true");
+  const preview = page.getByTestId("slide-preview");
+  await expect(preview).toHaveAttribute("sandbox", "");
+  const slides = page.frameLocator('[data-testid="slide-preview"]');
+  const summary = slides.getByRole("heading", { name: "Summary" });
+  await expect(summary).toBeVisible();
+  await expect(summary).not.toHaveCSS("color", "rgb(176, 0, 32)");
+
+  // Unsaved slide CSS shows in the preview first.
+  await slideCss.fill(".deck .slide-title { color: #b00020; }");
+  await expect(summary).toHaveCSS("color", "rgb(176, 0, 32)");
+
+  // Checked like the theme's CSS: an @import blocks saving.
+  const save = page.getByRole("button", { name: "Save", exact: true });
+  await slideCss.fill("@import url(https://fonts.example/brand.css);\n.deck .slide-title { color: #b00020; }");
+  await expect(page.getByTestId("theme-problems")).toContainText("slide CSS: @import is not allowed");
+  await expect(save).toBeDisabled();
+
+  await slideCss.fill(".deck .slide-title { color: #b00020; }");
+  await expect(page.getByTestId("theme-problems")).toHaveCount(0);
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(page.getByRole("status")).toContainText("Theme saved");
+  await page.reload();
+  await expect(page.getByLabel("Slide CSS")).toHaveValue(".deck .slide-title { color: #b00020; }");
+
+  // The document preview is still there.
+  await page.getByRole("button", { name: "Document" }).click();
+  await expect(page.frameLocator('[data-testid="theme-preview"]').getByRole("heading", { name: "Example feature PRD" })).toBeVisible();
+});
+
+test("themes: a built-in theme keeps its slide design, shown in the slide preview", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/themes/clean-document");
+  await expect(page.getByTestId("slide-css-builtin")).toContainText("Built-in themes keep their own slide design");
+  await expect(page.getByLabel("Slide CSS")).toHaveCount(0);
+  await page.getByRole("button", { name: "Slides" }).click();
+  const title = page.frameLocator('[data-testid="slide-preview"]').getByRole("heading", { name: "Summary" });
+  await expect(title).toBeVisible();
+  // The clean-document slide variant: a rule above each slide title.
+  await expect(title).toHaveCSS("border-top-style", "solid");
+});

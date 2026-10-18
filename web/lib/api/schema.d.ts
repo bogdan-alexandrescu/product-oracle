@@ -2058,7 +2058,8 @@ export interface paths {
         put?: never;
         /**
          * Create Theme
-         * @description Rejected (422) when a text colour misses WCAG AA contrast on the background.
+         * @description Rejected (422) when a text colour misses WCAG AA contrast on the background, or
+         *     the CSS or slide CSS loads anything from outside the export.
          */
         post: operations["create_theme"];
         delete?: never;
@@ -2095,7 +2096,8 @@ export interface paths {
         put?: never;
         /**
          * Preview Theme
-         * @description A sample document rendered with unsaved tokens and CSS, for the live preview.
+         * @description A sample document rendered with unsaved tokens and CSS, for the live preview;
+         *     with ``view: slides``, the sample's brief as Present mode slides with the slide CSS.
          */
         post: operations["preview_theme"];
         delete?: never;
@@ -6403,6 +6405,8 @@ export interface components {
              * @default
              */
             css: string;
+            /** Slide Css */
+            slide_css?: string | null;
         };
         /** ThemeFeatures */
         ThemeFeatures: {
@@ -6478,6 +6482,8 @@ export interface components {
             tokens: components["schemas"]["ThemeTokens"];
             /** Css */
             css: string;
+            /** Slide Css */
+            slide_css?: string | null;
             /** Builtin */
             builtin: boolean;
             /** Archived At */
@@ -6516,12 +6522,22 @@ export interface components {
              * @default
              */
             css: string;
+            /** Slide Css */
+            slide_css?: string | null;
             /**
              * Kind
              * @default prd
              * @enum {string}
              */
             kind: "prd" | "roadmap";
+            /**
+             * View
+             * @default document
+             * @enum {string}
+             */
+            view: "document" | "slides";
+            /** Slide Variant */
+            slide_variant?: string | null;
         };
         /** ThemeSpacing */
         ThemeSpacing: {
@@ -6556,6 +6572,8 @@ export interface components {
             tokens?: components["schemas"]["ThemeTokens"] | null;
             /** Css */
             css?: string | null;
+            /** Slide Css */
+            slide_css?: string | null;
         };
         /** ThemeValidateIn */
         ThemeValidateIn: {
@@ -6565,6 +6583,8 @@ export interface components {
              * @default
              */
             css: string;
+            /** Slide Css */
+            slide_css?: string | null;
         };
         /** ThemeValidateOut */
         ThemeValidateOut: {

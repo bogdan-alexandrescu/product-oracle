@@ -1,6 +1,7 @@
 """A sample PRD or roadmap rendered with a theme that may not be saved yet.
 
-Used by Settings > Themes for the live preview and the picker's theme thumbnails.
+Used by Settings > Themes for the live preview (the document, and its brief as Present
+mode slides) and the picker's theme thumbnails.
 Nothing touches the database: the sample is parsed and wrapped in transient rows.
 Tokens or CSS that fail the safety checks are left out of the preview (contrast
 problems are kept, so the editor can see them).
@@ -9,9 +10,11 @@ problems are kept, so the editor can see them).
 import uuid
 from datetime import UTC, datetime
 
+from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import parse_draft
-from oracle.export.render import ExportVersion, render_themed_html
+from oracle.export.deck import build_deck, render_deck_html
+from oracle.export.render import ExportVersion, apply_layer, render_themed_html
 from oracle.templates import validation
 from oracle.templates.models import Theme
 from oracle.templates.schemas import ThemeTokens
@@ -114,8 +117,16 @@ def _safe_tokens(tokens: ThemeTokens) -> dict:
     return raw
 
 
-def render_preview(tokens: ThemeTokens, css: str, kind: str = "prd") -> str:
+# The sample's brief sections, for the slide preview.
+SAMPLE_BRIEF = {
+    "prd": {"summary", "goal-trace", "requirements"},
+    "roadmap": {"now", "next", "later"},
+}
+
+
+def _sample(kind: str, theme: Theme) -> ExportVersion:
     draft = parse_draft(SAMPLE_ROADMAP if kind == "roadmap" else SAMPLE_PRD)
+    brief = SAMPLE_BRIEF["roadmap" if kind == "roadmap" else "prd"]
     now = datetime.now(UTC)
     document = Document(
         id=uuid.uuid4(),
@@ -138,15 +149,14 @@ def render_preview(tokens: ThemeTokens, css: str, kind: str = "prd") -> str:
             body_md=s.body_md,
             body_text=s.body_text,
             citation_keys=s.citation_keys,
+            layer=layers.BRIEF if s.section_key in brief else layers.DETAIL,
         )
         for s in draft.sections
     ]
     citations = [
         Citation(cite_key=c.id, source=c.source, ref=c.ref, title=c.title) for c in draft.citations
     ]
-    safe_css = "" if validation.check_theme_css(css) else css
-    theme = Theme(key="preview", name="Preview", tokens=_safe_tokens(tokens), css=safe_css)
-    ev = ExportVersion(
+    return ExportVersion(
         document=document,
         version=version,
         sections=sections,
@@ -154,5 +164,33 @@ def render_preview(tokens: ThemeTokens, css: str, kind: str = "prd") -> str:
         latest_number=1,
         theme=theme,
         theme_source="preview",
+        all_sections=list(sections),
     )
-    return render_themed_html(ev)
+
+
+def render_preview(tokens: ThemeTokens, css: str, kind: str = "prd") -> str:
+    safe_css = "" if validation.check_theme_css(css) else css
+    theme = Theme(key="preview", name="Preview", tokens=_safe_tokens(tokens), css=safe_css)
+    return render_themed_html(_sample(kind, theme))
+
+
+def render_slide_preview(
+    tokens: ThemeTokens, slide_css: str | None, kind: str = "prd", variant: str | None = None
+) -> str:
+    """The sample's brief as slides: the shared layout, the tokens, then the slide CSS
+    (left out when unsafe, like the document preview's CSS), or a built-in theme's
+    slide variant when ``variant`` names one."""
+    from oracle.templates.builtins import BUILTIN_THEMES_BY_KEY
+
+    builtin = variant in BUILTIN_THEMES_BY_KEY
+    safe_css = None if validation.check_slide_css(slide_css) else slide_css
+    theme = Theme(
+        key=variant if builtin else "preview",
+        name="Preview",
+        tokens=_safe_tokens(tokens),
+        css="",
+        slide_css=None if builtin else safe_css,
+        builtin=builtin,
+    )
+    deck = build_deck(apply_layer(_sample(kind, theme), "deck"))
+    return render_deck_html(deck, preview=True)

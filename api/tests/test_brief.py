@@ -175,12 +175,11 @@ def test_every_builtin_marks_a_brief_with_the_o1f_shape():
 
 
 @pytest.mark.parametrize(
-    ("body", "problems", "warnings", "brief"),
+    ("body", "problems", "brief"),
     [
         (
             "---\nbrief: [summary]\n---\n# T {#title}\n\n## Summary {#summary}\n\n"
             "## Detail {#detail}\n\n## Sources and data points {#sources}\n",
-            set(),
             set(),
             ["summary"],
         ),
@@ -188,64 +187,38 @@ def test_every_builtin_marks_a_brief_with_the_o1f_shape():
             "# T {#title}\n\n## Summary {#summary}\n\n# Full version {#full}\n\n"
             "## Detail {#detail}\n\n## Sources and data points {#sources}\n",
             set(),
-            set(),
             ["summary"],
         ),
         (
             "# T {#title}\n\n## Summary {#summary}\n\n## Sources and data points {#sources}\n",
-            set(),
             {"no_brief_sections"},
             [],
         ),
         (
             "---\nbrief: [nope, sources, full]\n---\n# T {#title}\n\n# Full version {#full}\n\n"
             "## Sources and data points {#sources}\n",
-            {"unknown_brief_section", "sources_section_brief", "full_section_brief"},
-            {"no_brief_sections"},
+            {
+                "unknown_brief_section",
+                "sources_section_brief",
+                "full_section_brief",
+                "no_brief_sections",
+            },
             [],
         ),
         (
             "---\nbrief: summary\n---\n# T {#title}\n\n## Summary {#summary}\n\n"
             "## Sources and data points {#sources}\n",
-            {"invalid_brief"},
-            {"no_brief_sections"},
+            {"invalid_brief", "no_brief_sections"},
             [],
         ),
     ],
 )
-def test_template_brief_validation(body, problems, warnings, brief):
+def test_template_brief_validation(body, problems, brief):
     check = check_template(body)
+    # O1g: a template without brief sections is refused, not warned about.
     assert {p.code for p in check.problems} == problems
-    assert {w.code for w in check.warnings} == warnings
+    assert check.warnings == []
     assert check.brief_sections == brief
-
-
-async def test_validate_endpoint_reports_a_template_without_brief(client, tenant_id):
-    h = await _token(tenant_id, "viewer")
-    body = "# T {#title}\n\n## Problem {#problem}\n\n## Sources and data points {#sources}\n"
-    out = (await client.post("/v1/templates/validate", json={"body": body}, headers=h)).json()
-    assert out["valid"] is True and out["brief_sections"] == []
-    assert [w["code"] for w in out["warnings"]] == ["no_brief_sections"]
-    marked = "---\nbrief: [problem]\n---\n" + body
-    out = (await client.post("/v1/templates/validate", json={"body": marked}, headers=h)).json()
-    assert out["valid"] and out["warnings"] == [] and out["brief_sections"] == ["problem"]
-
-
-async def test_template_versions_carry_their_brief(client, tenant_id):
-    h = await _token(tenant_id, "approver")
-    t = (await client.get("/v1/templates/now-next-later", headers=h)).json()
-    latest = t["versions"][-1]
-    assert latest["brief_sections"][:2] == ["summary", "goals"] and latest["warnings"] == []
-    body = "# T {#title}\n\n## Problem {#problem}\n\n## Sources and data points {#sources}\n"
-    created = await client.post(
-        "/v1/templates",
-        json={"key": "plain", "name": "Plain", "kind": "prd", "body": body},
-        headers=h,
-    )
-    assert created.status_code == 201
-    version = created.json()["versions"][0]
-    assert version["brief_sections"] == []
-    assert [w["code"] for w in version["warnings"]] == ["no_brief_sections"]
 
 
 async def test_seeding_adds_the_brief_version_to_unedited_builtins_only(tenant_id):
@@ -347,9 +320,10 @@ async def test_import_records_brief_sections_from_the_template(client, doc):
     assert [k for k, s in sections.items() if s["layer"] == "brief"] == BRIEF_KEYS
     for key in ("title", "full", "feature-detail", "milestone-beta", "risks", "sources"):
         assert sections[key]["layer"] == "detail"
-    # Presenter notes: the notes block, else the template's guidance; none on detail.
+    # Presenter notes come only from a notes block (O1g): the template's guidance for
+    # the problem section is not used; detail has none.
     assert sections["summary"]["notes"] == "Open with the drop-off number."
-    assert "plain language" in sections["problem"]["notes"]
+    assert sections["problem"]["notes"] is None
     assert sections["feature-detail"]["notes"] is None
 
 

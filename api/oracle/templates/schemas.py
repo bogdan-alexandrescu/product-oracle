@@ -40,7 +40,8 @@ class TemplateVersionOut(BaseModel):
     # O1f: the brief layer's section ids (front matter ``brief``, else the sections
     # before a ``Full version {#full}`` heading); every other section is detail.
     brief_sections: list[str] = []
-    # Non-blocking findings, e.g. no_brief_sections.
+    # Findings on a stored version: no_brief_sections for one saved before O1g (its
+    # next edit must add brief markers).
     warnings: list[Problem] = []
 
 
@@ -90,7 +91,8 @@ class TemplateValidateIn(BaseModel):
 class TemplateValidateOut(BaseModel):
     valid: bool
     problems: list[Problem]
-    # Reported without blocking the save: no_brief_sections (O1f).
+    # Findings that do not block saving. A template without brief sections is a
+    # problem (no_brief_sections, O1g), not a warning.
     warnings: list[Problem] = []
     brief_sections: list[str] = []
     section_keys: list[str]
@@ -148,6 +150,10 @@ class ThemeOut(BaseModel):
     description: str | None
     tokens: ThemeTokens
     css: str
+    # O1g: a company theme's slide CSS for Present mode and the deck PDF, applied after
+    # the shared slide layout. Null for built-in themes (their slide variants are in
+    # code) and for company themes that use the shared layout.
+    slide_css: str | None = None
     builtin: bool
     archived_at: datetime | None
     created_at: datetime
@@ -161,6 +167,8 @@ class ThemeCreate(BaseModel):
     description: str | None = Field(default=None, max_length=2000)
     tokens: ThemeTokens = Field(default_factory=ThemeTokens)
     css: str = Field(default="", max_length=100_000)
+    # Checked like ``css``: no @import, no URLs except data:, no way out of <style>.
+    slide_css: str | None = Field(default=None, max_length=100_000)
 
 
 class ThemeUpdate(BaseModel):
@@ -169,11 +177,14 @@ class ThemeUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=2000)
     tokens: ThemeTokens | None = None
     css: str | None = Field(default=None, max_length=100_000)
+    # Sent as null or "" clears it; left out keeps it. Built-in themes cannot have one.
+    slide_css: str | None = Field(default=None, max_length=100_000)
 
 
 class ThemeValidateIn(BaseModel):
     tokens: ThemeTokens
     css: str = Field(default="", max_length=100_000)
+    slide_css: str | None = Field(default=None, max_length=100_000)
 
 
 class ThemeValidateOut(BaseModel):
@@ -183,6 +194,11 @@ class ThemeValidateOut(BaseModel):
 
 class ThemePreviewIn(ThemeValidateIn):
     kind: TemplateKind = "prd"
+    # "slides": the sample as Present mode slides (16:9), with ``slide_css`` applied
+    # after the shared slide layout.
+    view: Literal["document", "slides"] = "document"
+    # Slides of a built-in theme: its key, so the preview uses its slide variant.
+    slide_variant: str | None = Field(default=None, max_length=63)
 
 
 # --- new-draft picker ---------------------------------------------------------------

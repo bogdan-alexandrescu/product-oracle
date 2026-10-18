@@ -32,11 +32,10 @@ export function slideBody(md: string): string {
   return md.replace(NOTES, "").replace(COMMENT, "").trim();
 }
 
+/** Presenter notes come only from ```notes blocks (O1g); guidance is never used. */
 export function presenterNotes(md: string): string | null {
   const notes = [...md.matchAll(NOTES)].map((m) => m[1].trim()).filter(Boolean);
-  if (notes.length) return notes.join("\n\n");
-  const guidance = [...md.matchAll(COMMENT)].map((m) => m[1].trim().replace(/\s+/g, " ")).filter(Boolean);
-  return guidance.length ? guidance.join("\n\n") : null;
+  return notes.length ? notes.join("\n\n") : null;
 }
 
 function linked(md: string): string[] {

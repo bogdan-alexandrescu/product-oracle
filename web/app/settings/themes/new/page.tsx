@@ -43,6 +43,8 @@ export default function NewThemePage() {
             description: description.trim() || null,
             tokens: base.tokens,
             css: base.css,
+            // A company theme's slide CSS comes along; built-ins have none (theirs is in code).
+            slide_css: base.slide_css ?? null,
           },
         }),
       );

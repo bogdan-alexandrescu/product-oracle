@@ -18,6 +18,7 @@ REPO = Path(__file__).resolve().parents[2]
 VALID = """---
 theme: clean-document
 suggest_when: "Small fixes"
+brief: [problem]
 ---
 
 # {{title}} {#title}
@@ -152,37 +153,45 @@ async def test_builtins_are_editable_as_new_versions_and_archivable(client, tena
     assert (await client.delete("/v1/templates/prd-rfc", headers=h)).json()["archived_at"]
 
 
+# O1g: every template marks a brief, so each body below does (but the invalid YAML).
+BRIEF_TITLE = "---\nbrief: [title]\n---\n"
+BRIEF_T = "---\nbrief: [t]\n---\n"
+
+
 @pytest.mark.parametrize(
     ("body", "codes"),
     [
         (
-            "# T {#title}\n\n## Problem\n\n## Sources and data points {#sources}\n",
+            BRIEF_TITLE + "# T {#title}\n\n## Problem\n\n## Sources and data points {#sources}\n",
             {"missing_section_id"},
         ),
         (
-            "# T {#title}\n\n## Problem {#p}\nWe know [c:c1].\n\n"
+            BRIEF_TITLE + "# T {#title}\n\n## Problem {#p}\nWe know [c:c1].\n\n"
             "## Sources and data points {#sources}\n",
             {"citation_in_body"},
         ),
-        ("# T {#title}\n\n## Problem {#p}\n", {"missing_sources_section"}),
+        (BRIEF_TITLE + "# T {#title}\n\n## Problem {#p}\n", {"missing_sources_section"}),
         (
-            "# T {#title}\n\n## Sources and data points {#sources}\n\n## After {#after}\n",
+            BRIEF_TITLE
+            + "# T {#title}\n\n## Sources and data points {#sources}\n\n## After {#after}\n",
             {"sources_section_not_last"},
         ),
         (
-            "# T {#t}\n\n## A {#t}\n\n## Sources and data points {#sources}\n",
+            BRIEF_T + "# T {#t}\n\n## A {#t}\n\n## Sources and data points {#sources}\n",
             {"duplicate_section_id"},
         ),
         (
             "---\ntheme: [\n---\n# T {#t}\n\n## Sources and data points {#sources}\n",
-            {"invalid_front_matter"},
+            {"invalid_front_matter", "no_brief_sections"},
         ),
         (
-            "---\ntheme: nope\n---\n# T {#t}\n\n## Sources and data points {#sources}\n",
+            "---\ntheme: nope\nbrief: [t]\n---\n"
+            "# T {#t}\n\n## Sources and data points {#sources}\n",
             {"unknown_theme"},
         ),
         (
-            "# T {#t}\n\n```yaml\nlayout: [\n```\n\n## Sources and data points {#sources}\n",
+            BRIEF_T
+            + "# T {#t}\n\n```yaml\nlayout: [\n```\n\n## Sources and data points {#sources}\n",
             {"invalid_layout"},
         ),
     ],
@@ -207,12 +216,13 @@ async def test_validation_reports_every_problem(client, tenant_id, body, codes):
 async def test_citation_problem_names_the_line_and_section(client, tenant_id):
     h = await _token(tenant_id)
     body = (
+        "---\nbrief: [problem]\n---\n"
         "# T {#title}\n\n## Problem {#problem}\nOk.\nWe know [c:c9].\n\n"
         "## Sources and data points {#sources}\n- [c:c9]\n"
     )
     out = (await client.post("/v1/templates/validate", json={"body": body}, headers=h)).json()
     [p] = out["problems"]
-    assert p["line"] == 5 and p["section_key"] == "problem" and "[c:c9]" in p["message"]
+    assert p["line"] == 8 and p["section_key"] == "problem" and "[c:c9]" in p["message"]
     unknown = await client.post(
         "/v1/templates/validate",
         json={"body": VALID, "required_sections": ["problem", "nope"]},

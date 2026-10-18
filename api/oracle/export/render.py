@@ -377,8 +377,11 @@ def build_context(ev: ExportVersion) -> dict:
                 key=s.section_key,
                 level=min(max(s.level, 1), 6),
                 heading=Markup(md.renderInline(heading, env)),
+                # Guidance comments and presenter notes are never exported.
                 body=Markup(
-                    absolute_doc_links(unlink_missing(md.render(s.body_md or "", env), present))
+                    absolute_doc_links(
+                        unlink_missing(md.render(layers.slide_body(s.body_md), env), present)
+                    )
                 ),
             )
         )
