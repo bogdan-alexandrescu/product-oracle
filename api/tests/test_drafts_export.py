@@ -373,6 +373,17 @@ async def test_roadmap_board_layout(client, tenant_id):
     assert "size: A4 landscape" in html and 'class="legend"' in html
     assert '<div class="section-group" data-group="now">' in html
     assert "flag-no-goal" in html and "Serves no confirmed goal" in html
+    # The board repeats its header on every PDF page, so the header is kept short enough
+    # for the top margin; a document theme that does not repeat it is left alone.
+    assert 'class="doc-header status-draft doc-header--running"' in html
+    assert ".doc-header--running .status-table tr" in html
+    prd = (
+        await client.post(
+            "/v1/drafts", json={"kind": "prd", "title": "Plain", "template": "one-pager"}, headers=h
+        )
+    ).json()
+    plain = (await client.get(f"/v1/documents/{prd['slug']}/versions/1/export", headers=h)).text
+    assert "doc-header--running" not in plain.split("</head>")[1]
 
 
 @requires_pdf

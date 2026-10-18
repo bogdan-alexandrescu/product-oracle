@@ -700,6 +700,9 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "css": Markup(themed_stylesheet()),
         "token_css": Markup(token_css(tokens)),
         "theme_css": Markup(theme.css or ""),
+        # The theme repeats the header on every PDF page: themed.css keeps it short enough
+        # for the page's top margin (stored theme copies included, so it lives here).
+        "running_header": "running(" in (theme.css or ""),
         "layer": ev.layer,
         "layer_label": ev.layer_label,
         "source_label": ev.source_label,
