@@ -480,3 +480,64 @@ def test_pdf_loads_nothing_external(tmp_path):
     finally:
         server.shutdown()
     assert hits == []
+
+
+@pytest.mark.parametrize(
+    ("css", "running"),
+    [
+        (".doc-header { position: running(docheader); }", True),
+        ("@media print { .doc-header { margin: 0; POSITION: RUNNING(h); } }", True),
+        (".doc-header.x, .doc-header { position:running(h) }", True),
+        (".legend { position: running(legend); }", False),
+        ("/* running( */ .doc-header { color: red; }", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_running_header_detection(css, running):
+    from oracle.export.render import running_header
+
+    assert running_header(css) is running
+
+
+def _text_positions(page) -> list[tuple[float, str]]:
+    """(distance from the top of the page in pt, text) for every text run on the page."""
+    height = float(page.mediabox.height)
+    out: list[tuple[float, str]] = []
+
+    def visit(text, cm, tm, _font, _size):
+        if text.strip():
+            y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
+            out.append((height - y, text.strip()))
+
+    page.extract_text(visitor_text=visit)
+    return out
+
+
+@requires_pdf
+async def test_board_header_fits_the_margin_and_the_footer_is_filled(client, tenant_id):
+    h = await _token(tenant_id)
+    long_title = "Board " + "with a very long roadmap name " * 6
+    out = (
+        await client.post(
+            "/v1/drafts",
+            json={"kind": "roadmap", "title": long_title.strip(), "template": "now-next-later"},
+            headers=h,
+        )
+    ).json()
+    resp = await client.get(
+        f"/v1/documents/{out['slug']}/versions/1/export", params={"format": "pdf"}, headers=h
+    )
+    assert resp.status_code == 200
+    reader = PdfReader(io.BytesIO(resp.content))
+    margin_pt = 30 / 25.4 * 72  # the board's 30 mm top margin
+    for page in reader.pages[:2]:
+        runs = _text_positions(page)
+        header = [y for y, t in runs if t.startswith("As of") or t.startswith("Confidence")]
+        assert header and all(0 < y < margin_pt for y in header), runs[:12]
+        # Nothing from the page body starts inside the margin.
+        body = [y for y, t in runs if y >= margin_pt]
+        assert body and min(body) > max(header)
+        # The footer carries the (capped) title, the version and the status.
+        footer = " ".join(t for y, t in runs if y > float(page.mediabox.height) - margin_pt)
+        assert "Version 1" in footer and "Draft" in footer and "…" in footer, footer

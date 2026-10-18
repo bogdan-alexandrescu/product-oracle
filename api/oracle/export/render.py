@@ -158,6 +158,25 @@ def apply_layer(ev: ExportVersion, layer: str) -> ExportVersion:
 
 _SECTION_LINK = re.compile(r'<a href="#([^"]+)">(.*?)</a>', re.S)
 # A link to another document's version in rendered HTML, with its optional section.
+# A theme that makes the version header a running element repeats it on every PDF page.
+_RUNNING_HEADER = re.compile(
+    r"\.doc-header\b[^{}]*\{[^{}]*position\s*:\s*running\s*\(", re.IGNORECASE
+)
+# The repeated header sits in the page's top margin, so its title and source are capped.
+HEADER_TEXT_MAX = 90
+
+
+def running_header(css: str | None) -> bool:
+    """True when the theme's CSS makes ``.doc-header`` a running element."""
+    return bool(_RUNNING_HEADER.search(css or ""))
+
+
+def _header_text(text: str | None, running: bool) -> str | None:
+    if not running or text is None or len(text) <= HEADER_TEXT_MAX:
+        return text
+    return text[: HEADER_TEXT_MAX - 1].rstrip() + "…"
+
+
 _DOC_LINK = re.compile(r'href="(/documents/[A-Za-z0-9][A-Za-z0-9_.-]*/v/\d+)(?:#([^"]*))?"')
 
 
@@ -669,6 +688,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         body_classes.append("numbered")
     if features.get("appendix_break"):
         body_classes.append("appendix-break")
+    running = running_header(theme.css)
     return {
         "title": ev.document.title,
         "slug": ev.document.slug,
@@ -702,7 +722,9 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "theme_css": Markup(theme.css or ""),
         # The theme repeats the header on every PDF page: themed.css keeps it short enough
         # for the page's top margin (stored theme copies included, so it lives here).
-        "running_header": "running(" in (theme.css or ""),
+        "running_header": running,
+        "header_title": _header_text(ev.document.title, running),
+        "header_source_label": _header_text(ev.source_label, running),
         "layer": ev.layer,
         "layer_label": ev.layer_label,
         "source_label": ev.source_label,

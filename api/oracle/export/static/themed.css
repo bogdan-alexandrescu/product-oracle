@@ -71,7 +71,18 @@ body.orientation-landscape { max-width: 76rem; }
   .doc-header--running .status-table tr::after { content: "·"; margin-right: 0.5rem; color: var(--color-muted); }
   .doc-header--running .status-table tr:last-child::after { content: none; }
   .doc-header--running .legend { margin-top: 0.15rem; }
+  .doc-header--running .status-table { font-size: inherit; }
 }
+/* WeasyPrint runs no string-set inside a running element, so a page footer that shows
+   the title, version and status reads them from this carrier instead. It takes no space
+   on the page and is never shown on screen. */
+.doc-strings { height: 0; overflow: hidden; margin: 0; }
+.doc-strings > span { display: inline; }
+.doc-strings-title { string-set: doc-title content(text); }
+.doc-strings-version { string-set: doc-version content(text); }
+.doc-strings-status { string-set: doc-status content(text); }
+.doc-strings-asof { string-set: doc-asof content(text); }
+@media screen { .doc-strings { display: none; } }
 .legend > span { display: inline-block; margin-right: 1rem; }
 
 @page {
