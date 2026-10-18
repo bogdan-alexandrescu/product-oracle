@@ -57,6 +57,10 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const verQ = useQuery(`ver|${doc}|${n}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })),
   );
+  // Commenters can cite public links on baseline items from any section.
+  const graphQ = useQuery(`baseline-graph|${canComment}`, () =>
+    canComment ? unwrap(api.GET("/v1/baseline/graph")) : Promise.resolve(null),
+  );
   const commentsQ = useQuery(`comments|${doc}|${n}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}/comments", { params: { path: { doc, n } } })),
   );
@@ -330,6 +334,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                     activeCommentId={activeId}
                     readOnly={readOnly || !canDecide}
                     changedLock={changedLocks.has(s.section_key)}
+                    evidenceTargets={canComment ? graphQ.data?.entities : undefined}
                     onHighlightClick={onHighlightClick}
                     onVerdict={onVerdict}
                   />

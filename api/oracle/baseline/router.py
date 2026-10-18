@@ -14,7 +14,7 @@ from sqlalchemy import inspect
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
-from oracle.baseline import conflicts, evidence, scoring, service, trace, yaml_io
+from oracle.baseline import conflicts, evidence, public_links, scoring, service, trace, yaml_io
 from oracle.baseline.models import Edge, Entity
 from oracle.baseline.schemas import (
     ConflictCreate,
@@ -34,8 +34,12 @@ from oracle.baseline.schemas import (
     EntityType,
     EntityWriteOut,
     EvidenceCreate,
+    EvidenceLinkCreate,
     EvidenceOut,
     GraphOut,
+    LinkErrorOut,
+    LinkPreviewOut,
+    LinkTarget,
     NodeStatus,
     OriginIn,
     ProposalCreate,
@@ -424,6 +428,72 @@ async def add_edge_evidence(
     try:
         edge = await service.get_edge(db, edge_id)
         ev = await evidence.attach(db, principal, body, edge=edge)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    await db.commit()
+    await _fresh(db, ev)
+    return (await evidence.present(db, principal, [ev]))[0]
+
+
+Fetcher = Annotated[public_links.LinkFetcher, Depends(public_links.get_link_fetcher)]
+_LINK_RESPONSES = {
+    422: {"model": LinkErrorOut, "description": "The link cannot be used (e.g. not public)"},
+    502: {"model": LinkErrorOut, "description": "The page could not be fetched"},
+    504: {"model": LinkErrorOut, "description": "The page took too long to respond"},
+}
+
+
+def _link_failed(exc: public_links.LinkError) -> JSONResponse:
+    return JSONResponse({"detail": str(exc), "code": exc.code}, exc.status_code)
+
+
+@router.post("/evidence/link/preview", response_model=LinkPreviewOut, responses=_LINK_RESPONSES)
+async def preview_link_evidence(
+    body: LinkTarget, principal: Commenter, db: TenantDB, fetcher: Fetcher
+) -> LinkPreviewOut | JSONResponse:
+    """Fetch a public link and show its title, excerpt and confidence; saves nothing."""
+    try:
+        return await evidence.preview_link(db, body, fetcher)
+    except public_links.LinkError as exc:
+        return _link_failed(exc)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+
+
+@router.post(
+    "/evidence/link",
+    response_model=EvidenceOut,
+    status_code=status.HTTP_201_CREATED,
+    responses=_LINK_RESPONSES,
+)
+async def add_link_evidence(
+    body: EvidenceLinkCreate, principal: Commenter, db: TenantDB, fetcher: Fetcher
+) -> EvidenceOut | JSONResponse:
+    """Cite a public page (a public Notion page, a Google Doc shared with anyone with
+    the link, or a public web page) on an entity or edge. Oracle fetches it without
+    any credential and keeps a snapshot; everyone sees it. Commenters and up."""
+    try:
+        ev = await evidence.add_link(db, principal, body, fetcher)
+    except public_links.LinkError as exc:
+        return _link_failed(exc)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    await db.commit()
+    await _fresh(db, ev)
+    return (await evidence.present(db, principal, [ev]))[0]
+
+
+@router.post(
+    "/evidence/{evidence_id}/refresh", response_model=EvidenceOut, responses=_LINK_RESPONSES
+)
+async def refresh_link_evidence(
+    evidence_id: uuid.UUID, principal: Commenter, db: TenantDB, fetcher: Fetcher
+) -> EvidenceOut | JSONResponse:
+    """Fetch a public link again: update its snapshot and excerpt, then rescore."""
+    try:
+        ev = await evidence.refresh_link(db, principal, evidence_id, fetcher)
+    except public_links.LinkError as exc:
+        return _link_failed(exc)
     except service.BaselineError as exc:
         raise _fail(exc) from exc
     await db.commit()

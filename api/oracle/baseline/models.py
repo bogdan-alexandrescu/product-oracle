@@ -33,6 +33,8 @@ NODE_STATUSES = ("proposed", "confirmed", "rejected")
 ORIGINS = ("user", "agent", "import")
 PROPOSAL_STATUSES = ("open", "accepted", "rejected")
 CONFLICT_STATUSES = ("open", "resolved", "logged")
+# Evidence from a public link (owner, 2026-10-17): scored like these source kinds.
+LINK_KINDS = ("notion", "google_docs", "web")
 
 EXACTLY_ONE_TARGET = "(entity_id IS NULL) <> (edge_id IS NULL)"
 CONFIDENCE_RANGE = "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)"
@@ -126,6 +128,7 @@ class Evidence(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(EXACTLY_ONE_TARGET, name="one_target"),
         CheckConstraint(CONFIDENCE_RANGE, name="confidence"),
+        CheckConstraint(f"kind IS NULL OR {_in('kind', LINK_KINDS)}", name="kind"),
     )
 
     entity_id: Mapped[uuid.UUID | None] = _entity_fk()
@@ -144,6 +147,35 @@ class Evidence(TenantScoped, Base):
         JSONB, nullable=False, server_default="{}"
     )
     scored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set for public-link evidence ("notion" | "google_docs" | "web"); its page is kept in
+    # evidence_link_snapshots. Null for evidence from a source item or free-standing.
+    kind: Mapped[str | None] = mapped_column(Text)
+    # Why the person who added a public link cites it.
+    note: Mapped[str | None] = mapped_column(Text)
+
+
+class EvidenceLinkSnapshot(TenantScoped, Base):
+    """One fetch of a public link behind a piece of evidence; the newest is current.
+
+    Fetched without any credential, so it is public and every user may see it.
+    """
+
+    __tablename__ = "evidence_link_snapshots"
+
+    evidence_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("evidence.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # The page that was fetched (after redirects) and, for Google Docs, its export.
+    final_url: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str | None] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(Text)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # When the page says it last changed (Last-Modified header or page metadata).
+    last_modified: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # User id or API token id that asked for the fetch.
+    fetched_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
 
 class EntityRevision(TenantScoped, Base):

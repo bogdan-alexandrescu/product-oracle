@@ -4283,6 +4283,218 @@
         }
       }
     },
+    "/v1/baseline/evidence/link/preview": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Preview Link Evidence",
+        "description": "Fetch a public link and show its title, excerpt and confidence; saves nothing.",
+        "operationId": "preview_link_evidence",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkTarget"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkPreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The link cannot be used (e.g. not public)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkErrorOut"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The page could not be fetched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkErrorOut"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The page took too long to respond",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/baseline/evidence/link": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Add Link Evidence",
+        "description": "Cite a public page (a public Notion page, a Google Doc shared with anyone with\nthe link, or a public web page) on an entity or edge. Oracle fetches it without\nany credential and keeps a snapshot; everyone sees it. Commenters and up.",
+        "operationId": "add_link_evidence",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvidenceLinkCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The link cannot be used (e.g. not public)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkErrorOut"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The page could not be fetched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkErrorOut"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The page took too long to respond",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/baseline/evidence/{evidence_id}/refresh": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Refresh Link Evidence",
+        "description": "Fetch a public link again: update its snapshot and excerpt, then rescore.",
+        "operationId": "refresh_link_evidence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "evidence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Evidence Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The link cannot be used (e.g. not public)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkErrorOut"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The page could not be fetched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkErrorOut"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The page took too long to respond",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkErrorOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/baseline/evidence/{evidence_id}": {
       "delete": {
         "tags": [
@@ -10270,6 +10482,57 @@
         "title": "EvidenceCreate",
         "description": "Evidence from one of your own source items (url, ref and an excerpt are copied\nfrom it unless given), or free-standing (url / ref / excerpt only)."
       },
+      "EvidenceLinkCreate": {
+        "properties": {
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "edge_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edge Id"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "EvidenceLinkCreate"
+      },
       "EvidenceOut": {
         "properties": {
           "id": {
@@ -10398,6 +10661,43 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "notion",
+                  "google_docs",
+                  "web"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LinkSnapshotOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -11974,6 +12274,202 @@
           "checkpoints"
         ],
         "title": "KnobsOut"
+      },
+      "LinkErrorOut": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "code"
+        ],
+        "title": "LinkErrorOut",
+        "description": "A link that cannot be used: ``not_public``, ``blocked_address``, ``not_https``..."
+      },
+      "LinkPreviewOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "notion",
+              "google_docs",
+              "web"
+            ],
+            "title": "Kind"
+          },
+          "final_url": {
+            "type": "string",
+            "title": "Final Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "excerpt": {
+            "type": "string",
+            "title": "Excerpt"
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fetched At"
+          },
+          "last_modified": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Modified"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "confidence_factors": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Confidence Factors",
+            "default": {}
+          },
+          "already_cited": {
+            "type": "boolean",
+            "title": "Already Cited",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "kind",
+          "final_url",
+          "excerpt",
+          "fetched_at",
+          "confidence"
+        ],
+        "title": "LinkPreviewOut",
+        "description": "What adding the link would save: its title, excerpt and confidence."
+      },
+      "LinkSnapshotOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "notion",
+              "google_docs",
+              "web"
+            ],
+            "title": "Kind"
+          },
+          "final_url": {
+            "type": "string",
+            "title": "Final Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fetched At"
+          },
+          "last_modified": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Modified"
+          },
+          "text_chars": {
+            "type": "integer",
+            "title": "Text Chars",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "final_url",
+          "fetched_at"
+        ],
+        "title": "LinkSnapshotOut",
+        "description": "The public page behind a piece of evidence, as last fetched. Everyone sees it."
+      },
+      "LinkTarget": {
+        "properties": {
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "edge_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edge Id"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "LinkTarget",
+        "description": "Exactly one of entity_id or edge_id."
       },
       "LoginRequest": {
         "properties": {

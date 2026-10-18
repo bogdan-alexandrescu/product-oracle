@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
+import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { Badge, Button, ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -39,6 +40,8 @@ type Props = {
   graph: GraphOut | undefined;
   low?: number;
   canWrite: boolean;
+  /** Commenters and up may add (and refresh) evidence from public links. */
+  canComment?: boolean;
   meId?: string | null;
   onClose: () => void;
   onOpen: (id: string) => void;
@@ -47,7 +50,17 @@ type Props = {
 };
 
 /** Right-side panel with one entity: its links, evidence and (for approvers) edit and unlock. */
-export function EntityDrawer({ entity, graph, low = DEFAULT_LOW, canWrite, meId, onClose, onOpen, onChanged }: Props) {
+export function EntityDrawer({
+  entity,
+  graph,
+  low = DEFAULT_LOW,
+  canWrite,
+  canComment = canWrite,
+  meId,
+  onClose,
+  onOpen,
+  onChanged,
+}: Props) {
   const q = useQuery(`baseline-entity:${entity.id}`, () =>
     unwrap(api.GET("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: entity.id } } })),
   );
@@ -81,6 +94,14 @@ export function EntityDrawer({ entity, graph, low = DEFAULT_LOW, canWrite, meId,
       setBusy(false);
     }
   }
+
+  const refreshLink = (evidenceId: string, label: string) =>
+    write(async () => {
+      await unwrap(
+        api.POST("/v1/baseline/evidence/{evidence_id}/refresh", { params: { path: { evidence_id: evidenceId } } }),
+      );
+      return `Fetched “${label}” again and rescored it.`;
+    });
 
   const unlock = () =>
     write(async () => {
@@ -187,15 +208,40 @@ export function EntityDrawer({ entity, graph, low = DEFAULT_LOW, canWrite, meId,
               ) : (
                 <ul className="flex flex-col items-start gap-2" aria-label="Evidence">
                   {d.evidence.map((ev) => (
-                    <li key={ev.id} className="flex max-w-full items-center gap-2">
+                    <li key={ev.id} className="flex max-w-full items-center gap-2" data-testid="evidence-row">
                       <EvidenceChip evidence={ev} low={low} />
                       <span className="truncate text-xs text-neutral-500">
                         {ev.ref ?? ev.url}
                         {ev.retrieved_at && ` · ${formatDate(ev.retrieved_at)}`}
                       </span>
+                      {ev.kind && canComment && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="ml-auto shrink-0"
+                          disabled={busy}
+                          aria-label={`Refresh ${ev.ref ?? ev.url}`}
+                          title="Fetch the public page again and rescore it"
+                          onClick={() => refreshLink(ev.id, ev.ref ?? ev.url ?? "the link")}
+                        >
+                          Refresh
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>
+              )}
+              {canComment && (
+                <div className="mt-3">
+                  <AddEvidenceLink
+                    target={{ entity_id: entity.id }}
+                    low={low}
+                    onSaved={() => {
+                      void q.reload();
+                      onChanged();
+                    }}
+                  />
+                </div>
               )}
             </Section>
           </>

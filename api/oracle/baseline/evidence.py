@@ -4,6 +4,11 @@ Source items are private to their owner (S3, revised 2026-10-17). Evidence copie
 excerpt, url and ref out of the item, so everyone can read the claim's support; the
 item itself (its id, title, source) is shown only to its owner. Everyone else gets
 ``source_item_private``.
+
+Public-link evidence (the owner, 2026-10-17) is different: a commenter or anyone above
+cites a public page by its URL, Oracle fetches it without any credential
+(``oracle.baseline.public_links``) and keeps a snapshot of it. The page is public, so
+everyone sees the snapshot too. Refreshing fetches it again and rescores.
 """
 
 import uuid
@@ -14,10 +19,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
-from oracle.baseline import scoring
-from oracle.baseline.models import Edge, Entity, Evidence
-from oracle.baseline.schemas import EvidenceCreate, EvidenceOut, SourceItemRef
-from oracle.baseline.service import InvalidError, NotFoundError
+from oracle.baseline import public_links, scoring, service
+from oracle.baseline.models import Edge, Entity, Evidence, EvidenceLinkSnapshot
+from oracle.baseline.schemas import (
+    EvidenceCreate,
+    EvidenceLinkCreate,
+    EvidenceOut,
+    LinkPreviewOut,
+    LinkSnapshotOut,
+    LinkTarget,
+    SourceItemRef,
+)
+from oracle.baseline.service import ConflictError, InvalidError, NotFoundError
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 
 EXCERPT_CHARS = 500
@@ -126,6 +139,162 @@ async def list_for(
     return list((await db.scalars(stmt)).all())
 
 
+# --- public links ---------------------------------------------------------------------------
+
+
+def excerpt_of(text: str, limit: int = EXCERPT_CHARS) -> str:
+    """The start of a page's text, cut at a word."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0] or text[:limit]
+    return cut.rstrip(" ,.;:") + "…"
+
+
+async def _link_target(db: AsyncSession, data: LinkTarget) -> tuple[Entity | None, Edge | None]:
+    if (data.entity_id is None) == (data.edge_id is None):
+        raise InvalidError("pass exactly one of entity_id or edge_id")
+    if data.entity_id:
+        return await service.get_entity(db, data.entity_id), None
+    return None, await service.get_edge(db, data.edge_id)
+
+
+async def _cited(
+    db: AsyncSession, url: str, entity: Entity | None, edge: Edge | None
+) -> Evidence | None:
+    cond = Evidence.entity_id == entity.id if entity else Evidence.edge_id == edge.id
+    return await db.scalar(
+        select(Evidence).where(cond, Evidence.kind.is_not(None), Evidence.url == url).limit(1)
+    )
+
+
+def _snapshot(ev: Evidence, page: public_links.Page, principal: Principal) -> EvidenceLinkSnapshot:
+    return EvidenceLinkSnapshot(
+        evidence_id=ev.id,
+        final_url=page.final_url,
+        title=page.title,
+        text=page.text,
+        content_hash=page.content_hash,
+        content_type=page.content_type,
+        fetched_at=page.fetched_at,
+        last_modified=page.last_modified,
+        fetched_by=principal.id,
+    )
+
+
+async def preview_link(
+    db: AsyncSession, data: LinkTarget, fetcher: public_links.LinkFetcher
+) -> LinkPreviewOut:
+    """Fetch the link and say how it would score here, without saving anything."""
+    entity, edge = await _link_target(db, data)
+    target = public_links.classify(data.url)
+    page = await fetcher.fetch(target.url)
+    result = await scoring.preview_link(
+        db,
+        kind=page.kind,
+        url=page.url,
+        latest_at=page.last_modified or page.fetched_at,
+        entity_id=entity.id if entity else None,
+        edge_id=edge.id if edge else None,
+    )
+    return LinkPreviewOut(
+        url=page.url,
+        kind=page.kind,
+        final_url=page.final_url,
+        title=page.title,
+        excerpt=excerpt_of(page.text),
+        fetched_at=page.fetched_at,
+        last_modified=page.last_modified,
+        confidence=result.confidence,
+        confidence_factors={
+            "breakdown": result.breakdown,
+            "weights": {k: v["weight"] for k, v in result.breakdown.items()},
+        },
+        already_cited=await _cited(db, page.url, entity, edge) is not None,
+    )
+
+
+async def add_link(
+    db: AsyncSession,
+    principal: Principal,
+    data: EvidenceLinkCreate,
+    fetcher: public_links.LinkFetcher,
+) -> Evidence:
+    entity, edge = await _link_target(db, data)
+    target = public_links.classify(data.url)
+    if await _cited(db, target.url, entity, edge):
+        raise ConflictError("This link is already cited here; refresh it instead.")
+    page = await fetcher.fetch(target.url)
+    ev = Evidence(
+        entity_id=entity.id if entity else None,
+        edge_id=edge.id if edge else None,
+        kind=page.kind,
+        url=page.url,
+        excerpt=excerpt_of(page.text),
+        ref=page.title or page.url,
+        note=(data.note or "").strip() or None,
+        retrieved_at=page.fetched_at,
+    )
+    db.add(ev)
+    await db.flush()
+    db.add(_snapshot(ev, page, principal))
+    await db.flush()
+    await audit.record(
+        db,
+        principal,
+        "baseline.evidence.link_added",
+        "evidence",
+        ev.id,
+        {
+            "entity_id": str(ev.entity_id) if ev.entity_id else None,
+            "edge_id": str(ev.edge_id) if ev.edge_id else None,
+            "url": ev.url,
+            "kind": ev.kind,
+        },
+    )
+    await rescore_target(db, ev.entity_id, ev.edge_id)
+    return ev
+
+
+async def refresh_link(
+    db: AsyncSession,
+    principal: Principal,
+    evidence_id: uuid.UUID,
+    fetcher: public_links.LinkFetcher,
+) -> Evidence:
+    """Fetch a public link again, keep the new snapshot and rescore."""
+    ev = await db.get(Evidence, evidence_id)
+    if ev is None:
+        raise NotFoundError("Evidence not found")
+    if not ev.kind or not ev.url:
+        raise InvalidError("Only evidence added from a public link can be refreshed")
+    page = await fetcher.fetch(ev.url)
+    current = (await scoring.latest_snapshots(db, [ev.id])).get(ev.id)
+    changed = current is None or current.content_hash != page.content_hash
+    if changed:
+        db.add(_snapshot(ev, page, principal))
+    else:
+        current.fetched_at = page.fetched_at
+        current.final_url = page.final_url
+        current.last_modified = page.last_modified or current.last_modified
+        current.fetched_by = principal.id
+    ev.kind = page.kind
+    ev.excerpt = excerpt_of(page.text)
+    ev.ref = page.title or page.url
+    ev.retrieved_at = page.fetched_at
+    await db.flush()
+    await audit.record(
+        db,
+        principal,
+        "baseline.evidence.link_refreshed",
+        "evidence",
+        ev.id,
+        {"url": ev.url, "changed": changed},
+    )
+    await rescore_target(db, ev.entity_id, ev.edge_id)
+    return ev
+
+
 async def present(
     db: AsyncSession, principal: Principal, rows: list[Evidence]
 ) -> list[EvidenceOut]:
@@ -139,10 +308,13 @@ async def present(
             .where(SourceItem.id.in_(item_ids))
         )
         items = {item.id: (item, source) for item, source in res.all()}
+    # Public links were fetched anonymously: their snapshot is shown to everyone.
+    snapshots = await scoring.latest_snapshots(db, [r.id for r in rows if r.kind])
     out = []
     for r in rows:
         item, source = items.get(r.source_item_id, (None, None))
         mine = source is not None and principal.user_id == source.owner_user_id
+        snap = snapshots.get(r.id)
         out.append(
             EvidenceOut(
                 id=r.id,
@@ -152,7 +324,7 @@ async def present(
                 excerpt=r.excerpt,
                 ref=r.ref,
                 retrieved_at=r.retrieved_at,
-                source_kind=scoring.source_kind_of(source, item),
+                source_kind=scoring.source_kind_of(source, item, r.kind),
                 source_item=SourceItemRef(
                     id=item.id,
                     source_id=source.id,
@@ -168,6 +340,18 @@ async def present(
                 confidence_factors=r.confidence_factors or {},
                 scored_at=r.scored_at,
                 created_at=r.created_at,
+                kind=r.kind,
+                note=r.note,
+                link=LinkSnapshotOut(
+                    kind=r.kind,
+                    final_url=snap.final_url,
+                    title=snap.title,
+                    fetched_at=snap.fetched_at,
+                    last_modified=snap.last_modified,
+                    text_chars=len(snap.text),
+                )
+                if snap is not None and r.kind
+                else None,
             )
         )
     return out

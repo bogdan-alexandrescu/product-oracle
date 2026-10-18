@@ -155,6 +155,39 @@ Every table is `TenantScoped` unless noted.
   as agent writes (locked items become proposals); priorities score unscored evidence
   through the baseline's confidence.
 
+## Public-link evidence (migration 0006, owner's decision 2026-10-17)
+
+Commenters and up attach evidence from **public links** without connecting an account:
+public Notion pages (`notion.so`, `*.notion.site`), Google Docs shared with "anyone with
+the link", and plain public web pages.
+
+- `POST /v1/baseline/evidence/link` `{entity_id | edge_id, url, note?}`, `POST
+  /v1/baseline/evidence/link/preview` (title, excerpt and confidence before saving,
+  saves nothing) and `POST /v1/baseline/evidence/{id}/refresh` (fetch again, update the
+  snapshot, rescore). Removing evidence stays with approvers.
+- `oracle.baseline.public_links` fetches anonymously (no credential, cookie or
+  environment proxy): `https` on port 443 only, no user info; every host, the first
+  request's and each redirect's, must resolve to public addresses only (private,
+  loopback, link-local, shared, reserved, multicast, mapped and NAT64 forms refused), and
+  the transport connects only to the addresses it checked; timeouts per request and per
+  fetch, a 2 MB cap after decompression, HTML or plain text only. Sign-in (401/403, a
+  redirect to a sign-in page, Notion's 404 or app shell) is `not_public`: "This link is
+  not public".
+- Text: Google Docs through `/export?format=txt` (title from the export's file name);
+  Notion from the page HTML it serves to link-preview bots (hence the `ProductOracleBot`
+  user agent); other pages from `<main>`, else `<article>`, else the body without
+  navigation, header, footer and scripts.
+- `evidence.kind` (`notion | google_docs | web`) and `evidence.note`;
+  `evidence_link_snapshots` keeps title, text, fetched_at and last_modified (the
+  `Last-Modified` header, else `article:modified_time` / `og:updated_time` /
+  `dateModified`); a refresh adds a snapshot only when the page changed. Confidence
+  scores link evidence as its kind (`web` added to `DEFAULTS`: source 0.55, half-life 90
+  days), freshness from last_modified else fetched_at, and each distinct link counts as
+  a mention. The page is public, so every user sees the snapshot, unlike items from
+  private connections.
+- UI: "Add evidence link" in the Baseline feature drawer (with Refresh per link) and on
+  each document section (pick the baseline item it supports).
+
 ## Agents and model calls (Bogdan, 2026-10-17)
 
 - **Agents run in SwarmCloud.** Product Oracle orchestrates all of its agents in

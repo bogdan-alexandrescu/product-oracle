@@ -38,6 +38,7 @@ from oracle.baseline.models import (  # noqa: E402
     Entity,
     EntityRevision,
     Evidence,
+    EvidenceLinkSnapshot,
     Proposal,
 )
 from oracle.connections.models import Connection  # noqa: E402
@@ -71,6 +72,7 @@ __all__ = [
     "Entity",
     "EntityRevision",
     "Evidence",
+    "EvidenceLinkSnapshot",
     "FeedbackItem",
     "Invite",
     "OAuthClient",

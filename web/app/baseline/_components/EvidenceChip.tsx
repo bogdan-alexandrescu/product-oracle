@@ -100,6 +100,17 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
                 “{evidence.excerpt}”
               </span>
             )}
+            {evidence.note && (
+              <span className="mt-2 block text-xs text-neutral-700" data-testid="evidence-note">
+                Note: {evidence.note}
+              </span>
+            )}
+            {evidence.link && (
+              <span className="mt-2 block rounded bg-neutral-50 px-2 py-1 text-xs text-neutral-600" data-testid="public-link-note">
+                Public link, visible to everyone · fetched {formatDate(evidence.link.fetched_at)}
+                {evidence.link.last_modified && ` · page updated ${formatDate(evidence.link.last_modified)}`}
+              </span>
+            )}
             {evidence.source_item_private && (
               <span className="mt-2 block rounded bg-neutral-50 px-2 py-1 text-xs text-neutral-600" data-testid="private-note">
                 From another person&apos;s private source: you see the excerpt, not the item.

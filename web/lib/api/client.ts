@@ -42,6 +42,7 @@ export type EdgeOut = Schemas["EdgeOut"];
 export type EdgeType = EdgeOut["type"];
 export type GraphOut = Schemas["GraphOut"];
 export type EvidenceOut = Schemas["EvidenceOut"];
+export type LinkPreviewOut = Schemas["LinkPreviewOut"];
 export type TraceReport = Schemas["TraceReport"];
 export type TraceFeature = Schemas["TraceFeature"];
 export type TraceGoal = Schemas["TraceGoal"];

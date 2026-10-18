@@ -1,11 +1,13 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
+
+import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 
 import { MarkdownBody, type Highlight } from "@/components/MarkdownBody";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
 import { LockIcon } from "@/components/ui";
-import type { CitationOut, SectionOut, Verdict } from "@/lib/api/client";
+import type { CitationOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
 import type { Block } from "@/lib/markdown";
 
 const HEADING_CLASS: Record<number, string> = {
@@ -22,6 +24,7 @@ export const SectionView = memo(function SectionView({
   activeCommentId,
   readOnly,
   changedLock,
+  evidenceTargets,
   onHighlightClick,
   onVerdict,
 }: {
@@ -32,11 +35,20 @@ export const SectionView = memo(function SectionView({
   activeCommentId: string | null;
   readOnly: boolean;
   changedLock: boolean;
+  /** Baseline items a commenter may cite a public link on; undefined hides the control. */
+  evidenceTargets?: EntityOut[];
   onHighlightClick: (id: string) => void;
   onVerdict: (key: string, verdict: Verdict, note: string) => Promise<void>;
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
   const locked = section.verdict?.verdict === "approved";
+  // Preselect the baseline item the section names (heading first, then its text).
+  const suggested = useMemo(() => {
+    if (!evidenceTargets) return null;
+    const named = (text: string) =>
+      evidenceTargets.find((e) => e.status !== "rejected" && text.toLowerCase().includes(e.title.toLowerCase()));
+    return (named(section.heading) ?? named(section.body_text))?.id ?? null;
+  }, [evidenceTargets, section.heading, section.body_text]);
   return (
     <section
       id={`s-${section.section_key}`}
@@ -71,6 +83,17 @@ export const SectionView = memo(function SectionView({
           onHighlightClick={onHighlightClick}
         />
       </div>
+      {evidenceTargets && (
+        <div className="mt-3" data-testid="section-evidence">
+          <AddEvidenceLink
+            key={suggested ?? ""}
+            entities={evidenceTargets}
+            suggested={suggested}
+            context={section.heading}
+            quiet
+          />
+        </div>
+      )}
       <SectionReviewBar
         heading={section.heading}
         verdict={section.verdict}

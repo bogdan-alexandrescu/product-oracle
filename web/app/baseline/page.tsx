@@ -18,6 +18,7 @@ type Tab = "graph" | "flagged" | "conflicts" | "proposals";
 export default function BaselinePage() {
   const { me, role } = useMe();
   const canWrite = hasRole(role, "approver");
+  const canComment = hasRole(role, "commenter");
   const onAuth = useAuthRedirect();
 
   const graph = useQuery("baseline-graph", () => unwrap(api.GET("/v1/baseline/graph")));
@@ -204,6 +205,7 @@ export default function BaselinePage() {
           graph={graph.data}
           low={low}
           canWrite={canWrite}
+          canComment={canComment}
           meId={me?.user_id}
           onClose={close}
           onOpen={setOpenId}

@@ -15,6 +15,8 @@ Origin = Literal["user", "agent", "import"]
 WriteOrigin = Literal["user", "agent"]
 ProposalStatus = Literal["open", "accepted", "rejected"]
 ConflictStatus = Literal["open", "resolved", "logged"]
+# Public-link evidence is scored like a source of this kind.
+LinkKind = Literal["notion", "google_docs", "web"]
 
 KEY_PATTERN = r"^[a-z0-9][a-z0-9._-]*$"
 
@@ -155,6 +157,55 @@ class SourceItemRef(BaseModel):
     url: str | None = None
 
 
+class LinkTarget(BaseModel):
+    """Exactly one of entity_id or edge_id."""
+
+    entity_id: uuid.UUID | None = None
+    edge_id: uuid.UUID | None = None
+    # https only: a public Notion page, a Google Doc shared with anyone with the link,
+    # or a public web page. Fetched without any credential.
+    url: str = Field(min_length=1, max_length=2048)
+
+
+class EvidenceLinkCreate(LinkTarget):
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class LinkSnapshotOut(BaseModel):
+    """The public page behind a piece of evidence, as last fetched. Everyone sees it."""
+
+    kind: LinkKind
+    final_url: str
+    title: str | None = None
+    fetched_at: datetime
+    # When the page says it last changed; freshness uses it, else fetched_at.
+    last_modified: datetime | None = None
+    text_chars: int = 0
+
+
+class LinkPreviewOut(BaseModel):
+    """What adding the link would save: its title, excerpt and confidence."""
+
+    url: str
+    kind: LinkKind
+    final_url: str
+    title: str | None = None
+    excerpt: str
+    fetched_at: datetime
+    last_modified: datetime | None = None
+    confidence: float
+    confidence_factors: dict[str, Any] = {}
+    # True when the entity or edge already cites this link (refresh it instead).
+    already_cited: bool = False
+
+
+class LinkErrorOut(BaseModel):
+    """A link that cannot be used: ``not_public``, ``blocked_address``, ``not_https``..."""
+
+    detail: str
+    code: str
+
+
 class EvidenceOut(BaseModel):
     id: uuid.UUID
     entity_id: uuid.UUID | None = None
@@ -175,6 +226,10 @@ class EvidenceOut(BaseModel):
     confidence_factors: dict[str, Any] = {}
     scored_at: datetime | None = None
     created_at: datetime
+    # Public-link evidence: its kind, the note it was added with and its page.
+    kind: LinkKind | None = None
+    note: str | None = None
+    link: LinkSnapshotOut | None = None
 
 
 class EntityDetail(EntityOut):

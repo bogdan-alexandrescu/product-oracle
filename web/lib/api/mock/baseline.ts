@@ -7,6 +7,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { routeEvidenceLinks } from "./public-links";
+
 type Role = Schemas["Me"]["role"];
 type EntityRow = Omit<Schemas["EntityOut"], "evidence_count">;
 type EdgeRow = Omit<Schemas["EdgeOut"], "evidence_count">;
@@ -44,9 +46,9 @@ function newId(): string {
 
 // ---------------------------------------------------------------- seed
 
-type Factors = { source: number; freshness: number; mentions: number; goal_impact: number };
+export type Factors = { source: number; freshness: number; mentions: number; goal_impact: number };
 
-function scored(f: Factors, latestAt: string) {
+export function scored(f: Factors, latestAt: string) {
   const total = Object.values(WEIGHTS).reduce((a, b) => a + b, 0);
   const confidence =
     Math.round(((Object.keys(WEIGHTS) as (keyof Factors)[]).reduce((s, k) => s + f[k] * WEIGHTS[k], 0) / total) * 100) /
@@ -562,6 +564,10 @@ export async function routeBaseline(
   const entityOut = (e: EntityRow) => withCount(s, e, "entity_id") as Schemas["EntityOut"];
   const edgeOut = (e: EdgeRow) => withCount(s, e, "edge_id") as Schemas["EdgeOut"];
   const findEntity = (id: string) => s.entities.find((e) => e.id === id);
+
+  // Public-link evidence is open to commenters, so it is routed before the approver check.
+  const link = await routeEvidenceLinks(s, caller, req, rest);
+  if (link) return link;
 
   if (m !== "GET" && ROLE_ORDER.indexOf(caller.role) < ROLE_ORDER.indexOf("approver")) {
     return fail(403, "Requires the approver role");

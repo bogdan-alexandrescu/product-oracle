@@ -1123,6 +1123,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/evidence/link/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Link Evidence
+         * @description Fetch a public link and show its title, excerpt and confidence; saves nothing.
+         */
+        post: operations["preview_link_evidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/evidence/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Link Evidence
+         * @description Cite a public page (a public Notion page, a Google Doc shared with anyone with
+         *     the link, or a public web page) on an entity or edge. Oracle fetches it without
+         *     any credential and keeps a snapshot; everyone sees it. Commenters and up.
+         */
+        post: operations["add_link_evidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/evidence/{evidence_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Link Evidence
+         * @description Fetch a public link again: update its snapshot and excerpt, then rescore.
+         */
+        post: operations["refresh_link_evidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/evidence/{evidence_id}": {
         parameters: {
             query?: never;
@@ -3067,6 +3129,17 @@ export interface components {
             /** Retrieved At */
             retrieved_at?: string | null;
         };
+        /** EvidenceLinkCreate */
+        EvidenceLinkCreate: {
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Edge Id */
+            edge_id?: string | null;
+            /** Url */
+            url: string;
+            /** Note */
+            note?: string | null;
+        };
         /** EvidenceOut */
         EvidenceOut: {
             /**
@@ -3110,6 +3183,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Kind */
+            kind?: ("notion" | "google_docs" | "web") | null;
+            /** Note */
+            note?: string | null;
+            link?: components["schemas"]["LinkSnapshotOut"] | null;
         };
         /** EvidenceUsed */
         EvidenceUsed: {
@@ -3649,6 +3727,95 @@ export interface components {
             };
             /** Budget Usd */
             budget_usd?: number | null;
+        };
+        /**
+         * LinkErrorOut
+         * @description A link that cannot be used: ``not_public``, ``blocked_address``, ``not_https``...
+         */
+        LinkErrorOut: {
+            /** Detail */
+            detail: string;
+            /** Code */
+            code: string;
+        };
+        /**
+         * LinkPreviewOut
+         * @description What adding the link would save: its title, excerpt and confidence.
+         */
+        LinkPreviewOut: {
+            /** Url */
+            url: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "notion" | "google_docs" | "web";
+            /** Final Url */
+            final_url: string;
+            /** Title */
+            title?: string | null;
+            /** Excerpt */
+            excerpt: string;
+            /**
+             * Fetched At
+             * Format: date-time
+             */
+            fetched_at: string;
+            /** Last Modified */
+            last_modified?: string | null;
+            /** Confidence */
+            confidence: number;
+            /**
+             * Confidence Factors
+             * @default {}
+             */
+            confidence_factors: {
+                [key: string]: unknown;
+            };
+            /**
+             * Already Cited
+             * @default false
+             */
+            already_cited: boolean;
+        };
+        /**
+         * LinkSnapshotOut
+         * @description The public page behind a piece of evidence, as last fetched. Everyone sees it.
+         */
+        LinkSnapshotOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "notion" | "google_docs" | "web";
+            /** Final Url */
+            final_url: string;
+            /** Title */
+            title?: string | null;
+            /**
+             * Fetched At
+             * Format: date-time
+             */
+            fetched_at: string;
+            /** Last Modified */
+            last_modified?: string | null;
+            /**
+             * Text Chars
+             * @default 0
+             */
+            text_chars: number;
+        };
+        /**
+         * LinkTarget
+         * @description Exactly one of entity_id or edge_id.
+         */
+        LinkTarget: {
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Edge Id */
+            edge_id?: string | null;
+            /** Url */
+            url: string;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -7787,6 +7954,157 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_link_evidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkTarget"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkPreviewOut"];
+                };
+            };
+            /** @description The link cannot be used (e.g. not public) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkErrorOut"];
+                };
+            };
+            /** @description The page could not be fetched */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkErrorOut"];
+                };
+            };
+            /** @description The page took too long to respond */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkErrorOut"];
+                };
+            };
+        };
+    };
+    add_link_evidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceLinkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceOut"];
+                };
+            };
+            /** @description The link cannot be used (e.g. not public) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkErrorOut"];
+                };
+            };
+            /** @description The page could not be fetched */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkErrorOut"];
+                };
+            };
+            /** @description The page took too long to respond */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkErrorOut"];
+                };
+            };
+        };
+    };
+    refresh_link_evidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                evidence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceOut"];
+                };
+            };
+            /** @description The link cannot be used (e.g. not public) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkErrorOut"];
+                };
+            };
+            /** @description The page could not be fetched */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkErrorOut"];
+                };
+            };
+            /** @description The page took too long to respond */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkErrorOut"];
                 };
             };
         };

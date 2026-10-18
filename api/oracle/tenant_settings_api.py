@@ -23,6 +23,7 @@ from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import ROLES
 from oracle.authz import require_role
+from oracle.baseline.models import LINK_KINDS
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
 from oracle.connections.models import Connection
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
@@ -67,7 +68,8 @@ def _number(value: Any, where: str, lo: float | None = 0.0, hi: float | None = N
 
 def _kind_key(key: str, where: str) -> None:
     source, _, item = key.partition(":")
-    if source not in SOURCE_KINDS or (item and item not in ITEM_KINDS):
+    # Public-link evidence is scored as its link kind ("web" has no source of its own).
+    if source not in (*SOURCE_KINDS, *LINK_KINDS) or (item and item not in ITEM_KINDS):
         raise InvalidSetting(
             f"{where}: unknown kind {key!r}; use <source kind> or <source kind>:<item kind>"
         )
