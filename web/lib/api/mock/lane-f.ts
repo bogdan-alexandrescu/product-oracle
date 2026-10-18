@@ -727,9 +727,16 @@ export function checkTemplate(body: string, required?: string[] | null, themeKey
       marked ?? undefined,
     ).brief,
   ];
-  const warnings: Problem[] = hs.length && !brief.length
-    ? [{ code: "no_brief_sections", message: "the template marks no brief sections: add 'brief: [section ids]' to its front matter (or a '# Full version {#full}' heading after the brief); documents from it open on the full document", line: null }]
-    : [];
+  // O1g: a template without brief sections is refused, not saved with a warning.
+  if (hs.length && !brief.length) {
+    problems.push({
+      code: "no_brief_sections",
+      message:
+        "the template marks no brief sections: add 'brief: [section ids]' to its front matter, or a level-1 '# Full version {#full}' heading after the brief sections",
+      line: null,
+    });
+  }
+  const warnings: Problem[] = [];
   return {
     brief,
     warnings,
@@ -794,7 +801,8 @@ function newVersion(n: number, body: string, required: string[] | null | undefin
     suggested_theme: check.suggested_theme,
     suggest_when: check.suggest_when,
     brief_sections: check.brief,
-    warnings: check.warnings,
+    // A version saved before O1g may have no brief; its next edit must add markers.
+    warnings: [...check.warnings, ...check.problems.filter((p) => p.code === "no_brief_sections")],
   } satisfies Schemas["TemplateVersionOut"];
 }
 
@@ -941,7 +949,7 @@ export function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-export function checkTheme(t: Tokens | null | undefined, css: string): Problem[] {
+export function checkTheme(t: Tokens | null | undefined, css: string, slideCss?: string | null): Problem[] {
   const problems: Problem[] = [];
   const colours = t?.colors ?? {};
   for (const [name, value] of Object.entries(colours)) {
@@ -980,6 +988,14 @@ export function checkTheme(t: Tokens | null | undefined, css: string): Problem[]
       problems.push({ code: "invalid_spacing", message: `spacing.${name} must be a number from ${lo} to ${hi}`, line: null });
     }
   }
+  problems.push(...checkCss(css));
+  // O1g: a theme's slide CSS passes the same checks, named as slide CSS.
+  if (slideCss) problems.push(...checkCss(slideCss).map((p) => ({ ...p, message: `slide CSS: ${p.message}` })));
+  return problems;
+}
+
+function checkCss(css: string): Problem[] {
+  const problems: Problem[] = [];
   const forbidden: [RegExp, string][] = [
     [/@import/i, "@import is not allowed"],
     [/<\//, "'</' is not allowed in CSS"],
@@ -1061,6 +1077,48 @@ section { margin-top: ${s.section_gap_rem}rem; }
 a { color: var(--color-accent); }
 code { font-family: ${f.mono}; }
 </style><style>${safeCss}</style></head><body>${status}<h1>${title}</h1>${legend}${fit}${toc}${body}<p><a href="#">Accent link</a> · <code>mono sample</code></p></body></html>`;
+}
+
+/** The sample's brief as slides with the tokens and slide CSS (stands in for the API's deck renderer). */
+export function slidePreviewHtml(t: Tokens, slideCss: string | null | undefined, kind: Kind, variant?: string | null): string {
+  const c = { ...BASE_TOKENS.colors, ...t.colors };
+  const f = { ...BASE_TOKENS.fonts, ...t.fonts };
+  const vars = Object.entries(c)
+    .map(([k, v]) => `--color-${k}: ${v};`)
+    .join(" ");
+  const title = kind === "prd" ? "Saved carts PRD" : "Product roadmap";
+  const brief =
+    kind === "prd"
+      ? [
+          ["Summary", "Returning buyers keep their cart for 30 days."],
+          ["Goal trace", "G1 Activation: high contribution."],
+          ["Requirements", "R1 Carts persist for 30 days. R2 Prices refresh on return."],
+        ]
+      : [
+          ["Now", "Saved carts · Faster checkout"],
+          ["Next", "Bulk ordering"],
+          ["Later", "Marketplace"],
+        ];
+  const builtin = !!variant && THEME_SEEDS.some((s) => s.key === variant);
+  const theme = builtin ? variant! : "preview";
+  const own = !builtin && slideCss && !checkCss(slideCss).length ? slideCss : "";
+  const slide = (n: number, kindClass: string, inner: string) =>
+    `<section class="slide slide--${kindClass}" data-slide="${n}"><div class="slide-inner">${inner}</div><footer class="slide-footer"><span class="slide-banner">${esc(title)} · Version 1</span><span class="slide-number">${n} / ${brief.length + 1}</span></footer></section>`;
+  const slides = [
+    slide(1, "title", `<p class="slide-kicker">Brief</p><h1 class="slide-title">${esc(title)}</h1>`),
+    ...brief.map(([h, p], i) => slide(i + 2, "section", `<h2 class="slide-title">${esc(h)}</h2><div class="slide-body"><p>${esc(p)}</p></div>`)),
+  ].join("");
+  const variantCss = builtin ? `.theme-${theme} .slide-title { border-top: 4px solid var(--color-accent); padding-top: 14px; }` : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)} (Deck)</title><style>
+.deck { ${vars} --font-body: ${f.body}; --font-heading: ${f.heading}; }
+body.deck-preview { margin: 0; background: #e5e7eb; padding: 16px 0; }
+.deck .slide { box-sizing: border-box; position: relative; width: 960px; height: 540px; margin: 0 auto 16px; overflow: hidden; background: var(--color-background); color: var(--color-text); font-family: var(--font-body); font-size: 21px; padding: 44px 60px 56px; }
+.deck .slide-title { color: var(--color-heading); font-family: var(--font-heading); font-size: 34px; margin: 0 0 22px; }
+.deck .slide-kicker { margin: 120px 0 10px; color: var(--color-accent); text-transform: uppercase; font-size: 15px; }
+.deck .slide-footer { position: absolute; left: 60px; right: 60px; bottom: 18px; display: flex; justify-content: space-between; font-size: 12px; color: var(--color-muted); }
+${variantCss}
+${own}
+</style></head><body class="deck deck-preview theme-${theme}">${slides}</body></html>`;
 }
 
 function themeOption(t: ThemeRow): Schemas["ThemeOption"] {
@@ -1328,6 +1386,7 @@ function seedState(): LaneFState {
     description: t.description,
     tokens: t.tokens,
     css: t.css,
+    slide_css: null,
     builtin: true,
     archived_at: null,
     created_at: SEEDED_AT,
@@ -1511,7 +1570,7 @@ export async function laneF(db: Db, req: Request, p: string[], m: string): Promi
       }
       if (st.themes.some((t) => t.key === input.key)) return json(409, { detail: `theme '${input.key}' already exists` });
       const tk = tokens(input.tokens ?? {});
-      const problems = checkTheme(tk, input.css ?? "");
+      const problems = checkTheme(tk, input.css ?? "", input.slide_css);
       if (problems.length) return rejectTheme(problems, "theme");
       const t: ThemeRow = {
         id: uuid(),
@@ -1521,6 +1580,7 @@ export async function laneF(db: Db, req: Request, p: string[], m: string): Promi
         description: input.description ?? null,
         tokens: tk,
         css: input.css ?? "",
+        slide_css: input.slide_css?.trim() ? input.slide_css : null,
         builtin: false,
         archived_at: null,
         created_at: now(),
@@ -1531,11 +1591,16 @@ export async function laneF(db: Db, req: Request, p: string[], m: string): Promi
     }
     if (p[2] === "validate" && m === "POST") {
       const input = await body<Schemas["ThemeValidateIn"]>();
-      const problems = checkTheme(input.tokens, input.css ?? "");
+      const problems = checkTheme(input.tokens, input.css ?? "", input.slide_css);
       return json(200, { valid: problems.length === 0, problems } satisfies Schemas["ThemeValidateOut"]);
     }
     if (p[2] === "preview" && m === "POST") {
       const input = await body<Schemas["ThemePreviewIn"]>();
+      if (input.view === "slides") {
+        return new Response(slidePreviewHtml(input.tokens ?? {}, input.slide_css, input.kind ?? "prd", input.slide_variant), {
+          headers: { "content-type": "text/html" },
+        });
+      }
       return new Response(previewHtml(input.tokens ?? {}, input.css ?? "", input.kind ?? "prd"), {
         headers: { "content-type": "text/html" },
       });
@@ -1555,11 +1620,21 @@ export async function laneF(db: Db, req: Request, p: string[], m: string): Promi
       const input = await body<Schemas["ThemeUpdate"]>();
       const nextTokens = input.tokens ?? t.tokens;
       const css = input.css ?? t.css;
-      const problems = checkTheme(nextTokens, css);
+      // Left out keeps the slide CSS; null or blank clears it (as the API does).
+      const slideCss = "slide_css" in input ? (input.slide_css?.trim() ? input.slide_css! : null) : (t.slide_css ?? null);
+      const problems = checkTheme(nextTokens, css, slideCss);
+      if (t.builtin && "slide_css" in input && slideCss) {
+        problems.push({
+          code: "builtin_slide_css",
+          message: "a built-in theme keeps its own slide design; create a company theme to write slide CSS",
+          line: null,
+        });
+      }
       if (problems.length) return rejectTheme(problems, "theme");
       Object.assign(t, {
         tokens: nextTokens,
         css,
+        slide_css: slideCss,
         name: input.name ?? t.name,
         kind: input.kind ?? t.kind,
         description: input.description !== undefined ? input.description : t.description,

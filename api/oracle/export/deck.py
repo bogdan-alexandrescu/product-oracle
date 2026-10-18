@@ -2,15 +2,16 @@
 
 One slide per brief section, in document order, after a title slide that carries the
 version banner; Sources and data points slides close the deck when the version has
-sources. Each section slide carries its presenter notes (a fenced ``notes`` block, else
-the section's guidance text) and, for every detail section its body links to with
+sources. Each section slide carries its presenter notes (only a fenced ``notes`` block,
+O1g; none without one) and, for every detail section its body links to with
 ``[text](#section-id)`` (feature rows, milestones), that section and its sub-sections
 rendered for the Expand overlay.
 
 Slides are laid out at 960 x 540 CSS px (10 x 5.625 in, 16:9) with the document's
 theme: its tokens as CSS variables, the shared slide stylesheet, and the slide variant
 of a built-in theme (``templates/builtin/themes/slides/<key>.css``). A company theme
-gets the shared slide layout in its own colours and fonts.
+gets the shared slide layout in its own colours and fonts, then its own slide CSS
+(``themes.slide_css``, O1g) when it has one. The PPTX uses the tokens only.
 """
 
 import re
@@ -35,6 +36,8 @@ from oracle.export.render import (
     token_vars,
     unlink_missing,
 )
+from oracle.templates import validation
+from oracle.templates.models import Theme
 
 SLIDE_VARIANTS = Path(__file__).resolve().parents[1] / "templates" / "builtin" / "themes" / "slides"
 SOURCES_PER_SLIDE = 8
@@ -97,6 +100,14 @@ def slide_variant_css(theme_key: str | None, builtin: bool) -> str:
     return path.read_text(encoding="utf-8") if path.is_file() else ""
 
 
+def company_slide_css(theme: Theme | None) -> str:
+    """A company theme's own slide CSS (O1g), checked like its CSS when saved; left
+    out if it would not pass the check now. Built-in themes use their variant."""
+    if theme is None or theme.builtin or not theme.slide_css:
+        return ""
+    return "" if validation.check_slide_css(theme.slide_css) else theme.slide_css
+
+
 def _plain_heading(s: Section) -> str:
     return _HEADING_ID.sub("", s.heading).strip()
 
@@ -131,9 +142,8 @@ def _banner(ev: ExportVersion) -> str:
     return " · ".join(parts)
 
 
-def build_deck(ev: ExportVersion, guidance: dict[str, str] | None = None) -> Deck:
+def build_deck(ev: ExportVersion) -> Deck:
     """Slides for ``ev`` (already restricted to the brief layer by ``apply_layer``)."""
-    guidance = guidance or {}
     appendix = sources_keys(ev.all_sections)
     brief = [s for s in ev.sections if s.section_key not in appendix]
     refs = [layers.SectionRef(s.section_key, s.level) for s in ev.all_sections]
@@ -167,7 +177,7 @@ def build_deck(ev: ExportVersion, guidance: dict[str, str] | None = None) -> Dec
                 heading=_plain_heading(s),
                 body_md=body,
                 section_key=s.section_key,
-                notes=layers.presenter_notes(s.body_md or "", guidance.get(s.section_key)),
+                notes=layers.presenter_notes(s.body_md or ""),
                 body_html=_render_md(body, on_slides),
                 expand=expand,
                 dense=len(body) > DENSE_CHARS or rows > DENSE_ROWS,
@@ -209,6 +219,7 @@ def build_deck(ev: ExportVersion, guidance: dict[str, str] | None = None) -> Dec
             slide_stylesheet(),
             token_vars(tokens, ".deck"),
             slide_variant_css(theme.key if theme else None, bool(theme and theme.builtin)),
+            company_slide_css(theme),
         ]
     )
     deck = Deck(
@@ -235,10 +246,11 @@ def theme_class(deck: Deck) -> str:
     return f"theme-{re.sub(r'[^a-z0-9-]', '', deck.theme_key or 'none')}"
 
 
-def render_deck_html(deck: Deck) -> str:
-    """Every slide on its own 16:9 page: the input for the deck PDF."""
+def render_deck_html(deck: Deck, preview: bool = False) -> str:
+    """Every slide on its own 16:9 page: the input for the deck PDF. ``preview`` lays
+    the slides out for the theme editor's slide preview instead."""
     return (
         _jinja()
         .get_template("deck.html.j2")
-        .render(deck=deck, theme_class=theme_class(deck), total=len(deck.slides))
+        .render(deck=deck, theme_class=theme_class(deck), total=len(deck.slides), preview=preview)
     )

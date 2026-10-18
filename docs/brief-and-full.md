@@ -39,9 +39,14 @@ Validation:
 - `brief` must list section ids of the body: `invalid_brief`, `unknown_brief_section`.
 - `full` and Sources and data points cannot be brief: `full_section_brief`,
   `sources_section_brief`.
-- A template with no brief gets a `no_brief_sections` warning. It is reported, not
-  blocking. `POST /v1/templates/validate` returns `warnings` and `brief_sections`; every
-  template version carries both.
+- A template must mark a brief (O1g). One with no brief sections is refused with the
+  `no_brief_sections` problem: creating or editing it answers 422, and
+  `POST /v1/templates/validate` reports it. The fix is a `brief:` list in the front
+  matter or a level-1 `# Full version {#full}` heading after the brief sections. A
+  company template version saved before this rule is not rewritten and documents
+  drafted from it keep working (they open on the full document); the version lists
+  `no_brief_sections` in its `warnings`, and the template's next edit must add brief
+  markers. Every template version carries `brief_sections`.
 
 Existing companies get each built-in's new skeleton as its next version, unless they
 edited it (its latest version was created by a user) or archived it.
@@ -60,9 +65,12 @@ in this order:
 4. `none`: no brief. The version opens on the full document, and the brief and deck
    exports answer 422.
 
-Presenter notes for a brief section come from a fenced `notes` block in its body. When
-there is none, they come from the section's guidance text: the HTML comment under its
-heading in the draft, else in the template. Notes and guidance never reach an export.
+Presenter notes for a brief section come only from a fenced `notes` block in its body
+(O1g). A section without one has no notes: the presenter view says "No notes for this
+slide" and the PPTX slide gets no speaker notes. Guidance text (the HTML comment under a
+heading) stays a writing aid for authors and is never used as notes. Notes are computed
+when a version is read, so older versions follow the same rule. Notes and guidance never
+reach an export, themed or not, and the document view does not show notes blocks.
 
 ## In the app
 
@@ -96,8 +104,13 @@ It shows full screen in the document's theme.
 Slides come from `GET .../versions/{n}/deck`, rendered by the API
 (`oracle/export/deck.py`) in a shadow root. Each built-in theme has a slide variant
 (`templates/builtin/themes/slides/<key>.css`) on top of the shared
-`export/static/slides.css`. A company theme gets the shared slide layout in its own
-colours and fonts.
+`export/static/slides.css`; those variants are in code and cannot be edited. A company
+theme gets the shared slide layout in its own colours and fonts, then its own **slide
+CSS** (`slide_css`, O1g) when it has one. Slide CSS is checked like the theme's CSS
+(no `@import`, no URLs but `data:`, no way out of `<style>`), recorded in the audit log
+like the other theme fields, and edited in Settings > Themes with a live slide preview
+(`POST /v1/themes/preview` with `view: "slides"`). Present mode and the deck PDF use it;
+the PPTX uses the theme tokens only.
 
 ## Exports
 

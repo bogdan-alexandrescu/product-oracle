@@ -7597,7 +7597,7 @@
           "themes"
         ],
         "summary": "Create Theme",
-        "description": "Rejected (422) when a text colour misses WCAG AA contrast on the background.",
+        "description": "Rejected (422) when a text colour misses WCAG AA contrast on the background, or\nthe CSS or slide CSS loads anything from outside the export.",
         "operationId": "create_theme",
         "security": [
           {
@@ -7701,7 +7701,7 @@
           "themes"
         ],
         "summary": "Preview Theme",
-        "description": "A sample document rendered with unsaved tokens and CSS, for the live preview.",
+        "description": "A sample document rendered with unsaved tokens and CSS, for the live preview;\nwith ``view: slides``, the sample's brief as Present mode slides with the slide CSS.",
         "operationId": "preview_theme",
         "requestBody": {
           "content": {
@@ -20024,6 +20024,18 @@
             "maxLength": 100000,
             "title": "Css",
             "default": ""
+          },
+          "slide_css": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slide Css"
           }
         },
         "type": "object",
@@ -20197,6 +20209,17 @@
             "type": "string",
             "title": "Css"
           },
+          "slide_css": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slide Css"
+          },
           "builtin": {
             "type": "boolean",
             "title": "Builtin"
@@ -20275,6 +20298,18 @@
             "title": "Css",
             "default": ""
           },
+          "slide_css": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slide Css"
+          },
           "kind": {
             "type": "string",
             "enum": [
@@ -20283,6 +20318,27 @@
             ],
             "title": "Kind",
             "default": "prd"
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "document",
+              "slides"
+            ],
+            "title": "View",
+            "default": "document"
+          },
+          "slide_variant": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 63
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slide Variant"
           }
         },
         "type": "object",
@@ -20430,6 +20486,18 @@
               }
             ],
             "title": "Css"
+          },
+          "slide_css": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slide Css"
           }
         },
         "type": "object",
@@ -20445,6 +20513,18 @@
             "maxLength": 100000,
             "title": "Css",
             "default": ""
+          },
+          "slide_css": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slide Css"
           }
         },
         "type": "object",

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { ProblemList } from "@/components/TemplateBodyEditor";
-import { ThemePreview } from "@/components/ThemePreview";
+import { SlidePreview, ThemePreview } from "@/components/ThemePreview";
 import { Badge, Button, ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
@@ -16,7 +16,7 @@ type ThemeOut = Schemas["ThemeOut"];
 type Tokens = Schemas["ThemeTokens"];
 type ThemeKind = ThemeOut["kind"];
 
-type Form = { name: string; description: string; kind: ThemeKind; tokens: Tokens; css: string };
+type Form = { name: string; description: string; kind: ThemeKind; tokens: Tokens; css: string; slide_css: string };
 
 const COLOURS: { name: string; label: string; hint: string }[] = [
   { name: "text", label: "Text", hint: "Body text" },
@@ -52,7 +52,14 @@ const FEATURES = [
 const KIND_LABEL: Record<ThemeKind, string> = { prd: "PRD", roadmap: "Roadmap", any: "Any document" };
 
 function formOf(t: ThemeOut): Form {
-  return { name: t.name, description: t.description ?? "", kind: t.kind, tokens: t.tokens, css: t.css };
+  return {
+    name: t.name,
+    description: t.description ?? "",
+    kind: t.kind,
+    tokens: t.tokens,
+    css: t.css,
+    slide_css: t.slide_css ?? "",
+  };
 }
 
 /** #abc → #aabbcc; anything that is not a hex colour → black (for <input type="color">). */
@@ -70,7 +77,8 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-const validate = (body: { tokens: Tokens; css: string }) => unwrap(api.POST("/v1/themes/validate", { body }));
+const validate = (body: { tokens: Tokens; css: string; slide_css: string | null }) =>
+  unwrap(api.POST("/v1/themes/validate", { body }));
 
 /** Editor of a theme's tokens and CSS, with a live preview and live validation. */
 export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
@@ -81,9 +89,10 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveProblems, setSaveProblems] = useState<Problem[]>([]);
+  const [previewView, setPreviewView] = useState<"document" | "slides">("document");
   const form = edit ?? (t ? formOf(t) : null);
   const live = useLive(
-    { tokens: form?.tokens ?? {}, css: form?.css ?? "" },
+    { tokens: form?.tokens ?? {}, css: form?.css ?? "", slide_css: form?.slide_css || null },
     validate,
     300,
     form !== null,
@@ -150,6 +159,8 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
               kind: form.kind,
               tokens: form.tokens,
               css: form.css,
+              // Built-in themes keep their slide design in code: no slide CSS to send.
+              ...(t.builtin ? {} : { slide_css: form.slide_css.trim() ? form.slide_css : null }),
             },
           }),
         ),
@@ -387,14 +398,74 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
               />
             </label>
           </Group>
+
+          <Group title="Slide CSS">
+            {t.builtin ? (
+              <p data-testid="slide-css-builtin" className="text-sm text-neutral-600">
+                Built-in themes keep their own slide design, which cannot be edited. To write slide CSS, create a new theme from
+                this one.
+              </p>
+            ) : (
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs text-neutral-500">
+                  Rules for Present mode and the deck PDF, applied after the shared slide layout. Each slide is a{" "}
+                  <code>.slide</code> inside <code>.deck</code>, with <code>.slide-title</code> and <code>.slide-body</code>; the
+                  PowerPoint export uses the colours and fonts only. Same limits as the CSS above.
+                </span>
+                <textarea
+                  aria-label="Slide CSS"
+                  rows={8}
+                  spellCheck={false}
+                  value={form.slide_css}
+                  onFocus={() => setPreviewView("slides")}
+                  onChange={(e) => set({ slide_css: e.target.value })}
+                  placeholder=".deck .slide-title { text-transform: uppercase; }"
+                  className={`${INPUT} font-mono text-xs`}
+                />
+              </label>
+            )}
+          </Group>
         </div>
 
         <div className="lg:sticky lg:top-4 lg:self-start">
-          <h2 className="mb-2 text-sm font-semibold text-neutral-700">Preview</h2>
-          <ThemePreview tokens={form.tokens} css={form.css} kind={form.kind === "roadmap" ? "roadmap" : "prd"} />
-          <p className="mt-1 text-xs text-neutral-500">
-            A sample {form.kind === "roadmap" ? "roadmap" : "PRD"} with these settings. Unsaved changes show here first.
-          </p>
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-neutral-700">Preview</h2>
+            <div role="group" aria-label="Preview of" className="ml-auto inline-flex rounded-md border border-neutral-300 text-xs">
+              {(["document", "slides"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={previewView === v}
+                  onClick={() => setPreviewView(v)}
+                  className={`px-2.5 py-1 first:rounded-l-md last:rounded-r-md ${
+                    previewView === v ? "bg-neutral-900 text-white" : "bg-white text-neutral-700 hover:bg-neutral-50"
+                  }`}
+                >
+                  {v === "document" ? "Document" : "Slides"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {previewView === "document" ? (
+            <>
+              <ThemePreview tokens={form.tokens} css={form.css} kind={form.kind === "roadmap" ? "roadmap" : "prd"} />
+              <p className="mt-1 text-xs text-neutral-500">
+                A sample {form.kind === "roadmap" ? "roadmap" : "PRD"} with these settings. Unsaved changes show here first.
+              </p>
+            </>
+          ) : (
+            <>
+              <SlidePreview
+                tokens={form.tokens}
+                slideCss={t.builtin ? null : form.slide_css || null}
+                kind={form.kind === "roadmap" ? "roadmap" : "prd"}
+                variant={t.builtin ? t.key : null}
+              />
+              <p className="mt-1 text-xs text-neutral-500">
+                The sample&apos;s brief as Present mode and the deck PDF show it. Unsaved changes show here first.
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

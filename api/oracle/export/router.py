@@ -11,7 +11,6 @@ from starlette.concurrency import run_in_threadpool
 
 from oracle.auth.deps import TenantDB
 from oracle.authz import require_role
-from oracle.docs.service import version_guidance
 from oracle.export.deck import build_deck, render_deck_html, theme_class
 from oracle.export.pdf import PdfUnavailable, html_to_pdf
 from oracle.export.render import (
@@ -94,7 +93,7 @@ async def export_version(
     ev = await _load(db, doc, n, layer)
     content: str | bytes
     if layer == "deck":
-        deck = build_deck(ev, await version_guidance(db, ev.version))
+        deck = build_deck(ev)
         if fmt == "pptx":
             from oracle.export.pptx import deck_to_pptx
 
@@ -122,7 +121,7 @@ async def get_deck(doc: str, n: int, db: TenantDB) -> DeckOut:
     presenter notes and the detail each slide can expand. 422 when the version has no
     brief sections."""
     ev = await _load(db, doc, n, "deck")
-    deck = build_deck(ev, await version_guidance(db, ev.version))
+    deck = build_deck(ev)
     return DeckOut(
         document_id=ev.document.id,
         slug=deck.slug,

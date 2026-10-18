@@ -10,9 +10,9 @@ is every section. Which sections are brief comes from, in order:
    the leading title section, are the brief (``full_heading``);
 4. otherwise the version has no brief (``none``) and opens on the full document.
 
-Presenter notes for a brief section are a fenced ``notes`` block in its body, else the
-section's guidance text (the HTML comment under its heading, in the draft or in the
-template).
+Presenter notes for a brief section come only from a fenced ``notes`` block in its body
+(O1g). Guidance text (the HTML comment under a heading) is a writing aid for authors and
+is never used as notes.
 """
 
 import re
@@ -126,49 +126,15 @@ def notes_block(body_md: str) -> str | None:
     return "\n\n".join(found) if found else None
 
 
-def guidance(body_md: str) -> str | None:
-    """The section's guidance text: its HTML comments, joined."""
-    found = [" ".join(m.group(1).split()) for m in _COMMENT.finditer(body_md or "")]
-    found = [f for f in found if f]
-    return "\n\n".join(found) if found else None
-
-
-def presenter_notes(body_md: str, template_guidance: str | None = None) -> str | None:
-    return notes_block(body_md) or guidance(body_md) or template_guidance
+def presenter_notes(body_md: str) -> str | None:
+    """A brief section's presenter notes: its ``notes`` blocks only (O1g)."""
+    return notes_block(body_md)
 
 
 def slide_body(body_md: str) -> str:
     """A section body as shown on a slide or in an export: no notes, no guidance."""
     text = _NOTES_FENCE.sub("", body_md or "")
     return _COMMENT.sub("", text).strip("\n")
-
-
-def section_guidance(body: str) -> dict[str, str]:
-    """Guidance per section id of a template (or draft) body: the comment under each
-    level 1-3 heading, up to the next heading."""
-    out: dict[str, str] = {}
-    current: str | None = None
-    chunk: list[str] = []
-    heading = re.compile(r"^#{1,3}\s+.*?\{#([A-Za-z0-9][A-Za-z0-9_.:-]*)\}\s*$")
-
-    def flush() -> None:
-        if current is not None:
-            text = guidance("\n".join(chunk))
-            if text:
-                out[current] = text
-
-    in_fence = False
-    for line in body.replace("\r\n", "\n").split("\n"):
-        if line.startswith("```"):
-            in_fence = not in_fence
-        m = None if in_fence else heading.match(line)
-        if m:
-            flush()
-            current, chunk = m.group(1), []
-        else:
-            chunk.append(line)
-    flush()
-    return out
 
 
 def linked_sections(body_md: str) -> list[str]:
