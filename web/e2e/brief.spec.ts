@@ -42,7 +42,11 @@ test("brief: a document opens on its brief; Show full document switches, and the
   await expect(section(page, "feature-detail").getByTestId("layer-badge").first()).toHaveText("Detail");
   await expect(topHeadings(page).first()).toHaveText("Saved carts PRD");
 
-  // Remembered for this user: after a reload and on another version.
+  // Remembered for this user: after a reload and on another version. The mock saves the
+  // choice inside the page, so wait for it before reloading.
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("po-mock-db-v2")?.includes('"document_view":"full"')))
+    .toBe(true);
   await page.reload();
   await expect(sections(page)).toHaveAttribute("data-view", "full");
   await page.goto("/documents/saved-carts/v/1");
@@ -65,7 +69,8 @@ test("brief: a document opens on its brief; Show full document switches, and the
 test("a link to a detail section opens the full document at it, once; the brief stays one click away", async ({
   page,
 }) => {
-  await login(page);
+  // Its own member: the mock keeps one saved view per member, and this test saves one.
+  await login(page, "viewer@example.com");
   // A roadmap item's link to its PRD feature: the feature is detail, not in the brief.
   await page.goto("/documents/saved-carts/v/2#s-feature-detail");
   await expect(sections(page)).toHaveAttribute("data-view", "full");
@@ -74,6 +79,19 @@ test("a link to a detail section opens the full document at it, once; the brief 
   await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Brief" }).click();
   await expect(sections(page)).toHaveAttribute("data-view", "brief");
   await expect(section(page, "feature-detail")).toHaveCount(0);
+  // The same from inside the app: a client-side navigation, as a roadmap's PRD link makes
+  // (Next writes the URL only after the new page renders).
+  await page.goto("/documents/usage-alerts-roadmap/v/1");
+  await expect(page.getByTestId("document-sections").filter({ visible: true })).toBeVisible();
+  await page.evaluate(() =>
+    (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push(
+      "/documents/saved-carts/v/2#s-feature-detail",
+    ),
+  );
+  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2#s-feature-detail$/);
+  await expect(sections(page)).toHaveAttribute("data-view", "full");
+  await expect(section(page, "feature-detail")).toBeInViewport();
+
   // A brief section's link keeps the brief (a fresh load, not a same-page hash change).
   await page.goto("about:blank");
   await page.goto("/documents/saved-carts/v/2#s-problem");

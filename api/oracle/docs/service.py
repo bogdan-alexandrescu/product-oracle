@@ -336,12 +336,13 @@ async def import_draft(
             raise NotFoundError(f"document '{doc}' not found")
         if draft.document is not None and draft.document != doc:
             raise _document_mismatch(doc, draft)
-        named_kind = draft.front_matter.get("kind")
+        # The same kind the check on an existing document reads: the run's, else the
+        # draft's front matter kind, else its template's.
         document = Document(
             slug=doc,
             title=draft.title,
             status="draft",
-            kind=kind or (named_kind if named_kind in DOCUMENT_KINDS else "prd"),
+            kind=kind or await _draft_kind(db, draft) or "prd",
             template=draft.template,
             template_version=draft.template_version,
             theme=theme,

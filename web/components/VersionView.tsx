@@ -94,11 +94,18 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const [viewOverride, setViewOverride] = useState<DocumentView | null>(null);
   // A #s-<key> link to a detail section (a roadmap's link to a PRD feature) opens this
   // version on the full document, until the reader picks a view.
-  const [hashLink, setHashLink] = useState<{ n: number; key: string } | null>(() =>
-    typeof window !== "undefined" && window.location.hash.startsWith("#s-")
-      ? { n, key: window.location.hash.slice(3) }
-      : null,
-  );
+  const [hashLink, setHashLink] = useState<{ n: number; key: string } | null>(null);
+  // The link this arrival has scrolled to: once per arrival, not on every view change.
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    const hash = window.location.hash;
+    scrolledTo.current = null;
+    // Next writes an in-app navigation's URL, #hash included, only once the new page has
+    // committed, so the hash cannot be read while rendering: read it here. This also runs
+    // when Next shows a kept route again.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHashLink(hash.startsWith("#s-") ? { n, key: hash.slice(3) } : null);
+  }, [doc, n]);
   // Open detail section -> the brief section showing it.
   const [opened, setOpened] = useState<Map<string, string>>(() => new Map());
   const [scrollTarget, setScrollTarget] = useState<{ id: string; key: string } | null>(null);
@@ -332,8 +339,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [selection, openComposer, versions, n, doc, router, hasBrief, view, switchView]);
 
-  // Honour #s-<key> links once the section has rendered, once per version and link.
-  const scrolledTo = useRef<string | null>(null);
+  // Honour #s-<key> links once the section has rendered.
   useEffect(() => {
     const hash = window.location.hash;
     if (!version || !hash.startsWith("#s-") || scrolledTo.current === `${n}${hash}`) return;
@@ -341,7 +347,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     if (!el) return;
     scrolledTo.current = `${n}${hash}`;
     el.scrollIntoView({ block: "start" });
-  }, [version, n, view]);
+  }, [version, n, view, hashLink]);
 
   const sectionProps = (s: SectionOut) => ({
     section: s,
