@@ -92,6 +92,13 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   // on a section the brief does not show switches this page to the full document only.
   const [savedView, saveView] = useDocumentView();
   const [viewOverride, setViewOverride] = useState<DocumentView | null>(null);
+  // A #s-<key> link to a detail section (a roadmap's link to a PRD feature) opens this
+  // version on the full document, until the reader picks a view.
+  const [hashLink, setHashLink] = useState<{ n: number; key: string } | null>(() =>
+    typeof window !== "undefined" && window.location.hash.startsWith("#s-")
+      ? { n, key: window.location.hash.slice(3) }
+      : null,
+  );
   // Open detail section -> the brief section showing it.
   const [opened, setOpened] = useState<Map<string, string>>(() => new Map());
   const [scrollTarget, setScrollTarget] = useState<{ id: string; key: string } | null>(null);
@@ -109,7 +116,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const sections = useMemo(() => version?.sections ?? [], [version]);
   const briefSections = useMemo(() => sections.filter((s) => s.layer === "brief"), [sections]);
   const hasBrief = briefSections.length > 0;
-  const view: DocumentView = hasBrief ? (viewOverride ?? savedView) : "full";
+  const linkedDetail =
+    hashLink?.n === n &&
+    !briefSections.some((s) => s.section_key === hashLink.key) &&
+    sections.some((s) => s.section_key === hashLink.key);
+  const view: DocumentView = hasBrief ? (viewOverride ?? (linkedDetail ? "full" : savedView)) : "full";
   // Detail sections a brief section links to: each feature row and milestone expands.
   const expandable = useMemo(() => {
     const detail = new Set(sections.filter((s) => s.layer !== "brief").map((s) => s.section_key));
@@ -121,6 +132,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const switchView = useCallback(
     (v: DocumentView) => {
       setViewOverride(null);
+      setHashLink(null);
       saveView(v);
     },
     [saveView],
@@ -320,21 +332,16 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [selection, openComposer, versions, n, doc, router, hasBrief, view, switchView]);
 
-  // Honour #s-<key> links once the version has rendered, once per version and link: a
-  // detail section (a roadmap's link to a PRD feature) shows the full document first.
-  const honouredHash = useRef<string | null>(null);
+  // Honour #s-<key> links once the section has rendered, once per version and link.
+  const scrolledTo = useRef<string | null>(null);
   useEffect(() => {
     const hash = window.location.hash;
-    if (!version || !hash.startsWith("#s-") || honouredHash.current === `${n}${hash}`) return;
-    const key = hash.slice(3);
-    const inBrief = briefSections.some((s) => s.section_key === key);
-    if (view === "brief" && !inBrief && sections.some((s) => s.section_key === key)) {
-      setViewOverride("full");
-      return;
-    }
-    honouredHash.current = `${n}${hash}`;
-    rootRef.current?.querySelector(`#${CSS.escape(hash.slice(1))}`)?.scrollIntoView({ block: "start" });
-  }, [version, n, view, sections, briefSections]);
+    if (!version || !hash.startsWith("#s-") || scrolledTo.current === `${n}${hash}`) return;
+    const el = rootRef.current?.querySelector(`#${CSS.escape(hash.slice(1))}`);
+    if (!el) return;
+    scrolledTo.current = `${n}${hash}`;
+    el.scrollIntoView({ block: "start" });
+  }, [version, n, view]);
 
   const sectionProps = (s: SectionOut) => ({
     section: s,

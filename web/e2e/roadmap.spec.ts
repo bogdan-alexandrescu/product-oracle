@@ -49,7 +49,8 @@ test("roadmap screen lists roadmaps with status, template and source PRD; PRDs l
 
   // PRDs: no roadmaps in the list.
   await page.getByTestId("nav-prds").click();
-  await expect(page.getByRole("link", { name: "Usage alerts PRD" })).toBeVisible();
+  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page.getByRole("link", { name: "Usage alerts PRD", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Usage alerts roadmap" })).toHaveCount(0);
 });
 
