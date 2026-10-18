@@ -11,6 +11,7 @@ from oracle.auth.service import create_user, make_session_cookie
 from oracle.baseline.models import Edge, Entity
 from oracle.config import get_settings
 from oracle.docs.models import Document, DocumentVersion
+from oracle.export import render
 from oracle.review.models import FeedbackItem
 from oracle.runs import flows
 from oracle.runs.roadmap import check_items, doc_links
@@ -252,8 +253,9 @@ async def test_flow_in_the_catalog(client, owner, runtime):
         ("roadmap_items", ["analyst", "prioritizer"], "roadmap_items", ["roadmap_items.yaml"]),
         ("roadmap_draft", ["writer", "critic"], "roadmap_review", ["roadmap.md"]),
     ]
-    assert "write:drafts" not in flow["segments"][0]["scopes"]
-    assert "write:drafts" in flow["segments"][1]["scopes"]
+    # Both segments are read-only: Oracle imports roadmap.md itself, with provenance.
+    assert all("write:drafts" not in s["scopes"] for s in flow["segments"])
+    assert all("push_draft" not in s.tools for s in flows.FLOWS["prd_to_roadmap"].segments)
     loop = next(f for f in body["flows"] if f["key"] == "feedback_loop")
     assert loop["target_kind"] is None
 
@@ -569,7 +571,7 @@ async def test_end_to_end(client, owner, runtime):
 
     spec = runtime.submitted[1]
     assert spec.outputs == ("roadmap.md",)
-    assert "write:drafts" in spec.mcp.scopes
+    assert "write:drafts" not in spec.mcp.scopes
     prompt = spec.steps[-1].prompt
     assert "--- roadmap_items.yaml ---" in prompt and "id: payment-step" in prompt
     assert "roadmap_items: Keep shipping in next" in prompt
@@ -626,7 +628,7 @@ async def test_exports_resolve_prd_links_and_carry_provenance(client, owner, run
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
     url = f"/v1/documents/{ROADMAP}/versions/1/export"
-    app = get_settings().app_url.rstrip("/")
+    app = render.app_url("")
     for layer in ("full", "brief"):
         html = (await client.get(url, params={"format": "html", "layer": layer}, headers=auth)).text
         assert f'<a href="{app}/documents/{PRD}/v/1">From {PRD_TITLE} v1</a>' in html, layer
@@ -748,7 +750,10 @@ async def test_feedback_loop_on_a_roadmap(client, owner, runtime):
 
     await tick(client, auth)
     run = await get(client, auth, run["id"])
-    assert run["waiting_on"] == "prd_review"
+    # The feedback loop on a roadmap is a roadmap review; its knob keeps the segment key.
+    assert run["waiting_on"] == "roadmap_review"
+    assert run["segments"][0]["checkpoint"] == "roadmap_review"
+    assert run["knobs"]["checkpoints"] == {"prd_review": True}
     imp = run["segments"][0]["draft_import"]
     assert imp["version"] == 2 and imp["kind"] == "roadmap"
     # The next draft keeps the PRD version the roadmap came from.
@@ -855,3 +860,47 @@ async def test_mcp_lists_the_flow_and_returns_provenance(client, owner, runtime)
         )
         assert not created.is_error, text_of(created)
         assert created.structured_content["source"]["version"] == 1
+
+
+# --------------------------------------------------------------------- review fixes
+
+
+async def test_a_draft_of_the_other_kind_never_imports_into_a_document(client, owner):
+    _, auth = owner
+    await approved_prd(client, auth)
+    # A roadmap pushed into the approved PRD, by its front matter kind or its template.
+    named = ROADMAP_MD.replace("document: checkout-redesign-roadmap\n", "")
+    resp = await import_draft(client, auth, named, doc=PRD)
+    assert resp.status_code == 422
+    assert resp.json()["errors"][0]["code"] == "kind_mismatch"
+    by_template = named.replace("kind: roadmap\n", "")
+    resp = await import_draft(client, auth, by_template, doc=PRD)
+    assert resp.status_code == 422
+    assert resp.json()["errors"][0]["code"] == "kind_mismatch"
+    doc = (await client.get(f"/v1/documents/{PRD}", headers=auth)).json()
+    assert doc["status"] == "approved" and doc["latest_version"] == 1
+
+
+async def test_a_run_without_a_template_takes_the_company_default(client, owner, runtime):
+    _, auth = owner
+    await approved_prd(client, auth)
+    await client.get("/v1/templates", headers=auth)
+    resp = await client.put(
+        "/v1/drafts/defaults",
+        json={"roadmap": {"template": "outcome-roadmap", "theme": "roadmap-board"}},
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+    run = await create(client, auth, source=PRD)
+    assert run["template"] == "outcome-roadmap" and run["theme"] == "roadmap-board"
+    # A template named in the call still wins.
+    run = await create(client, auth, source=PRD, template="now-next-later")
+    assert run["template"] == "now-next-later"
+
+
+def test_app_links_default_to_the_public_url():
+    from oracle.swarm.settings import get_runtime_settings
+
+    assert get_settings().app_url == ""
+    base = get_runtime_settings().public_url.rstrip("/")
+    assert render.app_url("/documents/x/v/1") == f"{base}/documents/x/v/1"

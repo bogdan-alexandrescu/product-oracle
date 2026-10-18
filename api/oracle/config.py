@@ -18,8 +18,9 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     sql_echo: bool = False
     # Where people open the web app: exports turn the app's own links (a roadmap's links
-    # to its PRD's sections) into absolute URLs under it.
-    app_url: str = "http://localhost:3000"
+    # to its PRD's sections) into absolute URLs under it. Empty: ORACLE_PUBLIC_URL, where
+    # the app and the API share a host behind the load balancer.
+    app_url: str = ""
     # Google IAP single sign-on. Empty audiences = off: the IAP header is ignored.
     # Audience: /projects/<PROJECT_NUMBER>/global/backendServices/<BACKEND_SERVICE_ID>.
     iap_audiences: list[str] = []

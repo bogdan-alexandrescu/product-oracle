@@ -58,6 +58,25 @@ test("brief: a document opens on its brief; Show full document switches, and the
   await expect(page.getByTestId("layer-badge")).toHaveCount(0);
 });
 
+test("a link to a detail section opens the full document at it, once; the brief stays one click away", async ({
+  page,
+}) => {
+  await login(page);
+  // A roadmap item's link to its PRD feature: the feature is detail, not in the brief.
+  await page.goto("/documents/saved-carts/v/2#s-feature-detail");
+  await expect(sections(page)).toHaveAttribute("data-view", "full");
+  await expect(section(page, "feature-detail")).toBeInViewport();
+  // Not saved as the user's choice, and not forced again on the way back to the brief.
+  await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Brief" }).click();
+  await expect(sections(page)).toHaveAttribute("data-view", "brief");
+  await expect(section(page, "feature-detail")).toHaveCount(0);
+  // A brief section's link keeps the brief (a fresh load, not a same-page hash change).
+  await page.goto("about:blank");
+  await page.goto("/documents/saved-carts/v/2#s-problem");
+  await expect(sections(page)).toHaveAttribute("data-view", "brief");
+  await expect(section(page, "problem")).toBeInViewport();
+});
+
 test("expand: a feature row and a milestone show their detail in place; comments and verdicts say the layer", async ({
   page,
 }) => {

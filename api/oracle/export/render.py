@@ -41,6 +41,7 @@ from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import CITATION_STRIP_RE
 from oracle.docs.schemas import VersionSource
+from oracle.swarm.settings import get_runtime_settings
 from oracle.templates.models import Template, TemplateVersion, Theme
 
 HERE = Path(__file__).resolve().parent
@@ -161,7 +162,8 @@ _DOC_LINK = re.compile(r'href="(/documents/[A-Za-z0-9][A-Za-z0-9_.-]*/v/\d+)(?:#
 
 
 def app_url(path: str) -> str:
-    return get_settings().app_url.rstrip("/") + path
+    base = get_settings().app_url or get_runtime_settings().public_url
+    return base.rstrip("/") + path
 
 
 def absolute_doc_links(html: str) -> str:

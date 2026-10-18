@@ -33,6 +33,7 @@ from oracle.docs.schemas import (
 )
 from oracle.review import service as review_service
 from oracle.review.models import SectionReview
+from oracle.templates.builtins import BUILTIN_TEMPLATES_BY_KEY
 from oracle.templates.models import Template, TemplateVersion
 
 
@@ -305,6 +306,18 @@ def _kind_mismatch(slug: str, kind: str, expected: str) -> DraftError:
     )
 
 
+async def _draft_kind(db: AsyncSession, draft: ParsedDraft) -> str | None:
+    """The kind a draft says it is: its front matter's ``kind``, else its template's."""
+    named = draft.front_matter.get("kind")
+    if named in DOCUMENT_KINDS:
+        return named
+    if draft.template:
+        stored = await db.scalar(select(Template.kind).where(Template.key == draft.template))
+        builtin = BUILTIN_TEMPLATES_BY_KEY.get(draft.template)
+        return stored or (builtin.kind if builtin else None)
+    return None
+
+
 async def import_draft(
     db: AsyncSession,
     doc: str,
@@ -359,6 +372,9 @@ async def import_draft(
             raise _document_mismatch(document.slug, draft)
         if kind is not None and document.kind != kind:
             raise _kind_mismatch(document.slug, document.kind, kind)
+        draft_kind = await _draft_kind(db, draft)
+        if draft_kind is not None and draft_kind != document.kind:
+            raise _kind_mismatch(document.slug, document.kind, draft_kind)
         existing = await db.scalar(
             select(DocumentVersion).where(
                 DocumentVersion.document_id == document.id,

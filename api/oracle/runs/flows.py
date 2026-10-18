@@ -94,6 +94,14 @@ class SegmentDef:
         """The files the segment writes for a target document of ``kind``."""
         return tuple(o.replace("{draft}", draft_file(kind)) for o in self.outputs)
 
+    def checkpoint_for(self, kind: str) -> str:
+        """The checkpoint kind a run writing a ``kind`` document opens: a draft review
+        names its document (the feedback loop on a roadmap is a roadmap review). Knobs
+        keep the segment's own ``checkpoint`` key."""
+        if self.checkpoint == "prd_review" and kind == "roadmap":
+            return "roadmap_review"
+        return self.checkpoint
+
     def task_for(self, kind: str) -> str:
         return self.task.replace("{draft}", draft_file(kind)).replace("{doc}", KIND_NAMES[kind])
 
@@ -283,7 +291,8 @@ FLOWS: dict[str, FlowDef] = {
                     name="roadmap_draft",
                     title="Roadmap draft",
                     roles=("writer", "critic"),
-                    scopes=(*READ, "read:documents", "write:drafts"),
+                    # Read-only: Oracle imports roadmap.md itself, with its provenance.
+                    scopes=(*READ, "read:documents"),
                     outputs=("roadmap.md",),
                     checkpoint="roadmap_review",
                     imports_draft=True,
@@ -303,7 +312,6 @@ FLOWS: dict[str, FlowDef] = {
                         "get_baseline",
                         "search",
                         "get_source_item",
-                        "push_draft",
                     ),
                 ),
             ),

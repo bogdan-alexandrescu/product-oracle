@@ -320,11 +320,21 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [selection, openComposer, versions, n, doc, router, hasBrief, view, switchView]);
 
-  // Honour #s-<key> links once the version has rendered.
+  // Honour #s-<key> links once the version has rendered, once per version and link: a
+  // detail section (a roadmap's link to a PRD feature) shows the full document first.
+  const honouredHash = useRef<string | null>(null);
   useEffect(() => {
-    if (!version || !window.location.hash.startsWith("#s-")) return;
-    rootRef.current?.querySelector(`#${CSS.escape(window.location.hash.slice(1))}`)?.scrollIntoView({ block: "start" });
-  }, [version]);
+    const hash = window.location.hash;
+    if (!version || !hash.startsWith("#s-") || honouredHash.current === `${n}${hash}`) return;
+    const key = hash.slice(3);
+    const inBrief = briefSections.some((s) => s.section_key === key);
+    if (view === "brief" && !inBrief && sections.some((s) => s.section_key === key)) {
+      setViewOverride("full");
+      return;
+    }
+    honouredHash.current = `${n}${hash}`;
+    rootRef.current?.querySelector(`#${CSS.escape(hash.slice(1))}`)?.scrollIntoView({ block: "start" });
+  }, [version, n, view, sections, briefSections]);
 
   const sectionProps = (s: SectionOut) => ({
     section: s,

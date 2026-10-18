@@ -316,7 +316,9 @@ def _checkpoint_out(cp: Checkpoint, principal: Principal | None) -> CheckpointOu
     )
 
 
-def _segment_out(run: Run, segment: RunSegment, knobs: flows.Knobs) -> SegmentOut:
+def _segment_out(
+    run: Run, segment: RunSegment, knobs: flows.Knobs, kind: str = "prd"
+) -> SegmentOut:
     sdef = _flow(run).segment(segment.name)
     art = segment.artifacts or {}
     imp = art.get("import")
@@ -329,7 +331,7 @@ def _segment_out(run: Run, segment: RunSegment, knobs: flows.Knobs) -> SegmentOu
         status=segment.status,  # type: ignore[arg-type]
         roles=knobs.roles.get(segment.name, list(sdef.roles)),
         scopes=list(sdef.scopes),
-        checkpoint=sdef.checkpoint,  # type: ignore[arg-type]
+        checkpoint=sdef.checkpoint_for(kind),  # type: ignore[arg-type]
         checkpoint_on=knobs.checkpoints.get(sdef.checkpoint, True),
         estimate_usd=_usd(segment.estimate_usd),
         cost_usd=float(segment.cost_usd or 0),
@@ -350,6 +352,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     checkpoints = await _checkpoints(db, [run.id])
     refs = await _refs(db, [run])
     knobs = _knobs(run)
+    kind = await _target_kind(db, run)
     snapshot = await db.get(Snapshot, run.snapshot_id) if run.snapshot_id else None
     waiting = next((c for c in checkpoints if c.status == "pending"), None)
     runtime = get_runtime()
@@ -377,7 +380,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         overrun_ceiling_usd=_usd(_ceiling(run)),
         runtime=runtime.name,
         notes=notes,
-        segments=[_segment_out(run, s, knobs) for s in segments],
+        segments=[_segment_out(run, s, knobs, kind) for s in segments],
         checkpoints=[_checkpoint_out(c, principal) for c in checkpoints],
     )
 
@@ -490,10 +493,20 @@ async def _resolve_template(
     document: Document | None,
 ) -> dict[str, Any]:
     """The target's template (key + version) and theme: the ones named, else the
-    existing document's, else the defaults for the kind (O4: now-next-later and
+    existing document's, else the company's new-draft default for the kind (Settings,
+    as the new-draft picker), else the built-in defaults (O4: now-next-later and
     roadmap-board for roadmaps)."""
     await ensure_builtins(db)
+    company = (await templates_service.company_draft_defaults(db)).get(kind) or {}
     key = template or (document.template if document and document.template else None)
+    if not key and company.get("template"):
+        key = await db.scalar(
+            select(Template.key).where(
+                Template.key == company["template"],
+                Template.kind == kind,
+                Template.archived_at.is_(None),
+            )
+        )
     key = key or DEFAULT_TEMPLATE_FOR_KIND[kind]
     row = await db.scalar(select(Template).where(Template.key == key))
     if row is None:
@@ -516,7 +529,21 @@ async def _resolve_template(
     number = await db.scalar(stmt.order_by(TemplateVersion.version.desc()).limit(1))
     if number is None:
         raise Invalid(f"template '{key}' has no version")
-    theme_key = theme or (document.theme if document else None) or DEFAULT_THEME_FOR_KIND[kind]
+    company_theme = None
+    if company.get("theme"):
+        company_theme = await db.scalar(
+            select(Theme.key).where(
+                Theme.key == company["theme"],
+                Theme.kind.in_((kind, "any")),
+                Theme.archived_at.is_(None),
+            )
+        )
+    theme_key = (
+        theme
+        or (document.theme if document else None)
+        or company_theme
+        or DEFAULT_THEME_FOR_KIND[kind]
+    )
     trow = await db.scalar(select(Theme).where(Theme.key == theme_key))
     if trow is None:
         raise Invalid(f"theme '{theme_key}' not found")
@@ -1254,11 +1281,12 @@ async def _advance(
         payload["baseline_import"] = baseline_import
     if items_check is not None:
         payload["items_check"] = items_check
+    checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
     if knobs.checkpoints.get(sdef.checkpoint, True):
         db.add(
             Checkpoint(
                 run_id=run.id,
-                kind=sdef.checkpoint,
+                kind=checkpoint_kind,
                 status="pending",
                 approver_role=sdef.approver_role,
                 payload=payload,
@@ -1269,7 +1297,7 @@ async def _advance(
     db.add(
         Checkpoint(
             run_id=run.id,
-            kind=sdef.checkpoint,
+            kind=checkpoint_kind,
             status="skipped",
             approver_role=sdef.approver_role,
             note="Turned off when the run started.",
