@@ -131,6 +131,7 @@ async def get_deck(doc: str, n: int, db: TenantDB) -> DeckOut:
         status=deck.status,
         as_of=deck.as_of,
         banner=deck.banner,
+        source=ev.source,
         theme=deck.theme_key,
         theme_name=deck.theme_name,
         theme_class=theme_class(deck),

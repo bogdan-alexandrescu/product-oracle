@@ -10,6 +10,7 @@ Verdict = Literal["approved", "changes_requested", "rejected"]
 # O1f: brief sections make up the brief layer; the full layer is every section.
 Layer = Literal["brief", "detail"]
 BriefSource = Literal["draft", "template", "full_heading", "none"]
+DocumentKind = Literal["prd", "roadmap"]
 
 
 class ORM(BaseModel):
@@ -39,14 +40,33 @@ class ImportErrorResponse(BaseModel):
     errors: list[ImportProblem]
 
 
+class VersionSource(BaseModel):
+    """Provenance: the document version this version was built from (a roadmap's
+    approved PRD version, O4b)."""
+
+    document_id: uuid.UUID
+    slug: str
+    title: str
+    kind: DocumentKind
+    version: int
+    version_id: uuid.UUID
+    approved_at: datetime | None = None
+
+
 class DocumentSummary(ORM):
     id: uuid.UUID
     slug: str
     title: str
     status: DocumentStatus
+    kind: DocumentKind = "prd"
     template: str | None = None
     template_version: str | None = None
+    theme: str | None = None
     latest_version: int | None = None
+    # The latest approved version's number, if any (a PRD a roadmap can be built from).
+    approved_version: int | None = None
+    # Provenance of the latest version (roadmaps: the PRD version it came from).
+    source: VersionSource | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -63,6 +83,8 @@ class VersionSummary(ORM):
     # Where the brief layer came from; "none": no brief, the version opens on the full
     # document.
     brief_source: BriefSource = "none"
+    # Provenance: the document version this one was built from, if any.
+    source: VersionSource | None = None
     created_at: datetime
 
 

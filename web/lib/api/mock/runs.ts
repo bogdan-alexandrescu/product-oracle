@@ -10,7 +10,9 @@ type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
 type CheckpointOut = Schemas["CheckpointOut"];
 type FeedbackRow = Schemas["FeedbackItemOut"];
-type DocumentRow = Pick<Schemas["DocumentSummary"], "id" | "slug" | "title">;
+type DocumentRow = Pick<Schemas["DocumentSummary"], "id" | "slug" | "title" | "kind" | "template" | "theme">;
+type VersionSource = Schemas["VersionSource"];
+type Kind = DocumentRow["kind"];
 
 export interface RunsDb {
   runs: RunOut[];
@@ -24,8 +26,15 @@ export interface RunsContext {
   feedback: FeedbackRow[];
   documents: DocumentRow[];
   latestVersion: (documentId: string) => number | null;
-  /** Imports a run's draft as the document's next version; returns the new number. */
-  importDraft: (slug: string) => { document_id: string; slug: string; version: number };
+  /** Section keys of a version (a roadmap's items check their PRD sections). */
+  sectionKeys: (versionId: string) => string[];
+  /** The approved version of a document a run reads (the one named, else the latest approved), or why not. */
+  sourceVersion: (documentId: string, number: number | null) => VersionSource | string;
+  /** Imports a run's draft as the document's next version. */
+  importDraft: (
+    slug: string,
+    run: Pick<RunOut, "document_kind" | "source" | "template" | "theme">,
+  ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings">;
   uuid: () => string;
   now: () => string;
 }
@@ -47,6 +56,8 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       title: "Baseline to PRD",
       description: "Baseline proposal, feature set and design, priority order, PRD draft.",
       requires_document: false,
+      target_kind: "prd",
+      source_kind: null,
       segments: [
         { name: "baseline", title: "Baseline proposal", roles: ["researcher", "analyst"], scopes: [...READ, "write:proposals"], outputs: ["baseline.yaml", "summary.md"], checkpoint: "baseline_confirm", approver_role: "approver" },
         { name: "feature_set", title: "Feature set, dependencies and design", roles: ["analyst", "architect"], scopes: [...READ, "write:proposals"], outputs: ["feature_set.yaml", "design.md"], checkpoint: "feature_set", approver_role: "approver" },
@@ -57,10 +68,24 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
     {
       key: "feedback_loop",
       title: "Feedback loop",
-      description: "Pull open feedback on the PRD, write the next draft, review it.",
+      description: "Pull open feedback on a PRD or roadmap, write the next draft, review it.",
       requires_document: true,
+      target_kind: null,
+      source_kind: null,
       segments: [
         { name: "next_draft", title: "Next draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver" },
+      ],
+    },
+    {
+      key: "prd_to_roadmap",
+      title: "Roadmap from an approved PRD",
+      description: "Roadmap items from an approved PRD version (horizon, milestone, dependencies, priority), then a roadmap draft in the chosen template.",
+      requires_document: false,
+      target_kind: "roadmap",
+      source_kind: "prd",
+      segments: [
+        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
+        { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
       ],
     },
   ],
@@ -73,6 +98,9 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
 };
 
 const THRESHOLD = 50;
+const KIND_NAME: Record<Kind, string> = { prd: "PRD", roadmap: "roadmap" };
+// O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
+const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
 const FACTOR = 1.5;
 const FINAL = ["succeeded", "failed", "cancelled"];
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -99,6 +127,10 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     status: r.status,
     document_id: r.document_id,
     document_slug: r.document_slug,
+    document_kind: r.document_kind,
+    source: r.source,
+    template: r.template,
+    theme: r.theme,
     estimate_usd: r.estimate_usd,
     spent_usd: r.spent_usd,
     created_by: r.created_by,
@@ -143,6 +175,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     artifacts: [],
     attempts: [],
     draft_import: null,
+    items_check: null,
     started_at: null,
     finished_at: null,
     error: null,
@@ -177,6 +210,10 @@ function next(ctx: RunsContext, r: RunOut, s: SegmentOut) {
 
 function fileContent(name: string, segment: string, attempt: number): string {
   if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt} from the local agent runtime.\n`;
+  if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt} from the local agent runtime.\n`;
+  if (name === "roadmap_items.yaml") {
+    return `# ${segment} (local agent runtime, attempt ${attempt})\nversion: 1\nitems:\n  - id: price-early\n    title: Show the price early\n    outcome: Fewer buyers drop off at checkout\n    horizon: now\n    milestone: Beta\n    confidence: medium\n    prd_section: features\n`;
+  }
   if (name.endsWith(".yaml")) return `# ${segment} (attempt ${attempt})\nitems:\n  - key: g1\n    title: Raise first-order completion to 70%\n    confidence: 0.82\n`;
   return `# ${segment}\n\nWritten by the local agent runtime (attempt ${attempt}).\n`;
 }
@@ -186,17 +223,29 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   const attempt = s.attempts.length;
   for (const name of def.outputs) ctx.db.artifacts[`${r.id}|${s.seq}|${name}`] = fileContent(name, s.name, attempt);
   s.artifacts = [...def.outputs].sort();
-  if (def.outputs.includes("prd.md") && r.document_slug) {
-    const imp = ctx.importDraft(r.document_slug);
+  // The local runtime's one item cites PRD section "features", as the API's FakeRuntime does.
+  if (def.outputs.includes("roadmap_items.yaml")) {
+    const known = r.source ? ctx.sectionKeys(r.source.version_id) : [];
+    s.items_check = {
+      items: 1,
+      by_horizon: { now: 1, next: 0, later: 0 },
+      problems: known.includes("features")
+        ? []
+        : [{ code: "unknown_prd_section", message: "item price-early: PRD section 'features' is not in the PRD version", item: "price-early" }],
+    };
+  }
+  if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md")) && r.document_slug) {
+    const imp = ctx.importDraft(r.document_slug, r);
     s.draft_import = { ...imp, created: true, warnings: [], error: null };
-    r.document_id = imp.document_id;
+    r.document_id = imp.document_id ?? null;
   }
   const payload = { segment_seq: s.seq, segment: s.name, attempt, artifacts: s.artifacts };
   const on = r.knobs.checkpoints[def.checkpoint] ?? true;
   const cp: CheckpointOut = {
     id: ctx.uuid(),
     run_id: r.id,
-    kind: def.checkpoint,
+    // As the API: the feedback loop on a roadmap is a roadmap review.
+    kind: def.checkpoint === "prd_review" && r.document_kind === "roadmap" ? "roadmap_review" : def.checkpoint,
     status: on ? "pending" : "skipped",
     approver_role: "approver",
     segment_seq: s.seq,
@@ -318,16 +367,47 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const flow = flowOf(input.flow);
     const knobs = resolveKnobs(input.flow, input.knobs);
     if (typeof knobs === "string") return fail(422, knobs);
-    const doc = input.document ? ctx.documents.find((d) => d.slug === input.document || d.id === input.document) : undefined;
-    if (!input.document) return fail(422, "name the PRD: an existing document, or a new slug to create");
-    if (flow.requires_document && !doc) return fail(422, `document '${input.document}' not found`);
+    const find = (ref: string) => ctx.documents.find((d) => d.slug === ref || d.id === ref);
+    if (flow.target_kind !== "roadmap" && (input.template || input.theme)) return fail(422, `the ${flow.title} flow takes no template or theme`);
+    // prd_to_roadmap reads an approved PRD version (422 when there is none).
+    let source: VersionSource | null = null;
+    if (flow.source_kind) {
+      const name = KIND_NAME[flow.source_kind];
+      if (!input.source) return fail(422, `name the approved ${name} to build from`);
+      const from = find(input.source);
+      if (!from) return fail(422, `document '${input.source}' not found`);
+      if (from.kind !== flow.source_kind) return fail(422, `document '${input.source}' is a ${KIND_NAME[from.kind]}, not a ${name}`);
+      const found = ctx.sourceVersion(from.id, input.source_version ?? null);
+      if (typeof found === "string") return fail(422, found);
+      source = found;
+    } else if (input.source || input.source_version != null) {
+      return fail(422, `the ${flow.title} flow reads no source document`);
+    }
+    // "<prd>-roadmap": that roadmap's next version, or a new roadmap.
+    let ref = input.document;
+    if (!ref && source) {
+      const base = `${source.slug}-roadmap`;
+      ref = base;
+      for (let n = 2; find(ref) && find(ref)!.kind !== flow.target_kind; n++) ref = `${base}-${n}`;
+    }
+    if (!ref) return fail(422, "name the PRD: an existing document, or a new slug to create");
+    const doc = find(ref);
+    if (flow.requires_document && !doc) return fail(422, `document '${ref}' not found`);
+    if (doc && flow.target_kind && doc.kind !== flow.target_kind) {
+      return fail(422, `document '${ref}' is a ${KIND_NAME[doc.kind]}, not a ${KIND_NAME[flow.target_kind]}`);
+    }
+    const roadmap = flow.target_kind === "roadmap";
     const run: RunOut = {
       id: ctx.uuid(),
       flow: input.flow,
       flow_title: flow.title,
       status: "draft",
       document_id: doc?.id ?? null,
-      document_slug: doc?.slug ?? input.document,
+      document_slug: doc?.slug ?? ref,
+      document_kind: doc?.kind ?? flow.target_kind ?? null,
+      source,
+      template: roadmap ? (input.template ?? doc?.template ?? ROADMAP_DEFAULTS.template) : null,
+      theme: roadmap ? (input.theme ?? doc?.theme ?? ROADMAP_DEFAULTS.theme) : null,
       estimate_usd: null,
       spent_usd: 0,
       created_by: ctx.userId,
@@ -372,6 +452,10 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       const doc = ctx.documents.find((d) => d.slug === patch.document || d.id === patch.document);
       r.document_id = doc?.id ?? null;
       r.document_slug = doc?.slug ?? patch.document;
+    }
+    if (r.document_kind === "roadmap") {
+      if (patch.template) r.template = patch.template;
+      if (patch.theme) r.theme = patch.theme;
     }
     r.segments = segmentsFor(r.flow, r.knobs, ctx.uuid);
     r.estimate_usd = null;
@@ -472,6 +556,10 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
       status: "draft",
       document_id: doc?.id ?? null,
       document_slug: doc?.slug ?? document,
+      document_kind: doc?.kind ?? "prd",
+      source: null,
+      template: null,
+      theme: null,
       estimate_usd: estimate,
       spent_usd: 0,
       created_by: ctx.userId,

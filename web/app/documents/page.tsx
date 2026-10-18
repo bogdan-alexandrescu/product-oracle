@@ -8,7 +8,8 @@ import { formatDateTime } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
 export default function DocumentsPage() {
-  const q = useQuery("documents", () => unwrap(api.GET("/v1/documents")));
+  // PRDs only: roadmaps have their own screen (/roadmap).
+  const q = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const documents = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
   return (
@@ -21,18 +22,12 @@ export default function DocumentsPage() {
         >
           New PRD
         </Link>
-        <Link
-          href="/documents/new?kind=roadmap"
-          className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-        >
-          New roadmap
-        </Link>
       </div>
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {q.loading && <Loading />}
       {q.data && documents.length === 0 && (
         <p className="text-neutral-600">
-          No documents yet. Start one with New PRD or New roadmap, import a draft with <code>POST /v1/documents/&#123;doc&#125;/versions</code> or{" "}
+          No PRDs yet. Start one with New PRD, import a draft with <code>POST /v1/documents/&#123;doc&#125;/versions</code> or{" "}
           <code>oracle push draft.md</code>.
         </p>
       )}

@@ -193,23 +193,8 @@
           "documents"
         ],
         "summary": "List Documents",
+        "description": "Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries\nits latest and latest approved version and the latest version's provenance.",
         "operationId": "list_documents",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/DocumentSummary"
-                  },
-                  "type": "array",
-                  "title": "Response List Documents"
-                }
-              }
-            }
-          }
-        },
         "security": [
           {
             "HTTPBearer": []
@@ -217,7 +202,55 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "prd",
+                    "roadmap"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSummary"
+                  },
+                  "title": "Response List Documents"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/documents/{doc}": {
@@ -9960,7 +9993,9 @@
               "feature_set",
               "priority_order",
               "prd_review",
-              "eng_review"
+              "eng_review",
+              "roadmap_items",
+              "roadmap_review"
             ],
             "title": "Kind"
           },
@@ -11069,6 +11104,16 @@
             "type": "string",
             "title": "Banner"
           },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "theme": {
             "anyOf": [
               {
@@ -11182,6 +11227,15 @@
             ],
             "title": "Status"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind",
+            "default": "prd"
+          },
           "template": {
             "anyOf": [
               {
@@ -11204,6 +11258,17 @@
             ],
             "title": "Template Version"
           },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
           "latest_version": {
             "anyOf": [
               {
@@ -11214,6 +11279,27 @@
               }
             ],
             "title": "Latest Version"
+          },
+          "approved_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Version"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "type": "string",
@@ -11269,6 +11355,15 @@
             ],
             "title": "Status"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind",
+            "default": "prd"
+          },
           "template": {
             "anyOf": [
               {
@@ -11291,6 +11386,17 @@
             ],
             "title": "Template Version"
           },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
           "latest_version": {
             "anyOf": [
               {
@@ -11301,6 +11407,27 @@
               }
             ],
             "title": "Latest Version"
+          },
+          "approved_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Version"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "type": "string",
@@ -11376,6 +11503,21 @@
             ],
             "title": "Slug"
           },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "prd",
+                  "roadmap"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
           "version": {
             "anyOf": [
               {
@@ -11416,6 +11558,26 @@
               }
             ],
             "title": "Error"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prd_links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrdLinks"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -13304,7 +13466,8 @@
             "type": "string",
             "enum": [
               "baseline_to_prd",
-              "feedback_loop"
+              "feedback_loop",
+              "prd_to_roadmap"
             ],
             "title": "Key"
           },
@@ -13319,6 +13482,36 @@
           "requires_document": {
             "type": "boolean",
             "title": "Requires Document"
+          },
+          "target_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "prd",
+                  "roadmap"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Kind"
+          },
+          "source_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "prd",
+                  "roadmap"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Kind"
           },
           "segments": {
             "items": {
@@ -13376,7 +13569,9 @@
               "feature_set",
               "priority_order",
               "prd_review",
-              "eng_review"
+              "eng_review",
+              "roadmap_items",
+              "roadmap_review"
             ],
             "title": "Checkpoint"
           },
@@ -13804,7 +13999,9 @@
               "feature_set",
               "priority_order",
               "prd_review",
-              "eng_review"
+              "eng_review",
+              "roadmap_items",
+              "roadmap_review"
             ],
             "title": "Kind"
           },
@@ -13893,7 +14090,8 @@
             "type": "string",
             "enum": [
               "baseline_to_prd",
-              "feedback_loop"
+              "feedback_loop",
+              "prd_to_roadmap"
             ],
             "title": "Flow"
           },
@@ -14504,6 +14702,65 @@
           "confidence"
         ],
         "title": "ItemOut"
+      },
+      "ItemsCheck": {
+        "properties": {
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "by_horizon": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Horizon"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/ItemsProblem"
+            },
+            "type": "array",
+            "title": "Problems"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "by_horizon",
+          "problems"
+        ],
+        "title": "ItemsCheck",
+        "description": "The check of roadmap_items.yaml (oracle.runs.roadmap)."
+      },
+      "ItemsProblem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ItemsProblem"
       },
       "JobCreate": {
         "properties": {
@@ -15420,6 +15677,26 @@
         "type": "object",
         "title": "PrdAnswers",
         "description": "At most four questions (docs/research/prd-formats.md, template picker)."
+      },
+      "PrdLinks": {
+        "properties": {
+          "resolved": {
+            "type": "integer",
+            "title": "Resolved",
+            "default": 0
+          },
+          "unresolved": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unresolved",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "PrdLinks",
+        "description": "Cross-document links from a roadmap draft to its PRD version's sections."
       },
       "Preferences": {
         "properties": {
@@ -17068,7 +17345,8 @@
             "type": "string",
             "enum": [
               "baseline_to_prd",
-              "feedback_loop"
+              "feedback_loop",
+              "prd_to_roadmap"
             ],
             "title": "Flow"
           },
@@ -17084,6 +17362,57 @@
               }
             ],
             "title": "Document"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Version"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
           },
           "knobs": {
             "$ref": "#/components/schemas/KnobsIn",
@@ -17111,7 +17440,8 @@
             "type": "string",
             "enum": [
               "baseline_to_prd",
-              "feedback_loop"
+              "feedback_loop",
+              "prd_to_roadmap"
             ],
             "title": "Flow"
           },
@@ -17155,6 +17485,53 @@
               }
             ],
             "title": "Document Slug"
+          },
+          "document_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "prd",
+                  "roadmap"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Kind"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
           },
           "estimate_usd": {
             "anyOf": [
@@ -17221,7 +17598,9 @@
                   "feature_set",
                   "priority_order",
                   "prd_review",
-                  "eng_review"
+                  "eng_review",
+                  "roadmap_items",
+                  "roadmap_review"
                 ]
               },
               {
@@ -17365,6 +17744,57 @@
             ],
             "title": "Document"
           },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Version"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
           "knobs": {
             "anyOf": [
               {
@@ -17390,7 +17820,8 @@
             "type": "string",
             "enum": [
               "baseline_to_prd",
-              "feedback_loop"
+              "feedback_loop",
+              "prd_to_roadmap"
             ],
             "title": "Flow"
           },
@@ -17434,6 +17865,53 @@
               }
             ],
             "title": "Document Slug"
+          },
+          "document_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "prd",
+                  "roadmap"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Kind"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
           },
           "estimate_usd": {
             "anyOf": [
@@ -17500,7 +17978,9 @@
                   "feature_set",
                   "priority_order",
                   "prd_review",
-                  "eng_review"
+                  "eng_review",
+                  "roadmap_items",
+                  "roadmap_review"
                 ]
               },
               {
@@ -18133,7 +18613,9 @@
               "feature_set",
               "priority_order",
               "prd_review",
-              "eng_review"
+              "eng_review",
+              "roadmap_items",
+              "roadmap_review"
             ],
             "title": "Checkpoint"
           },
@@ -18185,6 +18667,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/DraftImport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemsCheck"
               },
               {
                 "type": "null"
@@ -21086,6 +21578,16 @@
             "title": "Brief Source",
             "default": "none"
           },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -21197,6 +21699,63 @@
         ],
         "title": "VersionReports"
       },
+      "VersionSource": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "slug",
+          "title",
+          "kind",
+          "version",
+          "version_id"
+        ],
+        "title": "VersionSource",
+        "description": "Provenance: the document version this version was built from (a roadmap's\napproved PRD version, O4b)."
+      },
       "VersionSummary": {
         "properties": {
           "id": {
@@ -21270,6 +21829,16 @@
             ],
             "title": "Brief Source",
             "default": "none"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "type": "string",

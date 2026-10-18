@@ -1314,8 +1314,10 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     slug,
     title,
     status: "draft",
+    kind: input.kind,
     template: t.key,
     template_version: String(tv.version),
+    theme: input.theme ?? null,
     created_at: created,
     updated_at: created,
   };

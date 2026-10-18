@@ -19,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from oracle.db import Base, TenantScoped
 
 DOCUMENT_STATUSES = ("draft", "in_review", "approved")
+DOCUMENT_KINDS = ("prd", "roadmap")
 # O1f: a section belongs to the brief layer or is detail (oracle.docs.layers).
 SECTION_LAYERS = ("brief", "detail")
 BRIEF_SOURCES = ("draft", "template", "full_heading", "none")
@@ -85,6 +86,10 @@ class DocumentVersion(TenantScoped, Base):
     # Where the brief layer came from: the draft's front matter, its template's markers,
     # a "Full version" heading, or none (the version opens on the full document).
     brief_source: Mapped[str] = mapped_column(Text, nullable=False, server_default="none")
+    # Provenance: the PRD version a roadmap version was built from (O4b).
+    source_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("document_versions.id", ondelete="SET NULL"), index=True
+    )
 
     document: Mapped[Document] = relationship(back_populates="versions")
     sections: Mapped[list["Section"]] = relationship(

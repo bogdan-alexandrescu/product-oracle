@@ -16,6 +16,12 @@ const BRIEF = [
   "Decisions needed",
 ];
 
+/** Wait until the mock (which runs in the page) has saved this member's view choice. */
+const savedView = (page: Page, view: "brief" | "full") =>
+  expect
+    .poll(() => page.evaluate((v) => localStorage.getItem("po-mock-db-v2")?.includes(`"document_view":"${v}"`), view))
+    .toBe(true);
+
 const sections = (page: Page) => page.getByTestId("document-sections").filter({ visible: true });
 const topHeadings = (page: Page) =>
   sections(page).locator(":scope > section[data-section-key] > div > :is(h1,h2,h3)");
@@ -42,13 +48,16 @@ test("brief: a document opens on its brief; Show full document switches, and the
   await expect(section(page, "feature-detail").getByTestId("layer-badge").first()).toHaveText("Detail");
   await expect(topHeadings(page).first()).toHaveText("Saved carts PRD");
 
-  // Remembered for this user: after a reload and on another version.
+  // Remembered for this user: after a reload and on another version. The mock saves the
+  // choice inside the page, so wait for it before reloading.
+  await savedView(page, "full");
   await page.reload();
   await expect(sections(page)).toHaveAttribute("data-view", "full");
   await page.goto("/documents/saved-carts/v/1");
   await expect(sections(page)).toHaveAttribute("data-view", "full");
   await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Brief" }).click();
   await expect(sections(page)).toHaveAttribute("data-view", "brief");
+  await savedView(page, "brief");
   await page.reload();
   await expect(sections(page)).toHaveAttribute("data-view", "brief");
   await page.keyboard.press("v");
@@ -60,6 +69,39 @@ test("brief: a document opens on its brief; Show full document switches, and the
   await expect(page.getByRole("group", { name: "Document view" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Present" })).toHaveCount(0);
   await expect(page.getByTestId("layer-badge")).toHaveCount(0);
+});
+
+test("a link to a detail section opens the full document at it, once; the brief stays one click away", async ({
+  page,
+}) => {
+  // Its own member: the mock keeps one saved view per member, and this test saves one.
+  await login(page, "viewer@example.com");
+  // A roadmap item's link to its PRD feature: the feature is detail, not in the brief.
+  await page.goto("/documents/saved-carts/v/2#s-feature-detail");
+  await expect(sections(page)).toHaveAttribute("data-view", "full");
+  await expect(section(page, "feature-detail")).toBeInViewport();
+  // Not saved as the user's choice, and not forced again on the way back to the brief.
+  await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Brief" }).click();
+  await expect(sections(page)).toHaveAttribute("data-view", "brief");
+  await expect(section(page, "feature-detail")).toHaveCount(0);
+  // The same from inside the app: a client-side navigation, as a roadmap's PRD link makes
+  // (Next writes the URL only after the new page renders).
+  await page.goto("/documents/usage-alerts-roadmap/v/1");
+  await expect(page.getByTestId("document-sections").filter({ visible: true })).toBeVisible();
+  await page.evaluate(() =>
+    (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push(
+      "/documents/saved-carts/v/2#s-feature-detail",
+    ),
+  );
+  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2#s-feature-detail$/);
+  await expect(sections(page)).toHaveAttribute("data-view", "full");
+  await expect(section(page, "feature-detail")).toBeInViewport();
+
+  // A brief section's link keeps the brief (a fresh load, not a same-page hash change).
+  await page.goto("about:blank");
+  await page.goto("/documents/saved-carts/v/2#s-problem");
+  await expect(sections(page)).toHaveAttribute("data-view", "brief");
+  await expect(section(page, "problem")).toBeInViewport();
 });
 
 test("expand: a feature row and a milestone show their detail in place; comments and verdicts say the layer", async ({

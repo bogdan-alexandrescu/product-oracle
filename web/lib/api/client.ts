@@ -22,6 +22,7 @@ export type DocumentSummary = Schemas["DocumentSummary"];
 export type DocumentOut = Schemas["DocumentOut"];
 export type VersionOut = Schemas["VersionOut"];
 export type VersionSummary = Schemas["VersionSummary"];
+export type VersionSource = Schemas["VersionSource"];
 export type SectionOut = Schemas["SectionOut"];
 export type CitationOut = Schemas["CitationOut"];
 export type CommentOut = Schemas["CommentOut"];

@@ -22,13 +22,17 @@ export type VersionSeed = {
   citations: CitationSeed[];
   /** Front matter `brief: [...]` (O1f); without it a "Full version {#full}" heading splits the layers. */
   brief?: string[];
+  /** Provenance (O4b): the PRD version a roadmap version was built from. */
+  source?: { slug: string; version: number };
 };
 
 export type DocumentSeed = {
   slug: string;
   title: string;
+  kind?: "prd" | "roadmap";
   template?: string;
   template_version?: string;
+  theme?: string;
   versions: VersionSeed[];
 };
 
@@ -386,6 +390,61 @@ const CARTS_V1: SectionSeed[] = [
   { key: "sources-list", level: 3, heading: "Sources", body: "- Cart abandonment survey [c:c1]\n- Repeat orders, Q3 review [c:c2]" },
 ];
 
+const HORIZONS = [
+  { key: "now", heading: "Now", body: "Committed work; dated milestones only here." },
+  { key: "next", heading: "Next", body: "Planned, not dated." },
+  { key: "later", heading: "Later", body: "Direction, not a commitment." },
+];
+
+/**
+ * A roadmap draft built from a PRD version, the way the prd_to_roadmap flow writes one
+ * (O4b): one item per PRD section on Now / Next / Later, each linking back to its PRD
+ * section with a cross-document link (/documents/<slug>/v/<n>#<section>).
+ */
+export function roadmapFromPrd(prd: {
+  slug: string;
+  title: string;
+  version: number;
+  sections: { key: string; level: number; heading: string }[];
+}): { title: string; sections: SectionSeed[]; brief: string[] } {
+  const link = (key?: string) => `/documents/${prd.slug}/v/${prd.version}${key ? `#${key}` : ""}`;
+  const items = prd.sections
+    .filter((s) => s.level === 2 && s.key !== "sources")
+    .map((s, i) => ({ key: `item-${s.key}`, title: s.heading.replace(/^[\d.]+\s+/, ""), from: s, horizon: HORIZONS[Math.min(i, 2)] }));
+  const count = (h: string) => items.filter((i) => i.horizon.key === h).length;
+  const title = `${prd.title.replace(/\s*PRD$/, "")} roadmap`;
+  const sections: SectionSeed[] = [
+    { key: "title", level: 1, heading: title, body: `Built from [${prd.title} v${prd.version}](${link()}).` },
+    {
+      key: "summary",
+      level: 2,
+      heading: "Summary",
+      body: `The approved PRD's work on one page: ${count("now")} now, ${count("next")} next, ${count("later")} later.`,
+    },
+    {
+      key: "brief-items",
+      level: 2,
+      heading: "Items by horizon",
+      body: [
+        "| Horizon | Item | PRD section |",
+        "|---|---|---|",
+        ...items.map((i) => `| ${i.horizon.heading} | [${i.title}](#${i.key}) | [${i.from.heading}](${link(i.from.key)}) |`),
+      ].join("\n"),
+    },
+    { key: "full", level: 1, heading: "Full version", body: "" },
+    ...HORIZONS.flatMap((h) => [
+      { key: h.key, level: 2, heading: h.heading, body: h.body },
+      ...items
+        .filter((i) => i.horizon.key === h.key)
+        .map((i) => ({ key: i.key, level: 3, heading: i.title, body: `From the PRD: [${i.from.heading}](${link(i.from.key)}).` })),
+    ]),
+    { key: "sources", level: 2, heading: "Sources and data points", body: `- [${prd.title} v${prd.version}](${link()})` },
+  ];
+  return { title, sections, brief: ["summary", "brief-items"] };
+}
+
+const ALERTS_ROADMAP = roadmapFromPrd({ slug: "usage-alerts", title: "Usage alerts PRD", version: 1, sections: ALERTS_V1 });
+
 const CARTS_V2: SectionSeed[] = CARTS_V1.map((s) =>
   s.key === "problem"
     ? { ...s, body: "Shoppers build a cart on their phone, then lose it when they move to a laptop. More than half start over." }
@@ -439,6 +498,25 @@ export const DOCUMENTS: DocumentSeed[] = [
     slug: "usage-alerts",
     title: "Usage alerts PRD",
     versions: [{ number: 1, created_at: "2026-10-02T08:00:00Z", sections: ALERTS_V1, citations: [] }],
+  },
+  // O4b: a roadmap built from the approved usage-alerts v1.
+  {
+    slug: "usage-alerts-roadmap",
+    title: ALERTS_ROADMAP.title,
+    kind: "roadmap",
+    template: "now-next-later",
+    template_version: "1",
+    theme: "roadmap-board",
+    versions: [
+      {
+        number: 1,
+        created_at: "2026-10-04T09:00:00Z",
+        sections: ALERTS_ROADMAP.sections,
+        citations: [],
+        brief: ALERTS_ROADMAP.brief,
+        source: { slug: "usage-alerts", version: 1 },
+      },
+    ],
   },
 ];
 

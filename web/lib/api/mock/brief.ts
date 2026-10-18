@@ -113,6 +113,7 @@ const DECK_CSS = `
 .deck h1.slide-title { font-size: 46px; }
 .deck .slide-kicker { margin: 120px 0 10px; font: 600 15px/1 var(--font-body); text-transform: uppercase; letter-spacing: .12em; color: var(--color-accent); }
 .deck .slide-subtitle { color: var(--color-muted); font-size: 19px; margin: 0; }
+.deck .slide-source { color: var(--color-muted); font-size: 16px; margin: 8px 0 0; }
 .deck .slide-body p, .deck .slide-body ul, .deck .slide-body ol { margin: 0 0 12px; }
 .deck .slide-body table { border-collapse: collapse; width: 100%; font-size: 17px; }
 .deck .slide-body th, .deck .slide-body td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--color-rule); }
@@ -136,6 +137,8 @@ type DeckInput = {
   latest: number;
   status: string;
   created_at: string;
+  /** Provenance (O4b): the PRD version a roadmap version was built from. */
+  source?: Schemas["VersionSource"] | null;
   sections: Section[];
   citations: { cite_key: string; title?: string | null; ref: string; source: string }[];
 };
@@ -145,7 +148,14 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
   const brief = sections.filter((s) => s.layer === "brief");
   const briefKeys = new Set(brief.map((s) => s.section_key));
   const detail = new Set(sections.filter((s) => s.layer !== "brief").map((s) => s.section_key));
-  const banner = `${d.title} · Version ${d.number} · ${d.status.replace("_", " ")} · imported ${d.created_at.slice(0, 16).replace("T", " ")} UTC`;
+  const sourceLabel = d.source ? `From ${d.source.title} v${d.source.version}` : null;
+  const banner = [
+    d.title,
+    `Version ${d.number}`,
+    d.status.replace("_", " "),
+    `imported ${d.created_at.slice(0, 16).replace("T", " ")} UTC`,
+    ...(sourceLabel ? [sourceLabel] : []),
+  ].join(" · ");
   const slideLinks = (key: string, inner: string) =>
     briefKeys.has(key)
       ? `<a href="#${esc(key)}">${inner}</a>`
@@ -160,7 +170,7 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
       kind: "title",
       heading: d.title,
       expand: [],
-      inner: `<p class="slide-kicker">Brief</p><h1 class="slide-title">${esc(d.title)}</h1><p class="slide-subtitle">Version ${d.number} · ${esc(d.status.replace("_", " "))}</p>`,
+      inner: `<p class="slide-kicker">Brief</p><h1 class="slide-title">${esc(d.title)}</h1><p class="slide-subtitle">Version ${d.number} · ${esc(d.status.replace("_", " "))}</p>${sourceLabel ? `<p class="slide-source">${esc(sourceLabel)}</p>` : ""}`,
     },
   ];
   for (const s of brief) {
@@ -203,6 +213,7 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
     status: d.status,
     as_of: d.created_at,
     banner,
+    source: d.source ?? null,
     theme: "clean-document",
     theme_name: "Clean document",
     theme_class: "theme-clean-document",

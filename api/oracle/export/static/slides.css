@@ -95,6 +95,7 @@
 }
 .deck h1.slide-title { font-size: 46px; }
 .deck .slide-subtitle { color: var(--color-muted); font-size: 19px; margin: 0; }
+.deck .slide-source { color: var(--color-muted); font-size: 16px; margin: 8px 0 0; }
 .deck .slide-sources { font-size: 16px; margin: 0; padding-left: 1.6em; }
 .deck .slide-sources li { margin: 0 0 8px; }
 .deck .slide-sources .src-kind, .deck .slide-sources .src-retrieved { color: var(--color-muted); font-size: 13px; }

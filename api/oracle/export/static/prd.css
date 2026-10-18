@@ -131,4 +131,5 @@ sup.cite a { padding: 0 0.05em; }
 
 /* O1f: a brief export says so; links to detail it leaves out keep their text. */
 .version-banner .banner-layer { font-weight: 600; }
+.version-banner .banner-source a { color: inherit; }
 .detail-ref { color: inherit; }

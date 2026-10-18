@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
 import { CommentsPanel, type PlacedComment } from "@/components/CommentsPanel";
 import { DocToolbar } from "@/components/DocToolbar";
@@ -91,6 +92,20 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   // on a section the brief does not show switches this page to the full document only.
   const [savedView, saveView] = useDocumentView();
   const [viewOverride, setViewOverride] = useState<DocumentView | null>(null);
+  // A #s-<key> link to a detail section (a roadmap's link to a PRD feature) opens this
+  // version on the full document, until the reader picks a view.
+  const [hashLink, setHashLink] = useState<{ n: number; key: string } | null>(null);
+  // The link this arrival has scrolled to: once per arrival, not on every view change.
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    const hash = window.location.hash;
+    scrolledTo.current = null;
+    // Next writes an in-app navigation's URL, #hash included, only once the new page has
+    // committed, so the hash cannot be read while rendering: read it here. This also runs
+    // when Next shows a kept route again.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHashLink(hash.startsWith("#s-") ? { n, key: hash.slice(3) } : null);
+  }, [doc, n]);
   // Open detail section -> the brief section showing it.
   const [opened, setOpened] = useState<Map<string, string>>(() => new Map());
   const [scrollTarget, setScrollTarget] = useState<{ id: string; key: string } | null>(null);
@@ -108,7 +123,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const sections = useMemo(() => version?.sections ?? [], [version]);
   const briefSections = useMemo(() => sections.filter((s) => s.layer === "brief"), [sections]);
   const hasBrief = briefSections.length > 0;
-  const view: DocumentView = hasBrief ? (viewOverride ?? savedView) : "full";
+  const linkedDetail =
+    hashLink?.n === n &&
+    !briefSections.some((s) => s.section_key === hashLink.key) &&
+    sections.some((s) => s.section_key === hashLink.key);
+  const view: DocumentView = hasBrief ? (viewOverride ?? (linkedDetail ? "full" : savedView)) : "full";
   // Detail sections a brief section links to: each feature row and milestone expands.
   const expandable = useMemo(() => {
     const detail = new Set(sections.filter((s) => s.layer !== "brief").map((s) => s.section_key));
@@ -120,6 +139,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const switchView = useCallback(
     (v: DocumentView) => {
       setViewOverride(null);
+      setHashLink(null);
       saveView(v);
     },
     [saveView],
@@ -319,11 +339,15 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [selection, openComposer, versions, n, doc, router, hasBrief, view, switchView]);
 
-  // Honour #s-<key> links once the version has rendered.
+  // Honour #s-<key> links once the section has rendered.
   useEffect(() => {
-    if (!version || !window.location.hash.startsWith("#s-")) return;
-    rootRef.current?.querySelector(`#${CSS.escape(window.location.hash.slice(1))}`)?.scrollIntoView({ block: "start" });
-  }, [version]);
+    const hash = window.location.hash;
+    if (!version || !hash.startsWith("#s-") || scrolledTo.current === `${n}${hash}`) return;
+    const el = rootRef.current?.querySelector(`#${CSS.escape(hash.slice(1))}`);
+    if (!el) return;
+    scrolledTo.current = `${n}${hash}`;
+    el.scrollIntoView({ block: "start" });
+  }, [version, n, view, hashLink]);
 
   const sectionProps = (s: SectionOut) => ({
     section: s,
@@ -399,6 +423,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           </>
         )}
         <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
+        {document_?.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
         {version && (version.approved_at || canDecide) && (
           <ApproveButton
             doc={doc}
@@ -422,6 +447,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
               <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
                 <span className="font-medium text-neutral-800">Version {version.number}</span>
                 <span>Imported {formatDateTime(version.created_at)}</span>
+                {version.source && <SourceLink source={version.source} />}
                 {version.snapshot && <span>Sources as of {version.snapshot}</span>}
                 <span>
                   {reviewedCount}/{version.sections.length} sections reviewed · {lockedCount} locked

@@ -47,6 +47,8 @@ export const CHECKPOINT_LABEL: Record<CheckpointKind, string> = {
   priority_order: "Priority order",
   prd_review: "PRD review",
   eng_review: "Engineering review",
+  roadmap_items: "Roadmap items",
+  roadmap_review: "Roadmap review",
 };
 
 export const SEGMENT_STATUS_TONE: Record<SegmentOut["status"], "neutral" | "green" | "amber" | "red" | "blue"> = {
@@ -63,6 +65,39 @@ const usdFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "US
 
 export function usd(value: number | null | undefined): string {
   return value == null ? "—" : usdFmt.format(value);
+}
+
+/** A run's estimate before it starts: per segment, the total, and the owner gate over the threshold. */
+export function EstimateSummary({ estimate }: { estimate: EstimateOut }) {
+  return (
+    <section aria-label="Estimate" className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2.5" data-testid="estimate">
+      <table className="w-full text-sm">
+        <tbody>
+          {estimate.segments.map((s) => (
+            <tr key={s.seq}>
+              <td className="py-0.5 text-neutral-700">{s.title}</td>
+              <td className="py-0.5 text-right tabular-nums text-neutral-700">{usd(s.estimate_usd)}</td>
+            </tr>
+          ))}
+          <tr className="border-t border-neutral-200 font-semibold">
+            <td className="pt-1.5">Estimate</td>
+            <td className="pt-1.5 text-right tabular-nums" data-testid="estimate-total">
+              {usd(estimate.total_usd)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {estimate.needs_approval && (
+        <p className="mt-2 text-xs text-amber-800">
+          Over {usd(estimate.approval_threshold_usd)}: an owner approves the cost before the run starts.
+        </p>
+      )}
+      {!estimate.within_budget && (
+        <p className="mt-2 text-xs text-rose-700">Over the budget: lower the depth or roles, or raise the budget.</p>
+      )}
+      <p className="mt-1 text-xs text-neutral-500">Spending past 1.5× the estimate pauses the run and asks an owner.</p>
+    </section>
+  );
 }
 
 /** Spend against the estimate, with the overrun ceiling marked. */

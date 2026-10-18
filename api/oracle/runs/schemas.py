@@ -4,9 +4,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from oracle.docs.schemas import DocumentKind, VersionSource
 from oracle.jobs.schemas import LlmJobsTick
 
-Flow = Literal["baseline_to_prd", "feedback_loop"]
+Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap"]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
     "draft",
@@ -20,7 +21,13 @@ RunStatus = Literal[
 ]
 SegmentStatus = Literal["pending", "running", "succeeded", "failed", "cancelled"]
 CheckpointKind = Literal[
-    "baseline_confirm", "feature_set", "priority_order", "prd_review", "eng_review"
+    "baseline_confirm",
+    "feature_set",
+    "priority_order",
+    "prd_review",
+    "eng_review",
+    "roadmap_items",
+    "roadmap_review",
 ]
 CheckpointStatus = Literal["pending", "approved", "changes_requested", "skipped"]
 Role = Literal["viewer", "commenter", "approver", "owner"]
@@ -44,14 +51,28 @@ class KnobsOut(BaseModel):
 
 class RunCreate(BaseModel):
     flow: Flow
-    # The PRD: an existing document's slug or id, or a new slug (baseline_to_prd only;
-    # the document is created when the draft is imported).
+    # The document the run writes: an existing document's slug or id, or a new slug
+    # (baseline_to_prd and prd_to_roadmap; the document is created when the draft is
+    # imported). prd_to_roadmap: a roadmap; omitted, "<prd slug>-roadmap".
     document: str | None = Field(default=None, min_length=1, max_length=200)
+    # prd_to_roadmap: the approved PRD (slug or id) the roadmap is built from, and its
+    # version (the latest approved version when omitted). Refused (422) when the PRD has
+    # no approved version or the named version is not approved.
+    source: str | None = Field(default=None, min_length=1, max_length=200)
+    source_version: int | None = Field(default=None, ge=1)
+    # prd_to_roadmap: the roadmap template (default now-next-later, or the existing
+    # roadmap's) and theme (default roadmap-board, or the existing roadmap's).
+    template: str | None = Field(default=None, min_length=1, max_length=100)
+    theme: str | None = Field(default=None, min_length=1, max_length=100)
     knobs: KnobsIn = KnobsIn()
 
 
 class RunPatch(BaseModel):
     document: str | None = Field(default=None, min_length=1, max_length=200)
+    source: str | None = Field(default=None, min_length=1, max_length=200)
+    source_version: int | None = Field(default=None, ge=1)
+    template: str | None = Field(default=None, min_length=1, max_length=100)
+    theme: str | None = Field(default=None, min_length=1, max_length=100)
     knobs: KnobsIn | None = None
 
 
@@ -77,6 +98,10 @@ class FlowOut(BaseModel):
     title: str
     description: str
     requires_document: bool
+    # The kind of document the run writes; None: the existing document's kind.
+    target_kind: DocumentKind | None = None
+    # The kind of approved document the run reads (prd_to_roadmap: a PRD).
+    source_kind: DocumentKind | None = None
     segments: list[FlowSegmentOut]
 
 
@@ -118,13 +143,39 @@ class SegmentAttempt(BaseModel):
     state: str | None = None
 
 
+class PrdLinks(BaseModel):
+    """Cross-document links from a roadmap draft to its PRD version's sections."""
+
+    resolved: int = 0
+    # Links to a section the PRD version does not have, or to another version.
+    unresolved: list[str] = []
+
+
 class DraftImport(BaseModel):
     document_id: uuid.UUID | None = None
     slug: str | None = None
+    kind: DocumentKind | None = None
     version: int | None = None
     created: bool | None = None
     warnings: list[str] = []
     error: str | None = None
+    # Provenance recorded on the version (a roadmap's PRD version).
+    source: VersionSource | None = None
+    prd_links: PrdLinks | None = None
+
+
+class ItemsProblem(BaseModel):
+    code: str
+    message: str
+    item: str | None = None
+
+
+class ItemsCheck(BaseModel):
+    """The check of roadmap_items.yaml (oracle.runs.roadmap)."""
+
+    items: int
+    by_horizon: dict[str, int]
+    problems: list[ItemsProblem]
 
 
 class SegmentOut(BaseModel):
@@ -144,6 +195,7 @@ class SegmentOut(BaseModel):
     artifacts: list[str]
     attempts: list[SegmentAttempt]
     draft_import: DraftImport | None = None
+    items_check: ItemsCheck | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None
@@ -172,6 +224,13 @@ class RunSummary(BaseModel):
     status: RunStatus
     document_id: uuid.UUID | None = None
     document_slug: str | None = None
+    # The kind of document the run writes (feedback loop: the document's kind).
+    document_kind: DocumentKind | None = None
+    # prd_to_roadmap: the approved PRD version it reads, and the roadmap's template and
+    # theme.
+    source: VersionSource | None = None
+    template: str | None = None
+    theme: str | None = None
     estimate_usd: float | None = None
     spent_usd: float
     created_by: uuid.UUID | None = None

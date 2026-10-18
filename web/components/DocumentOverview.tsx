@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { DocToolbar } from "@/components/DocToolbar";
 import { JobsPanel } from "@/components/JobsPanel";
 import { Badge, ErrorNote, Loading } from "@/components/ui";
@@ -16,6 +17,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
   return (
     <div>
       <DocToolbar doc={d}>
+        {d?.kind === "prd" && <BuildRoadmapButton prd={d} />}
         {d?.latest_version != null && (
           <Link
             href={`/documents/${doc}/v/${d.latest_version}`}
@@ -34,8 +36,14 @@ export function DocumentOverview({ doc }: { doc: string }) {
             <p className="mt-1 text-sm text-neutral-500">
               <span className="font-mono">{d.slug}</span>
               {d.template && ` · template ${d.template}${d.template_version ? ` v${d.template_version}` : ""}`}
+              {d.theme && ` · theme ${d.theme}`}
               {` · updated ${formatDateTime(d.updated_at)}`}
             </p>
+            {d.source && (
+              <p className="mt-1 text-sm text-neutral-600">
+                <SourceLink source={d.source} />
+              </p>
+            )}
             <h2 className="mt-8 mb-3 text-sm font-semibold text-neutral-700">Versions</h2>
             {versions.length === 0 ? (
               <p className="text-sm text-neutral-600">No versions imported yet.</p>
@@ -51,6 +59,11 @@ export function DocumentOverview({ doc }: { doc: string }) {
                     </Link>
                     <span className="text-neutral-500">{formatDateTime(v.created_at)}</span>
                     {v.approved_at && <Badge tone="green">Approved</Badge>}
+                    {v.source && (
+                      <span className="text-neutral-500">
+                        <SourceLink source={v.source} />
+                      </span>
+                    )}
                     {v.warnings.length > 0 && (
                       <Badge tone="amber" title={v.warnings.map((w) => w.message).join("\n")}>
                         {v.warnings.length} warning{v.warnings.length > 1 ? "s" : ""}

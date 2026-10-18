@@ -10,15 +10,18 @@
 
 Every state change locks the run row. ``tick`` advances runs: it polls running
 segments, records cost, pauses on overrun, and on success merges ``baseline.yaml``
-into the baseline (through its YAML import: locked items get proposals), imports
-``prd.md`` as the document's next version, and opens the segment's checkpoint (or skips
-a disabled one).
+into the baseline (through its YAML import: locked items get proposals), checks
+``roadmap_items.yaml``, imports the draft (``prd.md`` or ``roadmap.md``, the target
+document's kind) as the document's next version, and opens the segment's checkpoint (or
+skips a disabled one).
 
 Segment ``artifacts`` (jsonb) hold ``files`` (name -> text), ``attempts`` (one entry
-per submission: workflow id, cost, the reviewer's note), ``notes``, ``import`` and
-``baseline_import``.
-Run ``knobs`` hold the resolved knobs plus two values Oracle sets: ``document_slug``
-(a document the run will create) and ``spend_ceiling_usd``.
+per submission: workflow id, cost, the reviewer's note), ``notes``, ``import``,
+``baseline_import`` and ``items_check``.
+Run ``knobs`` hold the resolved knobs plus values Oracle sets: ``document_slug`` (a
+document the run will create), ``spend_ceiling_usd``, and for prd_to_roadmap
+``source_version_id`` (the approved PRD version), ``template``, ``template_version`` and
+``theme`` (the roadmap's).
 """
 
 import copy
@@ -37,12 +40,16 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.baseline import yaml_io
+from oracle.baseline.models import Edge, Entity
 from oracle.docs import service as docs_service
-from oracle.docs.models import Document, DocumentVersion
+from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
+from oracle.docs.schemas import VersionSource
+from oracle.priorities import service as priorities_service
+from oracle.priorities.models import PrioritySnapshot
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
-from oracle.runs import flows
+from oracle.runs import flows, roadmap
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -56,6 +63,7 @@ from oracle.runs.schemas import (
     InboxDocument,
     InboxFeedbackItem,
     InboxOut,
+    ItemsCheck,
     KnobsIn,
     KnobsOut,
     RunCreate,
@@ -78,6 +86,13 @@ from oracle.swarm import (
     get_runtime,
 )
 from oracle.swarm.settings import get_runtime_settings
+from oracle.templates import service as templates_service
+from oracle.templates.builtins import (
+    DEFAULT_TEMPLATE_FOR_KIND,
+    DEFAULT_THEME_FOR_KIND,
+    ensure_builtins,
+)
+from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.tenancy import current_tenant, tenant_session
 from oracle.tenant_settings import TenantSetting
 
@@ -85,6 +100,9 @@ log = logging.getLogger(__name__)
 
 FINAL = ("succeeded", "failed", "cancelled")
 ACTIVE = ("running", "awaiting_checkpoint", "paused_overrun")
+# Run knobs Oracle sets (not the user's knobs): kept when a draft's knobs change.
+ORACLE_KNOBS = ("document_slug", "source_version_id", "template", "template_version", "theme")
+ITEMS_FILE = "roadmap_items.yaml"
 
 
 class RunError(Exception):
@@ -163,13 +181,15 @@ def flow_catalog() -> FlowCatalog:
                 title=f.title,
                 description=f.description,
                 requires_document=f.requires_document,
+                target_kind=f.target_kind,  # type: ignore[arg-type]
+                source_kind=f.source_kind,  # type: ignore[arg-type]
                 segments=[
                     FlowSegmentOut(
                         name=s.name,
                         title=s.title,
                         roles=list(s.roles),
                         scopes=list(s.scopes),
-                        outputs=list(s.outputs),
+                        outputs=list(s.outputs_for(f.target_kind or "prd")),
                         checkpoint=s.checkpoint,  # type: ignore[arg-type]
                         approver_role=s.approver_role,  # type: ignore[arg-type]
                     )
@@ -218,24 +238,54 @@ async def _checkpoints(db: AsyncSession, run_ids: list[uuid.UUID]) -> list[Check
     return list(rows)
 
 
-async def _slugs(db: AsyncSession, runs: list[Run]) -> dict[uuid.UUID, str]:
+@dataclass
+class _Refs:
+    """What run summaries show of the documents they name, loaded once per list."""
+
+    slugs: dict[uuid.UUID, str]
+    kinds: dict[uuid.UUID, str]
+    sources: dict[uuid.UUID, VersionSource]
+
+    def get(self, document_id: uuid.UUID | None) -> str | None:
+        return self.slugs.get(document_id) if document_id else None
+
+
+def _source_id(run: Run) -> uuid.UUID | None:
+    raw = (run.knobs or {}).get("source_version_id")
+    return uuid.UUID(raw) if raw else None
+
+
+async def _refs(db: AsyncSession, runs: list[Run]) -> _Refs:
     ids = {r.document_id for r in runs if r.document_id}
-    if not ids:
-        return {}
-    rows = await db.execute(select(Document.id, Document.slug).where(Document.id.in_(ids)))
-    return dict(rows.all())
+    slugs: dict[uuid.UUID, str] = {}
+    kinds: dict[uuid.UUID, str] = {}
+    if ids:
+        rows = await db.execute(
+            select(Document.id, Document.slug, Document.kind).where(Document.id.in_(ids))
+        )
+        for doc_id, slug, kind in rows.all():
+            slugs[doc_id], kinds[doc_id] = slug, kind
+    sources = await docs_service.version_sources(db, [_source_id(r) for r in runs])
+    return _Refs(slugs, kinds, sources)
 
 
-def _summary(run: Run, slugs: dict[uuid.UUID, str], waiting: Checkpoint | None) -> RunSummary:
+def _summary(run: Run, refs: _Refs, waiting: Checkpoint | None) -> RunSummary:
+    flow = _flow(run)
+    source_id = _source_id(run)
     return RunSummary(
         id=run.id,
         flow=run.flow,  # type: ignore[arg-type]
-        flow_title=_flow(run).title,
+        flow_title=flow.title,
         status=run.status,  # type: ignore[arg-type]
         document_id=run.document_id,
-        document_slug=slugs.get(run.document_id)
+        document_slug=refs.get(run.document_id)
         if run.document_id
         else run.knobs.get("document_slug"),
+        document_kind=(refs.kinds.get(run.document_id) if run.document_id else None)
+        or flow.target_kind,  # type: ignore[arg-type]
+        source=refs.sources.get(source_id) if source_id else None,
+        template=run.knobs.get("template"),
+        theme=run.knobs.get("theme"),
         estimate_usd=_usd(run.estimate_usd),
         spent_usd=float(run.spent_usd or 0),
         created_by=run.created_by,
@@ -266,10 +316,13 @@ def _checkpoint_out(cp: Checkpoint, principal: Principal | None) -> CheckpointOu
     )
 
 
-def _segment_out(run: Run, segment: RunSegment, knobs: flows.Knobs) -> SegmentOut:
+def _segment_out(
+    run: Run, segment: RunSegment, knobs: flows.Knobs, kind: str = "prd"
+) -> SegmentOut:
     sdef = _flow(run).segment(segment.name)
     art = segment.artifacts or {}
     imp = art.get("import")
+    check = art.get("items_check")
     return SegmentOut(
         id=segment.id,
         seq=segment.seq,
@@ -278,7 +331,7 @@ def _segment_out(run: Run, segment: RunSegment, knobs: flows.Knobs) -> SegmentOu
         status=segment.status,  # type: ignore[arg-type]
         roles=knobs.roles.get(segment.name, list(sdef.roles)),
         scopes=list(sdef.scopes),
-        checkpoint=sdef.checkpoint,  # type: ignore[arg-type]
+        checkpoint=sdef.checkpoint_for(kind),  # type: ignore[arg-type]
         checkpoint_on=knobs.checkpoints.get(sdef.checkpoint, True),
         estimate_usd=_usd(segment.estimate_usd),
         cost_usd=float(segment.cost_usd or 0),
@@ -286,6 +339,7 @@ def _segment_out(run: Run, segment: RunSegment, knobs: flows.Knobs) -> SegmentOu
         artifacts=sorted((art.get("files") or {}).keys()),
         attempts=[SegmentAttempt(**a) for a in art.get("attempts") or []],
         draft_import=DraftImport(**imp) if imp else None,
+        items_check=ItemsCheck(**check) if check else None,
         started_at=segment.started_at,
         finished_at=segment.finished_at,
         error=segment.error,
@@ -296,8 +350,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     run = await _get_run(db, run_id)
     segments = await _segments(db, run.id)
     checkpoints = await _checkpoints(db, [run.id])
-    slugs = await _slugs(db, [run])
+    refs = await _refs(db, [run])
     knobs = _knobs(run)
+    kind = await _target_kind(db, run)
     snapshot = await db.get(Snapshot, run.snapshot_id) if run.snapshot_id else None
     waiting = next((c for c in checkpoints if c.status == "pending"), None)
     runtime = get_runtime()
@@ -309,7 +364,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     if run.status == "draft" or not segments or not any(s.swarm_workflow_id for s in segments):
         notes += [n for n in runtime.notes() if n not in notes]
     return RunOut(
-        **_summary(run, slugs, waiting).model_dump(),
+        **_summary(run, refs, waiting).model_dump(),
         knobs=KnobsOut(
             depth=knobs.depth,  # type: ignore[arg-type]
             roles=knobs.roles,
@@ -325,7 +380,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         overrun_ceiling_usd=_usd(_ceiling(run)),
         runtime=runtime.name,
         notes=notes,
-        segments=[_segment_out(run, s, knobs) for s in segments],
+        segments=[_segment_out(run, s, knobs, kind) for s in segments],
         checkpoints=[_checkpoint_out(c, principal) for c in checkpoints],
     )
 
@@ -335,11 +390,11 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
     if status:
         stmt = stmt.where(Run.status == status)
     runs = list(await db.scalars(stmt))
-    slugs = await _slugs(db, runs)
+    refs = await _refs(db, runs)
     pending = {
         c.run_id: c for c in await _checkpoints(db, [r.id for r in runs]) if c.status == "pending"
     }
-    return [_summary(r, slugs, pending.get(r.id)) for r in runs]
+    return [_summary(r, refs, pending.get(r.id)) for r in runs]
 
 
 async def read_artifact(db: AsyncSession, run_id: uuid.UUID, seq: int, name: str) -> str:
@@ -357,18 +412,25 @@ async def read_artifact(db: AsyncSession, run_id: uuid.UUID, seq: int, name: str
 
 
 async def _resolve_document(
-    db: AsyncSession, flow: flows.FlowDef, ref: str | None
-) -> tuple[uuid.UUID | None, str | None]:
-    """(document_id, new slug) for a run's target PRD."""
+    db: AsyncSession, flow: flows.FlowDef, ref: str | None, default_slug: str | None = None
+) -> tuple[Document | None, str | None]:
+    """(document, new slug) for a run's target document."""
     if ref is None:
         if flow.requires_document:
             raise Invalid(f"the {flow.title} flow needs the document to work on")
-        raise Invalid("name the PRD: an existing document, or a new slug to create")
+        if default_slug is None:
+            raise Invalid("name the PRD: an existing document, or a new slug to create")
+        ref = default_slug
     document = await docs_service.find_document(db, ref)
     if document is None:
         if flow.requires_document or is_uuid(ref):
             raise Invalid(f"document '{ref}' not found")
         return None, ref
+    if flow.target_kind and document.kind != flow.target_kind:
+        raise Invalid(
+            f"document '{ref}' is a {flows.KIND_NAMES.get(document.kind, document.kind)}, "
+            f"not a {flows.KIND_NAMES[flow.target_kind]}"
+        )
     if flow.requires_document:
         latest = await db.scalar(
             select(func.max(DocumentVersion.number)).where(
@@ -377,7 +439,163 @@ async def _resolve_document(
         )
         if latest is None:
             raise Invalid(f"document '{ref}' has no version to give feedback on")
-    return document.id, None
+    return document, None
+
+
+async def _resolve_source(
+    db: AsyncSession, flow: flows.FlowDef, ref: str | None, number: int | None
+) -> tuple[Document, DocumentVersion] | None:
+    """The approved source version a flow reads (prd_to_roadmap: a PRD version)."""
+    if flow.source_kind is None:
+        if ref is not None or number is not None:
+            raise Invalid(f"the {flow.title} flow reads no source document")
+        return None
+    name = flows.KIND_NAMES[flow.source_kind]
+    if ref is None:
+        raise Invalid(f"name the approved {name} to build from")
+    document = await docs_service.find_document(db, ref)
+    if document is None:
+        raise Invalid(f"document '{ref}' not found")
+    if document.kind != flow.source_kind:
+        raise Invalid(
+            f"document '{ref}' is a {flows.KIND_NAMES.get(document.kind, document.kind)}, "
+            f"not a {name}"
+        )
+    stmt = select(DocumentVersion).where(DocumentVersion.document_id == document.id)
+    if number is not None:
+        version = await db.scalar(stmt.where(DocumentVersion.number == number))
+        if version is None:
+            raise Invalid(f"version {number} of '{document.slug}' not found")
+        if version.approved_at is None:
+            raise Invalid(
+                f"version {number} of '{document.slug}' is not approved: a roadmap is built "
+                f"from an approved {name} version"
+            )
+        return document, version
+    version = await db.scalar(
+        stmt.where(DocumentVersion.approved_at.is_not(None))
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    if version is None:
+        raise Invalid(
+            f"'{document.slug}' has no approved version: approve a version of the {name} "
+            "before building its roadmap"
+        )
+    return document, version
+
+
+async def _resolve_template(
+    db: AsyncSession,
+    kind: str,
+    template: str | None,
+    theme: str | None,
+    document: Document | None,
+) -> dict[str, Any]:
+    """The target's template (key + version) and theme: the ones named, else the
+    existing document's, else the company's new-draft default for the kind (Settings,
+    as the new-draft picker), else the built-in defaults (O4: now-next-later and
+    roadmap-board for roadmaps)."""
+    await ensure_builtins(db)
+    company = (await templates_service.company_draft_defaults(db)).get(kind) or {}
+    key = template or (document.template if document and document.template else None)
+    if not key and company.get("template"):
+        key = await db.scalar(
+            select(Template.key).where(
+                Template.key == company["template"],
+                Template.kind == kind,
+                Template.archived_at.is_(None),
+            )
+        )
+    key = key or DEFAULT_TEMPLATE_FOR_KIND[kind]
+    row = await db.scalar(select(Template).where(Template.key == key))
+    if row is None:
+        raise Invalid(f"template '{key}' not found")
+    if row.kind != kind:
+        raise Invalid(f"template '{key}' is a {row.kind} template, not a {kind} template")
+    if row.archived_at is not None and template:
+        raise Invalid(f"template '{key}' is archived; restore it to start new drafts")
+    number = None
+    if (
+        not template
+        and document is not None
+        and document.template == key
+        and (document.template_version or "").isdigit()
+    ):
+        number = int(document.template_version)  # type: ignore[arg-type]
+    stmt = select(TemplateVersion.version).where(TemplateVersion.template_id == row.id)
+    if number is not None:
+        stmt = stmt.where(TemplateVersion.version == number)
+    number = await db.scalar(stmt.order_by(TemplateVersion.version.desc()).limit(1))
+    if number is None:
+        raise Invalid(f"template '{key}' has no version")
+    company_theme = None
+    if company.get("theme"):
+        company_theme = await db.scalar(
+            select(Theme.key).where(
+                Theme.key == company["theme"],
+                Theme.kind.in_((kind, "any")),
+                Theme.archived_at.is_(None),
+            )
+        )
+    theme_key = (
+        theme
+        or (document.theme if document else None)
+        or company_theme
+        or DEFAULT_THEME_FOR_KIND[kind]
+    )
+    trow = await db.scalar(select(Theme).where(Theme.key == theme_key))
+    if trow is None:
+        raise Invalid(f"theme '{theme_key}' not found")
+    if trow.kind not in (kind, "any"):
+        raise Invalid(f"theme '{theme_key}' is for {trow.kind} documents, not {kind}")
+    if trow.archived_at is not None and theme:
+        raise Invalid(f"theme '{theme_key}' is archived")
+    return {"template": key, "template_version": number, "theme": theme_key}
+
+
+async def _free_slug(db: AsyncSession, base: str) -> str:
+    return await templates_service._free_slug(db, base)
+
+
+@dataclass
+class _Inputs:
+    document: str | None = None
+    source: str | None = None
+    source_version: int | None = None
+    template: str | None = None
+    theme: str | None = None
+
+
+async def _resolve_inputs(
+    db: AsyncSession, flow: flows.FlowDef, inputs: _Inputs
+) -> tuple[uuid.UUID | None, dict[str, Any]]:
+    """(target document id, the knobs Oracle sets) for a run's document, source and
+    template choices."""
+    if flow.target_kind != "roadmap" and (inputs.template or inputs.theme):
+        raise Invalid(f"the {flow.title} flow takes no template or theme")
+    source = await _resolve_source(db, flow, inputs.source, inputs.source_version)
+    default_slug = None
+    if source is not None and inputs.document is None:
+        # "<prd>-roadmap": that roadmap's next version, or a new roadmap.
+        base = f"{source[0].slug}-roadmap"
+        existing = await docs_service.find_document(db, base)
+        default_slug = (
+            base
+            if existing is None or existing.kind == flow.target_kind
+            else (await _free_slug(db, base))
+        )
+    document, new_slug = await _resolve_document(db, flow, inputs.document, default_slug)
+    oracle: dict[str, Any] = {}
+    if new_slug:
+        oracle["document_slug"] = new_slug
+    if source is not None:
+        oracle["source_version_id"] = str(source[1].id)
+    if flow.target_kind == "roadmap":
+        oracle.update(
+            await _resolve_template(db, "roadmap", inputs.template, inputs.theme, document)
+        )
+    return (document.id if document else None), oracle
 
 
 def _resolve_knobs(flow: flows.FlowDef, knobs: KnobsIn) -> flows.Knobs:
@@ -399,23 +617,44 @@ async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> No
 async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) -> uuid.UUID:
     flow = flows.FLOWS[body.flow]
     knobs = _resolve_knobs(flow, body.knobs)
-    document_id, new_slug = await _resolve_document(db, flow, body.document)
-    stored = knobs.as_json()
-    if new_slug:
-        stored["document_slug"] = new_slug
+    document_id, oracle = await _resolve_inputs(
+        db,
+        flow,
+        _Inputs(body.document, body.source, body.source_version, body.template, body.theme),
+    )
     run = Run(
         flow=flow.key,
         status="draft",
-        knobs=stored,
+        knobs={**knobs.as_json(), **oracle},
         document_id=document_id,
         created_by=principal.id,
     )
     db.add(run)
     await db.flush()
     await _reset_segments(db, run, flow)
-    await audit.record(db, principal, "run.created", "run", run.id, {"flow": flow.key})
+    details: dict[str, Any] = {"flow": flow.key}
+    if oracle.get("source_version_id"):
+        details["source_version_id"] = oracle["source_version_id"]
+    await audit.record(db, principal, "run.created", "run", run.id, details)
     await db.commit()
     return run.id
+
+
+async def _current_inputs(db: AsyncSession, run: Run) -> _Inputs:
+    knobs = run.knobs or {}
+    source = number = None
+    source_id = _source_id(run)
+    if source_id:
+        version = await db.get(DocumentVersion, source_id)
+        if version is not None:
+            source, number = str(version.document_id), version.number
+    return _Inputs(
+        document=str(run.document_id) if run.document_id else knobs.get("document_slug"),
+        source=source,
+        source_version=number,
+        template=knobs.get("template"),
+        theme=knobs.get("theme"),
+    )
 
 
 async def update_run(
@@ -425,18 +664,21 @@ async def update_run(
     if run.status != "draft":
         raise RunError("only a draft run can be changed")
     flow = _flow(run)
-    stored = dict(run.knobs)
+    oracle = {k: run.knobs[k] for k in ORACLE_KNOBS if k in (run.knobs or {})}
+    stored = {k: v for k, v in run.knobs.items() if k not in ORACLE_KNOBS}
     if body.knobs is not None:
-        stored = {**_resolve_knobs(flow, body.knobs).as_json()}
-        if run.knobs.get("document_slug"):
-            stored["document_slug"] = run.knobs["document_slug"]
-    if body.document is not None:
-        document_id, new_slug = await _resolve_document(db, flow, body.document)
-        run.document_id = document_id
-        stored.pop("document_slug", None)
-        if new_slug:
-            stored["document_slug"] = new_slug
-    run.knobs = stored
+        stored = _resolve_knobs(flow, body.knobs).as_json()
+    changed = body.model_fields_set & {"document", "source", "source_version", "template", "theme"}
+    if any(getattr(body, k) is not None for k in changed):
+        current = await _current_inputs(db, run)
+        if body.source is not None:
+            # Another PRD: its latest approved version unless one is named.
+            current.source, current.source_version = body.source, None
+        for k in ("document", "source_version", "template", "theme"):
+            if getattr(body, k) is not None:
+                setattr(current, k, getattr(body, k))
+        run.document_id, oracle = await _resolve_inputs(db, flow, current)
+    run.knobs = {**stored, **oracle}
     await _reset_segments(db, run, flow)
     await audit.record(db, principal, "run.updated", "run", run.id, {})
     await db.commit()
@@ -487,6 +729,9 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     if run.estimate_usd is None:
         raise RunError("estimate the run first: POST /v1/runs/{id}/estimate")
     knobs = _knobs(run)
+    source_id = _source_id(run)
+    if source_id is not None and await db.get(DocumentVersion, source_id) is None:
+        raise Invalid("the PRD version this roadmap is built from no longer exists")
     if knobs.budget_usd is not None and run.estimate_usd > knobs.budget_usd:
         raise Invalid(
             f"the estimate (${run.estimate_usd:.2f}) is over the budget "
@@ -554,10 +799,16 @@ async def _prompt_context(
     knobs = _knobs(run)
     snapshot = await db.get(Snapshot, run.snapshot_id) if run.snapshot_id else None
     document = None
-    if run.document_id:
-        doc = await db.get(Document, run.document_id)
-        document = doc.slug if doc else None
+    doc = await db.get(Document, run.document_id) if run.document_id else None
+    if doc is not None:
+        document = doc.slug
     document = document or run.knobs.get("document_slug")
+    kind = await _target_kind(db, run)
+    source = await _source_context(db, run)
+    roadmap_ctx = None
+    if source is not None and _flow(run).segment(segment.name).imports_draft:
+        title = doc.title if doc is not None else f"{source.title} roadmap"
+        roadmap_ctx = await _roadmap_context(db, run, document or "", title)
     prior: dict[str, str] = {}
     for s in segments:
         if s.seq < segment.seq:
@@ -600,6 +851,134 @@ async def _prompt_context(
         attempt=attempt,
         change_request=change_request,
         mcp_reachable=runtime.can_reach_oracle,
+        kind=kind,
+        source=source,
+        roadmap=roadmap_ctx,
+    )
+
+
+async def _target_kind(db: AsyncSession, run: Run) -> str:
+    """The kind of the document the run writes: the flow's, else the document's."""
+    flow = _flow(run)
+    if flow.target_kind:
+        return flow.target_kind
+    if run.document_id:
+        kind = await db.scalar(select(Document.kind).where(Document.id == run.document_id))
+        if kind:
+            return kind
+    return "prd"
+
+
+def _explain(feature: dict[str, Any]) -> str:
+    explanation = feature.get("explanation") or {}
+    parts = [explanation.get("formula") or ""]
+    parts += list(explanation.get("steps") or [])[:3]
+    parts += list(explanation.get("order") or [])[:2]
+    return " ".join(p for p in parts if p)[:400]
+
+
+async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | None:
+    """prd_to_roadmap: the approved PRD version, priorities, edges and goals."""
+    source_id = _source_id(run)
+    if source_id is None:
+        return None
+    version = await db.get(DocumentVersion, source_id)
+    if version is None:
+        return None
+    document = await db.get(Document, version.document_id)
+    sections = list(
+        (
+            await db.execute(
+                select(Section.section_key, Section.heading)
+                .where(Section.version_id == version.id)
+                .order_by(Section.ordinal)
+            )
+        ).all()
+    )
+    # The latest stored priority order, else the live goal-weighted ranking.
+    stored = await db.scalar(
+        select(PrioritySnapshot).order_by(PrioritySnapshot.created_at.desc()).limit(1)
+    )
+    if stored is not None:
+        method = f"{stored.method}, priority snapshot of {stored.created_at:%Y-%m-%d}"
+        ranking = list(stored.ranking or [])
+    else:
+        live = await priorities_service.compute(db, "goal_weighted")
+        method = f"{live.method}, live ranking"
+        ranking = [f.model_dump(mode="json") for f in live.features]
+    priorities = [
+        {
+            "rank": f.get("rank"),
+            "key": f.get("key"),
+            "title": f.get("title"),
+            "score": f.get("score"),
+            "flags": f.get("flags") or [],
+            "depends_on": f.get("depends_on") or [],
+            "explanation": _explain(f),
+        }
+        for f in ranking
+    ]
+    entities = {
+        e.id: e for e in await db.scalars(select(Entity).where(Entity.status != "rejected"))
+    }
+    edges = [
+        {
+            "src": f"{entities[e.src_id].type}:{entities[e.src_id].key}",
+            "type": e.type,
+            "dst": f"{entities[e.dst_id].type}:{entities[e.dst_id].key}",
+        }
+        for e in await db.scalars(
+            select(Edge)
+            .where(Edge.type.in_(("depends_on", "blocks")), Edge.status != "rejected")
+            .order_by(Edge.created_at, Edge.id)
+        )
+        if e.src_id in entities and e.dst_id in entities
+    ]
+    goals = [
+        {
+            "key": e.key,
+            "title": e.title,
+            **{k: (e.attrs or {}).get(k) for k in ("metric", "target", "horizon")},
+        }
+        for e in sorted(entities.values(), key=lambda e: e.key)
+        if e.type == "goal" and e.status == "confirmed"
+    ]
+    return flows.SourceContext(
+        slug=document.slug if document else str(version.document_id),
+        title=document.title if document else "",
+        version=version.number,
+        markdown=version.markdown,
+        sections=[(k, h) for k, h in sections],
+        priorities=priorities,
+        priority_method=method,
+        edges=edges,
+        goals=goals,
+    )
+
+
+async def _roadmap_context(
+    db: AsyncSession, run: Run, slug: str, title: str
+) -> flows.RoadmapContext | None:
+    """The roadmap draft's template, theme and skeleton (the template's body as a first
+    draft of this document, front matter included)."""
+    key, number = run.knobs.get("template"), run.knobs.get("template_version")
+    if not key or not number:
+        return None
+    body = await docs_service.template_body(db, key, str(number))
+    if body is None:
+        return None
+    theme = run.knobs.get("theme")
+    skeleton = templates_service.draft_skeleton(
+        body,
+        slug=slug,
+        title=title,
+        kind="roadmap",
+        template=key,
+        version=int(number),
+        theme=theme,
+    )
+    return flows.RoadmapContext(
+        slug=slug, template=key, template_version=int(number), theme=theme, skeleton=skeleton
     )
 
 
@@ -639,7 +1018,7 @@ async def _submit(
             )
             for key, role, prompt, deps, inputs in flows.build_steps(flow, sdef, knobs, ctx)
         ),
-        outputs=sdef.outputs,
+        outputs=sdef.outputs_for(ctx.kind),
         mcp=McpAccess(
             url=settings.public_url.rstrip("/") + "/mcp", token=token, scopes=sdef.scopes
         ),
@@ -726,9 +1105,45 @@ def _creator(principal_tenant: uuid.UUID, user: User | None, token: ApiToken | N
     raise LookupError("run creator not found")
 
 
-async def _import_prd(db: AsyncSession, run: Run, markdown: str) -> dict[str, Any]:
-    """Import prd.md as the next version of the run's document, in its own transaction."""
+async def _draft_source(db: AsyncSession, run: Run) -> uuid.UUID | None:
+    """The provenance of the draft a run imports: the run's source version
+    (prd_to_roadmap), else the document's latest version's (the feedback loop keeps the
+    PRD version a roadmap came from)."""
+    source_id = _source_id(run)
+    if source_id is not None or not run.document_id:
+        return source_id
+    return await db.scalar(
+        select(DocumentVersion.source_version_id)
+        .where(DocumentVersion.document_id == run.document_id)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+
+
+async def _prd_links(db: AsyncSession, markdown: str, source: VersionSource) -> dict[str, Any]:
+    """Which of the draft's links to its source document resolve to a section of the
+    source version."""
+    keys = set(
+        await db.scalars(select(Section.section_key).where(Section.version_id == source.version_id))
+    )
+    resolved, unresolved = 0, []
+    for link in roadmap.doc_links(markdown):
+        if link["slug"] not in (source.slug, str(source.document_id)):
+            continue
+        if link["version"] == source.version and (
+            link["section"] is None or link["section"] in keys
+        ):
+            resolved += 1
+        else:
+            unresolved.append(link["href"])
+    return {"resolved": resolved, "unresolved": unresolved}
+
+
+async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) -> dict[str, Any]:
+    """Import the draft as the next version of the run's document (of ``kind``, with
+    the run's provenance), in its own transaction."""
     tenant_id = current_tenant(db)
+    name = flows.draft_file(kind)
     ref = str(run.document_id) if run.document_id else run.knobs.get("document_slug")
     if not ref:
         return {"error": "the run names no document"}
@@ -738,22 +1153,52 @@ async def _import_prd(db: AsyncSession, run: Run, markdown: str) -> dict[str, An
         principal = _creator(tenant_id, user, token)
     except LookupError as exc:
         return {"error": str(exc)}
+    source_id = await _draft_source(db, run)
+    knobs = run.knobs or {}
+    template = (
+        (knobs["template"], str(knobs["template_version"]))
+        if knobs.get("template") and knobs.get("template_version")
+        else None
+    )
     async with tenant_session(tenant_id) as s:
         try:
-            result = await docs_service.import_draft(s, ref, markdown, principal)
+            result = await docs_service.import_draft(
+                s,
+                ref,
+                markdown,
+                principal,
+                kind=kind,
+                theme=knobs.get("theme"),
+                template=template,
+                source_version_id=source_id,
+            )
         except DraftError as exc:
             problems = "; ".join(f"[{p.code}] {p.message}" for p in exc.problems)
-            return {"error": f"prd.md was rejected: {problems}"}
+            return {"error": f"{name} was rejected: {problems}"}
         except (docs_service.NotFoundError, docs_service.ImportConflictError) as exc:
-            return {"error": f"prd.md was not imported: {exc}"}
+            return {"error": f"{name} was not imported: {exc}"}
+        if not result.created and source_id and result.version.source is None:
+            # The same draft was already imported (an agent pushed it) without its
+            # provenance: record it now.
+            row = await s.get(DocumentVersion, result.version.id)
+            if row is not None and row.source_version_id is None:
+                row.source_version_id = source_id
+                await s.commit()
+                result.version = await docs_service.read_version(s, row)
         document = await s.get(Document, result.version.document_id)
-    return {
-        "document_id": str(result.version.document_id),
-        "slug": document.slug if document else None,
-        "version": result.version.number,
-        "created": result.created,
-        "warnings": [w.code for w in result.version.warnings],
-    }
+        out: dict[str, Any] = {
+            "document_id": str(result.version.document_id),
+            "slug": document.slug if document else None,
+            "kind": document.kind if document else kind,
+            "version": result.version.number,
+            "created": result.created,
+            "warnings": [w.code for w in result.version.warnings],
+        }
+        source = result.version.source
+        if source is not None:
+            out["source"] = source.model_dump(mode="json")
+            out["prd_links"] = await _prd_links(s, markdown, source)
+    return out
 
 
 async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, Any]:
@@ -809,15 +1254,21 @@ async def _advance(
             # The commit released the run's row lock: take it again.
             await db.execute(select(Run.id).where(Run.id == run.id).with_for_update())
         art["baseline_import"] = baseline_import
-    if sdef.imports_prd:
-        markdown = art["files"].get("prd.md")
+    items_check: dict[str, Any] | None = None
+    if ITEMS_FILE in sdef.outputs:
+        items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+        art["items_check"] = items_check
+    if sdef.imports_draft:
+        kind = await _target_kind(db, run)
+        name = flows.draft_file(kind)
+        markdown = art["files"].get(name)
         if markdown is None:
-            imported = {"error": "the segment left no prd.md"}
+            imported = {"error": f"the segment left no {name}"}
         else:
             # Committed first: the import runs in its own transaction.
             _set_art(segment, art)
             await db.commit()
-            imported = await _import_prd(db, run, markdown)
+            imported = await _import_draft(db, run, kind, markdown)
             # The commit released the run's row lock: take it again.
             await db.execute(select(Run.id).where(Run.id == run.id).with_for_update())
             if imported.get("document_id"):
@@ -836,11 +1287,14 @@ async def _advance(
         payload["import"] = imported
     if baseline_import is not None:
         payload["baseline_import"] = baseline_import
+    if items_check is not None:
+        payload["items_check"] = items_check
+    checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
     if knobs.checkpoints.get(sdef.checkpoint, True):
         db.add(
             Checkpoint(
                 run_id=run.id,
-                kind=sdef.checkpoint,
+                kind=checkpoint_kind,
                 status="pending",
                 approver_role=sdef.approver_role,
                 payload=payload,
@@ -851,7 +1305,7 @@ async def _advance(
     db.add(
         Checkpoint(
             run_id=run.id,
-            kind=sdef.checkpoint,
+            kind=checkpoint_kind,
             status="skipped",
             approver_role=sdef.approver_role,
             note="Turned off when the run started.",
@@ -863,8 +1317,35 @@ async def _advance(
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
             return True
+    if items_check is not None and items_check["problems"]:
+        problems = "; ".join(f"[{p['code']}] {p['message']}" for p in items_check["problems"][:5])
+        await _finish(db, run, "failed", f"{ITEMS_FILE} was rejected: {problems}")
+        return True
     await _next(db, run, segment, segments)
     return True
+
+
+async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str, Any]:
+    """roadmap_items.yaml checked against the run's PRD version (oracle.runs.roadmap)."""
+    if text is None:
+        return {
+            "items": 0,
+            "by_horizon": {},
+            "problems": [{"code": "missing_file", "message": f"the segment left no {ITEMS_FILE}"}],
+        }
+    slug = version = None
+    keys: set[str] | None = None
+    source_id = _source_id(run)
+    if source_id is not None:
+        source = (await docs_service.version_sources(db, [source_id])).get(source_id)
+        if source is not None:
+            slug, version = source.slug, source.version
+            keys = set(
+                await db.scalars(select(Section.section_key).where(Section.version_id == source_id))
+            )
+    return roadmap.check_items(
+        text, prd_slug=slug, prd_version=version, prd_sections=keys
+    ).as_json()
 
 
 # --------------------------------------------------------------------------- tick
@@ -1102,7 +1583,7 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
     runs: dict[uuid.UUID, Run] = {}
     if run_ids:
         runs = {r.id: r for r in await db.scalars(select(Run).where(Run.id.in_(run_ids)))}
-    slugs = await _slugs(db, [*runs.values(), *waiting_runs])
+    refs = await _refs(db, [*runs.values(), *waiting_runs])
 
     checkpoints = []
     for c in mine:
@@ -1114,7 +1595,7 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
                 **_checkpoint_out(c, principal).model_dump(),
                 flow=run.flow,  # type: ignore[arg-type]
                 flow_title=_flow(run).title,
-                document_slug=slugs.get(run.document_id) if run.document_id else None,
+                document_slug=refs.get(run.document_id),
                 segment_title=sdef.title if sdef else None,
             )
         )
@@ -1167,8 +1648,8 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
                 )
             feedback.sort(key=lambda d: d.items[0].created_at, reverse=True)
 
-    approvals = [_summary(r, slugs, None) for r in waiting_runs if r.status == "awaiting_approval"]
-    overruns = [_summary(r, slugs, None) for r in waiting_runs if r.status == "paused_overrun"]
+    approvals = [_summary(r, refs, None) for r in waiting_runs if r.status == "awaiting_approval"]
+    overruns = [_summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"]
     return InboxOut(
         checkpoints=checkpoints,
         approvals=approvals,
