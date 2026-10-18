@@ -176,38 +176,32 @@ async def test_html_renders_all_sections_in_order(client, fx):
     assert "<table>" in html and "<td>41%</td>" in html
 
 
-async def test_html_citations_are_numbered_footnotes_with_links(client, fx):
+async def test_html_citations_are_numbered_sources_in_the_appendix(client, fx):
+    # No theme chosen: the built-in default theme (clean-document for a PRD), whose body
+    # carries no evidence markers and whose Sources and data points appendix lists them.
     html = (await _export(client, fx, "html")).text
+    assert 'content="clean-document"' in html
+    assert "[c:" not in html and "<sup" not in html
 
+    appendix = html[html.index('class="sources-appendix"') :]
     # Numbered by first use: c1 -> 1, c2 -> 2, c4 -> 3; unused c3 listed last as 4.
-    assert '<sup class="cite">[<a href="#fn-1" id="ref-1-1">1</a>]</sup>' in html
-    assert (
-        '<sup class="cite">[<a href="#fn-2" id="ref-2-1">2</a>, '
-        '<a href="#fn-1" id="ref-1-2">1</a>]</sup>'
-    ) in html
-    assert '<a href="#fn-3" id="ref-3-1">3</a>' in html
-    assert "[c:" not in html
-
-    footer = html[html.index('<footer class="citations">') :]
-    items = re.findall(r'<li id="fn-(\d+)"[^>]*data-cite-key="(\w+)"', footer)
+    items = re.findall(r'<li id="src-(\d+)"[^>]*data-cite-key="(\w+)"', appendix)
     assert items == [("1", "c1"), ("2", "c2"), ("3", "c4"), ("4", "c3")]
+    assert '<a href="#src-1">[1] #product thread on drop-off</a>' in appendix
 
-    fn1 = footer[footer.index('id="fn-1"') : footer.index('id="fn-2"')]
+    src1 = appendix[appendix.index('id="src-1"') : appendix.index('id="src-2"')]
     assert (
         '<a href="https://example.slack.com/archives/C123/p1700000000">'
         "#product thread on drop-off</a>"
-    ) in fn1
-    assert "Most users abandon at the shipping step" in fn1
-    assert "slack" in fn1 and "retrieved 2026-10-16 13:10 UTC" in fn1
-    assert 'href="#ref-1-1"' in fn1  # back-link to the first use
+    ) in src1
+    assert "Most users abandon at the shipping step" in src1
+    assert "slack" in src1 and "retrieved 2026-10-16 13:10 UTC" in src1
 
     # A non-http(s) ref is shown as text, never as a link.
-    fn3 = footer[footer.index('id="fn-3"') : footer.index('id="fn-4"')]
+    src3 = appendix[appendix.index('id="src-3"') : appendix.index('id="src-4"')]
     assert 'href="javascript' not in html
-    assert "Carrier API notes" in fn3 and "javascript:alert(1)" in fn3
-    # Unused citation: listed, no back-link.
-    fn4 = footer[footer.index('id="fn-4"') :]
-    assert "Unused source" in fn4 and "fn-back" not in fn4
+    assert "Carrier API notes" in src3 and "javascript:alert(1)" in src3
+    assert "Unused source" in appendix[appendix.index('id="src-4"') :]
 
 
 async def test_html_version_banner(client, fx):
@@ -223,7 +217,7 @@ async def test_html_version_banner(client, fx):
     banner = _text(banner[banner.index("<header") : banner.index("</header>")])
     assert "Version 1" in banner
     assert "Superseded" in banner
-    assert "Imported 2026-10-16 14:01 UTC" in banner
+    assert "imported 2026-10-16 14:01 UTC" in banner
 
 
 async def test_html_is_self_contained_and_escapes_raw_html(client, fx):
@@ -316,7 +310,7 @@ async def test_pdf_without_system_libraries_is_503(client, fx, monkeypatch):
     def missing():
         raise PdfUnavailable("PDF export is unavailable: no Pango")
 
-    monkeypatch.setattr(pdf_module, "_weasyprint_html", missing)
+    monkeypatch.setattr(pdf_module, "_weasyprint", missing)
     resp = await client.get(
         URL.format(doc="checkout-redesign", n=2), params={"format": "pdf"}, headers=fx.headers
     )

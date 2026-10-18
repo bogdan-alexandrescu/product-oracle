@@ -1,4 +1,5 @@
-"""Seed the single tenant, the admin user, a new API token and the default PRD template.
+"""Seed the single tenant, the admin user, a new API token (acting as the admin) and
+the default PRD template.
 
     python -m oracle.seed [--email admin@example.com] [--password ...] [--token-name ...]
 
@@ -58,8 +59,9 @@ async def seed(
         if user is None:
             if not password:
                 password = generated = secrets.token_urlsafe(12)
-            await create_user(s, email, password)
-        _, raw = await create_api_token(s, token_name)
+            user = await create_user(s, email, password)
+        # The token acts as the admin, so per-user calls (`oracle sync`) work with it.
+        _, raw = await create_api_token(s, token_name, user_id=user.id)
         await ensure_default_template(s)
         await s.commit()
 
@@ -92,7 +94,8 @@ def format_result(r: SeedResult, *, password_given: bool = False) -> str:
             f"  email      {r.user_email}",
             f"  password   {admin_note}",
             "",
-            f"API token '{r.token_name}' for the agent track (shown once, only its hash is kept):",
+            f"API token '{r.token_name}' acting as {r.user_email} (shown once, only its hash"
+            " is kept):",
             f"  export ORACLE_API_TOKEN={r.token}",
             "",
         ]

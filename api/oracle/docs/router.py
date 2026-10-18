@@ -21,6 +21,7 @@ from oracle.docs.schemas import (
     VersionOut,
     VersionSummary,
 )
+from oracle.jobs import service as jobs_service
 
 # Every route needs at least a viewer; importing a version needs an approver.
 router = APIRouter(
@@ -87,6 +88,12 @@ async def import_version(
         raise _not_found(exc) from exc
     except service.ImportConflictError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    if result.created:
+        # Oracle's reporting job writes this version's reports (when it is on).
+        await jobs_service.on_version_imported(
+            db, result.version.document_id, result.version.number, principal
+        )
+        await db.commit()
     return JSONResponse(
         result.version.model_dump(mode="json"),
         status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,

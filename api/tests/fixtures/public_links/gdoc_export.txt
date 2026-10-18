@@ -1,0 +1,9 @@
+﻿Pricing page refresh
+
+Goal: raise trial-to-paid conversion from 4% to 6% by Q2.
+
+Findings
+* Visitors compare plans on mobile; the table is unreadable there.
+* "Contact sales" on the Team plan loses self-serve buyers.
+
+Proposal: a single comparison card per plan, with annual pricing shown first.

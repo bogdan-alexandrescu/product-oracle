@@ -38,6 +38,9 @@ DEFAULTS: dict[str, Any] = {
         "upload": 0.7,
         "fireflies": 0.6,
         "slack": 0.5,
+        # A public web page cited through a link (Notion and Google Docs links count as
+        # their own kinds above).
+        "web": 0.7,
     },
     # A planning or feature document (item acl/attrs "doc_type": "planning") gets this
     # much on top of its kind, capped at 1.
@@ -51,6 +54,7 @@ DEFAULTS: dict[str, Any] = {
         "notion": 90,
         "google_docs": 90,
         "upload": 90,
+        "web": 90,
         "github": 180,
     },
     "freshness_floor": 0.2,
@@ -58,6 +62,8 @@ DEFAULTS: dict[str, Any] = {
     "goal_impact": {"3": 1.0, "2": 0.85, "1": 0.7, "0": 0.5},
     "tie_margin": 0.1,
     "low": 0.4,
+    # Built-in review jobs push back only against evidence at or above this (C1b).
+    "pushback": 0.7,
 }
 
 

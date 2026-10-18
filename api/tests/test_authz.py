@@ -3,10 +3,11 @@ from typing import Annotated
 import httpx
 import pytest
 from fastapi import Depends, FastAPI
-from sqlalchemy import update
+from sqlalchemy import delete, select, update
 
 from oracle.auth.deps import Principal
 from oracle.auth.models import ROLES, ApiToken, User
+from oracle.auth.service import create_api_token
 from oracle.authz import has_role, require_role
 from oracle.main import app
 from oracle.seed import seed
@@ -58,11 +59,13 @@ async def guarded():
 
 
 async def _as_token_with_role(role: str) -> tuple[str, object]:
+    """A token without a user (the seeded one acts as the admin), with ``role``."""
     r = await seed()
     async with tenant_session(r.tenant_id) as s:
-        await s.execute(update(ApiToken).values(role=role))
+        token, raw = await create_api_token(s, "bot")
+        token.role = role
         await s.commit()
-    return r.token, r.tenant_id
+    return raw, r.tenant_id
 
 
 @pytest.mark.parametrize("role", ROLES)
@@ -112,23 +115,45 @@ async def test_me_reports_the_user_role(client):
 
 async def test_me_reports_the_token_role(client):
     r = await seed()
-    headers = {"Authorization": f"Bearer {r.token}"}
+    async with tenant_session(r.tenant_id) as s:
+        _, raw = await create_api_token(s, "bot")
+        await s.commit()
+    headers = {"Authorization": f"Bearer {raw}"}
     me = (await client.get("/v1/me", headers=headers)).json()
     assert (me["kind"], me["role"]) == ("token", "owner")  # default for API tokens
 
     async with tenant_session(r.tenant_id) as s:
-        await s.execute(update(ApiToken).values(role="viewer"))
+        await s.execute(update(ApiToken).where(ApiToken.user_id.is_(None)).values(role="viewer"))
         await s.commit()
     assert (await client.get("/v1/me", headers=headers)).json()["role"] == "viewer"
 
 
-def test_v1_routers_are_mounted_and_empty():
-    from oracle.baseline.router import router as baseline
-    from oracle.priorities.router import router as priorities
-    from oracle.runs.router import router as runs
-    from oracle.sources.router import router as sources
-    from oracle.templates.router import router as templates
+async def test_a_token_for_a_user_acts_as_that_user(client):
+    # The seeded token acts as the admin: the user's role (not the token's), the user's id.
+    r = await seed(token_name="cli")
+    headers = {"Authorization": f"Bearer {r.token}"}
+    me = (await client.get("/v1/me", headers=headers)).json()
+    assert (me["kind"], me["role"], me["email"]) == ("user", "owner", "admin@example.com")
+    assert me["token_name"] == "cli" and me["user_id"]
 
-    for router in (sources, baseline, priorities, templates, runs):
-        assert router.routes == []
-    assert app.openapi()["paths"]  # the app still builds its schema
+    async with tenant_session(r.tenant_id) as s:
+        await s.execute(update(ApiToken).values(role="viewer"))  # ignored for a user token
+        await s.execute(update(User).values(role="commenter"))
+        await s.commit()
+    assert (await client.get("/v1/me", headers=headers)).json()["role"] == "commenter"
+
+    # Per-user endpoints work with it (sources are the user's own).
+    assert (await client.get("/v1/sources", headers=headers)).status_code == 200
+
+    async with tenant_session(r.tenant_id) as s:
+        await s.execute(delete(User))  # the user's tokens go with them
+        await s.commit()
+        assert (await s.scalars(select(ApiToken))).all() == []
+    assert (await client.get("/v1/me", headers=headers)).status_code == 401
+
+
+def test_v1_routers_are_mounted():
+    # Every v1 lane has landed; their own tests cover the routes.
+    paths = app.openapi()["paths"]
+    for prefix in ("/v1/members", "/v1/sources", "/v1/baseline", "/v1/priorities", "/v1/runs"):
+        assert any(p.startswith(prefix) for p in paths), prefix

@@ -3,14 +3,27 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { SuggestionCard } from "@/components/SuggestionCard";
 import { Badge, ErrorNote, Loading, StatusBadge, VerdictBadge } from "@/components/ui";
 import { api, unwrap, type FeedbackItem, type FeedbackStatus, type VersionSummary } from "@/lib/api/client";
 import { STATUS_LABEL } from "@/lib/format";
+import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 const STATUSES = Object.keys(STATUS_LABEL) as FeedbackStatus[];
 
-function FeedbackRow({ item, doc, current }: { item: FeedbackItem; doc: string; current: number }) {
+function FeedbackRow({
+  item,
+  doc,
+  current,
+  onChanged,
+}: {
+  item: FeedbackItem;
+  doc: string;
+  current: number;
+  onChanged?: () => void;
+}) {
+  const { role } = useMe();
   const href = `/documents/${doc}/v/${item.raised_on_version}${item.section_key ? `#s-${item.section_key}` : ""}`;
   return (
     <li className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm" data-testid="feedback-item">
@@ -39,6 +52,14 @@ function FeedbackRow({ item, doc, current }: { item: FeedbackItem; doc: string; 
           #{item.section_key}
           {item.raised_on_version !== current && ` (v${item.raised_on_version})`}
         </Link>
+      )}
+      {item.suggestion && (
+        <SuggestionCard
+          key={`${item.suggestion.id}|${item.suggestion.updated_at}`}
+          suggestion={item.suggestion}
+          canDecide={hasRole(role, "approver") && !!onChanged}
+          onChanged={() => onChanged?.()}
+        />
       )}
     </li>
   );
@@ -115,7 +136,7 @@ export function FeedbackPanel({
           </p>
           <ol className="flex flex-col gap-2" aria-label="Feedback items">
             {q.data.map((f) => (
-              <FeedbackRow key={f.id} item={f} doc={doc} current={current} />
+              <FeedbackRow key={f.id} item={f} doc={doc} current={current} onChanged={() => void q.reload()} />
             ))}
           </ol>
         </>

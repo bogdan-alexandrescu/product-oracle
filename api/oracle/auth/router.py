@@ -47,12 +47,16 @@ async def logout(response: Response) -> None:
 async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
     if principal.kind == "user":
         user = await db.get(User, principal.user_id)
+        # An API token acting for this user also names itself.
+        token = await db.get(ApiToken, principal.token_id) if principal.token_id else None
         return Me(
             kind="user",
             tenant_id=principal.tenant_id,
             role=principal.role,
             user_id=user.id,
             email=user.email,
+            token_id=token.id if token else None,
+            token_name=token.name if token else None,
         )
     token = await db.get(ApiToken, principal.token_id)
     return Me(

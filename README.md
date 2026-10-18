@@ -25,7 +25,9 @@ open http://localhost:3000
 
 `make seed` prints the admin email and, the first time, a generated password; every run
 also mints a new API token for the agent track (send it as `Authorization: Bearer
-<token>`; the `oracle` CLI reads `ORACLE_API_TOKEN`). Both secrets are shown once: only
+<token>`; the `oracle` CLI reads `ORACLE_API_TOKEN`). The token acts as the admin (their
+role, connections and sources), so per-user commands such as `oracle sync` work with it;
+tokens created without a user act with their own role. Both secrets are shown once: only
 hashes are stored. To choose the email and password, pass them through `ARGS`
 (see `python -m oracle.seed --help`).
 

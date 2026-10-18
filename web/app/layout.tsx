@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { AppHeader, HeaderShell } from "@/components/AppHeader";
-import { WorkspaceNav } from "@/components/WorkspaceNav";
+import { AppNav } from "@/components/AppNav";
 import { MeProvider, MeSync } from "@/lib/me";
 import "./globals.css";
 
@@ -24,7 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </Suspense>
           <div className="flex w-full flex-1">
             <Suspense fallback={null}>
-              <WorkspaceNav />
+              <AppNav />
             </Suspense>
             <main className="min-w-0 flex-1">{children}</main>
           </div>

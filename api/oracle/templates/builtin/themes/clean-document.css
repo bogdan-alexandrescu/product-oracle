@@ -1,0 +1,11 @@
+/* Clean document: a long PRD read on screen and printed. Sticky contents on wide
+   screens, a status header block, quiet tables, requirement id badges. */
+@media screen and (min-width: 72rem) {
+  body.has-toc { max-width: 68rem; display: grid; grid-template-columns: 14rem minmax(0, 1fr); column-gap: 2.5rem; }
+  body.has-toc > .doc-header, body.has-toc > .fit-warning { grid-column: 1 / -1; }
+  body.has-toc > .toc { position: sticky; top: 1rem; align-self: start; grid-row: span 2; }
+  body.has-toc > main, body.has-toc > .sources-appendix { grid-column: 2; }
+}
+h2 { border-bottom-width: 2px; }
+th { text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.03em; }
+tbody tr:nth-child(even) td { background: #fafafa; }

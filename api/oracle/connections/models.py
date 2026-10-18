@@ -18,8 +18,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-# Data connectors plus the Claude plan that pays for Oracle's own model calls.
-PROVIDERS = ("github", "slack", "notion", "fireflies", "google", "claude")
+# Data connectors, per user. Oracle's own model calls run on the company's Claude account
+# pool (oracle.claude_accounts), not on a connection.
+PROVIDERS = ("github", "slack", "notion", "fireflies", "google")
 AUTH_MODES = ("oauth", "token")
 CONNECTION_STATUSES = ("active", "expired", "revoked", "error")
 

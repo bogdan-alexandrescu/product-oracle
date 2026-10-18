@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.jobs.schemas import SuggestionOut
 from oracle.review.models import FEEDBACK_STATUSES, Comment, FeedbackItem, SectionReview
 from oracle.review.schemas import (
     CommentOut,
@@ -161,9 +162,13 @@ async def feedback_out(
             select(SectionReview.id, SectionReview.verdict).where(SectionReview.id.in_(review_ids))
         )
         verdicts = {k: v for k, v in rows}
+    from oracle.jobs.service import latest_suggestions
+
+    suggestions = await latest_suggestions(session, [i.id for i in items])
     out = []
     for item in items:
         anchor = anchors.get(item.comment_id) if item.comment_id else None
+        suggestion = suggestions.get(item.id)
         out.append(
             FeedbackItemOut(
                 id=item.id,
@@ -181,6 +186,7 @@ async def feedback_out(
                 resolution_note=item.resolution_note,
                 created_at=item.created_at,
                 updated_at=item.updated_at,
+                suggestion=SuggestionOut.model_validate(suggestion) if suggestion else None,
             )
         )
     return out

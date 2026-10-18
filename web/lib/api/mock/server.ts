@@ -7,10 +7,17 @@ import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
+import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { claudeAccountsRoute } from "./claude-accounts";
+import { connectionsRoute } from "./connections";
 import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { laneF, type LaneFState } from "./lane-f";
+import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 
-type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
-type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
+export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version">;
+export type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
   sections: Omit<Schemas["SectionOut"], "verdict">[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
@@ -20,7 +27,7 @@ type MemberRow = Schemas["MemberOut"];
 type InviteRow = Schemas["InviteOut"];
 type Role = MemberRow["role"];
 
-interface Db {
+export interface Db {
   /** Email of the signed-in mock member. */
   session: string | null;
   tenant_id: string;
@@ -33,9 +40,25 @@ interface Db {
   comments: CommentRow[];
   reviews: ReviewRow[];
   feedback: FeedbackRow[];
+  baseline: BaselineState;
+  /** Priorities, templates, themes and draft defaults (lane-f.ts), seeded on first use. */
+  lane_f?: LaneFState;
+  /** Runs, checkpoints and their artifacts (./runs.ts); absent in data saved before runs existed. */
+  runs?: RunsDb;
+  /** Built-in model jobs and suggestions (./llm-jobs.ts); absent in older saved data. */
+  llm?: LlmDb;
 }
 
 const STORAGE_KEY = "po-mock-db-v2";
+/** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
+export const MOCK_ROLE_KEY = "po-mock-role";
+const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
+
+/** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
+function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
+  const role = localStorage.getItem(MOCK_ROLE_KEY) as Schemas["Me"]["role"] | null;
+  return role && ROLES.includes(role) ? { ...member, role } : member;
+}
 const LATENCY_MS = 60;
 
 let counter = 0;
@@ -105,6 +128,7 @@ function seed(): Db {
     comments: [],
     reviews: [],
     feedback: [],
+    baseline: seedBaseline(uuid),
   };
   db.members = MOCK_MEMBERS.map((m) => ({ ...m, id: m.email === MOCK_LOGIN.email ? db.user_id : uuid() }));
   db.invites = MOCK_INVITES.map((i) => ({
@@ -203,6 +227,23 @@ function seed(): Db {
       section_keys: ["scope"],
     },
   ];
+  // Review comments on v2, which Oracle's review job has already handled (./llm-jobs.ts).
+  const w2 = ver("team-workspaces", 2);
+  addComment(db, w2, {
+    section_key: "problem",
+    anchor: { exact: "Requests for shared editing come up in most sales conversations", prefix: "around. ", suffix: " with teams" },
+    body: "Say how many teams asked for this; a number would make the case.",
+  }, at("2026-10-13T10:50:00Z"));
+  addComment(db, w2, {
+    section_key: "problem",
+    anchor: { exact: "People share work by exporting files", prefix: "", suffix: " and sending" },
+    body: "Can we quantify the demand from the sales calls?",
+  }, at("2026-10-13T10:55:00Z"));
+  addComment(db, w2, {
+    section_key: "roles",
+    anchor: { exact: "Three fixed roles", prefix: "", suffix: ": owner" },
+    body: "Add custom roles to the first release; big teams will ask for them.",
+  }, at("2026-10-13T11:00:00Z"));
   docs.get("team-workspaces")!.status = "in_review";
 
   // Usage alerts: fully approved.
@@ -210,7 +251,98 @@ function seed(): Db {
   for (const s of a1.sections) addReview(db, a1, s.section_key, { verdict: "approved", note: null }, at("2026-10-03T10:00:00Z"));
   a1.approved_at = "2026-10-03T10:05:00Z";
   docs.get("usage-alerts")!.status = "approved";
+  db.runs = seedRuns(runsContext(db));
+  db.llm = seedLlm(llmContext(db, db.user_id, "owner"));
   return db;
+}
+
+function llmContext(db: Db, userId: string, role: Role): LlmContext {
+  return {
+    db: db.llm ?? { jobs: [], suggestions: [], disabled: {} },
+    userId,
+    role,
+    documents: db.documents,
+    versions: db.versions,
+    feedback: db.feedback,
+    uuid,
+    now,
+    lockedKeys: (v) => lockedKeys(db, v as VersionRow),
+    reply: (feedbackId, body) => {
+      const parent = db.comments.find((c) => c.id === db.feedback.find((f) => f.id === feedbackId)?.comment_id);
+      if (!parent) return;
+      db.comments.push({ ...parent, id: uuid(), anchor: null, body, author_id: userId, parent_id: parent.id, created_at: now(), feedback_item_id: null });
+    },
+    importRevision: (doc, base, key, heading, body, resolutions) => {
+      const row = findDocument(db, doc.id)!;
+      const from = base as VersionRow;
+      const v = buildVersion(row, {
+        number: base.number + 1,
+        created_at: now(),
+        snapshot: from.snapshot ?? undefined,
+        sections: from.sections.map((x) =>
+          x.section_key === key
+            ? { key, level: x.level, heading, body }
+            : { key: x.section_key, level: x.level, heading: x.heading, body: x.body_md },
+        ),
+        citations: from.citations.map((c) => ({
+          id: c.cite_key,
+          source: c.source,
+          ref: c.ref,
+          title: c.title ?? "",
+          excerpt: c.excerpt ?? "",
+          retrieved_at: c.retrieved_at ?? "",
+        })),
+      });
+      db.versions.push(v);
+      for (const r of resolutions) {
+        const f = db.feedback.find((x) => x.id === r.feedback_id);
+        if (f && f.status === "open") Object.assign(f, { status: r.status, resolution_note: r.note, addressed_in_version: v.number, updated_at: now() });
+      }
+      // Duplicates of what was resolved go with it.
+      for (const s of db.llm?.suggestions ?? []) {
+        const f = db.feedback.find((x) => x.id === s.feedback_item_id);
+        if (s.kind === "duplicate" && f?.status === "open" && resolutions.some((r) => r.feedback_id === s.duplicate_of)) {
+          Object.assign(f, { status: "addressed", resolution_note: "Addressed with the item it duplicates", addressed_in_version: v.number, updated_at: now() });
+        }
+      }
+      touch(db, doc.id);
+      return v;
+    },
+  };
+}
+
+function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
+  return {
+    db: db.runs,
+    userId: db.user_id,
+    feedback: db.feedback,
+    documents: db.documents,
+    latestVersion: (id) => {
+      const doc = db.documents.find((d) => d.id === id);
+      const vs = doc ? docVersions(db, doc) : [];
+      return vs.length ? vs[vs.length - 1].number : null;
+    },
+    // A run's draft becomes the next version: a copy of the latest one (or of the
+    // first fixture for a new document), so the review screens have something to show.
+    importDraft: (slug) => {
+      let doc = findDocument(db, slug);
+      if (!doc) {
+        doc = { id: uuid(), slug, title: "Example product PRD", status: "draft", template: null, template_version: null, created_at: now(), updated_at: now() };
+        db.documents.push(doc);
+      }
+      const latest = docVersions(db, doc).pop();
+      const seed = (DOCUMENTS as DocumentSeed[])[0].versions[0];
+      const base = latest
+        ? { number: latest.number + 1, created_at: now(), sections: latest.sections.map((x) => ({ key: x.section_key, level: x.level, heading: x.heading, body: x.body_md })), citations: [] }
+        : { ...seed, number: 1, created_at: now() };
+      const v = buildVersion(doc, base);
+      db.versions.push(v);
+      touch(db, doc.id);
+      return { document_id: doc.id, slug: doc.slug, version: v.number };
+    },
+    uuid,
+    now,
+  };
 }
 
 function load(): Db {
@@ -234,6 +366,7 @@ function save(db: Db) {
 /** Drops all mock state (used by the "Reset mock data" control). */
 export function resetMockData() {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(SOURCES_STORAGE_KEY);
 }
 
 // ---------------------------------------------------------------- domain helpers
@@ -576,16 +709,33 @@ async function route(db: Db, req: Request): Promise<Response> {
       return json(401, { detail: "Invalid credentials" });
     }
     db.session = member.email;
-    return json(200, meOut(db, member));
+    return json(200, meOut(db, withMockRole(member)));
   }
   if (p[1] === "auth" && p[2] === "logout" && m === "POST") {
     db.session = null;
     return json(204, undefined);
   }
-  const me = db.members.find((x) => x.email === db.session);
-  if (!me) return json(401, { detail: "Not authenticated" });
+  const member = db.members.find((x) => x.email === db.session);
+  if (!member) return json(401, { detail: "Not authenticated" });
+  const me = withMockRole(member);
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
+  // The baseline mock checks roles itself (commenters propose, approvers decide).
+  if (p[1] === "baseline") {
+    return routeBaseline(db.baseline, { userId: me.id, role: me.role }, req, p.slice(2), q);
+  }
+  // Sources and connections belong to each user: every role manages their own.
+  if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  const connections = await connectionsRoute(req, p);
+  if (connections) return connections;
+  // The Claude account pool checks roles itself: every member reads, owners change.
+  const pool = await claudeAccountsRoute(req, p, q, me.role);
+  if (pool) return pool;
+  // Built-in model jobs check roles themselves (approvers decide, owners set them up).
+  db.llm ??= seedLlm(llmContext(db, db.user_id, "owner"));
+  const llm = llmContext(db, me.id, me.role);
+  const jobs = await llmJobsRoute(llm, req, p, q);
+  if (jobs) return jobs;
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
@@ -633,6 +783,13 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, f);
   }
 
+  const handled = await laneF(db, req, p, m);
+  if (handled) return handled;
+
+  db.runs ??= seedRuns(runsContext(db));
+  const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
+  if (runs) return runs;
+
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) return json(200, db.documents.map((d) => documentSummary(db, d)));
 
@@ -657,11 +814,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[3] === "feedback") {
     const status = q.get("status");
     const version = q.get("version");
+    tick(llm);
     const items = db.feedback
       .filter((f) => f.document_id === doc.id)
       .filter((f) => !status || f.status === status)
       .filter((f) => !version || f.raised_on_version === Number(version))
-      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .map((f) => withSuggestion(db.llm, f));
     return json(200, items);
   }
 
@@ -685,6 +844,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (!v.sections.some((s) => s.section_key === input.section_key)) return notFound("Section");
       const c = addComment(db, v, input, { author_id: me.id });
       touch(db, doc.id);
+      onFeedback(llm, doc.id, v.number);
       return json(201, commentOut(db, c));
     }
     return json(
@@ -699,6 +859,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (!v.sections.some((s) => s.section_key === p[6])) return notFound("Section");
     const r = addReview(db, v, p[6], await body<Schemas["SectionReviewIn"]>(), { reviewer_id: me.id });
     touch(db, doc.id);
+    if (r.feedback_item_id) onFeedback(llm, doc.id, v.number);
     return json(200, r);
   }
   if (sub === "feedback-package") {
@@ -716,7 +877,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     });
   }
   if (sub === "resolution-report") {
-    const items = db.feedback.filter((f) => f.document_id === doc.id && f.raised_on_version < v.number);
+    const items = db.feedback
+      .filter((f) => f.document_id === doc.id && f.raised_on_version < v.number)
+      .map((f) => withSuggestion(db.llm, f));
     const counts: Record<string, number> = {};
     for (const f of items) counts[f.status] = (counts[f.status] ?? 0) + 1;
     return json(200, { document_id: doc.id, version: v.number, items, counts });

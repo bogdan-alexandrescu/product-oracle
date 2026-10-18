@@ -1,0 +1,120 @@
+{% macro section(s) %}
+  <section id="{{ s.key }}" class="prd-section level-{{ s.level }}{% if s.flagged %} flag-no-goal{% endif %}" data-section-key="{{ s.key }}">
+    <h{{ s.level }}>{{ s.heading }}</h{{ s.level }}>
+    {% if s.flagged %}<p class="no-goal-note">⚑ Serves no confirmed goal</p>{% endif %}
+    {{ s.body }}
+  </section>
+{% endmacro %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Product Oracle">
+<meta name="oracle-theme" content="{{ theme_key }}">
+{% if page_fit %}<meta name="oracle-page-fit" content="{{ page_fit }}">{% endif %}
+<title>{{ title }} — v{{ number }}</title>
+<style>
+{{ css }}
+</style>
+<style>
+{{ token_css }}
+</style>
+<style>
+{{ theme_css }}
+</style>
+</head>
+<body class="{{ body_class }}">
+<header class="doc-header status-{{ status }}" role="note" aria-label="Version">
+  <div class="header-line">
+    <span class="banner-doc">{{ title }}</span>
+    <span class="banner-asof">As of {{ as_of }}</span>
+    <span class="banner-version">Version {{ number }}{% if number < latest_number %} of {{ latest_number }}{% endif %}</span>
+    <span class="banner-status">{{ status | replace("_", " ") | capitalize }}</span>
+    <span class="banner-date">
+      {%- if approved_at %}Approved {{ approved_at }}{% else %}Not approved · imported {{ imported_at }}{% endif -%}
+    </span>
+  </div>
+  {% if status_header %}
+  <table class="status-table">
+    <tr><th scope="row">Document</th><td>{{ slug }} ({{ kind | upper }})</td></tr>
+    {% if template %}<tr><th scope="row">Template</th><td>{{ template_name or template }}{% if template_version %} v{{ template_version }}{% endif %}</td></tr>{% endif %}
+    {% if snapshot %}<tr><th scope="row">Sources as of</th><td>{{ snapshot }}</td></tr>{% endif %}
+    <tr><th scope="row">Theme</th><td>{{ theme_name }}</td></tr>
+  </table>
+  {% endif %}
+  {% if legend %}
+  <div class="legend" aria-label="Legend">
+    <span>Confidence: ●●● high · ●●○ medium · ●○○ low</span>
+    <span>G1, G2 … goal codes</span>
+    <span>after: X = depends on X</span>
+    <span>⚑ serves no confirmed goal</span>
+  </div>
+  {% endif %}
+</header>
+{% if toc %}
+<nav class="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ul>
+  {% for t in toc %}
+    <li class="toc-level-{{ t.level }}"><a href="#{{ t.key }}">{{ t.heading }}</a></li>
+  {% endfor %}
+    <li class="toc-level-2"><a href="#sources">{{ sources_heading }}</a></li>
+  </ul>
+</nav>
+{% endif %}
+<main class="prd">
+{% if not has_title_section %}
+  <h1 class="doc-title">{{ title }}</h1>
+{% endif %}
+{% for g in groups %}
+  {% if g.children %}
+  <div class="section-group" data-group="{{ g.key }}">
+    {{ section(g) }}
+    <div class="group-body">
+    {% for c in g.children %}{{ section(c) }}{% endfor %}
+    </div>
+  </div>
+  {% else %}
+  {{ section(g) }}
+  {% endif %}
+{% endfor %}
+</main>
+<section id="sources" class="sources-appendix" aria-label="Sources and data points" data-section-key="sources">
+  <h2>{{ sources_heading }}</h2>
+  {% if sources_intro %}{{ sources_intro }}{% endif %}
+  {% for s in sources_parts %}
+  <div class="sources-part" id="{{ s.key }}" data-section-key="{{ s.key }}">
+    <h3>{{ s.heading }}</h3>
+    {{ s.body }}
+  </div>
+  {% endfor %}
+  {% if by_section %}
+  <h3 id="sources-by-section">Citations by section</h3>
+  <ul class="by-section">
+  {% for b in by_section %}
+    <li><a class="section-link" href="#{{ b.key }}">{{ b.heading }}</a>:
+      {% for src in b.sources %}<a href="#src-{{ src.number }}">[{{ src.number }}] {{ src.title }}</a>{% if not loop.last %}; {% endif %}{% endfor %}
+    </li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+  {% if source_list %}
+  <h3 id="sources-all">All sources</h3>
+  <ol class="source-list">
+  {% for f in source_list %}
+    <li id="src-{{ f.number }}" value="{{ f.number }}" data-cite-key="{{ f.key }}">
+      <span class="src-title">
+        {%- if f.href %}<a href="{{ f.href }}">{{ f.title }}</a>{% else %}{{ f.title }}{% endif -%}
+      </span>
+      <span class="src-kind">{{ f.source }}</span>
+      {% if f.retrieved_at %}<span class="src-retrieved">retrieved {{ f.retrieved_at }}</span>{% endif %}
+      {% if f.excerpt %}<blockquote class="src-excerpt">{{ f.excerpt }}</blockquote>{% endif %}
+      <span class="src-ref">{{ f.ref }}</span>
+    </li>
+  {% endfor %}
+  </ol>
+  {% endif %}
+</section>
+</body>
+</html>

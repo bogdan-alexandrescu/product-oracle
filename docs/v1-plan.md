@@ -17,8 +17,8 @@ From the design's phasing table (v1 row), in build order:
 2. **Connections and sources (S1–S5).** Integrations are **per user** (S5, revised
    2026-10-17): each person connects their own GitHub, Slack, Notion, Fireflies and
    Google Docs accounts, through each tool's OAuth or a personal token, and picks what
-   to pull in. A Claude plan connects the same way and pays for Oracle's own Claude
-   calls. Connectors for uploads, GitHub, Slack, Notion, Fireflies and Google Docs;
+   to pull in. Oracle's own Claude calls run on the company's Claude account pool
+   (see "Claude accounts"), not on a connection. Connectors for uploads, GitHub, Slack, Notion, Fireflies and Google Docs;
    incremental sync with cursors; item versions
    so a run can pin the snapshot it started on (S4 Freshness); full-text search.
    DMs are never ingested; source ACL metadata is stored (S3 Visibility).
@@ -125,6 +125,8 @@ Every table is `TenantScoped` unless noted.
   `oracle.crypto`, `auth_mode` `oauth` (provider OAuth, refreshed) or `token` (a
   pasted personal token, or `claude setup-token` for a Claude plan). Replaces
   `source_credentials`.
+- (Superseded by migration 0007: the `claude` provider and `default_claude_connection_id`
+  are gone; Oracle's own Claude calls run on the Claude account pool.)
 - **Sources are owned and private** (`sources.owner_user_id`, `connection_id`): what
   a user's connections pull in is visible only to that user (S3 revised). Others see
   it only as evidence the owner adds to the shared baseline (excerpt, url, ref), and a
@@ -140,6 +142,54 @@ Every table is `TenantScoped` unless noted.
   (`commenter`), `default_claude_connection_id` (the Claude plan used when a user has
   none; the owner's own plan first), `confidence_weights`.
 
+## Integration (migrations 0004-0005, 2026-10-17)
+
+- **0004** (Lane D2): OAuth clients, codes and tokens for MCP clients. An OAuth access
+  token (`poa_...`) works on `/mcp` and on the REST API as the approving user, with the
+  role capped by the granted scope.
+- **0005**: `api_tokens.user_id` (nullable). A token with a user acts as that user (their
+  role, connections and sources), so `oracle sync` works with `ORACLE_API_TOKEN`; `make
+  seed` mints its token for the admin. Tokens without a user act with their own role.
+- A sync whose credential is rejected also marks the user's connection `expired` (with
+  `last_error`). Disconnect revokes a grant Oracle obtained through GitHub, Slack or
+  Google OAuth (best effort) before deleting Oracle's copy.
+- A run's `baseline` segment merges its `baseline.yaml` through the baseline's YAML import
+  as agent writes (locked items become proposals); priorities score unscored evidence
+  through the baseline's confidence.
+
+## Public-link evidence (migration 0006, owner's decision 2026-10-17)
+
+Commenters and up attach evidence from **public links** without connecting an account:
+public Notion pages (`notion.so`, `*.notion.site`), Google Docs shared with "anyone with
+the link", and plain public web pages.
+
+- `POST /v1/baseline/evidence/link` `{entity_id | edge_id, url, note?}`, `POST
+  /v1/baseline/evidence/link/preview` (title, excerpt and confidence before saving,
+  saves nothing) and `POST /v1/baseline/evidence/{id}/refresh` (fetch again, update the
+  snapshot, rescore). Removing evidence stays with approvers.
+- `oracle.baseline.public_links` fetches anonymously (no credential, cookie or
+  environment proxy): `https` on port 443 only, no user info; every host, the first
+  request's and each redirect's, must resolve to public addresses only (private,
+  loopback, link-local, shared, reserved, multicast, mapped and NAT64 forms refused), and
+  the transport connects only to the addresses it checked; timeouts per request and per
+  fetch, a 2 MB cap after decompression, HTML or plain text only. Sign-in (401/403, a
+  redirect to a sign-in page, Notion's 404 or app shell) is `not_public`: "This link is
+  not public".
+- Text: Google Docs through `/export?format=txt` (title from the export's file name);
+  Notion from the page HTML it serves to link-preview bots (hence the `ProductOracleBot`
+  user agent); other pages from `<main>`, else `<article>`, else the body without
+  navigation, header, footer and scripts.
+- `evidence.kind` (`notion | google_docs | web`) and `evidence.note`;
+  `evidence_link_snapshots` keeps title, text, fetched_at and last_modified (the
+  `Last-Modified` header, else `article:modified_time` / `og:updated_time` /
+  `dateModified`); a refresh adds a snapshot only when the page changed. Confidence
+  scores link evidence as its kind (`web` added to `DEFAULTS`: source 0.55, half-life 90
+  days), freshness from last_modified else fetched_at, and each distinct link counts as
+  a mention. The page is public, so every user sees the snapshot, unlike items from
+  private connections.
+- UI: "Add evidence link" in the Baseline feature drawer (with Refresh per link) and on
+  each document section (pick the baseline item it supports).
+
 ## Agents and model calls (Bogdan, 2026-10-17)
 
 - **Agents run in SwarmCloud.** Product Oracle orchestrates all of its agents in
@@ -152,6 +202,11 @@ Every table is `TenantScoped` unless noted.
   suggestions, keeping ids, O1c and O1e) run directly in Oracle as jobs.
 - **Their provider is Oracle's Claude account pool,** managed exactly like SwarmCloud's
   account management (ported, for local personal use): see the next section.
+- **Built (migration 0008):** `api/oracle/jobs/` (job queue run by `oracle tick` and a
+  local worker, one job at a time per document, retry once, a clear failure when no
+  Claude account can take the call), suggestions on feedback items, version reports, and
+  section refinement imported as the next version; each kind can be turned off per
+  document. See [llm-jobs.md](llm-jobs.md).
 - Data connections (GitHub, Slack, Notion, Fireflies, Google) stay per user.
 
 ## Claude accounts
@@ -165,6 +220,12 @@ no-account reasons, swap and drain, the accounts screen and the CLI. Adapted for
 local, single-company app: no lending; credentials encrypted in Oracle's database; the
 sweep runs from `oracle tick`; calls run through Claude Code headless with
 `CLAUDE_CODE_OAUTH_TOKEN` set per call. The pool starts with the owner's account.
+
+Built (migration 0007): `api/oracle/claude_accounts/`, `api/oracle/llm/gateway.py`,
+`/v1/claude-accounts`, Settings > Claude accounts, `oracle accounts` and `oracle account
+add|pause|resume|drain|remove`. See [claude-accounts.md](claude-accounts.md) for how it
+works and every adaptation. Agent workflows still run in SwarmCloud on SwarmCloud's own
+accounts; `ORACLE_RUNTIME` defaults to `swarmcloud`.
 
 ## Confidence
 

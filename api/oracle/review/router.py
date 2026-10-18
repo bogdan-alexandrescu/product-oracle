@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.docs.schemas import VersionSummary
+from oracle.jobs import service as jobs_service
 from oracle.review import service
 from oracle.review.schemas import (
     ApproveOut,
@@ -56,6 +57,9 @@ async def create_comment(
     out = await _call(
         service.create_comment(db, principal, doc, n, body.section_key, body.anchor, body.body)
     )
+    # Oracle's review-comments job picks the new item up (when it is on for the document).
+    version = await service.get_version(db, doc, n)
+    await jobs_service.on_feedback(db, version.document_id, n)
     await db.commit()
     return out
 
@@ -95,6 +99,8 @@ async def review_section(
     review, item = await _call(
         service.review_section(db, principal, doc, n, key, body.verdict, body.note)
     )
+    if item is not None:
+        await jobs_service.on_feedback(db, item.document_id, n)
     await db.commit()
     out = SectionReviewOut.model_validate(review)
     out.feedback_item_id = item.id if item else None

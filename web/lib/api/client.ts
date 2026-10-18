@@ -31,7 +31,33 @@ export type FeedbackStatus = FeedbackItem["status"];
 export type DiffOut = Schemas["DiffOut"];
 export type SectionDiff = Schemas["SectionDiff"];
 export type Member = Schemas["MemberOut"];
+
+// Built-in model jobs (/v1/.../llm-jobs, suggestions, reports).
+export type LlmJob = Schemas["LlmJobOut"];
+export type LlmJobKind = LlmJob["kind"];
+export type JobSettings = Schemas["JobSettings"];
+export type Suggestion = Schemas["SuggestionOut"];
+export type VersionReports = Schemas["VersionReports"];
+export type RefinementPreview = Schemas["RefinementPreview"];
 export type Invite = Schemas["InviteOut"];
+
+// Baseline graph (/v1/baseline/...).
+export type EntityOut = Schemas["EntityOut"];
+export type EntityDetail = Schemas["EntityDetail"];
+export type EntityType = EntityOut["type"];
+export type NodeStatus = EntityOut["status"];
+export type EdgeOut = Schemas["EdgeOut"];
+export type EdgeType = EdgeOut["type"];
+export type GraphOut = Schemas["GraphOut"];
+export type EvidenceOut = Schemas["EvidenceOut"];
+export type LinkPreviewOut = Schemas["LinkPreviewOut"];
+export type TraceReport = Schemas["TraceReport"];
+export type TraceFeature = Schemas["TraceFeature"];
+export type TraceGoal = Schemas["TraceGoal"];
+export type ConflictOut = Schemas["ConflictOut"];
+export type ProposalOut = Schemas["ProposalOut"];
+export type EntityPatch = Schemas["EntityPatch"];
+export type EntityWriteOut = Schemas["EntityWriteOut"];
 
 /** A failed API call, carrying the HTTP status so pages can react (401 → login). */
 export class ApiError extends Error {

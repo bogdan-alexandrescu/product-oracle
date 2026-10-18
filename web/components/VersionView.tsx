@@ -9,6 +9,8 @@ import { CommentsPanel, type PlacedComment } from "@/components/CommentsPanel";
 import { DocToolbar } from "@/components/DocToolbar";
 import { RoleNote } from "@/components/RoleNote";
 import { FeedbackPanel, ResolutionPanel } from "@/components/FeedbackPanel";
+import { JobsPanel } from "@/components/JobsPanel";
+import { ReportsPanel } from "@/components/ReportsPanel";
 import type { Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
@@ -22,7 +24,7 @@ import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 type Selection = { sectionKey: string; anchor: TextQuoteSelector; rect: PageRect };
-type Tab = "comments" | "feedback" | "resolutions";
+type Tab = "comments" | "feedback" | "resolutions" | "reports" | "jobs";
 
 function isTyping(target: EventTarget | null) {
   const el = target as HTMLElement | null;
@@ -57,6 +59,10 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const verQ = useQuery(`ver|${doc}|${n}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })),
   );
+  // Commenters can cite public links on baseline items from any section.
+  const graphQ = useQuery(`baseline-graph|${canComment}`, () =>
+    canComment ? unwrap(api.GET("/v1/baseline/graph")) : Promise.resolve(null),
+  );
   const commentsQ = useQuery(`comments|${doc}|${n}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}/comments", { params: { path: { doc, n } } })),
   );
@@ -75,6 +81,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const versions = useMemo(() => document_?.versions ?? [], [document_]);
   const readOnly = !!version?.approved_at;
   const latest = versions.at(-1)?.number;
+  const refine = useMemo(() => ({ doc, n }), [doc, n]);
 
   const parsed = useMemo(() => {
     const m = new Map<string, { blocks: ReturnType<typeof parseBlocks>; text: string }>();
@@ -330,6 +337,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                     activeCommentId={activeId}
                     readOnly={readOnly || !canDecide}
                     changedLock={changedLocks.has(s.section_key)}
+                    evidenceTargets={canComment ? graphQ.data?.entities : undefined}
+                    refine={canDecide && !readOnly && n === latest ? refine : undefined}
                     onHighlightClick={onHighlightClick}
                     onVerdict={onVerdict}
                   />
@@ -363,12 +372,14 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           aria-label="Review panel"
           className="border-t border-neutral-200 py-6 lg:sticky lg:top-14 lg:max-h-[calc(100vh-3.5rem)] lg:overflow-y-auto lg:border-t-0 lg:border-l lg:pl-6"
         >
-          <div role="tablist" aria-label="Review panel" className="mb-4 flex gap-1 border-b border-neutral-200">
+          <div role="tablist" aria-label="Review panel" className="mb-4 flex flex-wrap gap-x-0.5 border-b border-neutral-200">
             {(
               [
                 ["comments", `Comments${commentsQ.data ? ` (${openComments})` : ""}`],
                 ["feedback", "Feedback"],
                 ["resolutions", "Resolutions"],
+                ["reports", "Reports"],
+                ["jobs", "Jobs"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -377,7 +388,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                 type="button"
                 aria-selected={tab === id}
                 onClick={() => setTab(id)}
-                className={`-mb-px border-b-2 px-2 pb-2 text-sm ${
+                className={`-mb-px border-b-2 px-1.5 pt-1 pb-2 text-sm whitespace-nowrap ${
                   tab === id
                     ? "border-neutral-900 font-medium text-neutral-900"
                     : "border-transparent text-neutral-500 hover:text-neutral-800"
@@ -410,6 +421,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
               <FeedbackPanel doc={doc} current={n} versions={versions} refreshKey={refreshKey} />
             )}
             {tab === "resolutions" && <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} />}
+            {tab === "reports" && <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} />}
+            {tab === "jobs" && <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />}
           </div>
           <p className="mt-6 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-400">
             <span>

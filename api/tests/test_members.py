@@ -81,7 +81,11 @@ async def world(client) -> World:
     """One document version with a comment, a changes-requested verdict, a second member
     and an open invite, all made by the owner token."""
     r = await seed()
-    owner = {"Authorization": f"Bearer {r.token}"}
+    # A token without a user (the seeded one acts as the admin, whose role changes here).
+    async with tenant_session(r.tenant_id) as s:
+        _, raw = await create_api_token(s, "owner-token")
+        await s.commit()
+    owner = {"Authorization": f"Bearer {raw}"}
     resp = await client.post(
         "/v1/documents/checkout-redesign/versions",
         content=DRAFT,
