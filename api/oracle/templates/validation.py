@@ -363,25 +363,19 @@ _CSS_FORBIDDEN = [
 ]
 _CSS_URL = re.compile(r"url\s*\(\s*(['\"]?)\s*([^'\")\s]*)", re.I)
 # These take a quoted URL without url(), and browsers fetch it (Present mode). Not
-# element(): it names an element (WeasyPrint's running headers), never a URL.
+# element(): it names an element (WeasyPrint's running headers), never a URL. Checked on
+# the raw CSS: a browser only reads the function with its name and "(" side by side, so
+# nothing can hide one, while stripping comments or strings first could (a "/*" inside a
+# string). The price: the words inside a string, e.g. content: "image (1)", count too.
 _CSS_URL_FUNCTIONS = re.compile(r"(?:image-set|cross-fade|\bimage)\s*\(", re.I)
 # Slide CSS runs in a shadow root inside the app: :host would restyle the presenter's
-# own controls.
-_SLIDE_CSS_HOST = re.compile(r":host\b", re.I)
-_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
-_CSS_STRING = re.compile(r"\"[^\"]*\"|'[^']*'")
-
-
-def _css_code(css: str) -> str:
-    """The CSS without comments and with every string emptied: the function names and
-    selectors a browser reads, so neither ``:/**/host`` nor ``content: "image (1)"``
-    misleads the checks."""
-    return _CSS_STRING.sub('""', _CSS_COMMENT.sub("", css))
+# own controls. Comments are all a browser allows between ":" and "host".
+_SLIDE_CSS_HOST = re.compile(r":(?:/\*.*?\*/)*host\b", re.I | re.S)
 
 
 def check_theme_css(css: str) -> list[Problem]:
     problems = [Problem("unsafe_css", msg) for rx, msg in _CSS_FORBIDDEN if rx.search(css)]
-    if _CSS_URL_FUNCTIONS.search(_css_code(css)):
+    if _CSS_URL_FUNCTIONS.search(css):
         problems.append(
             Problem("unsafe_css", "image-set(), image() and cross-fade() are not allowed")
         )
@@ -403,6 +397,6 @@ def check_slide_css(css: str | None) -> list[Problem]:
     if not css:
         return []
     problems = [Problem(p.code, f"slide CSS: {p.message}") for p in check_theme_css(css)]
-    if _SLIDE_CSS_HOST.search(_css_code(css)):
+    if _SLIDE_CSS_HOST.search(css):
         problems.append(Problem("unsafe_css", "slide CSS: :host is not allowed"))
     return problems
