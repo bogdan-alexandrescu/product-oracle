@@ -369,8 +369,9 @@ _CSS_URL = re.compile(r"url\s*\(\s*(['\"]?)\s*([^'\")\s]*)", re.I)
 # string). The price: the words inside a string, e.g. content: "image (1)", count too.
 _CSS_URL_FUNCTIONS = re.compile(r"(?:image-set|cross-fade|\bimage)\s*\(", re.I)
 # Slide CSS runs in a shadow root inside the app: :host would restyle the presenter's
-# own controls. Comments are all a browser allows between ":" and "host".
-_SLIDE_CSS_HOST = re.compile(r":(?:/\*.*?\*/)*host\b", re.I | re.S)
+# own controls. A browser allows only comments between ":" and "host", so a comment
+# straight after any ":" is refused too. Linear: no pattern that can backtrack.
+_SLIDE_CSS_HOST = re.compile(r":(?:host\b|/\*)", re.I)
 
 
 def check_theme_css(css: str) -> list[Problem]:
@@ -398,5 +399,10 @@ def check_slide_css(css: str | None) -> list[Problem]:
         return []
     problems = [Problem(p.code, f"slide CSS: {p.message}") for p in check_theme_css(css)]
     if _SLIDE_CSS_HOST.search(css):
-        problems.append(Problem("unsafe_css", "slide CSS: :host is not allowed"))
+        problems.append(
+            Problem(
+                "unsafe_css",
+                "slide CSS: :host is not allowed, nor a comment straight after ':'",
+            )
+        )
     return problems
