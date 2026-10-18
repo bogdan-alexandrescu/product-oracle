@@ -2,7 +2,10 @@
 
 ORACLE_RUNTIME                  swarmcloud (default) | fake (tests and local demos)
 ORACLE_SWARMCLOUD_URL           SwarmCloud API base URL, e.g. https://swarm.example.com
-ORACLE_SWARMCLOUD_AUTH          bearer (default) | google_id_token
+ORACLE_SWARMCLOUD_AUTH          bearer (default) | google_id_token | google_access_token
+                                (google_access_token: the service account's OAuth access token
+                                from the metadata server, what an IAP front door with a
+                                Google-managed OAuth client accepts)
 ORACLE_SWARMCLOUD_TOKEN         the static bearer, for ``bearer``
 ORACLE_SWARMCLOUD_AUDIENCE      the ID token audience, for ``google_id_token``
 ORACLE_SWARMCLOUD_PROFILE       runner profile for agent steps (default claude-code)
@@ -22,7 +25,7 @@ class RuntimeSettings(BaseSettings):
     # Runs execute in SwarmCloud; the FakeRuntime is for tests that choose it.
     runtime: Literal["fake", "swarmcloud"] = "swarmcloud"
     swarmcloud_url: str = ""
-    swarmcloud_auth: Literal["bearer", "google_id_token"] = "bearer"
+    swarmcloud_auth: Literal["bearer", "google_id_token", "google_access_token"] = "bearer"
     swarmcloud_token: str = ""
     swarmcloud_audience: str = ""
     swarmcloud_profile: str = "claude-code"

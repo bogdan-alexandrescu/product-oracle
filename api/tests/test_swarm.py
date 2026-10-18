@@ -22,7 +22,13 @@ from oracle.swarm import (
     set_runtime,
 )
 from oracle.swarm.settings import RuntimeSettings, get_runtime_settings
-from oracle.swarm.swarmcloud import NO_MCP_NOTE, GoogleIdToken, StaticBearer, auth_from_settings
+from oracle.swarm.swarmcloud import (
+    NO_MCP_NOTE,
+    GoogleAccessToken,
+    GoogleIdToken,
+    StaticBearer,
+    auth_from_settings,
+)
 
 SPEC = WorkflowSpec(
     name="oracle-baseline_to_prd-baseline",
@@ -115,6 +121,32 @@ def test_auth_from_settings():
         auth_from_settings(RuntimeSettings(swarmcloud_auth="google_id_token"))
     with pytest.raises(ValueError):
         SwarmCloudRuntime("", StaticBearer("x"))
+    s = RuntimeSettings(swarmcloud_auth="google_access_token")
+    assert isinstance(auth_from_settings(s), GoogleAccessToken)
+
+
+async def test_access_token_from_metadata_is_cached_and_never_leaks():
+    calls: list[httpx.Request] = []
+
+    def metadata(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        assert request.headers["metadata-flavor"] == "Google"
+        return httpx.Response(200, json={"access_token": "ya29.example", "expires_in": 3599})
+
+    auth = GoogleAccessToken()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(metadata)) as client:
+        assert await auth.header(client) == "Bearer ya29.example"
+        assert await auth.header(client) == "Bearer ya29.example"
+    assert len(calls) == 1
+    assert "ya29" not in repr(auth)
+
+    def broken(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="boom")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(broken)) as client:
+        with pytest.raises(RuntimeUnavailable) as exc:
+            await GoogleAccessToken().header(client)
+    assert "HTTP 500" in str(exc.value)
 
 
 class FakeSwarm:

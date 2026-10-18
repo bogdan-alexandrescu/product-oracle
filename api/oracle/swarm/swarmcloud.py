@@ -6,9 +6,11 @@
     GET  /v1/tasks/{task_id}/artifacts       a step's artifact listing
     GET  /v1/tasks/{task_id}/artifacts/raw   one artifact's bytes, by name
 
-Auth is pluggable: a static bearer from the environment, or a Google ID token minted
-for an audience by the metadata server (GKE workload identity). Tokens never reach a
-log line or an exception message.
+Auth is pluggable: a static bearer from the environment, a Google ID token minted for an
+audience by the metadata server, or the service account's OAuth access token from the
+metadata server (what an IAP front door with a Google-managed OAuth client accepts; the
+account needs roles/iap.httpsResourceAccessor there). Tokens never reach a log line or
+an exception message.
 
 Until SwarmCloud #1433 lands, a dispatch cannot attach an MCP server or a credential,
 so agents cannot reach Oracle's data: the run token is never sent (a prompt is not a
@@ -41,6 +43,9 @@ TEXT_SUFFIXES = (".md", ".yaml", ".yml", ".json", ".txt")
 MAX_ARTIFACT_BYTES = 1_000_000
 METADATA_IDENTITY_URL = (
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity"
+)
+METADATA_TOKEN_URL = (
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
 )
 
 _STATES: dict[str, WorkflowState] = {
@@ -96,7 +101,40 @@ class GoogleIdToken:
         return f"Bearer {self._token}"
 
 
+@dataclass
+class GoogleAccessToken:
+    """The service account's OAuth access token from the metadata server, cached until near
+    expiry. An IAP front door that uses a Google-managed OAuth client accepts this, not an
+    ID token."""
+
+    url: str = METADATA_TOKEN_URL
+    _token: str | None = field(default=None, repr=False)
+    _expires_at: float = 0.0
+
+    async def header(self, client: httpx.AsyncClient) -> str:
+        if self._token is None or time.time() > self._expires_at - 300:
+            try:
+                resp = await client.get(self.url, headers={"Metadata-Flavor": "Google"})
+            except httpx.HTTPError as exc:
+                raise RuntimeUnavailable(
+                    f"cannot get an access token: {type(exc).__name__}"
+                ) from None
+            if resp.status_code != 200:
+                raise RuntimeUnavailable(f"cannot get an access token: HTTP {resp.status_code}")
+            try:
+                body = resp.json()
+                token = body["access_token"]
+                ttl = float(body.get("expires_in", 300))
+            except (ValueError, KeyError, TypeError):
+                raise RuntimeUnavailable("the metadata server returned no access token") from None
+            self._token = token
+            self._expires_at = time.time() + ttl
+        return f"Bearer {self._token}"
+
+
 def auth_from_settings(settings: RuntimeSettings) -> Auth:
+    if settings.swarmcloud_auth == "google_access_token":
+        return GoogleAccessToken()
     if settings.swarmcloud_auth == "google_id_token":
         if not settings.swarmcloud_audience:
             raise ValueError("ORACLE_SWARMCLOUD_AUDIENCE is required for google_id_token auth")
