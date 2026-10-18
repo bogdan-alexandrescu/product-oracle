@@ -164,3 +164,7 @@ body.appendix-break .sources-appendix { break-before: page; border-top: none; }
   body { max-width: none; margin: 0; padding: 0; }
   a { color: inherit; }
 }
+
+/* O1f: a brief export says so; links to detail it leaves out keep their text. */
+.doc-header .banner-layer { font-weight: 600; color: var(--color-accent); }
+.detail-ref { color: inherit; }

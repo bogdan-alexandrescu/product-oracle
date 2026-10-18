@@ -13,7 +13,8 @@
 <meta name="generator" content="Product Oracle">
 <meta name="oracle-theme" content="{{ theme_key }}">
 {% if page_fit %}<meta name="oracle-page-fit" content="{{ page_fit }}">{% endif %}
-<title>{{ title }} — v{{ number }}</title>
+<title>{{ title }} — v{{ number }}{% if layer != "full" %} ({{ layer_label }}){% endif %}</title>
+<meta name="oracle-layer" content="{{ layer }}">
 <style>
 {{ css }}
 </style>
@@ -30,6 +31,7 @@
     <span class="banner-doc">{{ title }}</span>
     <span class="banner-asof">As of {{ as_of }}</span>
     <span class="banner-version">Version {{ number }}{% if number < latest_number %} of {{ latest_number }}{% endif %}</span>
+    {% if layer != "full" %}<span class="banner-layer">{{ layer_label }}: the full document has the detail</span>{% endif %}
     <span class="banner-status">{{ status | replace("_", " ") | capitalize }}</span>
     <span class="banner-date">
       {%- if approved_at %}Approved {{ approved_at }}{% else %}Not approved · imported {{ imported_at }}{% endif -%}

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from oracle.docs.schemas import DocumentStatus, Verdict, VersionSummary
+from oracle.docs.schemas import DocumentStatus, Layer, Verdict, VersionSummary
 from oracle.jobs.schemas import SuggestionOut
 
 FeedbackStatus = Literal["open", "addressed", "declined", "superseded"]
@@ -50,6 +50,8 @@ class CommentOut(ORM):
     created_at: datetime
     replies: list["CommentOut"] = []
     feedback_item_id: uuid.UUID | None = None
+    # O1f: the commented section's layer in this version (brief or detail).
+    layer: Layer | None = None
 
 
 class SectionReviewIn(BaseModel):
@@ -66,6 +68,8 @@ class SectionReviewOut(ORM):
     reviewer_id: uuid.UUID | None = None
     created_at: datetime
     feedback_item_id: uuid.UUID | None = None  # None for "approved"
+    # O1f: the reviewed section's layer in this version (brief or detail).
+    layer: Layer | None = None
 
 
 class FeedbackItemOut(ORM):

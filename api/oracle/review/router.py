@@ -104,6 +104,7 @@ async def review_section(
     await db.commit()
     out = SectionReviewOut.model_validate(review)
     out.feedback_item_id = item.id if item else None
+    out.layer = await service.section_layer(db, review.version_id, review.section_key)
     return out
 
 

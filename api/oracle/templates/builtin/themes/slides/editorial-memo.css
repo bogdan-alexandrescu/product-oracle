@@ -1,0 +1,6 @@
+/* Editorial memo, slide variant: serif, generous leading, centred title slide. */
+.theme-editorial-memo .slide { line-height: 1.55; }
+.theme-editorial-memo .slide-title { font-weight: 600; letter-spacing: -0.01em; }
+.theme-editorial-memo .slide-title::after { content: ""; display: block; width: 64px; height: 2px; margin-top: 14px; background: var(--color-accent); }
+.theme-editorial-memo .slide--title .slide-inner { text-align: center; }
+.theme-editorial-memo .slide--title h1.slide-title::after { margin-left: auto; margin-right: auto; }

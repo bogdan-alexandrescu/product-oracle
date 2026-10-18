@@ -128,6 +128,7 @@ def _comment_out(
     comment: Comment,
     replies: Iterable[Comment] = (),
     feedback_item_id: uuid.UUID | None = None,
+    layer: str | None = None,
 ) -> CommentOut:
     return CommentOut(
         id=comment.id,
@@ -139,8 +140,15 @@ def _comment_out(
         parent_id=comment.parent_id,
         resolved_at=comment.resolved_at,
         created_at=comment.created_at,
-        replies=[_comment_out(r) for r in replies],
+        replies=[_comment_out(r, layer=layer) for r in replies],
         feedback_item_id=feedback_item_id,
+        layer=layer,
+    )
+
+
+async def section_layer(session: AsyncSession, version_id: uuid.UUID, key: str) -> str | None:
+    return await session.scalar(
+        select(Section.layer).where(Section.version_id == version_id, Section.section_key == key)
     )
 
 
@@ -210,7 +218,7 @@ async def create_comment(
 ) -> CommentOut:
     """Top-level inline comment; also opens a ``comment`` feedback item."""
     version = await get_version(session, doc, n)
-    await _get_section(session, version, section_key)
+    section = await _get_section(session, version, section_key)
     comment = Comment(
         version_id=version.id,
         section_key=section_key,
@@ -250,7 +258,7 @@ async def create_comment(
         item.id,
         {"kind": "comment", "comment_id": str(comment.id), "raised_on_version": version.number},
     )
-    return _comment_out(comment, feedback_item_id=item.id)
+    return _comment_out(comment, feedback_item_id=item.id, layer=section.layer)
 
 
 async def list_comments(session: AsyncSession, doc: str, n: int) -> list[CommentOut]:
@@ -276,8 +284,15 @@ async def list_comments(session: AsyncSession, doc: str, n: int) -> list[Comment
     for c in comments:
         if c.parent_id is not None:
             replies.setdefault(c.parent_id, []).append(c)
+    layers = dict(
+        (
+            await session.execute(
+                select(Section.section_key, Section.layer).where(Section.version_id == version.id)
+            )
+        ).all()
+    )
     return [
-        _comment_out(c, replies.get(c.id, []), items.get(c.id))
+        _comment_out(c, replies.get(c.id, []), items.get(c.id), layers.get(c.section_key))
         for c in comments
         if c.parent_id is None
     ]
@@ -307,7 +322,9 @@ async def reply_to_comment(
     await audit.record(
         session, principal, "comment.reply", "comment", reply.id, {"parent_id": str(parent.id)}
     )
-    return _comment_out(reply)
+    return _comment_out(
+        reply, layer=await section_layer(session, reply.version_id, reply.section_key)
+    )
 
 
 async def update_comment(
@@ -365,7 +382,8 @@ async def update_comment(
         )
     if changes:
         await audit.record(session, principal, "comment.update", "comment", comment.id, changes)
-    return _comment_out(comment, replies, item_id)
+    layer = await section_layer(session, comment.version_id, comment.section_key)
+    return _comment_out(comment, replies, item_id, layer)
 
 
 # --- Section verdicts --------------------------------------------------------------------

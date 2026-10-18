@@ -72,6 +72,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Preferences */
+        get: operations["get_preferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Preferences
+         * @description Any signed-in user, viewers included, keeps their own choices.
+         */
+        patch: operations["update_preferences"];
+        trace?: never;
+    };
     "/v1/documents": {
         parameters: {
             query?: never;
@@ -342,8 +363,34 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Export Version */
+        /**
+         * Export Version
+         * @description Full: html, pdf, md. Brief: html, pdf. Deck: pdf, pptx (html: the printable
+         *     slides).
+         */
         get: operations["export_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/deck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Deck
+         * @description The brief layer as slides in the document's theme (its slide variant), with
+         *     presenter notes and the detail each slide can expand. 422 when the version has no
+         *     brief sections.
+         */
+        get: operations["get_deck"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2967,6 +3014,8 @@ export interface components {
             replies: components["schemas"]["CommentOut"][];
             /** Feedback Item Id */
             feedback_item_id?: string | null;
+            /** Layer */
+            layer?: ("brief" | "detail") | null;
         };
         /** CommentPatch */
         CommentPatch: {
@@ -3155,6 +3204,42 @@ export interface components {
              * @enum {string}
              */
             effective_role: "viewer" | "commenter" | "approver" | "owner";
+        };
+        /**
+         * DeckOut
+         * @description The brief layer as slides, for Present mode: one slide per brief section after a
+         *     title slide, Sources and data points slides last when the version has sources.
+         */
+        DeckOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Number */
+            number: number;
+            /** Latest Number */
+            latest_number: number;
+            /** Status */
+            status: string;
+            /** As Of */
+            as_of: string;
+            /** Banner */
+            banner: string;
+            /** Theme */
+            theme: string | null;
+            /** Theme Name */
+            theme_name: string | null;
+            /** Theme Class */
+            theme_class: string;
+            /** Css */
+            css: string;
+            /** Slides */
+            slides: components["schemas"]["SlideOut"][];
         };
         /** DiffOut */
         DiffOut: {
@@ -3778,6 +3863,18 @@ export interface components {
             state: string;
             /** Code */
             code: string;
+        };
+        /**
+         * ExpandOut
+         * @description A detail section (and its sub-sections) a slide links to, for the Expand overlay.
+         */
+        ExpandOut: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Html */
+            html: string;
         };
         /** Explanation */
         Explanation: {
@@ -4683,6 +4780,24 @@ export interface components {
             /** Model Driven */
             model_driven?: boolean | null;
         };
+        /**
+         * Preferences
+         * @description What the signed-in user (or API token) chose. ``document_view``: the layer
+         *     documents open on; brief unless they switched to the full document.
+         */
+        Preferences: {
+            /**
+             * Document View
+             * @default brief
+             * @enum {string}
+             */
+            document_view: "brief" | "full";
+        };
+        /** PreferencesUpdate */
+        PreferencesUpdate: {
+            /** Document View */
+            document_view?: ("brief" | "full") | null;
+        };
         /** PriorityRanking */
         PriorityRanking: {
             /**
@@ -5379,6 +5494,10 @@ export interface components {
             from_heading?: string | null;
             /** To Heading */
             to_heading?: string | null;
+            /** From Layer */
+            from_layer?: ("brief" | "detail") | null;
+            /** To Layer */
+            to_layer?: ("brief" | "detail") | null;
             /** Words */
             words?: components["schemas"]["WordOp"][] | null;
         };
@@ -5409,6 +5528,14 @@ export interface components {
              */
             citation_keys: string[];
             verdict?: components["schemas"]["SectionVerdict"] | null;
+            /**
+             * Layer
+             * @default detail
+             * @enum {string}
+             */
+            layer: "brief" | "detail";
+            /** Notes */
+            notes?: string | null;
         };
         /** SectionReviewIn */
         SectionReviewIn: {
@@ -5450,6 +5577,8 @@ export interface components {
             created_at: string;
             /** Feedback Item Id */
             feedback_item_id?: string | null;
+            /** Layer */
+            layer?: ("brief" | "detail") | null;
         };
         /**
          * SectionVerdict
@@ -5566,6 +5695,29 @@ export interface components {
             is_default: boolean;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** SlideOut */
+        SlideOut: {
+            /** Index */
+            index: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "title" | "section" | "sources";
+            /** Heading */
+            heading: string;
+            /** Section Key */
+            section_key?: string | null;
+            /** Html */
+            html: string;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Expand
+             * @default []
+             */
+            expand: components["schemas"]["ExpandOut"][];
         };
         /** SnapshotCreate */
         SnapshotCreate: {
@@ -6061,6 +6213,16 @@ export interface components {
             valid: boolean;
             /** Problems */
             problems: components["schemas"]["Problem"][];
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["Problem"][];
+            /**
+             * Brief Sections
+             * @default []
+             */
+            brief_sections: string[];
             /** Section Keys */
             section_keys: string[];
             /** Suggested Theme */
@@ -6087,6 +6249,16 @@ export interface components {
             suggested_theme?: string | null;
             /** Suggest When */
             suggest_when?: string | null;
+            /**
+             * Brief Sections
+             * @default []
+             */
+            brief_sections: string[];
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["Problem"][];
         };
         /**
          * TextQuoteSelector
@@ -6489,6 +6661,12 @@ export interface components {
             /** Approved At */
             approved_at?: string | null;
             /**
+             * Brief Source
+             * @default none
+             * @enum {string}
+             */
+            brief_source: "draft" | "template" | "full_heading" | "none";
+            /**
              * Created At
              * Format: date-time
              */
@@ -6555,6 +6733,12 @@ export interface components {
             imported_by?: string | null;
             /** Approved At */
             approved_at?: string | null;
+            /**
+             * Brief Source
+             * @default none
+             * @enum {string}
+             */
+            brief_source: "draft" | "template" | "full_heading" | "none";
             /**
              * Created At
              * Format: date-time
@@ -6748,6 +6932,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+        };
+    };
+    get_preferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preferences"];
+                };
+            };
+        };
+    };
+    update_preferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferencesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preferences"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7320,7 +7557,8 @@ export interface operations {
     export_version: {
         parameters: {
             query?: {
-                format?: "html" | "pdf" | "md";
+                format?: "html" | "pdf" | "md" | "pptx";
+                layer?: "full" | "brief" | "deck";
             };
             header?: never;
             path: {
@@ -7340,6 +7578,37 @@ export interface operations {
                     "text/html": string;
                     "application/pdf": string;
                     "text/markdown": string;
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation": string;
+                };
+            };
+            /** @description Format not offered for the layer, or the version has no brief */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_deck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeckOut"];
                 };
             };
             /** @description Validation Error */

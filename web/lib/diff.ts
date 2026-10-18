@@ -74,6 +74,7 @@ interface DiffableSection {
   heading: string;
   body_text: string;
   content_hash: string;
+  layer?: "brief" | "detail" | null;
 }
 
 /**
@@ -97,6 +98,7 @@ export function sectionDiff(from: DiffableSection[], to: DiffableSection[]): Sch
         moved: false,
         to_ordinal: t.ordinal,
         to_heading: t.heading,
+        to_layer: t.layer ?? null,
         words: [{ op: "insert", text: t.body_text }],
       };
     }
@@ -109,6 +111,8 @@ export function sectionDiff(from: DiffableSection[], to: DiffableSection[]): Sch
       to_ordinal: t.ordinal,
       from_heading: f.heading,
       to_heading: t.heading,
+      from_layer: f.layer ?? null,
+      to_layer: t.layer ?? null,
       words: changed ? wordDiff(f.body_text, t.body_text) : null,
     };
   });
@@ -121,6 +125,7 @@ export function sectionDiff(from: DiffableSection[], to: DiffableSection[]): Sch
       moved: false,
       from_ordinal: f.ordinal,
       from_heading: f.heading,
+      from_layer: f.layer ?? null,
       words: [{ op: "delete", text: f.body_text }],
     };
     // Insert after the closest preceding section (from the source order) still in the output.

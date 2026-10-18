@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { DocToolbar } from "@/components/DocToolbar";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
-import { Badge, ErrorNote, Loading } from "@/components/ui";
+import { Badge, ErrorNote, LayerBadge, Loading } from "@/components/ui";
 import { api, unwrap, type SectionDiff } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
@@ -36,7 +36,21 @@ function Words({ words }: { words: NonNullable<SectionDiff["words"]> }) {
   );
 }
 
-function DiffSection({ d, doc, to }: { d: SectionDiff; doc: string; to: number }) {
+/** O1f: the section's layer, and its move between brief and detail. */
+function DiffLayer({ d }: { d: SectionDiff }) {
+  const from = d.from_layer ?? null;
+  const to = d.to_layer ?? null;
+  if (from && to && from !== to) {
+    return (
+      <span data-testid="layer-change" className="inline-flex items-center gap-1 text-xs text-neutral-500">
+        <LayerBadge layer={from} />→<LayerBadge layer={to} />
+      </span>
+    );
+  }
+  return <LayerBadge layer={to ?? from} />;
+}
+
+function DiffSection({ d, doc, to, showLayer }: { d: SectionDiff; doc: string; to: number; showLayer: boolean }) {
   const heading = d.to_heading ?? d.from_heading ?? d.section_key;
   const renamed = d.from_heading && d.to_heading && d.from_heading !== d.to_heading;
   return (
@@ -50,6 +64,7 @@ function DiffSection({ d, doc, to }: { d: SectionDiff; doc: string; to: number }
           {heading}
         </h2>
         <Badge tone={STATUS[d.status].tone}>{STATUS[d.status].label}</Badge>
+        {showLayer && <DiffLayer d={d} />}
         {d.moved && (
           <Badge tone="blue" title={`Position ${(d.from_ordinal ?? 0) + 1} → ${(d.to_ordinal ?? 0) + 1}`}>
             Moved
@@ -81,6 +96,7 @@ function DiffSection({ d, doc, to }: { d: SectionDiff; doc: string; to: number }
 
 export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: number }) {
   const [showUnchanged, setShowUnchanged] = useState(false);
+  const [briefOnly, setBriefOnly] = useState(false);
   const docQ = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
   const versions = docQ.data?.versions ?? [];
   const latest = versions.at(-1)?.number;
@@ -102,7 +118,11 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
     moved: sections.filter((s) => s.moved).length,
     unchanged: sections.filter((s) => s.status === "unchanged" && !s.moved).length,
   };
-  const shown = sections.filter((s) => showUnchanged || s.status !== "unchanged" || s.moved);
+  // Diffs of versions with a brief layer label each section and can show the brief only.
+  const showLayer = sections.some((s) => s.from_layer === "brief" || s.to_layer === "brief");
+  const shown = sections
+    .filter((s) => showUnchanged || s.status !== "unchanged" || s.moved)
+    .filter((s) => !briefOnly || !showLayer || s.from_layer === "brief" || s.to_layer === "brief");
   const href = (f: number, t: number) => `/documents/${doc}/diff?from=${f}&to=${t}`;
 
   return (
@@ -140,14 +160,20 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
               <span>{counts.removed} removed</span>
               <span>{counts.moved} moved</span>
               <span>{counts.unchanged} unchanged</span>
-              <label className="ml-auto flex items-center gap-2">
+              {showLayer && (
+                <label className="ml-auto flex items-center gap-2">
+                  <input type="checkbox" checked={briefOnly} onChange={(e) => setBriefOnly(e.target.checked)} />
+                  Brief sections only
+                </label>
+              )}
+              <label className={`${showLayer ? "" : "ml-auto "}flex items-center gap-2`}>
                 <input type="checkbox" checked={showUnchanged} onChange={(e) => setShowUnchanged(e.target.checked)} />
                 Show unchanged sections
               </label>
             </div>
             <ol className="flex flex-col gap-3">
               {shown.map((d) => (
-                <DiffSection key={`${d.status}-${d.section_key}`} d={d} doc={doc} to={toN!} />
+                <DiffSection key={`${d.status}-${d.section_key}`} d={d} doc={doc} to={toN!} showLayer={showLayer} />
               ))}
             </ol>
             {shown.length === 0 && <p className="text-sm text-neutral-600">No differences between these versions.</p>}

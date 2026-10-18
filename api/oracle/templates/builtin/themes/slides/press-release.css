@@ -1,0 +1,4 @@
+/* Press release, slide variant: newspaper headline type with a heavy rule. */
+.theme-press-release .slide-title { font-size: 38px; border-bottom: 3px double var(--color-heading); padding-bottom: 10px; }
+.theme-press-release .slide-kicker { color: var(--color-accent); }
+.theme-press-release .slide--title h1.slide-title { font-size: 52px; }

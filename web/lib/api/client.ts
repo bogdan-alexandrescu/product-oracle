@@ -32,6 +32,11 @@ export type DiffOut = Schemas["DiffOut"];
 export type SectionDiff = Schemas["SectionDiff"];
 export type Member = Schemas["MemberOut"];
 
+// Brief, full and present (O1f).
+export type DeckOut = Schemas["DeckOut"];
+export type SlideOut = Schemas["SlideOut"];
+export type ExpandOut = Schemas["ExpandOut"];
+
 // Built-in model jobs (/v1/.../llm-jobs, suggestions, reports).
 export type LlmJob = Schemas["LlmJobOut"];
 export type LlmJobKind = LlmJob["kind"];

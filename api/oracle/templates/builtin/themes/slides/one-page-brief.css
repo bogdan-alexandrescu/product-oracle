@@ -1,0 +1,6 @@
+/* One-page brief, slide variant: compact type, a left accent bar, dense tables. */
+.theme-one-page-brief .slide { font-size: 18px; padding-left: 72px; }
+.theme-one-page-brief .slide::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 12px; background: var(--color-accent); }
+.theme-one-page-brief .slide-title { font-size: 28px; text-transform: none; }
+.theme-one-page-brief .slide-body table { font-size: 15px; }
+.theme-one-page-brief .slide-footer { left: 72px; }

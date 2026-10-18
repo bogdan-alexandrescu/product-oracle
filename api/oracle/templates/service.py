@@ -5,6 +5,7 @@ documents keep pointing at the version they were started from. Delete archives, 
 document whose template (or theme) is archived still resolves and still exports.
 """
 
+import json
 import re
 import unicodedata
 import uuid
@@ -135,6 +136,8 @@ def _version_out(v: TemplateVersion) -> TemplateVersionOut:
         created_at=v.created_at,
         suggested_theme=meta.suggested_theme,
         suggest_when=meta.suggest_when,
+        brief_sections=meta.brief_sections,
+        warnings=_problems(meta.warnings),
     )
 
 
@@ -206,6 +209,8 @@ async def validate_template(
     return TemplateValidateOut(
         valid=not problems,
         problems=_problems(problems),
+        warnings=_problems(check.warnings),
+        brief_sections=check.brief_sections,
         section_keys=check.section_keys,
         suggested_theme=check.suggested_theme,
         suggest_when=check.suggest_when,
@@ -768,9 +773,11 @@ def draft_skeleton(
     theme: str | None,
 ) -> str:
     """The template body as a first draft: front matter rewritten for this document,
-    template metadata dropped, the level-1 heading set to the title."""
+    template metadata dropped except the brief markers (O1f), the level-1 heading set
+    to the title."""
     yaml_text, rest, _ = split_front_matter(body.replace("\r\n", "\n"))
-    del yaml_text  # the template's own front matter is replaced, not merged
+    # The template's own front matter is replaced, not merged; its brief carries over.
+    brief = version_meta(body).marked_brief
     lines = [
         "---",
         f"document: {slug}",
@@ -781,6 +788,8 @@ def draft_skeleton(
     ]
     if theme:
         lines.append(f"theme: {theme}")
+    if brief:
+        lines.append("brief: [" + ", ".join(json.dumps(k) for k in brief) + "]")
     lines.append("---")
     safe_title = title.replace("{", "(").replace("}", ")").replace("\n", " ")
     rest = _TITLE_LINE.sub(lambda m: f"{m.group(1)}{safe_title}{m.group(3)}", rest, count=1)

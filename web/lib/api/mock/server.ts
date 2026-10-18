@@ -8,6 +8,7 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
 import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, type DocumentSeed, type VersionSeed } from "./fixtures";
@@ -47,6 +48,8 @@ export interface Db {
   runs?: RunsDb;
   /** Built-in model jobs and suggestions (./llm-jobs.ts); absent in older saved data. */
   llm?: LlmDb;
+  /** Per-user preferences (O1f document_view), by member email. */
+  preferences?: Record<string, Schemas["Preferences"]>;
 }
 
 const STORAGE_KEY = "po-mock-db-v2";
@@ -81,6 +84,7 @@ const now = () => new Date().toISOString();
 
 function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
   const id = uuid();
+  const layered = resolveBrief(seed.sections.map((s) => ({ section_key: s.key, level: s.level })), seed.brief);
   const sections = seed.sections.map((s, ordinal) => ({
     id: uuid(),
     section_key: s.key,
@@ -91,9 +95,12 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     body_text: plainText(s.body),
     content_hash: hash(s.heading + "\n" + s.body),
     citation_keys: [...new Set([...s.body.matchAll(/\[c:([\w.-]+)\]/g)].map((m) => m[1]))],
+    layer: layered.brief.has(s.key) ? ("brief" as const) : ("detail" as const),
+    notes: layered.brief.has(s.key) ? presenterNotes(s.body) : null,
   }));
   return {
     id,
+    brief_source: layered.brief_source,
     document_id: doc.id,
     number: seed.number,
     content_hash: hash(sections.map((s) => s.content_hash).join("")),
@@ -393,8 +400,13 @@ function summary(v: VersionRow): Schemas["VersionSummary"] {
     warnings: v.warnings,
     imported_by: v.imported_by,
     approved_at: v.approved_at,
+    brief_source: v.brief_source ?? "none",
     created_at: v.created_at,
   };
+}
+
+function sectionLayer(db: Db, versionId: string, key: string): Schemas["SectionOut"]["layer"] | null {
+  return db.versions.find((v) => v.id === versionId)?.sections.find((s) => s.section_key === key)?.layer ?? null;
 }
 
 function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
@@ -425,6 +437,7 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
 function commentOut(db: Db, c: CommentRow): Schemas["CommentOut"] {
   return {
     ...c,
+    layer: sectionLayer(db, c.version_id, c.section_key),
     replies: db.comments
       .filter((r) => r.parent_id === c.id)
       .sort((a, b) => a.created_at.localeCompare(b.created_at))
@@ -718,6 +731,16 @@ async function route(db: Db, req: Request): Promise<Response> {
   const member = db.members.find((x) => x.email === db.session);
   if (!member) return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
+  if (p[1] === "me" && p[2] === "preferences") {
+    db.preferences ??= {};
+    const mine = (db.preferences[me.email] ??= { document_view: "brief" });
+    if (m === "PATCH") {
+      const patch = await body<Schemas["PreferencesUpdate"]>();
+      if (patch.document_view && !["brief", "full"].includes(patch.document_view)) return json(422, { detail: "document_view" });
+      if (patch.document_view) mine.document_view = patch.document_view;
+    }
+    return json(200, mine);
+  }
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
   // The baseline mock checks roles itself (commenters propose, approvers decide).
@@ -860,7 +883,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const r = addReview(db, v, p[6], await body<Schemas["SectionReviewIn"]>(), { reviewer_id: me.id });
     touch(db, doc.id);
     if (r.feedback_item_id) onFeedback(llm, doc.id, v.number);
-    return json(200, r);
+    return json(200, { ...r, layer: sectionLayer(db, v.id, r.section_key) });
   }
   if (sub === "feedback-package") {
     return json(200, {
@@ -890,8 +913,45 @@ async function route(db: Db, req: Request): Promise<Response> {
     doc.updated_at = v.approved_at;
     return json(200, { document_id: doc.id, document_status: doc.status, version: summary(v) });
   }
+  if (sub === "deck" || (sub === "export" && (q.get("layer") ?? "full") !== "full")) {
+    if (!v.sections.some((s) => s.layer === "brief")) {
+      return json(422, { detail: `version ${v.number} of '${doc.slug}' has no brief sections; export the full document instead` });
+    }
+  }
+  if (sub === "deck") {
+    const versions = docVersions(db, doc);
+    return json(
+      200,
+      deckOut({
+        document_id: doc.id,
+        slug: doc.slug,
+        title: doc.title,
+        number: v.number,
+        latest: versions[versions.length - 1].number,
+        status: v.approved_at ? "approved" : doc.status,
+        created_at: v.created_at,
+        sections: v.sections,
+        citations: v.citations,
+      }),
+    );
+  }
   if (sub === "export") {
     const format = q.get("format") ?? "html";
+    const layer = q.get("layer") ?? "full";
+    if (!LAYER_FORMATS[layer]?.includes(format)) {
+      return json(422, { detail: `the ${layer} layer exports as ${LAYER_FORMATS[layer]?.join(", ")}, not ${format}` });
+    }
+    if (layer === "deck") {
+      if (format === "pptx") return new Response(`PK mock deck: ${banner(doc, v)}`, { headers: { "content-type": PPTX_TYPE } });
+      return new Response(exportPdf(doc, { ...v, sections: v.sections.filter((s) => s.layer === "brief") }), {
+        headers: { "content-type": "application/pdf" },
+      });
+    }
+    if (layer === "brief") {
+      const brief = { ...v, sections: v.sections.filter((s) => s.layer === "brief") };
+      if (format === "pdf") return new Response(exportPdf(doc, brief), { headers: { "content-type": "application/pdf" } });
+      return new Response(exportHtml(doc, brief), { headers: { "content-type": "text/html" } });
+    }
     if (format === "md") {
       return new Response(`<!-- ${banner(doc, v)} -->\n${versionMarkdown(doc, v)}`, {
         headers: { "content-type": "text/markdown" },

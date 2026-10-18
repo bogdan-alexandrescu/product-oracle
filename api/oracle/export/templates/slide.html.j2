@@ -1,0 +1,26 @@
+{# One slide (oracle.export.deck): the deck PDF page and Present mode's slide. #}
+{% macro slide(s, deck, total) %}
+<section class="slide slide--{{ s.kind }}{% if s.dense %} slide-dense{% endif %}" id="slide-{{ s.index }}" data-slide="{{ s.index }}"{% if s.section_key %} data-section-key="{{ s.section_key }}"{% endif %} aria-label="Slide {{ s.index }} of {{ total }}: {{ s.heading }}">
+  <div class="slide-inner">
+  {% if s.kind == "title" %}
+    <p class="slide-kicker">Brief</p>
+    <h1 class="slide-title">{{ deck.title }}</h1>
+    <p class="slide-subtitle">Version {{ deck.number }}{% if deck.number < deck.latest_number %} of {{ deck.latest_number }}{% endif %} · {{ deck.status | replace("_", " ") | capitalize }} · as of {{ deck.as_of }}</p>
+  {% elif s.kind == "sources" %}
+    <h2 class="slide-title">{{ s.heading }}</h2>
+    <ol class="slide-sources">
+    {% for number, title, kind, retrieved in s.sources %}
+      <li value="{{ number }}"><span class="src-title">{{ title }}</span> <span class="src-kind">{{ kind }}</span>{% if retrieved %} <span class="src-retrieved">retrieved {{ retrieved }}</span>{% endif %}</li>
+    {% endfor %}
+    </ol>
+  {% else %}
+    <h2 class="slide-title" data-n="{{ '%02d' % (s.index - 1) }}">{{ s.heading }}</h2>
+    <div class="slide-body">{{ s.body_html }}</div>
+  {% endif %}
+  </div>
+  <footer class="slide-footer" role="note" aria-label="Version">
+    <span class="slide-banner">{{ deck.banner }}</span>
+    <span class="slide-number">{{ s.index }} / {{ total }}</span>
+  </footer>
+</section>
+{% endmacro %}

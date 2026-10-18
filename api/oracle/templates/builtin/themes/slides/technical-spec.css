@@ -1,0 +1,7 @@
+/* Technical spec, slide variant: numbered slide titles, monospace accents. */
+.theme-technical-spec .slide--section .slide-title::before {
+  content: attr(data-n); font-family: var(--font-mono); color: var(--color-accent);
+  font-size: 0.6em; margin-right: 14px; vertical-align: middle;
+}
+.theme-technical-spec .slide-body th { font-family: var(--font-mono); text-transform: none; }
+.theme-technical-spec .slide-footer { font-family: var(--font-mono); }

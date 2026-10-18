@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="generator" content="Product Oracle">
+<meta name="oracle-layer" content="deck">
+{% if deck.theme_key %}<meta name="oracle-theme" content="{{ deck.theme_key }}">{% endif %}
+<title>{{ deck.title }} — v{{ deck.number }} (Deck)</title>
+<style>
+@page { size: 254mm 142.875mm; margin: 0; }
+html, body { margin: 0; padding: 0; }
+{{ deck.css }}
+</style>
+</head>
+<body class="deck deck-print {{ theme_class }}">
+{% for s in deck.slides %}{{ s.html }}{% endfor %}
+</body>
+</html>

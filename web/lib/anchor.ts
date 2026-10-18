@@ -5,13 +5,19 @@ export type TextQuoteSelector = Schemas["TextQuoteSelector"];
 /** How many characters of context are stored on each side of the quote. */
 const CONTEXT = 32;
 
-/** Subtrees marked with this attribute (citation chips) are not part of the anchorable text. */
+/**
+ * Subtrees marked with this attribute (citation chips, Expand controls, detail shown in
+ * place inside a brief section) are not part of the anchorable text of the section
+ * body that contains them; a section body nested inside one keeps its own text.
+ */
 export const IGNORE_ATTR = "data-anchor-ignore";
 
 function countedTextNodes(container: Node): Text[] {
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) =>
-      n.parentElement?.closest(`[${IGNORE_ATTR}]`) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+    acceptNode: (n) => {
+      const ignored = n.parentElement?.closest(`[${IGNORE_ATTR}]`);
+      return ignored && container.contains(ignored) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    },
   });
   const out: Text[] = [];
   while (walker.nextNode()) out.push(walker.currentNode as Text);

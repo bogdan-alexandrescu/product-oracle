@@ -11,19 +11,34 @@ import { RoleNote } from "@/components/RoleNote";
 import { FeedbackPanel, ResolutionPanel } from "@/components/FeedbackPanel";
 import { JobsPanel } from "@/components/JobsPanel";
 import { ReportsPanel } from "@/components/ReportsPanel";
-import type { Highlight } from "@/components/MarkdownBody";
+import type { ExpandCtx, Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
-import { ErrorNote, Kbd, Loading } from "@/components/ui";
+import { Button, ErrorNote, Kbd, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
-import { api, unwrap, type CitationOut, type Verdict } from "@/lib/api/client";
+import { api, unwrap, type CitationOut, type SectionOut, type Verdict } from "@/lib/api/client";
 import { formatDate, formatDateTime, SOURCE_LABEL } from "@/lib/format";
 import { blocksText, parseBlocks } from "@/lib/markdown";
 import { hasRole, useMe } from "@/lib/me";
+import { useDocumentView, type DocumentView } from "@/lib/preferences";
 import { useQuery } from "@/lib/use-query";
 
 type Selection = { sectionKey: string; anchor: TextQuoteSelector; rect: PageRect };
+
+const SECTION_LINK = /\]\(#([A-Za-z0-9][\w.:-]*)\)/g;
+
+/** The section and the deeper sections that follow it. */
+function subtree(sections: SectionOut[], key: string): SectionOut[] {
+  const i = sections.findIndex((s) => s.section_key === key);
+  if (i < 0) return [];
+  const out = [sections[i]];
+  for (const s of sections.slice(i + 1)) {
+    if (s.level <= sections[i].level) break;
+    out.push(s);
+  }
+  return out;
+}
 type Tab = "comments" | "feedback" | "resolutions" | "reports" | "jobs";
 
 function isTyping(target: EventTarget | null) {
@@ -72,6 +87,13 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("comments");
   const [refreshKey, setRefreshKey] = useState(0);
+  // O1f: the brief or the whole version; the choice is remembered per user. A comment
+  // on a section the brief does not show switches this page to the full document only.
+  const [savedView, saveView] = useDocumentView();
+  const [viewOverride, setViewOverride] = useState<DocumentView | null>(null);
+  // Open detail section -> the brief section showing it.
+  const [opened, setOpened] = useState<Map<string, string>>(() => new Map());
+  const [scrollTarget, setScrollTarget] = useState<{ id: string; key: string } | null>(null);
   const focusIdx = useRef(-1);
   // Queries are scoped to this view: Next keeps recently visited routes mounted (hidden).
   const rootRef = useRef<HTMLDivElement>(null);
@@ -82,6 +104,48 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const readOnly = !!version?.approved_at;
   const latest = versions.at(-1)?.number;
   const refine = useMemo(() => ({ doc, n }), [doc, n]);
+
+  const sections = useMemo(() => version?.sections ?? [], [version]);
+  const briefSections = useMemo(() => sections.filter((s) => s.layer === "brief"), [sections]);
+  const hasBrief = briefSections.length > 0;
+  const view: DocumentView = hasBrief ? (viewOverride ?? savedView) : "full";
+  // Detail sections a brief section links to: each feature row and milestone expands.
+  const expandable = useMemo(() => {
+    const detail = new Set(sections.filter((s) => s.layer !== "brief").map((s) => s.section_key));
+    const keys = new Set<string>();
+    for (const s of briefSections) for (const m of s.body_md.matchAll(SECTION_LINK)) if (detail.has(m[1])) keys.add(m[1]);
+    return keys;
+  }, [sections, briefSections]);
+
+  const switchView = useCallback(
+    (v: DocumentView) => {
+      setViewOverride(null);
+      saveView(v);
+    },
+    [saveView],
+  );
+
+  const toggleOpen = useCallback((key: string, origin: string) => {
+    setOpened((prev) => {
+      const next = new Map(prev);
+      if (next.get(key) === origin) next.delete(key);
+      else next.set(key, origin);
+      return next;
+    });
+  }, []);
+
+  // Scroll to a comment once the section it is on has rendered (after Expand or a switch).
+  useEffect(() => {
+    if (!scrollTarget) return;
+    const root = rootRef.current;
+    const mark = root?.querySelector(`[data-comment-ids~="${scrollTarget.id}"]`);
+    const el = mark ?? root?.querySelector(`#s-${CSS.escape(scrollTarget.key)}`);
+    if (el) {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      setScrollTarget(null);
+    }
+  }, [scrollTarget, view, opened, version]);
+
 
   const parsed = useMemo(() => {
     const m = new Map<string, { blocks: ReturnType<typeof parseBlocks>; text: string }>();
@@ -155,12 +219,27 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     window.getSelection()?.removeAllRanges();
   }, []);
 
-  const scrollToComment = useCallback((c: PlacedComment) => {
-    setActiveId(c.id);
-    const root = rootRef.current;
-    const mark = root?.querySelector(`[data-comment-ids~="${c.id}"]`);
-    (mark ?? root?.querySelector(`#s-${CSS.escape(c.section_key)}`))?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, []);
+  const scrollToComment = useCallback(
+    (c: PlacedComment) => {
+      setActiveId(c.id);
+      const root = rootRef.current;
+      const mark = root?.querySelector(`[data-comment-ids~="${c.id}"]`);
+      const el = mark ?? root?.querySelector(`#s-${CSS.escape(c.section_key)}`);
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        return;
+      }
+      // Not shown in the brief: expand the feature or milestone that holds it, else
+      // show the full document.
+      const all = version?.sections ?? [];
+      const holder = [...expandable].find((k) => subtree(all, k).some((s) => s.section_key === c.section_key));
+      const origin = holder && briefSections.find((s) => s.body_md.includes(`](#${holder})`));
+      if (holder && origin) setOpened((prev) => new Map(prev).set(holder, origin.section_key));
+      else setViewOverride("full");
+      setScrollTarget({ id: c.id, key: c.section_key });
+    },
+    [version, expandable, briefSections],
+  );
 
   const onHighlightClick = useCallback((id: string) => {
     setActiveId(id);
@@ -222,6 +301,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
         focusIdx.current = next;
         sections[next]?.focus({ preventScroll: true });
         sections[next]?.scrollIntoView({ block: "start", behavior: "smooth" });
+      } else if (e.key === "v" && hasBrief) {
+        switchView(view === "brief" ? "full" : "brief");
       } else if (e.key === "c" && selection) {
         e.preventDefault();
         openComposer();
@@ -236,13 +317,36 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selection, openComposer, versions, n, doc, router]);
+  }, [selection, openComposer, versions, n, doc, router, hasBrief, view, switchView]);
 
   // Honour #s-<key> links once the version has rendered.
   useEffect(() => {
     if (!version || !window.location.hash.startsWith("#s-")) return;
     rootRef.current?.querySelector(`#${CSS.escape(window.location.hash.slice(1))}`)?.scrollIntoView({ block: "start" });
   }, [version]);
+
+  const sectionProps = (s: SectionOut) => ({
+    section: s,
+    blocks: parsed.get(s.section_key)!.blocks,
+    citations,
+    highlights: highlights.get(s.section_key) ?? NO_HIGHLIGHTS,
+    activeCommentId: activeId,
+    readOnly: readOnly || !canDecide,
+    changedLock: changedLocks.has(s.section_key),
+    evidenceTargets: canComment ? graphQ.data?.entities : undefined,
+    refine: canDecide && !readOnly && n === latest ? refine : undefined,
+    onHighlightClick,
+    onVerdict,
+    showLayer: hasBrief,
+  });
+  const expandFor = (origin: string): ExpandCtx => ({
+    keys: expandable,
+    open: opened,
+    origin,
+    toggle: toggleOpen,
+    render: (key) =>
+      subtree(sections, key).map((d) => <SectionView key={d.id} {...sectionProps(d)} nested />),
+  });
 
   const changedLocks = new Set(
     version?.warnings.filter((w) => w.code === "locked_section_changed").flatMap((w) => w.section_keys) ?? [],
@@ -264,7 +368,37 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             Compare with v{n - 1}
           </Link>
         )}
-        <ExportButtons doc={doc} n={n} />
+        {hasBrief && (
+          <>
+            <div role="group" aria-label="Document view" className="flex items-center">
+              <Button
+                size="sm"
+                className="rounded-r-none"
+                aria-pressed={view === "brief"}
+                variant={view === "brief" ? "primary" : undefined}
+                onClick={() => switchView("brief")}
+              >
+                Brief
+              </Button>
+              <Button
+                size="sm"
+                className="-ml-px rounded-l-none"
+                aria-pressed={view === "full"}
+                variant={view === "full" ? "primary" : undefined}
+                onClick={() => switchView("full")}
+              >
+                Full document
+              </Button>
+            </div>
+            <Link
+              href={`/documents/${doc}/v/${n}/present`}
+              className="rounded-md border border-neutral-300 px-2.5 py-1 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+            >
+              Present
+            </Link>
+          </>
+        )}
+        <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
         {version && (version.approved_at || canDecide) && (
           <ApproveButton
             doc={doc}
@@ -326,21 +460,40 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
               ) : (
                 <RoleNote role={role} />
               )}
-              <div className="divide-y divide-neutral-100">
-                {version.sections.map((s) => (
+              {hasBrief && (
+                <p
+                  data-testid="view-note"
+                  className="mb-2 flex flex-wrap items-center gap-x-2 rounded-md border border-sky-100 bg-sky-50/60 px-3 py-2 text-sm text-neutral-700"
+                >
+                  {view === "brief" ? (
+                    <>
+                      <span>
+                        <span className="font-medium text-neutral-900">Brief</span>: {briefSections.length} of{" "}
+                        {sections.length} sections. Expand a feature or milestone to see its detail.
+                      </span>
+                      <button type="button" className="font-medium underline underline-offset-2" onClick={() => switchView("full")}>
+                        Show full document
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        <span className="font-medium text-neutral-900">Full document</span>: all {sections.length} sections; the{" "}
+                        {briefSections.length} marked Brief make up the brief.
+                      </span>
+                      <button type="button" className="font-medium underline underline-offset-2" onClick={() => switchView("brief")}>
+                        Show brief
+                      </button>
+                    </>
+                  )}
+                </p>
+              )}
+              <div className="divide-y divide-neutral-100" data-testid="document-sections" data-view={view}>
+                {(view === "brief" ? briefSections : sections).map((s) => (
                   <SectionView
                     key={s.id}
-                    section={s}
-                    blocks={parsed.get(s.section_key)!.blocks}
-                    citations={citations}
-                    highlights={highlights.get(s.section_key) ?? NO_HIGHLIGHTS}
-                    activeCommentId={activeId}
-                    readOnly={readOnly || !canDecide}
-                    changedLock={changedLocks.has(s.section_key)}
-                    evidenceTargets={canComment ? graphQ.data?.entities : undefined}
-                    refine={canDecide && !readOnly && n === latest ? refine : undefined}
-                    onHighlightClick={onHighlightClick}
-                    onVerdict={onVerdict}
+                    {...sectionProps(s)}
+                    expand={view === "brief" ? expandFor(s.section_key) : undefined}
                   />
                 ))}
               </div>
@@ -406,6 +559,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                 <Loading />
               ) : (
                 <CommentsPanel
+                  showLayer={hasBrief}
                   comments={placed}
                   activeId={activeId}
                   readOnly={readOnly}
@@ -436,6 +590,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             <span>
               <Kbd>[</Kbd>/<Kbd>]</Kbd> versions
             </span>
+            {hasBrief && (
+              <span>
+                <Kbd>v</Kbd> brief / full
+              </span>
+            )}
           </p>
         </aside>
       </div>

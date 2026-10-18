@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict
 DocumentStatus = Literal["draft", "in_review", "approved"]
 CitationSource = Literal["slack", "notion", "gdocs", "github", "fireflies", "upload", "web"]
 Verdict = Literal["approved", "changes_requested", "rejected"]
+# O1f: brief sections make up the brief layer; the full layer is every section.
+Layer = Literal["brief", "detail"]
+BriefSource = Literal["draft", "template", "full_heading", "none"]
 
 
 class ORM(BaseModel):
@@ -57,6 +60,9 @@ class VersionSummary(ORM):
     warnings: list[VersionWarning] = []
     imported_by: uuid.UUID | None = None
     approved_at: datetime | None = None
+    # Where the brief layer came from; "none": no brief, the version opens on the full
+    # document.
+    brief_source: BriefSource = "none"
     created_at: datetime
 
 
@@ -94,6 +100,10 @@ class SectionOut(ORM):
     content_hash: str
     citation_keys: list[str] = []
     verdict: SectionVerdict | None = None
+    layer: Layer = "detail"
+    # Presenter notes: the section's fenced ``notes`` block, else its guidance text
+    # (from the draft, else from its template version).
+    notes: str | None = None
 
 
 class VersionOut(VersionSummary):
@@ -117,6 +127,9 @@ class SectionDiff(BaseModel):
     to_ordinal: int | None = None
     from_heading: str | None = None
     to_heading: str | None = None
+    # The section's layer in each version (None where it does not exist).
+    from_layer: Layer | None = None
+    to_layer: Layer | None = None
     # Word-level ops over body_text (and heading); only for status == "changed".
     words: list[WordOp] | None = None
 

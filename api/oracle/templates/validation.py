@@ -5,6 +5,11 @@ level 1-3 headings each end with ``{#section-id}``. O1c: the body carries no
 citations; every ``[c:...]`` marker belongs in the final ``Sources and data points``
 section (id ``sources``), which must be present and last.
 
+O1f: the front matter's ``brief: [section ids]`` marks the brief layer (everything
+else is detail); without it, the sections before a level-1 ``Full version {#full}``
+heading are the brief. A template with no brief sections is valid but gets a
+``no_brief_sections`` warning: its documents open on the full document.
+
 A theme's colour tokens must reach WCAG AA contrast for body text (4.5:1) against
 the background, and its CSS may not load anything from outside the export.
 """
@@ -16,12 +21,13 @@ from typing import Any
 import yaml
 from markdown_it import MarkdownIt
 
+from oracle.docs import layers
 from oracle.docs.parser import CITATION_RE, SECTION_ID_RE, split_front_matter
 
 SOURCES_SECTION_ID = "sources"
 SOURCES_HEADING = "Sources and data points"
 # Front matter keys a template may carry for itself; they are dropped from drafts.
-TEMPLATE_META_KEYS = ("theme", "suggest_when")
+TEMPLATE_META_KEYS = ("theme", "suggest_when", "brief")
 
 _md = MarkdownIt("commonmark", {"html": False}).enable("table")
 _LAYOUT_FENCE = re.compile(r"^```ya?ml[ \t]*\n(.*?)^```", re.S | re.M)
@@ -46,6 +52,8 @@ class Heading:
 @dataclass
 class TemplateCheck:
     problems: list[Problem] = field(default_factory=list)
+    # Findings that do not block saving (no_brief_sections).
+    warnings: list[Problem] = field(default_factory=list)
     front_matter: dict[str, Any] = field(default_factory=dict)
     headings: list[Heading] = field(default_factory=list)
 
@@ -66,6 +74,18 @@ class TemplateCheck:
     def suggest_when(self) -> str | None:
         value = self.front_matter.get("suggest_when")
         return value if isinstance(value, str) and value else None
+
+    @property
+    def marked_brief(self) -> list[str] | None:
+        """The front matter's ``brief`` list, as written (None when absent)."""
+        return layers.marked_brief(self.front_matter)
+
+    @property
+    def brief_sections(self) -> list[str]:
+        """The brief layer: the marked sections, else those before ``{#full}``."""
+        refs = [layers.SectionRef(h.key, h.level) for h in self.headings if h.key]
+        keys, _ = layers.resolve_brief(refs, draft_brief=None, template_brief=self.marked_brief)
+        return keys
 
     def default_required_sections(self) -> list[str]:
         """Level 1-2 sections: the skeleton's spine."""
@@ -198,6 +218,21 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
                     current,
                 )
             )
+
+    # O1f: brief markers name real sections; a template without a brief is reported.
+    for code, message, key in layers.brief_problems(
+        result.front_matter.get("brief"), result.section_keys
+    ):
+        problems.append(Problem(code, message, None, key))
+    if headings and not result.brief_sections:
+        result.warnings.append(
+            Problem(
+                "no_brief_sections",
+                "the template marks no brief sections: add 'brief: [section ids]' to its "
+                f"front matter (or a '# {layers.FULL_HEADING} {{#{layers.FULL_SECTION_ID}}}' "
+                "heading after the brief); documents from it open on the full document",
+            )
+        )
 
     # Roadmap layout blocks are read by the renderer: they must parse.
     for m in _LAYOUT_FENCE.finditer(rest):

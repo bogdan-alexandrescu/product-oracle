@@ -128,3 +128,7 @@ sup.cite a { padding: 0 0.05em; }
   sup.cite a { color: var(--accent); }
   .fn-back { display: none; }
 }
+
+/* O1f: a brief export says so; links to detail it leaves out keep their text. */
+.version-banner .banner-layer { font-weight: 600; }
+.detail-ref { color: inherit; }

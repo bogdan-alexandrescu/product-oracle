@@ -6,6 +6,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { plainText } from "@/lib/markdown";
+import { presenterNotes, resolveBrief } from "./brief";
 
 import type { Db, DocumentRow, VersionRow } from "./server";
 
@@ -578,6 +579,7 @@ function templateBody(t: TemplateSeed): string {
     `template: ${t.key}`,
     `theme: ${t.theme}`,
     `suggest_when: ${JSON.stringify(t.suggest_when)}`,
+    `brief: [${t.sections.slice(0, 2).map(([id]) => id).join(", ")}]`,
     "---",
     "",
     `# ${t.kind === "prd" ? "<Feature> PRD" : "<Product> roadmap"} {#title}`,
@@ -714,7 +716,23 @@ export function checkTemplate(body: string, required?: string[] | null, themeKey
   for (const k of required ?? []) {
     if (!keys.includes(k)) problems.push({ code: "unknown_required_section", message: `required section '${k}' is not in the body`, line: null });
   }
+  // O1f: front matter `brief: [ids]`, else the sections before "# Full version {#full}".
+  const marked = fm?.brief ? fm.brief.replace(/^\[|\]$/g, "").split(",").map((k) => k.trim().replace(/^["']|["']$/g, "")).filter(Boolean) : null;
+  for (const k of marked ?? []) {
+    if (!keys.includes(k)) problems.push({ code: "unknown_brief_section", message: `brief section '${k}' is not a section id`, line: null, section_key: k });
+  }
+  const brief = [
+    ...resolveBrief(
+      hs.filter((h) => h.key).map((h) => ({ section_key: h.key!, level: h.level })),
+      marked ?? undefined,
+    ).brief,
+  ];
+  const warnings: Problem[] = hs.length && !brief.length
+    ? [{ code: "no_brief_sections", message: "the template marks no brief sections: add 'brief: [section ids]' to its front matter (or a '# Full version {#full}' heading after the brief); documents from it open on the full document", line: null }]
+    : [];
   return {
+    brief,
+    warnings,
     valid: problems.length === 0,
     problems,
     section_keys: keys,
@@ -775,6 +793,8 @@ function newVersion(n: number, body: string, required: string[] | null | undefin
     created_at: now(),
     suggested_theme: check.suggested_theme,
     suggest_when: check.suggest_when,
+    brief_sections: check.brief,
+    warnings: check.warnings,
   } satisfies Schemas["TemplateVersionOut"];
 }
 
@@ -1242,6 +1262,7 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     updated_at: created,
   };
   const check = checkTemplate(tv.body);
+  const briefKeys = new Set(check.brief);
   const lines = check.rest.split("\n");
   const offset = check.offset;
   // One section per heading; its body is the text up to the next heading, with the
@@ -1263,6 +1284,8 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
         body_text: plainText(md),
         content_hash: hash(heading + "\n" + md),
         citation_keys: [],
+        layer: briefKeys.has(key) ? ("brief" as const) : ("detail" as const),
+        notes: briefKeys.has(key) ? presenterNotes(raw) : null,
       };
     });
   const v: VersionRow = {
@@ -1274,6 +1297,7 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     warnings: [],
     imported_by: "draft-picker",
     approved_at: null,
+    brief_source: briefKeys.size ? "draft" : "none",
     created_at: created,
     front_matter: { document: slug, title, template: t.key },
     sections,
@@ -1429,6 +1453,8 @@ export async function laneF(db: Db, req: Request, p: string[], m: string): Promi
       return json(200, {
         valid: c.valid,
         problems: c.problems,
+        warnings: c.warnings,
+        brief_sections: c.brief,
         section_keys: c.section_keys,
         suggested_theme: c.suggested_theme,
         suggest_when: c.suggest_when,

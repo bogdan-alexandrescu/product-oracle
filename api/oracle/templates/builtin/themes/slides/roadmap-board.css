@@ -1,0 +1,5 @@
+/* Roadmap board, slide variant: a surface backdrop with tables as cards. */
+.theme-roadmap-board .slide { background: var(--color-surface); }
+.theme-roadmap-board .slide-body table { background: var(--color-background); border-radius: 6px; }
+.theme-roadmap-board .slide-body td:first-child { font-weight: 600; color: var(--color-accent); }
+.theme-roadmap-board .slide-body li { background: var(--color-background); border-left: 4px solid var(--color-accent); padding: 6px 10px; list-style: none; margin-left: -1.2em; }

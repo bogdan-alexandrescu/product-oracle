@@ -24,6 +24,18 @@ export function Badge({ tone = "neutral", children, title }: { tone?: Tone; chil
   );
 }
 
+/** O1f: which layer a section belongs to (brief, or detail in the full document only). */
+export function LayerBadge({ layer }: { layer: "brief" | "detail" | null | undefined }) {
+  if (!layer) return null;
+  return (
+    <span data-testid="layer-badge" data-layer={layer}>
+      <Badge tone={layer === "brief" ? "blue" : "neutral"} title={layer === "brief" ? "In the brief" : "Detail: in the full document only"}>
+        {layer === "brief" ? "Brief" : "Detail"}
+      </Badge>
+    </span>
+  );
+}
+
 export const VERDICT_TONE: Record<Verdict, Tone> = { approved: "green", changes_requested: "amber", rejected: "red" };
 export const STATUS_TONE: Record<FeedbackStatus, Tone> = {
   open: "blue",

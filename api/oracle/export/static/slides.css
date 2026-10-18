@@ -1,0 +1,107 @@
+/* Product Oracle slides (O1f): one brief section per 16:9 slide, 960 x 540 CSS px.
+   Shared by Present mode in the app (inside a shadow root) and the deck PDF. Theme
+   tokens arrive as CSS variables on .deck; a built-in theme's slide variant follows. */
+
+.deck {
+  --font-body: "DejaVu Sans", Helvetica, Arial, sans-serif;
+  --font-heading: "DejaVu Sans", Helvetica, Arial, sans-serif;
+  --font-mono: "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --color-text: #1f2933;
+  --color-heading: #111827;
+  --color-muted: #5b6472;
+  --color-accent: #2f5bd3;
+  --color-background: #ffffff;
+  --color-rule: #d9dde3;
+  --color-surface: #f3f4f6;
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+.deck .slide {
+  box-sizing: border-box;
+  position: relative;
+  width: 960px;
+  height: 540px;
+  overflow: hidden;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 21px;
+  line-height: 1.4;
+  padding: 44px 60px 56px;
+  display: flex;
+  flex-direction: column;
+}
+.deck-print .slide { page-break-after: always; break-after: page; }
+.deck-print .slide:last-child { page-break-after: auto; break-after: auto; }
+.deck .slide-inner { flex: 1; min-height: 0; overflow: hidden; }
+.deck .slide-title {
+  font-family: var(--font-heading);
+  color: var(--color-heading);
+  font-size: 34px;
+  line-height: 1.15;
+  margin: 0 0 22px;
+  font-weight: 700;
+}
+.deck .slide-title + .slide-body { margin-top: 0; }
+.deck .slide-body p { margin: 0 0 12px; }
+.deck .slide-body ul, .deck .slide-body ol { margin: 0 0 12px; padding-left: 1.2em; }
+.deck .slide-body li { margin: 0 0 8px; }
+.deck .slide-body h4, .deck .slide-body h5, .deck .slide-body h6 {
+  font-family: var(--font-heading); color: var(--color-heading); margin: 8px 0; font-size: 1em;
+}
+.deck .slide-body table { border-collapse: collapse; width: 100%; font-size: 17px; }
+.deck .slide-body th, .deck .slide-body td {
+  text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--color-rule);
+}
+.deck .slide-body th { color: var(--color-muted); font-weight: 600; font-size: 14px; text-transform: uppercase; letter-spacing: 0.03em; }
+.deck .slide-body code { font-family: var(--font-mono); font-size: 0.85em; }
+.deck .slide-body a { color: var(--color-accent); text-decoration: none; }
+.deck .slide-body pre { display: none; }
+.deck .slide-dense { font-size: 17px; }
+.deck .slide-dense .slide-title { font-size: 28px; margin-bottom: 14px; }
+.deck .slide-dense .slide-body table { font-size: 14px; }
+.deck .slide-dense .slide-body th, .deck .slide-dense .slide-body td { padding: 4px 8px; }
+.deck .detail-ref { color: inherit; }
+.deck .expand {
+  margin-left: 6px;
+  font: 600 12px/1 var(--font-body);
+  color: var(--color-accent);
+  background: transparent;
+  border: 1px solid var(--color-rule);
+  border-radius: 4px;
+  padding: 3px 6px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.deck .expand:hover, .deck .expand:focus-visible { border-color: var(--color-accent); outline: none; }
+.deck-print .expand { display: none; }
+.deck .slide-footer {
+  position: absolute;
+  left: 60px;
+  right: 60px;
+  bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  font-size: 12px;
+  color: var(--color-muted);
+  border-top: 1px solid var(--color-rule);
+  padding-top: 8px;
+}
+.deck .slide-banner { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.deck .slide-kicker {
+  margin: 120px 0 10px; font: 600 15px/1 var(--font-heading); text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--color-accent);
+}
+.deck h1.slide-title { font-size: 46px; }
+.deck .slide-subtitle { color: var(--color-muted); font-size: 19px; margin: 0; }
+.deck .slide-sources { font-size: 16px; margin: 0; padding-left: 1.6em; }
+.deck .slide-sources li { margin: 0 0 8px; }
+.deck .slide-sources .src-kind, .deck .slide-sources .src-retrieved { color: var(--color-muted); font-size: 13px; }
+/* The Expand overlay in the app reuses these rules for the detail it shows. */
+.deck .expand-section h2, .deck .expand-section h3, .deck .expand-section h4 {
+  font-family: var(--font-heading); color: var(--color-heading); margin: 0 0 10px;
+}
+.deck .expand-section { margin-bottom: 18px; }
+.deck .expand-section table { border-collapse: collapse; width: 100%; }
+.deck .expand-section th, .deck .expand-section td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--color-rule); }

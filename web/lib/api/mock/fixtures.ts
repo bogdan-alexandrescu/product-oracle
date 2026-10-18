@@ -20,6 +20,8 @@ export type VersionSeed = {
   snapshot?: string;
   sections: SectionSeed[];
   citations: CitationSeed[];
+  /** Front matter `brief: [...]` (O1f); without it a "Full version {#full}" heading splits the layers. */
+  brief?: string[];
 };
 
 export type DocumentSeed = {
@@ -266,6 +268,130 @@ const ALERTS_V1: SectionSeed[] = [
   },
 ];
 
+// A PRD with a brief layer (O1f): the brief first, then "Full version" and the detail
+// each feature row and milestone expands.
+const CARTS_CITATIONS: CitationSeed[] = [
+  {
+    id: "c1",
+    source: "web",
+    ref: "https://example.com/research/cart-abandonment-survey",
+    title: "Cart abandonment survey",
+    excerpt: "Shoppers who switch devices restart their cart more often than not.",
+    retrieved_at: "2026-10-15T10:00:00Z",
+  },
+  {
+    id: "c2",
+    source: "gdocs",
+    ref: "https://docs.google.com/document/d/example-repeat-orders",
+    title: "Repeat orders, Q3 review",
+    excerpt: "Repeat orders within 30 days: 18% of first-time buyers.",
+    retrieved_at: "2026-10-15T10:05:00Z",
+  },
+];
+
+export const CARTS_BRIEF = [
+  "summary",
+  "goal-trace",
+  "problem",
+  "brief-items",
+  "brief-roadmap",
+  "non-goals",
+  "top-risks",
+  "decisions",
+];
+
+const CARTS_V1: SectionSeed[] = [
+  { key: "title", level: 1, heading: "Saved carts PRD", body: "Returning shoppers keep their cart across devices." },
+  {
+    key: "summary",
+    level: 2,
+    heading: "Summary",
+    body:
+      "We will let signed-in shoppers save a cart and pick it up on any device. It serves G2 (retention). We ask you to approve the beta scope.\n\n" +
+      "```notes\nOpen with how many carts are lost when a session ends.\n```",
+  },
+  { key: "goal-trace", level: 2, heading: "Goal trace", body: "- **G2 (retention)**: more repeat orders within 30 days." },
+  {
+    key: "problem",
+    level: 2,
+    heading: "Problem",
+    body: "Shoppers build a cart on their phone, then lose it when they move to a laptop. Most start over; many give up.",
+  },
+  {
+    key: "brief-items",
+    level: 2,
+    heading: "Features by milestone",
+    body: [
+      "| Milestone | Feature | Goal | Outcome |",
+      "|---|---|---|---|",
+      "| [Beta](#milestone-beta) | [Save cart](#feature-save-cart) | G2 | A cart survives the session |",
+      "|  | [Cart on every device](#feature-sync) | G2 | The same cart on phone and laptop |",
+      "| [General release](#milestone-ga) | [Reminder email](#feature-reminder) | G2 | Shoppers come back to finish |",
+    ].join("\n"),
+  },
+  {
+    key: "brief-roadmap",
+    level: 2,
+    heading: "Roadmap",
+    body: "- [Beta](#milestone-beta): signed-in shoppers never lose a cart.\n- [General release](#milestone-ga): more saved carts turn into orders.",
+  },
+  { key: "non-goals", level: 2, heading: "Non-goals", body: "- Carts for guests without an account.\n- Sharing a cart with someone else." },
+  {
+    key: "top-risks",
+    level: 2,
+    heading: "Top risks",
+    body: "- Old carts show stale prices: re-price when a cart opens. See [Risks](#risks).\n- Too many emails: one reminder per cart, never more.",
+  },
+  {
+    key: "decisions",
+    level: 2,
+    heading: "Decisions needed",
+    body: "- Approve the beta scope: owner the founder, needed by 2026-11-01.\n- Pick the reminder delay (24 or 72 hours): owner the growth lead, needed by 2026-11-15.",
+  },
+  { key: "full", level: 1, heading: "Full version", body: "" },
+  { key: "feature-detail", level: 2, heading: "Feature detail", body: "One section per feature, in priority order." },
+  {
+    key: "feature-save-cart",
+    level: 3,
+    heading: "Save cart",
+    body: "**Story:** as a signed-in shopper, I want my cart kept when I leave, so I can finish later.\n\n**Acceptance:** given a cart with items, when the session ends, then the cart is there at the next sign-in.",
+  },
+  {
+    key: "feature-sync",
+    level: 3,
+    heading: "Cart on every device",
+    body: "**Story:** as a shopper on two devices, I want one cart, so I never rebuild it.\n\n**Acceptance:** an item added on the phone appears on the laptop within five seconds.",
+  },
+  {
+    key: "feature-reminder",
+    level: 3,
+    heading: "Reminder email",
+    body: "**Story:** as a shopper who left a cart, I want one reminder, so I remember to finish.\n\n**Acceptance:** one email per cart, sent after the chosen delay, with a one-click opt-out.",
+  },
+  { key: "milestones", level: 2, heading: "Milestones", body: "Dates come from the tracker estimates." },
+  {
+    key: "milestone-beta",
+    level: 3,
+    heading: "Beta",
+    body: "Scope: save cart and cart on every device, for signed-in shoppers. Exit: two weeks without a lost cart.",
+  },
+  { key: "milestone-ga", level: 3, heading: "General release", body: "Scope: the reminder email. Exit: opt-outs below 2%." },
+  {
+    key: "risks",
+    level: 2,
+    heading: "Risks and open questions",
+    body: "- Stale prices: likely, medium impact; re-price when the cart opens.\n- Too many emails: possible, high impact; one reminder per cart.",
+  },
+  { key: "sources", level: 2, heading: "Sources and data points", body: "" },
+  { key: "sources-list", level: 3, heading: "Sources", body: "- Cart abandonment survey [c:c1]\n- Repeat orders, Q3 review [c:c2]" },
+];
+
+const CARTS_V2: SectionSeed[] = CARTS_V1.map((s) =>
+  s.key === "problem"
+    ? { ...s, body: "Shoppers build a cart on their phone, then lose it when they move to a laptop. More than half start over." }
+    : s,
+);
+
 export const DOCUMENTS: DocumentSeed[] = [
   {
     slug: "checkout-redesign",
@@ -297,6 +423,16 @@ export const DOCUMENTS: DocumentSeed[] = [
     versions: [
       { number: 1, created_at: "2026-10-12T11:00:00Z", sections: WORKSPACES_V1, citations: WORKSPACES_CITATIONS },
       { number: 2, created_at: "2026-10-13T10:30:00Z", sections: WORKSPACES_V2, citations: WORKSPACES_CITATIONS },
+    ],
+  },
+  {
+    slug: "saved-carts",
+    title: "Saved carts PRD",
+    template: "oracle-default",
+    template_version: "2",
+    versions: [
+      { number: 1, created_at: "2026-10-17T11:00:00Z", sections: CARTS_V1, citations: CARTS_CITATIONS, brief: CARTS_BRIEF },
+      { number: 2, created_at: "2026-10-18T08:30:00Z", sections: CARTS_V2, citations: CARTS_CITATIONS, brief: CARTS_BRIEF },
     ],
   },
   {
