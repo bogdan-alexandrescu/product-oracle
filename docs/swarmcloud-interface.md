@@ -104,12 +104,16 @@ Artifacts are read by task: `GET /v1/tasks/{task_id}/artifacts`, `.../content?na
 
 ## 3. What Oracle builds
 
+**When (Bogdan, 2026-10-18):** after SwarmCloud switches both features on in dev; until then
+Oracle keeps today's flow unchanged.
+
 1. **Auth:** switch to the ID token, with the audience as a setting. De-duplicate submits
    by label.
-2. **MCP server:** register Oracle's MCP server once (`auth.mode: dispatch`). Restrict
-   run tokens to SwarmCloud's `egress_addresses`. That means app-level enforcement, not
-   a network allowlist on `/mcp`, which people's Claude Code clients also use over OAuth.
-   Bogdan decides this.
+2. **MCP server:** register Oracle's MCP server once (`auth.mode: dispatch`). **Decided
+   (Bogdan, 2026-10-18):** Oracle accepts a run token only from SwarmCloud's
+   `egress_addresses`, refreshed from `GET /v1/mcp-servers`. People's OAuth sign-ins
+   and API tokens keep working from any address, so there is no network allowlist on
+   `/mcp`.
 3. **Per run:** a run token whose TTL covers the whole workflow; `mcp_servers` on every
    claude-code step; one `mcp_credentials` map.
 4. **Checkpoints:** checkpoints become await-input verdict steps in the unrolled shape.
