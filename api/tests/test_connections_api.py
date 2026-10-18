@@ -11,7 +11,6 @@ from oracle.auth.service import create_api_token
 from oracle.connections.models import Connection
 from oracle.models import AuditEvent
 from oracle.tenancy import tenant_session
-from oracle.tenant_settings import TenantSetting
 from tests.connection_helpers import (
     add_connection,
     clear_provider_http,
@@ -155,21 +154,14 @@ async def test_api_tokens_have_no_connections(client, tenant_id):
     assert (await client.get("/v1/connections")).status_code == 401
 
 
-async def test_disconnect_removes_row_and_clears_company_default(client, tenant_id, alice):
+async def test_disconnect_removes_row(client, tenant_id, alice):
     conn = await add_connection(
-        tenant_id, alice.id, "claude", account_id="plan", bundle={"access_token": "t"}
+        tenant_id, alice.id, "github", account_id="7", bundle={"access_token": "t"}
     )
-    async with tenant_session(tenant_id) as s:
-        s.add(TenantSetting(key="default_claude_connection_id", value=str(conn.id)))
-        await s.commit()
-    listed = (await client.get("/v1/connections", headers=alice.headers)).json()
-    assert listed[0]["is_company_default"] is True
-
     resp = await client.delete(f"/v1/connections/{conn.id}", headers=alice.headers)
     assert resp.status_code == 204
     async with tenant_session(tenant_id) as s:
         assert await s.get(Connection, conn.id) is None
-        assert await s.scalar(select(TenantSetting)) is None
 
 
 async def test_reconnect_with_new_token_same_account_only(client, tenant_id, alice):
@@ -219,6 +211,5 @@ async def test_providers_list_reports_oauth_configuration(client, alice):
     resp = await client.get("/v1/connections/providers", headers=alice.headers)
     assert resp.status_code == 200
     by_key = {p["key"]: p for p in resp.json()}
-    assert set(by_key) == {"github", "slack", "notion", "fireflies", "google", "claude"}
+    assert set(by_key) == {"github", "slack", "notion", "fireflies", "google"}
     assert not any(p["oauth_configured"] for p in by_key.values())
-    assert "setup-token" in by_key["claude"]["token_help"]

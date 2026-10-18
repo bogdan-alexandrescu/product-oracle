@@ -41,6 +41,13 @@ from oracle.baseline.models import (  # noqa: E402
     EvidenceLinkSnapshot,
     Proposal,
 )
+from oracle.claude_accounts.models import (  # noqa: E402
+    ClaudeAccount,
+    ClaudeAccountHold,
+    ClaudeAccountSignin,
+    ClaudeFallbackCredential,
+    ClaudeSweepLease,
+)
 from oracle.connections.models import Connection  # noqa: E402
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
@@ -62,6 +69,11 @@ __all__ = [
     "ApiToken",
     "AuditEvent",
     "Checkpoint",
+    "ClaudeAccount",
+    "ClaudeAccountHold",
+    "ClaudeAccountSignin",
+    "ClaudeFallbackCredential",
+    "ClaudeSweepLease",
     "Citation",
     "Comment",
     "Connection",

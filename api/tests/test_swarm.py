@@ -16,11 +16,12 @@ from oracle.swarm import (
     RuntimeUnavailable,
     StepSpec,
     SwarmCloudRuntime,
+    UnconfiguredSwarmCloud,
     WorkflowSpec,
     get_runtime,
     set_runtime,
 )
-from oracle.swarm.settings import RuntimeSettings
+from oracle.swarm.settings import RuntimeSettings, get_runtime_settings
 from oracle.swarm.swarmcloud import NO_MCP_NOTE, GoogleIdToken, StaticBearer, auth_from_settings
 
 SPEC = WorkflowSpec(
@@ -73,11 +74,33 @@ async def test_fake_runtime_answers_for_ids_another_process_submitted():
         await other.status("not-a-fake-id")
 
 
-def test_runtime_is_chosen_by_settings(monkeypatch):
+async def test_runtime_is_chosen_by_settings(monkeypatch):
+    # SwarmCloud by default; without its settings it says what is missing.
+    for key in ("ORACLE_RUNTIME", "ORACLE_SWARMCLOUD_URL", "ORACLE_SWARMCLOUD_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+    get_runtime_settings.cache_clear()
     set_runtime(None)
     try:
+        runtime = get_runtime()
+        assert runtime.name == "swarmcloud"
+        assert isinstance(runtime, UnconfiguredSwarmCloud)
+        assert "ORACLE_SWARMCLOUD_URL" in runtime.notes()[0]
+        with pytest.raises(RuntimeUnavailable, match="not configured"):
+            await runtime.submit(SPEC)
+
+        monkeypatch.setenv("ORACLE_SWARMCLOUD_URL", "https://swarm.example.com")
+        monkeypatch.setenv("ORACLE_SWARMCLOUD_TOKEN", "t0k")
+        get_runtime_settings.cache_clear()
+        set_runtime(None)
+        assert isinstance(get_runtime(), SwarmCloudRuntime)
+
+        # The FakeRuntime only where a test (or a local demo) chooses it.
+        monkeypatch.setenv("ORACLE_RUNTIME", "fake")
+        get_runtime_settings.cache_clear()
+        set_runtime(None)
         assert get_runtime().name == "fake"
     finally:
+        get_runtime_settings.cache_clear()
         set_runtime(None)
 
 

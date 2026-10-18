@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response, status
@@ -7,6 +9,8 @@ from sqlalchemy import text
 
 from oracle.auth.router import router as auth_router
 from oracle.baseline.router import router as baseline_router
+from oracle.claude_accounts.router import router as claude_accounts_router
+from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
 from oracle.config import get_settings
 from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
@@ -25,7 +29,15 @@ from oracle.tenant_settings_api import router as settings_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # The Claude account pool's local scheduler (SwarmCloud runs its sweep from Cloud
+    # Scheduler); `oracle tick` sweeps too. ORACLE_CLAUDE_SWEEP_SECONDS=0 turns it off.
+    interval = get_pool_settings().sweep_seconds
+    task = asyncio.create_task(run_scheduler(interval)) if interval > 0 else None
     yield
+    if task is not None:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
     await dispose_engine()
 
 
@@ -70,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(members_router)
     app.include_router(connections_router)
     app.include_router(settings_router)
+    app.include_router(claude_accounts_router)
     app.include_router(sources_router)
     app.include_router(baseline_router)
     app.include_router(priorities_router)

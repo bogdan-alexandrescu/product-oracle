@@ -202,12 +202,30 @@ class CheckpointDecision(BaseModel):
     note: str | None = Field(default=None, max_length=10_000)
 
 
+class ClaudeSweepSummary(BaseModel):
+    """What the Claude account pool's sweep did on this tick (oracle.claude_accounts)."""
+
+    # Abandoned holds reclaimed.
+    reclaimed: int = 0
+    # Credentials examined and exchanged.
+    examined: int = 0
+    refreshed: int = 0
+    # Accounts marked REAUTH_REQUIRED this tick.
+    reauth_required: list[str] = []
+    # Usage readings taken.
+    polled: int = 0
+    # "ran", "skipped" (another sweep holds the lease) or "error".
+    lease: str = "ran"
+    errors: list[str] = []
+
+
 class TickOut(BaseModel):
     runs_checked: int
     segments_finished: int
     runs_advanced: int
     runs_paused: int
     errors: list[str]
+    claude_accounts: ClaudeSweepSummary | None = None
 
 
 class InboxCheckpoint(CheckpointOut):

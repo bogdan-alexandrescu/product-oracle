@@ -1,8 +1,10 @@
 """Agent runtimes that execute run segments (Lane E).
 
-``get_runtime()`` returns the process-wide runtime chosen by ``ORACLE_RUNTIME``: the
-deterministic :class:`FakeRuntime` (default) or :class:`SwarmCloudRuntime`. Tests swap
-it with ``set_runtime()``.
+``get_runtime()`` returns the process-wide runtime chosen by ``ORACLE_RUNTIME``:
+:class:`SwarmCloudRuntime` (default; runs execute in SwarmCloud, on SwarmCloud's own
+Claude accounts) or the deterministic :class:`FakeRuntime`, which tests choose with
+``set_runtime()`` or ``ORACLE_RUNTIME=fake``. SwarmCloud chosen but not configured is
+:class:`UnconfiguredSwarmCloud`: runs say what is missing instead of the API failing.
 """
 
 from oracle.swarm.fake import FakeRuntime, Outcome
@@ -15,7 +17,7 @@ from oracle.swarm.runtime import (
     WorkflowStatus,
 )
 from oracle.swarm.settings import get_runtime_settings
-from oracle.swarm.swarmcloud import SwarmCloudRuntime
+from oracle.swarm.swarmcloud import SwarmCloudRuntime, UnconfiguredSwarmCloud
 
 __all__ = [
     "AgentRuntime",
@@ -25,6 +27,7 @@ __all__ = [
     "RuntimeUnavailable",
     "StepSpec",
     "SwarmCloudRuntime",
+    "UnconfiguredSwarmCloud",
     "WorkflowSpec",
     "WorkflowStatus",
     "get_runtime",
@@ -39,7 +42,10 @@ def get_runtime() -> AgentRuntime:
     if _runtime is None:
         settings = get_runtime_settings()
         if settings.runtime == "swarmcloud":
-            _runtime = SwarmCloudRuntime.from_settings(settings)
+            try:
+                _runtime = SwarmCloudRuntime.from_settings(settings)
+            except ValueError as e:
+                _runtime = UnconfiguredSwarmCloud(str(e))
         else:
             _runtime = FakeRuntime()
     return _runtime

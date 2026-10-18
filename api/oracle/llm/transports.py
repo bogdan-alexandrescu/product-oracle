@@ -1,9 +1,12 @@
 """How a model call reaches Claude, by credential kind.
 
-- A Claude plan token (``claude setup-token``) runs the call through Claude Code in
-  headless mode (``claude -p``), with ``CLAUDE_CODE_OAUTH_TOKEN`` set for that one
-  process. Oracle never sends a plan token to the Messages API itself.
-- An Anthropic API key calls the Messages API with ``x-api-key``.
+- A subscription token (a pool account's access token, or a ``claude setup-token``
+  fallback) runs the call through Claude Code in headless mode
+  (``claude -p --output-format stream-json``), with ``CLAUDE_CODE_OAUTH_TOKEN`` set for
+  that one process. The stream's ``rate_limit_event`` lines are the account's window
+  readings (SwarmCloud's ``runners/cliagent.py``: ``_reading_of``); a REJECTED one says
+  the account is spent. Oracle never sends a subscription token to the Messages API.
+- An Anthropic API key (fallback only) calls the Messages API with ``x-api-key``.
 
 Both implement :class:`Transport`; tests swap in a fake (``gateway.set_transports``).
 """
@@ -11,15 +14,17 @@ Both implement :class:`Transport`; tests swap in a fake (``gateway.set_transport
 import asyncio
 import json
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any, Protocol
 
 import httpx
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from oracle.connections.providers import ANTHROPIC_API, ANTHROPIC_VERSION
+from oracle.claude_accounts.fallback import ANTHROPIC_API, ANTHROPIC_VERSION
 
 
 class LlmSettings(BaseSettings):
@@ -27,7 +32,7 @@ class LlmSettings(BaseSettings):
 
     # Model for Oracle's own calls, unless the caller names one.
     model: str = "claude-opus-5"
-    # The Claude Code executable used for plan tokens.
+    # The Claude Code executable used for subscription tokens.
     claude_bin: str = "claude"
     timeout_seconds: float = 300.0
 
@@ -41,8 +46,13 @@ class LlmError(Exception):
     """Base class of model call failures."""
 
 
-class NoClaudePlan(LlmError):
-    """Neither the user nor the company has a usable Claude connection."""
+class NoClaudeAccount(LlmError):
+    """No pool account can take the call and no fallback credential applies."""
+
+    def __init__(self, message: str, reason: str = "", next_reset_at: str | None = None):
+        super().__init__(message)
+        self.reason = reason
+        self.next_reset_at = next_reset_at
 
 
 class LlmAuthError(LlmError):
@@ -51,6 +61,14 @@ class LlmAuthError(LlmError):
 
 class LlmUnavailable(LlmError):
     """The call failed for another reason (network, rate limit, Claude Code missing)."""
+
+
+class LlmRateLimited(LlmUnavailable):
+    """The account the call ran on is out of quota: move to another one."""
+
+    def __init__(self, message: str, readings: dict[str, dict[str, Any]] | None = None):
+        super().__init__(message)
+        self.readings = readings or {}
 
 
 @dataclass(frozen=True)
@@ -68,6 +86,8 @@ class TransportResult:
     model: str
     stop_reason: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
+    # Window readings from ``rate_limit_event``: {window: {utilization, resets_at}}.
+    readings: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 class Transport(Protocol):
@@ -93,6 +113,39 @@ def render_prompt(messages: list[dict[str, Any]]) -> str:
     return "\n\n".join(turns)
 
 
+_WINDOW_NAME = re.compile(r"^[a-z0-9_]{1,40}$")
+
+
+def reading_of(event: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    """(window, {utilization, resets_at}) from one ``rate_limit_event``, or None.
+
+    ``rateLimitType`` names the window, ``resetsAt`` is epoch seconds, ``utilization``
+    the 0-1 fraction. A REJECTED reading with no utilization is a full window. Anything
+    that does not say all of that is dropped rather than guessed at.
+    """
+    info = event.get("rate_limit_info")
+    if not isinstance(info, dict):
+        return None
+    name = info.get("rateLimitType")
+    resets = info.get("resetsAt")
+    if not isinstance(name, str) or not _WINDOW_NAME.match(name):
+        return None
+    if isinstance(resets, bool) or not isinstance(resets, int | float):
+        return None
+    utilization = info.get("utilization")
+    if utilization is None and info.get("status") == "rejected":
+        utilization = 1.0
+    if isinstance(utilization, bool) or not isinstance(utilization, int | float):
+        return None
+    if not 0.0 <= float(utilization) <= 1.0:
+        return None
+    try:
+        at = datetime.fromtimestamp(float(resets), tz=UTC)
+    except (OverflowError, OSError, ValueError):
+        return None
+    return name, {"utilization": float(utilization), "resets_at": at.isoformat()}
+
+
 class ClaudeCodeTransport:
     """``claude -p`` with tools, settings, MCP, slash commands and sessions all off."""
 
@@ -105,7 +158,8 @@ class ClaudeCodeTransport:
         return [
             self.claude_bin,
             "-p",
-            "--output-format", "json",
+            "--output-format", "stream-json",
+            "--verbose",
             "--model", request.model,
             "--system-prompt", request.system,
             "--tools", "",
@@ -117,7 +171,7 @@ class ClaudeCodeTransport:
 
     def environment(self, token: str, request: LlmRequest, home: str) -> dict[str, str]:
         # Built from scratch: no ANTHROPIC_API_KEY or other credential from the server's
-        # environment can leak in or take precedence over the user's plan token.
+        # environment can leak in or take precedence over this call's token.
         return {
             "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
             "HOME": home,
@@ -153,17 +207,49 @@ class ClaudeCodeTransport:
         return self.parse(stdout, stderr, request)
 
     @staticmethod
-    def parse(stdout: bytes, stderr: bytes, request: LlmRequest) -> TransportResult:
-        try:
-            out = json.loads(stdout)
-        except ValueError:
+    def events(stdout: bytes) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
+        for raw in stdout.splitlines():
+            raw = raw.strip()
+            if not raw.startswith(b"{"):
+                continue
+            try:
+                event = json.loads(raw)
+            except (ValueError, UnicodeDecodeError):
+                continue
+            if isinstance(event, dict):
+                events.append(event)
+        return events
+
+    @classmethod
+    def parse(cls, stdout: bytes, stderr: bytes, request: LlmRequest) -> TransportResult:
+        readings: dict[str, dict[str, Any]] = {}
+        rejected = False
+        out: dict[str, Any] | None = None
+        for event in cls.events(stdout):
+            kind = event.get("type")
+            if kind == "rate_limit_event":
+                reading = reading_of(event)
+                if reading is not None:
+                    readings[reading[0]] = reading[1]
+                info = event.get("rate_limit_info")
+                status = info.get("status") if isinstance(info, dict) else None
+                if (status or event.get("status")) == "rejected":
+                    rejected = True
+            elif kind == "result":
+                out = event
+        if out is None:
             tail = (stderr or stdout).decode(errors="replace").strip()[-300:]
-            raise LlmUnavailable(f"Claude Code failed: {tail or 'no output'}") from None
+            if rejected:
+                raise LlmRateLimited("the account is out of quota", readings)
+            raise LlmUnavailable(f"Claude Code failed: {tail or 'no output'}")
         message = str(out.get("result") or "")
         if out.get("is_error"):
             status = out.get("api_error_status")
+            if rejected or status == 429:
+                raise LlmRateLimited(message or "the account is out of quota", readings)
             if status in (401, 403) or "authenticat" in message.lower():
-                raise LlmAuthError(message or "Claude rejected the plan token")
+                raise LlmAuthError(message or "Claude rejected the token")
             raise LlmUnavailable(message or f"Claude Code failed ({out.get('subtype')})")
         models = list((out.get("modelUsage") or {}).keys())
         return TransportResult(
@@ -171,6 +257,7 @@ class ClaudeCodeTransport:
             model=models[0] if models else request.model,
             stop_reason=out.get("stop_reason"),
             usage=out.get("usage") or {},
+            readings=readings,
         )
 
 

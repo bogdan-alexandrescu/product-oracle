@@ -3,14 +3,11 @@
 The known keys and how each value is checked:
 
 - ``iap_default_role``: one of the roles; the role of a Google sign-in without an invite.
-- ``default_claude_connection_id``: a Claude connection of the owner setting it, used
-  for Oracle's model calls by users without their own plan; ``null`` clears it.
 - ``confidence_weights``: overrides of ``oracle.confidence.DEFAULTS``, same shape.
 
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
-import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
@@ -25,13 +22,11 @@ from oracle.auth.models import ROLES
 from oracle.authz import require_role
 from oracle.baseline.models import LINK_KINDS
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
-from oracle.connections.models import Connection
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
 from oracle.tenant_settings import TenantSetting
 
 DEFAULTS: dict[str, Any] = {
     "iap_default_role": "commenter",
-    "default_claude_connection_id": None,
     "confidence_weights": {},
 }
 KNOWN_KEYS = tuple(DEFAULTS)
@@ -117,21 +112,6 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         if value not in ROLES:
             raise InvalidSetting(f"iap_default_role must be one of {', '.join(ROLES)}")
         return value
-    if key == "default_claude_connection_id":
-        try:
-            connection_id = uuid.UUID(str(value))
-        except ValueError:
-            raise InvalidSetting("default_claude_connection_id must be a connection id") from None
-        conn = await session.get(Connection, connection_id)
-        if conn is None:
-            raise InvalidSetting("No such connection")
-        if conn.provider != "claude":
-            raise InvalidSetting("default_claude_connection_id must be a Claude connection")
-        if conn.user_id != principal.user_id:
-            raise InvalidSetting("Only your own Claude plan can be the company default")
-        if conn.status != "active":
-            raise InvalidSetting(f"That Claude connection is {conn.status}; reconnect it first")
-        return str(connection_id)
     if key == "confidence_weights":
         return validate_confidence_weights(value)
     raise KeyError(key)

@@ -1584,36 +1584,6 @@
         ]
       }
     },
-    "/v1/claude-plan": {
-      "get": {
-        "tags": [
-          "connections"
-        ],
-        "summary": "Get Claude Plan",
-        "description": "Which Claude connection pays for this user's model calls, if any.",
-        "operationId": "get_claude_plan",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClaudePlanOut"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ]
-      }
-    },
     "/v1/connections/{provider}/token": {
       "post": {
         "tags": [
@@ -1709,7 +1679,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthorizeOut"
+                  "$ref": "#/components/schemas/oracle__connections__router__AuthorizeOut"
                 }
               }
             }
@@ -2082,6 +2052,613 @@
           },
           "422": {
             "description": "Invalid value"
+          }
+        }
+      }
+    },
+    "/v1/claude-accounts": {
+      "get": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "List Claude Accounts",
+        "description": "Every account in the company's pool, with the sweep's liveness and the fallback.",
+        "operationId": "list_claude_accounts",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsPage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Add Claude Account",
+        "description": "Add an account from Claude Code's saved login, pasted verbatim.\n\nIt must be a PAIR: a credential with no refresh token cannot be kept alive, so it is\nrefused here rather than dying silently at its first expiry.",
+        "operationId": "add_claude_account",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/claude-accounts/authorize": {
+      "post": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Begin Claude Sign In",
+        "description": "Start a browser sign-in: the URL to open, and the ``state`` that keys it.\n\nThe PKCE verifier stays here, keyed by ``state``; the browser never holds it.",
+        "operationId": "begin_claude_sign_in",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/oracle__claude_accounts__router__AuthorizeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/claude-accounts/exchange": {
+      "post": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Finish Claude Sign In",
+        "description": "Redeem the pasted code and add the account.\n\nOnly whoever started the sign-in may finish it, checked BEFORE the code is redeemed:\na mismatch redeems nothing and leaves the pending sign-in for its owner. Where the\naccount lands (its label) comes from the pending sign-in, never from this request.",
+        "operationId": "finish_claude_sign_in",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExchangeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountCreated"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Someone else started this sign-in"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/claude-accounts/fallback": {
+      "put": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Set Claude Fallback",
+        "description": "Set the credential used while no account is registered (setup-token or API key).",
+        "operationId": "set_claude_fallback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FallbackIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FallbackOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Clear Claude Fallback",
+        "operationId": "clear_claude_fallback",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/claude-accounts/sweep": {
+      "post": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Sweep Claude Accounts",
+        "description": "Run the sweep now: reclaim holds, refresh credentials, read usage.",
+        "operationId": "sweep_claude_accounts",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SweepOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/claude-accounts/{account_id}/state": {
+      "put": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Set Claude Account State",
+        "description": "AVAILABLE, PAUSED, DRAINING or REAUTH_REQUIRED. DRAINING marks every live hold to\nmove at its next turn boundary, in the same transaction.",
+        "operationId": "set_claude_account_state",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/claude-accounts/{account_id}/refresh": {
+      "post": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Refresh Claude Account",
+        "description": "Exchange this account's credential now, through the same single writer as the\nsweep, and say what happened.",
+        "operationId": "refresh_claude_account",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/claude-accounts/{account_id}": {
+      "delete": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Remove Claude Account",
+        "description": "Remove the account; its open hold records close as ``account_removed``.",
+        "operationId": "remove_claude_account",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemovedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/claude-accounts/{account_id}/holders": {
+      "get": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Claude Account Holders",
+        "description": "The LIVE holds: an expired one is a killed job, not a holder.",
+        "operationId": "claude_account_holders",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldersOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/claude-accounts/{account_id}/history": {
+      "get": {
+        "tags": [
+          "claude-accounts"
+        ],
+        "summary": "Claude Account History",
+        "description": "Recorded spans taken in [from, to), newest first (default: the last 7 days).\n\nA cursor is ``<instant>|<n>``: the last ``assigned_at`` served and how many rows at\nthat instant were served, so ties are not dropped. Windows over 90 days, and\ncursors this route did not mint, are refused.",
+        "operationId": "claude_account_history",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -7122,7 +7699,7 @@
           "runs"
         ],
         "summary": "Tick",
-        "description": "Advance this company's active runs (``oracle tick`` calls it on a schedule).",
+        "description": "Advance this company's active runs and sweep its Claude account pool (``oracle tick``\ncalls it on a schedule).",
         "operationId": "tick",
         "responses": {
           "200": {
@@ -7615,6 +8192,199 @@
   },
   "components": {
     "schemas": {
+      "AccountCreated": {
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/AccountOut"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account",
+          "expires_at",
+          "note"
+        ],
+        "title": "AccountCreated"
+      },
+      "AccountOut": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "PAUSED",
+              "DRAINING",
+              "REAUTH_REQUIRED"
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "assigned": {
+            "type": "integer",
+            "title": "Assigned"
+          },
+          "windows": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WindowOut"
+            },
+            "type": "object",
+            "title": "Windows"
+          },
+          "observed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed At"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          },
+          "unreadable_now": {
+            "type": "boolean",
+            "title": "Unreadable Now"
+          },
+          "last_refresh_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refresh At"
+          },
+          "token_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Expires At"
+          },
+          "last_refresh_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refresh Reason"
+          },
+          "last_assigned_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Assigned At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "label",
+          "provider",
+          "state",
+          "reason",
+          "assigned",
+          "windows",
+          "observed_at",
+          "stale",
+          "unreadable_now",
+          "last_refresh_at",
+          "token_expires_at",
+          "last_refresh_reason",
+          "last_assigned_at"
+        ],
+        "title": "AccountOut"
+      },
+      "AccountsPage": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AccountOut"
+            },
+            "type": "array",
+            "title": "Accounts"
+          },
+          "unreadable_documents": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unreadable Documents"
+          },
+          "unreadable_document_count": {
+            "type": "integer",
+            "title": "Unreadable Document Count"
+          },
+          "refresh_sweep": {
+            "$ref": "#/components/schemas/RefreshSweepOut"
+          },
+          "fallback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FallbackOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "accounts",
+          "unreadable_documents",
+          "unreadable_document_count",
+          "refresh_sweep",
+          "fallback"
+        ],
+        "title": "AccountsPage"
+      },
       "AgentRoleOut": {
         "properties": {
           "key": {
@@ -7765,18 +8535,21 @@
         ],
         "title": "AuthorizationServerMetadata"
       },
-      "AuthorizeOut": {
+      "AuthorizeIn": {
         "properties": {
-          "url": {
+          "label": {
             "type": "string",
-            "title": "Url"
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Label"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "url"
+          "label"
         ],
-        "title": "AuthorizeOut"
+        "title": "AuthorizeIn"
       },
       "Body_oauth_revoke": {
         "properties": {
@@ -8215,72 +8988,53 @@
         ],
         "title": "ClaimIn"
       },
-      "ClaudePlanOut": {
+      "ClaudeSweepSummary": {
         "properties": {
-          "source": {
+          "reclaimed": {
+            "type": "integer",
+            "title": "Reclaimed",
+            "default": 0
+          },
+          "examined": {
+            "type": "integer",
+            "title": "Examined",
+            "default": 0
+          },
+          "refreshed": {
+            "type": "integer",
+            "title": "Refreshed",
+            "default": 0
+          },
+          "reauth_required": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reauth Required",
+            "default": []
+          },
+          "polled": {
+            "type": "integer",
+            "title": "Polled",
+            "default": 0
+          },
+          "lease": {
             "type": "string",
-            "enum": [
-              "own",
-              "company",
-              "none"
-            ],
-            "title": "Source"
+            "title": "Lease",
+            "default": "ran"
           },
-          "connection_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Connection Id"
-          },
-          "account_label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Account Label"
-          },
-          "via": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "plan",
-                  "api_key"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Via"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "default": []
           }
         },
         "type": "object",
-        "required": [
-          "source"
-        ],
-        "title": "ClaudePlanOut"
+        "title": "ClaudeSweepSummary",
+        "description": "What the Claude account pool's sweep did on this tick (oracle.claude_accounts)."
       },
       "ClientRegistrationIn": {
         "properties": {
@@ -8939,11 +9693,6 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
-          },
-          "is_company_default": {
-            "type": "boolean",
-            "title": "Is Company Default",
-            "default": false
           }
         },
         "type": "object",
@@ -10745,6 +11494,29 @@
         ],
         "title": "EvidenceUsed"
       },
+      "ExchangeIn": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 8,
+            "title": "State"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 4,
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "code"
+        ],
+        "title": "ExchangeIn"
+      },
       "Explanation": {
         "properties": {
           "method": {
@@ -10827,6 +11599,50 @@
           "weight"
         ],
         "title": "FactorOut"
+      },
+      "FallbackIn": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 8,
+            "title": "Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "FallbackIn"
+      },
+      "FallbackOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "plan",
+              "api_key"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "updated_at"
+        ],
+        "title": "FallbackOut"
       },
       "FeedbackItemOut": {
         "properties": {
@@ -11345,6 +12161,164 @@
           "database"
         ],
         "title": "Health"
+      },
+      "HistoryOut": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "title": "To"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/SpanOut"
+            },
+            "type": "array",
+            "title": "Spans"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "from",
+          "to",
+          "spans",
+          "next_cursor"
+        ],
+        "title": "HistoryOut"
+      },
+      "HolderOut": {
+        "properties": {
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "attempt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "swapped_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swapped From"
+          },
+          "swapped_from_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swapped From Reason"
+          },
+          "move": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Move"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "attempt_id",
+          "since",
+          "expires_at",
+          "swapped_from",
+          "swapped_from_reason",
+          "move"
+        ],
+        "title": "HolderOut"
+      },
+      "HoldersOut": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "holders": {
+            "items": {
+              "$ref": "#/components/schemas/HolderOut"
+            },
+            "type": "array",
+            "title": "Holders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "total",
+          "holders"
+        ],
+        "title": "HoldersOut"
       },
       "ImportErrorResponse": {
         "properties": {
@@ -13622,6 +14596,152 @@
         "type": "object",
         "title": "ReconnectOut"
       },
+      "RefreshOut": {
+        "properties": {
+          "refresh": {
+            "$ref": "#/components/schemas/RefreshResult"
+          },
+          "account": {
+            "$ref": "#/components/schemas/AccountOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh",
+          "account"
+        ],
+        "title": "RefreshOut"
+      },
+      "RefreshResult": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "refreshed": {
+            "type": "boolean",
+            "title": "Refreshed"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "refreshed",
+          "reason",
+          "expires_at"
+        ],
+        "title": "RefreshResult"
+      },
+      "RefreshSweepOut": {
+        "properties": {
+          "last_completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Completed At"
+          },
+          "last_outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "error"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Outcome"
+          },
+          "readable": {
+            "type": "boolean",
+            "title": "Readable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "last_completed_at",
+          "last_outcome",
+          "readable"
+        ],
+        "title": "RefreshSweepOut"
+      },
+      "RegisterIn": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "credential": {
+            "type": "string",
+            "maxLength": 16384,
+            "minLength": 8,
+            "title": "Credential"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "credential"
+        ],
+        "title": "RegisterIn"
+      },
+      "RemovedOut": {
+        "properties": {
+          "removed": {
+            "type": "string",
+            "title": "Removed"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "closed_holds": {
+            "type": "integer",
+            "title": "Closed Holds"
+          },
+          "credential": {
+            "type": "string",
+            "const": "deleted",
+            "title": "Credential"
+          }
+        },
+        "type": "object",
+        "required": [
+          "removed",
+          "label",
+          "closed_holds",
+          "credential"
+        ],
+        "title": "RemovedOut"
+      },
       "ReplyCreate": {
         "properties": {
           "body": {
@@ -15451,6 +16571,137 @@
         "type": "object",
         "title": "SourcePatch"
       },
+      "SpanOut": {
+        "properties": {
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "attempt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "hold_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Expires At"
+          },
+          "swapped_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swapped From"
+          },
+          "swapped_from_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swapped From Reason"
+          },
+          "swapped_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swapped To"
+          },
+          "swapped_to_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swapped To Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "attempt_id",
+          "since",
+          "until",
+          "end",
+          "hold_expires_at",
+          "swapped_from",
+          "swapped_from_reason",
+          "swapped_to",
+          "swapped_to_reason"
+        ],
+        "title": "SpanOut"
+      },
       "StartDraftIn": {
         "properties": {
           "kind": {
@@ -15574,6 +16825,59 @@
           "version"
         ],
         "title": "StartDraftOut"
+      },
+      "StateIn": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "State"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Reason",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "StateIn"
+      },
+      "StateOut": {
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/AccountOut"
+          },
+          "moving": {
+            "type": "integer",
+            "title": "Moving"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account",
+          "moving"
+        ],
+        "title": "StateOut"
+      },
+      "SweepOut": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "title": "SweepOut"
       },
       "SyncResult": {
         "properties": {
@@ -16725,6 +18029,16 @@
             },
             "type": "array",
             "title": "Errors"
+          },
+          "claude_accounts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClaudeSweepSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -17354,6 +18668,30 @@
         "title": "VersionWarning",
         "description": "A non-fatal import finding stored on the version."
       },
+      "WindowOut": {
+        "properties": {
+          "utilization": {
+            "type": "number",
+            "title": "Utilization"
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Resets At"
+          },
+          "reset": {
+            "type": "boolean",
+            "title": "Reset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "utilization",
+          "resets_at",
+          "reset"
+        ],
+        "title": "WindowOut"
+      },
       "WordOp": {
         "properties": {
           "op": {
@@ -17436,6 +18774,42 @@
         },
         "type": "object",
         "title": "YamlImportResult"
+      },
+      "oracle__claude_accounts__router__AuthorizeOut": {
+        "properties": {
+          "authorize_url": {
+            "type": "string",
+            "title": "Authorize Url"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "title": "Expires In Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "authorize_url",
+          "state",
+          "expires_in_seconds"
+        ],
+        "title": "AuthorizeOut"
+      },
+      "oracle__connections__router__AuthorizeOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "AuthorizeOut"
       }
     },
     "securitySchemes": {

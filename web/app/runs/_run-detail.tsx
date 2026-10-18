@@ -13,6 +13,7 @@ import {
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   RunStatusBadge,
+  RunsWhere,
   SEGMENT_STATUS_TONE,
   SpendBar,
   usd,
@@ -129,6 +130,9 @@ export function RunDetail({ id }: { id: string }) {
               Spend passed {usd(run.overrun_ceiling_usd)} (1.5× the estimate). An owner resumes the run or cancels it.
             </p>
           )}
+          <div className="mt-4">
+            <RunsWhere runtime={run.runtime} />
+          </div>
           {run.notes.length > 0 && (
             <ul className="mt-4 space-y-1 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="run-notes">
               {run.notes.map((n) => (

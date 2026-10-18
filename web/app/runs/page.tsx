@@ -9,7 +9,7 @@ import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
-import { CHECKPOINT_LABEL, RunStatusBadge, usd } from "./_lib";
+import { CHECKPOINT_LABEL, RunStatusBadge, RunsWhere, usd } from "./_lib";
 import { NewRunDialog } from "./_new-run-dialog";
 
 export default function RunsPage() {
@@ -20,8 +20,11 @@ export default function RunsPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Runs</h1>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Runs</h1>
+          <RunsWhere />
+        </div>
         {hasRole(role, "approver") && (
           <Button variant="primary" onClick={() => setOpen(true)}>
             New run

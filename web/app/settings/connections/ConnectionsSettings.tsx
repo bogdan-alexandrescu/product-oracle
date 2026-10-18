@@ -1,18 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { Badge, Button, ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Connection = Schemas["ConnectionOut"];
 type Provider = Schemas["ProviderOut"];
-type ClaudePlan = Schemas["ClaudePlanOut"];
-
-type Data = { providers: Provider[]; connections: Connection[]; plan: ClaudePlan };
+type Data = { providers: Provider[]; connections: Connection[] };
 
 const STATUS_TONE = { active: "green", expired: "amber", revoked: "neutral", error: "red" } as const;
 const STATUS_LABEL = { active: "Connected", expired: "Expired", revoked: "Revoked", error: "Error" } as const;
@@ -25,25 +23,21 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 async function loadAll(): Promise<Data> {
-  const [providers, connections, plan] = await Promise.all([
+  const [providers, connections] = await Promise.all([
     unwrap(api.GET("/v1/connections/providers")),
     unwrap(api.GET("/v1/connections")),
-    unwrap(api.GET("/v1/claude-plan")),
   ]);
-  return { providers, connections, plan };
+  return { providers, connections };
 }
 
 /** Settings > Connections: the signed-in user's own accounts, one card per provider. */
 export function ConnectionsSettings() {
   const params = useSearchParams();
-  const { role } = useMe();
   const q = useQuery("connections", loadAll);
   const connected = params.get("connected");
   const callbackError = params.get("error");
 
   const providers = q.data?.providers ?? [];
-  const claude = providers.find((p) => p.key === "claude");
-  const others = providers.filter((p) => p.key !== "claude");
   const nameOf = (key: string | null) => providers.find((p) => p.key === key)?.name ?? key;
 
   return (
@@ -51,7 +45,11 @@ export function ConnectionsSettings() {
       <h1 className="mb-2 text-2xl font-semibold tracking-tight text-neutral-900">Connections</h1>
       <p className="mb-6 text-sm text-neutral-600">
         Your own accounts. Only you see these connections and what they pull in; nobody else in the company can
-        use them.
+        use them. Oracle&apos;s own Claude calls run on the company&apos;s{" "}
+        <Link href="/settings/claude-accounts" className="underline">
+          Claude accounts
+        </Link>
+        .
       </p>
 
       {connected && !callbackError && (
@@ -71,25 +69,16 @@ export function ConnectionsSettings() {
       {q.loading && !q.data && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
 
-      {q.data && claude && (
-        <div className="flex flex-col gap-4">
-          <ClaudeCard
-            provider={claude}
-            connections={q.data.connections.filter((c) => c.provider === "claude")}
-            plan={q.data.plan}
-            isOwner={hasRole(role, "owner")}
-            reload={q.reload}
-          />
-          <div className="grid gap-4 md:grid-cols-2">
-            {others.map((p) => (
-              <ProviderCard
-                key={p.key}
-                provider={p}
-                connections={q.data!.connections.filter((c) => c.provider === p.key)}
-                reload={q.reload}
-              />
-            ))}
-          </div>
+      {q.data && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {providers.map((p) => (
+            <ProviderCard
+              key={p.key}
+              provider={p}
+              connections={q.data!.connections.filter((c) => c.provider === p.key)}
+              reload={q.reload}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -151,96 +140,6 @@ function ProviderCard({
         )}
       </div>
       <TokenForm provider={provider} reload={reload} openByDefault={false} />
-      {error && (
-        <div className="mt-2">
-          <ErrorNote>{error}</ErrorNote>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function ClaudeCard({
-  provider,
-  connections,
-  plan,
-  isOwner,
-  reload,
-}: {
-  provider: Provider;
-  connections: Connection[];
-  plan: ClaudePlan;
-  isOwner: boolean;
-  reload: () => Promise<void>;
-}) {
-  const [error, setError] = useState<string | null>(null);
-  // The default being saved, shown at once (undefined: none pending).
-  const [pendingDefault, setPendingDefault] = useState<string | null | undefined>(undefined);
-  const isDefault = (c: Connection) =>
-    pendingDefault !== undefined ? pendingDefault === c.id : (c.is_company_default ?? false);
-
-  async function setDefault(c: Connection, on: boolean) {
-    setError(null);
-    setPendingDefault(on ? c.id : null);
-    try {
-      await unwrap(
-        api.PUT("/v1/settings/{key}", {
-          params: { path: { key: "default_claude_connection_id" } },
-          body: { value: on ? c.id : null },
-        }),
-      );
-      await reload();
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setPendingDefault(undefined);
-    }
-  }
-
-  const using =
-    plan.source === "own"
-      ? `Oracle's model calls run on your own plan: ${plan.account_label}.`
-      : plan.source === "company"
-        ? "Oracle's model calls run on the company's default plan. Connect your own to use it instead."
-        : "No Claude plan: Oracle cannot make model calls for you until you connect one, or an owner sets a company default.";
-
-  return (
-    <Card provider={provider}>
-      <p data-testid="claude-plan-status" className="mt-1 text-sm text-neutral-700">
-        {using}
-      </p>
-      <div className="mt-3 rounded-md bg-neutral-50 p-3 text-sm text-neutral-700">
-        <p>Connect your Claude plan (Pro or Max) so it pays for Oracle&apos;s own Claude calls:</p>
-        <ol className="mt-1 list-decimal space-y-0.5 pl-5">
-          <li>
-            On your machine, with Claude Code installed, run{" "}
-            <code className="rounded bg-white px-1 font-mono text-xs ring-1 ring-neutral-200">claude setup-token</code>.
-          </li>
-          <li>Sign in when the browser opens; it prints a long-lived token.</li>
-          <li>Paste that token below. Oracle runs your calls through Claude Code with it.</li>
-        </ol>
-        <p className="mt-1 text-xs text-neutral-500">An Anthropic API key works too.</p>
-      </div>
-      <ConnectionList
-        connections={connections}
-        reload={reload}
-        extra={(c) =>
-          isOwner && c.status === "active" ? (
-            <label className="mt-1 flex items-center gap-2 text-xs text-neutral-700">
-              <input
-                type="checkbox"
-                checked={isDefault(c)}
-                disabled={pendingDefault !== undefined}
-                onChange={(e) => void setDefault(c, e.target.checked)}
-              />
-              Use as the default plan for users without their own
-            </label>
-          ) : isDefault(c) ? (
-            <p className="mt-1 text-xs text-neutral-500">The company&apos;s default plan.</p>
-          ) : null
-        }
-      />
-      <TokenForm provider={provider} reload={reload} openByDefault={connections.length === 0} />
       {error && (
         <div className="mt-2">
           <ErrorNote>{error}</ErrorNote>
@@ -351,15 +250,6 @@ function ConnectionRow({
   );
 }
 
-/** The Claude plan is the one provider that serves no source kinds. */
-const PASTE_WORD = "Token";
-const CLAUDE_COMMAND = ["claude", "setup-token"].join(" ");
-
-function pasteLabel(p: Provider): string {
-  if (p.source_kinds.length > 0) return PASTE_WORD;
-  return `${PASTE_WORD} from ${CLAUDE_COMMAND}`;
-}
-
 function TokenForm({
   provider,
   reload,
@@ -409,7 +299,7 @@ function TokenForm({
     <form onSubmit={onSubmit} className="mt-3 flex flex-col gap-2" aria-label={`${provider.name} token`}>
       <p className="text-xs text-neutral-500">{provider.token_help}</p>
       <label className="flex flex-col gap-1 text-xs text-neutral-700">
-        {pasteLabel(provider)}
+        Token
         <input
           type="password"
           autoComplete="off"

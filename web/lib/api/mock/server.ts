@@ -8,6 +8,7 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
 import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
@@ -651,6 +652,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
   const connections = await connectionsRoute(req, p);
   if (connections) return connections;
+  // The Claude account pool checks roles itself: every member reads, owners change.
+  const pool = await claudeAccountsRoute(req, p, q, me.role);
+  if (pool) return pool;
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"

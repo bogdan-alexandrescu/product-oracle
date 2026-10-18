@@ -1,8 +1,8 @@
 """Company-wide settings, one JSON value per key.
 
-Known keys: ``iap_default_role`` (role for a Google sign-in without an invite),
-``default_claude_connection_id`` (the Claude plan used when a user has none of their
-own), ``confidence_weights`` (oracle.baseline confidence scoring).
+Known keys: ``iap_default_role`` (role for a Google sign-in without an invite) and
+``confidence_weights`` (oracle.baseline confidence scoring). The Claude account pool
+behind Oracle's built-in model jobs has its own tables (oracle.claude_accounts).
 """
 
 import uuid

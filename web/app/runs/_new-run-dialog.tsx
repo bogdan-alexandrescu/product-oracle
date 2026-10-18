@@ -7,7 +7,7 @@ import { Button, ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CHECKPOINT_LABEL, usd, type EstimateOut, type FlowCatalog } from "./_lib";
+import { CHECKPOINT_LABEL, RunsWhere, usd, type EstimateOut, type FlowCatalog } from "./_lib";
 
 type Flow = FlowCatalog["flows"][number];
 type Depth = "quick" | "standard" | "deep";
@@ -120,6 +120,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
           {!catalog.data && !catalog.error && <Loading />}
           {catalog.data && flow && (
             <>
+              <RunsWhere runtime={catalog.data.runtime} />
               {catalog.data.runtime_notes.length > 0 && (
                 <ul className="space-y-1 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="runtime-notes">
                   {catalog.data.runtime_notes.map((n) => (

@@ -17,8 +17,8 @@ From the design's phasing table (v1 row), in build order:
 2. **Connections and sources (S1–S5).** Integrations are **per user** (S5, revised
    2026-10-17): each person connects their own GitHub, Slack, Notion, Fireflies and
    Google Docs accounts, through each tool's OAuth or a personal token, and picks what
-   to pull in. A Claude plan connects the same way and pays for Oracle's own Claude
-   calls. Connectors for uploads, GitHub, Slack, Notion, Fireflies and Google Docs;
+   to pull in. Oracle's own Claude calls run on the company's Claude account pool
+   (see "Claude accounts"), not on a connection. Connectors for uploads, GitHub, Slack, Notion, Fireflies and Google Docs;
    incremental sync with cursors; item versions
    so a run can pin the snapshot it started on (S4 Freshness); full-text search.
    DMs are never ingested; source ACL metadata is stored (S3 Visibility).
@@ -125,6 +125,8 @@ Every table is `TenantScoped` unless noted.
   `oracle.crypto`, `auth_mode` `oauth` (provider OAuth, refreshed) or `token` (a
   pasted personal token, or `claude setup-token` for a Claude plan). Replaces
   `source_credentials`.
+- (Superseded by migration 0007: the `claude` provider and `default_claude_connection_id`
+  are gone; Oracle's own Claude calls run on the Claude account pool.)
 - **Sources are owned and private** (`sources.owner_user_id`, `connection_id`): what
   a user's connections pull in is visible only to that user (S3 revised). Others see
   it only as evidence the owner adds to the shared baseline (excerpt, url, ref), and a
@@ -213,6 +215,12 @@ no-account reasons, swap and drain, the accounts screen and the CLI. Adapted for
 local, single-company app: no lending; credentials encrypted in Oracle's database; the
 sweep runs from `oracle tick`; calls run through Claude Code headless with
 `CLAUDE_CODE_OAUTH_TOKEN` set per call. The pool starts with the owner's account.
+
+Built (migration 0007): `api/oracle/claude_accounts/`, `api/oracle/llm/gateway.py`,
+`/v1/claude-accounts`, Settings > Claude accounts, `oracle accounts` and `oracle account
+add|pause|resume|drain|remove`. See [claude-accounts.md](claude-accounts.md) for how it
+works and every adaptation. Agent workflows still run in SwarmCloud on SwarmCloud's own
+accounts; `ORACLE_RUNTIME` defaults to `swarmcloud`.
 
 ## Confidence
 

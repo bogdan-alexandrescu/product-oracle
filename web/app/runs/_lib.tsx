@@ -84,3 +84,20 @@ export function SpendBar({ spent, estimate, ceiling }: { spent: number; estimate
     </div>
   );
 }
+
+/** Where runs execute, said on the Runs screens (ORACLE_RUNTIME defaults to swarmcloud). */
+export function RunsWhere({ runtime }: { runtime?: string }) {
+  if (runtime === "fake") {
+    return (
+      <p className="text-xs text-neutral-500" data-testid="runs-where">
+        This Oracle uses the local test runtime; in normal use runs execute in SwarmCloud.
+      </p>
+    );
+  }
+  return (
+    <p className="text-xs text-neutral-500" data-testid="runs-where">
+      Runs execute in SwarmCloud, on SwarmCloud&apos;s own Claude accounts. Oracle&apos;s built-in jobs (review
+      comments, reporting, refinement) use the accounts in Settings &gt; Claude accounts.
+    </p>
+  );
+}

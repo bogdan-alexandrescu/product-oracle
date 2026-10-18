@@ -5,14 +5,10 @@ For every provider: how to check a credential and read the account it belongs to
 it serves (``oracle.sources.models.SOURCE_KINDS``). ``identify`` takes the HTTP client
 as an argument so tests drive it with ``httpx.MockTransport``.
 
-The Claude plan is special: a pasted ``claude setup-token`` value is checked by running
-a tiny call through Claude Code (``oracle.llm``), an Anthropic API key with
-``GET /v1/models``. Neither reveals a stable account id, so a user holds at most one
-plan and one API key (``account_id`` ``plan`` / ``api_key``) and pasting again replaces
-the old one.
+Claude is not a connection: Oracle's own model calls run on the company's Claude account
+pool (``oracle.claude_accounts``, Settings > Claude accounts).
 """
 
-import hashlib
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -34,7 +30,7 @@ class Identity:
     label: str
     # Scopes the provider reports for the credential, when it reports any.
     scopes: list[str] = field(default_factory=list)
-    # Extra values to keep inside the encrypted credential (e.g. the Claude token kind).
+    # Extra values to keep inside the encrypted credential.
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -205,60 +201,6 @@ async def identify_google(client: httpx.AsyncClient, token: str) -> Identity:
     return Identity(account_id=data["sub"], label=data.get("email") or data["sub"])
 
 
-# --- Claude -------------------------------------------------------------------------
-
-# Built from parts so the source holds no credential-shaped literal.
-PLAN_TOKEN_PREFIX = "-".join(("sk", "ant", "oat"))
-API_KEY_PREFIX = "-".join(("sk", "ant", "api"))
-ANTHROPIC_API = "https://api.anthropic.com"
-ANTHROPIC_VERSION = "2023-06-01"
-
-
-def claude_token_kind(token: str) -> str:
-    """``plan`` for a ``claude setup-token`` value, ``api_key`` for an API key."""
-    if token.startswith(PLAN_TOKEN_PREFIX):
-        return "plan"
-    if token.startswith(API_KEY_PREFIX):
-        return "api_key"
-    raise CredentialRejected(
-        "Not a Claude credential: paste the value printed by `claude setup-token` "
-        "or an Anthropic API key"
-    )
-
-
-def _tail(token: str) -> str:
-    return token[-4:]
-
-
-async def identify_claude(client: httpx.AsyncClient, token: str) -> Identity:
-    """An API key is checked with ``GET /v1/models``; a plan token through Claude Code."""
-    kind = claude_token_kind(token)
-    fingerprint = hashlib.sha256(token.encode()).hexdigest()[:12]
-    if kind == "api_key":
-        resp = await _get(
-            client,
-            "GET",
-            f"{ANTHROPIC_API}/v1/models",
-            params={"limit": 1},
-            headers={"x-api-key": token, "anthropic-version": ANTHROPIC_VERSION},
-        )
-        _check(resp, "Anthropic")
-        return Identity(
-            account_id="api_key",
-            label=f"Anthropic API key …{_tail(token)}",
-            extra={"kind": "api_key", "fingerprint": fingerprint},
-        )
-
-    from oracle.llm import gateway
-
-    await gateway.verify_plan_token(token)
-    return Identity(
-        account_id="plan",
-        label=f"Claude plan (setup-token …{_tail(token)})",
-        extra={"kind": "plan", "fingerprint": fingerprint},
-    )
-
-
 # --- Registry -----------------------------------------------------------------------
 
 PROVIDERS: dict[str, Provider] = {
@@ -340,14 +282,6 @@ PROVIDERS: dict[str, Provider] = {
                 ],
                 authorize_params={"access_type": "offline", "prompt": "consent"},
             ),
-        ),
-        Provider(
-            key="claude",
-            name="Claude plan",
-            identify=identify_claude,
-            source_kinds=(),
-            token_help="Run `claude setup-token` on your machine and paste the token it "
-            "prints, or paste an Anthropic API key.",
         ),
     )
 }

@@ -47,7 +47,7 @@ class Credential:
     provider: str
     auth_mode: str
     access_token: str
-    # Non-secret extras kept with the token (e.g. the Claude token kind: plan | api_key).
+    # Non-secret extras kept with the token.
     extra: dict[str, Any] = field(default_factory=dict)
 
 

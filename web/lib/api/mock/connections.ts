@@ -1,10 +1,10 @@
 /**
- * Mock of the connections, Claude plan and company settings endpoints (mock mode only).
- * Kept apart from server.ts; state lives in its own localStorage key.
+ * Mock of the connections and company settings endpoints (mock mode only). Kept apart
+ * from server.ts; state lives in its own localStorage key.
  *
- * Token rules: anything starting with "bad" is rejected; Claude accepts a plan token
- * or an API key, told apart by their prefixes (PLAN_PREFIX, API_PREFIX). OAuth is "configured" for GitHub and Google:
- * authorize connects at once and sends the browser straight back to the page.
+ * Token rules: anything starting with "bad" is rejected. OAuth is "configured" for GitHub
+ * and Google: authorize connects at once and sends the browser straight back to the page.
+ * Claude is not a connection: see ./claude-accounts.ts.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -16,19 +16,7 @@ interface ConnDb {
 }
 
 const STORAGE_KEY = "po-mock-connections-v1";
-// Built from parts so the source holds no credential-shaped literal.
-export const PLAN_PREFIX = ["sk", "ant", "oat"].join("-");
-export const API_PREFIX = ["sk", "ant", "api"].join("-");
-
 const PROVIDERS: Schemas["ProviderOut"][] = [
-  {
-    key: "claude",
-    name: "Claude plan",
-    source_kinds: [],
-    oauth_configured: false,
-    oauth_scopes: [],
-    token_help: "Run `claude setup-token` on your machine and paste the token it prints, or paste an Anthropic API key.",
-  },
   {
     key: "github",
     name: "GitHub",
@@ -73,7 +61,6 @@ const PROVIDERS: Schemas["ProviderOut"][] = [
 
 const SETTING_DEFAULTS: Record<string, unknown> = {
   iap_default_role: "commenter",
-  default_claude_connection_id: null,
   confidence_weights: {},
 };
 
@@ -102,12 +89,6 @@ const now = () => new Date().toISOString();
 
 function identity(provider: string, token: string): { account_id: string; label: string; scopes: string[] } | string {
   if (token.startsWith("bad")) return `${PROVIDERS.find((p) => p.key === provider)?.name ?? provider} rejected the token (401)`;
-  const tail = token.slice(-4);
-  if (provider === "claude") {
-    if (token.startsWith(PLAN_PREFIX)) return { account_id: "plan", label: `Claude plan (setup-token …${tail})`, scopes: [] };
-    if (token.startsWith(API_PREFIX)) return { account_id: "api_key", label: `Anthropic API key …${tail}`, scopes: [] };
-    return "Not a Claude credential: paste the value printed by `claude setup-token` or an Anthropic API key";
-  }
   const labels: Record<string, string> = {
     github: "example-user",
     slack: "pat @ Example",
@@ -140,7 +121,6 @@ function upsert(
       last_used_at: null,
       created_at: now(),
       updated_at: now(),
-      is_company_default: false,
     };
     db.connections.push(row);
   }
@@ -156,8 +136,8 @@ function upsert(
   return row;
 }
 
-function out(db: ConnDb, c: ConnectionRow): ConnectionRow {
-  return { ...c, is_company_default: db.settings.default_claude_connection_id === c.id };
+function out(_db: ConnDb, c: ConnectionRow): ConnectionRow {
+  return c;
 }
 
 function settingOut(db: ConnDb, key: string): Schemas["SettingOut"] {
@@ -171,9 +151,9 @@ function settingOut(db: ConnDb, key: string): Schemas["SettingOut"] {
   };
 }
 
-/** Handles /v1/connections…, /v1/claude-plan and /v1/settings…; null for other routes. */
+/** Handles /v1/connections… and /v1/settings…; null for other routes. */
 export async function connectionsRoute(req: Request, p: string[]): Promise<Response | null> {
-  if (p[1] !== "connections" && p[1] !== "claude-plan" && p[1] !== "settings") return null;
+  if (p[1] !== "connections" && p[1] !== "settings") return null;
   const db = load();
   const res = await handle(db, req, p);
   save(db);
@@ -184,25 +164,6 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
   const m = req.method;
   const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
 
-  if (p[1] === "claude-plan") {
-    const own = db.connections
-      .filter((c) => c.provider === "claude" && c.status === "active")
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
-    if (own) {
-      return json(200, {
-        source: "own",
-        connection_id: own.id,
-        account_label: own.account_label,
-        via: own.account_id === "api_key" ? "api_key" : "plan",
-        reason: null,
-      });
-    }
-    return json(200, {
-      source: "none",
-      reason: "No Claude plan connected: connect yours in Settings > Connections (`claude setup-token`), or ask an owner to set a company default plan",
-    });
-  }
-
   if (p[1] === "settings") {
     if (!p[2] && m === "GET") return json(200, Object.keys(SETTING_DEFAULTS).map((k) => settingOut(db, k)));
     const key = p[2];
@@ -211,12 +172,7 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
     if (m === "PUT") {
       const { value } = await body<Schemas["SettingIn"]>();
       if (value === null || value === undefined) delete db.settings[key];
-      else if (key === "default_claude_connection_id") {
-        const c = db.connections.find((x) => x.id === value);
-        if (!c || c.provider !== "claude") return json(422, { detail: "default_claude_connection_id must be a Claude connection" });
-        if (c.status !== "active") return json(422, { detail: `That Claude connection is ${c.status}; reconnect it first` });
-        db.settings[key] = value;
-      } else db.settings[key] = value;
+      else db.settings[key] = value;
       return json(200, settingOut(db, key));
     }
   }
@@ -245,7 +201,6 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
     if (!row) return json(404, { detail: "Connection not found" });
     if (!p[3] && m === "DELETE") {
       db.connections = db.connections.filter((c) => c.id !== row.id);
-      if (db.settings.default_claude_connection_id === row.id) delete db.settings.default_claude_connection_id;
       return json(204, undefined);
     }
     if (p[3] === "reconnect" && m === "POST") {

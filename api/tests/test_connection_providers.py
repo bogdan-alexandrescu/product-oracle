@@ -4,15 +4,10 @@ import httpx
 import pytest
 
 from oracle.connections.providers import (
-    API_KEY_PREFIX,
-    PLAN_TOKEN_PREFIX,
     PROVIDERS,
     CredentialRejected,
     ProviderUnavailable,
-    claude_token_kind,
 )
-from oracle.llm import gateway
-from oracle.llm.transports import LlmAuthError, LlmUnavailable, TransportResult
 from oracle.sources.models import SOURCE_KINDS
 
 
@@ -25,13 +20,12 @@ def bearer(request: httpx.Request) -> str:
 
 
 def test_registry_covers_every_provider_and_valid_source_kinds():
-    assert set(PROVIDERS) == {"github", "slack", "notion", "fireflies", "google", "claude"}
+    assert set(PROVIDERS) == {"github", "slack", "notion", "fireflies", "google"}
     for p in PROVIDERS.values():
         assert set(p.source_kinds) <= set(SOURCE_KINDS)
         assert p.token_help
     assert PROVIDERS["google"].source_kinds == ("google_docs",)
-    assert PROVIDERS["claude"].source_kinds == ()
-    # OAuth where the provider has it; Fireflies and Claude are token-only.
+    # OAuth where the provider has it; Fireflies is token-only.
     assert {k for k, p in PROVIDERS.items() if p.oauth} == {"github", "slack", "notion", "google"}
     assert all("im:history" not in s for s in PROVIDERS["slack"].oauth.scopes)
 
@@ -137,59 +131,6 @@ async def test_provider_down_is_unavailable_not_rejected():
             await PROVIDERS["google"].identify(c, "tok")
 
 
-def test_claude_token_kinds():
-    assert claude_token_kind(PLAN_TOKEN_PREFIX + "01-abc") == "plan"
-    assert claude_token_kind(API_KEY_PREFIX + "03-abc") == "api_key"
-    with pytest.raises(CredentialRejected):
-        claude_token_kind("not-a-claude-token")
-
-
-async def test_claude_api_key_checked_with_models_endpoint():
-    def handler(request):
-        assert request.url.path == "/v1/models"
-        assert request.headers["anthropic-version"]
-        if request.headers.get("x-api-key") == API_KEY_PREFIX + "03-good-1234":
-            return httpx.Response(200, json={"data": []})
-        return httpx.Response(401, json={"type": "error"})
-
-    async with http(handler) as c:
-        identity = await PROVIDERS["claude"].identify(c, API_KEY_PREFIX + "03-good-1234")
-        assert identity.account_id == "api_key"
-        assert identity.label == "Anthropic API key …1234"
-        assert identity.extra["kind"] == "api_key"
-        with pytest.raises(CredentialRejected):
-            await PROVIDERS["claude"].identify(c, API_KEY_PREFIX + "03-bad")
-
-
-class FakePlan:
-    def __init__(self, outcome=None):
-        self.outcome = outcome
-        self.calls: list[tuple[str, object]] = []
-
-    async def complete(self, token, request):
-        self.calls.append((token, request))
-        if self.outcome:
-            raise self.outcome
-        return TransportResult(text="OK", model=request.model)
-
-
-async def test_claude_plan_token_checked_through_claude_code():
-    fake = FakePlan()
-    previous = gateway.set_transports(gateway.Transports(plan=fake, api_key=FakePlan()))
-    try:
-        async with http(lambda r: pytest.fail("a plan token never goes to an HTTP API")) as c:
-            identity = await PROVIDERS["claude"].identify(c, PLAN_TOKEN_PREFIX + "01-good-9876")
-        assert identity.account_id == "plan"
-        assert identity.label == "Claude plan (setup-token …9876)"
-        assert fake.calls[0][0] == PLAN_TOKEN_PREFIX + "01-good-9876"
-
-        fake.outcome = LlmAuthError("401 OAuth access token is invalid")
-        async with http(lambda r: httpx.Response(500)) as c:
-            with pytest.raises(CredentialRejected):
-                await PROVIDERS["claude"].identify(c, PLAN_TOKEN_PREFIX + "01-bad")
-        fake.outcome = LlmUnavailable("Claude Code is not installed")
-        async with http(lambda r: httpx.Response(500)) as c:
-            with pytest.raises(ProviderUnavailable):
-                await PROVIDERS["claude"].identify(c, PLAN_TOKEN_PREFIX + "01-x")
-    finally:
-        gateway.set_transports(previous)
+def test_claude_is_not_a_connection():
+    # Oracle's own model calls run on the company's Claude account pool.
+    assert "claude" not in PROVIDERS

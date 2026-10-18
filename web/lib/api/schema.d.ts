@@ -467,26 +467,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/claude-plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Claude Plan
-         * @description Which Claude connection pays for this user's model calls, if any.
-         */
-        get: operations["get_claude_plan"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/connections/{provider}/token": {
         parameters: {
             query?: never;
@@ -611,6 +591,226 @@ export interface paths {
         get: operations["get_setting_endpoint"];
         /** Put Setting */
         put: operations["put_setting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claude-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Claude Accounts
+         * @description Every account in the company's pool, with the sweep's liveness and the fallback.
+         */
+        get: operations["list_claude_accounts"];
+        put?: never;
+        /**
+         * Add Claude Account
+         * @description Add an account from Claude Code's saved login, pasted verbatim.
+         *
+         *     It must be a PAIR: a credential with no refresh token cannot be kept alive, so it is
+         *     refused here rather than dying silently at its first expiry.
+         */
+        post: operations["add_claude_account"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claude-accounts/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin Claude Sign In
+         * @description Start a browser sign-in: the URL to open, and the ``state`` that keys it.
+         *
+         *     The PKCE verifier stays here, keyed by ``state``; the browser never holds it.
+         */
+        post: operations["begin_claude_sign_in"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claude-accounts/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish Claude Sign In
+         * @description Redeem the pasted code and add the account.
+         *
+         *     Only whoever started the sign-in may finish it, checked BEFORE the code is redeemed:
+         *     a mismatch redeems nothing and leaves the pending sign-in for its owner. Where the
+         *     account lands (its label) comes from the pending sign-in, never from this request.
+         */
+        post: operations["finish_claude_sign_in"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claude-accounts/fallback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Claude Fallback
+         * @description Set the credential used while no account is registered (setup-token or API key).
+         */
+        put: operations["set_claude_fallback"];
+        post?: never;
+        /** Clear Claude Fallback */
+        delete: operations["clear_claude_fallback"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claude-accounts/sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sweep Claude Accounts
+         * @description Run the sweep now: reclaim holds, refresh credentials, read usage.
+         */
+        post: operations["sweep_claude_accounts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claude-accounts/{account_id}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Claude Account State
+         * @description AVAILABLE, PAUSED, DRAINING or REAUTH_REQUIRED. DRAINING marks every live hold to
+         *     move at its next turn boundary, in the same transaction.
+         */
+        put: operations["set_claude_account_state"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claude-accounts/{account_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Claude Account
+         * @description Exchange this account's credential now, through the same single writer as the
+         *     sweep, and say what happened.
+         */
+        post: operations["refresh_claude_account"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claude-accounts/{account_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Claude Account
+         * @description Remove the account; its open hold records close as ``account_removed``.
+         */
+        delete: operations["remove_claude_account"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claude-accounts/{account_id}/holders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Claude Account Holders
+         * @description The LIVE holds: an expired one is a killed job, not a holder.
+         */
+        get: operations["claude_account_holders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claude-accounts/{account_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Claude Account History
+         * @description Recorded spans taken in [from, to), newest first (default: the last 7 days).
+         *
+         *     A cursor is ``<instant>|<n>``: the last ``assigned_at`` served and how many rows at
+         *     that instant were served, so ties are not dropped. Windows over 90 days, and
+         *     cursors this route did not mint, are refused.
+         */
+        get: operations["claude_account_history"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1918,7 +2118,8 @@ export interface paths {
         put?: never;
         /**
          * Tick
-         * @description Advance this company's active runs (``oracle tick`` calls it on a schedule).
+         * @description Advance this company's active runs and sweep its Claude account pool (``oracle tick``
+         *     calls it on a schedule).
          */
         post: operations["tick"];
         delete?: never;
@@ -2093,6 +2294,64 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccountCreated */
+        AccountCreated: {
+            account: components["schemas"]["AccountOut"];
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Note */
+            note: string;
+        };
+        /** AccountOut */
+        AccountOut: {
+            /** Account Id */
+            account_id: string;
+            /** Label */
+            label: string;
+            /** Provider */
+            provider: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "AVAILABLE" | "PAUSED" | "DRAINING" | "REAUTH_REQUIRED";
+            /** Reason */
+            reason: string;
+            /** Assigned */
+            assigned: number;
+            /** Windows */
+            windows: {
+                [key: string]: components["schemas"]["WindowOut"];
+            };
+            /** Observed At */
+            observed_at: string | null;
+            /** Stale */
+            stale: boolean;
+            /** Unreadable Now */
+            unreadable_now: boolean;
+            /** Last Refresh At */
+            last_refresh_at: string | null;
+            /** Token Expires At */
+            token_expires_at: string | null;
+            /** Last Refresh Reason */
+            last_refresh_reason: string | null;
+            /** Last Assigned At */
+            last_assigned_at: string | null;
+        };
+        /** AccountsPage */
+        AccountsPage: {
+            /** Accounts */
+            accounts: components["schemas"]["AccountOut"][];
+            /** Unreadable Documents */
+            unreadable_documents: string[];
+            /** Unreadable Document Count */
+            unreadable_document_count: number;
+            refresh_sweep: components["schemas"]["RefreshSweepOut"];
+            fallback: components["schemas"]["FallbackOut"] | null;
+        };
         /** AgentRoleOut */
         AgentRoleOut: {
             /** Key */
@@ -2147,10 +2406,10 @@ export interface components {
             /** Authorization Response Iss Parameter Supported */
             authorization_response_iss_parameter_supported: boolean;
         };
-        /** AuthorizeOut */
-        AuthorizeOut: {
-            /** Url */
-            url: string;
+        /** AuthorizeIn */
+        AuthorizeIn: {
+            /** Label */
+            label: string;
         };
         /** Body_oauth_revoke */
         Body_oauth_revoke: {
@@ -2292,21 +2551,46 @@ export interface components {
             /** Observed At */
             observed_at?: string | null;
         };
-        /** ClaudePlanOut */
-        ClaudePlanOut: {
+        /**
+         * ClaudeSweepSummary
+         * @description What the Claude account pool's sweep did on this tick (oracle.claude_accounts).
+         */
+        ClaudeSweepSummary: {
             /**
-             * Source
-             * @enum {string}
+             * Reclaimed
+             * @default 0
              */
-            source: "own" | "company" | "none";
-            /** Connection Id */
-            connection_id?: string | null;
-            /** Account Label */
-            account_label?: string | null;
-            /** Via */
-            via?: ("plan" | "api_key") | null;
-            /** Reason */
-            reason?: string | null;
+            reclaimed: number;
+            /**
+             * Examined
+             * @default 0
+             */
+            examined: number;
+            /**
+             * Refreshed
+             * @default 0
+             */
+            refreshed: number;
+            /**
+             * Reauth Required
+             * @default []
+             */
+            reauth_required: string[];
+            /**
+             * Polled
+             * @default 0
+             */
+            polled: number;
+            /**
+             * Lease
+             * @default ran
+             */
+            lease: string;
+            /**
+             * Errors
+             * @default []
+             */
+            errors: string[];
         };
         /** ClientRegistrationIn */
         ClientRegistrationIn: {
@@ -2530,11 +2814,6 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
-            /**
-             * Is Company Default
-             * @default false
-             */
-            is_company_default: boolean;
         };
         /** ConsentDecisionIn */
         ConsentDecisionIn: {
@@ -3198,6 +3477,13 @@ export interface components {
             /** Ref */
             ref: string | null;
         };
+        /** ExchangeIn */
+        ExchangeIn: {
+            /** State */
+            state: string;
+            /** Code */
+            code: string;
+        };
         /** Explanation */
         Explanation: {
             /**
@@ -3227,6 +3513,26 @@ export interface components {
             value: number;
             /** Weight */
             weight: number;
+        };
+        /** FallbackIn */
+        FallbackIn: {
+            /** Token */
+            token: string;
+        };
+        /** FallbackOut */
+        FallbackOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "plan" | "api_key";
+            /** Label */
+            label: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** FeedbackItemOut */
         FeedbackItemOut: {
@@ -3410,6 +3716,54 @@ export interface components {
             status: string;
             /** Database */
             database: string;
+        };
+        /** HistoryOut */
+        HistoryOut: {
+            /** Account Id */
+            account_id: string;
+            /**
+             * From
+             * Format: date-time
+             */
+            from: string;
+            /**
+             * To
+             * Format: date-time
+             */
+            to: string;
+            /** Spans */
+            spans: components["schemas"]["SpanOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** HolderOut */
+        HolderOut: {
+            /** Task Id */
+            task_id: string | null;
+            /** Attempt Id */
+            attempt_id: string | null;
+            /** Since */
+            since: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Swapped From */
+            swapped_from: string | null;
+            /** Swapped From Reason */
+            swapped_from_reason: string | null;
+            /** Move */
+            move: string | null;
+        };
+        /** HoldersOut */
+        HoldersOut: {
+            /** Account Id */
+            account_id: string;
+            /** Total */
+            total: number;
+            /** Holders */
+            holders: components["schemas"]["HolderOut"][];
         };
         /**
          * ImportErrorResponse
@@ -4194,6 +4548,52 @@ export interface components {
             /** Authorize Url */
             authorize_url?: string | null;
         };
+        /** RefreshOut */
+        RefreshOut: {
+            refresh: components["schemas"]["RefreshResult"];
+            account: components["schemas"]["AccountOut"];
+        };
+        /** RefreshResult */
+        RefreshResult: {
+            /** Account Id */
+            account_id: string;
+            /** Refreshed */
+            refreshed: boolean;
+            /** Reason */
+            reason: string;
+            /** Expires At */
+            expires_at: string | null;
+        };
+        /** RefreshSweepOut */
+        RefreshSweepOut: {
+            /** Last Completed At */
+            last_completed_at: string | null;
+            /** Last Outcome */
+            last_outcome: ("ok" | "error") | null;
+            /** Readable */
+            readable: boolean;
+        };
+        /** RegisterIn */
+        RegisterIn: {
+            /** Label */
+            label: string;
+            /** Credential */
+            credential: string;
+        };
+        /** RemovedOut */
+        RemovedOut: {
+            /** Removed */
+            removed: string;
+            /** Label */
+            label: string;
+            /** Closed Holds */
+            closed_holds: number;
+            /**
+             * Credential
+             * @constant
+             */
+            credential: "deleted";
+        };
         /** ReplyCreate */
         ReplyCreate: {
             /** Body */
@@ -4791,6 +5191,29 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** SpanOut */
+        SpanOut: {
+            /** Task Id */
+            task_id: string | null;
+            /** Attempt Id */
+            attempt_id: string | null;
+            /** Since */
+            since: string | null;
+            /** Until */
+            until: string | null;
+            /** End */
+            end: string | null;
+            /** Hold Expires At */
+            hold_expires_at: string | null;
+            /** Swapped From */
+            swapped_from: string | null;
+            /** Swapped From Reason */
+            swapped_from_reason: string | null;
+            /** Swapped To */
+            swapped_to: string | null;
+            /** Swapped To Reason */
+            swapped_to_reason: string | null;
+        };
         /** StartDraftIn */
         StartDraftIn: {
             /**
@@ -4833,6 +5256,29 @@ export interface components {
             theme: string | null;
             /** Version */
             version: number;
+        };
+        /** StateIn */
+        StateIn: {
+            /** State */
+            state: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
+        /** StateOut */
+        StateOut: {
+            account: components["schemas"]["AccountOut"];
+            /** Moving */
+            moving: number;
+        };
+        /** SweepOut */
+        SweepOut: {
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
         };
         /** SyncResult */
         SyncResult: {
@@ -5252,6 +5698,7 @@ export interface components {
             runs_paused: number;
             /** Errors */
             errors: string[];
+            claude_accounts?: components["schemas"]["ClaudeSweepSummary"] | null;
         };
         /** TokenIn */
         TokenIn: {
@@ -5501,6 +5948,18 @@ export interface components {
              */
             section_keys: string[];
         };
+        /** WindowOut */
+        WindowOut: {
+            /** Utilization */
+            utilization: number;
+            /**
+             * Resets At
+             * Format: date-time
+             */
+            resets_at: string;
+            /** Reset */
+            reset: boolean;
+        };
         /** WordOp */
         WordOp: {
             /**
@@ -5550,6 +6009,20 @@ export interface components {
              * @default []
              */
             notes: components["schemas"]["ImportIssue"][];
+        };
+        /** AuthorizeOut */
+        oracle__claude_accounts__router__AuthorizeOut: {
+            /** Authorize Url */
+            authorize_url: string;
+            /** State */
+            state: string;
+            /** Expires In Seconds */
+            expires_in_seconds: number;
+        };
+        /** AuthorizeOut */
+        oracle__connections__router__AuthorizeOut: {
+            /** Url */
+            url: string;
         };
     };
     responses: never;
@@ -6454,26 +6927,6 @@ export interface operations {
             };
         };
     };
-    get_claude_plan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClaudePlanOut"];
-                };
-            };
-        };
-    };
     connect_with_token: {
         parameters: {
             query?: never;
@@ -6533,7 +6986,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthorizeOut"];
+                    "application/json": components["schemas"]["oracle__connections__router__AuthorizeOut"];
                 };
             };
             /** @description OAuth is not configured for this provider */
@@ -6747,6 +7200,367 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_claude_accounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsPage"];
+                };
+            };
+        };
+    };
+    add_claude_account: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    begin_claude_sign_in: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorizeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["oracle__claude_accounts__router__AuthorizeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finish_claude_sign_in: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExchangeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountCreated"];
+                };
+            };
+            /** @description Someone else started this sign-in */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_claude_fallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FallbackIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FallbackOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_claude_fallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sweep_claude_accounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SweepOut"];
+                };
+            };
+        };
+    };
+    set_claude_account_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_claude_account: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_claude_account: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemovedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claude_account_holders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HoldersOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claude_account_history: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

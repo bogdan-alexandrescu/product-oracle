@@ -1,188 +1,183 @@
-"""The LLM gateway: which Claude plan pays, and how each credential kind is called."""
+"""Built-in model calls on the Claude account pool, and how each credential is called."""
 
 import json
 import os
 import stat
-import uuid
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 
-from oracle.connections.models import Connection
-from oracle.connections.providers import API_KEY_PREFIX, PLAN_TOKEN_PREFIX
-from oracle.llm import NoClaudePlan, gateway
+from oracle.claude_accounts import store
+from oracle.claude_accounts.accounts import AccountState
+from oracle.claude_accounts.fallback import API_KEY_PREFIX, PLAN_TOKEN_PREFIX
+from oracle.llm import NoClaudeAccount, gateway
 from oracle.llm.transports import (
     ClaudeCodeTransport,
     LlmAuthError,
+    LlmRateLimited,
     LlmRequest,
     LlmUnavailable,
     MessagesApiTransport,
     TransportResult,
+    reading_of,
     render_prompt,
 )
 from oracle.tenancy import tenant_session
-from oracle.tenant_settings import TenantSetting
-from tests.connection_helpers import add_connection, make_person
+from tests.claude_account_helpers import add_account, get_account, now, window
+
+MESSAGES = [{"role": "user", "content": "Summarise the goals."}]
+RESETS = int((datetime.now(UTC) + timedelta(hours=3)).timestamp())
 
 
 class FakeTransport:
-    def __init__(self, name: str, error: Exception | None = None):
+    """Answers per token: an exception, or text with readings."""
+
+    def __init__(self, name: str, answers: dict[str, object] | None = None):
         self.name = name
-        self.error = error
+        self.answers = answers or {}
         self.calls: list[tuple[str, LlmRequest]] = []
 
     async def complete(self, token: str, request: LlmRequest) -> TransportResult:
         self.calls.append((token, request))
-        if self.error:
-            raise self.error
-        return TransportResult(text=f"{self.name} answer", model=request.model)
+        answer = self.answers.get(token)
+        if isinstance(answer, Exception):
+            raise answer
+        readings = answer if isinstance(answer, dict) else {}
+        return TransportResult(text=f"{self.name} answer", model=request.model, readings=readings)
 
 
 @pytest.fixture
 def fakes():
-    plan, api = FakeTransport("plan"), FakeTransport("api")
-    return gateway.Transports(plan=plan, api_key=api)
+    return gateway.Transports(plan=FakeTransport("plan"), api_key=FakeTransport("api"))
 
 
-async def _claude(tenant_id, user_id, kind="plan", status="active", token=None):
-    token = token or (PLAN_TOKEN_PREFIX if kind == "plan" else API_KEY_PREFIX) + uuid.uuid4().hex
-    conn = await add_connection(
-        tenant_id, user_id, "claude", account_id=kind, status=status,
-        bundle={"access_token": token, "kind": kind},
-    )  # fmt: skip
-    return conn, token
+def _reading(utilization: float) -> dict[str, object]:
+    return {
+        "five_hour": {
+            "utilization": utilization,
+            "resets_at": datetime.fromtimestamp(RESETS, tz=UTC).isoformat(),
+        }
+    }
 
 
-async def _set_default(tenant_id, conn_id):
+async def _call(tenant_id, fakes, job="reporting"):
     async with tenant_session(tenant_id) as s:
-        s.add(TenantSetting(key="default_claude_connection_id", value=str(conn_id)))
-        await s.commit()
+        return await gateway.complete(s, "Be brief.", MESSAGES, 256, job=job, transports=fakes)
 
 
-MESSAGES = [{"role": "user", "content": "Summarise the goals."}]
+async def test_a_call_runs_on_the_account_with_most_headroom_and_records_its_reading(
+    tenant_id, fakes
+):
+    await add_account(tenant_id, "busy", windows={"five_hour": window(0.8)})
+    roomy = await add_account(tenant_id, "roomy", windows={"five_hour": window(0.1)})
+    fakes.plan.answers["acc-roomy"] = _reading(0.33)
+    out = await _call(tenant_id, fakes)
+    assert (out.text, out.via, out.account_label) == ("plan answer", "account", "roomy")
+    assert fakes.plan.calls[0][0] == "acc-roomy"
+    after = await get_account(tenant_id, roomy.account_id)
+    assert after.windows["five_hour"].utilization == pytest.approx(0.33)
+    # The hold was given back when the call ended, and the log says so.
+    assert after.assigned == 0 and after.last_assigned_at is not None
 
 
-async def test_uses_the_users_own_plan(tenant_id, fakes):
-    alice = await make_person(tenant_id, "alice@example.com")
-    conn, token = await _claude(tenant_id, alice.id)
-    async with tenant_session(tenant_id) as s:
-        out = await gateway.complete(s, alice.id, "Be brief.", MESSAGES, 512, transports=fakes)
-    assert out.text == "plan answer"
-    assert (out.plan, out.via, out.connection_id) == ("own", "plan", conn.id)
-    token_seen, request = fakes.plan.calls[0]
-    assert token_seen == token
-    assert request.system == "Be brief."  # passed as is: no prelude added
-    assert request.messages == MESSAGES and request.max_tokens == 512
-    assert fakes.api_key.calls == []
+async def test_an_exhausted_account_is_swapped_at_the_turn_boundary(tenant_id, fakes):
+    spent = await add_account(tenant_id, "alpha")
+    spare = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
+    fakes.plan.answers["acc-alpha"] = LlmRateLimited("out of quota", _reading(1.0))
+    out = await _call(tenant_id, fakes)
+    assert out.account_label == "bravo"
+    assert out.swaps == [(spent.account_id, "exhausted")]
+    assert [t for t, _ in fakes.plan.calls] == ["acc-alpha", "acc-bravo"]
+    # The rejected reading is recorded, so the next call does not try it.
+    assert (await get_account(tenant_id, spent.account_id)).windows["five_hour"].utilization == 1.0
+    assert (await get_account(tenant_id, spare.account_id)).assigned == 0
+    again = await _call(tenant_id, fakes)
+    assert again.account_label == "bravo" and again.swaps == []
 
 
-async def test_api_key_goes_to_the_messages_transport(tenant_id, fakes):
-    alice = await make_person(tenant_id, "alice@example.com")
-    _, key = await _claude(tenant_id, alice.id, kind="api_key")
-    async with tenant_session(tenant_id) as s:
-        out = await gateway.complete(s, alice.id, "s", MESSAGES, 64, transports=fakes)
-    assert (out.text, out.via) == ("api answer", "api_key")
-    assert fakes.api_key.calls[0][0] == key
-    assert fakes.plan.calls == []
+async def test_a_draining_account_moves_its_hold_before_the_next_turn(tenant_id, fakes):
+    a = await add_account(tenant_id, "alpha")
+    b = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
+    real_must_move = gateway.pool.must_move
+    drained = False
 
+    async def drain_once(tenant, assignment):
+        nonlocal drained
+        if not drained:
+            drained = True
+            await store.set_state_and_moves(
+                tenant, a.account_id, AccountState.DRAINING, "", now=now()
+            )
+        return await real_must_move(tenant, assignment)
 
-async def test_falls_back_to_the_company_default(tenant_id, fakes):
-    owner = await make_person(tenant_id, "owner@example.com", "owner")
-    bob = await make_person(tenant_id, "bob@example.com", "commenter")
-    conn, token = await _claude(tenant_id, owner.id)
-    await _set_default(tenant_id, conn.id)
-    async with tenant_session(tenant_id) as s:
-        out = await gateway.complete(s, bob.id, "s", MESSAGES, 64, transports=fakes)
-    assert (out.plan, out.connection_id) == ("company", conn.id)
-    assert fakes.plan.calls[0][0] == token
-
-    # Bob's own plan wins over the default once he has one.
-    own, own_token = await _claude(tenant_id, bob.id)
-    async with tenant_session(tenant_id) as s:
-        out = await gateway.complete(s, bob.id, "s", MESSAGES, 64, transports=fakes)
-    assert (out.plan, out.connection_id) == ("own", own.id)
-    assert fakes.plan.calls[-1][0] == own_token
-
-
-async def test_no_plan_is_a_clear_error(tenant_id, fakes):
-    bob = await make_person(tenant_id, "bob@example.com", "commenter")
-    async with tenant_session(tenant_id) as s:
-        with pytest.raises(NoClaudePlan, match="No Claude plan connected"):
-            await gateway.complete(s, bob.id, "s", MESSAGES, 64, transports=fakes)
-
-    # Another user's plan that is not the default is never used.
-    owner = await make_person(tenant_id, "owner@example.com")
-    await _claude(tenant_id, owner.id)
-    async with tenant_session(tenant_id) as s:
-        with pytest.raises(NoClaudePlan):
-            await gateway.complete(s, bob.id, "s", MESSAGES, 64, transports=fakes)
-    assert fakes.plan.calls == []
-
-
-async def test_inactive_default_or_own_plan_is_not_used(tenant_id, fakes):
-    owner = await make_person(tenant_id, "owner@example.com")
-    bob = await make_person(tenant_id, "bob@example.com", "viewer")
-    conn, _ = await _claude(tenant_id, owner.id, status="expired")
-    await _set_default(tenant_id, conn.id)
-    await _claude(tenant_id, bob.id, status="error")
-    async with tenant_session(tenant_id) as s:
-        with pytest.raises(NoClaudePlan, match="default Claude plan is expired"):
-            await gateway.complete(s, bob.id, "s", MESSAGES, 64, transports=fakes)
-
-
-async def test_rejected_credential_marks_the_connection_expired(tenant_id):
-    alice = await make_person(tenant_id, "alice@example.com")
-    conn, _ = await _claude(tenant_id, alice.id)
-    failing = gateway.Transports(
-        plan=FakeTransport("plan", LlmAuthError("401 OAuth access token is invalid")),
-        api_key=FakeTransport("api"),
-    )
-    async with tenant_session(tenant_id) as s:
-        with pytest.raises(LlmAuthError):
-            await gateway.complete(s, alice.id, "s", MESSAGES, 64, transports=failing)
-    async with tenant_session(tenant_id) as s:
-        row = await s.get(Connection, conn.id)
-        assert row.status == "expired"
-        assert "invalid" in row.last_error
-
-
-async def test_claude_plan_endpoint(client, tenant_id):
-    owner = await make_person(tenant_id, "owner@example.com")
-    bob = await make_person(tenant_id, "bob@example.com", "commenter")
-    none = (await client.get("/v1/claude-plan", headers=bob.headers)).json()
-    assert none["source"] == "none" and "No Claude plan" in none["reason"]
-
-    conn, _ = await _claude(tenant_id, owner.id)
-    await _set_default(tenant_id, conn.id)
-    company = (await client.get("/v1/claude-plan", headers=bob.headers)).json()
-    assert company["source"] == "company"
-    assert company["account_label"] is None
-    own = (await client.get("/v1/claude-plan", headers=owner.headers)).json()
-    assert own["source"] == "own" and own["via"] == "plan"
-
-
-async def test_connect_claude_plan_via_api(client, tenant_id, fakes):
-    alice = await make_person(tenant_id, "alice@example.com", "viewer")
-    previous = gateway.set_transports(fakes)
+    gateway.pool.must_move = drain_once  # type: ignore[assignment]
     try:
-        resp = await client.post(
-            "/v1/connections/claude/token",
-            json={"token": PLAN_TOKEN_PREFIX + "01-example-abcd"},
-            headers=alice.headers,
-        )
+        out = await _call(tenant_id, fakes)
     finally:
-        gateway.set_transports(previous)
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["account_label"] == "Claude plan (setup-token …abcd)"
-    assert resp.json()["auth_mode"] == "token"
-    assert PLAN_TOKEN_PREFIX not in resp.text
-    assert fakes.plan.calls[0][0] == PLAN_TOKEN_PREFIX + "01-example-abcd"
+        gateway.pool.must_move = real_must_move  # type: ignore[assignment]
+    assert out.account_id == b.account_id
+    assert out.swaps == [(a.account_id, "drain")]
 
-    wrong = await client.post(
-        "/v1/connections/claude/token", json={"token": "not-a-claude-token"}, headers=alice.headers
-    )
-    assert wrong.status_code == 400
-    assert "claude setup-token" in wrong.json()["detail"]
+
+async def test_no_other_account_says_why_and_gives_the_hold_back(tenant_id, fakes):
+    a = await add_account(tenant_id, "alpha")
+    fakes.plan.answers["acc-alpha"] = LlmRateLimited("out of quota", _reading(1.0))
+    with pytest.raises(NoClaudeAccount) as info:
+        await _call(tenant_id, fakes)
+    assert info.value.reason == "no_account_available"
+    assert info.value.next_reset_at is not None
+    assert (await get_account(tenant_id, a.account_id)).assigned == 0
+
+
+async def test_a_paused_pool_is_a_wait_never_the_fallback(tenant_id, fakes):
+    from oracle.claude_accounts import fallback
+
+    await add_account(tenant_id, "alpha", state=AccountState.PAUSED)
+    async with tenant_session(tenant_id) as s:
+        await fallback.store(s, PLAN_TOKEN_PREFIX + "01-spare", None)
+        await s.commit()
+    with pytest.raises(NoClaudeAccount) as info:
+        await _call(tenant_id, fakes)
+    assert info.value.reason == "pool_paused"
+    assert fakes.plan.calls == []
+
+
+async def test_with_no_account_the_fallback_credential_is_used(tenant_id, fakes):
+    from oracle.claude_accounts import fallback
+
+    with pytest.raises(NoClaudeAccount, match="Settings > Claude accounts"):
+        await _call(tenant_id, fakes)
+    async with tenant_session(tenant_id) as s:
+        await fallback.store(s, PLAN_TOKEN_PREFIX + "01-spare", None)
+        await s.commit()
+    out = await _call(tenant_id, fakes)
+    assert (out.via, out.account_id) == ("fallback_plan", None)
+    assert fakes.plan.calls[-1][0] == PLAN_TOKEN_PREFIX + "01-spare"
+    async with tenant_session(tenant_id) as s:
+        await fallback.store(s, API_KEY_PREFIX + "03-key", None)
+        await s.commit()
+    out = await _call(tenant_id, fakes)
+    assert out.via == "fallback_api_key"
+    assert fakes.api_key.calls[-1][0] == API_KEY_PREFIX + "03-key"
+
+
+async def test_an_unreadable_credential_moves_the_call_and_marks_the_account(tenant_id, fakes):
+    a = await add_account(tenant_id, "alpha")
+    b = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
+    async with tenant_session(tenant_id) as s:
+        row = await store.get_row(s, a.account_id)
+        row.access_ciphertext = None
+        await s.commit()
+    out = await _call(tenant_id, fakes)
+    assert out.account_id == b.account_id
+    assert out.swaps == [(a.account_id, "unusable")]
+    assert (await get_account(tenant_id, a.account_id)).is_unreadable(now())
+
+
+async def test_only_the_built_in_jobs_run_on_the_pool(tenant_id, fakes):
+    with pytest.raises(ValueError, match="review_comments"):
+        await _call(tenant_id, fakes, job="agent_workflow")
 
 
 # --- Transports ---------------------------------------------------------------------
@@ -236,6 +231,7 @@ async def test_messages_api_transport_uses_x_api_key():
 
 
 PLAN_BAD = PLAN_TOKEN_PREFIX + "01-bad"
+PLAN_SPENT = PLAN_TOKEN_PREFIX + "01-spent"
 FAKE_CLAUDE = """#!/usr/bin/env python3
 import json, os, sys
 prompt = sys.stdin.read()
@@ -244,10 +240,23 @@ record = {"argv": sys.argv[1:], "prompt": prompt, "cwd": os.getcwd(),
               "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
               "HOME")}}
 open(__LOG__, "w").write(json.dumps(record))
-if record["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == __BAD__:
+token = record["env"]["CLAUDE_CODE_OAUTH_TOKEN"]
+print(json.dumps({"type": "system", "subtype": "init", "session_id": "s-12345678"}))
+if token == __BAD__:
     print(json.dumps({"type": "result", "is_error": True, "api_error_status": 401,
                       "result": "API Error: 401 OAuth access token is invalid."}))
     sys.exit(1)
+if token == __SPENT__:
+    print(json.dumps({"type": "rate_limit_event", "rate_limit_info": {
+        "status": "rejected", "rateLimitType": "five_hour", "resetsAt": __RESETS__}}))
+    print(json.dumps({"type": "result", "is_error": True, "result": "Usage limit reached"}))
+    sys.exit(1)
+print(json.dumps({"type": "rate_limit_event", "rate_limit_info": {
+    "status": "allowed", "rateLimitType": "five_hour", "utilization": 0.25,
+    "resetsAt": __RESETS__}}))
+print(json.dumps({"type": "rate_limit_event", "rate_limit_info": {
+    "status": "allowed_warning", "rateLimitType": "seven_day", "utilization": 0.81,
+    "resetsAt": __RESETS__}}))
 print(json.dumps({"type": "result", "subtype": "success", "is_error": False,
                   "result": "Plan answer", "stop_reason": "end_turn",
                   "usage": {"output_tokens": 2}, "modelUsage": {"claude-opus-5": {}}}))
@@ -258,7 +267,12 @@ print(json.dumps({"type": "result", "subtype": "success", "is_error": False,
 def fake_claude(tmp_path, monkeypatch):
     log = tmp_path / "call.json"
     script = tmp_path / "claude"
-    body = FAKE_CLAUDE.replace("__LOG__", repr(str(log))).replace("__BAD__", repr(PLAN_BAD))
+    body = (
+        FAKE_CLAUDE.replace("__LOG__", repr(str(log)))
+        .replace("__BAD__", repr(PLAN_BAD))
+        .replace("__SPENT__", repr(PLAN_SPENT))
+        .replace("__RESETS__", str(RESETS))
+    )
     script.write_text(body)
     script.chmod(script.stat().st_mode | stat.S_IEXEC)
     # The server's own credentials must never reach the subprocess.
@@ -266,11 +280,15 @@ def fake_claude(tmp_path, monkeypatch):
     return str(script), log
 
 
-async def test_claude_code_transport_runs_headless_with_the_plan_token(fake_claude):
+async def test_claude_code_transport_runs_headless_with_the_token_and_reads_the_windows(
+    fake_claude,
+):
     script, log = fake_claude
     transport = ClaudeCodeTransport(claude_bin=script, timeout=30)
     out = await transport.complete(PLAN_TOKEN_PREFIX + "01-good", _request())
     assert (out.text, out.model, out.stop_reason) == ("Plan answer", "claude-opus-5", "end_turn")
+    assert out.readings["five_hour"]["utilization"] == 0.25
+    assert out.readings["seven_day"]["utilization"] == 0.81
 
     call = json.loads(log.read_text())
     assert call["prompt"] == "Summarise the goals."
@@ -280,6 +298,7 @@ async def test_claude_code_transport_runs_headless_with_the_plan_token(fake_clau
     assert call["env"]["HOME"] != os.environ.get("HOME")
     argv = call["argv"]
     assert argv[0] == "-p"
+    assert argv[argv.index("--output-format") + 1] == "stream-json"
     assert argv[argv.index("--system-prompt") + 1] == "Be brief."
     assert argv[argv.index("--tools") + 1] == ""
     assert argv[argv.index("--model") + 1] == "claude-opus-5"
@@ -289,6 +308,31 @@ async def test_claude_code_transport_runs_headless_with_the_plan_token(fake_clau
 
     with pytest.raises(LlmAuthError):
         await transport.complete(PLAN_TOKEN_PREFIX + "01-bad", _request())
+    with pytest.raises(LlmRateLimited) as info:
+        await transport.complete(PLAN_SPENT, _request())
+    assert info.value.readings["five_hour"]["utilization"] == 1.0
+
+
+def test_a_rate_limit_event_is_a_reading_only_when_it_says_everything():
+    def event(**info):
+        return {"type": "rate_limit_event", "rate_limit_info": info}
+
+    name, r = reading_of(event(rateLimitType="five_hour", utilization=0.5, resetsAt=RESETS))
+    assert name == "five_hour" and r["utilization"] == 0.5
+    assert (
+        reading_of(event(rateLimitType="seven_day", status="rejected", resetsAt=RESETS))[1][
+            "utilization"
+        ]
+        == 1.0
+    )
+    for bad in (
+        event(rateLimitType="five_hour", utilization=0.5),
+        event(rateLimitType="Five Hour", utilization=0.5, resetsAt=RESETS),
+        event(rateLimitType="five_hour", utilization=1.5, resetsAt=RESETS),
+        event(rateLimitType="five_hour", utilization=True, resetsAt=RESETS),
+        {"type": "rate_limit_event"},
+    ):
+        assert reading_of(bad) is None
 
 
 async def test_claude_code_transport_missing_binary_or_garbage():

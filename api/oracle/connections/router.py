@@ -28,9 +28,7 @@ from oracle.connections.providers import (
     ProviderUnavailable,
     get_provider,
 )
-from oracle.llm.gateway import choose_plan
 from oracle.tenancy import tenant_session
-from oracle.tenant_settings_api import clear_setting, get_setting
 
 router = APIRouter(prefix="/v1", tags=["connections"])
 
@@ -73,8 +71,6 @@ class ConnectionOut(BaseModel):
     last_used_at: datetime | None
     created_at: datetime
     updated_at: datetime
-    # A Claude connection the company uses for people without their own plan.
-    is_company_default: bool = False
 
 
 class ProviderOut(BaseModel):
@@ -106,15 +102,7 @@ class AuthorizeOut(BaseModel):
     url: str
 
 
-class ClaudePlanOut(BaseModel):
-    source: Literal["own", "company", "none"]
-    connection_id: uuid.UUID | None = None
-    account_label: str | None = None
-    via: Literal["plan", "api_key"] | None = None
-    reason: str | None = None
-
-
-def _out(conn: Connection, default_id: str | None) -> ConnectionOut:
+def _out(conn: Connection) -> ConnectionOut:
     return ConnectionOut(
         id=conn.id,
         provider=conn.provider,
@@ -128,7 +116,6 @@ def _out(conn: Connection, default_id: str | None) -> ConnectionOut:
         last_used_at=conn.last_used_at,
         created_at=conn.created_at,
         updated_at=conn.updated_at,
-        is_company_default=default_id is not None and str(conn.id) == default_id,
     )
 
 
@@ -184,8 +171,7 @@ def _start_oauth(
 @router.get("/connections", response_model=list[ConnectionOut])
 async def list_connections(principal: UserPrincipal, db: TenantDB) -> list[ConnectionOut]:
     assert principal.user_id is not None
-    default_id = await get_setting(db, "default_claude_connection_id")
-    return [_out(c, default_id) for c in await service.list_for_user(db, principal.user_id)]
+    return [_out(c) for c in await service.list_for_user(db, principal.user_id)]
 
 
 @router.get("/connections/providers", response_model=list[ProviderOut])
@@ -201,23 +187,6 @@ async def list_providers(principal: UserPrincipal) -> list[ProviderOut]:
         )
         for p in PROVIDERS.values()
     ]
-
-
-@router.get("/claude-plan", response_model=ClaudePlanOut)
-async def get_claude_plan(principal: UserPrincipal, db: TenantDB) -> ClaudePlanOut:
-    """Which Claude connection pays for this user's model calls, if any."""
-    assert principal.user_id is not None
-    choice = await choose_plan(db, principal.user_id)
-    conn = choice.connection
-    if conn is None:
-        return ClaudePlanOut(source="none", reason=choice.reason)
-    return ClaudePlanOut(
-        source=choice.source,
-        connection_id=conn.id,
-        # The company plan's owner is another user: show only that it is the company's.
-        account_label=conn.account_label if choice.source == "own" else None,
-        via="api_key" if conn.account_id == "api_key" else "plan",
-    )
 
 
 @router.post(
@@ -248,7 +217,7 @@ async def connect_with_token(
         {"provider": p.key, "auth_mode": "token", "account": conn.account_label},
     )  # fmt: skip
     await db.commit()
-    return _out(conn, await get_setting(db, "default_claude_connection_id"))
+    return _out(conn)
 
 
 @router.get(
@@ -325,8 +294,6 @@ async def delete_connection(
     Slack, Google; best effort), then delete Oracle's copy of the credential."""
     conn = await _own(db, connection_id, principal)
     revoked = await service.revoke_at_provider(http, conn)
-    if await get_setting(db, "default_claude_connection_id") == str(conn.id):
-        await clear_setting(db, "default_claude_connection_id")
     await audit.record(
         db, principal, "connection.disconnect", "connection", conn.id,
         {"provider": conn.provider, "account": conn.account_label, "provider_revoke": revoked},
@@ -351,7 +318,6 @@ async def reconnect_connection(
     the provider needs a fresh sign-in, returns ``authorize_url`` instead."""
     conn = await _own(db, connection_id, principal)
     p = _provider(conn.provider)
-    default_id = await get_setting(db, "default_claude_connection_id")
     if body is not None and body.token:
         try:
             identity = await p.identify(http, body.token.strip())
@@ -380,7 +346,7 @@ async def reconnect_connection(
         except service.ConnectionUnavailable as e:
             url = _start_oauth(principal, p, conn.id) if conn.auth_mode == "oauth" else None
             if url:
-                return ReconnectOut(connection=_out(conn, default_id), authorize_url=url)
+                return ReconnectOut(connection=_out(conn), authorize_url=url)
             raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
         except ProviderUnavailable as e:
             raise _unavailable(e) from None
@@ -388,4 +354,4 @@ async def reconnect_connection(
         db, principal, "connection.reconnect", "connection", conn.id, {"provider": p.key}
     )
     await db.commit()
-    return ReconnectOut(connection=_out(conn, default_id))
+    return ReconnectOut(connection=_out(conn))

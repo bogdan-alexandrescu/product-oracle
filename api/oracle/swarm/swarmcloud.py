@@ -126,6 +126,8 @@ class SwarmCloudRuntime:
 
     @classmethod
     def from_settings(cls, settings: RuntimeSettings) -> "SwarmCloudRuntime":
+        if not settings.swarmcloud_url:
+            raise ValueError("ORACLE_SWARMCLOUD_URL is required for the swarmcloud runtime")
         return cls(
             settings.swarmcloud_url,
             auth_from_settings(settings),
@@ -255,3 +257,37 @@ def _detail(resp: httpx.Response) -> str:
     if isinstance(detail, dict):
         detail = detail.get("message") or detail.get("code")
     return str(detail)[:200] if detail else ""
+
+
+class UnconfiguredSwarmCloud:
+    """SwarmCloud is the runtime but its settings are missing: every call says which."""
+
+    name = "swarmcloud"
+
+    def __init__(self, problem: str) -> None:
+        self.problem = problem
+
+    @property
+    def can_reach_oracle(self) -> bool:
+        return False
+
+    def notes(self) -> list[str]:
+        return [f"SwarmCloud is not configured, so runs cannot start: {self.problem}."]
+
+    def _refuse(self) -> RuntimeUnavailable:
+        return RuntimeUnavailable(f"SwarmCloud is not configured: {self.problem}")
+
+    async def submit(self, spec: WorkflowSpec) -> str:
+        raise self._refuse()
+
+    async def status(self, workflow_id: str) -> WorkflowStatus:
+        raise self._refuse()
+
+    async def cost(self, workflow_id: str) -> Decimal:
+        raise self._refuse()
+
+    async def artifacts(self, workflow_id: str) -> dict[str, str]:
+        raise self._refuse()
+
+    async def cancel(self, workflow_id: str) -> None:
+        raise self._refuse()

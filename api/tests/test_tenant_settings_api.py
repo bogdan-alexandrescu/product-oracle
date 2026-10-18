@@ -6,7 +6,7 @@ from sqlalchemy import select
 from oracle.models import AuditEvent
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings_api import InvalidSetting, validate_confidence_weights
-from tests.connection_helpers import add_connection, make_person
+from tests.connection_helpers import make_person
 
 
 @pytest.fixture
@@ -29,7 +29,6 @@ async def test_defaults_and_unknown_keys(client, owner):
     listed = (await client.get("/v1/settings", headers=owner.headers)).json()
     assert {s["key"]: s["value"] for s in listed} == {
         "iap_default_role": "commenter",
-        "default_claude_connection_id": None,
         "confidence_weights": {},
     }
     assert all(s["is_default"] for s in listed)
@@ -62,32 +61,10 @@ async def test_iap_default_role(client, tenant_id, owner):
     assert "setting.update" in actions and "setting.reset" in actions
 
 
-async def test_default_claude_connection(client, tenant_id, owner):
-    other_owner = await make_person(tenant_id, "other@example.com", "owner")
-    github = await add_connection(tenant_id, owner.id, "github")
-    mine = await add_connection(tenant_id, owner.id, "claude", account_id="plan")
-    theirs = await add_connection(tenant_id, other_owner.id, "claude", account_id="plan")
-    expired = await add_connection(
-        tenant_id, owner.id, "claude", account_id="api_key", status="expired"
-    )
+async def test_the_claude_plan_setting_is_gone(client, owner):
+    # Oracle's model calls run on the Claude account pool, not a default connection.
     url = "/v1/settings/default_claude_connection_id"
-
-    for value, message in [
-        ("not-a-uuid", "must be a connection id"),
-        ("00000000-0000-4000-8000-000000000000", "No such connection"),
-        (str(github.id), "must be a Claude connection"),
-        (str(theirs.id), "your own Claude plan"),
-        (str(expired.id), "is expired"),
-    ]:
-        resp = await client.put(url, json={"value": value}, headers=owner.headers)
-        assert resp.status_code == 422, value
-        assert message in resp.json()["detail"]
-
-    ok = await client.put(url, json={"value": str(mine.id)}, headers=owner.headers)
-    assert ok.status_code == 200
-    assert ok.json()["value"] == str(mine.id)
-    listed = (await client.get("/v1/connections", headers=owner.headers)).json()
-    assert [c["is_company_default"] for c in listed if c["id"] == str(mine.id)] == [True]
+    assert (await client.get(url, headers=owner.headers)).status_code == 404
 
 
 async def test_confidence_weights_api(client, owner):

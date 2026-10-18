@@ -1,14 +1,21 @@
-"""Oracle's own model calls on a connected Claude plan (see ``gateway``)."""
+"""Oracle's built-in model calls on the Claude account pool (see ``gateway``)."""
 
 from oracle.llm.gateway import Completion, Transports, complete, set_transports
-from oracle.llm.transports import LlmAuthError, LlmError, LlmUnavailable, NoClaudePlan
+from oracle.llm.transports import (
+    LlmAuthError,
+    LlmError,
+    LlmRateLimited,
+    LlmUnavailable,
+    NoClaudeAccount,
+)
 
 __all__ = [
     "Completion",
     "LlmAuthError",
     "LlmError",
+    "LlmRateLimited",
     "LlmUnavailable",
-    "NoClaudePlan",
+    "NoClaudeAccount",
     "Transports",
     "complete",
     "set_transports",
