@@ -16,6 +16,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import confidence as confidence_rules
+from oracle.baseline import scoring
 from oracle.baseline.models import Entity, Evidence
 from oracle.docs.diff import diff_sections, word_diff
 from oracle.docs.models import Document, DocumentVersion, Section
@@ -26,7 +28,8 @@ from oracle.review.models import Comment, FeedbackItem, SectionReview
 from oracle.review.service import locked_section_keys
 
 #: Evidence at or above this confidence counts as high-confidence for pushback (C1b).
-HIGH_CONFIDENCE = 0.7
+# Default for the company's confidence_weights "pushback" setting (oracle.confidence).
+HIGH_CONFIDENCE = confidence_rules.DEFAULTS["pushback"]
 MAX_GOALS = 30
 MAX_EVIDENCE = 40
 MAX_FEEDBACK = 60
@@ -113,11 +116,12 @@ async def baseline_context(s: AsyncSession) -> tuple[list[dict], list[dict], dic
             .limit(MAX_GOALS)
         )
     )
+    threshold = float(confidence_rules.merged(await scoring.company_weights(s))["pushback"])
     rows = (
         await s.execute(
             select(Evidence, Entity.title)
             .join(Entity, Entity.id == Evidence.entity_id)
-            .where(Evidence.confidence >= HIGH_CONFIDENCE, Entity.status != "rejected")
+            .where(Evidence.confidence >= threshold, Entity.status != "rejected")
             .order_by(Evidence.confidence.desc(), Evidence.created_at.desc())
             .limit(MAX_EVIDENCE)
         )

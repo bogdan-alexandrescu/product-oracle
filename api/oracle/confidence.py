@@ -62,6 +62,8 @@ DEFAULTS: dict[str, Any] = {
     "goal_impact": {"3": 1.0, "2": 0.85, "1": 0.7, "0": 0.5},
     "tie_margin": 0.1,
     "low": 0.4,
+    # Built-in review jobs push back only against evidence at or above this (C1b).
+    "pushback": 0.7,
 }
 
 
