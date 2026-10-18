@@ -276,6 +276,66 @@ async def test_seeding_adds_the_brief_version_to_unedited_builtins_only(tenant_i
         assert versions["one-pager"] == [1]
 
 
+async def _versions(s, key):
+    t = await s.scalar(select(Template).where(Template.key == key))
+    return list(
+        await s.scalars(
+            select(TemplateVersion)
+            .where(TemplateVersion.template_id == t.id)
+            .order_by(TemplateVersion.version)
+        )
+    )
+
+
+async def _make_pre_o1f(s, key):
+    """Drop the packaged skeleton from every version, as in a company seeded before O1f."""
+    for v in await _versions(s, key):
+        v.body = v.body.replace("brief: [", "old_brief: [")
+    await s.commit()
+
+
+@pytest.mark.parametrize("change", ["edited", "archived"])
+async def test_seeding_leaves_an_edited_or_archived_default_template_alone(
+    client, tenant_id, change
+):
+    h = await _token(tenant_id)
+    await client.get("/v1/templates", headers=h)
+    if change == "edited":
+        versions = (await client.get("/v1/templates/oracle-default", headers=h)).json()["versions"]
+        body = versions[-1]["body"]
+        edited = body.replace("## ", "## Our ", 1)
+        resp = await client.patch("/v1/templates/oracle-default", json={"body": edited}, headers=h)
+        assert resp.status_code == 200, resp.text
+    else:
+        assert (await client.delete("/v1/templates/oracle-default", headers=h)).status_code == 200
+    async with tenant_session(tenant_id) as s:
+        before = [v.version for v in await _versions(s, "oracle-default")]
+        await _make_pre_o1f(s, "oracle-default")
+        assert await ensure_builtins(s) is False
+        await s.commit()
+        assert [v.version for v in await _versions(s, "oracle-default")] == before
+
+
+async def test_first_edit_of_a_stale_builtin_keeps_the_edit(client, tenant_id):
+    h = await _token(tenant_id)
+    await client.get("/v1/templates", headers=h)
+    async with tenant_session(tenant_id) as s:
+        await _make_pre_o1f(s, "pr-faq")
+        old_body = (await _versions(s, "pr-faq"))[-1].body
+    edited = old_body.replace("## ", "## Our ", 1)
+    resp = await client.patch("/v1/templates/pr-faq", json={"body": edited}, headers=h)
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(tenant_id) as s:
+        versions = await _versions(s, "pr-faq")
+    # v2 is the seeded brief skeleton, v3 the user's edit on top of it.
+    assert [(v.version, v.created_by is None) for v in versions] == [
+        (1, True),
+        (2, True),
+        (3, False),
+    ]
+    assert versions[-1].body == edited
+
+
 # --- a version records its brief ------------------------------------------------------
 
 

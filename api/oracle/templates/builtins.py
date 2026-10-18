@@ -362,18 +362,20 @@ async def ensure_builtins(session: AsyncSession) -> bool:
     missing_themes = [t for t in BUILTIN_THEMES if t.key not in theme_keys]
     missing_templates = [t for t in BUILTIN_TEMPLATES if t.key not in template_keys]
     default = BUILTIN_TEMPLATES_BY_KEY[DEFAULT_TEMPLATE_KEY]
-    default_body = builtin_body(default)
-    default_has_research = False
-    if DEFAULT_TEMPLATE_KEY in template_keys:
-        default_has_research = default_body in set(
-            await session.scalars(
-                select(TemplateVersion.body)
-                .join(Template, Template.id == TemplateVersion.template_id)
-                .where(Template.key == DEFAULT_TEMPLATE_KEY)
+    # The oracle-default seeded before v1 had no metadata and is not marked built-in yet.
+    default_needs_metadata = bool(
+        await session.scalar(
+            select(func.count())
+            .select_from(Template)
+            .where(
+                Template.key == DEFAULT_TEMPLATE_KEY,
+                Template.description.is_(None),
+                Template.builtin.is_(False),
             )
         )
+    )
     stale = await _stale_builtins(session)
-    if not missing_themes and not missing_templates and default_has_research and not stale:
+    if not missing_themes and not missing_templates and not default_needs_metadata and not stale:
         return False
 
     await session.execute(
@@ -397,19 +399,13 @@ async def ensure_builtins(session: AsyncSession) -> bool:
         )
 
     template = await ensure_default_template(session)
-    versions = list(
-        await session.scalars(
-            select(TemplateVersion).where(TemplateVersion.template_id == template.id)
-        )
-    )
     if template.description is None and not template.builtin:
-        # The oracle-default seeded before v1 had no metadata.
         template.name = default.name
         template.kind = default.kind
         template.description = default.description
         template.builtin = True
-    if default_body not in {v.body for v in versions}:
-        session.add(_version(template, max(v.version for v in versions) + 1, default_body))
+    # Once marked built-in, oracle-default gets the packaged skeleton like the others:
+    # only when the company has not edited or archived it.
     await session.flush()
 
     for key in await _stale_builtins(session):
