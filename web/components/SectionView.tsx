@@ -54,7 +54,7 @@ export const SectionView = memo(function SectionView({
   showLayer?: boolean;
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
-  const locked = section.verdict?.verdict === "approved";
+  const locked = section.verdict?.verdict === "approved" && !section.verdict.lapsed_at;
   // Preselect the baseline item the section names (heading first, then its text).
   const suggested = useMemo(() => {
     if (!evidenceTargets) return null;

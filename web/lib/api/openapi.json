@@ -4057,7 +4057,7 @@
           "members"
         ],
         "summary": "Disable Member",
-        "description": "Remove a member by disabling them: sign-in is refused on every path; their\nconnections are disconnected (revoked at the provider) and their sources recorded\nas revoked, so documents citing them cannot publish; their API tokens and OAuth\ngrants are revoked, their runs cancelled, the open invite for their email revoked;\ntheir approvals lapse for good. The member stays in the list (history keeps the\nname); an owner can restore them. A no-op for a disabled member.",
+        "description": "Remove a member by disabling them: sign-in is refused on every path; their\nconnections are disconnected (revoked at the provider) and their sources recorded\nas revoked, so documents citing them cannot publish; their API tokens and OAuth\ngrants are revoked, their runs cancelled, the open invite for their email revoked;\ntheir approvals lapse for good; every session they signed is ended. The calls at\nthe providers and the runtime are made after the disable commits, outside the\nreview gate, and retried by the tick when they fail. The member stays in the list\n(history keeps the name); an owner can restore them, and they sign in fresh. A\nno-op for a disabled member.",
         "operationId": "disable_member",
         "security": [
           {
@@ -10689,7 +10689,7 @@
           "runs"
         ],
         "summary": "Tick",
-        "description": "Advance this company's active runs, sweep its Claude account pool and run its\nqueued built-in model jobs (``oracle tick`` calls it on a schedule).",
+        "description": "Advance this company's active runs, sweep its Claude account pool, run its\nqueued built-in model jobs and retry the provider and runtime calls a member's\ndisable still owes (``oracle tick`` calls it on a schedule).",
         "operationId": "tick",
         "responses": {
           "200": {
@@ -29056,6 +29056,29 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "lapsed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lapsed At"
+          },
+          "lapse_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lapse Reason"
           }
         },
         "type": "object",
@@ -32058,6 +32081,11 @@
                 "type": "null"
               }
             ]
+          },
+          "member_follow_ups": {
+            "type": "integer",
+            "title": "Member Follow Ups",
+            "default": 0
           }
         },
         "type": "object",

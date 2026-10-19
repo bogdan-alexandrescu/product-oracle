@@ -375,7 +375,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const changedLocks = new Set(
     version?.warnings.filter((w) => w.code === "locked_section_changed").flatMap((w) => w.section_keys) ?? [],
   );
-  const lockedCount = version?.sections.filter((s) => s.verdict?.verdict === "approved").length ?? 0;
+  const lockedCount =
+    version?.sections.filter((s) => s.verdict?.verdict === "approved" && !s.verdict.lapsed_at).length ?? 0;
   const reviewedCount = version?.sections.filter((s) => s.verdict).length ?? 0;
   const openComments = placed.filter((c) => !c.resolved_at).length;
   const error = docQ.error || verQ.error;

@@ -112,6 +112,10 @@ class SectionVerdict(ORM):
     note: str | None = None
     reviewer_id: uuid.UUID | None = None
     created_at: datetime
+    # Set when an approval lapsed for good (C2: its approver was demoted or removed, its
+    # API token or OAuth grant revoked): it no longer counts, and never will again.
+    lapsed_at: datetime | None = None
+    lapse_reason: str | None = None
 
 
 class SectionOut(ORM):

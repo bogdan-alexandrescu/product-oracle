@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
-import { Button, LockIcon, VerdictBadge } from "@/components/ui";
+import { Badge, Button, LockIcon, VerdictBadge } from "@/components/ui";
 import type { Schemas, Verdict } from "@/lib/api/client";
 import { formatDateTime, VERDICT_LABEL } from "@/lib/format";
 
@@ -45,7 +45,9 @@ export function SectionReviewBar({
     }
   }
 
-  const locked = verdict?.verdict === "approved";
+  // A lapsed approval (approver demoted or removed, token or grant revoked) never counts.
+  const lapsed = verdict?.verdict === "approved" && Boolean(verdict.lapsed_at);
+  const locked = verdict?.verdict === "approved" && !lapsed;
 
   return (
     <div className="mt-4 rounded-md border border-neutral-200 text-sm" data-testid="review-bar">
@@ -53,7 +55,15 @@ export function SectionReviewBar({
         <div className="flex min-w-0 flex-1 items-center gap-2 text-neutral-600" data-testid="verdict-state">
           {verdict ? (
             <>
-              <VerdictBadge verdict={verdict.verdict} />
+              {lapsed ? (
+                <span data-testid="verdict-lapsed">
+                  <Badge tone="amber" title={verdict.lapse_reason ?? "This approval no longer counts"}>
+                    Lapsed
+                  </Badge>
+                </span>
+              ) : (
+                <VerdictBadge verdict={verdict.verdict} />
+              )}
               {locked && (
                 <span
                   className="inline-flex items-center gap-1 text-xs font-medium text-neutral-700"

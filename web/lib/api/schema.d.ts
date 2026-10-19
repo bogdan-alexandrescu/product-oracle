@@ -1145,8 +1145,11 @@ export interface paths {
          *     connections are disconnected (revoked at the provider) and their sources recorded
          *     as revoked, so documents citing them cannot publish; their API tokens and OAuth
          *     grants are revoked, their runs cancelled, the open invite for their email revoked;
-         *     their approvals lapse for good. The member stays in the list (history keeps the
-         *     name); an owner can restore them. A no-op for a disabled member.
+         *     their approvals lapse for good; every session they signed is ended. The calls at
+         *     the providers and the runtime are made after the disable commits, outside the
+         *     review gate, and retried by the tick when they fail. The member stays in the list
+         *     (history keeps the name); an owner can restore them, and they sign in fresh. A
+         *     no-op for a disabled member.
          */
         post: operations["disable_member"];
         delete?: never;
@@ -2992,8 +2995,9 @@ export interface paths {
         put?: never;
         /**
          * Tick
-         * @description Advance this company's active runs, sweep its Claude account pool and run its
-         *     queued built-in model jobs (``oracle tick`` calls it on a schedule).
+         * @description Advance this company's active runs, sweep its Claude account pool, run its
+         *     queued built-in model jobs and retry the provider and runtime calls a member's
+         *     disable still owes (``oracle tick`` calls it on a schedule).
          */
         post: operations["tick"];
         delete?: never;
@@ -9135,6 +9139,10 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Lapsed At */
+            lapsed_at?: string | null;
+            /** Lapse Reason */
+            lapse_reason?: string | null;
         };
         /** SegmentAttempt */
         SegmentAttempt: {
@@ -10160,6 +10168,11 @@ export interface components {
             errors: string[];
             claude_accounts?: components["schemas"]["ClaudeSweepSummary"] | null;
             llm_jobs?: components["schemas"]["LlmJobsTick"] | null;
+            /**
+             * Member Follow Ups
+             * @default 0
+             */
+            member_follow_ups: number;
         };
         /**
          * TokenApprovalOut

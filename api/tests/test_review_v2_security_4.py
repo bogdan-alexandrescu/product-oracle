@@ -827,3 +827,53 @@ async def test_a_revoked_run_token_is_refused_under_the_gate(client):
         await revoke_run_tokens(s, run.id)
         await s.commit()
         assert await caller_refusal(s, principal, "approver") == "This run's token was revoked"
+
+
+@pytest.mark.parametrize("field", ["owner_id", "reviewer_ids"])
+async def test_a_disabled_member_cannot_be_a_section_owner_or_reviewer(client, field):
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    value = str(pm.user_id) if field == "owner_id" else [str(pm.user_id)]
+    resp = await client.put(
+        f"/v1/documents/{DOC}/sections/problem/assignment", json={field: value}, headers=ctx.auth
+    )
+    assert resp.status_code in (400, 422), resp.text
+    assert "removed" in resp.text
+
+
+async def test_campaign_invitees_by_role_leave_out_disabled_members(client):
+    from oracle.review.models import Notification
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "commenter", "pm")
+    gone = await person(ctx.tenant_id, "commenter", "gone")
+    assert (await disable(client, ctx, gone.user_id)).status_code == 200
+    resp = await client.post(
+        f"/v1/documents/{DOC}/campaigns",
+        json={"title": "Feedback", "audience_roles": ["commenter"]},
+        headers=ctx.auth,
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["invited"] == 1
+    async with tenant_session(ctx.tenant_id) as s:
+        notified = set(await s.scalars(select(Notification.user_id)))
+    assert pm.user_id in notified and gone.user_id not in notified
+
+
+async def test_the_legacy_version_view_shows_a_lapsed_approval_as_lapsed(client):
+    from tests.review_v2_helpers import verdict
+    from tests.test_review_v2_security_2 import set_role
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    assert (await verdict(client, pm.headers, 1, "problem")).status_code == 200
+    body = (await client.get(f"/v1/documents/{DOC}/versions/1", headers=ctx.auth)).json()
+    [problem] = [s for s in body["sections"] if s["section_key"] == "problem"]
+    assert problem["verdict"]["verdict"] == "approved"
+    assert problem["verdict"]["lapsed_at"] is None
+    assert (await set_role(client, ctx, pm.user_id, "commenter")).status_code == 200
+    body = (await client.get(f"/v1/documents/{DOC}/versions/1", headers=ctx.auth)).json()
+    [problem] = [s for s in body["sections"] if s["section_key"] == "problem"]
+    assert problem["verdict"]["lapsed_at"] is not None
+    assert "demoted" in problem["verdict"]["lapse_reason"]
