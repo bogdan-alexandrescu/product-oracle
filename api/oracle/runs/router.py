@@ -6,6 +6,7 @@ owner or the approver who created a run cancels it; a checkpoint is decided by i
 ``approver_role`` or above. The tick takes an owner or an API token.
 """
 
+import asyncio
 import uuid
 from collections.abc import Awaitable
 from typing import Annotated
@@ -24,15 +25,18 @@ from oracle.runs.schemas import (
     EstimateOut,
     FlowCatalog,
     InboxOut,
+    McpServerRegistration,
     RunCreate,
     RunOut,
     RunPatch,
     RunStatus,
     RunSummary,
+    RuntimeFeatures,
     RuntimeStatusOut,
     TickOut,
 )
-from oracle.swarm import RuntimeUnavailable, get_runtime
+from oracle.swarm import Features, RuntimeUnavailable, get_runtime
+from oracle.swarm.runtime import MCP_SERVER
 from oracle.swarm.settings import get_runtime_settings
 
 router = APIRouter(prefix="/v1", tags=["runs"])
@@ -50,9 +54,13 @@ async def _call[T](op: Awaitable[T]) -> T:
 
 @router.get("/runtime/status", response_model=RuntimeStatusOut)
 async def runtime_status(_: Owner) -> RuntimeStatusOut:
-    """Call the agent runtime as Oracle and report what it answers: reachable, and as which
-    tenant. Owner only. Never shows a credential."""
+    """Call the agent runtime as Oracle and report what it answers: reachable, as which
+    tenant, and which adapter v2 features are on (mcp, await_input, service_answer: on,
+    off or unknown; read briefly cached, never longer than the runtime's timeout). Owner
+    only. Never shows a credential."""
     runtime = get_runtime()
+    # Both calls at once: each holds its own deadline, so the answer takes at most one.
+    me, feats = await asyncio.gather(runtime.whoami(), runtime.features(), return_exceptions=True)
     out = RuntimeStatusOut(
         runtime=runtime.name,
         auth=get_runtime_settings().swarmcloud_auth if runtime.name == "swarmcloud" else None,
@@ -60,14 +68,35 @@ async def runtime_status(_: Owner) -> RuntimeStatusOut:
         can_reach_oracle=runtime.can_reach_oracle,
         notes=runtime.notes(),
     )
-    try:
-        me = await runtime.whoami()
-    except RuntimeUnavailable as exc:
-        out.error = str(exc)
+    if isinstance(feats, Features):
+        out.features = RuntimeFeatures(**feats.as_dict())
+        out.feature_reasons = {
+            k: v for k, v in feats.reasons.items() if getattr(feats, k, "on") != "on"
+        }
+    elif isinstance(feats, BaseException) and not isinstance(feats, RuntimeUnavailable):
+        raise feats
+    if isinstance(me, RuntimeUnavailable):
+        out.error = str(me)
         return out
+    if isinstance(me, BaseException):
+        raise me
     out.reachable = True
     out.tenant_id = me.get("tenant_id")
     return out
+
+
+@router.post("/runtime/mcp-server", response_model=McpServerRegistration)
+async def register_mcp_server(_: Owner) -> McpServerRegistration:
+    """Register Oracle's MCP server in the agent runtime, idempotently: created when
+    missing, its URL updated when ORACLE_PUBLIC_URL changed, else unchanged. Runs do this
+    on their own before the first run token is sent; this is for owners and the
+    switch-on check. Owner only."""
+    url = get_runtime_settings().public_url.rstrip("/") + "/mcp"
+    try:
+        result = await get_runtime().ensure_mcp_server(url)
+    except RuntimeUnavailable as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+    return McpServerRegistration(name=MCP_SERVER, url=url, result=result)  # type: ignore[arg-type]
 
 
 @router.get("/flows", response_model=FlowCatalog)

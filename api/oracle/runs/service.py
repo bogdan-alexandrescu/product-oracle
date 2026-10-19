@@ -15,13 +15,25 @@ into the baseline (through its YAML import: locked items get proposals), checks
 document's kind) as the document's next version, and opens the segment's checkpoint (or
 skips a disabled one).
 
+Adapter v2 (oracle.runs.workflow, docs/swarmcloud-interface.md): while SwarmCloud's
+caller MCP is on, the run token reaches the agents through the workflow's credential map;
+while await-input is on too, a run is one workflow whose checkpoints wait for a person in
+SwarmCloud, and the Inbox decision is posted as the answer. Either off (or refused at
+submit): today's one workflow per segment, and the run's notes say why.
+
+    running --wait opens--> awaiting_checkpoint (the workflow parked on its step)
+            --approved / changes posted--> running (the same workflow goes on)
+            --expired, tail rule, refused--> today's flow: a new workflow
+
 Segment ``artifacts`` (jsonb) hold ``files`` (name -> text), ``attempts`` (one entry
-per submission: workflow id, cost, the reviewer's note), ``notes``, ``import``,
-``baseline_import`` and ``items_check``.
+per submission or in-workflow round: workflow id, label, cost, the reviewer's note),
+``notes``, ``import``, ``baseline_import``, ``items_check`` and ``lost`` (a submission
+whose answer was lost, looked up by its label before resubmitting).
 Run ``knobs`` hold the resolved knobs plus values Oracle sets: ``document_slug`` (a
 document the run will create), ``spend_ceiling_usd``, and for prd_to_roadmap
 ``source_version_id`` (the approved PRD version), ``template``, ``template_version`` and
-``theme`` (the roadmap's).
+``theme`` (the roadmap's), and ``workflow``: the live v2 workflow's id, label, credential
+expiry and plan (oracle.runs.workflow).
 """
 
 import copy
@@ -49,7 +61,7 @@ from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
-from oracle.runs import flows, roadmap
+from oracle.runs import flows, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -83,8 +95,10 @@ from oracle.swarm import (
     RuntimeUnavailable,
     StepSpec,
     WorkflowSpec,
+    WorkflowStatus,
     get_runtime,
 )
+from oracle.swarm.runtime import MERGE, NOT_YET
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates import service as templates_service
 from oracle.templates.builtins import (
@@ -119,6 +133,12 @@ class Invalid(RunError):
 
 class Forbidden(RunError):
     status = 403
+
+
+class Unavailable(RunError):
+    """The agent runtime did not confirm a call; repeating it is safe."""
+
+    status = 503
 
 
 def _now() -> datetime:
@@ -795,7 +815,12 @@ async def _prompt_context(
     attempt: int,
     change_request: str | None,
     runtime: AgentRuntime,
+    *,
+    attached: bool = False,
+    planned: list[tuple[int, str, list[str]]] | None = None,
 ) -> flows.PromptContext:
+    """``attached``: the run token reaches the agents, so earlier outputs are named, not
+    pasted; ``planned``: earlier segments of the same workflow and the files they write."""
     knobs = _knobs(run)
     snapshot = await db.get(Snapshot, run.snapshot_id) if run.snapshot_id else None
     document = None
@@ -810,10 +835,16 @@ async def _prompt_context(
         title = doc.title if doc is not None else f"{source.title} roadmap"
         roadmap_ctx = await _roadmap_context(db, run, document or "", title)
     prior: dict[str, str] = {}
+    prior_files: list[tuple[int, str, list[str]]] = []
+    in_workflow = {seq for seq, _, _ in planned or []}
     for s in segments:
-        if s.seq < segment.seq:
-            for name, content in ((s.artifacts or {}).get("files") or {}).items():
+        if s.seq < segment.seq and s.seq not in in_workflow:
+            files = (s.artifacts or {}).get("files") or {}
+            for name, content in files.items():
                 prior[name] = content
+            if files:
+                prior_files.append((s.seq, _flow(run).segment(s.name).title, sorted(files)))
+    prior_files += list(planned or [])
     notes = [
         f"{c.kind}: {c.note}"
         for c in await _checkpoints(db, [run.id])
@@ -850,7 +881,11 @@ async def _prompt_context(
         locked_sections=locked,
         attempt=attempt,
         change_request=change_request,
-        mcp_reachable=runtime.can_reach_oracle,
+        # SwarmCloud reaches Oracle only through the credential it attaches; the local
+        # runtime's agents are Oracle's own.
+        mcp_reachable=attached or (runtime.can_reach_oracle and runtime.name != "swarmcloud"),
+        mcp_attached=attached,
+        prior_files=prior_files,
         kind=kind,
         source=source,
         roadmap=roadmap_ctx,
@@ -982,6 +1017,111 @@ async def _roadmap_context(
     )
 
 
+@dataclass
+class _Mode:
+    """How a submission uses the runtime: the run token attached for the agents, and the
+    rest of the run as one workflow with its checkpoints as waits for a person."""
+
+    attach: bool
+    waits: bool
+    notes: list[str]
+
+
+# Refusals at submit that a submission survives by dropping the feature they concern.
+_DROP_WAITS = ("await_input_disabled",)
+_DROP_MCP = (
+    "mcp_unavailable",
+    "mcp_server_profile_refused",
+    "mcp_credential_missing",
+    "mcp_credential_unexpected",
+    "mcp_credential_shape",
+)
+
+
+async def _mode(runtime: AgentRuntime, url: str) -> _Mode:
+    """Which v2 features this submission uses: the runtime's (cached) reading, and
+    Oracle's MCP server registered once before the first credential is sent."""
+    feats = await runtime.features()
+    notes: list[str] = []
+    attach = feats.mcp == "on"
+    if not attach and feats.reasons.get("mcp"):
+        notes.append(f"Agents run without Oracle's MCP server: {feats.reasons['mcp']}.")
+    if attach:
+        try:
+            await runtime.ensure_mcp_server(url)
+        except RuntimeUnavailable as exc:
+            attach = False
+            notes.append(
+                f"Oracle's MCP server could not be registered in SwarmCloud ({exc}): agents "
+                "run without it. An owner can retry with POST /v1/runtime/mcp-server."
+            )
+    waits = attach and feats.await_input != "off" and feats.service_answer != "off"
+    if not waits:
+        why = None
+        if feats.await_input == "off":
+            why = feats.reasons.get("await_input")
+        elif feats.service_answer == "off":
+            why = feats.reasons.get("service_answer")
+        elif feats.reasons and not attach:
+            why = "a run is one workflow only while agents can read Oracle's MCP server"
+        if why:
+            notes.append(f"Checkpoints wait in Oracle's Inbox, one workflow per segment: {why}.")
+    return _Mode(attach, waits, notes)
+
+
+def _degrade(mode: _Mode, exc: RuntimeUnavailable) -> _Mode | None:
+    """The mode to submit again with after a refusal, or None when none helps."""
+    if exc.code in _DROP_WAITS and mode.waits:
+        return _Mode(mode.attach, False, [*mode.notes, workflow.advice(exc.code, str(exc))])
+    if exc.code in _DROP_MCP and mode.attach:
+        return _Mode(False, False, [*mode.notes, workflow.advice(exc.code, str(exc))])
+    return None
+
+
+def _note(segment: RunSegment, note: str) -> None:
+    art = _art(segment)
+    if note not in art["notes"]:
+        art["notes"].append(note)
+    _set_art(segment, art)
+
+
+def _live(run: Run) -> dict[str, Any] | None:
+    """The run's workflow that is still Oracle's to drive (adapter v2), if any."""
+    wf = (run.knobs or {}).get("workflow")
+    # A copy: the column is not mutation-tracked, so changes go back with _set_knob.
+    return copy.deepcopy(wf) if isinstance(wf, dict) and wf.get("state") == "live" else None
+
+
+def _plan_entry(wf: dict[str, Any], seq: int) -> dict[str, Any] | None:
+    return next((e for e in wf.get("segments") or [] if e.get("seq") == seq), None)
+
+
+async def _detach(db: AsyncSession, run: Run, *, cancel: bool, state: str) -> None:
+    """Stop driving the run's live workflow (cancelling it when asked) and revoke its
+    run token: what comes next is a new workflow with a fresh token, or the end."""
+    wf = _live(run)
+    if wf is None:
+        return
+    if cancel:
+        try:
+            await get_runtime().cancel(wf["id"])
+        except RuntimeUnavailable as exc:
+            log.warning("run %s: cancelling workflow %s: %s", run.id, wf["id"], exc)
+    _set_knob(run, "workflow", {**wf, "state": state, "ended_at": _now().isoformat()})
+    await revoke_run_tokens(db, run.id)
+
+
+def _pending(
+    segment: RunSegment, art: dict[str, Any], change_request: str | None, error: str
+) -> None:
+    """Left pending: the next tick submits it again."""
+    segment.status = "pending"
+    segment.error = error
+    if change_request:
+        art["pending_note"] = change_request
+    _set_art(segment, art)
+
+
 async def _submit(
     db: AsyncSession,
     run: Run,
@@ -989,7 +1129,13 @@ async def _submit(
     segments: list[RunSegment],
     change_request: str | None = None,
 ) -> None:
-    """Mint the segment's run token and submit its workflow (the caller commits)."""
+    """Mint the run token and submit the segment's workflow (the caller commits).
+
+    With caller MCP on, the token goes to the agents through the workflow's credential
+    map; with await-input on too, the workflow covers the rest of the run and its
+    checkpoints wait for a person in SwarmCloud (oracle.runs.workflow). A refusal that
+    names a switched-off feature submits again without it; a lost answer is looked up by
+    the submission's label before anything is submitted again."""
     runtime = get_runtime()
     settings = get_runtime_settings()
     flow, knobs = _flow(run), _knobs(run)
@@ -1000,60 +1146,190 @@ async def _submit(
     change_request = change_request or art.pop("pending_note", None)
     if segment.estimate_usd is None:
         segment.estimate_usd = flows.segment_estimate(sdef, knobs)
+    tag = workflow.label(run.id, segment.name, attempt)
 
-    # One segment runs at a time: earlier tokens of the run die before a new one exists.
+    # SwarmCloud has no idempotency keys: a submission whose answer was lost may exist.
+    lost = art.pop("lost", None)
+    if isinstance(lost, dict) and lost.get("label") == tag:
+        try:
+            found = await runtime.find_by_label(tag)
+        except RuntimeUnavailable as exc:
+            art["lost"] = lost
+            _pending(segment, art, change_request, f"looking up submission {tag}: {exc}")
+            return
+        if found:
+            _accepted(run, segment, art, found, lost, change_request, runtime)
+            return
+
+    # One submission at a time: an earlier workflow and its token end before a new one.
+    await _detach(db, run, cancel=True, state="replaced")
     await revoke_run_tokens(db, run.id)
-    token = await mint_run_token(db, run.id, sdef.scopes, settings.run_token_ttl_seconds)
-    ctx = await _prompt_context(db, run, segment, segments, attempt, change_request, runtime)
-    spec = WorkflowSpec(
-        name=f"oracle-{run.flow}-{segment.name}",
-        steps=tuple(
-            StepSpec(
-                key=key,
-                role=role,
-                profile=settings.swarmcloud_profile,
-                prompt=prompt,
-                depends_on=deps,
-                input_from=inputs,
+    url = settings.public_url.rstrip("/") + "/mcp"
+    mode = await _mode(runtime, url)
+    kind = await _target_kind(db, run)
+    registered_again = False
+    while True:
+        covered = [s for s in segments if s.seq >= segment.seq] if mode.waits else [segment]
+        planned: list[tuple[int, str, list[str]]] = []
+        contexts: list[tuple[int, flows.SegmentDef, flows.PromptContext]] = []
+        for s in covered:
+            d = flow.segment(s.name)
+            own = s.seq == segment.seq
+            ctx = await _prompt_context(
+                db,
+                run,
+                s,
+                segments,
+                attempt if own else 1,
+                change_request if own else None,
+                runtime,
+                attached=mode.attach,
+                planned=list(planned),
             )
-            for key, role, prompt, deps, inputs in flows.build_steps(flow, sdef, knobs, ctx)
-        ),
-        outputs=sdef.outputs_for(ctx.kind),
-        mcp=McpAccess(
-            url=settings.public_url.rstrip("/") + "/mcp", token=token, scopes=sdef.scopes
-        ),
-        budget_usd=knobs.budget_usd,
-        labels={
-            "run_id": str(run.id),
-            "segment": segment.name,
-            "attempt": str(attempt),
-            "estimate_usd": str(segment.estimate_usd),
-        },
-    )
-    entry: dict[str, Any] = {
-        "attempt": attempt,
-        "workflow_id": None,
-        "submitted_at": _now().isoformat(),
-        "cost_usd": 0,
-        "note": change_request,
-        "state": None,
-    }
-    try:
-        workflow_id = await runtime.submit(spec)
-    except RuntimeUnavailable as exc:
-        # Left pending: the next tick submits it again.
-        segment.status = "pending"
-        segment.error = str(exc)
-        if change_request:
-            art["pending_note"] = change_request
-        _set_art(segment, art)
+            contexts.append((s.seq, d, ctx))
+            planned.append((s.seq, d.title, list(d.outputs_for(kind))))
+        plan = None
+        if mode.waits:
+            plan = workflow.build_plan(
+                flow, contexts, knobs, settings, settings.swarmcloud_profile, run_id=str(run.id)
+            )
+            steps = tuple(plan.steps)
+            scopes = workflow.scopes_for([d for _, d, _ in contexts])
+            outputs = contexts[-1][1].outputs_for(kind)
+        else:
+            steps = tuple(
+                StepSpec(
+                    key=key,
+                    role=role,
+                    profile=settings.swarmcloud_profile,
+                    prompt=prompt,
+                    depends_on=deps,
+                    input_from=inputs,
+                )
+                for key, role, prompt, deps, inputs in flows.build_steps(
+                    flow, sdef, knobs, contexts[0][2]
+                )
+            )
+            scopes = sdef.scopes
+            outputs = sdef.outputs_for(kind)
+        if mode.attach:
+            agents = sum(1 for s in steps if not s.waits)
+            ttl = workflow.credential_seconds(agents, len(steps) - agents, settings)
+        else:
+            ttl = settings.run_token_ttl_seconds
         await revoke_run_tokens(db, run.id)
-        log.warning("run %s segment %s: submit failed: %s", run.id, segment.name, exc)
+        token = await mint_run_token(db, run.id, scopes, ttl)
+        submitted_at = _now()
+        info: dict[str, Any] = {
+            "label": tag,
+            "mode": "workflow" if mode.waits else "segment",
+            "attach": mode.attach,
+            "notes": mode.notes,
+            "submitted_at": submitted_at.isoformat(),
+            "credential_seconds": ttl if mode.attach else None,
+            "expires_at": workflow.expires_at(submitted_at, ttl).isoformat(),
+            "segments": plan.segments if plan else None,
+            "start_seq": segment.seq,
+        }
+        spec = WorkflowSpec(
+            name=f"oracle-{run.flow}-{segment.name}",
+            steps=steps,
+            outputs=outputs,
+            mcp=McpAccess(
+                url=url,
+                token=token,
+                scopes=scopes,
+                expires_in=ttl if mode.attach else 0,
+                attach=mode.attach,
+            ),
+            budget_usd=knobs.budget_usd,
+            labels={
+                "run_id": str(run.id),
+                "segment": segment.name,
+                "attempt": str(attempt),
+                "estimate_usd": str(segment.estimate_usd),
+            },
+            label=tag,
+        )
+        try:
+            workflow_id = await runtime.submit(spec)
+        except RuntimeUnavailable as exc:
+            if exc.code == "mcp_server_unregistered" and mode.attach and not registered_again:
+                registered_again = True
+                try:
+                    await runtime.ensure_mcp_server(url)
+                    continue
+                except RuntimeUnavailable:
+                    pass
+            fallback = _degrade(mode, exc)
+            if fallback is None and exc.code == "mcp_server_unregistered" and mode.attach:
+                fallback = _Mode(False, False, [*mode.notes, workflow.advice(exc.code, "")])
+            if fallback is not None:
+                log.info("run %s: submitting %s again: %s", run.id, segment.name, exc.code)
+                mode = fallback
+                continue
+            if exc.lost:
+                # The workflow may exist: keep its token alive and look before resubmitting.
+                found = None
+                try:
+                    found = await runtime.find_by_label(tag)
+                except RuntimeUnavailable:
+                    pass
+                if found:
+                    _accepted(run, segment, art, found, info, change_request, runtime)
+                    return
+                art["lost"] = info
+                _pending(
+                    segment,
+                    art,
+                    change_request,
+                    f"{exc}; Oracle looks for submission {tag} before submitting again",
+                )
+                log.warning("run %s segment %s: submit lost: %s", run.id, segment.name, exc)
+                return
+            await revoke_run_tokens(db, run.id)
+            _pending(segment, art, change_request, workflow.advice(exc.code, str(exc)))
+            log.warning("run %s segment %s: submit failed: %s", run.id, segment.name, exc)
+            return
+        _accepted(run, segment, art, workflow_id, info, change_request, runtime)
         return
-    entry["workflow_id"] = workflow_id
-    entry["state"] = "running"
-    art["attempts"].append(entry)
-    for note in runtime.notes() if not runtime.can_reach_oracle else []:
+
+
+def _accepted(
+    run: Run,
+    segment: RunSegment,
+    art: dict[str, Any],
+    workflow_id: str,
+    info: dict[str, Any],
+    change_request: str | None,
+    runtime: AgentRuntime,
+) -> None:
+    """Record a submission the runtime holds (just made, or found by its label)."""
+    art.pop("lost", None)
+    art["attempts"].append(
+        {
+            "attempt": len(art["attempts"]) + 1,
+            "workflow_id": workflow_id,
+            "submitted_at": info.get("submitted_at") or _now().isoformat(),
+            "cost_usd": 0,
+            "note": change_request,
+            "state": "running",
+            "label": info.get("label"),
+            "mode": info.get("mode"),
+        }
+    )
+    notes = list(info.get("notes") or [])
+    if not info.get("attach") and not runtime.can_reach_oracle:
+        notes += runtime.notes()
+    if info.get("mode") == "workflow":
+        hours = get_runtime_settings().checkpoint_wait_seconds / 3600
+        notes.append(
+            f"From '{_flow(run).segment(segment.name).title}' on, this run is one SwarmCloud "
+            f"workflow: each checkpoint waits there for up to {hours:g} h and is answered "
+            "from the Inbox, and the run token lasts "
+            f"{info.get('credential_seconds')} s from submission."
+        )
+    for note in notes:
         if note not in art["notes"]:
             art["notes"].append(note)
     _set_art(segment, art)
@@ -1063,6 +1339,23 @@ async def _submit(
     segment.finished_at = None
     segment.started_at = segment.started_at or _now()
     run.status = "running"
+    if info.get("mode") == "workflow":
+        _set_knob(
+            run,
+            "workflow",
+            {
+                "id": workflow_id,
+                "label": info.get("label"),
+                "state": "live",
+                "start_seq": info.get("start_seq", segment.seq),
+                "submitted_at": info.get("submitted_at"),
+                "expires_at": info.get("expires_at"),
+                "credential_seconds": info.get("credential_seconds"),
+                "segments": info.get("segments") or [],
+            },
+        )
+    else:
+        _set_knob(run, "workflow", None)
 
 
 def _recompute_spend(run: Run, segments: list[RunSegment]) -> None:
@@ -1074,6 +1367,8 @@ async def _finish(db: AsyncSession, run: Run, status: str, error: str | None = N
     run.finished_at = _now()
     if error:
         run.error = error
+    # A run that ends early stops its workflow; a finished one's ends on its own.
+    await _detach(db, run, cancel=status != "succeeded", state="ended")
     await revoke_run_tokens(db, run.id)
 
 
@@ -1081,6 +1376,30 @@ async def _next(
     db: AsyncSession, run: Run, segment: RunSegment, segments: list[RunSegment]
 ) -> None:
     later = [s for s in segments if s.seq > segment.seq]
+    wf = _live(run)
+    if later and wf is not None and _plan_entry(wf, later[0].seq) is not None:
+        # Already part of the live workflow: it runs once the wait is answered.
+        nxt = later[0]
+        art = _art(nxt)
+        art["attempts"].append(
+            {
+                "attempt": len(art["attempts"]) + 1,
+                "workflow_id": wf["id"],
+                "submitted_at": _now().isoformat(),
+                "cost_usd": 0,
+                "note": None,
+                "state": "running",
+                "label": wf.get("label"),
+                "mode": "workflow",
+            }
+        )
+        _set_art(nxt, art)
+        nxt.status = "running"
+        nxt.swarm_workflow_id = wf["id"]
+        nxt.error = None
+        nxt.started_at = nxt.started_at or _now()
+        run.status = "running"
+        return
     if later:
         await _submit(db, run, later[0], segments)
     else:
@@ -1227,9 +1546,16 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
 
 
 async def _advance(
-    db: AsyncSession, run: Run, segment: RunSegment, segments: list[RunSegment]
+    db: AsyncSession,
+    run: Run,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    wait: dict[str, Any] | None = None,
 ) -> bool:
     """After a segment succeeded: import its draft, then open or skip its checkpoint.
+
+    ``wait``: the step of the live workflow that waits for this checkpoint's decision
+    (adapter v2); the Inbox decision is posted to it.
 
     Returns False when this attempt of the segment was already advanced.
     """
@@ -1289,6 +1615,8 @@ async def _advance(
         payload["baseline_import"] = baseline_import
     if items_check is not None:
         payload["items_check"] = items_check
+    if wait is not None:
+        payload["wait"] = wait
     checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
     if knobs.checkpoints.get(sdef.checkpoint, True):
         db.add(
@@ -1362,6 +1690,10 @@ class _TickStats:
 async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
     runtime = get_runtime()
     segments = await _segments(db, run.id)
+    wf = _live(run)
+    if wf is not None:
+        await _tick_workflow(db, run, wf, segments, stats)
+        return
     running = next((s for s in segments if s.status == "running"), None)
     if running is None:
         if run.status == "running":
@@ -1421,20 +1753,201 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
             stats.advanced += 1
 
 
+async def _harvest(run: Run, segment: RunSegment, workflow_id: str, steps: tuple[str, ...]) -> None:
+    """A segment's files from the steps that wrote them (read by task id), in step order:
+    a later step's file of the same name wins."""
+    files = await get_runtime().artifacts(workflow_id, steps)
+    art = _art(segment)
+    art["files"] = {**art["files"], **files}
+    if art["attempts"]:
+        art["attempts"][-1]["state"] = "succeeded"
+    _set_art(segment, art)
+    segment.status = "succeeded"
+    segment.finished_at = _now()
+
+
+# A step state that is neither a failure nor an expiry.
+_OPEN_OR_DONE = ("PENDING", "RUNNING", "PARKED", "SUCCEEDED", "SKIPPED")
+
+
+async def _tick_workflow(
+    db: AsyncSession,
+    run: Run,
+    wf: dict[str, Any],
+    segments: list[RunSegment],
+    stats: _TickStats,
+) -> None:
+    """Advance a run that is one live workflow: record its cost, take each segment's files
+    when the wait after it opens (or when it is done, checkpoint off), open the checkpoint
+    with the wait to answer, and notice expiry, failures and the end."""
+    status = await get_runtime().status(wf["id"])
+    by_seq = {s.seq: s for s in segments}
+    start = by_seq.get(wf.get("start_seq"))
+    if start is not None:
+        art = _art(start)
+        for a in art["attempts"]:
+            if a.get("workflow_id") == wf["id"]:
+                a["cost_usd"] = float(status.cost_usd)
+        start.cost_usd = sum(
+            (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
+        )
+        _set_art(start, art)
+    _recompute_spend(run, segments)
+    current = next((s for s in segments if s.status == "running"), None)
+    for parked in status.parked:
+        if parked.reason == "CREDENTIAL_MISSING":
+            _note(current or start or segments[0], workflow.ADVICE["CREDENTIAL_MISSING"])
+    if run.status == "paused_overrun":
+        return
+    if run.status == "awaiting_checkpoint":
+        if status.terminal:
+            await _wait_ended(db, run, wf, status, segments)
+        return
+
+    ceiling = _ceiling(run)
+    if ceiling is not None and run.spent_usd > ceiling:
+        run.status = "paused_overrun"
+        stats.paused += 1
+        await audit.record(
+            db,
+            None,
+            "run.paused_overrun",
+            "run",
+            run.id,
+            {"spent_usd": str(run.spent_usd), "ceiling_usd": str(ceiling)},
+        )
+        return
+
+    while run.status == "running":
+        current = next((s for s in segments if s.status == "running"), None)
+        entry = _plan_entry(wf, current.seq) if current is not None else None
+        if current is None or entry is None:
+            break
+        round_ = int(entry.get("round") or 1)
+        producers = tuple(entry["work"]) if round_ == 1 else (entry["revises"][round_ - 2],)
+        done = status.step(producers[-1])
+        if done is None or done.state != "SUCCEEDED":
+            break
+        reviews = entry.get("reviews") or []
+        if entry.get("checkpoint") and round_ <= len(reviews):
+            review = reviews[round_ - 1]
+            parked = next(
+                (p for p in status.parked if p.step_id == review and p.reason == "AWAITING_INPUT"),
+                None,
+            )
+            ended = status.step(review)
+            if parked is None and not (
+                status.terminal and ended is not None and ended.state not in _OPEN_OR_DONE
+            ):
+                break
+            await _harvest(run, current, wf["id"], producers)
+            wait: dict[str, Any] = {"workflow_id": wf["id"], "step_id": review, "round": round_}
+            if parked is not None:
+                wait["task_id"] = parked.task_id
+                wait["opened_at"] = parked.opened_at.isoformat() if parked.opened_at else None
+                wait["expires_at"] = parked.expires_at.isoformat() if parked.expires_at else None
+            else:
+                # The wait ended before Oracle opened its checkpoint (it expired while the
+                # run was paused): the checkpoint opens in the Inbox only.
+                wait["ended"] = "expired"
+                wait["ended_at"] = _now().isoformat()
+                _note(current, workflow.ADVICE["expired"])
+                await _detach(db, run, cancel=False, state="expired")
+            stats.finished += 1
+            if await _advance(db, run, current, segments, wait=wait):
+                stats.advanced += 1
+            break
+        # Checkpoint off, or the last round's revision is done: the files are final.
+        await _harvest(run, current, wf["id"], producers)
+        stats.finished += 1
+        if entry.get("checkpoint"):
+            # Its checkpoint waits in the Inbox only: the workflow has nothing left.
+            await _detach(db, run, cancel=False, state="ended")
+        if await _advance(db, run, current, segments):
+            stats.advanced += 1
+
+    if status.terminal and run.status == "running" and _live(run) is not None:
+        current = next((s for s in segments if s.status == "running"), None)
+        if status.state == "succeeded":
+            if current is None:
+                await _detach(db, run, cancel=False, state="ended")
+                return
+            error = f"the workflow ended before '{current.name}' wrote its files"
+        else:
+            fallback = f"the workflow ended {status.state}: {status.error or 'no reason given'}"
+            error = workflow.advice(status.error_code, fallback)
+        if current is not None:
+            current.status = "failed" if status.state != "cancelled" else "cancelled"
+            current.error = error
+            current.finished_at = _now()
+        await _finish(db, run, "failed", f"{current.name if current else 'workflow'}: {error}")
+        await audit.record(db, None, "run.failed", "run", run.id, {"workflow": wf["id"]})
+
+
+async def _wait_ended(
+    db: AsyncSession,
+    run: Run,
+    wf: dict[str, Any],
+    status: WorkflowStatus,
+    segments: list[RunSegment],
+) -> None:
+    """The workflow ended while a checkpoint waited in it (W2b: the wait expired, or it
+    ended otherwise). The checkpoint stays open in the Inbox; deciding it continues the
+    run as a new workflow."""
+    cp = next(
+        (
+            c
+            for c in await _checkpoints(db, [run.id])
+            if c.status == "pending"
+            and ((c.payload or {}).get("wait") or {}).get("workflow_id") == wf["id"]
+        ),
+        None,
+    )
+    step = status.step(((cp.payload or {}).get("wait") or {}).get("step_id", "")) if cp else None
+    expired = status.error_code == "expired" or (
+        status.state == "failed" and step is not None and step.state != "SUCCEEDED"
+    )
+    if expired:
+        note = workflow.ADVICE["expired"]
+    else:
+        note = (
+            f"The workflow waiting on this run's checkpoint ended {status.state} in SwarmCloud"
+            f"{f' ({status.error})' if status.error else ''}. The checkpoint stays open in the "
+            "Inbox; deciding it continues the run as a new workflow."
+        )
+    if cp is not None:
+        wait = dict((cp.payload or {}).get("wait") or {})
+        wait["ended"] = "expired" if expired else status.state
+        wait["ended_at"] = _now().isoformat()
+        cp.payload = {**(cp.payload or {}), "wait": wait}
+        seq = (cp.payload or {}).get("segment_seq")
+        target = next((s for s in segments if s.seq == seq), segments[0])
+        _note(target, note)
+    await _detach(db, run, cancel=False, state="expired" if expired else "ended")
+
+
 async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
     """Advance every active run of the session's tenant; one transaction per run."""
     stats = _TickStats()
     errors: list[str] = []
+    # Runs waiting on a checkpoint inside a live workflow are watched too: its wait may
+    # expire, or the workflow may end in SwarmCloud.
+    waiting_in_workflow = (Run.status == "awaiting_checkpoint") & (
+        Run.knobs["workflow"]["state"].astext == "live"
+    )
     ids = list(
         await db.scalars(
             select(Run.id)
-            .where(Run.status.in_(("running", "paused_overrun")))
+            .where(Run.status.in_(("running", "paused_overrun")) | waiting_in_workflow)
             .order_by(Run.started_at, Run.id)
         )
     )
     for run_id in ids:
         run = await db.scalar(select(Run).where(Run.id == run_id).with_for_update(skip_locked=True))
-        if run is None or run.status not in ("running", "paused_overrun"):
+        if run is None or not (
+            run.status in ("running", "paused_overrun")
+            or (run.status == "awaiting_checkpoint" and _live(run) is not None)
+        ):
             await db.rollback()
             continue
         stats.checked += 1
@@ -1496,6 +2009,12 @@ async def decide_checkpoint(
         cp.id,
         {"run_id": str(run.id), "kind": cp.kind},
     )
+    wait = (cp.payload or {}).get("wait") or {}
+    wf = _live(run)
+    if wf is not None and wait.get("workflow_id") == wf["id"]:
+        if await _decide_in_workflow(db, run, cp, segment, segments, wf, principal):
+            await db.commit()
+            return
     run.status = "running"
     if decision == "approved":
         await _next(db, run, segment, segments)
@@ -1503,6 +2022,133 @@ async def decide_checkpoint(
         segment.status = "pending"
         await _submit(db, run, segment, segments, change_request=note)
     await db.commit()
+
+
+def _left(wf: dict[str, Any]) -> float:
+    """Seconds left of the live workflow's run credential."""
+    try:
+        expires = datetime.fromisoformat(wf["expires_at"])
+    except (KeyError, TypeError, ValueError):
+        return 0.0
+    return (expires - _now()).total_seconds()
+
+
+def _duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    hours, rest = divmod(seconds, 3600)
+    return f"{hours} h {rest // 60} min" if hours else f"{rest // 60} min {rest % 60} s"
+
+
+async def _email(db: AsyncSession, principal: Principal) -> str | None:
+    """The deciding user's email, recorded by SwarmCloud as ``on_behalf_of``."""
+    if principal.user_id is None:
+        return None
+    user = await db.get(User, principal.user_id)
+    return user.email if user is not None else None
+
+
+async def _decide_in_workflow(
+    db: AsyncSession,
+    run: Run,
+    cp: Checkpoint,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    wf: dict[str, Any],
+    principal: Principal,
+) -> bool:
+    """Post an Inbox decision to the wait in the live workflow. Returns False when it is
+    not posted and the run continues as a new workflow instead (the caller does that):
+    the workflow has no step for the decision, too little of the credential is left
+    (the tail rule), or SwarmCloud refuses the answer."""
+    settings = get_runtime_settings()
+    wait = dict((cp.payload or {}).get("wait") or {})
+    entry = _plan_entry(wf, segment.seq) or {}
+    round_ = int(wait.get("round") or 1)
+    approved = cp.status == "approved"
+    if not approved and round_ > len(entry.get("revises") or []):
+        # The workflow's next steps assume approval: re-run the segment on its own.
+        _note(
+            segment,
+            f"Changes requested at {cp.kind} (round {round_}): the workflow had no revision "
+            "step for it, so Oracle cancelled it and re-runs the segment as a new workflow.",
+        )
+        await _detach(db, run, cancel=True, state="cancelled")
+        return False
+    left = _left(wf)
+    if left < settings.checkpoint_tail_seconds:
+        _note(
+            segment,
+            f"Decided at {cp.kind} with {_duration(left)} of the run's credential left (under "
+            f"the {_duration(settings.checkpoint_tail_seconds)} tail): Oracle did not post the "
+            "decision to SwarmCloud, cancelled the waiting workflow and continued as a new "
+            "workflow with a fresh run token.",
+        )
+        await _detach(db, run, cancel=True, state="tail")
+        return False
+    payload: dict[str, Any] = (
+        {"verdict": MERGE, "findings": []}
+        if approved
+        else {"verdict": NOT_YET, "findings": [cp.note] if cp.note else []}
+    )
+    try:
+        answer = await get_runtime().answer(
+            wf["id"],
+            wait["step_id"],
+            answer_id=str(cp.id),
+            payload=payload,
+            on_behalf_of=await _email(db, principal),
+        )
+    except RuntimeUnavailable as exc:
+        if exc.code in ("already_answered", "not_open", "expired", "person_required"):
+            _note(segment, workflow.ADVICE[exc.code])
+            await _detach(db, run, cancel=exc.code != "expired", state=exc.code)
+            return False
+        # Not recorded: the same decision is safe to send again (same answer_id).
+        raise Unavailable(
+            f"SwarmCloud did not confirm the decision ({exc}); decide again, it is safe to repeat"
+        ) from None
+    wait["answered"] = {
+        "verdict": payload["verdict"],
+        "at": _now().isoformat(),
+        "replayed": answer.replayed,
+    }
+    cp.payload = {**(cp.payload or {}), "wait": wait}
+    run.status = "running"
+    last = wf["segments"][-1].get("seq") == segment.seq if wf.get("segments") else True
+    if approved:
+        if last:
+            # What follows a MERGE in the last round's shape is pass-through: stop it.
+            more = round_ < len(entry.get("reviews") or [])
+            await _detach(db, run, cancel=more, state="ended")
+        await _next(db, run, segment, segments)
+        return True
+    # NOT_YET: the revision step runs in the workflow, then the next round's wait.
+    entry["round"] = round_ + 1
+    _set_knob(
+        run,
+        "workflow",
+        {
+            **wf,
+            "segments": [entry if e.get("seq") == segment.seq else e for e in wf["segments"]],
+        },
+    )
+    art = _art(segment)
+    art["attempts"].append(
+        {
+            "attempt": len(art["attempts"]) + 1,
+            "workflow_id": wf["id"],
+            "submitted_at": _now().isoformat(),
+            "cost_usd": 0,
+            "note": cp.note,
+            "state": "running",
+            "label": wf.get("label"),
+            "mode": "workflow",
+        }
+    )
+    _set_art(segment, art)
+    segment.status = "running"
+    segment.finished_at = None
+    return True
 
 
 def _may_manage(principal: Principal, run: Run) -> bool:
@@ -1519,8 +2165,13 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         raise RunError(f"run is already {run.status}")
     runtime = get_runtime()
     segments = await _segments(db, run.id)
+    wf = _live(run)
+    await _detach(db, run, cancel=True, state="cancelled")
     for s in segments:
-        if s.status == "running" and s.swarm_workflow_id:
+        if s.status == "running" and wf is not None and s.swarm_workflow_id == wf["id"]:
+            s.status = "cancelled"
+            s.finished_at = _now()
+        elif s.status == "running" and s.swarm_workflow_id:
             try:
                 await runtime.cancel(s.swarm_workflow_id)
             except RuntimeUnavailable as exc:

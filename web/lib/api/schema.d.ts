@@ -2217,12 +2217,37 @@ export interface paths {
         };
         /**
          * Runtime Status
-         * @description Call the agent runtime as Oracle and report what it answers: reachable, and as which
-         *     tenant. Owner only. Never shows a credential.
+         * @description Call the agent runtime as Oracle and report what it answers: reachable, as which
+         *     tenant, and which adapter v2 features are on (mcp, await_input, service_answer: on,
+         *     off or unknown; read briefly cached, never longer than the runtime's timeout). Owner
+         *     only. Never shows a credential.
          */
         get: operations["runtime_status"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runtime/mcp-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register Mcp Server
+         * @description Register Oracle's MCP server in the agent runtime, idempotently: created when
+         *     missing, its URL updated when ORACLE_PUBLIC_URL changed, else unchanged. Runs do this
+         *     on their own before the first run token is sent; this is for owners and the
+         *     switch-on check. Owner only.
+         */
+        post: operations["register_mcp_server"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4770,6 +4795,21 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * McpServerRegistration
+         * @description Oracle's MCP server in the runtime (``oracle``, at ORACLE_PUBLIC_URL + /mcp).
+         */
+        McpServerRegistration: {
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "created" | "updated" | "unchanged";
+        };
         /** Me */
         Me: {
             /**
@@ -5574,6 +5614,31 @@ export interface components {
             error?: string | null;
         };
         /**
+         * RuntimeFeatures
+         * @description Adapter v2's switches in the runtime: caller MCP (#1433), waits for a person
+         *     (#1436), and Oracle's principal answering them.
+         */
+        RuntimeFeatures: {
+            /**
+             * Mcp
+             * @default unknown
+             * @enum {string}
+             */
+            mcp: "on" | "off" | "unknown";
+            /**
+             * Await Input
+             * @default unknown
+             * @enum {string}
+             */
+            await_input: "on" | "off" | "unknown";
+            /**
+             * Service Answer
+             * @default unknown
+             * @enum {string}
+             */
+            service_answer: "on" | "off" | "unknown";
+        };
+        /**
          * RuntimeStatusOut
          * @description Whether Oracle reaches its agent runtime, and as which tenant (owner only).
          */
@@ -5588,6 +5653,21 @@ export interface components {
             tenant_id?: string | null;
             /** Can Reach Oracle */
             can_reach_oracle: boolean;
+            /**
+             * @default {
+             *       "mcp": "unknown",
+             *       "await_input": "unknown",
+             *       "service_answer": "unknown"
+             *     }
+             */
+            features: components["schemas"]["RuntimeFeatures"];
+            /**
+             * Feature Reasons
+             * @default {}
+             */
+            feature_reasons: {
+                [key: string]: string;
+            };
             /**
              * Notes
              * @default []
@@ -11724,6 +11804,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuntimeStatusOut"];
+                };
+            };
+        };
+    };
+    register_mcp_server: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerRegistration"];
                 };
             };
         };

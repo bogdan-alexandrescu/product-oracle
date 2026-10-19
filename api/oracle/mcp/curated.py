@@ -58,6 +58,14 @@ class Curated:
         [FastAPI, McpCaller, dict[str, Operation], dict[str, Any]],
         Awaitable[types.CallToolResult],
     ]
+    # Offered to run tokens only, for their own run: listed whatever the token's scopes.
+    own_run: bool = False
+
+    def offered_to(self, caller: McpCaller) -> bool | None:
+        """True or False for an own-run tool; None: the operations' scopes decide."""
+        if not self.own_run:
+            return None
+        return caller.kind == "run" and caller.run_id is not None
 
     def resolve(self, ops: list[Operation]) -> dict[str, Operation] | None:
         found = {role: find(ops) for role, find in self.needs.items()}
@@ -201,6 +209,31 @@ async def _push_draft(app, caller, ops, args) -> types.CallToolResult:
     )
 
 
+_RUN_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "seq": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The segment's number in this run (1 is the first)",
+        },
+        "name": {"type": "string", "description": "The file name, e.g. baseline.yaml"},
+    },
+    "required": ["seq", "name"],
+}
+
+
+async def _run_output(app, caller, ops, args) -> types.CallToolResult:
+    """A file an earlier segment of the caller's run wrote: the run is the token's own."""
+    if caller.kind != "run" or caller.run_id is None:
+        raise ToolError("get_run_output is for a run's own agents (a run token).")
+    missing = [k for k in ("seq", "name") if args.get(k) in (None, "")]
+    if missing:
+        raise ToolError(f"Missing required argument(s): {', '.join(missing)}")
+    call = {"run_id": str(caller.run_id), "seq": args["seq"], "name": args["name"]}
+    return to_result(await call_operation(app, caller, ops["op"], call, check_scopes=False))
+
+
 def _is_baseline(path: str) -> bool:
     return path.startswith("/v1/baseline")
 
@@ -313,6 +346,18 @@ CURATED: tuple[Curated, ...] = (
         needs={"op": _by("POST", ("import_version",))},
         schema=lambda ops: copy.deepcopy(_PUSH_DRAFT_SCHEMA),
         run=_push_draft,
+    ),
+    Curated(
+        name="get_run_output",
+        description=(
+            "Read a file an earlier segment of this run wrote (by segment number and file "
+            "name), e.g. the baseline proposal or the feature set a later step builds on. "
+            "Only the run's own files."
+        ),
+        needs={"op": _by("GET", ("get_run_artifact",))},
+        schema=lambda ops: copy.deepcopy(_RUN_OUTPUT_SCHEMA),
+        run=_run_output,
+        own_run=True,
     ),
 )
 

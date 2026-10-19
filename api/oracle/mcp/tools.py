@@ -297,10 +297,17 @@ def _build_request(op: Operation, args: dict[str, Any]) -> tuple[str, dict, Any,
 
 
 async def call_operation(
-    app: FastAPI, caller: McpCaller, op: Operation, args: dict[str, Any]
+    app: FastAPI,
+    caller: McpCaller,
+    op: Operation,
+    args: dict[str, Any],
+    *,
+    check_scopes: bool = True,
 ) -> RestResponse:
-    """Run ``op`` as ``caller`` through the app; raise ToolError when it may not run."""
-    if not scopes.allowed(caller.scopes, op.method, op.path):
+    """Run ``op`` as ``caller`` through the app; raise ToolError when it may not run.
+    ``check_scopes=False`` only for a curated tool that pins the call to the caller's own
+    run (the REST role checks still apply)."""
+    if check_scopes and not scopes.allowed(caller.scopes, op.method, op.path):
         needed = scopes.required_scope(op.method, op.path)
         reason = f"needs the {needed} scope" if needed else "is not available to run tokens"
         raise ToolError(f"Refused: {op.method} {op.path} {reason}.")

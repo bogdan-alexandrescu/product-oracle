@@ -324,6 +324,18 @@ class InboxOut(BaseModel):
     total: int
 
 
+FeatureState = Literal["on", "off", "unknown"]
+
+
+class RuntimeFeatures(BaseModel):
+    """Adapter v2's switches in the runtime: caller MCP (#1433), waits for a person
+    (#1436), and Oracle's principal answering them."""
+
+    mcp: FeatureState = "unknown"
+    await_input: FeatureState = "unknown"
+    service_answer: FeatureState = "unknown"
+
+
 class RuntimeStatusOut(BaseModel):
     """Whether Oracle reaches its agent runtime, and as which tenant (owner only)."""
 
@@ -333,5 +345,17 @@ class RuntimeStatusOut(BaseModel):
     reachable: bool
     tenant_id: str | None = None
     can_reach_oracle: bool
+    features: RuntimeFeatures = RuntimeFeatures()
+    # Why a feature is off or unknown, by feature.
+    feature_reasons: dict[str, str] = {}
     notes: list[str] = []
     error: str | None = None
+
+
+class McpServerRegistration(BaseModel):
+    """Oracle's MCP server in the runtime (``oracle``, at ORACLE_PUBLIC_URL + /mcp)."""
+
+    name: str
+    url: str
+    # created | updated (the URL changed) | unchanged
+    result: Literal["created", "updated", "unchanged"]

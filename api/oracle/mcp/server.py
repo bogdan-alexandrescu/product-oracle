@@ -4,6 +4,7 @@ Every request is authenticated here (:mod:`oracle.mcp.auth`), then served by a f
 low-level MCP server whose tools are the app's REST operations plus the curated ones.
 """
 
+import logging
 from typing import Any
 
 import mcp_types as types
@@ -17,6 +18,7 @@ from starlette.types import Receive, Scope, Send
 
 from oracle.mcp import auth, scopes
 from oracle.mcp.curated import CONFIDENCE_GUIDANCE, CURATED, CURATED_NAMES, Curated
+from oracle.mcp.egress import client_address, run_token_allowed
 from oracle.mcp.oauth.service import issuer
 from oracle.mcp.tools import (
     Operation,
@@ -27,6 +29,9 @@ from oracle.mcp.tools import (
     to_result,
     tool_names,
 )
+from oracle.runtokens import RUN_TOKEN_PREFIX
+
+log = logging.getLogger(__name__)
 
 MOUNT_PATH = "/mcp"
 SERVER_NAME = "product-oracle"
@@ -49,6 +54,20 @@ def unauthorized(request: Request, error: bool) -> JSONResponse:
         {"error": "invalid_token" if error else "unauthorized", "detail": "Not authenticated"},
         status_code=401,
         headers={"WWW-Authenticate": _www_authenticate(request, error)},
+    )
+
+
+def refused(request: Request) -> JSONResponse:
+    log.warning(
+        "/mcp: a run token from %s refused (not SwarmCloud's egress)",
+        client_address(request) or "an unknown address",
+    )
+    return JSONResponse(
+        {
+            "error": "forbidden",
+            "detail": "Run tokens are accepted only from the agent runtime's egress addresses",
+        },
+        status_code=403,
     )
 
 
@@ -80,7 +99,10 @@ class Catalog:
     def tools(self) -> list[types.Tool]:
         out: list[types.Tool] = []
         for name, (c, ops) in self.curated.items():
-            if all(self._allowed(op) for op in ops.values()):
+            offered = c.offered_to(self.caller)
+            if offered is None:
+                offered = all(self._allowed(op) for op in ops.values())
+            if offered:
                 read_only = all(op.method == "GET" for op in ops.values())
                 out.append(
                     types.Tool(
@@ -130,6 +152,8 @@ class Catalog:
         try:
             if name in self.curated:
                 c, ops = self.curated[name]
+                if c.offered_to(self.caller) is False:
+                    raise ToolError(f"Unknown tool: {name}")
                 return await c.run(self.app, self.caller, ops, args)
             op = self.generated.get(name)
             if op is None:
@@ -169,6 +193,11 @@ class McpEndpoint:
             return
         request = Request(scope, receive)
         raw = _bearer(request)
+        if raw and raw.startswith(RUN_TOKEN_PREFIX) and not await run_token_allowed(request):
+            # Checked before the token is: a run token is SwarmCloud's to use, and from
+            # anywhere else it is refused without being looked up.
+            await refused(request)(scope, receive, send)
+            return
         caller = await auth.verify(raw) if raw else None
         if caller is None:
             await unauthorized(request, error=raw is not None)(scope, receive, send)

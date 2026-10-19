@@ -319,8 +319,11 @@ async def test_runtime_status_reports_the_tenant_and_never_the_token(client):
     _, owner = await seed_auth()
 
     def me(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/v1/tenants/me"
         assert "x-swarm-tenant" not in request.headers  # the service tenant is the default
+        if request.url.path == "/v1/mcp-servers":
+            return httpx.Response(503, json={"detail": {"code": "mcp_unavailable"}})
+        if request.url.path != "/v1/tenants/me":
+            return httpx.Response(404, json={"detail": "no route"})
         return httpx.Response(200, json={"tenant": {"tenant_id": "u-or-9a0792", "kind": "user"}})
 
     def refused(request: httpx.Request) -> httpx.Response:
@@ -335,6 +338,12 @@ async def test_runtime_status_reports_the_tenant_and_never_the_token(client):
         body = (await client.get("/v1/runtime/status", headers=owner)).json()
         assert body["runtime"] == "swarmcloud" and body["reachable"] is True
         assert body["tenant_id"] == "u-or-9a0792" and body["error"] is None
+        assert body["features"] == {
+            "mcp": "off",
+            "await_input": "unknown",
+            "service_answer": "unknown",
+        }
+        assert "mcp_unavailable" in body["feature_reasons"]["mcp"]
 
         set_runtime(
             SwarmCloudRuntime(
@@ -360,6 +369,8 @@ async def test_runtime_status_reports_the_tenant_and_never_the_token(client):
             "reachable": True,
             "tenant_id": "fake",
             "can_reach_oracle": True,
+            "features": {"mcp": "off", "await_input": "off", "service_answer": "off"},
+            "feature_reasons": {},
             "notes": FakeRuntime().notes(),
             "error": None,
         }

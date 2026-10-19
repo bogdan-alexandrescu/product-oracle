@@ -8179,7 +8179,7 @@
           "runs"
         ],
         "summary": "Runtime Status",
-        "description": "Call the agent runtime as Oracle and report what it answers: reachable, and as which\ntenant. Owner only. Never shows a credential.",
+        "description": "Call the agent runtime as Oracle and report what it answers: reachable, as which\ntenant, and which adapter v2 features are on (mcp, await_input, service_answer: on,\noff or unknown; read briefly cached, never longer than the runtime's timeout). Owner\nonly. Never shows a credential.",
         "operationId": "runtime_status",
         "responses": {
           "200": {
@@ -8188,6 +8188,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RuntimeStatusOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/runtime/mcp-server": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Register Mcp Server",
+        "description": "Register Oracle's MCP server in the agent runtime, idempotently: created when\nmissing, its URL updated when ORACLE_PUBLIC_URL changed, else unchanged. Runs do this\non their own before the first run token is sent; this is for owners and the\nswitch-on check. Owner only.",
+        "operationId": "register_mcp_server",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerRegistration"
                 }
               }
             }
@@ -15434,6 +15464,35 @@
         ],
         "title": "LoginRequest"
       },
+      "McpServerRegistration": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "created",
+              "updated",
+              "unchanged"
+            ],
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "url",
+          "result"
+        ],
+        "title": "McpServerRegistration",
+        "description": "Oracle's MCP server in the runtime (``oracle``, at ORACLE_PUBLIC_URL + /mcp)."
+      },
       "Me": {
         "properties": {
           "kind": {
@@ -18042,6 +18101,43 @@
         ],
         "title": "RunSummary"
       },
+      "RuntimeFeatures": {
+        "properties": {
+          "mcp": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "unknown"
+            ],
+            "title": "Mcp",
+            "default": "unknown"
+          },
+          "await_input": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "unknown"
+            ],
+            "title": "Await Input",
+            "default": "unknown"
+          },
+          "service_answer": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "unknown"
+            ],
+            "title": "Service Answer",
+            "default": "unknown"
+          }
+        },
+        "type": "object",
+        "title": "RuntimeFeatures",
+        "description": "Adapter v2's switches in the runtime: caller MCP (#1433), waits for a person\n(#1436), and Oracle's principal answering them."
+      },
       "RuntimeStatusOut": {
         "properties": {
           "runtime": {
@@ -18077,6 +18173,22 @@
           "can_reach_oracle": {
             "type": "boolean",
             "title": "Can Reach Oracle"
+          },
+          "features": {
+            "$ref": "#/components/schemas/RuntimeFeatures",
+            "default": {
+              "mcp": "unknown",
+              "await_input": "unknown",
+              "service_answer": "unknown"
+            }
+          },
+          "feature_reasons": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Feature Reasons",
+            "default": {}
           },
           "notes": {
             "items": {

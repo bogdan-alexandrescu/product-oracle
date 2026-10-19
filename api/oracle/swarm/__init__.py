@@ -10,9 +10,13 @@ Claude accounts) or the deterministic :class:`FakeRuntime`, which tests choose w
 from oracle.swarm.fake import FakeRuntime, Outcome
 from oracle.swarm.runtime import (
     AgentRuntime,
+    Answer,
+    Features,
     McpAccess,
+    Parked,
     RuntimeUnavailable,
     StepSpec,
+    StepStatus,
     WorkflowSpec,
     WorkflowStatus,
 )
@@ -21,11 +25,15 @@ from oracle.swarm.swarmcloud import SwarmCloudRuntime, UnconfiguredSwarmCloud
 
 __all__ = [
     "AgentRuntime",
+    "Answer",
     "FakeRuntime",
+    "Features",
     "McpAccess",
     "Outcome",
+    "Parked",
     "RuntimeUnavailable",
     "StepSpec",
+    "StepStatus",
     "SwarmCloudRuntime",
     "UnconfiguredSwarmCloud",
     "WorkflowSpec",
