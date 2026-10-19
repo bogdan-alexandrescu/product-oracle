@@ -49,9 +49,11 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_0014_trace_follows_0013():
+def test_0014_trace_follows_0014_usage_retry_at():
+    # Re-chained at the wave 1 integration, part 2: 0014_* in merge order, one head.
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_revision("0014_trace").down_revision == "0013"
+    assert script.get_revision("0014_trace").down_revision == "0014_usage_retry_at"
+    assert script.get_heads() == ["0014_trace"]
 
 
 def _seed(t, doc, ver, ent):
@@ -81,7 +83,8 @@ def _seed(t, doc, ver, ent):
 
 def test_upgrade_keeps_rows_and_a_deleted_entity_leaves_its_dependency(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0013")
+    # The live database is at 0014_usage_retry_at when 0014_trace first runs.
+    command.upgrade(cfg, "0014_usage_retry_at")
     t, doc, ver, ent = (uuid.uuid4() for _ in range(4))
     _seed(t, doc, ver, ent)
     av = ver

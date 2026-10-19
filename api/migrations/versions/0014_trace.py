@@ -15,10 +15,11 @@ check holds.
 The downgrade deletes the rows whose upstream entity is gone (the old schema would have
 cascaded them) and restores the cascade.
 
-The integrator re-chains this onto the head of the merged wave.
+Re-chained on 0014_usage_retry_at at the wave 1 integration, part 2 (waves.md: 0014_* in
+merge order).
 
 Revision ID: 0014_trace
-Revises: 0013
+Revises: 0014_usage_retry_at
 """
 
 from collections.abc import Sequence
@@ -28,7 +29,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0014_trace"
-down_revision: str | None = "0013"
+down_revision: str | None = "0014_usage_retry_at"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

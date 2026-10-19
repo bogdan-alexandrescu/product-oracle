@@ -214,11 +214,14 @@ async def test_a_working_save_never_supersedes_the_confirmed_revision(client):
 async def test_a_first_working_save_leaves_the_document_legacy(client):
     ctx = await seeded_ctx()
     await _doc(client, ctx)
+    # The import itself records a document_version change (the trace hook); the working
+    # save adds none.
+    before = len(await _events(ctx))
     resp = await _revise(client, ctx, None, "Draft", status="working", inputs=PLATFORM)
     assert resp.status_code == 201, resp.text
     out = resp.json()
     assert out["legacy"] and out["current"] is None and out["working"]["number"] == 1
-    assert await _events(ctx) == []
+    assert len(await _events(ctx)) == before
     resp = await client.post(
         f"/v1/documents/{SLUG}/composition/publish",
         json={"version": 1},
