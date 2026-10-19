@@ -53,7 +53,9 @@ async def owner():
 
 def _reads(swarm, wid: str = "wf_1") -> int:
     """SwarmCloud status reads of workflow ``wid``."""
-    return sum(1 for r in swarm.requests if r.method == "GET" and r.url.path == f"/v1/workflows/{wid}")
+    return sum(
+        1 for r in swarm.requests if r.method == "GET" and r.url.path == f"/v1/workflows/{wid}"
+    )
 
 
 async def _push(token: str, doc: str = "r8-draft") -> tuple[bool, str]:
