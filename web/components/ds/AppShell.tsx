@@ -9,6 +9,7 @@ import { resetMockData } from "@/lib/api/mock/server";
 import { useMe } from "@/lib/me";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
+import { Mark } from "./Brand";
 import { initialsOf } from "./Figures";
 import { Icon, type IconName } from "./Icon";
 
@@ -238,12 +239,8 @@ function Navs() {
         data-testid="app-nav"
         className="sticky top-0 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 bg-nav py-3.5 max-[600px]:hidden"
       >
-        <Link
-          href="/home"
-          aria-label="Product Oracle"
-          className="mb-3 grid size-10 flex-none place-items-center rounded-xl bg-lime font-display text-[19px] font-bold text-on-lime"
-        >
-          Q
+        <Link href="/home" aria-label="Product Oracle" data-testid="nav-brand" className="mb-3 flex-none rounded-xl">
+          <Mark size={44} tone="sky" className="block" />
         </Link>
         {DESTINATIONS.map((d) => (
           <RailLink key={d.href} d={d} pathname={pathname} badge={d.label === "Inbox" ? inbox : undefined} />

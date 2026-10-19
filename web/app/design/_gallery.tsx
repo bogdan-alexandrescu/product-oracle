@@ -10,6 +10,7 @@ import {
   CostFigure,
   DataTable,
   Empty,
+  FaviconMark,
   GoalTag,
   Icon,
   InfoTip,
@@ -20,6 +21,7 @@ import {
   KpiStrip,
   Label,
   LinkButton,
+  Mark,
   Meter,
   Notice,
   Numeral,
@@ -30,6 +32,7 @@ import {
   SegmentedControl,
   Sparkline,
   ToGo,
+  Wordmark,
   type ButtonVariant,
   type Column,
 } from "@/components/ds";
@@ -51,6 +54,41 @@ function State({ name, children, wide = false }: { name: string; children: React
 /** A dark strip for samples drawn on the Inspector head. */
 function HeroStrip({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap items-center gap-2.5 rounded-button bg-hero px-3 py-2.5 text-hero-text">{children}</div>;
+}
+
+/** The three grounds the mark is drawn on (brand/README.md): fixed colours, not the theme's. */
+const BRAND_GROUNDS = [
+  { name: "Light", bg: "#f3f6f9", ink: "#0b3a7a", accent: "#0369a1", sky: false },
+  { name: "Dark", bg: "#06101e", ink: "#bcd6ee", accent: "#7cc8f8", sky: false },
+  { name: "Navy", bg: "linear-gradient(#0b3a7a, #06101e)", ink: "#ffffff", accent: "#7dd3fc", sky: true },
+] as const;
+
+/** The Compass mark, its compact cut, the tab icon and the wordmark on each ground. */
+function BrandGrounds({ tid }: { tid: string }) {
+  return (
+    <div className="grid grid-cols-3 gap-3 p-4 max-[900px]:grid-cols-1">
+      {BRAND_GROUNDS.map((g) => (
+        <div
+          key={g.name}
+          data-testid={`${tid}-${g.name.toLowerCase()}`}
+          className="flex flex-col gap-4 rounded-button border border-line p-4"
+          style={{ background: g.bg, color: g.ink }}
+        >
+          <span className="text-[13px] font-semibold">{g.name}</span>
+          <div className="flex items-end gap-5">
+            <Mark size={44} tone={g.sky ? "sky" : "current"} label="Full mark, 44 px" />
+            <Mark size={22} tone={g.sky ? "sky" : "current"} label="Compact mark, 22 px" />
+            <Mark size={16} tone={g.sky ? "sky" : "current"} label="Compact mark, 16 px" />
+            <FaviconMark />
+          </div>
+          <div className="flex items-center gap-3">
+            <Mark size={40} tone={g.sky ? "sky" : "current"} />
+            <Wordmark className="text-xl" accent={g.accent} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function Body({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -116,6 +154,10 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
 
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-4" data-testid={id("gallery")}>
+      <Panel title="Brand" className="col-span-full" testId={id("brand")}>
+        <BrandGrounds tid={id("brand")} />
+      </Panel>
+
       <Panel title="Page header" className="col-span-full" testId={id("page-header")}>
         <div className="px-4">
           <PageHeader
