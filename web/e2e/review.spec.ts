@@ -119,7 +119,7 @@ test("switch versions with the version switcher", async ({ page }) => {
   await page.goto("/documents/checkout-redesign/v/2");
   await expect(section(page, "s-5-3")).toBeVisible();
 
-  await page.getByLabel("Version", { exact: true }).selectOption("1");
+  await page.getByRole("group", { name: "Version" }).getByRole("link", { name: "v1", exact: true }).click();
   await expect(page).toHaveURL(/\/v\/1$/);
   await expect(section(page, "rollout")).toBeVisible();
   await expect(section(page, "s-5-3")).toHaveCount(0);
@@ -160,12 +160,13 @@ test("approve a version and export it", async ({ page }) => {
   await expect(page.getByRole("status").filter({ hasText: "scope" })).toBeVisible();
 
   const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
   await page.getByRole("button", { name: "Export PDF" }).click();
   expect((await download).suggestedFilename()).toBe("team-workspaces-v2.pdf");
 
   await page.getByRole("button", { name: "Approve version" }).click();
   await page.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByText(/✓ Approved/)).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Approved");
+  await expect(page.getByTestId("doc-status")).toHaveText("Approved");
   await expect(page.getByText(/review is closed/)).toBeVisible();
 });

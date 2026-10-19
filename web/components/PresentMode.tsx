@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { ErrorNote, Kbd, Loading } from "@/components/ui";
+import { Icon, InfoTip } from "@/components/ds";
+import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type DeckOut, type ExpandOut } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
@@ -111,7 +112,7 @@ function SlideCanvas({
   return (
     <div ref={outer} className="flex h-full w-full items-center justify-center overflow-hidden">
       {slide && (
-        <div style={{ width: SLIDE_W * scale, height: SLIDE_H * scale }} className="shadow-2xl">
+        <div style={{ width: SLIDE_W * scale, height: SLIDE_H * scale }} className="shadow-[0_24px_64px_rgba(0,0,0,0.45)]">
           <ShadowHtml
             css={deck.css}
             themeClass={deck.theme_class}
@@ -135,23 +136,24 @@ function ExpandOverlay({ deck, item, onClose }: { deck: DeckOut; item: ExpandOut
   const close = useRef<HTMLButtonElement>(null);
   useEffect(() => close.current?.focus(), [item]);
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-6" onClick={onClose}>
+    <div className="absolute inset-0 z-10 flex items-center justify-center bg-hero/80 p-6 max-[600px]:p-2.5" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Detail: ${item.heading}`}
-        className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl"
+        className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-inspector border border-hero-line bg-surface text-text shadow-tip"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-neutral-200 px-4 py-2">
-          <span className="text-xs font-medium tracking-wide text-neutral-500 uppercase">Detail</span>
-          <span className="font-medium text-neutral-900">{item.heading}</span>
+        <div className="flex min-h-14 items-center gap-3 bg-hero px-5 py-2 text-hero-text">
+          <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">Detail</span>
+          <span className="min-w-0 truncate font-display text-lg font-bold">{item.heading}</span>
           <button
             ref={close}
             type="button"
             onClick={onClose}
-            className="ml-auto rounded px-2 py-1 text-sm text-neutral-600 hover:bg-neutral-100"
+            className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-hero-text2 px-3 text-sm font-semibold text-hero-text hover:bg-hero-2"
           >
+            <Icon name="x" size={16} />
             Close
           </button>
         </div>
@@ -180,7 +182,17 @@ function useElapsed() {
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
-const BAR_BTN = "rounded px-2.5 py-1 text-sm text-neutral-200 hover:bg-white/10 disabled:opacity-40";
+const BAR_BTN =
+  "inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold whitespace-nowrap text-hero-text hover:bg-hero-2 disabled:text-hero-text2 disabled:opacity-60 disabled:hover:bg-transparent aria-pressed:bg-hero-2";
+
+/** A key cap on the dark presentation bar. */
+function Key({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-grid h-6 min-w-6 place-items-center rounded-md border border-hero-line px-1 font-mono text-[13px] text-hero-text">
+      {children}
+    </kbd>
+  );
+}
 
 /**
  * Present mode (O1f): the brief, one section per slide, full screen, in the document's
@@ -298,19 +310,19 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
       ref={rootRef}
       data-testid="present-mode"
       data-presenter={presenter ? "true" : "false"}
-      className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100"
+      className="fixed inset-0 z-50 flex flex-col bg-hero text-hero-text"
     >
       {deckQ.error && (
-        <div className="m-auto max-w-md rounded-lg bg-white p-6 text-neutral-900">
+        <div className="m-auto max-w-md rounded-panel bg-surface p-6 text-text">
           <ErrorNote>{deckQ.error}</ErrorNote>
-          <Link href={back} className="mt-3 inline-block text-sm font-medium underline underline-offset-2">
+          <Link href={back} className="mt-3 inline-block text-sm font-semibold text-accent-ink hover:underline">
             Back to the document
           </Link>
         </div>
       )}
       {!deckQ.error && !deck && (
-        <div className="m-auto rounded bg-white px-4 py-3 text-neutral-900">
-          <Loading label="Loading slides…" />
+        <div className="m-auto rounded-panel bg-hero-2 px-4 py-3 text-hero-text">
+          <p role="status" className="text-sm font-medium">Loading slides…</p>
         </div>
       )}
       {deck && current && (
@@ -320,9 +332,9 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
           </p>
           <div className="relative flex min-h-0 flex-1">
             {presenter ? (
-              <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 p-4" data-testid="presenter-view">
+              <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 p-4 max-[800px]:grid-cols-1 max-[800px]:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] max-[600px]:gap-3 max-[600px]:p-2.5" data-testid="presenter-view">
                 <section aria-label="Current slide" className="flex min-h-0 flex-col">
-                  <h2 className="mb-2 text-xs font-medium tracking-wide text-neutral-400 uppercase">
+                  <h2 className="tnum mb-2 text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
                     Current · {counter}
                   </h2>
                   <div className="min-h-0 flex-1" onClick={() => go(index + 1)}>
@@ -331,44 +343,49 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
                 </section>
                 <div className="flex min-h-0 flex-col gap-4">
                   <section aria-label="Next slide" className="flex h-1/3 min-h-0 flex-col">
-                    <h2 className="mb-2 text-xs font-medium tracking-wide text-neutral-400 uppercase">Next</h2>
+                    <h2 className="mb-2 text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">Next</h2>
                     <div className="min-h-0 flex-1">
                       {index + 1 < total ? (
                         <SlideCanvas deck={deck} index={index + 1} testId="next-slide" />
                       ) : (
-                        <p className="text-sm text-neutral-400">End of the deck.</p>
+                        <p className="text-sm text-hero-text2">End</p>
                       )}
                     </div>
                   </section>
                   <section aria-label="Notes" className="flex min-h-0 flex-1 flex-col">
-                    <h2 className="mb-2 flex items-center text-xs font-medium tracking-wide text-neutral-400 uppercase">
-                      Notes <span className="ml-auto font-mono tracking-normal text-neutral-300" aria-label="Elapsed time">{elapsed}</span>
+                    <h2 className="mb-2 flex items-center text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+                      Notes{" "}
+                      <span className="tnum ml-auto font-mono text-[15px] tracking-normal text-hero-text" aria-label="Elapsed time">
+                        {elapsed}
+                      </span>
                     </h2>
-                    <div data-testid="presenter-notes" className="min-h-0 flex-1 overflow-y-auto rounded bg-neutral-900 p-3 text-[15px] leading-relaxed whitespace-pre-wrap text-neutral-100">
-                      {current.notes ?? <span className="text-neutral-500">No notes for this slide.</span>}
+                    <div data-testid="presenter-notes" className="min-h-0 flex-1 overflow-y-auto rounded-button border border-hero-line bg-hero-2 p-3.5 text-[17px] leading-relaxed whitespace-pre-wrap text-hero-text">
+                      {current.notes ?? <span className="text-hero-text2">No notes for this slide.</span>}
                     </div>
                   </section>
                 </div>
               </div>
             ) : (
-              <div className="min-h-0 flex-1 cursor-pointer p-4" onClick={() => go(index + 1)} data-testid="audience-view">
+              <div className="min-h-0 flex-1 cursor-pointer p-4 max-[600px]:p-2.5" onClick={() => go(index + 1)} data-testid="audience-view">
                 <SlideCanvas deck={deck} index={index} onExpand={showOverlay} onLink={onLink} testId="current-slide" />
               </div>
             )}
             {overlay && <ExpandOverlay deck={deck} item={overlay} onClose={() => showOverlay(null)} />}
           </div>
-          <nav aria-label="Presentation" className="flex flex-wrap items-center gap-1 border-t border-white/10 px-3 py-1.5">
+          <nav aria-label="Presentation" className="flex flex-wrap items-center gap-1 border-t border-hero-line px-3 py-2 max-[600px]:px-2">
             <button type="button" className={BAR_BTN} onClick={() => go(index - 1)} disabled={index === 0} aria-label="Previous slide">
-              ← Previous
+              <Icon name="back" size={16} />
+              <span className="max-[600px]:sr-only">Previous</span>
             </button>
-            <span className="px-2 font-mono text-sm text-neutral-300" data-testid="slide-counter">
+            <span className="tnum px-2 font-mono text-[15px] font-medium text-hero-text" data-testid="slide-counter">
               {counter}
             </span>
             <button type="button" className={BAR_BTN} onClick={() => go(index + 1)} disabled={index >= total - 1} aria-label="Next slide">
-              Next →
+              <span className="max-[600px]:sr-only">Next</span>
+              <Icon name="arrow" size={16} />
             </button>
-            <span className="mx-2 truncate text-xs text-neutral-500">{deck.banner}</span>
-            <span className="ml-auto flex items-center gap-1">
+            <span className="mx-2 min-w-0 truncate text-[13px] text-hero-text2 max-[800px]:hidden">{deck.banner}</span>
+            <span className="ml-auto flex flex-wrap items-center gap-1">
               <button type="button" className={BAR_BTN} onClick={() => setPresenter((p) => !p)} aria-pressed={presenter}>
                 {presenter ? "Audience view" : "Presenter view"}
               </button>
@@ -387,9 +404,16 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
               <Link href={back} className={BAR_BTN} onClick={() => document.fullscreenElement && void document.exitFullscreen()}>
                 Exit
               </Link>
-              <span className="hidden gap-1 pl-2 text-[11px] text-neutral-500 lg:flex">
-                <Kbd>←</Kbd>
-                <Kbd>→</Kbd> slides · <Kbd>s</Kbd> presenter · <Kbd>f</Kbd> full screen
+              <span className="hidden items-center gap-1 pl-2 text-[13px] text-hero-text2 xl:flex">
+                <Key>←</Key>
+                <Key>→</Key>
+                <Key>s</Key>
+                <Key>f</Key>
+              </span>
+              <span className="hidden xl:inline-flex">
+                <InfoTip label="keys" hero>
+                  ← → slides · s presenter view · f full screen · Esc closes a detail
+                </InfoTip>
               </span>
             </span>
           </nav>

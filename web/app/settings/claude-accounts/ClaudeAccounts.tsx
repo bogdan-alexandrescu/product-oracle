@@ -5,9 +5,9 @@
  *
  * Ported from SwarmCloud's swarm-ui `src/Accounts.tsx`. The scan line is `cs status`'s:
  * the label, the five-hour figure and the state with when the binding window CLEARS.
- * Everything else lives in the chosen account's pane: the 5h / 7d / Clears / Last given
- * out tiles, the facts, Holding now | History, and an owner's controls (state with a
- * confirm and a reason, refresh, sign in again, remove by typing the label).
+ * Everything else lives in the chosen account's inspector: the 5h / 7d / Clears / Last
+ * given out stats, the facts, Holding now | History, and an owner's controls (state with
+ * a confirm and a reason, refresh, sign in again, remove by typing the label).
  *
  * Honesty marks, unchanged from SwarmCloud: an unmeasured window prints an em dash and
  * draws no bar; a measured 0% prints 0%; a figure that is real but old carries `~`; a
@@ -16,18 +16,34 @@
  */
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
-import { Badge, Button, ErrorNote, INPUT, Loading } from "@/components/ui";
+import {
+  Button,
+  Chip,
+  DataTable,
+  Empty,
+  InfoTip,
+  Inspector,
+  InspectorSection,
+  Label,
+  Notice,
+  PageHeader,
+  Panel,
+  Split,
+  type ChipKind,
+  type Column,
+} from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
+
+import { Field, INPUT, TEXTAREA } from "../_components/fields";
 
 import {
   FIVE_HOUR,
   SEVEN_DAY,
   agoPastDay,
   anyProjected,
-  bindingWindow,
   clearsIn,
   clearsOf,
   defaultAccount,
@@ -49,6 +65,9 @@ type SignIn =
   | { kind: "started"; label: string; state: string; url: string; expiresIn: number }
   | { kind: "done"; account: Account };
 
+/** Separator that keeps the summary's text "4 accounts · 3 available" between chips. */
+const Dot = () => <span className="sr-only"> · </span>;
+
 export function ClaudeAccounts() {
   const q = useQuery("claude-accounts", () => unwrap(api.GET("/v1/claude-accounts")));
   const { role } = useMe();
@@ -62,20 +81,48 @@ export function ClaudeAccounts() {
   const setSignin = (key: string, s: SignIn) => setSignins((all) => ({ ...all, [key]: s }));
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <h1 className="mb-2 text-2xl font-semibold tracking-tight text-neutral-900">Claude accounts</h1>
-      <p className="mb-4 max-w-3xl text-sm text-neutral-600">
-        The Claude subscriptions Oracle&apos;s built-in jobs (review comments, reporting, refinement) run on. Each
-        call takes the account with the most headroom and moves to another when one runs out. Agent workflows run
-        in SwarmCloud on SwarmCloud&apos;s own accounts.
-      </p>
-      {q.loading && !q.data && <Loading />}
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
+    <>
+      <PageHeader
+        title="Claude accounts"
+        status={
+          <>
+            <InfoTip label="Claude accounts" align="start" side="bottom">
+              The Claude subscriptions Oracle&apos;s built-in jobs (review comments, reporting, refinement) run on.
+              Each call takes the account with the most headroom and moves to another when one runs out. Agent
+              workflows run in SwarmCloud on SwarmCloud&apos;s own accounts.
+            </InfoTip>
+            {q.data && <SummaryChips page={q.data} />}
+          </>
+        }
+        action={
+          owner && q.data ? (
+            <Button
+              variant="primary"
+              icon="plus"
+              aria-label="+ Add account"
+              aria-expanded={adding}
+              disabled={signin("add").kind === "started"}
+              onClick={() => setAdding(!adding)}
+            >
+              Add account
+            </Button>
+          ) : null
+        }
+      />
+      {q.error && <Notice tone="error">{q.error}</Notice>}
+      {q.loading && !q.data && (
+        <Panel title="Accounts">
+          <DataTable<Account>
+            label="Subscription accounts"
+            columns={[{ key: "label", header: "Account", cell: (a) => a.label }]}
+            rows={undefined}
+            rowKey={(a) => a.account_id}
+            loading
+          />
+        </Panel>
+      )}
       {q.data && (
-        <>
-          <p className="mb-3 text-sm text-neutral-700" data-testid="accounts-summary">
-            <SummaryLine page={q.data} />
-          </p>
+        <div className="flex flex-col gap-4 max-[600px]:gap-3">
           <Broken accounts={q.data.accounts} owner={owner} onOpen={(id) => setChosen(id)} />
           <Pool
             page={q.data}
@@ -91,46 +138,52 @@ export function ClaudeAccounts() {
             setSignin={setSignin}
             reload={q.reload}
           />
-          <Fallback page={q.data} owner={owner} reload={q.reload} />
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
-function SummaryLine({ page }: { page: Page }) {
+/** The summary as chips; the hidden dots keep it one readable sentence for tests and readers. */
+function SummaryChips({ page }: { page: Page }) {
   const n = page.accounts.length;
   const available = page.accounts.filter((a) => a.state === "AVAILABLE").length;
   const broken = page.accounts.filter(needsAHuman).length;
   const missing = page.unreadable_document_count;
   const sweep = page.refresh_sweep;
+  const sweepOk = sweep.readable && !!sweep.last_completed_at && sweep.last_outcome === "ok";
   return (
-    <>
-      {n} account{n === 1 ? "" : "s"} &middot; {available} available
+    <span data-testid="accounts-summary" className="flex flex-wrap items-center gap-2">
+      <Chip kind="line">
+        {n} account{n === 1 ? "" : "s"}
+      </Chip>
+      <Dot />
+      <Chip kind="pass">{available} available</Chip>
       {missing > 0 && (
         <>
-          {" "}
-          &middot;{" "}
-          <strong>
-            {missing} row{missing === 1 ? "" : "s"} unreadable, so this list is short
-          </strong>
+          <Dot />
+          <Chip kind="crit" title="This list is short.">
+            {missing} row{missing === 1 ? "" : "s"} unreadable
+          </Chip>
         </>
       )}
       {broken > 0 && (
         <>
-          {" "}
-          &middot; <strong>{broken} need{broken === 1 ? "s" : ""} a sign-in</strong>
+          <Dot />
+          <Chip kind="warn">
+            {broken} need{broken === 1 ? "s" : ""} a sign-in
+          </Chip>
         </>
-      )}{" "}
-      &middot;{" "}
-      <span data-testid="refresh-sweep">
+      )}
+      <Dot />
+      <Chip kind={sweepOk ? "na" : "warn"} data-testid="refresh-sweep">
         {!sweep.readable
           ? "refresh sweep unknown"
           : sweep.last_completed_at
             ? `refresh sweep ${sweep.last_outcome === "ok" ? "ran" : "failed"} ${timeAgo(sweep.last_completed_at)}`
             : "refresh sweep has not completed yet"}
-      </span>
-    </>
+      </Chip>
+    </span>
   );
 }
 
@@ -139,19 +192,28 @@ function Broken({ accounts, owner, onOpen }: { accounts: Account[]; owner: boole
   const broken = accounts.filter(needsAHuman);
   if (broken.length === 0) return null;
   return (
-    <div role="status" className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-      <b>{broken.map((a) => a.label).join(", ")}</b> need{broken.length === 1 ? "s" : ""} someone to sign in again.{" "}
-      {broken.length === 1 ? "It gives" : "They give"} out nothing until then.{" "}
-      {owner
-        ? broken.map((a, i) => (
-            <span key={a.account_id}>
-              {i > 0 && <span aria-hidden="true"> &middot; </span>}
-              <button type="button" className="underline" onClick={() => onOpen(a.account_id)}>
-                {broken.length === 1 ? "Sign in again" : `Sign in again to ${a.label}`}
-              </button>
-            </span>
-          ))
-        : "An owner signs in again."}
+    <div
+      role="status"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn"
+    >
+      <span>
+        <b>{broken.map((a) => a.label).join(", ")}</b> need{broken.length === 1 ? "s" : ""} someone to sign in again
+      </span>
+      <InfoTip label="sign-ins" align="start" side="bottom">
+        {broken.length === 1 ? "It gives" : "They give"} out nothing until then.{" "}
+        {owner ? "" : "An owner signs in again."}
+      </InfoTip>
+      {owner &&
+        broken.map((a) => (
+          <button
+            key={a.account_id}
+            type="button"
+            className="font-semibold underline underline-offset-2"
+            onClick={() => onOpen(a.account_id)}
+          >
+            {broken.length === 1 ? "Sign in again" : `Sign in again to ${a.label}`}
+          </button>
+        ))}
     </div>
   );
 }
@@ -190,54 +252,66 @@ function Pool({
       reload={reload}
     />
   ) : null;
+  const showDetail = !!shown && !(adding && signin("add").kind === "idle");
 
-  return (
-    <div className="mb-8 grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-      <section aria-label="Subscription accounts" className="rounded-lg border border-neutral-200 bg-white">
-        <div className="flex items-center justify-between border-b border-neutral-200 px-3 py-2">
-          <h2 className="text-sm font-semibold text-neutral-900">
-            Subscription accounts <span className="font-normal text-neutral-500">{accounts.length}</span>
-          </h2>
-          {owner && (
-            <Button size="sm" onClick={() => setAdding(!adding)} disabled={signin("add").kind === "started"} aria-expanded={adding}>
-              + Add account
-            </Button>
+  const columns: Column<Account>[] = [
+    {
+      key: "label",
+      header: "Account",
+      cell: (a) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-current={shown?.account_id === a.account_id ? "true" : undefined}
+            className="min-w-0 truncate text-left font-semibold"
+          >
+            {a.label}
+          </button>
+          {a.unreadable_now && (
+            <Chip kind="crit" title="A call could not read this account's credential; the pool skips it for thirty minutes.">
+              skipped
+            </Chip>
           )}
-        </div>
-        {accounts.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-neutral-600" role="status">
-            <h3 className="font-medium text-neutral-900">No accounts registered</h3>
-            <p className="mt-1">
-              Built-in jobs use the fallback credential below, if one is set.{" "}
-              {owner ? "Add the first account beside this list." : "An owner adds accounts."}
-            </p>
-          </div>
-        ) : (
-          <ul className="divide-y divide-neutral-100" data-testid="account-list">
-            {accounts.map((a) => (
-              <AcctItem
-                key={a.account_id}
-                account={a}
-                now={now}
-                chosen={shown?.account_id === a.account_id}
-                onChoose={() => choose(a.account_id)}
-              />
-            ))}
-          </ul>
-        )}
-        {accounts.length > 0 && (
-          <p className="border-t border-neutral-100 px-3 py-2 text-xs text-neutral-500" data-testid="accounts-foot">
-            {accounts.length} row{accounts.length === 1 ? "" : "s"}
-            {page.unreadable_document_count > 0 && <> of {accounts.length + page.unreadable_document_count}</>}
-            {readingAges(accounts, now) && <> &middot; {readingAges(accounts, now)}</>} &middot;{" "}
-            {anyProjected(accounts, now) ? "~ is an old reading, not current" : "no projected figures"} &middot; — is not
-            measured
-          </p>
-        )}
-      </section>
-      <div className="min-w-0 space-y-4">
+        </span>
+      ),
+    },
+    {
+      key: "5h",
+      header: "5h",
+      width: "76px",
+      align: "right",
+      cell: (a) => <WindowFig reading={readingOf(a, FIVE_HOUR)} window="five-hour" />,
+    },
+    { key: "state", header: "State", width: "164px", cell: (a) => <AcctState state={a.state} /> },
+    {
+      key: "clears",
+      header: "Clears",
+      width: "150px",
+      hideOnPhone: true,
+      className: "text-text2",
+      cell: (a) => <ClearsLine account={a} now={now} />,
+    },
+    {
+      key: "given",
+      header: "Given out",
+      width: "150px",
+      hideOnPhone: true,
+      className: "text-text2",
+      cell: (a) => (
+        <span className="tnum" title={a.last_assigned_at ? formatDateTime(a.last_assigned_at) : undefined}>
+          {a.last_assigned_at ? `given out ${agoPastDay(a.last_assigned_at, now)}` : "never given out"}
+        </span>
+      ),
+    },
+  ];
+
+  const ages = readingAges(accounts, now);
+  const inspector =
+    (adding && addForm) || showDetail ? (
+      <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
         {adding && addForm}
-        {shown && !(adding && signin("add").kind === "idle") && (
+        {showDetail && shown && (
           <Detail
             key={shown.account_id}
             account={shown}
@@ -249,7 +323,46 @@ function Pool({
           />
         )}
       </div>
-    </div>
+    ) : undefined;
+
+  return (
+    <Split inspector={inspector}>
+      <Panel title="Accounts" count={accounts.length} className="overflow-hidden">
+        {accounts.length === 0 ? (
+          <div role="status">
+            <Empty>No accounts registered</Empty>
+          </div>
+        ) : (
+          <DataTable
+            label="Subscription accounts"
+            testId="account-list"
+            columns={columns}
+            rows={accounts}
+            rowKey={(a) => a.account_id}
+            selected={shown?.account_id ?? null}
+            onSelect={(id) => choose(id)}
+            rowProps={(a) => ({ "data-testid": `account-row-${a.label}` })}
+          />
+        )}
+        {accounts.length > 0 && (
+          <p
+            className="tnum flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line px-4 py-2 text-[13px] leading-4 text-text2"
+            data-testid="accounts-foot"
+          >
+            <span>
+              {accounts.length} row{accounts.length === 1 ? "" : "s"}
+              {page.unreadable_document_count > 0 && <> of {accounts.length + page.unreadable_document_count}</>}
+              {ages && <> · {ages}</>}
+            </span>
+            <InfoTip label="the figures" align="start">
+              {anyProjected(accounts, now) ? "~ is an old reading, not current" : "no projected figures"} · — is not
+              measured
+            </InfoTip>
+          </p>
+        )}
+      </Panel>
+      <Fallback page={page} owner={owner} reload={reload} />
+    </Split>
   );
 }
 
@@ -263,20 +376,19 @@ function useNow(tickMs: number): number {
   return now;
 }
 
-const STATE_TONE: Record<string, "neutral" | "green" | "amber" | "red" | "blue"> = {
-  AVAILABLE: "green",
-  PAUSED: "blue",
-  DRAINING: "neutral",
-  REAUTH_REQUIRED: "amber",
+const STATE_KIND: Record<string, ChipKind> = {
+  AVAILABLE: "pass",
+  PAUSED: "acc",
+  DRAINING: "na",
+  REAUTH_REQUIRED: "warn",
 };
 
 /** The state word, lower case with spaces; the platform's spelling is the title. */
 function AcctState({ state }: { state: string }) {
   return (
-    <Badge tone={STATE_TONE[state] ?? "neutral"} title={state}>
-      {state === "REAUTH_REQUIRED" && <span aria-hidden="true">⚠</span>}
+    <Chip kind={STATE_KIND[state] ?? "na"} dot title={state}>
       {state.toLowerCase().replace(/_/g, " ")}
-    </Badge>
+    </Chip>
   );
 }
 
@@ -296,28 +408,27 @@ function readingTitle(r: AccountReading, window: string): string {
 }
 
 /** A window's figure: an em dash when unmeasured, `~` when projected, `reset` once refilled. */
-function WindowFig({ reading, window, win }: { reading: AccountReading; window: string; win?: string }) {
+function WindowFig({ reading, window }: { reading: AccountReading; window: string }) {
   const title = readingTitle(reading, window);
-  const named = win ? <span className="ml-1 text-xs font-normal text-neutral-500">{win}</span> : null;
   if (reading.kind === "never" || reading.kind === "absent") {
     return (
-      <span className="tabular-nums text-neutral-400" title={title} data-testid="fig-unmeasured">
-        —{named}
+      <span className="tnum text-text2" title={title} data-testid="fig-unmeasured">
+        —
       </span>
     );
   }
   if (reading.kind === "reset") {
     return (
-      <span className="tabular-nums text-neutral-500" title={title}>
-        reset{named} <small className="text-xs">was {Math.round(reading.pct)}%</small>
+      <span className="tnum text-text2" title={`${title} Was ${Math.round(reading.pct)}%.`}>
+        reset
       </span>
     );
   }
   const projected = isProjected(reading);
   return (
-    <span className={`tabular-nums ${projected ? "text-neutral-500" : "text-neutral-900"}`} title={title}>
+    <span className={`tnum font-semibold ${projected ? "text-text2" : "text-text"}`} title={title}>
       {projected && <span data-testid="tilde">~</span>}
-      {Math.round(reading.pct)}%{named}
+      {Math.round(reading.pct)}%
     </span>
   );
 }
@@ -325,7 +436,7 @@ function WindowFig({ reading, window, win }: { reading: AccountReading; window: 
 function ClearsLine({ account, now }: { account: Account; now: number }) {
   const c = clearsOf(account, now);
   return (
-    <span title={c.title} data-testid="clears">
+    <span className="tnum" title={c.title} data-testid="clears">
       clears {c.tilde && "~"}
       {c.text}
       {c.win && <> &middot; {c.win}</>}
@@ -333,86 +444,71 @@ function ClearsLine({ account, now }: { account: Account; now: number }) {
   );
 }
 
-function AcctItem({ account, now, chosen, onChoose }: { account: Account; now: number; chosen: boolean; onChoose: () => void }) {
+/** A thin bar under a window figure; none when unmeasured. */
+function Bar({ pct, tone }: { pct: number; tone: "full" | "old" | "live" }) {
   return (
-    <li className={chosen ? "bg-neutral-50" : ""} data-testid={`account-row-${account.label}`}>
-      <button
-        type="button"
-        onClick={onChoose}
-        aria-current={chosen ? "true" : undefined}
-        className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-neutral-50"
+    <span className="mt-1.5 block h-1.5 w-full max-w-24 overflow-hidden rounded bg-surface2" aria-hidden="true">
+      <span
+        className={`block h-full rounded ${tone === "full" ? "bg-crit" : tone === "old" ? "bg-line-strong" : "bg-accent"}`}
+        style={{ width: `${Math.max(1, Math.min(100, pct))}%` }}
+      />
+    </span>
+  );
+}
+
+/** A stat's figure: a display numeral sized for four across, and a 13 px note. */
+function StatFig({ children, note, dim, title }: { children: ReactNode; note?: ReactNode; dim?: boolean; title?: string }) {
+  return (
+    <span className="block min-w-0" title={title}>
+      <span
+        className={`tnum block truncate font-display text-[22px] leading-7 font-bold tracking-[-0.02em] ${dim ? "text-text2" : ""}`}
       >
-        <span className="flex items-baseline justify-between gap-2">
-          <b className="truncate text-sm text-neutral-900">{account.label}</b>
-          <WindowFig reading={readingOf(account, FIVE_HOUR)} window="five-hour" win="5h" />
-        </span>
-        <small className="flex flex-wrap items-center gap-1 text-xs text-neutral-500">
-          <AcctState state={account.state} /> &middot; <ClearsLine account={account} now={now} />
-        </small>
-      </button>
-      <span className="flex flex-wrap gap-x-2 px-3 pb-2 text-[11px] text-neutral-400">
-        <span className="font-mono">{account.account_id.slice(0, 8)}</span>
-        <span>{account.last_assigned_at ? `given out ${agoPastDay(account.last_assigned_at, now)}` : "never given out"}</span>
-        {account.unreadable_now && (
-          <span className="text-rose-700" title="A call could not read this account's credential; the pool skips it for thirty minutes.">
-            skipped
-          </span>
-        )}
-        <StateNote account={account} />
+        {children}
       </span>
-    </li>
+      {note && <span className="block truncate text-[13px] leading-4 text-text2">{note}</span>}
+    </span>
   );
 }
 
-/** The second line under a state, when there is a real one to write. */
-function StateNote({ account }: { account: Account }) {
-  if (account.reason) return <span>{account.reason}</span>;
-  const binding = bindingWindow(account);
-  if (binding && binding.window.reset) return <span>window reset, awaiting a new reading</span>;
-  if (account.observed_at === null) return <span>never observed</span>;
-  if (account.stale) return <span>reading is {timeAgo(account.observed_at)}</span>;
-  return null;
-}
-
-function Tile({ label, children, note, title }: { label: string; children: ReactNode; note?: ReactNode; title?: string }) {
-  return (
-    <div className="rounded-md border border-neutral-200 px-3 py-2" title={title} data-testid={`tile-${label}`}>
-      <small className="block text-xs text-neutral-500">{label}</small>
-      <b className="text-lg text-neutral-900">{children}</b>
-      {note && <i className="block text-xs not-italic text-neutral-500">{note}</i>}
-    </div>
-  );
-}
-
-function WindowTile({ reading, window, label }: { reading: AccountReading; window: string; label: string }) {
+function windowStat(reading: AccountReading, window: string): ReactNode {
   const title = readingTitle(reading, window);
   if (reading.kind === "never" || reading.kind === "absent") {
     return (
-      <Tile label={label} title={title} note="not measured">
-        <span className="text-neutral-400">—</span>
-      </Tile>
+      <StatFig title={title} note="not measured" dim>
+        —
+      </StatFig>
     );
   }
   if (reading.kind === "reset") {
     return (
-      <Tile label={label} title={title} note={`was ${Math.round(reading.pct)}% before it refilled`}>
+      <StatFig title={title} note={`was ${Math.round(reading.pct)}% before it refilled`}>
         reset
-      </Tile>
+      </StatFig>
     );
   }
   const projected = isProjected(reading);
   const full = reading.kind === "live" && reading.pct >= 100;
   return (
-    <Tile label={label} title={title}>
+    <StatFig title={title} dim={projected}>
       {projected && "~"}
       {Math.round(reading.pct)}%
-      <span className="mt-1 block h-1.5 w-full rounded bg-neutral-100" aria-hidden="true">
-        <span
-          className={`block h-1.5 rounded ${full ? "bg-rose-500" : projected ? "bg-neutral-300" : "bg-neutral-700"}`}
-          style={{ width: `${Math.max(1, Math.min(100, reading.pct))}%` }}
-        />
+      <Bar pct={reading.pct} tone={full ? "full" : projected ? "old" : "live"} />
+    </StatFig>
+  );
+}
+
+/** One fact: a 13 px label left, the value right (truncated, full text in its title). */
+function Fact({ label, children, mono }: { label: string; children: ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex min-h-8 items-center gap-3">
+      <Label className="flex-none">{label}</Label>
+      <span
+        className={`tnum min-w-0 flex-1 truncate text-right font-semibold ${mono ? "font-mono text-sm" : ""}`}
+        title={typeof children === "string" ? children : undefined}
+      >
+        {children}
       </span>
-    </Tile>
+    </div>
   );
 }
 
@@ -433,74 +529,98 @@ function Detail({
 }) {
   const c = clearsOf(account, now);
   return (
-    <section aria-label={`Account ${account.label}`} className="rounded-lg border border-neutral-200 bg-white p-4" data-testid="account-detail">
-      <header>
-        <div className="flex items-center gap-2">
+    <Inspector
+      testId="account-detail"
+      label={`Account ${account.label}`}
+      eyebrow="Account · selected"
+      title={account.label}
+      chips={
+        <>
           <AcctState state={account.state} />
-          <Badge>{account.provider} &middot; Claude subscription</Badge>
-        </div>
-        <h3 className="mt-1 text-lg font-semibold text-neutral-900">{account.label}</h3>
-        <p className="font-mono text-xs text-neutral-500">{account.account_id}</p>
-        {account.reason && <p className="mt-1 text-sm text-neutral-700">{account.reason}</p>}
-      </header>
-      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-        <WindowTile reading={readingOf(account, FIVE_HOUR)} window="five-hour" label="5h used" />
-        <WindowTile reading={readingOf(account, SEVEN_DAY)} window="seven-day" label="7d used" />
-        <Tile label="Clears" title={c.title} note={c.win ? `${c.win} window` : undefined}>
-          <span className={c.unmeasured ? "text-neutral-400" : ""}>
-            {c.tilde && "~"}
-            {c.text}
-          </span>
-        </Tile>
-        <Tile
-          label="Last given out"
-          note={account.last_assigned_at ? timeAgo(account.last_assigned_at, now) : "no job has ever been handed it"}
-        >
-          {account.last_assigned_at ? formatDateTime(account.last_assigned_at) : "never"}
-        </Tile>
-      </div>
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <dt className="text-neutral-500">jobs on it</dt>
-        <dd>{account.assigned}</dd>
-        <dt className="text-neutral-500">last read</dt>
-        <dd>
+          <Chip hero>{account.provider} · Claude subscription</Chip>
+        </>
+      }
+      stats={[
+        { label: "5h used", testId: "tile-5h used", figure: windowStat(readingOf(account, FIVE_HOUR), "five-hour") },
+        { label: "7d used", testId: "tile-7d used", figure: windowStat(readingOf(account, SEVEN_DAY), "seven-day") },
+        {
+          label: "Clears",
+          testId: "tile-Clears",
+          figure: (
+            <StatFig title={c.title} note={c.win ? `${c.win} window` : undefined} dim={c.unmeasured}>
+              {c.tilde && "~"}
+              {c.text}
+            </StatFig>
+          ),
+        },
+        {
+          label: "Given out",
+          testId: "tile-Last given out",
+          figure: account.last_assigned_at ? (
+            <StatFig title={formatDateTime(account.last_assigned_at)} note={formatDateTime(account.last_assigned_at)}>
+              {agoPastDay(account.last_assigned_at, now).replace(" ago", "")}
+            </StatFig>
+          ) : (
+            <StatFig title="No job has ever been handed it." dim>
+              never
+            </StatFig>
+          ),
+        },
+      ]}
+    >
+      <InspectorSection label="Facts">
+        {account.reason && <Fact label="Reason">{account.reason}</Fact>}
+        <Fact label="Jobs on it">{account.assigned}</Fact>
+        <Fact label="Last read">
           {account.observed_at === null
             ? "not measured"
             : `${timeAgo(account.observed_at, now)}${account.stale ? " (old: figures are projected)" : ""}`}
-        </dd>
-        <dt className="text-neutral-500">token expires</dt>
-        <dd>{account.token_expires_at ? `in ${clearsIn(account.token_expires_at, now)}` : "—"}</dd>
-        <dt className="text-neutral-500">last refresh</dt>
-        <dd>
+        </Fact>
+        <Fact label="Token expires">{account.token_expires_at ? `in ${clearsIn(account.token_expires_at, now)}` : "—"}</Fact>
+        <Fact label="Last refresh">
           {account.last_refresh_at
             ? `${timeAgo(account.last_refresh_at, now)}: ${account.last_refresh_reason ?? "—"}`
-            : "no sweep has visited it yet"}
-        </dd>
-      </dl>
+            : "no sweep yet"}
+        </Fact>
+        <Fact label="Id" mono>
+          {account.account_id}
+        </Fact>
+      </InspectorSection>
       <Holding account={account} now={now} />
       {owner ? (
-        <div className="mt-4 space-y-4 border-t border-neutral-200 pt-4">
+        <>
           {needsAHuman(account) && (
             <SignInAgain account={account} signin={signin} setSignin={setSignin} reload={reload} prominent />
           )}
           <StateControls account={account} reload={reload} />
-          <RefreshControl account={account} reload={reload} />
-          {!needsAHuman(account) && <SignInAgain account={account} signin={signin} setSignin={setSignin} reload={reload} />}
+          <InspectorSection label="Credential">
+            <div className="flex flex-col gap-3">
+              <RefreshControl account={account} reload={reload} />
+              {!needsAHuman(account) && (
+                <SignInAgain account={account} signin={signin} setSignin={setSignin} reload={reload} />
+              )}
+            </div>
+          </InspectorSection>
           <Remove account={account} reload={reload} />
-        </div>
+        </>
       ) : (
-        <p className="mt-4 border-t border-neutral-200 pt-3 text-xs text-neutral-500">Only an owner changes accounts.</p>
+        <InspectorSection>
+          <p className="text-sm text-text2">Only an owner changes accounts.</p>
+        </InspectorSection>
       )}
-    </section>
+    </Inspector>
   );
 }
+
+const TAB = "h-8 rounded-lg px-3 text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-70";
+const tabTone = (on: boolean) => (on ? "bg-accent text-on-accent" : "text-text2 hover:bg-surface2 hover:text-text");
 
 /** Holding now | History, both closed by default and loaded only when opened. */
 function Holding({ account, now }: { account: Account; now: number }) {
   const [tab, setTab] = useState<"now" | "history" | null>(null);
   return (
-    <div className="mt-4">
-      <div role="tablist" className="flex gap-1 border-b border-neutral-200">
+    <InspectorSection label="Jobs">
+      <div role="tablist" aria-label="Jobs on this account" className="flex flex-wrap gap-1">
         {(
           [
             ["now", `Holding now (${account.assigned})`],
@@ -513,7 +633,7 @@ function Holding({ account, now }: { account: Account; now: number }) {
             role="tab"
             aria-selected={tab === key}
             onClick={() => setTab(tab === key ? null : key)}
-            className={`-mb-px border-b-2 px-2 py-1 text-sm ${tab === key ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-500"}`}
+            className={`${TAB} ${tabTone(tab === key)}`}
           >
             {label}
           </button>
@@ -521,7 +641,7 @@ function Holding({ account, now }: { account: Account; now: number }) {
       </div>
       {tab === "now" && <HoldingNow account={account} now={now} />}
       {tab === "history" && <HoldingHistory account={account} now={now} />}
-    </div>
+    </InspectorSection>
   );
 }
 
@@ -537,36 +657,40 @@ const JOB_LABEL: Record<string, string> = {
   refinement: "refinement",
 };
 
+const Quiet = ({ children }: { children: ReactNode }) => <p className="mt-2 text-sm text-text2">{children}</p>;
+
 function HoldingNow({ account, now }: { account: Account; now: number }) {
   const path = { params: { path: { account_id: account.account_id } } };
   const q = useQuery(`holders:${account.account_id}`, () =>
     unwrap(api.GET("/v1/claude-accounts/{account_id}/holders", path)),
   );
-  if (q.loading) return <Loading label="Loading holders…" />;
-  if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
+  if (q.loading) return <Quiet>Loading holders…</Quiet>;
+  if (q.error)
+    return (
+      <div className="mt-2">
+        <Notice tone="error">{q.error}</Notice>
+      </div>
+    );
   const b = q.data!;
-  if (b.total === 0) return <p className="mt-2 text-sm text-neutral-500">Nobody holds it.</p>;
+  if (b.total === 0) return <Quiet>Nobody holds it.</Quiet>;
   return (
-    <table className="mt-2 w-full text-sm" data-testid="holding-now">
-      <thead className="text-left text-xs text-neutral-500">
-        <tr>
-          <th className="py-1 font-medium">Job</th>
-          <th className="py-1 font-medium">Since</th>
-          <th className="py-1 font-medium">Note</th>
-        </tr>
-      </thead>
-      <tbody>
-        {b.holders.map((h, i) => (
-          <tr key={i} className="border-t border-neutral-100">
-            <td className="py-1">{h.task_id ? (JOB_LABEL[h.task_id] ?? h.task_id) : <span className="text-neutral-400">not recorded</span>}</td>
-            <td className="py-1">{h.since ? `${formatDateTime(h.since)} (${heldFor(now - Date.parse(h.since))})` : "—"}</td>
-            <td className="py-1 text-xs text-neutral-500">
-              {h.move === "drain" ? "moving off (draining)" : h.swapped_from ? `moved here: ${h.swapped_from_reason}` : ""}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <ul className="mt-2" data-testid="holding-now">
+      {b.holders.map((h, i) => {
+        const note =
+          h.move === "drain" ? "moving off (draining)" : h.swapped_from ? `moved here: ${h.swapped_from_reason}` : "";
+        return (
+          <li key={i} className="flex min-h-9 items-center gap-2.5 border-t border-line first:border-t-0">
+            <span className="min-w-0 flex-1 truncate" title={note || undefined}>
+              {h.task_id ? (JOB_LABEL[h.task_id] ?? h.task_id) : <span className="text-text2">not recorded</span>}
+            </span>
+            {h.move === "drain" && <Chip kind="na">moving off</Chip>}
+            <span className="tnum flex-none text-sm text-text2" title={h.since ? formatDateTime(h.since) : undefined}>
+              {h.since ? heldFor(now - Date.parse(h.since)) : "—"}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -579,8 +703,13 @@ function HoldingHistory({ account, now }: { account: Account; now: number }) {
       }),
     ),
   );
-  if (q.loading) return <Loading label="Loading history…" />;
-  if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
+  if (q.loading) return <Quiet>Loading history…</Quiet>;
+  if (q.error)
+    return (
+      <div className="mt-2">
+        <Notice tone="error">{q.error}</Notice>
+      </div>
+    );
   const h = q.data!;
   const five = readingOf(account, FIVE_HOUR);
   const spans = h.spans;
@@ -593,55 +722,51 @@ function HoldingHistory({ account, now }: { account: Account; now: number }) {
     <div className="mt-2" data-testid="holding-history">
       {/* One reading per window is kept, not a series: today's figure, labelled as current. */}
       {(five.kind === "live" || five.kind === "stale") && (
-        <p className="text-xs text-neutral-500">
+        <Label className="tnum">
           Five-hour window now: {five.kind === "stale" && "~"}
           {Math.round(five.pct)}%
-        </p>
+        </Label>
       )}
       {spans.length === 0 ? (
-        <p className="text-sm text-neutral-500">No holds recorded in this window.</p>
+        <Quiet>No holds recorded in this window.</Quiet>
       ) : (
-        <table className="mt-1 w-full text-sm">
-          <thead className="text-left text-xs text-neutral-500">
-            <tr>
-              <th className="py-1 font-medium">Job</th>
-              <th className="py-1 font-medium">Started</th>
-              <th className="py-1 text-right font-medium">Held</th>
-              <th className="py-1 font-medium">Ended</th>
-              <th className="py-1 font-medium">When</th>
-            </tr>
-          </thead>
-          <tbody>
-            {spans.map((s, i) => {
-              const a = Date.parse(s.since ?? "");
-              const b = s.until ? Date.parse(s.until) : now;
-              const left = Number.isFinite(a) ? ((a - lo) / scale) * 100 : 0;
-              const width = Number.isFinite(a) ? ((b - a) / scale) * 100 : 0;
-              return (
-                <tr key={i} className="border-t border-neutral-100">
-                  <td className="py-1">{s.task_id ? (JOB_LABEL[s.task_id] ?? s.task_id) : "not recorded"}</td>
-                  <td className="py-1">{s.since ? formatDateTime(s.since) : "start not recorded"}</td>
-                  <td className="py-1 text-right tabular-nums">{s.since ? heldFor(b - a) : "—"}</td>
-                  <td className="py-1">
-                    {s.end ?? <span className="text-neutral-400">holding</span>}
-                    {s.swapped_to && <span className="text-xs text-neutral-500"> ({s.swapped_to_reason})</span>}
-                  </td>
-                  <td className="w-1/4 py-1">
-                    <span className="relative block h-1.5 rounded bg-neutral-100" aria-hidden="true">
-                      <i
-                        className="absolute block h-1.5 rounded bg-neutral-600"
-                        style={{ left: `${Math.max(0, Math.min(100, left))}%`, width: `${Math.max(1, Math.min(100, width))}%` }}
-                      />
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <ul className="mt-1">
+          {spans.map((s, i) => {
+            const a = Date.parse(s.since ?? "");
+            const b = s.until ? Date.parse(s.until) : now;
+            const left = Number.isFinite(a) ? ((a - lo) / scale) * 100 : 0;
+            const width = Number.isFinite(a) ? ((b - a) / scale) * 100 : 0;
+            return (
+              <li key={i} className="border-t border-line py-1.5 first:border-t-0">
+                <span className="flex min-h-7 items-center gap-2.5">
+                  <span
+                    className="min-w-0 flex-1 truncate"
+                    title={s.since ? `Started ${formatDateTime(s.since)}` : "start not recorded"}
+                  >
+                    {s.task_id ? (JOB_LABEL[s.task_id] ?? s.task_id) : "not recorded"}
+                  </span>
+                  <span className="tnum flex-none text-sm text-text2">{s.since ? heldFor(b - a) : "—"}</span>
+                  {s.end ? (
+                    <Chip kind="line" title={s.swapped_to ? (s.swapped_to_reason ?? undefined) : undefined}>
+                      {s.end}
+                    </Chip>
+                  ) : (
+                    <Chip kind="now">holding</Chip>
+                  )}
+                </span>
+                <span className="relative mt-1 block h-1.5 rounded bg-surface2" aria-hidden="true">
+                  <i
+                    className="absolute block h-1.5 rounded bg-accent"
+                    style={{ left: `${Math.max(0, Math.min(100, left))}%`, width: `${Math.max(1, Math.min(100, width))}%` }}
+                  />
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       )}
       {h.next_cursor && (
-        <Button size="sm" className="mt-2" onClick={() => setCursor(h.next_cursor ?? null)}>
+        <Button className="mt-2" onClick={() => setCursor(h.next_cursor ?? null)}>
           Older
         </Button>
       )}
@@ -692,54 +817,54 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
   }
 
   return (
-    <div>
-      <h4 className="text-sm font-medium text-neutral-900">State</h4>
-      <div className="mt-1 flex flex-wrap gap-2">
+    <InspectorSection label="State">
+      <div className="flex flex-wrap gap-2">
         {TARGETS.map((t) => (
-          <Button key={t.to} size="sm" title={t.why} disabled={account.state === t.to} onClick={() => setAsking(t.to)}>
+          <Button key={t.to} title={t.why} disabled={account.state === t.to} onClick={() => setAsking(t.to)}>
             move to {t.to.toLowerCase()}
           </Button>
         ))}
       </div>
       {asked && (
-        <div role="dialog" aria-label={`Move ${account.label} to ${asked.to.toLowerCase()}?`} className="mt-2 rounded-md border border-neutral-300 bg-neutral-50 p-3 text-sm">
-          <p className="font-medium text-neutral-900">
-            Move {account.label} to {asked.to.toLowerCase()}?
+        <div
+          role="dialog"
+          aria-label={`Move ${account.label} to ${asked.to.toLowerCase()}?`}
+          className="mt-3 flex flex-col gap-2.5 rounded-button border border-line-strong bg-surface2 p-3"
+        >
+          <p className="flex items-center gap-2 font-semibold">
+            <span className="min-w-0 flex-1">
+              Move {account.label} to {asked.to.toLowerCase()}?
+            </span>
+            <InfoTip label="this state">After: {asked.why}.</InfoTip>
           </p>
-          <p className="text-neutral-600">After: {asked.why}.</p>
           {asked.to !== "AVAILABLE" && account.assigned > 0 && (
-            <p className="mt-1 text-amber-800">
+            <p className="text-sm font-medium text-warn">
               {asked.to === "DRAINING"
                 ? `${jobs} on it now will be moved off at their next turn.`
                 : `${jobs} on it now keep running; no new ones start on it.`}
             </p>
           )}
-          <label className="mt-2 flex flex-col gap-1 text-xs text-neutral-700">
-            {needsReason ? "Reason (required)" : "Reason"}
+          <Field label={needsReason ? "Reason (required)" : "Reason"}>
             <input
               className={INPUT}
               value={reason}
               disabled={busy}
-              placeholder="why, e.g. held back for Monday's report"
+              placeholder="why"
               onChange={(e) => setReason(e.target.value)}
             />
-          </label>
-          <div className="mt-2 flex gap-2">
-            <Button size="sm" variant="primary" disabled={busy || (needsReason && !reason.trim())} onClick={() => void move(asked.to)}>
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="solid" disabled={busy || (needsReason && !reason.trim())} onClick={() => void move(asked.to)}>
               {busy ? "saving…" : `move to ${asked.to.toLowerCase()}`}
             </Button>
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => setAsking(null)}>
+            <Button variant="ghost" disabled={busy} onClick={() => setAsking(null)}>
               Leave it {account.state.toLowerCase().replace(/_/g, " ")}
             </Button>
           </div>
-          {error && (
-            <div className="mt-2">
-              <ErrorNote>{error} The state was not changed.</ErrorNote>
-            </div>
-          )}
+          {error && <Notice tone="error">{error} The state was not changed.</Notice>}
         </div>
       )}
-    </div>
+    </InspectorSection>
   );
 }
 
@@ -777,13 +902,15 @@ function RefreshControl({ account, reload }: { account: Account; reload: () => P
     }
   }
   return (
-    <div>
-      <h4 className="text-sm font-medium text-neutral-900">Refresh</h4>
-      <Button size="sm" className="mt-1" disabled={busy} onClick={() => void run()}>
+    <div className="flex flex-col items-start gap-2">
+      <Button icon="clock" disabled={busy} onClick={() => void run()}>
         {busy ? "refreshing…" : "Refresh now"}
       </Button>
       {verdict && (
-        <p role="status" className={`mt-1 text-sm ${verdict.ok ? "text-emerald-800" : "text-rose-800"}`}>
+        <p
+          role="status"
+          className={`rounded-button px-3 py-2 text-sm font-medium ${verdict.ok ? "bg-pass-bg text-pass" : "bg-crit-bg text-crit"}`}
+        >
           {verdict.text}
         </p>
       )}
@@ -811,33 +938,35 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
     }
   }
   return (
-    <div className="rounded-md border border-rose-200 p-3">
-      <h4 className="text-sm font-medium text-rose-900">Remove</h4>
-      <p className="text-xs text-neutral-600">
-        jobs on it: {account.assigned}
-        {account.assigned > 0 && " (in use: move it to draining first to move them off)"} &middot; its credential is
-        deleted with it
-      </p>
-      <div className="mt-2 flex items-center gap-2">
+    <InspectorSection
+      label="Remove"
+      tools={
+        <InfoTip label="deleting">
+          Jobs on it: {account.assigned}
+          {account.assigned > 0 && " (in use: move it to draining first to move them off)"}. Its credential is deleted
+          with it. Type the label to arm the button.
+        </InfoTip>
+      }
+    >
+      <div className="flex flex-wrap items-center gap-2">
         <input
-          className={`${INPUT} max-w-56 font-mono`}
+          className={`${INPUT} max-w-48 flex-1 font-mono`}
           value={typed}
           disabled={busy}
           placeholder={account.label}
           aria-label={`Type ${account.label} to confirm removal`}
           onChange={(e) => setTyped(e.target.value)}
         />
-        <Button size="sm" variant="primary" disabled={!armed || busy} onClick={() => void run()}>
+        <Button variant="danger" disabled={!armed || busy} onClick={() => void run()}>
           {busy ? "removing…" : `remove ${account.label}`}
         </Button>
-        <span className="text-xs text-neutral-500">type the label to arm this</span>
       </div>
       {error && (
         <div className="mt-2">
-          <ErrorNote>{error} The account was not removed.</ErrorNote>
+          <Notice tone="error">{error} The account was not removed.</Notice>
         </div>
       )}
-    </div>
+    </InspectorSection>
   );
 }
 
@@ -894,9 +1023,15 @@ function SignInSteps({
 
   if (signin.kind === "done") {
     return (
-      <div role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900" data-testid="signin-done">
-        Signed in: <b>{signin.account.label}</b> is {signin.account.state.toLowerCase().replace(/_/g, " ")}.{" "}
-        <button type="button" className="underline" onClick={() => setSignin({ kind: "idle" })}>
+      <div
+        role="status"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass"
+        data-testid="signin-done"
+      >
+        <span>
+          Signed in: <b>{signin.account.label}</b> is {signin.account.state.toLowerCase().replace(/_/g, " ")}.
+        </span>
+        <button type="button" className="font-semibold underline underline-offset-2" onClick={() => setSignin({ kind: "idle" })}>
           Done
         </button>
       </div>
@@ -904,50 +1039,60 @@ function SignInSteps({
   }
   if (signin.kind === "idle") {
     return (
-      <div>
-        <Button size="sm" variant="primary" disabled={busy || !label} onClick={() => void begin()}>
+      <div className="flex flex-col items-start gap-2">
+        <Button
+          variant="solid"
+          icon="signout"
+          disabled={busy || !label}
+          title={!fixedLabel && !label ? "Give it a label first" : undefined}
+          onClick={() => void begin()}
+        >
           {busy ? "starting…" : start}
         </Button>
-        {!fixedLabel && !label && <span className="ml-2 text-xs text-neutral-500">give it a label first</span>}
-        {error && (
-          <div className="mt-2">
-            <ErrorNote>{error}</ErrorNote>
-          </div>
-        )}
+        {error && <Notice tone="error">{error}</Notice>}
       </div>
     );
   }
+  const codeId = `code-${signin.state}`;
   return (
-    <form onSubmit={finish} className="space-y-2 text-sm" aria-label="Finish the Claude sign-in">
-      <ol className="list-decimal space-y-1 pl-5 text-neutral-700">
-        <li>
-          <a href={signin.url} target="_blank" rel="noopener noreferrer" className="underline" data-testid="signin-link">
-            Open the Claude sign-in page
-          </a>{" "}
-          and sign in to the account to add as <b>{signin.label}</b>.
-        </li>
-        <li>Claude shows a code when you are done. Copy all of it (it may end in #…).</li>
-        <li>Paste it here within {Math.round(signin.expiresIn / 60)} minutes.</li>
-      </ol>
-      <label className="flex flex-col gap-1 text-xs text-neutral-700">
-        Code from the Claude page
+    <form onSubmit={finish} className="flex flex-col gap-2.5" aria-label="Finish the Claude sign-in">
+      <span className="flex flex-wrap items-center gap-2">
+        <a
+          href={signin.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-8 items-center rounded-lg border border-line-strong px-3 text-sm font-semibold hover:bg-surface2"
+          data-testid="signin-link"
+        >
+          Open the Claude sign-in page
+        </a>
+        <Chip kind="na" className="tnum" title="Paste the code within this time">
+          {Math.round(signin.expiresIn / 60)} min
+        </Chip>
+        <InfoTip label="the steps" align="start">
+          Sign in on Claude&apos;s page to the account to add as <b>{signin.label}</b>. Claude shows a code when you are
+          done. Copy all of it (it may end in #…) and paste it here within {Math.round(signin.expiresIn / 60)} minutes.
+        </InfoTip>
+      </span>
+      <Field label="Code from the Claude page" htmlFor={codeId}>
         <input
+          id={codeId}
           className={`${INPUT} font-mono`}
           value={code}
           autoComplete="off"
           spellCheck={false}
           onChange={(e) => setCode(e.target.value)}
         />
-      </label>
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" variant="primary" disabled={busy || code.trim().length < 4}>
+      </Field>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" variant="solid" disabled={busy || code.trim().length < 4}>
           {busy ? "finishing…" : "Finish sign-in"}
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => setSignin({ kind: "idle" })}>
+        <Button variant="ghost" disabled={busy} onClick={() => setSignin({ kind: "idle" })}>
           Start over
         </Button>
       </div>
-      {error && <ErrorNote>{error}</ErrorNote>}
+      {error && <Notice tone="error">{error}</Notice>}
     </form>
   );
 }
@@ -965,15 +1110,39 @@ function SignInAgain({
   reload: () => Promise<void>;
   prominent?: boolean;
 }) {
+  const tip = (
+    <InfoTip label="signing in again">
+      {prominent
+        ? "Its refresh token is gone and the sweep has stopped trying. Signing in again puts it back the way it was."
+        : "Replaces its credential with a fresh sign-in; its state, holds and readings stay."}
+    </InfoTip>
+  );
+  const steps = (
+    <SignInSteps label={account.label} fixedLabel signin={signin} setSignin={setSignin} reload={reload} start="Sign in again with Claude" />
+  );
+  if (prominent) {
+    return (
+      <InspectorSection
+        label={
+          <>
+            <Chip kind="warn" dot>
+              Sign in again
+            </Chip>
+          </>
+        }
+        tools={tip}
+      >
+        {steps}
+      </InspectorSection>
+    );
+  }
   return (
-    <div className={prominent ? "rounded-md border border-amber-200 bg-amber-50 p-3" : ""}>
-      <h4 className="text-sm font-medium text-neutral-900">Sign in again</h4>
-      <p className="mb-2 text-xs text-neutral-600">
-        {prominent
-          ? "Its refresh token is gone and the sweep has stopped trying. Signing in again puts it back the way it was."
-          : "Replaces its credential with a fresh sign-in; its state, holds and readings stay."}
-      </p>
-      <SignInSteps label={account.label} fixedLabel signin={signin} setSignin={setSignin} reload={reload} start="Sign in again with Claude" />
+    <div className="flex flex-col gap-2">
+      <span className="flex items-center gap-2">
+        <Label>Sign in again</Label>
+        {tip}
+      </span>
+      {steps}
     </div>
   );
 }
@@ -1015,89 +1184,119 @@ function AddAccount({
   }
 
   return (
-    <section aria-label="Add a Claude account" className="rounded-lg border border-neutral-200 bg-white p-4" data-testid="add-account">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-neutral-900">Add a Claude account</h3>
-        {signin.kind !== "started" && (
-          <Button size="sm" variant="ghost" onClick={close}>
+    <Inspector
+      testId="add-account"
+      label="Add a Claude account"
+      eyebrow="Account · new"
+      title="Add a Claude account"
+      action={
+        signin.kind !== "started" ? (
+          <Button variant="hero" onClick={close}>
             Cancel
           </Button>
-        )}
-      </div>
-      <p className="mt-1 text-xs text-neutral-500">
-        A Claude subscription (Pro or Max). Oracle keeps it signed in by refreshing its token; nobody has to sign in
-        again unless the subscription is signed out.
-      </p>
+        ) : undefined
+      }
+      chips={
+        <>
+          <Chip hero>Pro or Max</Chip>
+          <InfoTip label="adding" hero align="start" side="bottom">
+            A Claude subscription (Pro or Max). Oracle keeps it signed in by refreshing its token; nobody has to sign in
+            again unless the subscription is signed out.
+          </InfoTip>
+        </>
+      }
+    >
       {signin.kind === "done" ? (
-        <div className="mt-3">
+        <InspectorSection>
           <SignInSteps label={label} signin={signin} setSignin={setSignin} reload={reload} start="" />
-        </div>
+        </InspectorSection>
       ) : (
         <>
-          <label className="mt-3 flex flex-col gap-1 text-xs text-neutral-700">
-            Label (lowercase letters, digits and dashes)
-            <input
-              className={`${INPUT} max-w-xs font-mono`}
-              value={label}
-              disabled={signin.kind === "started"}
-              placeholder="personal"
-              onChange={(e) => setLabel(e.target.value.toLowerCase())}
-            />
-          </label>
-          {taken && (
-            <p className="mt-1 text-xs text-amber-800">
-              An account has this label: adding again replaces its credential and keeps its state.
-            </p>
-          )}
-          <div role="tablist" className="mt-3 flex gap-1 text-sm">
-            {(
-              [
-                ["signin", "Sign in with Claude"],
-                ["paste", "Paste Claude Code's saved login"],
-              ] as const
-            ).map(([key, text]) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={mode === key}
+          <InspectorSection>
+            <Field
+              label="Label"
+              htmlFor="add-account-label"
+              tip={
+                <InfoTip label="naming" align="start">
+                  Lowercase letters, digits and dashes.
+                </InfoTip>
+              }
+            >
+              <input
+                id="add-account-label"
+                className={`${INPUT} font-mono`}
+                value={label}
                 disabled={signin.kind === "started"}
-                onClick={() => setMode(key)}
-                className={`rounded px-2 py-1 ${mode === key ? "bg-neutral-100 font-medium text-neutral-900" : "text-neutral-500"}`}
-              >
-                {text}
-              </button>
-            ))}
-          </div>
-          <div className="mt-2">
-            {mode === "signin" ? (
-              <SignInSteps label={label.trim()} signin={signin} setSignin={setSignin} reload={reload} start="Sign in with Claude" />
-            ) : (
-              <form onSubmit={paste} className="space-y-2" aria-label="Paste Claude Code login JSON">
-                <p className="text-xs text-neutral-500">
-                  The JSON Claude Code keeps for its login (on macOS the keychain item &quot;Claude Code-credentials&quot;),
-                  pasted whole. It must include a refresh token.
-                </p>
-                <label className="flex flex-col gap-1 text-xs text-neutral-700">
-                  Saved login
-                  <textarea
-                    className={`${INPUT} h-24 font-mono text-xs`}
-                    value={credential}
-                    spellCheck={false}
-                    autoComplete="off"
-                    onChange={(e) => setCredential(e.target.value)}
-                  />
-                </label>
-                <Button type="submit" size="sm" variant="primary" disabled={busy || !label.trim() || !credential.trim()}>
-                  {busy ? "adding…" : "Add account"}
-                </Button>
-                {error && <ErrorNote>{error}</ErrorNote>}
-              </form>
+                placeholder="personal"
+                onChange={(e) => setLabel(e.target.value.toLowerCase())}
+              />
+            </Field>
+            {taken && (
+              <div className="mt-2">
+                <Chip kind="warn" title="Adding again replaces its credential and keeps its state.">
+                  Label in use
+                </Chip>
+              </div>
             )}
-          </div>
+          </InspectorSection>
+          <InspectorSection label="Method">
+            <div role="tablist" aria-label="How to add it" className="flex flex-wrap gap-1">
+              {(
+                [
+                  ["signin", "Sign in with Claude"],
+                  ["paste", "Paste Claude Code's saved login"],
+                ] as const
+              ).map(([key, text]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === key}
+                  disabled={signin.kind === "started"}
+                  onClick={() => setMode(key)}
+                  className={`${TAB} ${tabTone(mode === key)}`}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3">
+              {mode === "signin" ? (
+                <SignInSteps label={label.trim()} signin={signin} setSignin={setSignin} reload={reload} start="Sign in with Claude" />
+              ) : (
+                <form onSubmit={paste} className="flex flex-col gap-2.5" aria-label="Paste Claude Code login JSON">
+                  <Field
+                    label="Saved login"
+                    htmlFor="add-account-json"
+                    tip={
+                      <InfoTip label="the JSON" align="start">
+                        The JSON Claude Code keeps for its login (on macOS the keychain item &quot;Claude
+                        Code-credentials&quot;), pasted whole. It must include a refresh token.
+                      </InfoTip>
+                    }
+                  >
+                    <textarea
+                      id="add-account-json"
+                      className={`${TEXTAREA} h-24 font-mono text-sm`}
+                      value={credential}
+                      spellCheck={false}
+                      autoComplete="off"
+                      onChange={(e) => setCredential(e.target.value)}
+                    />
+                  </Field>
+                  <div>
+                    <Button type="submit" variant="solid" disabled={busy || !label.trim() || !credential.trim()}>
+                      {busy ? "adding…" : "Add account"}
+                    </Button>
+                  </div>
+                  {error && <Notice tone="error">{error}</Notice>}
+                </form>
+              )}
+            </div>
+          </InspectorSection>
         </>
       )}
-    </section>
+    </Inspector>
   );
 }
 
@@ -1139,64 +1338,63 @@ function Fallback({ page, owner, reload }: { page: Page; owner: boolean; reload:
   }
 
   return (
-    <section aria-label="Fallback credential" className="max-w-3xl rounded-lg border border-neutral-200 bg-white p-4" data-testid="fallback">
-      <h2 className="text-base font-semibold text-neutral-900">Fallback credential</h2>
-      <p className="mt-1 text-sm text-neutral-600">
-        Used only while no account is registered: a <code className="font-mono text-xs">claude setup-token</code> value
-        or an Anthropic API key. Accounts that are spent or paused are waited for, never replaced by this.
-      </p>
-      <p className="mt-2 text-sm" data-testid="fallback-status">
-        {spare ? (
-          <>
-            <b>{spare.label}</b> <span className="text-neutral-500">(set {timeAgo(spare.updated_at)})</span>
-          </>
-        ) : (
-          <span className="text-neutral-500">None set.</span>
-        )}
-      </p>
-      {owner && (
-        <div className="mt-2">
-          {open ? (
-            <form onSubmit={save} className="space-y-2" aria-label="Set the fallback credential">
-              <label className="flex flex-col gap-1 text-xs text-neutral-700">
-                Setup-token or API key
-                <input
-                  type="password"
-                  className={`${INPUT} max-w-md font-mono`}
-                  value={token}
-                  autoComplete="off"
-                  spellCheck={false}
-                  onChange={(e) => setToken(e.target.value)}
-                />
-              </label>
-              <div className="flex gap-2">
-                <Button type="submit" size="sm" variant="primary" disabled={busy || token.trim().length < 8}>
-                  Save
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          ) : (
+    <Panel
+      title="Fallback credential"
+      tools={
+        // The tip sits outside the `fallback` block, so a reader's block holds no buttons.
+        <InfoTip label="the fallback">
+          Used only while no account is registered: a <code className="font-mono">claude setup-token</code> value or an
+          Anthropic API key. Accounts that are spent or paused are waited for, never replaced by this.
+        </InfoTip>
+      }
+    >
+      <div data-testid="fallback" aria-label="Fallback credential" role="group" className="flex flex-col gap-3 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="min-w-0 flex-1" data-testid="fallback-status">
+            {spare ? (
+              <>
+                <b className="font-semibold">{spare.label}</b>{" "}
+                <span className="tnum text-sm text-text2">(set {timeAgo(spare.updated_at)})</span>
+              </>
+            ) : (
+              <span className="text-text2">None set.</span>
+            )}
+          </p>
+          {owner && !open && (
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => setOpen(true)}>
-                {spare ? "Replace" : "Set a fallback"}
-              </Button>
+              <Button onClick={() => setOpen(true)}>{spare ? "Replace" : "Set a fallback"}</Button>
               {spare && (
-                <Button size="sm" variant="ghost" disabled={busy} onClick={() => void clear()}>
+                <Button variant="ghost" disabled={busy} onClick={() => void clear()}>
                   Remove
                 </Button>
               )}
             </div>
           )}
-          {error && (
-            <div className="mt-2">
-              <ErrorNote>{error}</ErrorNote>
-            </div>
-          )}
         </div>
-      )}
-    </section>
+        {owner && open && (
+          <form onSubmit={save} className="flex flex-col gap-2.5" aria-label="Set the fallback credential">
+            <Field label="Setup-token or API key" className="max-w-md">
+              <input
+                type="password"
+                className={`${INPUT} font-mono`}
+                value={token}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setToken(e.target.value)}
+              />
+            </Field>
+            <div className="flex gap-2">
+              <Button type="submit" variant="solid" disabled={busy || token.trim().length < 8}>
+                Save
+              </Button>
+              <Button variant="ghost" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
+        {owner && error && <Notice tone="error">{error}</Notice>}
+      </div>
+    </Panel>
   );
 }

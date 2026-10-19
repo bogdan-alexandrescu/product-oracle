@@ -4,8 +4,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 
+import {
+  Button,
+  Chip,
+  Icon,
+  InfoTip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  Notice,
+  Page,
+  PageHeader,
+  Panel,
+  Split,
+} from "@/components/ds";
 import { ThemeThumbnail } from "@/components/ThemePreview";
-import { Badge, Button, ErrorNote, INPUT, Loading } from "@/components/ui";
+import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { unwrapProblems, ProblemsError } from "@/lib/api/problems";
 import { useMe } from "@/lib/me";
@@ -109,25 +123,25 @@ function Question<V extends string | boolean>({
 }) {
   const choices: Option<V | null>[] = [{ value: null, label: "Not sure" }, ...options];
   return (
-    <fieldset className="text-sm">
-      <legend className="mb-1.5 font-medium text-neutral-800">{question}</legend>
+    <fieldset className="min-w-0">
+      <legend className="mb-2 text-[15px] font-semibold text-text">{question}</legend>
       <div className="flex flex-wrap gap-1.5">
         {choices.map((o) => {
           const checked = (value ?? null) === o.value;
           return (
             <label
               key={String(o.value)}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 ${
-                checked ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50"
+              className={`inline-flex h-8 cursor-pointer items-center rounded-lg border px-3 text-sm font-medium has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent ${
+                checked && o.value === null
+                  ? "border-accent-mid bg-accent-soft text-accent-ink"
+                  : checked
+                  ? "border-accent bg-accent text-on-accent"
+                  : o.value === null
+                    ? "border-line bg-surface text-text2 hover:bg-surface2"
+                    : "border-line-strong bg-surface text-text hover:bg-surface2"
               }`}
             >
-              <input
-                type="radio"
-                name={name}
-                className="sr-only"
-                checked={checked}
-                onChange={() => onChange(o.value)}
-              />
+              <input type="radio" name={name} className="sr-only" checked={checked} onChange={() => onChange(o.value)} />
               {o.label}
             </label>
           );
@@ -149,17 +163,25 @@ function NumberQuestion({
   onChange: (v: number | null) => void;
 }) {
   return (
-    <label className="block text-sm">
-      <span className="mb-1.5 block font-medium text-neutral-800">{label}</span>
-      <input
-        type="number"
-        min={0}
-        className={`${INPUT} w-28`}
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value === "" ? null : Math.max(0, Math.floor(Number(e.target.value))))}
-      />
-      {hint && <span className="ml-2 text-xs text-neutral-500">{hint}</span>}
-    </label>
+    <div className="flex items-end gap-2">
+      <label className="block">
+        <span className="mb-1.5 block text-[15px] font-semibold text-text">{label}</span>
+        <input
+          type="number"
+          min={0}
+          className={`${INPUT} tnum w-28`}
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value === "" ? null : Math.max(0, Math.floor(Number(e.target.value))))}
+        />
+      </label>
+      {hint && (
+        <span className="pb-2">
+          <InfoTip label={label} align="start">
+            {hint}
+          </InfoTip>
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -242,22 +264,22 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
   return (
     <>
       <section aria-labelledby={`${id}-template`}>
-        <div className="mb-2 flex flex-wrap items-center gap-3">
-          <h2 id={`${id}-template`} className="text-sm font-semibold text-neutral-700">
+        <div className="mb-2.5 flex min-h-8 flex-wrap items-center gap-2.5">
+          <h2 id={`${id}-template`} className="font-display text-lg leading-6 font-bold tracking-[-0.01em]">
             Template
           </h2>
-          {templateSource === "last" && <Badge tone="blue">Your last choice</Badge>}
-          {templateSource === "company" && <Badge tone="blue">Company default</Badge>}
+          {templateSource === "last" && <Chip kind="acc">Your last choice</Chip>}
+          {templateSource === "company" && <Chip kind="acc">Company default</Chip>}
           {rec && templateKey !== rec.template.key && (
             <Button
-              size="sm"
               variant="ghost"
+              className="ml-auto"
               onClick={() => {
                 setTemplatePick({ key: rec.template.key, source: "user" });
                 setThemePick(null);
               }}
             >
-              Use the recommended template
+              Use recommended
             </Button>
           )}
         </div>
@@ -268,30 +290,31 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
               <label
                 key={t.key}
                 data-testid={`template-option-${t.key}`}
-                className={`flex cursor-pointer gap-2.5 rounded-lg border bg-white p-3 text-sm ${
-                  checked ? "border-neutral-900 ring-1 ring-neutral-900" : "border-neutral-200 hover:border-neutral-400"
+                title={[t.description, t.suggest_when && `When: ${t.suggest_when}`].filter(Boolean).join("\n") || undefined}
+                className={`flex min-w-0 cursor-pointer items-start gap-2.5 rounded-button border bg-surface px-3 py-2.5 ${
+                  checked ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line hover:border-line-strong"
                 }`}
               >
                 <input
                   type="radio"
                   name={`${id}-template`}
-                  className="mt-0.5"
+                  className="mt-1 size-4 flex-none accent-[var(--accent)]"
                   checked={checked}
                   onChange={() => {
                     setTemplatePick({ key: t.key, source: "user" });
                     if (themePick?.source !== "user") setThemePick(null);
                   }}
                 />
-                <span className="min-w-0">
-                  <span className="font-medium text-neutral-900">{t.name}</span>
-                  {rec?.template.key === t.key && (
-                    <>
-                      {" "}
-                      <Badge tone="green">Recommended</Badge>
-                    </>
-                  )}
-                  {t.description && <span className="mt-0.5 block text-xs text-neutral-600">{t.description}</span>}
-                  {t.suggest_when && <span className="mt-0.5 block text-xs text-neutral-400">When: {t.suggest_when}</span>}
+                <span className="min-w-0 flex-1">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-semibold text-text">{t.name}</span>
+                    {rec?.template.key === t.key && (
+                      <Chip kind="pass" className="flex-none">
+                        Recommended
+                      </Chip>
+                    )}
+                  </span>
+                  {t.description && <span className="mt-0.5 block truncate text-sm text-text2">{t.description}</span>}
                 </span>
               </label>
             );
@@ -300,12 +323,16 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
       </section>
 
       <section aria-labelledby={`${id}-theme`}>
-        <h2 id={`${id}-theme`} className="mb-1 text-sm font-semibold text-neutral-700">
-          Theme
-        </h2>
-        {rec && themeKey === rec.theme?.key && rec.theme_reason && (
-          <p className="mb-2 text-xs text-neutral-500">{rec.theme_reason}</p>
-        )}
+        <div className="mb-2.5 flex min-h-8 items-center gap-2.5">
+          <h2 id={`${id}-theme`} className="font-display text-lg leading-6 font-bold tracking-[-0.01em]">
+            Theme
+          </h2>
+          {rec && themeKey === rec.theme?.key && rec.theme_reason && (
+            <InfoTip label="the recommended theme" align="start">
+              {rec.theme_reason}
+            </InfoTip>
+          )}
+        </div>
         {themes.error && <ErrorNote>{themes.error}</ErrorNote>}
         {themes.loading && <Loading />}
         <div role="radiogroup" aria-labelledby={`${id}-theme`} className="flex flex-wrap gap-3">
@@ -315,19 +342,20 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
               <label
                 key={t.key}
                 data-testid={`theme-option-${t.key}`}
-                className={`flex w-[178px] cursor-pointer flex-col gap-1.5 rounded-lg border bg-white p-2 text-sm ${
-                  checked ? "border-neutral-900 ring-1 ring-neutral-900" : "border-neutral-200 hover:border-neutral-400"
+                className={`flex w-[178px] cursor-pointer flex-col gap-1.5 rounded-button border bg-surface p-2 ${
+                  checked ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line hover:border-line-strong"
                 }`}
               >
                 <ThemeThumbnail tokens={t.tokens} css={t.css} kind={kind} />
-                <span className="flex items-center gap-1.5">
+                <span className="flex min-w-0 items-center gap-1.5">
                   <input
                     type="radio"
                     name={`${id}-theme`}
+                    className="size-4 flex-none accent-[var(--accent)]"
                     checked={checked}
                     onChange={() => setThemePick({ key: t.key, source: "user" })}
                   />
-                  <span className="font-medium text-neutral-900">{t.name}</span>
+                  <span className="truncate text-sm font-semibold text-text">{t.name}</span>
                 </span>
               </label>
             );
@@ -413,157 +441,174 @@ export function NewDraft({ kind }: { kind: Kind }) {
   const companyTemplateName = company && templates.find((t) => t.key === company.template)?.name;
   const companyThemeName = company?.theme && themes.data?.find((t) => t.key === company.theme)?.name;
 
-  return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      <p className="mb-2 text-sm">
-        <Link href={kind === "roadmap" ? "/roadmap" : "/documents"} className="text-neutral-500 hover:text-neutral-900 hover:underline">
-          {kind === "roadmap" ? "← Roadmap" : "← Documents"}
-        </Link>
-      </p>
-      <h1 className="mb-1 text-2xl font-semibold tracking-tight text-neutral-900">New {label}</h1>
-      <p className="mb-6 text-sm text-neutral-600">
-        Answer what you can; every question is optional. The template and theme follow your answers, and you can change
-        either below.
-      </p>
+  const themeName = themeKey ? (themes.data?.find((t) => t.key === themeKey)?.name ?? themeKey) : null;
+  const formId = `new-draft-${kind}`;
 
-      <form onSubmit={create} className="space-y-8">
-        <section aria-labelledby="questions-heading" className="rounded-lg border border-neutral-200 bg-white p-4">
-          <h2 id="questions-heading" className="mb-3 text-sm font-semibold text-neutral-700">
-            About this {label}
-          </h2>
-          <div className="space-y-4">
-            {kind === "prd" &&
-              PRD_QUESTIONS.map((q) => (
-                <Question
-                  key={q.field}
-                  name={q.field}
-                  question={q.question}
-                  options={q.options as readonly Option<string | boolean>[]}
-                  value={prd[q.field]}
-                  onChange={(v) => setAnswer(q.field, v as never)}
-                />
-              ))}
-            {kind === "roadmap" && (
-              <>
-                {ROADMAP_QUESTIONS.map((q) => (
-                  <Question
-                    key={q.field}
-                    name={q.field}
-                    question={q.question}
-                    options={q.options as readonly Option<string | boolean>[]}
-                    value={roadmap[q.field]}
-                    onChange={(v) => setRoad(q.field, v as never)}
-                  />
-                ))}
-                <div className="flex flex-wrap gap-6">
-                  <NumberQuestion label="How many teams?" value={roadmap.teams} onChange={(v) => setRoad("teams", v)} />
-                  <NumberQuestion
-                    label="Confirmed goals"
-                    hint="From the baseline; change it to plan ahead."
-                    value={roadmap.confirmed_goals ?? rec?.confirmed_goals}
-                    onChange={(v) => setRoad("confirmed_goals", v)}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-
-        <section aria-labelledby="recommendation-heading">
-          <h2 id="recommendation-heading" className="mb-2 text-sm font-semibold text-neutral-700">
-            Recommendation
-          </h2>
-          {live.error && <ErrorNote>{live.error}</ErrorNote>}
-          {!rec && !live.error && <Loading />}
-          {rec && (
-            <div
-              data-testid="recommendation"
-              aria-live="polite"
-              className={`rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm ${live.pending ? "opacity-60" : ""}`}
-            >
-              <p className="text-neutral-900">
-                <span className="font-semibold" data-testid="recommended-template">
-                  {rec.template.name}
-                </span>
-                {rec.theme && <span className="text-neutral-600"> with the {rec.theme.name} theme</span>}
-              </p>
-              <p data-testid="recommendation-reason" className="mt-0.5 text-neutral-700">
+  const inspector = (
+    <div data-testid="recommendation-panel" aria-live="polite" className={live.pending ? "opacity-70" : ""}>
+      <Inspector
+        label="Recommendation"
+        eyebrow="Recommended"
+        title={rec ? <span data-testid="recommended-template">{rec.template.name}</span> : live.error ? "–" : "…"}
+        chips={
+          rec && (
+            <>
+              {rec.theme && <Chip hero>{rec.theme.name}</Chip>}
+              {rec.variant && rec.variant !== "team" && <Chip hero>{rec.variant}</Chip>}
+              {rec.group_by && rec.variant && rec.variant !== "team" && <Chip hero>by {rec.group_by}</Chip>}
+            </>
+          )
+        }
+      >
+        {live.error && (
+          <InspectorSection>
+            <ErrorNote>{live.error}</ErrorNote>
+          </InspectorSection>
+        )}
+        {rec && (
+          <InspectorSection label="Why">
+            <div data-testid="recommendation">
+              <p data-testid="recommendation-reason" className="text-[15px] leading-[22px] text-text">
                 {rec.reason}
               </p>
-              {rec.variant && rec.variant !== "team" && (
-                <p className="mt-0.5 text-xs text-neutral-500">
-                  Variant: {rec.variant}
-                  {rec.group_by ? ` · grouped by ${rec.group_by}` : ""}
-                </p>
-              )}
               {rec.warnings.length > 0 && (
-                <ul data-testid="recommendation-warnings" className="mt-2 space-y-1">
+                <ul data-testid="recommendation-warnings" className="mt-2.5 flex flex-col gap-1.5">
                   {rec.warnings.map((w, i) => (
-                    <li key={i} className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900">
-                      {w}
+                    <li key={i} className="flex gap-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
+                      <Icon name="alert" size={16} className="mt-0.5 flex-none" />
+                      <span className="min-w-0">{w}</span>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
-          )}
-          {company && (
-            <p data-testid="company-default" className="mt-2 flex flex-wrap items-center gap-2 text-sm text-neutral-600">
-              Company default: <span className="font-medium text-neutral-800">{companyTemplateName ?? company.template}</span>
-              {company.theme && <span>with {companyThemeName ?? company.theme}</span>}
-              <Button size="sm" variant="ghost" onClick={applyCompany}>
-                Use company default
-              </Button>
-            </p>
-          )}
-        </section>
-
-        <TemplateThemePicker choice={choice} />
-
-        <section className="rounded-lg border border-neutral-200 bg-white p-4">
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-neutral-800">Title</span>
-            <input
-              className={INPUT}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={kind === "prd" ? "Saved addresses at checkout" : "Product roadmap, next two quarters"}
-              required
-            />
-          </label>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Button type="submit" variant="primary" disabled={busy !== null || !templateKey || !title.trim()}>
-              {busy === "create" ? "Creating…" : "Create draft"}
-            </Button>
-            {template && (
-              <span className="text-sm text-neutral-600">
-                {template.name} v{template.latest_version}
-                {themeKey && ` · ${themes.data?.find((t) => t.key === themeKey)?.name ?? themeKey}`}
-              </span>
+          </InspectorSection>
+        )}
+        <InspectorSection label="Selected">
+          <InspectorRow value={template ? `v${template.latest_version}` : undefined}>{template?.name ?? "–"}</InspectorRow>
+          <InspectorRow>{themeName ?? "No theme"}</InspectorRow>
+        </InspectorSection>
+        {(company || isOwner) && (
+          <InspectorSection label="Company default">
+            {company && (
+              <div data-testid="company-default" className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1 truncate font-semibold">
+                  {companyTemplateName ?? company.template}
+                  {company.theme && <span className="font-normal text-text2"> · {companyThemeName ?? company.theme}</span>}
+                </span>
+                <Button variant="solid" onClick={applyCompany}>
+                  Use company default
+                </Button>
+              </div>
             )}
             {isOwner && (
-              <Button
-                className="ml-auto"
-                onClick={makeDefault}
-                disabled={busy !== null || !templateKey}
-                title={`New ${label}s start with this template and theme unless someone picks another`}
-              >
-                {busy === "default" ? "Saving…" : "Make company default"}
-              </Button>
+              <div className={`flex items-center gap-2 ${company ? "mt-2.5" : ""}`}>
+                <Button onClick={makeDefault} disabled={busy !== null || !templateKey}>
+                  {busy === "default" ? "Saving…" : "Make company default"}
+                </Button>
+                <InfoTip label="company default" align="start" side="bottom">
+                  New {label}s start with this template and theme unless someone picks another.
+                </InfoTip>
+              </div>
             )}
-          </div>
-          {notice && (
-            <p role="status" className="mt-3 text-sm text-emerald-800">
-              {notice}
-            </p>
-          )}
-          {error && (
-            <div className="mt-3">
-              <ErrorNote>{error}</ErrorNote>
-            </div>
-          )}
-        </section>
-      </form>
+          </InspectorSection>
+        )}
+      </Inspector>
     </div>
+  );
+
+  return (
+    <Page>
+      <PageHeader
+        back={
+          <Link
+            href={kind === "roadmap" ? "/roadmap" : "/documents"}
+            className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
+          >
+            <Icon name="back" size={16} />
+            {kind === "roadmap" ? "Roadmap" : "Documents"}
+          </Link>
+        }
+        title={`New ${label}`}
+        status={
+          <InfoTip label={`new ${label}s`} align="start" side="bottom">
+            Answer what you can; every question is optional. The template and theme follow your answers, and you can
+            change either.
+          </InfoTip>
+        }
+        action={
+          <Button form={formId} type="submit" variant="primary" icon="plus" disabled={busy !== null || !templateKey || !title.trim()}>
+            {busy === "create" ? "Creating…" : "Create draft"}
+          </Button>
+        }
+      />
+
+      <form id={formId} onSubmit={create}>
+        <Split inspector={inspector}>
+          {notice && <Notice tone="pass">{notice}</Notice>}
+          {error && <ErrorNote>{error}</ErrorNote>}
+          <Panel bodyClassName="p-4">
+            <label className="block">
+              <span className="mb-1.5 block text-[15px] font-semibold text-text">Title</span>
+              <input
+                className={INPUT}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={kind === "prd" ? "Saved addresses at checkout" : "Product roadmap, next two quarters"}
+                required
+              />
+            </label>
+          </Panel>
+
+          <Panel as="div" bodyClassName="p-4">
+            <section aria-labelledby="questions-heading">
+              <h2 id="questions-heading" className="mb-3 font-display text-lg leading-6 font-bold tracking-[-0.01em]">
+                About this {label}
+              </h2>
+              <div className="flex flex-col gap-4">
+                {kind === "prd" &&
+                  PRD_QUESTIONS.map((q) => (
+                    <Question
+                      key={q.field}
+                      name={q.field}
+                      question={q.question}
+                      options={q.options as readonly Option<string | boolean>[]}
+                      value={prd[q.field]}
+                      onChange={(v) => setAnswer(q.field, v as never)}
+                    />
+                  ))}
+                {kind === "roadmap" && (
+                  <>
+                    {ROADMAP_QUESTIONS.map((q) => (
+                      <Question
+                        key={q.field}
+                        name={q.field}
+                        question={q.question}
+                        options={q.options as readonly Option<string | boolean>[]}
+                        value={roadmap[q.field]}
+                        onChange={(v) => setRoad(q.field, v as never)}
+                      />
+                    ))}
+                    <div className="flex flex-wrap gap-6">
+                      <NumberQuestion label="How many teams?" value={roadmap.teams} onChange={(v) => setRoad("teams", v)} />
+                      <NumberQuestion
+                        label="Confirmed goals"
+                        hint="From the baseline; change it to plan ahead."
+                        value={roadmap.confirmed_goals ?? rec?.confirmed_goals}
+                        onChange={(v) => setRoad("confirmed_goals", v)}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
+          </Panel>
+
+          <Panel as="div" bodyClassName="flex flex-col gap-6 p-4">
+            <TemplateThemePicker choice={choice} />
+          </Panel>
+        </Split>
+      </form>
+    </Page>
   );
 }

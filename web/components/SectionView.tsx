@@ -3,18 +3,18 @@
 import { memo, useMemo } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
-
+import { Chip } from "@/components/ds";
 import { MarkdownBody, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
-import { LayerBadge, LockIcon } from "@/components/ui";
+import { LayerChip, LockedChip } from "@/components/review/parts";
 import type { CitationOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
 import type { Block } from "@/lib/markdown";
 
 const HEADING_CLASS: Record<number, string> = {
-  1: "text-2xl font-semibold tracking-tight",
-  2: "text-xl font-semibold tracking-tight",
-  3: "text-base font-semibold",
+  1: "font-display text-[26px] leading-8 font-bold tracking-[-0.02em] max-[600px]:text-[22px] max-[600px]:leading-7",
+  2: "font-display text-xl leading-7 font-bold tracking-[-0.01em]",
+  3: "font-display text-lg leading-6 font-bold",
 };
 
 export const SectionView = memo(function SectionView({
@@ -69,29 +69,26 @@ export const SectionView = memo(function SectionView({
       tabIndex={-1}
       aria-labelledby={`h-${section.section_key}`}
       data-layer={section.layer}
-      className={`scroll-mt-24 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 ${
-        nested ? "py-3" : "py-5"
-      } ${section.level >= 3 && !nested ? "pl-4" : ""}`}
+      className={`min-w-0 scroll-mt-6 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${
+        nested ? "py-3" : "px-6 py-5 max-[600px]:px-4"
+      } ${section.level >= 3 && !nested ? "pl-10 max-[600px]:pl-6" : ""}`}
     >
-      <div className="mb-2 flex items-baseline gap-2">
+      <div className="mb-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <Heading
           id={`h-${section.section_key}`}
-          className={`${nested ? HEADING_CLASS[3] : HEADING_CLASS[Math.min(section.level, 3)]} text-neutral-900`}
+          className={`min-w-0 ${nested ? HEADING_CLASS[3] : HEADING_CLASS[Math.min(section.level, 3)]} text-text`}
         >
           {section.heading}
         </Heading>
-        <LayerBadge layer={showLayer ? section.layer : null} />
-        {locked && (
-          <span className="text-neutral-500" title="Locked: approved sections are reported as locked to the agent track">
-            <LockIcon className="h-4 w-4" />
-            <span className="sr-only">Locked</span>
+        <LayerChip layer={showLayer ? section.layer : null} />
+        {locked && <LockedChip />}
+        {changedLock && (
+          <span title="This section was approved in the previous version and has changed.">
+            <Chip kind="warn">Changed after lock</Chip>
           </span>
         )}
-        <span className="ml-auto font-mono text-[11px] text-neutral-400">#{section.section_key}</span>
+        <span className="ml-auto truncate font-mono text-[13px] text-text2 max-[600px]:hidden">#{section.section_key}</span>
       </div>
-      {changedLock && (
-        <p className="mb-2 text-xs text-amber-800">This section was approved in the previous version and has changed.</p>
-      )}
       <div className="doc-body" data-section-body={section.section_key}>
         <MarkdownBody
           blocks={blocks}
@@ -120,7 +117,7 @@ export const SectionView = memo(function SectionView({
         onSubmit={(v, note) => onVerdict(section.section_key, v, note)}
       />
       {refine && !locked && (
-        <div className="mt-2">
+        <div className="mt-1.5">
           <RefineSection doc={refine.doc} n={refine.n} sectionKey={section.section_key} heading={section.heading} />
         </div>
       )}

@@ -3,9 +3,23 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
+import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
+import {
+  Button,
+  Chip,
+  InfoTip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  Notice,
+  PageHeader,
+  Panel,
+  SegmentedControl,
+  Split,
+} from "@/components/ds";
 import { ProblemList } from "@/components/TemplateBodyEditor";
 import { SlidePreview, ThemePreview } from "@/components/ThemePreview";
-import { Badge, Button, ErrorNote, INPUT, Loading } from "@/components/ui";
+import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
 import { formatDateTime } from "@/lib/format";
@@ -68,14 +82,25 @@ function pickerValue(v: string | undefined): string {
   return v.length === 4 ? `#${[...v.slice(1)].map((c) => c + c).join("")}`.toLowerCase() : v.toLowerCase();
 }
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * A group of the editor. The title is passed as a node, so the panel carries no aria-label
+ * of its own and labels like "Slide CSS" name only their control.
+ */
+function Group({ title, tools, children }: { title: string; tools?: ReactNode; children: ReactNode }) {
   return (
-    <fieldset className="rounded-lg border border-neutral-200 bg-white p-4">
-      <legend className="px-1 text-sm font-semibold text-neutral-700">{title}</legend>
+    <Panel title={<>{title}</>} tools={tools} bodyClassName="p-4 max-[600px]:p-3">
       {children}
-    </fieldset>
+    </Panel>
   );
 }
+
+const SELECT_FULL = `${SELECT} h-9 w-full`;
+
+const BACK = (
+  <Link href="/settings/themes" className="hover:text-text hover:underline">
+    ← Themes
+  </Link>
+);
 
 const validate = (body: { tokens: Tokens; css: string; slide_css: string | null }) =>
   unwrap(api.POST("/v1/themes/validate", { body }));
@@ -100,16 +125,18 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
 
   if (q.error) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-8">
-        <ErrorNote>{q.error}</ErrorNote>
-      </div>
+      <>
+        <PageHeader back={BACK} title="Theme" />
+        <Notice tone="error">{q.error}</Notice>
+      </>
     );
   }
   if (!t || !form) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-8">
+      <>
+        <PageHeader back={BACK} title="Theme" />
         <Loading />
-      </div>
+      </>
     );
   }
 
@@ -175,243 +202,293 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
   const restore = () =>
     run("restore", () => unwrap(api.POST("/v1/themes/{key}/restore", { params: { path: { key } } })), "Restored.");
 
+  const previewKind = form.kind === "roadmap" ? "roadmap" : "prd";
+  const chips = (hero: boolean) => (
+    <>
+      <Chip hero={hero} kind="acc">
+        {KIND_LABEL[t.kind]}
+      </Chip>
+      {t.builtin && (
+        <Chip hero={hero} kind="na">
+          Built-in
+        </Chip>
+      )}
+      {t.archived_at && (
+        <Chip hero={hero} kind="warn">
+          Archived
+        </Chip>
+      )}
+    </>
+  );
+
+  const inspector = (
+    <Inspector eyebrow="Theme" title={t.name} label="Theme details" chips={chips(true)}>
+      <InspectorSection label="Details">
+        <div className="flex flex-col gap-3">
+          <Field label="Name">
+            <input className={INPUT} value={form.name} onChange={(e) => set({ name: e.target.value })} />
+          </Field>
+          <Field label="For">
+            <select className={SELECT_FULL} value={form.kind} onChange={(e) => set({ kind: e.target.value as ThemeKind })}>
+              {(Object.keys(KIND_LABEL) as ThemeKind[]).map((k) => (
+                <option key={k} value={k}>
+                  {KIND_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Description">
+            <input className={INPUT} value={form.description} onChange={(e) => set({ description: e.target.value })} />
+          </Field>
+        </div>
+      </InspectorSection>
+      <InspectorSection label="Facts">
+        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
+        <InspectorRow value={formatDateTime(t.updated_at)}>Updated</InspectorRow>
+        {t.archived_at && <InspectorRow value={formatDateTime(t.archived_at)}>Archived</InspectorRow>}
+      </InspectorSection>
+      <InspectorSection>
+        {t.archived_at ? (
+          <Button onClick={restore} disabled={busy !== null}>
+            {busy === "restore" ? "Restoring…" : "Restore"}
+          </Button>
+        ) : (
+          <Button onClick={archive} disabled={busy !== null}>
+            {busy === "archive" ? "Archiving…" : "Archive"}
+          </Button>
+        )}
+      </InspectorSection>
+    </Inspector>
+  );
+
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <p className="mb-2 text-sm">
-        <Link href="/settings/themes" className="text-neutral-500 hover:text-neutral-900 hover:underline">
-          ← Themes
-        </Link>
-      </p>
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">{t.name}</h1>
-        <Badge tone="blue">{KIND_LABEL[t.kind]}</Badge>
-        {t.builtin && <Badge>Built-in</Badge>}
-        {t.archived_at && <Badge tone="amber">Archived</Badge>}
-        <div className="ml-auto flex items-center gap-2">
-          {t.archived_at ? (
-            <Button onClick={restore} disabled={busy !== null}>
-              {busy === "restore" ? "Restoring…" : "Restore"}
-            </Button>
-          ) : (
-            <Button onClick={archive} disabled={busy !== null}>
-              {busy === "archive" ? "Archiving…" : "Archive"}
-            </Button>
-          )}
-          <Button variant="primary" onClick={save} disabled={busy !== null || !changed || invalid || live.pending}>
+    <>
+      <PageHeader
+        back={BACK}
+        title={t.name}
+        status={chips(false)}
+        action={
+          <Button variant="primary" icon="check" onClick={save} disabled={busy !== null || !changed || invalid || live.pending}>
             {busy === "save" ? "Saving…" : "Save"}
           </Button>
-        </div>
-      </div>
-      <p className="mb-6 text-sm text-neutral-500">
-        <span className="font-mono">{t.key}</span> · updated {formatDateTime(t.updated_at)}
-        {t.archived_at && ` · archived ${formatDateTime(t.archived_at)}`}
-      </p>
-
-      {notice && (
-        <p role="status" className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {notice}
-        </p>
-      )}
-      {error && (
-        <div className="mb-4 space-y-2">
-          <ErrorNote>{error}</ErrorNote>
-          {saveProblems.length > 0 && <ProblemList problems={saveProblems} testId="save-problems" />}
-        </div>
-      )}
-      {contrast.length > 0 && (
-        <div
-          role="alert"
-          data-testid="contrast-errors"
-          className="mb-4 rounded-md border-2 border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900"
-        >
-          <p className="font-semibold">Text would be hard to read. Fix the contrast before saving:</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5">
-            {contrast.map((p, i) => (
-              <li key={i}>{p.message}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {other.length > 0 && (
-        <div className="mb-4">
-          <ProblemList problems={other} testId="theme-problems" />
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <Group title="Details">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1 block text-neutral-600">Name</span>
-                <input className={INPUT} value={form.name} onChange={(e) => set({ name: e.target.value })} />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-neutral-600">For</span>
-                <select className={INPUT} value={form.kind} onChange={(e) => set({ kind: e.target.value as ThemeKind })}>
-                  {(Object.keys(KIND_LABEL) as ThemeKind[]).map((k) => (
-                    <option key={k} value={k}>
-                      {KIND_LABEL[k]}
-                    </option>
+        }
+      />
+      <Split inspector={inspector}>
+        {(notice || error || contrast.length > 0 || other.length > 0) && (
+          <div className="flex flex-col gap-2">
+            {notice && <Notice tone="pass">{notice}</Notice>}
+            {error && <Notice tone="error">{error}</Notice>}
+            {saveProblems.length > 0 && <ProblemList problems={saveProblems} testId="save-problems" />}
+            {contrast.length > 0 && (
+              <div role="alert" data-testid="contrast-errors" className="rounded-button bg-crit-bg px-3 py-2 text-sm text-crit">
+                <p className="font-semibold">Low contrast</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {contrast.map((p, i) => (
+                    <li key={i}>{p.message}</li>
                   ))}
-                </select>
-              </label>
-              <label className="block text-sm sm:col-span-2">
-                <span className="mb-1 block text-neutral-600">Description</span>
-                <input className={INPUT} value={form.description} onChange={(e) => set({ description: e.target.value })} />
-              </label>
-            </div>
-          </Group>
+                </ul>
+              </div>
+            )}
+            {other.length > 0 && <ProblemList problems={other} testId="theme-problems" />}
+          </div>
+        )}
 
-          <Group title="Colours">
-            <div className="grid gap-2 sm:grid-cols-2">
-              {COLOURS.map((c) => {
-                const bad = contrast.some((p) => p.message.startsWith(`colors.${c.name} `));
-                return (
-                  <div key={c.name} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="color"
-                      aria-label={`${c.label} colour picker`}
-                      value={pickerValue(colors[c.name])}
-                      onChange={(e) => setTokens("colors", { [c.name]: e.target.value })}
-                      className="h-8 w-9 shrink-0 cursor-pointer rounded border border-neutral-300 bg-white p-0.5"
-                    />
-                    <label className="flex min-w-0 flex-1 flex-col">
-                      <span className="text-xs text-neutral-600" title={c.hint}>
-                        {c.label}
-                      </span>
+        <div className="grid items-start gap-4 max-[600px]:gap-3 min-[1280px]:grid-cols-2">
+          <div className="min-w-0 min-[1280px]:sticky min-[1280px]:top-4 min-[1280px]:col-start-2 min-[1280px]:row-start-1">
+            <Panel
+              title={<>Preview</>}
+              tools={
+                <>
+                  <SegmentedControl
+                    label="Preview of"
+                    size="sm"
+                    value={previewView}
+                    onChange={setPreviewView}
+                    items={[
+                      { value: "document", label: "Document" },
+                      { value: "slides", label: "Slides" },
+                    ]}
+                  />
+                  <InfoTip label="the preview">
+                    {previewView === "document"
+                      ? `A sample ${previewKind === "roadmap" ? "roadmap" : "PRD"} with these settings.`
+                      : "The sample's brief as Present mode and the deck PDF show it."}{" "}
+                    Unsaved changes show here first.
+                  </InfoTip>
+                </>
+              }
+              bodyClassName="p-4 max-[600px]:p-3"
+            >
+              {previewView === "document" ? (
+                <ThemePreview tokens={form.tokens} css={form.css} kind={previewKind} />
+              ) : (
+                <SlidePreview
+                  tokens={form.tokens}
+                  slideCss={t.builtin ? null : form.slide_css || null}
+                  kind={previewKind}
+                  variant={t.builtin ? t.key : null}
+                />
+              )}
+            </Panel>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3 min-[1280px]:col-start-1 min-[1280px]:row-start-1">
+            <Group title="Colours">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {COLOURS.map((c) => {
+                  const bad = contrast.some((p) => p.message.startsWith(`colors.${c.name} `));
+                  return (
+                    <div key={c.name} className="flex items-end gap-2">
                       <input
-                        aria-label={c.label}
-                        aria-invalid={bad || undefined}
-                        value={colors[c.name] ?? ""}
-                        onChange={(e) => setTokens("colors", { [c.name]: e.target.value.trim() })}
-                        className={`${INPUT} font-mono ${bad ? "border-rose-400 ring-1 ring-rose-300" : ""}`}
+                        type="color"
+                        aria-label={`${c.label} colour picker`}
+                        value={pickerValue(colors[c.name])}
+                        onChange={(e) => setTokens("colors", { [c.name]: e.target.value })}
+                        className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-line-strong bg-surface p-0.5"
                       />
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-          </Group>
+                      <label className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2" title={c.hint}>
+                          {c.label}
+                        </span>
+                        <input
+                          aria-label={c.label}
+                          aria-invalid={bad || undefined}
+                          value={colors[c.name] ?? ""}
+                          onChange={(e) => setTokens("colors", { [c.name]: e.target.value.trim() })}
+                          className={`${INPUT} font-mono ${bad ? "border-crit ring-1 ring-crit" : ""}`}
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </Group>
 
-          <Group title="Type">
-            <div className="space-y-2">
-              {FONTS.map((f) => (
-                <label key={f.name} className="block text-sm">
-                  <span className="mb-1 block text-neutral-600">{f.label}</span>
-                  <input
-                    className={`${INPUT} font-mono text-xs`}
-                    value={tokens.fonts?.[f.name] ?? ""}
-                    onChange={(e) => setTokens("fonts", { [f.name]: e.target.value || null })}
-                  />
-                </label>
-              ))}
-            </div>
-          </Group>
+            <Group title="Type">
+              <div className="flex flex-col gap-3">
+                {FONTS.map((f) => (
+                  <Field key={f.name} label={f.label}>
+                    <input
+                      className={`${INPUT} font-mono text-sm`}
+                      value={tokens.fonts?.[f.name] ?? ""}
+                      onChange={(e) => setTokens("fonts", { [f.name]: e.target.value || null })}
+                    />
+                  </Field>
+                ))}
+              </div>
+            </Group>
 
-          <Group title="Spacing and page">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {SPACING.map((s) => (
-                <label key={s.name} className="block text-sm">
-                  <span className="mb-1 block text-neutral-600">{s.label}</span>
-                  <input
-                    type="number"
-                    step={s.step}
-                    min={s.min}
-                    max={s.max}
-                    className={INPUT}
-                    value={tokens.spacing?.[s.name] ?? ""}
+            <Group title="Spacing and page">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {SPACING.map((s) => (
+                  <Field key={s.name} label={s.label}>
+                    <input
+                      type="number"
+                      step={s.step}
+                      min={s.min}
+                      max={s.max}
+                      className={`${INPUT} tnum`}
+                      value={tokens.spacing?.[s.name] ?? ""}
+                      onChange={(e) =>
+                        setTokens("spacing", { [s.name]: e.target.value === "" ? null : Number(e.target.value) })
+                      }
+                    />
+                  </Field>
+                ))}
+                <Field label="Page size">
+                  <select
+                    className={SELECT_FULL}
+                    value={tokens.page?.size ?? "A4"}
                     onChange={(e) =>
-                      setTokens("spacing", { [s.name]: e.target.value === "" ? null : Number(e.target.value) })
+                      setTokens("page", { size: e.target.value as "A4" | "Letter", orientation: tokens.page?.orientation ?? "portrait" })
                     }
-                  />
-                </label>
-              ))}
-              <label className="block text-sm">
-                <span className="mb-1 block text-neutral-600">Page size</span>
-                <select
-                  className={INPUT}
-                  value={tokens.page?.size ?? "A4"}
-                  onChange={(e) =>
-                    setTokens("page", { size: e.target.value as "A4" | "Letter", orientation: tokens.page?.orientation ?? "portrait" })
-                  }
-                >
-                  <option value="A4">A4</option>
-                  <option value="Letter">Letter</option>
-                </select>
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-neutral-600">Orientation</span>
-                <select
-                  className={INPUT}
-                  value={tokens.page?.orientation ?? "portrait"}
-                  onChange={(e) =>
-                    setTokens("page", {
-                      size: tokens.page?.size ?? "A4",
-                      orientation: e.target.value as "portrait" | "landscape",
-                    })
-                  }
-                >
-                  <option value="portrait">Portrait</option>
-                  <option value="landscape">Landscape</option>
-                </select>
-              </label>
-            </div>
-          </Group>
+                  >
+                    <option value="A4">A4</option>
+                    <option value="Letter">Letter</option>
+                  </select>
+                </Field>
+                <Field label="Orientation">
+                  <select
+                    className={SELECT_FULL}
+                    value={tokens.page?.orientation ?? "portrait"}
+                    onChange={(e) =>
+                      setTokens("page", {
+                        size: tokens.page?.size ?? "A4",
+                        orientation: e.target.value as "portrait" | "landscape",
+                      })
+                    }
+                  >
+                    <option value="portrait">Portrait</option>
+                    <option value="landscape">Landscape</option>
+                  </select>
+                </Field>
+              </div>
+            </Group>
 
-          <Group title="Features">
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              {FEATURES.map((f) => (
-                <label key={f.name} className="inline-flex items-center gap-2 text-sm text-neutral-800">
+            <Group title="Features">
+              <div className="grid gap-2 text-[15px] sm:grid-cols-2">
+                {FEATURES.map((f) => (
+                  <label key={f.name} className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-[var(--accent)]"
+                      checked={!!tokens.features?.[f.name]}
+                      onChange={(e) => setTokens("features", { [f.name]: e.target.checked })}
+                    />
+                    {f.label}
+                  </label>
+                ))}
+                <label className="inline-flex items-center gap-2">
                   <input
                     type="checkbox"
-                    checked={!!tokens.features?.[f.name]}
-                    onChange={(e) => setTokens("features", { [f.name]: e.target.checked })}
+                    className="size-4 accent-[var(--accent)]"
+                    checked={tokens.features?.page_fit === "one_page"}
+                    onChange={(e) => setTokens("features", { page_fit: e.target.checked ? "one_page" : null })}
                   />
-                  {f.label}
+                  Must fit on one page
                 </label>
-              ))}
-              <label className="inline-flex items-center gap-2 text-sm text-neutral-800">
-                <input
-                  type="checkbox"
-                  checked={tokens.features?.page_fit === "one_page"}
-                  onChange={(e) => setTokens("features", { page_fit: e.target.checked ? "one_page" : null })}
-                />
-                Must fit on one page
-              </label>
-            </div>
-          </Group>
+              </div>
+            </Group>
 
-          <Group title="CSS">
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs text-neutral-500">
-                Extra rules applied after the tokens. Colours are available as <code>var(--color-accent)</code> and so on; no
-                @import or external URLs.
-              </span>
+            <Group
+              title="CSS"
+              tools={
+                <InfoTip label="extra rules">
+                  Extra rules applied after the tokens. Colours are available as <code>var(--color-accent)</code> and so on; no
+                  @import or external URLs.
+                </InfoTip>
+              }
+            >
               <textarea
                 aria-label="CSS"
                 rows={8}
                 spellCheck={false}
                 value={form.css}
                 onChange={(e) => set({ css: e.target.value })}
-                className={`${INPUT} font-mono text-xs`}
+                className={`${TEXTAREA} font-mono text-sm leading-5`}
               />
-            </label>
-          </Group>
+            </Group>
 
-          <Group title="Slide CSS">
-            {t.builtin ? (
-              <p data-testid="slide-css-builtin" className="text-sm text-neutral-600">
-                Built-in themes keep their own slide design, which cannot be edited. To write slide CSS, create a new theme from
-                this one.
-              </p>
-            ) : (
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs text-neutral-500">
-                  Rules for Present mode and the deck PDF, applied after the shared slide layout. Each slide is a{" "}
-                  <code>.slide</code> inside <code>.deck</code>, with <code>.slide-title</code> and <code>.slide-body</code>; the
-                  PowerPoint export uses the colours and fonts only. Same limits as the CSS above.
-                </span>
+            <Group
+              title="Slide CSS"
+              tools={
+                t.builtin ? undefined : (
+                  <InfoTip label="slide rules">
+                    Rules for Present mode and the deck PDF, applied after the shared slide layout. Each slide is a{" "}
+                    <code>.slide</code> inside <code>.deck</code>, with <code>.slide-title</code> and <code>.slide-body</code>;
+                    the PowerPoint export uses the colours and fonts only. Same limits as the CSS above.
+                  </InfoTip>
+                )
+              }
+            >
+              {t.builtin ? (
+                <p data-testid="slide-css-builtin" className="flex items-center gap-2 text-[15px] text-text2">
+                  Built-in themes keep their own slide design.
+                  <InfoTip label="built-in slides" align="start">
+                    It cannot be edited. To write slide CSS, create a new theme from this one.
+                  </InfoTip>
+                </p>
+              ) : (
                 <textarea
                   aria-label="Slide CSS"
                   rows={8}
@@ -420,54 +497,13 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                   onFocus={() => setPreviewView("slides")}
                   onChange={(e) => set({ slide_css: e.target.value })}
                   placeholder=".deck .slide-title { text-transform: uppercase; }"
-                  className={`${INPUT} font-mono text-xs`}
+                  className={`${TEXTAREA} font-mono text-sm leading-5`}
                 />
-              </label>
-            )}
-          </Group>
-        </div>
-
-        <div className="lg:sticky lg:top-4 lg:self-start">
-          <div className="mb-2 flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-neutral-700">Preview</h2>
-            <div role="group" aria-label="Preview of" className="ml-auto inline-flex rounded-md border border-neutral-300 text-xs">
-              {(["document", "slides"] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  aria-pressed={previewView === v}
-                  onClick={() => setPreviewView(v)}
-                  className={`px-2.5 py-1 first:rounded-l-md last:rounded-r-md ${
-                    previewView === v ? "bg-neutral-900 text-white" : "bg-white text-neutral-700 hover:bg-neutral-50"
-                  }`}
-                >
-                  {v === "document" ? "Document" : "Slides"}
-                </button>
-              ))}
-            </div>
+              )}
+            </Group>
           </div>
-          {previewView === "document" ? (
-            <>
-              <ThemePreview tokens={form.tokens} css={form.css} kind={form.kind === "roadmap" ? "roadmap" : "prd"} />
-              <p className="mt-1 text-xs text-neutral-500">
-                A sample {form.kind === "roadmap" ? "roadmap" : "PRD"} with these settings. Unsaved changes show here first.
-              </p>
-            </>
-          ) : (
-            <>
-              <SlidePreview
-                tokens={form.tokens}
-                slideCss={t.builtin ? null : form.slide_css || null}
-                kind={form.kind === "roadmap" ? "roadmap" : "prd"}
-                variant={t.builtin ? t.key : null}
-              />
-              <p className="mt-1 text-xs text-neutral-500">
-                The sample&apos;s brief as Present mode and the deck PDF show it. Unsaved changes show here first.
-              </p>
-            </>
-          )}
         </div>
-      </div>
-    </div>
+      </Split>
+    </>
   );
 }

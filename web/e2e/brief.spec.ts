@@ -253,6 +253,7 @@ test("present: viewers present too; a version without a brief has nothing to pre
 test("exports: Brief, Full and Deck downloads", async ({ page }) => {
   await login(page);
   await page.goto("/documents/saved-carts/v/2");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
   const cases: [string, string][] = [
     ["Export brief PDF", "saved-carts-v2-brief.pdf"],
     ["Export brief HTML", "saved-carts-v2-brief.html"],
@@ -267,6 +268,7 @@ test("exports: Brief, Full and Deck downloads", async ({ page }) => {
   }
   // Without a brief only the full exports are offered.
   await page.goto("/documents/checkout-redesign/v/2");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
   await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Export brief PDF" })).toHaveCount(0);
 });

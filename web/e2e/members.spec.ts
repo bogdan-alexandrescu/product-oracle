@@ -67,6 +67,7 @@ test("roles: a viewer reads and exports but has no comment, verdict or approve c
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
   await expect(section(page, "problem").getByTestId("verdict-state")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Export", exact: true }).click();
   await expect(page.getByRole("button", { name: "Export MD" })).toBeEnabled();
 
   // Selecting text offers no comment button; existing threads have no reply or resolve.

@@ -7,7 +7,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
 import { CommentsPanel, type PlacedComment } from "@/components/CommentsPanel";
-import { DocToolbar } from "@/components/DocToolbar";
+import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
+import { DocCrumb } from "@/components/DocToolbar";
+import {
+  Button,
+  Chip,
+  Icon,
+  InfoTip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  LinkButton,
+  Page,
+  PageHeader,
+  SegmentedControl,
+  Split,
+} from "@/components/ds";
+import { Kbd, TabBar } from "@/components/review/parts";
 import { RoleNote } from "@/components/RoleNote";
 import { FeedbackPanel, ResolutionPanel } from "@/components/FeedbackPanel";
 import { JobsPanel } from "@/components/JobsPanel";
@@ -16,10 +32,10 @@ import type { ExpandCtx, Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
-import { Button, ErrorNote, Kbd, Loading } from "@/components/ui";
+import { ErrorNote, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
 import { api, unwrap, type CitationOut, type SectionOut, type Verdict } from "@/lib/api/client";
-import { formatDate, formatDateTime, SOURCE_LABEL } from "@/lib/format";
+import { formatDate, formatDateTime, SOURCE_LABEL, VERDICT_LABEL } from "@/lib/format";
 import { blocksText, parseBlocks } from "@/lib/markdown";
 import { hasRole, useMe } from "@/lib/me";
 import { useDocumentView, type DocumentView } from "@/lib/preferences";
@@ -380,250 +396,322 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const openComments = placed.filter((c) => !c.resolved_at).length;
   const error = docQ.error || verQ.error;
 
-  return (
-    <div ref={rootRef}>
-      <DocToolbar doc={document_}>
-        {versions.length > 0 && <VersionSwitcher doc={doc} versions={versions} current={n} />}
-        {n > 1 && (
-          <Link
-            href={`/documents/${doc}/diff?from=${n - 1}&to=${n}`}
-            className="text-sm text-neutral-700 underline-offset-2 hover:text-neutral-950 hover:underline"
-          >
-            Compare with v{n - 1}
-          </Link>
-        )}
-        {hasBrief && (
-          <>
-            <div role="group" aria-label="Document view" className="flex items-center">
-              <Button
-                size="sm"
-                className="rounded-r-none"
-                aria-pressed={view === "brief"}
-                variant={view === "brief" ? "primary" : undefined}
-                onClick={() => switchView("brief")}
-              >
-                Brief
-              </Button>
-              <Button
-                size="sm"
-                className="-ml-px rounded-l-none"
-                aria-pressed={view === "full"}
-                variant={view === "full" ? "primary" : undefined}
-                onClick={() => switchView("full")}
-              >
-                Full document
-              </Button>
-            </div>
-            <Link
-              href={`/documents/${doc}/v/${n}/present`}
-              className="rounded-md border border-neutral-300 px-2.5 py-1 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-            >
-              Present
-            </Link>
-          </>
-        )}
-        <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
-        {document_?.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
-        {version && (version.approved_at || canDecide) && (
-          <ApproveButton
-            doc={doc}
-            n={n}
-            approvedAt={version.approved_at}
-            isLatest={n === latest}
-            onApproved={() => {
-              verQ.reload();
-              docQ.reload();
-            }}
-          />
-        )}
-      </DocToolbar>
+  const shownSections = view === "brief" ? briefSections : sections;
+  const stripSections = shownSections.filter((s) => s.level <= 2);
+  const warnings = version?.warnings ?? [];
 
-      <div className="mx-auto grid max-w-[1400px] gap-x-10 px-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <article className="mx-auto w-full max-w-3xl min-w-0 py-6" aria-label="Document">
-          {error && <ErrorNote>{error}</ErrorNote>}
-          {!error && !version && <Loading label="Loading version…" />}
-          {version && (
-            <>
-              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
-                <span className="font-medium text-neutral-800">Version {version.number}</span>
-                <span>Imported {formatDateTime(version.created_at)}</span>
-                {version.source && <SourceLink source={version.source} />}
-                {version.snapshot && <span>Sources as of {version.snapshot}</span>}
-                <span>
-                  {reviewedCount}/{version.sections.length} sections reviewed · {lockedCount} locked
-                </span>
-              </div>
-              {latest != null && n !== latest && (
-                <p className="mb-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
-                  You are viewing an earlier version.{" "}
-                  <Link href={`/documents/${doc}/v/${latest}`} className="font-medium underline underline-offset-2">
-                    Go to v{latest} (latest)
-                  </Link>
-                </p>
-              )}
-              {version.warnings.map((w, i) => (
-                <div
-                  key={i}
-                  role="status"
-                  className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-                >
-                  <p>{w.message}</p>
-                  {w.section_keys.length > 0 && (
-                    <p className="mt-1 flex flex-wrap gap-2 text-xs">
-                      {w.section_keys.map((k) => (
-                        <a key={k} href={`#s-${k}`} className="font-mono underline underline-offset-2">
-                          #{k}
-                        </a>
-                      ))}
-                    </p>
-                  )}
-                </div>
-              ))}
-              {readOnly ? (
-                <p className="mb-3 text-sm text-neutral-600">
-                  This version was approved on {formatDate(version.approved_at!)}; review is closed.
-                </p>
-              ) : (
-                <RoleNote role={role} />
-              )}
-              {hasBrief && (
-                <p
-                  data-testid="view-note"
-                  className="mb-2 flex flex-wrap items-center gap-x-2 rounded-md border border-sky-100 bg-sky-50/60 px-3 py-2 text-sm text-neutral-700"
-                >
-                  {view === "brief" ? (
-                    <>
-                      <span>
-                        <span className="font-medium text-neutral-900">Brief</span>: {briefSections.length} of{" "}
-                        {sections.length} sections. Expand a feature or milestone to see its detail.
-                      </span>
-                      <button type="button" className="font-medium underline underline-offset-2" onClick={() => switchView("full")}>
-                        Show full document
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span>
-                        <span className="font-medium text-neutral-900">Full document</span>: all {sections.length} sections; the{" "}
-                        {briefSections.length} marked Brief make up the brief.
-                      </span>
-                      <button type="button" className="font-medium underline underline-offset-2" onClick={() => switchView("brief")}>
-                        Show brief
-                      </button>
-                    </>
-                  )}
-                </p>
-              )}
-              <div className="divide-y divide-neutral-100" data-testid="document-sections" data-view={view}>
-                {(view === "brief" ? briefSections : sections).map((s) => (
-                  <SectionView
-                    key={s.id}
-                    {...sectionProps(s)}
-                    expand={view === "brief" ? expandFor(s.section_key) : undefined}
-                  />
-                ))}
-              </div>
-              {version.citations.length > 0 && (
-                <section className="mt-6 border-t border-neutral-200 pt-4" aria-labelledby="sources-heading">
-                  <h2 id="sources-heading" className="mb-2 text-sm font-semibold text-neutral-700">
-                    Sources
-                  </h2>
-                  <ol className="flex flex-col gap-1.5 text-sm text-neutral-700">
-                    {version.citations.map((c, i) => (
-                      <li key={c.id} className="flex gap-2">
-                        <span className="w-5 shrink-0 text-right text-neutral-400">{i + 1}.</span>
-                        <span>
-                          <span className="text-neutral-500">{SOURCE_LABEL[c.source]} · </span>
-                          <a href={c.ref} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-                            {c.title ?? c.ref}
-                          </a>
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              )}
-            </>
-          )}
-        </article>
+  const tabs: { id: Tab; label: string; count?: number | null }[] = [
+    { id: "comments", label: "Comments", count: commentsQ.data ? openComments : null },
+    { id: "feedback", label: "Feedback" },
+    { id: "resolutions", label: "Resolutions" },
+    { id: "reports", label: "Reports" },
+    { id: "jobs", label: "Jobs" },
+  ];
 
-        <aside
-          aria-label="Review panel"
-          className="border-t border-neutral-200 py-6 lg:sticky lg:top-14 lg:max-h-[calc(100vh-3.5rem)] lg:overflow-y-auto lg:border-t-0 lg:border-l lg:pl-6"
-        >
-          <div role="tablist" aria-label="Review panel" className="mb-4 flex flex-wrap gap-x-0.5 border-b border-neutral-200">
-            {(
-              [
-                ["comments", `Comments${commentsQ.data ? ` (${openComments})` : ""}`],
-                ["feedback", "Feedback"],
-                ["resolutions", "Resolutions"],
-                ["reports", "Reports"],
-                ["jobs", "Jobs"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                role="tab"
-                type="button"
-                aria-selected={tab === id}
-                onClick={() => setTab(id)}
-                className={`-mb-px border-b-2 px-1.5 pt-1 pb-2 text-sm whitespace-nowrap ${
-                  tab === id
-                    ? "border-neutral-900 font-medium text-neutral-900"
-                    : "border-transparent text-neutral-500 hover:text-neutral-800"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div role="tabpanel">
-            {tab === "comments" &&
-              (commentsQ.error ? (
-                <ErrorNote>{commentsQ.error}</ErrorNote>
-              ) : !commentsQ.data ? (
-                <Loading />
-              ) : (
-                <CommentsPanel
-                  showLayer={hasBrief}
-                  comments={placed}
-                  activeId={activeId}
-                  readOnly={readOnly}
-                  canComment={canComment}
-                  canResolveAny={canDecide}
-                  userId={me?.user_id ?? me?.token_id ?? null}
-                  onSelect={scrollToComment}
-                  onReply={reply}
-                  onResolve={resolve}
-                />
-              ))}
-            {tab === "feedback" && (
-              <FeedbackPanel doc={doc} current={n} versions={versions} refreshKey={refreshKey} />
-            )}
-            {tab === "resolutions" && <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} />}
-            {tab === "reports" && <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} />}
-            {tab === "jobs" && <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />}
-          </div>
-          <p className="mt-6 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-400">
-            <span>
-              <Kbd>j</Kbd>/<Kbd>k</Kbd> sections
+  const inspector = (
+    <Inspector
+      label="Review panel"
+      eyebrow={`Review · v${n}`}
+      action={
+        <InfoTip label="keyboard shortcuts" hero side="bottom">
+          <span className="flex flex-col gap-1.5">
+            <span className="flex items-center gap-1.5">
+              <Kbd>j</Kbd>
+              <Kbd>k</Kbd> sections
             </span>
             {canComment && (
-              <span>
+              <span className="flex items-center gap-1.5">
                 <Kbd>c</Kbd> comment on selection
               </span>
             )}
-            <span>
-              <Kbd>[</Kbd>/<Kbd>]</Kbd> versions
+            <span className="flex items-center gap-1.5">
+              <Kbd>[</Kbd>
+              <Kbd>]</Kbd> versions
             </span>
             {hasBrief && (
-              <span>
+              <span className="flex items-center gap-1.5">
                 <Kbd>v</Kbd> brief / full
               </span>
             )}
-          </p>
-        </aside>
+          </span>
+        </InfoTip>
+      }
+      head={
+        version && (
+          <dl className="mt-2.5 flex flex-wrap gap-x-7 gap-y-2">
+            {(
+              [
+                ["Reviewed", `${reviewedCount}/${version.sections.length}`, "stat-reviewed"],
+                ["Locked", lockedCount, "stat-locked"],
+                ["Open comments", commentsQ.data ? openComments : "–", "stat-open-comments"],
+              ] as const
+            ).map(([label, value, testId]) => (
+              <div key={label} data-testid={testId} className="flex flex-col-reverse">
+                <dt className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">{label}</dt>
+                <dd className="tnum font-display text-[34px] leading-10 font-bold tracking-[-0.03em]">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        )
+      }
+    >
+      {version && (
+        <InspectorSection label="Version">
+          <InspectorRow value={<span className="text-sm font-medium">{formatDateTime(version.created_at)}</span>}>
+            Imported
+          </InspectorRow>
+          {version.snapshot && (
+            <InspectorRow value={<span className="font-mono text-[13px] font-medium">{version.snapshot}</span>}>
+              Sources as of
+            </InspectorRow>
+          )}
+          {version.source && (
+            <div className="flex min-h-8 items-center text-sm text-text2">
+              <SourceLink source={version.source} />
+            </div>
+          )}
+        </InspectorSection>
+      )}
+      <div className="px-5 pt-1 max-[600px]:px-4">
+        <TabBar label="Review panel" size="sm" tabs={tabs} value={tab} onChange={setTab} />
       </div>
+      <div role="tabpanel" className="px-5 py-3.5 max-[600px]:px-4 xl:max-h-[calc(100vh-330px)] xl:overflow-y-auto">
+        {tab === "comments" &&
+          (commentsQ.error ? (
+            <ErrorNote>{commentsQ.error}</ErrorNote>
+          ) : !commentsQ.data ? (
+            <Loading />
+          ) : (
+            <CommentsPanel
+              showLayer={hasBrief}
+              comments={placed}
+              activeId={activeId}
+              readOnly={readOnly}
+              canComment={canComment}
+              canResolveAny={canDecide}
+              userId={me?.user_id ?? me?.token_id ?? null}
+              onSelect={scrollToComment}
+              onReply={reply}
+              onResolve={resolve}
+            />
+          ))}
+        {tab === "feedback" && <FeedbackPanel doc={doc} current={n} versions={versions} refreshKey={refreshKey} />}
+        {tab === "resolutions" && <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} />}
+        {tab === "reports" && <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} />}
+        {tab === "jobs" && <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />}
+      </div>
+    </Inspector>
+  );
+
+  return (
+    <div ref={rootRef}>
+      <Page>
+        <PageHeader
+          testId="doc-header"
+          back={<DocCrumb doc={document_} withTitle={false} />}
+          title={document_?.title ?? "…"}
+          suffix={<span className="font-mono">v{n}</span>}
+          status={
+            <>
+              {document_ && (
+                <span data-testid="doc-status" className="inline-flex">
+                  <DocStatusChip status={document_.status} />
+                </span>
+              )}
+              {latest != null && n !== latest && <Chip kind="na">Earlier version</Chip>}
+              {warnings.length > 0 && (
+                <Chip kind="warn">
+                  {warnings.length} warning{warnings.length === 1 ? "" : "s"}
+                </Chip>
+              )}
+              {!readOnly && <RoleNote role={role} />}
+            </>
+          }
+          action={
+            version &&
+            (version.approved_at || canDecide) && (
+              <ApproveButton
+                doc={doc}
+                n={n}
+                approvedAt={version.approved_at}
+                isLatest={n === latest}
+                onApproved={() => {
+                  verQ.reload();
+                  docQ.reload();
+                }}
+              />
+            )
+          }
+        />
+
+        <div className="mb-3 flex flex-wrap items-center gap-2 max-[600px]:gap-y-2.5">
+          {versions.length > 0 && <VersionSwitcher doc={doc} versions={versions} current={n} variant="segments" />}
+          {hasBrief && (
+            <SegmentedControl<DocumentView>
+              label="Document view"
+              value={view}
+              onChange={switchView}
+              items={[
+                { value: "brief", label: "Brief" },
+                { value: "full", label: "Full" },
+              ]}
+            />
+          )}
+          {n > 1 && (
+            <LinkButton variant="ghost" href={`/documents/${doc}/diff?from=${n - 1}&to=${n}`}>
+              Compare with v{n - 1}
+            </LinkButton>
+          )}
+          <span className="flex-1" />
+          {hasBrief && (
+            <LinkButton icon="monitor" href={`/documents/${doc}/v/${n}/present`}>
+              Present
+            </LinkButton>
+          )}
+          <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
+          {document_?.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
+        </div>
+
+        {version && (
+          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-panel border border-line bg-surface py-2 pr-3 pl-4 shadow-panel">
+            <span className="flex-none text-[13px] font-semibold tracking-[0.02em] whitespace-nowrap text-text2">
+              Sections{" "}
+              <b className="tnum font-bold text-text">
+                {reviewedCount}/{version.sections.length}
+              </b>
+            </span>
+            <nav aria-label="Sections" className="flex min-w-0 flex-1 gap-1 overflow-x-auto max-[600px]:order-last max-[600px]:basis-full">
+              {stripSections.map((s) => {
+                const v = s.verdict?.verdict;
+                return (
+                  <a
+                    key={s.id}
+                    href={`#s-${s.section_key}`}
+                    className={`flex h-8 flex-none items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium whitespace-nowrap hover:bg-surface2 ${
+                      v ? "text-text" : "text-text2"
+                    }`}
+                  >
+                    {v === "approved" && (
+                      <span className="text-pass">
+                        <Icon name="check" size={16} />
+                      </span>
+                    )}
+                    {v === "changes_requested" && <span aria-hidden className="size-2 rounded-full bg-warn" />}
+                    {v === "rejected" && <span aria-hidden className="size-2 rounded-full bg-crit" />}
+                    {v && <span className="sr-only">{VERDICT_LABEL[v]}:</span>}
+                    {s.heading}
+                  </a>
+                );
+              })}
+            </nav>
+            {hasBrief && (
+              <p data-testid="view-note" className="flex flex-none items-center gap-1.5 text-sm text-text2">
+                {view === "brief" ? (
+                  <>
+                    <span className="tnum whitespace-nowrap">
+                      <b className="font-semibold text-text">Brief</b>: {briefSections.length} of {sections.length} sections
+                    </span>
+                    <InfoTip label="the brief" side="bottom">
+                      Expand a feature or milestone to see its detail.
+                    </InfoTip>
+                    <Button variant="ghost" onClick={() => switchView("full")}>
+                      Show full document
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="tnum whitespace-nowrap">
+                      <b className="font-semibold text-text">Full document</b>: all {sections.length} sections
+                    </span>
+                    <InfoTip label="the full document" side="bottom">
+                      The {briefSections.length} sections marked Brief make up the brief.
+                    </InfoTip>
+                    <Button variant="ghost" onClick={() => switchView("brief")}>
+                      Show brief
+                    </Button>
+                  </>
+                )}
+              </p>
+            )}
+          </div>
+        )}
+
+        {version && (latest != null && n !== latest || warnings.length > 0 || readOnly) && (
+          <div className="mb-4 flex flex-col gap-2">
+            {latest != null && n !== latest && (
+              <p role="status" className="flex flex-wrap items-center gap-x-2 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">
+                You are viewing an earlier version.
+                <Link href={`/documents/${doc}/v/${latest}`} className="font-semibold underline underline-offset-2">
+                  Go to v{latest} (latest)
+                </Link>
+              </p>
+            )}
+            {warnings.map((w, i) => (
+              <div key={i} role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
+                <Icon name="alert" size={16} />
+                <p className="min-w-0 flex-1 font-medium">{w.message}</p>
+                {w.section_keys.map((k) => (
+                  <a key={k} href={`#s-${k}`} className="font-mono text-[13px] font-medium underline underline-offset-2">
+                    #{k}
+                  </a>
+                ))}
+              </div>
+            ))}
+            {readOnly && (
+              <p role="status" className="rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass">
+                Approved {formatDate(version.approved_at!)} · review is closed
+              </p>
+            )}
+          </div>
+        )}
+
+        <Split inspector={inspector}>
+          <article aria-label="Document" className="min-w-0 rounded-panel border border-line bg-surface shadow-panel">
+            {error && (
+              <div className="p-4">
+                <ErrorNote>{error}</ErrorNote>
+              </div>
+            )}
+            {!error && !version && (
+              <div className="px-4 py-6">
+                <Loading label="Loading version…" />
+              </div>
+            )}
+            {version && (
+              <>
+                <div className="divide-y divide-line" data-testid="document-sections" data-view={view}>
+                  {shownSections.map((s) => (
+                    <SectionView key={s.id} {...sectionProps(s)} expand={view === "brief" ? expandFor(s.section_key) : undefined} />
+                  ))}
+                </div>
+                {version.citations.length > 0 && (
+                  <section className="border-t border-line px-6 py-4 max-[600px]:px-4" aria-labelledby="sources-heading">
+                    <h2 id="sources-heading" className="mb-2 font-display text-lg leading-6 font-bold">
+                      Sources <span className="tnum text-accent-ink">{version.citations.length}</span>
+                    </h2>
+                    <ol className="flex flex-col">
+                      {version.citations.map((c, i) => (
+                        <li key={c.id} className="flex min-h-8 items-center gap-2.5 text-sm">
+                          <span className="tnum w-5 flex-none text-right font-semibold text-text2">{i + 1}</span>
+                          <span className="flex-none text-[13px] font-semibold text-text2">{SOURCE_LABEL[c.source]}</span>
+                          <a
+                            href={c.ref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
+                          >
+                            {c.title ?? c.ref}
+                          </a>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                )}
+              </>
+            )}
+          </article>
+        </Split>
+      </Page>
 
       {selection && !composing && <SelectionButton rect={selection.rect} onOpen={openComposer} />}
       {composing && (

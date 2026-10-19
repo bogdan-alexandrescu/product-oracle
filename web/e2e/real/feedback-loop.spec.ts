@@ -107,6 +107,7 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, approve, ex
   await expect(page.getByText(/review is closed/)).toBeVisible();
 
   const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
   await page.getByRole("button", { name: "Export PDF" }).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe(`${DOC}-v2.pdf`);

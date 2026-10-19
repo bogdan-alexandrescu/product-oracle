@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { usePolling } from "@/components/JobsPanel";
-import { Button, INPUT } from "@/components/ui";
+import { Button, Chip, InfoTip } from "@/components/ds";
+import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type LlmJob, type RefinementPreview } from "@/lib/api/client";
 import { JOB_STATUS_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
@@ -100,30 +101,34 @@ export function RefineSection({ doc, n, sectionKey, heading }: { doc: string; n:
 
   if (!open) {
     return (
-      <Button size="sm" variant="ghost" onClick={() => setOpen(true)} aria-label={`Refine section ${heading}`}>
+      <Button variant="ghost" icon="flag" onClick={() => setOpen(true)} aria-label={`Refine section ${heading}`}>
         Refine section
       </Button>
     );
   }
 
   return (
-    <div className="mt-3 rounded-md border border-violet-200 bg-violet-50/40 px-3 py-2 text-sm" data-testid="refine-panel">
+    <div className="mt-3 w-full rounded-button border border-line bg-surface2 px-3 py-2.5 text-left" data-testid="refine-panel">
       <div className="flex items-center gap-2">
-        <p className="font-medium text-neutral-900">Refine “{heading}”</p>
-        <Button size="sm" variant="ghost" className="ml-auto" onClick={reset}>
+        <p className="min-w-0 truncate font-semibold text-text">Refine “{heading}”</p>
+        <InfoTip label="refining a section" align="start">
+          Oracle revises this one section from the accepted suggestions on it and your instruction, keeping its id; you
+          review a diff and accept it as the next version.
+        </InfoTip>
+        <Button variant="ghost" className="ml-auto" onClick={reset}>
           Close
         </Button>
       </div>
       {!job && (
-        <div className="mt-2 flex flex-col gap-2">
+        <div className="mt-2 flex flex-col gap-2.5">
           {(accepted.data ?? []).length > 0 ? (
-            <fieldset className="flex flex-col gap-1">
-              <legend className="text-xs text-neutral-600">Accepted suggestions to work in</legend>
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">Accepted suggestions</legend>
               {accepted.data!.map((s) => (
-                <label key={s.id} className="flex items-start gap-1.5 text-xs text-neutral-800">
+                <label key={s.id} className="flex items-start gap-2 text-sm leading-5 text-text">
                   <input
                     type="checkbox"
-                    className="mt-0.5"
+                    className="mt-0.5 size-4 accent-[var(--accent)]"
                     checked={chosen.has(s.id)}
                     onChange={(e) => {
                       const next = new Set(chosen);
@@ -137,27 +142,27 @@ export function RefineSection({ doc, n, sectionKey, heading }: { doc: string; n:
               ))}
             </fieldset>
           ) : (
-            <p className="text-xs text-neutral-600">No accepted suggestions on this section; give Oracle an instruction.</p>
+            <p className="text-sm text-text2">No accepted suggestions on this section; give Oracle an instruction.</p>
           )}
-          <label className="flex flex-col gap-1 text-xs text-neutral-600">
+          <label className={FIELD_LABEL}>
             Instruction (optional)
-            <textarea rows={2} value={instruction} onChange={(e) => setInstruction(e.target.value)} className={INPUT} />
+            <textarea rows={2} value={instruction} onChange={(e) => setInstruction(e.target.value)} className={TEXTAREA} />
           </label>
           <div>
-            <Button size="sm" variant="primary" disabled={busy || (chosen.size === 0 && !instruction.trim())} onClick={refine}>
+            <Button variant="solid" disabled={busy || (chosen.size === 0 && !instruction.trim())} onClick={refine}>
               Refine
             </Button>
           </div>
         </div>
       )}
       {job && job.status !== "succeeded" && (
-        <div className="mt-2 text-xs text-neutral-700" data-testid="refine-status">
-          <p>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" data-testid="refine-status">
+          <Chip kind={job.status === "failed" ? "crit" : job.status === "cancelled" ? "na" : "acc"} dot>
             {JOB_STATUS_LABEL[job.status]}
-            {running && "… Oracle is revising the section."}
-          </p>
+          </Chip>
+          {running && <span className="text-text2">Oracle is revising the section.</span>}
           {job.status === "failed" && (
-            <p className="mt-1 text-rose-800">
+            <p className="basis-full font-medium text-crit">
               {job.error} {job.error_reason && NO_ACCOUNT_REASON[job.error_reason]}
             </p>
           )}
@@ -165,10 +170,8 @@ export function RefineSection({ doc, n, sectionKey, heading }: { doc: string; n:
       )}
       {preview && (
         <div className="mt-2 flex flex-col gap-2" data-testid="refine-preview">
-          <p className="text-xs text-neutral-600">
-            Preview of #{preview.section_key}: other sections and approved sections stay as they are.
-          </p>
-          <p className="rounded border border-neutral-200 bg-white px-2 py-1.5 text-[13px] leading-6 whitespace-pre-wrap text-neutral-800">
+          <p className="font-mono text-[13px] font-medium text-text2">Preview · #{preview.section_key}</p>
+          <p className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm leading-6 whitespace-pre-wrap text-text">
             {preview.words.map((w, i) =>
               w.op === "insert" ? (
                 <ins key={i} className="diff-ins">
@@ -184,27 +187,23 @@ export function RefineSection({ doc, n, sectionKey, heading }: { doc: string; n:
             )}
           </p>
           {edit != null && (
-            <label className="flex flex-col gap-1 text-xs text-neutral-600">
+            <label className={FIELD_LABEL}>
               Your edit of the section body
-              <textarea rows={6} value={edit} onChange={(e) => setEdit(e.target.value)} className={INPUT} />
+              <textarea rows={6} value={edit} onChange={(e) => setEdit(e.target.value)} className={TEXTAREA} />
             </label>
           )}
           <div className="flex flex-wrap gap-1.5">
-            <Button size="sm" variant="primary" disabled={busy} onClick={apply}>
+            <Button variant="solid" icon="check" disabled={busy} onClick={apply}>
               Accept as next version
             </Button>
-            {edit == null && (
-              <Button size="sm" onClick={() => setEdit(preview.body_md)}>
-                Edit first
-              </Button>
-            )}
-            <Button size="sm" variant="ghost" onClick={reset}>
+            {edit == null && <Button onClick={() => setEdit(preview.body_md)}>Edit first</Button>}
+            <Button variant="ghost" onClick={reset}>
               Discard
             </Button>
           </div>
         </div>
       )}
-      {error && <p className="mt-1 text-xs text-rose-700">{error}</p>}
+      {error && <InlineError>{error}</InlineError>}
     </div>
   );
 }

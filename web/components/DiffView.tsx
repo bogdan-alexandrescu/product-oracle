@@ -4,28 +4,47 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { DocToolbar } from "@/components/DocToolbar";
+import { Chip, Empty, InfoTip, LinkButton, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
-import { Badge, ErrorNote, LayerBadge, Loading } from "@/components/ui";
+import { ErrorNote, LayerBadge, Loading } from "@/components/ui";
 import { api, unwrap, type SectionDiff } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
-const STATUS: Record<SectionDiff["status"], { label: string; tone: "green" | "red" | "amber" | "neutral" }> = {
-  added: { label: "Added", tone: "green" },
-  removed: { label: "Removed", tone: "red" },
-  changed: { label: "Changed", tone: "amber" },
-  unchanged: { label: "Unchanged", tone: "neutral" },
+const STATUS: Record<SectionDiff["status"], { label: string; kind: ChipKind }> = {
+  added: { label: "Added", kind: "pass" },
+  removed: { label: "Removed", kind: "crit" },
+  changed: { label: "Changed", kind: "warn" },
+  unchanged: { label: "Unchanged", kind: "na" },
 };
+
+const SUMMARY: [keyof ReturnType<typeof countOf>, ChipKind][] = [
+  ["changed", "warn"],
+  ["added", "pass"],
+  ["removed", "crit"],
+  ["moved", "acc"],
+  ["unchanged", "na"],
+];
+
+function countOf(sections: SectionDiff[]) {
+  return {
+    changed: sections.filter((s) => s.status === "changed").length,
+    added: sections.filter((s) => s.status === "added").length,
+    removed: sections.filter((s) => s.status === "removed").length,
+    moved: sections.filter((s) => s.moved).length,
+    unchanged: sections.filter((s) => s.status === "unchanged" && !s.moved).length,
+  };
+}
 
 function Words({ words }: { words: NonNullable<SectionDiff["words"]> }) {
   return (
-    <p className="text-[15px] leading-7 whitespace-pre-wrap text-neutral-800" data-testid="word-diff">
+    <p className="text-[15px] leading-7 whitespace-pre-wrap text-text" data-testid="word-diff">
       {words.map((w, i) =>
         w.op === "insert" ? (
-          <ins key={i} className="diff-ins">
+          <ins key={i} className="rounded-sm bg-pass-bg px-0.5 text-pass no-underline">
             {w.text}
           </ins>
         ) : w.op === "delete" ? (
-          <del key={i} className="diff-del">
+          <del key={i} className="rounded-sm bg-crit-bg px-0.5 text-crit line-through">
             {w.text}
           </del>
         ) : (
@@ -42,7 +61,7 @@ function DiffLayer({ d }: { d: SectionDiff }) {
   const to = d.to_layer ?? null;
   if (from && to && from !== to) {
     return (
-      <span data-testid="layer-change" className="inline-flex items-center gap-1 text-xs text-neutral-500">
+      <span data-testid="layer-change" className="inline-flex items-center gap-1 text-sm text-text2">
         <LayerBadge layer={from} />→<LayerBadge layer={to} />
       </span>
     );
@@ -53,44 +72,69 @@ function DiffLayer({ d }: { d: SectionDiff }) {
 function DiffSection({ d, doc, to, showLayer }: { d: SectionDiff; doc: string; to: number; showLayer: boolean }) {
   const heading = d.to_heading ?? d.from_heading ?? d.section_key;
   const renamed = d.from_heading && d.to_heading && d.from_heading !== d.to_heading;
+  const quiet = d.status === "unchanged" && !d.moved;
+  const bar =
+    d.status === "added"
+      ? "shadow-[inset_4px_0_0_var(--pass)]"
+      : d.status === "removed"
+        ? "shadow-[inset_4px_0_0_var(--crit)]"
+        : d.status === "changed"
+          ? "shadow-[inset_4px_0_0_var(--warn)]"
+          : "shadow-panel";
   return (
     <li
       data-testid="diff-section"
       data-status={d.status}
-      className={`rounded-lg border bg-white ${d.status === "unchanged" && !d.moved ? "border-neutral-200" : "border-neutral-300"}`}
+      className={`min-w-0 overflow-hidden rounded-panel border border-line bg-surface ${bar}`}
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
-        <h2 className={`font-medium ${d.status === "removed" ? "text-neutral-500 line-through" : "text-neutral-900"}`}>
+      <div className="flex min-h-12 flex-wrap items-center gap-2 px-4 py-2">
+        <h2
+          className={`min-w-0 truncate font-display text-lg leading-6 font-bold tracking-[-0.01em] ${
+            d.status === "removed" ? "text-text2 line-through" : quiet ? "text-text2" : ""
+          }`}
+        >
           {heading}
         </h2>
-        <Badge tone={STATUS[d.status].tone}>{STATUS[d.status].label}</Badge>
+        <Chip kind={STATUS[d.status].kind}>{STATUS[d.status].label}</Chip>
         {showLayer && <DiffLayer d={d} />}
         {d.moved && (
-          <Badge tone="blue" title={`Position ${(d.from_ordinal ?? 0) + 1} → ${(d.to_ordinal ?? 0) + 1}`}>
+          <Chip kind="acc" title={`Position ${(d.from_ordinal ?? 0) + 1} → ${(d.to_ordinal ?? 0) + 1}`}>
             Moved
-          </Badge>
+          </Chip>
         )}
-        <span className="ml-auto font-mono text-[11px] text-neutral-400">#{d.section_key}</span>
+        <span className="ml-auto truncate font-mono text-[13px] text-text2">#{d.section_key}</span>
         {d.status !== "removed" && (
-          <Link
-            href={`/documents/${doc}/v/${to}#s-${d.section_key}`}
-            className="text-xs text-neutral-500 underline-offset-2 hover:text-neutral-900 hover:underline"
-          >
+          <Link href={`/documents/${doc}/v/${to}#s-${d.section_key}`} className="text-sm font-medium text-accent-ink hover:underline">
             View
           </Link>
         )}
       </div>
       {(renamed || (d.words && d.words.length > 0)) && (
-        <div className="px-4 py-3">
+        <div className="border-t border-line px-4 py-3">
           {renamed && (
-            <p className="mb-2 text-xs text-neutral-500">
-              Renamed from <span className="font-medium text-neutral-700">“{d.from_heading}”</span>
+            <p className="mb-2 text-sm text-text2">
+              Renamed from <span className="font-semibold text-text">“{d.from_heading}”</span>
             </p>
           )}
           {d.words && d.words.length > 0 && <Words words={d.words} />}
         </div>
       )}
     </li>
+  );
+}
+
+function Toggle({ label, name, checked, onChange }: { label: string; name: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-line-strong px-3 text-sm font-semibold text-text hover:bg-surface2">
+      <input
+        type="checkbox"
+        aria-label={name}
+        className="size-4 accent-[var(--accent)]"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {label}
+    </label>
   );
 }
 
@@ -111,13 +155,7 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
   );
 
   const sections = diffQ.data?.sections ?? [];
-  const counts = {
-    changed: sections.filter((s) => s.status === "changed").length,
-    added: sections.filter((s) => s.status === "added").length,
-    removed: sections.filter((s) => s.status === "removed").length,
-    moved: sections.filter((s) => s.moved).length,
-    unchanged: sections.filter((s) => s.status === "unchanged" && !s.moved).length,
-  };
+  const counts = countOf(sections);
   // Diffs of versions with a brief layer label each section and can show the brief only.
   const showLayer = sections.some((s) => s.from_layer === "brief" || s.to_layer === "brief");
   const shown = sections
@@ -131,55 +169,79 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
         {ready && versions.length > 0 && (
           <>
             <VersionSwitcher doc={doc} versions={versions} current={fromN} label="From" hrefFor={(f) => href(f, toN)} />
-            <span className="text-neutral-400">→</span>
+            <span aria-hidden className="text-text2">
+              →
+            </span>
             <VersionSwitcher doc={doc} versions={versions} current={toN} label="To" hrefFor={(t) => href(fromN, t)} />
-            <Link
-              href={`/documents/${doc}/v/${toN}`}
-              className="text-sm text-neutral-700 underline-offset-2 hover:text-neutral-950 hover:underline"
-            >
-              Open v{toN}
-            </Link>
           </>
         )}
       </DocToolbar>
-      <div className="mx-auto max-w-4xl px-6 py-6">
-        <h1 className="mb-1 text-xl font-semibold text-neutral-900">
-          {ready ? `Changes from v${fromN} to v${toN}` : "Compare versions"}
-        </h1>
+      <Page>
+        <PageHeader
+          title={ready ? `Changes from v${fromN} to v${toN}` : "Compare versions"}
+          status={
+            diffQ.data && (
+              <span data-testid="diff-summary" className="flex flex-wrap items-center gap-2">
+                {SUMMARY.filter(([k]) => counts[k] > 0).map(([k, kind]) => (
+                  <Chip key={k} kind={kind}>
+                    {counts[k]} {k}
+                  </Chip>
+                ))}
+                {sections.length === 0 && <Chip kind="na">0 changed</Chip>}
+              </span>
+            )
+          }
+          action={
+            ready && (
+              <LinkButton variant="primary" href={`/documents/${doc}/v/${toN}`}>
+                Open v{toN}
+              </LinkButton>
+            )
+          }
+        />
         {(docQ.error || diffQ.error) && <ErrorNote>{docQ.error || diffQ.error}</ErrorNote>}
         {docQ.data && versions.length < 2 && (
-          <p className="text-sm text-neutral-600">This document has only one version, so there is nothing to compare yet.</p>
+          <Panel>
+            <Empty>One version only</Empty>
+          </Panel>
         )}
-        {ready && fromN === toN && <p className="text-sm text-neutral-600">Pick two different versions to compare.</p>}
+        {ready && fromN === toN && versions.length >= 2 && (
+          <Panel>
+            <Empty>Pick two versions</Empty>
+          </Panel>
+        )}
         {ready && !diffQ.data && !diffQ.error && <Loading label="Computing diff…" />}
         {diffQ.data && (
-          <>
-            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-neutral-600" data-testid="diff-summary">
-              <span>{counts.changed} changed</span>
-              <span>{counts.added} added</span>
-              <span>{counts.removed} removed</span>
-              <span>{counts.moved} moved</span>
-              <span>{counts.unchanged} unchanged</span>
-              {showLayer && (
-                <label className="ml-auto flex items-center gap-2">
-                  <input type="checkbox" checked={briefOnly} onChange={(e) => setBriefOnly(e.target.checked)} />
-                  Brief sections only
-                </label>
-              )}
-              <label className={`${showLayer ? "" : "ml-auto "}flex items-center gap-2`}>
-                <input type="checkbox" checked={showUnchanged} onChange={(e) => setShowUnchanged(e.target.checked)} />
-                Show unchanged sections
-              </label>
-            </div>
+          <div className="flex flex-col gap-3">
+            <Panel
+              title="Sections"
+              count={shown.length}
+              tools={
+                <>
+                  {showLayer && (
+                    <Toggle label="Brief only" name="Brief sections only" checked={briefOnly} onChange={setBriefOnly} />
+                  )}
+                  <Toggle label="Unchanged" name="Show unchanged sections" checked={showUnchanged} onChange={setShowUnchanged} />
+                  <InfoTip label="the diff">
+                    Sections are matched by key across versions. Unchanged sections stay hidden until you show them;
+                    a moved section changed position.
+                  </InfoTip>
+                </>
+              }
+            />
             <ol className="flex flex-col gap-3">
               {shown.map((d) => (
                 <DiffSection key={`${d.status}-${d.section_key}`} d={d} doc={doc} to={toN!} showLayer={showLayer} />
               ))}
             </ol>
-            {shown.length === 0 && <p className="text-sm text-neutral-600">No differences between these versions.</p>}
-          </>
+            {shown.length === 0 && (
+              <Panel>
+                <Empty>No differences</Empty>
+              </Panel>
+            )}
+          </div>
         )}
-      </div>
+      </Page>
     </div>
   );
 }

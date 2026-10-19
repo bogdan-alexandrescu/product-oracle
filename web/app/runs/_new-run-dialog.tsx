@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { Button, ErrorNote, Loading } from "@/components/ui";
+import { Button, Icon, InfoTip } from "@/components/ds";
+import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -106,39 +107,50 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   }
 
   const docOptions = documents.data ?? [];
-  const inputCls = "w-full rounded-md border border-neutral-300 px-2.5 py-1.5 text-sm focus:border-neutral-500 focus:outline-none";
+  const inputCls = `${INPUT} h-10 placeholder:text-text2`;
+  const legendCls = "mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2";
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-neutral-900/30 px-4 py-10">
-      <div role="dialog" aria-modal="true" aria-labelledby="new-run-title" className="w-full max-w-2xl rounded-lg border border-neutral-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-3">
-          <h2 id="new-run-title" className="text-base font-semibold text-neutral-900">
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-run-title"
+        className="w-full max-w-2xl min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip"
+      >
+        <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
+          <h2 id="new-run-title" className="font-display text-xl font-bold tracking-[-0.01em]">
             New run
           </h2>
-          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close">
-            ✕
-          </Button>
+          {catalog.data && (
+            <InfoTip label="where runs execute" align="start" side="bottom">
+              <RunsWhere runtime={catalog.data.runtime} />
+            </InfoTip>
+          )}
+          <span className="flex-1" />
+          <Button variant="ghost" icon="x" onClick={onClose} aria-label="Close" />
         </div>
-        <div className="space-y-5 px-5 py-4 text-sm">
+        <div className="space-y-5 px-5 py-4 text-[15px] max-[600px]:px-4">
           {catalog.error && <ErrorNote>{catalog.error}</ErrorNote>}
           {!catalog.data && !catalog.error && <Loading />}
           {catalog.data && flow && (
             <>
-              <RunsWhere runtime={catalog.data.runtime} />
               {catalog.data.runtime_notes.length > 0 && (
-                <ul className="space-y-1 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="runtime-notes">
+                <ul className="space-y-1 rounded-button bg-accent-soft px-3 py-2 text-sm text-accent-ink" data-testid="runtime-notes">
                   {catalog.data.runtime_notes.map((n) => (
                     <li key={n}>{n}</li>
                   ))}
                 </ul>
               )}
               <fieldset>
-                <legend className="mb-1.5 font-medium text-neutral-800">Flow</legend>
+                <legend className={legendCls}>Flow</legend>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {flows.map((f) => (
                     <label
                       key={f.key}
-                      className={`cursor-pointer rounded-md border px-3 py-2 ${f.key === flowKey ? "border-neutral-900 bg-neutral-50" : "border-neutral-200"}`}
+                      className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-button border px-3 py-2 ${
+                        f.key === flowKey ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line-strong hover:bg-surface2"
+                      }`}
                     >
                       <input
                         type="radio"
@@ -146,28 +158,28 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                         value={f.key}
                         checked={f.key === flowKey}
                         onChange={() => selectFlow(f.key)}
-                        className="mr-2"
+                        className="accent-[var(--accent)]"
                       />
-                      <span className="font-medium">{f.title}</span>
-                      <span className="mt-0.5 block text-xs text-neutral-500">{f.description}</span>
+                      <span className="min-w-0 flex-1 truncate font-semibold">{f.title}</span>
+                      <InfoTip label={f.title}>{f.description}</InfoTip>
                     </label>
                   ))}
                 </div>
                 {catalog.data.flows.some((f) => f.source_kind) && (
-                  <p className="mt-1.5 text-xs text-neutral-500" data-testid="roadmap-flow-note">
-                    A roadmap from an approved PRD starts from the{" "}
-                    <Link href="/roadmap" className="underline underline-offset-2">
+                  <p className="mt-2 flex items-center gap-1.5 text-sm text-text2" data-testid="roadmap-flow-note">
+                    PRD to roadmap:{" "}
+                    <Link href="/roadmap" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
                       Roadmap
-                    </Link>{" "}
-                    screen.
+                    </Link>
+                    <InfoTip label="roadmap runs" align="start">
+                      A roadmap from an approved PRD starts from the Roadmap screen.
+                    </InfoTip>
                   </p>
                 )}
               </fieldset>
 
               <label className="block">
-                <span className="mb-1 block font-medium text-neutral-800">
-                  {flow.requires_document ? "PRD or roadmap to revise" : "PRD document"}
-                </span>
+                <span className={legendCls}>{flow.requires_document ? "PRD or roadmap to revise" : "PRD document"}</span>
                 {flow.requires_document ? (
                   <select className={inputCls} value={document} onChange={(e) => change(setDocument)(e.target.value)}>
                     <option value="">Choose a document…</option>
@@ -194,14 +206,14 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                         </option>
                       ))}
                     </datalist>
-                    <span className="mt-1 block text-xs text-neutral-500">A new slug creates the document when the draft is imported.</span>
+                    <span className="sr-only">A new slug creates the document when the draft is imported.</span>
                   </>
                 )}
               </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
-                  <span className="mb-1 block font-medium text-neutral-800">Depth</span>
+                  <span className={legendCls}>Depth</span>
                   <select className={inputCls} value={depth} onChange={(e) => change(setDepth)(e.target.value as Depth)}>
                     {Object.entries(catalog.data.depths).map(([k, mult]) => (
                       <option key={k} value={k}>
@@ -211,7 +223,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                   </select>
                 </label>
                 <label className="block">
-                  <span className="mb-1 block font-medium text-neutral-800">Budget (USD, optional)</span>
+                  <span className={legendCls}>Budget (USD)</span>
                   <input
                     className={inputCls}
                     type="number"
@@ -225,22 +237,29 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
               </div>
 
               <fieldset>
-                <legend className="mb-1.5 font-medium text-neutral-800">Segments, agent roles and checkpoints</legend>
-                <ol className="divide-y divide-neutral-200 rounded-md border border-neutral-200">
+                <legend className={legendCls}>
+                  Segments
+                  <InfoTip label="segments" align="start">
+                    Each segment runs the agent roles picked here, then stops for its checkpoint if it is on.
+                  </InfoTip>
+                </legend>
+                <ol className="divide-y divide-line rounded-panel border border-line">
                   {flow.segments.map((s, i) => (
                     <li key={s.name} className="space-y-2 px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-medium text-neutral-900">
-                          {i + 1}. {s.title}
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                        <span className="min-w-0 truncate font-semibold">
+                          <span className="tnum">{i + 1}</span>. {s.title}
                         </span>
-                        <label className="flex items-center gap-1.5 text-xs text-neutral-700">
+                        <label className="flex items-center gap-1.5 text-sm text-text2">
                           <input
                             type="checkbox"
+                            className="size-4 accent-[var(--accent)]"
                             checked={checkpoints[s.checkpoint] ?? true}
                             onChange={(e) => change(setCheckpoints)({ ...checkpoints, [s.checkpoint]: e.target.checked })}
                             aria-label={`Stop for ${CHECKPOINT_LABEL[s.checkpoint]}`}
                           />
-                          Stop for {CHECKPOINT_LABEL[s.checkpoint].toLowerCase()}
+                          <Icon name="flag" size={16} />
+                          <span className="max-w-56 truncate">{CHECKPOINT_LABEL[s.checkpoint]}</span>
                         </label>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -253,7 +272,9 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
                               aria-pressed={on}
                               title={`${r.description} · ${usd(r.base_usd)} at standard depth`}
                               onClick={() => toggleRole(s, r.key)}
-                              className={`rounded-full border px-2 py-0.5 text-xs ${on ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"}`}
+                              className={`inline-flex h-7 items-center rounded-full border px-2.5 text-[13px] font-semibold ${
+                                on ? "border-accent bg-accent text-on-accent" : "border-line-strong text-text2 hover:bg-surface2"
+                              }`}
                             >
                               {r.title}
                             </button>
@@ -270,8 +291,10 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
             </>
           )}
         </div>
-        <div className="flex justify-end gap-2 border-t border-neutral-200 px-5 py-3">
-          <Button onClick={onClose}>Cancel</Button>
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
           <Button onClick={runEstimate} disabled={busy || !flow}>
             {estimate ? "Re-estimate" : "Estimate"}
           </Button>

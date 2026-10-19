@@ -1,8 +1,28 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
-import { Badge, Button, ErrorNote, Loading } from "@/components/ui";
+import {
+  Button,
+  Chip,
+  DataTable,
+  GoalTag,
+  Icon,
+  InfoTip,
+  Inspector,
+  InspectorSection,
+  Label,
+  Meter,
+  Notice,
+  Page,
+  PageHeader,
+  Panel,
+  Ring,
+  Split,
+  type ChipKind,
+  type Column,
+} from "@/components/ds";
+import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
@@ -19,24 +39,23 @@ const METHODS: { method: Method; label: string }[] = [
 ];
 const METHOD_LABEL = Object.fromEntries(METHODS.map((m) => [m.method, m.label])) as Record<Method, string>;
 
-type Tone = "neutral" | "green" | "amber" | "red" | "blue";
-const FLAGS: Record<string, { label: string; tone: Tone; title: string }> = {
+const FLAGS: Record<string, { label: string; kind: ChipKind; title: string }> = {
   no_confirmed_goal: {
     label: "Serves no confirmed goal",
-    tone: "red",
+    kind: "crit",
     title: "Linked to no confirmed goal, so it is ranked after every feature that serves one.",
   },
   dependency_cycle: {
     label: "Dependency cycle",
-    tone: "red",
+    kind: "crit",
     title: "Part of a set of features that depend on each other.",
   },
-  missing_inputs: { label: "Missing inputs", tone: "amber", title: "Some inputs this method needs are not set." },
-  no_confidence: { label: "No confidence data", tone: "amber", title: "No evidence or confidence value: 0.5 assumed." },
-  low_confidence: { label: "Low confidence", tone: "amber", title: "Confidence below 0.4." },
+  missing_inputs: { label: "Missing inputs", kind: "warn", title: "Some inputs this method needs are not set." },
+  no_confidence: { label: "No confidence data", kind: "warn", title: "No evidence or confidence value: 0.5 assumed." },
+  low_confidence: { label: "Low confidence", kind: "warn", title: "Confidence below 0.4." },
   moved_for_dependency: {
     label: "Moved for a dependency",
-    tone: "blue",
+    kind: "acc",
     title: "Placed earlier than its score because a higher-ranked feature depends on it.",
   },
 };
@@ -48,16 +67,20 @@ const CONFIDENCE_SOURCE: Record<Schemas["ConfidenceUsed"]["source"], string> = {
   default: "assumed",
 };
 
-function FlagBadge({ flag }: { flag: string }) {
-  const f = FLAGS[flag] ?? { label: flag.replace(/_/g, " "), tone: "neutral" as const, title: flag };
+const flagOf = (flag: string) => FLAGS[flag] ?? { label: flag.replace(/_/g, " "), kind: "na" as const, title: flag };
+
+function FlagChip({ flag, hero = false }: { flag: string; hero?: boolean }) {
+  const f = flagOf(flag);
   return (
-    <Badge tone={f.tone} title={f.title}>
+    <Chip kind={f.kind} hero={hero} title={f.title}>
       {f.label}
-    </Badge>
+    </Chip>
   );
 }
 
 const fmt = (n: number | null | undefined) => (n == null ? "—" : String(Math.round(n * 100) / 100));
+/** Confidence 0-1 as 0-100, for the bar and the ring. */
+const pct = (n: number | null | undefined) => (n == null ? null : Math.round(n * 100));
 
 function inputValue(v: unknown): string {
   if (v == null) return "—";
@@ -65,152 +88,288 @@ function inputValue(v: unknown): string {
   return String(v);
 }
 
-function Explanation({ f }: { f: RankedFeature }) {
+/** The ranking method: a radio group drawn as B1's segmented control. */
+function MethodSwitch({ value, onChange }: { value: Method; onChange: (m: Method) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onKey = (e: KeyboardEvent) => {
+    if (!["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(e.key)) return;
+    e.preventDefault();
+    const at = METHODS.findIndex((m) => m.method === value);
+    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+    const next = METHODS[(at + step + METHODS.length) % METHODS.length]!;
+    onChange(next.method);
+    ref.current?.querySelector<HTMLElement>(`[data-testid="method-${next.method}"]`)?.focus();
+  };
+  return (
+    <div
+      ref={ref}
+      role="radiogroup"
+      aria-label="Ranking method"
+      onKeyDown={onKey}
+      className="inline-flex max-w-full flex-none overflow-x-auto rounded-button border border-line-strong bg-surface"
+    >
+      {METHODS.map((m) => {
+        const on = value === m.method;
+        return (
+          <button
+            key={m.method}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabIndex={on ? 0 : -1}
+            data-testid={`method-${m.method}`}
+            onClick={() => onChange(m.method)}
+            className={`flex h-9 items-center border-r border-line px-3.5 text-[15px] font-medium max-[600px]:px-2.5 max-[600px]:text-sm whitespace-nowrap last:border-r-0 ${
+              on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
+            }`}
+          >
+            {m.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The selected feature: rank, confidence, score, then how the score was worked out. */
+function FeatureInspector({ f, id }: { f: RankedFeature; id: string }) {
   const e = f.explanation;
   const inputs = Object.entries(e.inputs ?? {}) as [string, Record<string, unknown> | null][];
   return (
-    <div data-testid={`explanation-${f.key}`} className="grid gap-5 px-4 py-4 text-sm md:grid-cols-2">
-      <div className="space-y-4">
-        <div>
-          <h3 className="mb-1 text-xs font-semibold tracking-wide text-neutral-500 uppercase">How the score was worked out</h3>
-          <p className="mb-1 font-mono text-xs text-neutral-500">{e.formula}</p>
-          <ol className="list-decimal space-y-0.5 pl-5 font-mono text-xs text-neutral-800" aria-label="Steps">
-            {e.steps.map((s, i) => (
-              <li key={i}>{s}</li>
+    <div id={id}>
+      <Inspector
+        eyebrow="Feature · selected"
+        title={f.title}
+        label={`Feature ${f.title}`}
+        testId="priority-inspector"
+        chips={
+          <>
+            <Chip hero kind="na">
+              {f.key}
+            </Chip>
+            {f.flags.map((flag) => (
+              <FlagChip key={flag} flag={flag} hero />
             ))}
-          </ol>
-          {e.missing.length > 0 && (
-            <p className="mt-1 text-xs text-amber-800">Missing: {e.missing.join(", ")}</p>
-          )}
-        </div>
-        {inputs.length > 0 && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold tracking-wide text-neutral-500 uppercase">Inputs</h3>
-            <table className="w-full text-xs">
-              <thead className="text-left text-neutral-500">
-                <tr>
-                  <th className="py-1 pr-3 font-medium">Input</th>
-                  <th className="py-1 pr-3 font-medium">Value</th>
-                  <th className="py-1 font-medium">From</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {inputs.map(([name, v]) => (
-                  <tr key={name}>
-                    <td className="py-1 pr-3 text-neutral-700">{name.replace(/_/g, " ")}</td>
-                    <td className="py-1 pr-3 font-mono">{inputValue(v?.value)}</td>
-                    <td className="py-1 text-neutral-500">
-                      {name === "goal_value"
-                        ? "goal terms"
-                        : v?.attr
-                          ? <span className="font-mono">attrs.{String(v.attr)}</span>
-                          : "—"}
-                    </td>
+          </>
+        }
+        stats={[
+          { label: "Rank", value: `#${f.rank}` },
+          { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} size={46} /> },
+          { label: "Score", value: fmt(f.score) },
+        ]}
+      >
+        <div data-testid={`explanation-${f.key}`}>
+          <InspectorSection
+            label="Score"
+            tools={
+              <InfoTip label="Formula">
+                <span className="font-mono">{e.formula}</span>
+                {f.rank !== f.score_rank && <span className="mt-1 block">Rank by score alone: #{f.score_rank}</span>}
+              </InfoTip>
+            }
+          >
+            <ol className="list-decimal space-y-1 pl-5 font-mono text-[13px] leading-5" aria-label="Steps">
+              {e.steps.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+            {e.missing.length > 0 && (
+              <p className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Chip kind="warn">Missing</Chip>
+                <span className="font-mono text-[13px]">{e.missing.join(", ")}</span>
+              </p>
+            )}
+          </InspectorSection>
+
+          {inputs.length > 0 && (
+            <InspectorSection label="Inputs">
+              <table className="w-full table-fixed text-[13px] leading-5">
+                <thead className="text-left text-text2">
+                  <tr>
+                    <th className="py-1 pr-2 font-semibold">Input</th>
+                    <th className="w-[72px] py-1 pr-2 font-semibold">Value</th>
+                    <th className="py-1 font-semibold">From</th>
                   </tr>
+                </thead>
+                <tbody>
+                  {inputs.map(([name, v]) => (
+                    <tr key={name} className="border-t border-line">
+                      <td className="truncate py-1 pr-2">{name.replace(/_/g, " ")}</td>
+                      <td className="tnum truncate py-1 pr-2 font-mono">{inputValue(v?.value)}</td>
+                      <td className="truncate py-1 text-text2">
+                        {name === "goal_value" ? (
+                          "goal terms"
+                        ) : v?.attr ? (
+                          <span className="font-mono">attrs.{String(v.attr)}</span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </InspectorSection>
+          )}
+
+          {e.order && e.order.length > 0 && (
+            <InspectorSection label="Order">
+              <ul className="space-y-1 text-sm">
+                {e.order.map((o, i) => (
+                  <li key={i}>{o}</li>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {e.order && e.order.length > 0 && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold tracking-wide text-neutral-500 uppercase">Order</h3>
-            <ul className="list-disc pl-5 text-neutral-700">
-              {e.order.map((o, i) => (
-                <li key={i}>{o}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-      <div className="space-y-4">
-        <div>
-          <h3 className="mb-1 text-xs font-semibold tracking-wide text-neutral-500 uppercase">Confidence used</h3>
-          <p className="text-neutral-800">
-            <span className="font-mono">{fmt(e.confidence.value)}</span>{" "}
-            <span className="text-neutral-500">({CONFIDENCE_SOURCE[e.confidence.source]})</span>
-          </p>
-          <p className="text-xs text-neutral-500">{e.confidence.explain}</p>
-          {e.confidence.evidence.length > 0 && (
-            <ul className="mt-1 space-y-0.5 text-xs">
-              {e.confidence.evidence.map((ev) => (
-                <li key={ev.id} className="flex gap-2">
-                  <span className="font-mono text-neutral-700">{ev.id}</span>
-                  <span className="text-neutral-500">{fmt(ev.confidence)}</span>
-                  {ev.ref && (
-                    <a href={ev.ref} target="_blank" rel="noreferrer" className="truncate text-sky-700 hover:underline">
-                      {ev.ref}
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
+              </ul>
+            </InspectorSection>
           )}
+
+          <InspectorSection
+            label="Confidence"
+            tools={
+              <InfoTip label="Confidence used">
+                {e.confidence.explain}
+              </InfoTip>
+            }
+          >
+            <div className="flex items-center gap-2.5">
+              <b className="tnum font-mono">{fmt(e.confidence.value)}</b>
+              <span className="text-sm text-text2">{CONFIDENCE_SOURCE[e.confidence.source]}</span>
+            </div>
+            {e.confidence.evidence.length > 0 && (
+              <ul className="mt-1.5 space-y-1 text-sm">
+                {e.confidence.evidence.map((ev) => (
+                  <li key={ev.id} className="flex min-w-0 items-center gap-2">
+                    <span className="flex-none font-mono">{ev.id}</span>
+                    <span className="tnum flex-none text-text2">{fmt(ev.confidence)}</span>
+                    {ev.ref && (
+                      <a
+                        href={ev.ref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="min-w-0 truncate text-accent-ink underline-offset-2 hover:underline"
+                      >
+                        {ev.ref}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </InspectorSection>
+
+          <InspectorSection label="Goals">
+            {e.goals.length === 0 ? (
+              <Chip kind="crit">Serves no confirmed goal</Chip>
+            ) : (
+              <ul className="space-y-2">
+                {e.goals.map((g) => (
+                  <li key={g.goal} className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <GoalTag id={g.goal} />
+                      <span className="truncate">{g.title}</span>
+                    </div>
+                    <div className="tnum mt-1 flex flex-wrap items-center gap-x-1 font-mono text-[13px] text-text2">
+                      weight {g.weight}
+                      {g.weight_assumed && <AssumedMark />} × contribution {g.contribution}
+                      {g.contribution_assumed && <AssumedMark />} = {fmt(g.term)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </InspectorSection>
         </div>
-        <div>
-          <h3 className="mb-1 text-xs font-semibold tracking-wide text-neutral-500 uppercase">Goals</h3>
-          {e.goals.length === 0 ? (
-            <p className="text-rose-800">Serves no confirmed goal.</p>
-          ) : (
-            <ul className="space-y-1">
-              {e.goals.map((g) => (
-                <li key={g.goal} className="text-neutral-800">
-                  <span className="font-mono text-xs text-neutral-500">{g.goal}</span> {g.title}
-                  <div className="font-mono text-xs text-neutral-600">
-                    weight {g.weight}
-                    {g.weight_assumed && <AssumedMark />} × contribution {g.contribution}
-                    {g.contribution_assumed && <AssumedMark />} = {fmt(g.term)}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+      </Inspector>
     </div>
   );
 }
 
 function AssumedMark() {
   return (
-    <span className="ml-1 rounded bg-amber-50 px-1 font-sans text-[10px] text-amber-800 ring-1 ring-amber-200 ring-inset">
-      assumed
-    </span>
+    <span className="rounded-goal bg-warn-bg px-1.5 font-sans text-[13px] leading-5 font-semibold text-warn">assumed</span>
   );
 }
 
-function Snapshots({ reloadKey }: { reloadKey: number }) {
+type GoalRow = { id: string; title: string; count: number; top: number };
+
+/** Each goal, the features ranked for it and its best rank. Derived from the ranking. */
+function byGoal(features: RankedFeature[]): GoalRow[] {
+  const m = new Map<string, GoalRow>();
+  for (const f of features) {
+    for (const g of f.explanation.goals) {
+      const row = m.get(g.goal) ?? { id: g.goal, title: g.title, count: 0, top: f.rank };
+      row.count += 1;
+      row.top = Math.min(row.top, f.rank);
+      m.set(g.goal, row);
+    }
+  }
+  return [...m.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+}
+
+function Snapshots({
+  reloadKey,
+  note,
+  onNote,
+  canSnapshot,
+}: {
+  reloadKey: number;
+  note: string;
+  onNote: (v: string) => void;
+  canSnapshot: boolean;
+}) {
   const q = useQuery(`priority-snapshots|${reloadKey}`, () => unwrap(api.GET("/v1/priorities/snapshots")));
+  const list = q.data?.slice(0, 10);
   return (
-    <section className="mt-10" aria-labelledby="snapshots-heading">
-      <h2 id="snapshots-heading" className="mb-3 text-sm font-semibold text-neutral-700">
-        Recent snapshots
-      </h2>
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      {q.loading && !q.data && <Loading />}
-      {q.data && q.data.length === 0 && (
-        <p className="text-sm text-neutral-600">No snapshots yet. Save one to keep a record of today&apos;s ranking.</p>
+    <Panel
+      title="Snapshots"
+      count={q.data?.length || undefined}
+      tools={
+        <>
+          <label className="sr-only" htmlFor="snapshot-note">
+            Snapshot note
+          </label>
+          <input
+            id="snapshot-note"
+            value={note}
+            onChange={(e) => onNote(e.target.value)}
+            placeholder="Note"
+            disabled={!canSnapshot}
+            className={`${INPUT} !w-52 max-[600px]:!w-40`}
+          />
+        </>
+      }
+    >
+      {q.error && (
+        <div className="p-3">
+          <Notice tone="error">{q.error}</Notice>
+        </div>
       )}
-      {q.data && q.data.length > 0 && (
-        <ul data-testid="snapshot-list" className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">
-          {q.data.slice(0, 10).map((s) => (
-            <li key={s.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm">
-              <span className="text-neutral-900">{formatDateTime(s.created_at)}</span>
-              <Badge>{METHOD_LABEL[s.method]}</Badge>
-              <span className="text-neutral-500">{s.feature_count} features</span>
-              <span className="font-mono text-xs text-neutral-600">top: {s.top.join(", ") || "—"}</span>
-              {s.note && <span className="text-neutral-600">“{s.note}”</span>}
+      {q.loading && !q.data && <p className="px-4 py-3 text-text2">Loading…</p>}
+      {q.data && q.data.length === 0 && <p className="px-4 py-6 text-center text-text2">No snapshots yet.</p>}
+      {list && list.length > 0 && (
+        <ul data-testid="snapshot-list">
+          {list.map((s) => (
+            <li
+              key={s.id}
+              className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-4 py-1.5 first:border-t-0 max-[600px]:px-3"
+            >
+              <span className="tnum">{formatDateTime(s.created_at)}</span>
+              <Chip kind="acc">{METHOD_LABEL[s.method]}</Chip>
+              <span className="tnum text-text2">{s.feature_count} features</span>
+              <span className="min-w-0 truncate font-mono text-[13px] text-text2">
+                top {s.top.join(", ") || "—"}
+              </span>
+              {s.note && <span className="min-w-0 truncate text-text2">“{s.note}”</span>}
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </Panel>
   );
 }
 
 export default function PrioritiesPage() {
   const [method, setMethod] = useState<Method>("goal_weighted");
-  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<Schemas["PrioritySnapshotOut"] | null>(null);
@@ -223,14 +382,10 @@ export default function PrioritiesPage() {
     unwrap(api.GET("/v1/priorities", { params: { query: { method } } })),
   );
   const r = q.data;
-
-  const toggle = (key: string) =>
-    setOpen((s) => {
-      const next = new Set(s);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const features = r?.features ?? [];
+  // The selected feature, else the top of the ranking.
+  const current = features.find((f) => f.key === selected) ?? features[0];
+  const inspectorId = "priority-inspector";
 
   async function saveSnapshot() {
     setSaving(true);
@@ -250,188 +405,231 @@ export default function PrioritiesPage() {
     }
   }
 
-  return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <h1 className="mb-1 text-2xl font-semibold tracking-tight text-neutral-900">Priorities</h1>
-      <p className="mb-6 text-sm text-neutral-600">
-        Features from the baseline, ranked by the method you pick and put in dependency order. Expand a row to see how
-        its score was worked out.
-      </p>
-
-      <div className="mb-4 flex flex-wrap items-center gap-4">
-        <div role="radiogroup" aria-label="Ranking method" className="inline-flex rounded-md border border-neutral-300 bg-white p-0.5">
-          {METHODS.map((m) => (
-            <button
-              key={m.method}
-              type="button"
-              role="radio"
-              aria-checked={method === m.method}
-              data-testid={`method-${m.method}`}
-              onClick={() => {
-                setMethod(m.method);
-                setSaved(null);
-              }}
-              className={`rounded px-3 py-1 text-sm font-medium ${
-                method === m.method ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <label className="sr-only" htmlFor="snapshot-note">
-            Snapshot note
-          </label>
-          <input
-            id="snapshot-note"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Note (optional)"
-            disabled={!canSnapshot}
-            className="w-48 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-          />
-          <Button
-            variant="primary"
-            onClick={saveSnapshot}
-            disabled={!canSnapshot || saving || !r}
-            title={canSnapshot ? "Keep a dated copy of this ranking" : "Approvers and owners can save snapshots"}
+  const columns: Column<RankedFeature>[] = [
+    {
+      key: "rank",
+      header: "#",
+      width: "48px",
+      cell: (f) => <b className="tnum font-semibold">{f.rank}</b>,
+    },
+    {
+      key: "feature",
+      header: "Feature",
+      cell: (f) => {
+        const on = current?.key === f.key;
+        return (
+          <button
+            type="button"
+            aria-expanded={on}
+            aria-controls={inspectorId}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation();
+              setSelected(f.key);
+            }}
+            className="block max-w-full truncate text-left font-medium hover:underline"
+            title={`${f.title} · ${f.key}`}
           >
-            {saving ? "Saving…" : "Save snapshot"}
-          </Button>
-        </div>
-      </div>
-
-      {saved && (
-        <p role="status" className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          Snapshot saved: {METHOD_LABEL[saved.method]} ranking of {saved.feature_count} features, top{" "}
-          {saved.top.slice(0, 3).join(", ")}.
-        </p>
-      )}
-      {saveError && <ErrorNote>{saveError}</ErrorNote>}
-
-      {r && (
-        <p className="mb-4 text-sm text-neutral-600">
-          Formula:{" "}
-          <code data-testid="formula" className="rounded bg-neutral-100 px-1.5 py-0.5 text-[13px] text-neutral-800">
-            {r.formula}
-          </code>
-        </p>
-      )}
-
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      {q.loading && <Loading />}
-
-      {r && r.cycles.length > 0 && (
-        <div
-          role="alert"
-          data-testid="cycles-banner"
-          className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-        >
-          <strong className="font-semibold">Dependency cycle{r.cycles.length > 1 ? "s" : ""}:</strong>{" "}
-          {r.cycles.map((c, i) => (
-            <span key={i}>
-              {i > 0 && "; "}
-              <span className="font-mono">{c.join(" → ")}</span>
-            </span>
+            {f.title}
+          </button>
+        );
+      },
+    },
+    {
+      key: "goal",
+      header: "Goal",
+      width: "80px",
+      hideOnPhone: true,
+      cell: (f) =>
+        f.explanation.goals.length === 0 ? (
+          <span className="text-text2">—</span>
+        ) : (
+          <span className="flex gap-1">
+            {f.explanation.goals.map((g) => (
+              <GoalTag key={g.goal} id={g.goal} title={`${g.goal} · ${g.title}`} />
+            ))}
+          </span>
+        ),
+    },
+    {
+      key: "confidence",
+      header: "Confidence",
+      width: "104px",
+      hideOnPhone: true,
+      cell: (f) => {
+        const c = pct(f.explanation.confidence.value);
+        return c == null ? (
+          <span className="text-text2">—</span>
+        ) : (
+          <Meter value={c} max={100} showMax={false} label={`Confidence ${c}`} width={80} />
+        );
+      },
+    },
+    {
+      key: "score",
+      header: "Score",
+      width: "80px",
+      align: "right",
+      cell: (f) => (
+        <span data-testid="score" className="tnum font-mono">
+          {fmt(f.score)}
+        </span>
+      ),
+    },
+    {
+      key: "deps",
+      header: "Depends on",
+      width: "96px",
+      hideOnPhone: true,
+      cell: (f) => <span className="font-mono text-[13px] text-text2">{f.depends_on.join(", ") || "—"}</span>,
+    },
+    {
+      key: "flags",
+      header: "Flags",
+      width: "240px",
+      hideOnPhone: true,
+      cell: (f) => (
+        <span className="flex items-center gap-1.5 overflow-hidden">
+          {f.flags.slice(0, 1).map((flag) => (
+            <FlagChip key={flag} flag={flag} />
           ))}
-          . These features depend on each other, so they are ordered by score until the cycle is broken.
-        </div>
-      )}
+          {f.flags.length > 1 && (
+            <Chip kind="na" title={f.flags.slice(1).map((x) => flagOf(x).label).join(", ")}>
+              +{f.flags.length - 1}
+              <span className="sr-only">{f.flags.slice(1).map((x) => flagOf(x).label).join(", ")}</span>
+            </Chip>
+          )}
+        </span>
+      ),
+    },
+  ];
 
-      {r && r.features.length === 0 && (
-        <div className="space-y-2 text-neutral-600">
-          <p>No features to rank yet. Features come from the baseline: confirm some and link them to goals.</p>
-        </div>
-      )}
+  const goals = byGoal(features);
+  const counts = r?.counts;
 
-      {r && r.features.length > 0 && (
-        <>
-          <p className="mb-2 text-xs text-neutral-500">
-            {r.counts.features} features · {r.counts.no_goal} serve no confirmed goal · {r.counts.unscored} unscored ·{" "}
-            {r.counts.in_cycles} in a cycle · ranked {formatDateTime(r.generated_at)}
-          </p>
-          <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white">
-            <table className="w-full text-sm" data-testid="priority-table">
-              <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
-                <tr>
-                  <th className="px-3 py-2 font-medium">#</th>
-                  <th className="px-3 py-2 font-medium">Feature</th>
-                  <th className="px-3 py-2 text-right font-medium">Score</th>
-                  <th className="px-3 py-2 text-right font-medium">Confidence</th>
-                  <th className="px-3 py-2 font-medium">Goals</th>
-                  <th className="px-3 py-2 font-medium">Depends on</th>
-                  <th className="px-3 py-2 font-medium">Flags</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-200">
-                {r.features.map((f) => {
-                  const expanded = open.has(f.key);
-                  return (
-                    <Fragment key={f.key}>
-                      <tr data-testid={`priority-row-${f.key}`} className={expanded ? "bg-neutral-50" : "hover:bg-neutral-50"}>
-                        <td className="px-3 py-2.5 align-top text-neutral-500 tabular-nums">
-                          {f.rank}
-                          {f.rank !== f.score_rank && (
-                            <span className="block text-[10px] text-neutral-400" title="Rank by score alone">
-                              score #{f.score_rank}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 align-top">
-                          <button
-                            type="button"
-                            aria-expanded={expanded}
-                            aria-controls={`explanation-row-${f.key}`}
-                            onClick={() => toggle(f.key)}
-                            className="flex items-start gap-1.5 text-left"
-                          >
-                            <span aria-hidden className="mt-0.5 w-3 text-neutral-400">
-                              {expanded ? "▾" : "▸"}
-                            </span>
-                            <span>
-                              <span className="font-medium text-neutral-900 hover:underline">{f.title}</span>
-                              <span className="block font-mono text-[11px] text-neutral-400">{f.key}</span>
-                            </span>
-                          </button>
-                        </td>
-                        <td className="px-3 py-2.5 text-right align-top font-mono tabular-nums" data-testid="score">
-                          {fmt(f.score)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right align-top font-mono tabular-nums">
-                          {fmt(f.explanation.confidence.value)}
-                        </td>
-                        <td className="px-3 py-2.5 align-top text-xs text-neutral-700">
-                          {f.explanation.goals.map((g) => g.goal).join(", ") || "—"}
-                        </td>
-                        <td className="px-3 py-2.5 align-top font-mono text-xs text-neutral-600">
-                          {f.depends_on.join(", ") || "—"}
-                        </td>
-                        <td className="px-3 py-2.5 align-top">
-                          <div className="flex flex-wrap gap-1">
-                            {f.flags.map((flag) => (
-                              <FlagBadge key={flag} flag={flag} />
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                      {expanded && (
-                        <tr id={`explanation-row-${f.key}`} className="bg-neutral-50">
-                          <td colSpan={7} className="p-0">
-                            <Explanation f={f} />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+  return (
+    <Page>
+      <PageHeader
+        title="Priorities"
+        status={
+          counts && (
+            <>
+              <Chip kind="acc">{counts.features} ranked</Chip>
+              {counts.no_goal > 0 && <Chip kind="crit">{counts.no_goal} no goal</Chip>}
+              {counts.unscored > 0 && <Chip kind="warn">{counts.unscored} unscored</Chip>}
+              {counts.in_cycles > 0 && <Chip kind="warn">{counts.in_cycles} in a cycle</Chip>}
+            </>
+          )
+        }
+        action={
+          <>
+            <Button
+              variant="primary"
+              icon="check"
+              onClick={saveSnapshot}
+              disabled={!canSnapshot || saving || !r}
+              title={canSnapshot ? "Keep a dated copy of this ranking" : "Approvers and owners can save snapshots"}
+            >
+              {saving ? "Saving…" : "Save snapshot"}
+            </Button>
+          </>
+        }
+      />
 
-      <Snapshots reloadKey={snapshotsKey} />
-    </div>
+      <div className="flex flex-col gap-3">
+        {saved && (
+          <Notice tone="pass">
+            Snapshot saved: {METHOD_LABEL[saved.method]} ranking of {saved.feature_count} features, top{" "}
+            {saved.top.slice(0, 3).join(", ")}.
+          </Notice>
+        )}
+        {saveError && <Notice tone="error">{saveError}</Notice>}
+        {q.error && <Notice tone="error">{q.error}</Notice>}
+
+        <Split
+          inspector={current && <FeatureInspector key={current.key} f={current} id={inspectorId} />}
+        >
+          <Panel>
+            <div className="flex min-h-14 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2.5 max-[600px]:px-3">
+              <MethodSwitch
+                value={method}
+                onChange={(m) => {
+                  setMethod(m);
+                  setSaved(null);
+                }}
+              />
+              <span className="flex-1" />
+              {r && (
+                <span className="flex items-center gap-2">
+                  <Label>Formula</Label>
+                  <InfoTip label="Formula">
+                    <code data-testid="formula" className="font-mono">
+                      {r.formula}
+                    </code>
+                    <span className="mt-1 block">Ranked {formatDateTime(r.generated_at)}, in dependency order.</span>
+                  </InfoTip>
+                </span>
+              )}
+            </div>
+            {r && r.cycles.length > 0 && (
+              <div
+                role="alert"
+                data-testid="cycles-banner"
+                className="flex flex-wrap items-center gap-2 border-b border-line bg-warn-bg px-4 py-2 text-sm font-semibold text-warn"
+              >
+                <Icon name="alert" size={16} />
+                <span>{r.cycles.length > 1 ? "Cycles" : "Cycle"}</span>
+                {r.cycles.map((c, i) => (
+                  <span key={i} className="font-mono font-medium">
+                    {i > 0 && "; "}
+                    {c.join(" → ")}
+                  </span>
+                ))}
+                <InfoTip label="Dependency cycle" align="start">
+                  These features depend on each other, so they are ordered by score until the cycle is broken.
+                </InfoTip>
+              </div>
+            )}
+            <DataTable
+              label="Ranking"
+              testId="priority-table"
+              columns={columns}
+              rows={r?.features}
+              rowKey={(f) => f.key}
+              selected={current?.key ?? null}
+              onSelect={(k) => setSelected(k)}
+              loading={q.loading}
+              empty="No features ranked"
+              rowProps={(f) => ({ "data-testid": `priority-row-${f.key}` })}
+            />
+          </Panel>
+
+          {goals.length > 0 && (
+            <Panel title="By goal" count={goals.length}>
+              <DataTable<GoalRow>
+                label="By goal"
+                columns={[
+                  { key: "id", header: "", width: "64px", cell: (g) => <GoalTag id={g.id} /> },
+                  { key: "title", header: "Goal", cell: (g) => g.title },
+                  {
+                    key: "count",
+                    header: "Ranked features",
+                    width: "180px",
+                    hideOnPhone: true,
+                    cell: (g) => (
+                      <Meter value={g.count} max={features.length} showMax={false} label={`${g.count} ranked features`} />
+                    ),
+                  },
+                  { key: "top", header: "Top rank", width: "96px", align: "right", cell: (g) => <span className="tnum">#{g.top}</span> },
+                ]}
+                rows={goals}
+                rowKey={(g) => g.id}
+              />
+            </Panel>
+          )}
+
+          <Snapshots reloadKey={snapshotsKey} note={note} onNote={setNote} canSnapshot={canSnapshot} />
+        </Split>
+      </div>
+    </Page>
   );
 }

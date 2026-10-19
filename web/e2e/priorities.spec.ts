@@ -44,7 +44,7 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await expect(page.getByTestId("priority-row-F-5")).toContainText("Moved for a dependency");
   await expect(page.getByTestId("priority-row-F-4")).toContainText("Low confidence");
 
-  // Expand: steps, inputs, confidence and goals.
+  // Select: the inspector shows steps, inputs, confidence and goals.
   const toggle = page.getByTestId("priority-row-F-1").getByRole("button", { name: /Saved addresses at checkout/ });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await toggle.click();
@@ -62,8 +62,8 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await page.getByTestId("priority-row-F-5").getByRole("button").click();
   await expect(page.getByTestId("explanation-F-5")).toContainText("placed earlier because F-2 depend(s) on it");
 
-  // Collapse again.
-  await toggle.click();
+  // The inspector shows one feature at a time: F-1's explanation has gone.
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByTestId("explanation-F-1")).toHaveCount(0);
 });
 
