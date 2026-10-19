@@ -29,16 +29,20 @@ approval stale. Edits, patches and verdict conflicts still compare `revision`.
 An approval counts only while its approver still is one, read at gate time
 (`oracle.review.state.standing`): an active user with the approver role or above today,
 or an active user-less API token with that role (a token acting for a user approves as
-the user). A demoted or disabled member's approvals, and a revoked token's, are left out
-of the section states, the mandatory reviewers' approvals and the publish check.
+the user). A demoted or disabled member's approvals, and a revoked token's or MCP OAuth
+grant's, are left out of the section states, the mandatory reviewers' approvals and the
+publish check.
 
-**They lapse for good (C2).** A demotion below approver, a disable and a token
+**They lapse for good (C2).** A demotion below approver, a disable, and a token or grant
 revocation mark the approvals they end as lapsed in their own transaction
 (`oracle.review.state.lapse_approvals`, audited `approval.lapse`): section approvals get
 `section_reviews.lapsed_at` and `lapse_reason`; a version approval moves to
 `document_versions.approval_lapsed_at`, `approval_lapsed_by` and `approval_lapse_reason`
 (`approved_at` and `approved_by` are cleared, so exports, `VersionOut.approved_at` and
-the document's status stop saying approved; `approved_token_id` is kept). Re-review is
+the document's status stop saying approved; `approved_token_id` is kept) and is appended
+to `document_versions.approval_lapses`, which a new approval never clears
+(`VersionOut.approval_lapses`; the legacy per-version view shows a lapsed section
+approval with `lapsed_at` and `lapse_reason`). Re-review is
 requested where the policy asks for it, as an edit does. A re-promotion or a restore
 never revives them: the approver approves again. Owner to approver is not a lapse.
 Objections (changes requested, rejected) never lapse.
@@ -52,33 +56,65 @@ see the approvals a token gave (`GET /v1/api-tokens/{id}/approvals`, lapsed ones
 the approvals it gave lapse, the approvals its user gave in person stand. A token revoked
 any other way voids its approvals at gate time too.
 
+**And their MCP OAuth grant (C2, owner 2026-10-19).** A call with an MCP client's OAuth
+access token carries its grant (the refresh-token family, `oauth_tokens.family_id`):
+verdicts, version approvals and audit events record it (`section_reviews.grant_id`,
+`document_versions.approved_grant_id`, `audit_events.actor_grant_id`). Revoking the grant
+(`POST /oauth/revoke` with either token), a reused refresh token and a replayed code end
+the whole family and, in the same transaction under the review gate, lapse the
+approvals made through it; a grant revoked any other way voids them at gate time.
+
+Known limit: approvals made through a user-bound API token before `0014_member_disable`
+have no `token_id` (the column did not exist): they read as the user's own approvals, so
+revoking that token cannot void them. Revoking the user's approver role (or disabling
+them) does.
+
 **Removing a member disables them (C2).** `POST /v1/members/{id}/disable` (owner;
 `DELETE /v1/members/{id}` is kept as the same operation, deprecated) sets
 `users.disabled_at` and `disabled_by`; the row stays, so every `*_by` reference and the
 verdict history keep the name. Sign-in is refused on every path
-(`oracle.auth.service.may_sign_in`): the session cookie (also one minted earlier),
+(`oracle.auth.service.may_sign_in`): the session cookie (also one minted earlier;
+and since a disable and a restore set `users.sessions_valid_after`, a cookie signed
+before the last of them stays dead after a restore: the member signs in fresh, and an
+OAuth authorization code issued before it is refused),
 password login, IAP (a disabled email is refused and never provisioned again), API
 tokens and MCP OAuth tokens acting for them, an OAuth code or refresh exchange, the MCP
 verifiers and a run token or run-token header of a run they started. In the same
-transaction, under the review gate: each connection is disconnected the normal way
-(revoked at the provider, `connection.disconnect` audit, a `connection_revoked`
-revocation for the sources it synced, the credential deleted); every other source of
-theirs gets a `source_revoked` revocation, so documents citing it cannot publish; all
-their sources are paused; their API tokens and OAuth grants are revoked; their
-unfinished runs are cancelled with their run tokens; the open invite for their email is
-revoked; their approvals lapse. Audited `member.disable`, change event
+transaction, under the review gate: each connection is disconnected (a
+`connection.disconnect` audit, a `connection_revoked` revocation for the sources it
+synced, the credential deleted); every other source of theirs gets a `source_revoked`
+revocation, so documents citing it cannot publish; all their sources are paused (a sync
+already running never un-pauses one); their API tokens and OAuth grants are revoked;
+their unfinished runs are cancelled with their run tokens; the open invite for their
+email and every open invite they created are revoked; the built-in model jobs they
+queued are cancelled; a spend approval they gave on someone else's run that has not
+started is voided (the run waits for an approval again; a started run keeps its
+ceiling); their approvals lapse. No network call is made under the gate: the revokes at
+the providers and the cancels at the runtime are `member_follow_ups`, made after the
+disable commits (each with a deadline), recorded (`connection.provider_revoke`,
+`run.runtime_cancel`) and retried by the tick (`POST /v1/internal/tick`,
+`member_follow_ups`) until they succeed or five attempts fail. After the commit the
+member is swept once more: a credential a request in flight created meanwhile is
+revoked. A provider connection is saved, and an OAuth refresh or code exchange issues
+tokens, only after the member's row is locked and re-read, so none is created for them
+while the disable runs. Audited `member.disable`, change event
 `member_disabled`. The last active owner cannot be disabled or demoted (a disabled owner
 is not another owner). `POST /v1/members/{id}/restore` (owner, audited
 `member.restore`, change event `member_restored`) lets them sign in again with their
 role; nothing else comes back (approvals stay lapsed, tokens revoked, connections gone,
-sources revoked). A disabled member cannot be the designated decider or a mandatory
-reviewer and gets no notifications.
+sources revoked). A disabled member cannot be the designated decider, a mandatory
+reviewer, a section owner or reviewer, or a campaign invitee, and gets no notifications.
+A disabled row never blocks the same email's password sign-in in another company.
 
 A role change (`PATCH /v1/members/{id}`) records a `member` change event
 (`role_changed`). Role changes, disables, restores and token revocations take the review
 gate exclusively; a verdict and a version approval take it shared before the document
 lock and re-read the caller's role, disabled state and token, so neither lands after a
-change that ended it.
+change that ended it. Every member-management and invite route does the same: after the
+gate (invites take it shared) it re-reads the caller (`oracle.auth.service.caller_refusal`)
+and refuses with 403 a caller disabled, no longer an owner, or whose API token, OAuth
+grant or run token was revoked while the request waited, so an owner being disabled
+cannot act with a request already in flight.
 
 So, per stable section id (`{#id}`):
 
@@ -324,12 +360,17 @@ Extended: `POST .../versions?base_version=`, `PUT .../sections/{key}/review` (`r
 (backfilled), and `change_events.subject_kind` admits `member`. Nothing in 0013 or
 earlier changes; legacy rows read as before.
 
-`0014_member_disable` (additive, on `0014_review`): `users.disabled_at`, `disabled_by`;
-`section_reviews.token_id` (indexed), `lapsed_at`, `lapse_reason`;
-`document_versions.approved_token_id` (indexed), `approval_lapsed_at`,
-`approval_lapsed_by`, `approval_lapse_reason`; `audit_events.actor_token_id`. Its
-downgrade refuses while a member is disabled or an approval has lapsed (dropping the
-columns would let them back).
+`0014_member_disable` (on `0014_review`): `users.disabled_at`, `disabled_by`,
+`sessions_valid_after`; `section_reviews.token_id`, `grant_id` (indexed), `lapsed_at`,
+`lapse_reason`; `document_versions.approved_token_id`, `approved_grant_id` (indexed),
+`approval_lapsed_at`, `approval_lapsed_by`, `approval_lapse_reason`, `approval_lapses`
+(default `[]`); `audit_events.actor_token_id`, `actor_grant_id`; the
+`member_follow_ups` table. Its upgrade backfills: every un-lapsed approval (section or
+version) by a member already below approver lapses for good with reason "demoted before
+this change" (a document left with no approved version goes back to in_review; one
+`approval.lapse` audit event per person). Its downgrade refuses while a member is
+disabled, an approval has lapsed or a follow-up is pending (dropping the columns would
+let them back).
 
 ## Tests
 
@@ -344,4 +385,7 @@ markdown env per exported section, criticals gate, run resolutions),
 `test_review_v2_security_3.py` (round 3, C2: disable instead of delete on every sign-in
 path, lapses for good, approvals by token, the fence with trailing blank lines and lost
 sections, a UUID citation as an external id, Google Docs and percent-encoded URLs, URLs
-with a user name).
+with a user name), `test_review_v2_security_4.py` (round 4, C2 follow-ups: sessions end
+at a disable, the caller re-read under the gate, outbound calls after the commit, OAuth
+grants, UUID refs in any spelling, credentials racing a disable, what else a disable
+reaches) and `test_member_disable_migration.py` (the backfill on a populated database).
