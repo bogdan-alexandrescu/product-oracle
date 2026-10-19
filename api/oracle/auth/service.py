@@ -70,12 +70,14 @@ async def authenticate_user(email: str, password: str) -> User | None:
     # Runs before a tenant is known, hence unscoped.
     async with unscoped_session() as s:
         users = (await s.scalars(select(User).where(User.email == email.strip().lower()))).all()
-    for user in users:
+    active = [u for u in users if may_sign_in(u)]
+    for user in active:
+        # A disabled member's password no longer signs in; the same email may be an
+        # active member of another company, so a disabled row never ends the search.
         if verify_password(user.password_hash, password):
-            # A disabled member's password no longer signs in.
-            return user if may_sign_in(user) else None
-    # Equalise timing when the email is unknown.
-    if not users:
+            return user
+    # Equalise timing when the email is unknown or only disabled.
+    if not active:
         verify_password(_DUMMY_HASH, password)
     return None
 

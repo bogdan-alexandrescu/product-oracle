@@ -877,3 +877,30 @@ async def test_the_legacy_version_view_shows_a_lapsed_approval_as_lapsed(client)
     [problem] = [s for s in body["sections"] if s["section_key"] == "problem"]
     assert problem["verdict"]["lapsed_at"] is not None
     assert "demoted" in problem["verdict"]["lapse_reason"]
+
+
+async def test_a_disabled_row_does_not_block_the_same_email_in_another_company(client):
+    from datetime import UTC, datetime
+
+    from oracle.auth.service import authenticate_user, create_user
+    from tests.conftest import make_tenant
+
+    email = f"shared-{uuid.uuid4().hex[:8]}@example.com"
+    first, second = await make_tenant("First Co"), await make_tenant("Second Co")
+    ids = {}
+    for tenant in (first, second):
+        async with tenant_session(tenant) as s:
+            user = await create_user(s, email, "pw")
+            if tenant == first:
+                user.disabled_at = datetime.now(UTC)
+            await s.commit()
+            ids[tenant] = user.id
+    user = await authenticate_user(email, "pw")
+    assert user is not None and user.id == ids[second]
+    assert (await sign_in(client, email)).status_code == 200
+    # Wrong password, or only disabled rows: nobody.
+    assert await authenticate_user(email, "nope") is None
+    async with tenant_session(second) as s:
+        (await s.get(User, ids[second])).disabled_at = datetime.now(UTC)
+        await s.commit()
+    assert await authenticate_user(email, "pw") is None
