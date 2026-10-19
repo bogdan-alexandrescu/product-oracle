@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Icon, type IconName } from "./Icon";
 import { PageTabs } from "./PageTabs";
 
 /**
@@ -37,7 +38,7 @@ export function PageHeader({
   // wraps; a wide action drops below it), and the status chips get their own line under it,
   // so nothing runs under the action.
   return (
-    <header data-testid={testId} className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 py-3 max-[600px]:py-3.5">
+    <header data-testid={testId} data-page-header className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 py-3 max-[600px]:py-3.5">
       {back && <div className="basis-full text-sm text-text2">{back}</div>}
       <h1 className="min-w-0 font-display text-[28px] leading-8 font-bold tracking-[-0.02em] max-[600px]:flex-[1_1_7.5rem] max-[600px]:text-2xl max-[600px]:leading-7">
         {title}
@@ -114,8 +115,18 @@ export function Label({ children, className = "", id }: { children: ReactNode; c
   );
 }
 
-/** Empty state: the title of what will appear, nothing more (rule 1). */
-export function Empty({ children, testId }: { children: ReactNode; testId?: string }) {
+/** Empty state: the title of what will appear, nothing more (rule 1); `icon` draws it above. */
+export function Empty({ children, testId, icon }: { children: ReactNode; testId?: string; icon?: IconName }) {
+  if (icon) {
+    return (
+      <div data-testid={testId} className="flex flex-col items-center gap-3 px-4 py-12 text-center">
+        <span aria-hidden className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink">
+          <Icon name={icon} size={24} />
+        </span>
+        <p className="text-[15px] font-semibold text-text2">{children}</p>
+      </div>
+    );
+  }
   return (
     <p data-testid={testId} className="px-4 py-8 text-center text-[15px] text-text2">
       {children}

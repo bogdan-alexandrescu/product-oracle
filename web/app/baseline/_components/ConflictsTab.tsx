@@ -140,7 +140,6 @@ export function ConflictsTab({
                       <td className={`${td} text-right`}>
                         {c.status === "open" && (
                           <Button
-                            variant="solid"
                             disabled={busy}
                             onClick={() => onPick(c, i)}
                             aria-label={`Pick ${formatValue(claim.value)}`}

@@ -9,6 +9,8 @@ export type InspectorStat = {
   tone?: "crit" | "warn";
   /** Replaces the numeral, e.g. a Ring. */
   figure?: ReactNode;
+  /** Rendered after the label, on its line: an InfoTip. */
+  extra?: ReactNode;
   testId?: string;
 };
 
@@ -72,7 +74,10 @@ export function Inspector({
                 (i + 1) % cols !== 0 && i !== stats.length - 1 ? "border-r border-line" : ""
               } ${i >= cols ? "border-t border-line" : ""}`}
             >
-              <dt className="mt-0.5 truncate text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{s.label}</dt>
+              <dt className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+                <span className="truncate">{s.label}</span>
+                {s.extra}
+              </dt>
               <dd>{s.figure ?? <Numeral value={s.value} of={s.of} tone={s.tone} />}</dd>
             </div>
           ))}

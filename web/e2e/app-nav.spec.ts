@@ -34,6 +34,15 @@ test("app shell: hidden when signed out, the rail lists the nine destinations on
   await expect(nav.getByRole("link", { name: "Roadmap" })).toHaveAttribute("href", "/roadmap");
 });
 
+test("Home and Requests: placeholders with a one-line empty state", async ({ page }) => {
+  await login(page);
+  for (const name of ["home", "requests"]) {
+    await page.goto(`/${name}`);
+    await expect(page.getByTestId(`${name}-empty`)).toHaveText("Nothing yet");
+    await expect(page.getByTestId(`${name}-empty`).locator("svg")).toBeVisible();
+  }
+});
+
 test("app shell: each destination routes to its page", async ({ page }) => {
   await login(page);
   const nav = page.getByRole("navigation", { name: "Oracle" });

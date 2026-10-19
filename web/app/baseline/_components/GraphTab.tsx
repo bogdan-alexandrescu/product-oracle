@@ -174,7 +174,6 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       cell: (g) =>
         g.status === "proposed" ? (
           <Button
-            variant="solid"
             disabled={busy}
             onClick={(e: MouseEvent) => {
               e.stopPropagation();

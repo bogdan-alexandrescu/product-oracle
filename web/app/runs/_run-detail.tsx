@@ -377,12 +377,20 @@ function SegmentItem({
                 {CHECKPOINT_LABEL[kind]}: off
               </Chip>
             ))}
-          {deciding.map((cp) => (
-            <Chip key={cp.id} kind="warn" title={`Waiting: ${CHECKPOINT_LABEL[cp.kind]}`} className={WRAP_CHIP}>
-              <Icon name="clock" size={16} />
-              {CHECKPOINT_LABEL[cp.kind]}
-            </Chip>
-          ))}
+          {deciding.length > 0 && (
+            // The decision panel below and the inspector name the checkpoint; the row shows its state.
+            <a
+              href="#decide"
+              data-testid="checkpoint-waiting"
+              className="inline-flex max-w-full rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <Chip kind="warn" title={`Waiting: ${deciding.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}`}>
+                <Icon name="clock" size={16} />
+                Waiting
+                <span className="sr-only">: {deciding.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}</span>
+              </Chip>
+            </a>
+          )}
           {compact.map((cp) => (
             <span key={cp.id} data-testid={`checkpoint-${cp.kind}`} className="inline-flex max-w-full">
               <Chip

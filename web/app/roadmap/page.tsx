@@ -156,14 +156,14 @@ export default function RoadmapPage() {
     {
       key: "template",
       header: "Template",
-      width: "180px",
+      width: "150px",
       hideOnPhone: true,
-      // An approved PRD has no template or source of its own; the roadmaps it built are in its inspector.
+      // The template key alone (the theme is in the inspector). An approved PRD has no template
+      // or source of its own; the roadmaps it built are in its inspector.
       cell: (r) =>
         r.kind === "roadmap" ? (
-          <span className="font-mono text-sm text-text2" title={[r.d.template, r.d.theme].filter(Boolean).join(" · ")}>
+          <span className="font-mono text-sm text-text2" title={r.d.template ?? undefined}>
             {r.d.template ?? "—"}
-            {r.d.theme && <> · {r.d.theme}</>}
           </span>
         ) : null,
     },
@@ -191,12 +191,20 @@ export default function RoadmapPage() {
     {
       key: "source",
       header: "Source PRD",
-      width: "170px",
+      width: "200px",
       hideOnPhone: true,
+      // The header says where it came from; the cell is the PRD's name alone.
       cell: (r) =>
         r.kind === "roadmap" ? (
           r.d.source ? (
-            <SourceLink source={r.d.source} />
+            <Link
+              href={`/documents/${r.d.source.slug}/v/${r.d.source.version}`}
+              data-testid="roadmap-source"
+              title={`${r.d.source.title} v${r.d.source.version}`}
+              className="font-medium underline-offset-2 hover:underline"
+            >
+              {r.d.source.title} v{r.d.source.version}
+            </Link>
           ) : (
             <span className="text-text2">—</span>
           )

@@ -31,6 +31,7 @@ import {
   Split,
   type ChipKind,
   type Column,
+  type InspectorStat,
 } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
@@ -509,38 +510,39 @@ function StatFig({ children, note, dim, title }: { children: ReactNode; note?: R
   );
 }
 
-function windowStat(reading: AccountReading, window: string): ReactNode {
+/** A window's stat: the figure, and an InfoTip for the label's line when it is not measured. */
+function windowStat(reading: AccountReading, window: string): Pick<InspectorStat, "figure" | "extra"> {
   const title = readingTitle(reading, window);
   if (reading.kind === "never" || reading.kind === "absent") {
-    return (
-      <StatFig
-        dim
-        note={
-          <InfoTip label={`the ${window} window`} align="start">
-            Not measured. {title}
-          </InfoTip>
-        }
-      >
-        —
-      </StatFig>
-    );
+    return {
+      figure: <StatFig dim>—</StatFig>,
+      extra: (
+        <InfoTip label={`the ${window} window`} align="start">
+          Not measured. {title}
+        </InfoTip>
+      ),
+    };
   }
   if (reading.kind === "reset") {
-    return (
-      <StatFig title={title} note={`was ${Math.round(reading.pct)}% before it refilled`}>
-        reset
-      </StatFig>
-    );
+    return {
+      figure: (
+        <StatFig title={title} note={`was ${Math.round(reading.pct)}% before it refilled`}>
+          reset
+        </StatFig>
+      ),
+    };
   }
   const projected = isProjected(reading);
   const full = reading.kind === "live" && reading.pct >= 100;
-  return (
-    <StatFig title={title} dim={projected}>
-      {projected && "~"}
-      {Math.round(reading.pct)}%
-      <Bar pct={reading.pct} tone={full ? "full" : projected ? "old" : "live"} />
-    </StatFig>
-  );
+  return {
+    figure: (
+      <StatFig title={title} dim={projected}>
+        {projected && "~"}
+        {Math.round(reading.pct)}%
+        <Bar pct={reading.pct} tone={full ? "full" : projected ? "old" : "live"} />
+      </StatFig>
+    ),
+  };
 }
 
 /** One fact: a 13 px label left, the value right (truncated, full text in its title). */
@@ -588,8 +590,8 @@ function Detail({
       }
       statColumns={2}
       stats={[
-        { label: "5h used", testId: "tile-5h used", figure: windowStat(readingOf(account, FIVE_HOUR), "five-hour") },
-        { label: "7d used", testId: "tile-7d used", figure: windowStat(readingOf(account, SEVEN_DAY), "seven-day") },
+        { label: "5h used", testId: "tile-5h used", ...windowStat(readingOf(account, FIVE_HOUR), "five-hour") },
+        { label: "7d used", testId: "tile-7d used", ...windowStat(readingOf(account, SEVEN_DAY), "seven-day") },
         {
           label: "Clears",
           testId: "tile-Clears",

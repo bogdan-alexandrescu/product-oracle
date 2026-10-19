@@ -165,7 +165,7 @@ function Needs({
     at: c.created_at,
     action: (
       // The same verb as the runs list: the run page opens at the decision.
-      <LinkButton variant="solid" href={`/runs/${c.run_id}#decide`}>
+      <LinkButton href={`/runs/${c.run_id}#decide`}>
         Decide
       </LinkButton>
     ),

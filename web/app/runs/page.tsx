@@ -98,7 +98,6 @@ export default function RunsPage() {
       cell: (r) =>
         ACTION[r.status] ? (
           <Button
-            variant={r.status === "awaiting_checkpoint" ? "solid" : "secondary"}
             onClick={(e) => {
               e.stopPropagation();
               router.push(`/runs/${r.id}`);

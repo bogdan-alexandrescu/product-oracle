@@ -24,6 +24,10 @@ test("inbox lists checkpoints, cost approvals, overruns and open feedback", asyn
   await page.getByTestId("inbox-overruns").getByRole("button", { name: "Resume" }).click();
   await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
 
+  // Row actions are outline, like every other row action; filled is for the page's primary.
+  await expect(checkpoints.getByRole("link", { name: "Decide" }).first()).toHaveAttribute("data-variant", "secondary");
+  await expect(feedback.getByRole("link", { name: /^Resolve/ }).first()).toHaveAttribute("data-variant", "secondary");
+
   // Decide goes to the run, at the decision.
   await checkpoints.getByRole("link", { name: "Decide" }).first().click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+#decide$/);

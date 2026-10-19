@@ -57,6 +57,15 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
   await expect(detail(page).getByTestId("tile-Clears")).toContainText("5h window");
   await row(page, "spare").getByRole("button").click();
   await expect(detail(page).getByTestId("tile-5h used")).toContainText(/not measured/i);
+  // The (i) sits on the label's line, after the label.
+  for (const tile of ["tile-5h used", "tile-7d used"]) {
+    const label = detail(page).getByTestId(tile).locator("dt");
+    const tip = label.getByTestId("info-tip");
+    await expect(tip).toBeVisible();
+    const [l, t] = [(await label.getByText(/used$/).boundingBox())!, (await tip.boundingBox())!];
+    expect(Math.abs(l.y + l.height / 2 - (t.y + t.height / 2))).toBeLessThan(3);
+    expect(t.x).toBeGreaterThan(l.x + l.width - 1);
+  }
   await expect(detail(page).getByTestId("tile-Last given out")).toContainText("never");
 });
 

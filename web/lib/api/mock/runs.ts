@@ -542,7 +542,12 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
 /** Seeded runs: one waiting at a checkpoint, one over the approval threshold, one paused on overrun, one done. */
 export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
   const db: RunsDb = { runs: [], artifacts: {} };
-  const full = { ...ctx, db };
+  // Seeded runs take fixed times, as they take stable ids: each step a minute after the
+  // last, from the run's own creation, so "Started" reads the same on every page load.
+  let clock = 0;
+  const from = (iso: string) => void (clock = Date.parse(iso));
+  const now = () => new Date((clock += 60_000)).toISOString();
+  const full = { ...ctx, db, now };
   const make = (flow: RunOut["flow"], document: string, knobs: KnobsIn, created_at: string): RunOut => {
     const doc = ctx.documents.find((d) => d.slug === document);
     const k = resolveKnobs(flow, knobs) as RunOut["knobs"];
@@ -586,6 +591,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 
   // Waiting for the baseline to be confirmed.
   const waiting = make("baseline_to_prd", "team-onboarding", {}, "2026-10-17T08:00:00Z");
+  from(waiting.created_at);
   launch(full, waiting);
   tick(full);
 
@@ -595,6 +601,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 
   // Spent past 1.5x its estimate.
   const over = make("feedback_loop", "team-workspaces", {}, "2026-10-16T17:00:00Z");
+  from(over.created_at);
   launch(full, over);
   over.overrun_ceiling_usd = 13.5;
   over.segments[0].attempts[0].cost_usd = 14.2;

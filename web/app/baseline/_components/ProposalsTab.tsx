@@ -87,7 +87,7 @@ export function ProposalsTab({
                 </div>
                 {canWrite && (
                   <div className="flex flex-none gap-2">
-                    <Button variant="solid" disabled={busy} onClick={() => onDecide(p, true)}>
+                    <Button disabled={busy} onClick={() => onDecide(p, true)}>
                       Accept
                     </Button>
                     <Button disabled={busy} onClick={() => onDecide(p, false)}>
