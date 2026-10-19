@@ -10,10 +10,10 @@ from oracle import changes
 from oracle.main import app
 from oracle.mcp.tools import app_operations
 from oracle.models import AuditEvent
+from oracle.modules.catalog import builtin_contracts, builtin_packs
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ChangeEvent, CompositionRevision, ProductIntake
-from tests.baseline_helpers import make_ctx
-from tests.modules.helpers import draft, import_md
+from tests.modules.helpers import draft, import_md, seeded_ctx
 
 SLUG = "placeholder-platform"
 PLATFORM = {
@@ -82,10 +82,11 @@ async def test_routes_require_auth(client, method, path):
 
 
 async def test_a_viewer_reads_the_catalogue_packs_policy_and_manifests(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     viewer = ctx.as_("viewer")
     catalogue = (await client.get("/v1/module-catalog", headers=viewer)).json()
-    assert len(catalogue) == 32 and {m["origin"] for m in catalogue} == {"builtin"}
+    assert len(catalogue) == len(builtin_contracts())
+    assert {m["origin"] for m in catalogue} == {"builtin"}
     assert (
         len((await client.get("/v1/module-catalog?pack=startup.standard", headers=viewer)).json())
         == 17
@@ -97,7 +98,7 @@ async def test_a_viewer_reads_the_catalogue_packs_policy_and_manifests(client):
     )
     assert (await client.get("/v1/module-catalog/no.such", headers=viewer)).status_code == 404
     packs = (await client.get("/v1/module-packs", headers=viewer)).json()
-    assert [p["id"] for p in packs] == ["startup.standard", "ai-agent.platform"]
+    assert [p["id"] for p in packs] == list(builtin_packs())
     policy = (await client.get("/v1/module-policy", headers=viewer)).json()
     assert policy["is_default"] and policy["required"] == []
     manifest = (await client.get("/v1/template-manifests/one-pager", headers=viewer)).json()
@@ -110,7 +111,7 @@ async def test_a_viewer_reads_the_catalogue_packs_policy_and_manifests(client):
 
 
 async def test_writes_need_their_roles(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     await _doc(client, ctx)
     contract = {"id": "company.extra", "version": "1.0.0", "title": "Extra", "policy": "optional"}
     for who in ("viewer", "commenter", "approver"):
@@ -137,7 +138,7 @@ async def test_writes_need_their_roles(client):
 
 
 async def test_owner_adds_company_modules_and_overrides_with_audit(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     owner = ctx.as_("owner")
     contract = {
         "id": "company.extra",
@@ -171,7 +172,7 @@ async def test_owner_adds_company_modules_and_overrides_with_audit(client):
 async def test_recommend_for_an_intake_with_one_source(client):
     """§16 item 3 (this lane's part): a short brief plus one source gives a recommended
     existing PRD template with mandatory and conditional modules, each explained."""
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         intake = ProductIntake(
             title="Agent tool permissions",
@@ -203,7 +204,7 @@ async def test_recommend_for_an_intake_with_one_source(client):
 
 
 async def test_composition_lifecycle_records_who_why_changes_and_publish(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     doc = await _doc(client, ctx)
     viewer, approver = ctx.as_("viewer"), ctx.as_("approver")
 
@@ -297,7 +298,7 @@ async def test_composition_lifecycle_records_who_why_changes_and_publish(client)
 
 
 async def test_a_published_document_version_event_pins_the_composition(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     doc = await _doc(client, ctx)
     assert (await _confirm(client, ctx)).status_code == 201
     await client.post(f"/v1/documents/{SLUG}/versions/1/approve", headers=ctx.as_("approver"))
@@ -314,7 +315,7 @@ async def test_a_published_document_version_event_pins_the_composition(client):
 
 
 async def test_the_company_policy_route_changes_recommendations(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     await _doc(client, ctx)
     owner = ctx.as_("owner")
     resp = await client.put(
@@ -331,7 +332,7 @@ async def test_the_company_policy_route_changes_recommendations(client):
 
 
 async def test_template_manifest_edits_are_company_edits(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     resp = await client.put(
         "/v1/template-manifests/one-pager",
         json={"modules": [{"module_key": "risks.register", "section_ids": ["top-risks"],
@@ -352,7 +353,7 @@ async def test_template_manifest_edits_are_company_edits(client):
 
 
 async def test_roadmaps_have_no_composition(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     roadmap = "---\ndocument: placeholder-roadmap\ntitle: Roadmap\nkind: roadmap\n---\n# R {#r}\n"
     resp = await import_md(client, ctx.as_("approver"), "placeholder-roadmap", roadmap)
     assert resp.status_code == 201, resp.text
@@ -364,8 +365,8 @@ async def test_roadmaps_have_no_composition(client):
 
 async def test_another_companys_compositions_are_invisible(client):
     """Negative cross-company test for every route that names a record."""
-    a = await make_ctx("Company A")
-    b = await make_ctx("Company B")
+    a = await seeded_ctx("Company A")
+    b = await seeded_ctx("Company B")
     await _doc(client, b, slug="theirs")
     assert (await _confirm(client, b, slug="theirs")).status_code == 201
     async with tenant_session(b.tenant_id) as s:

@@ -175,3 +175,41 @@ def test_deterministic_and_accepts_the_typed_inputs_model():
     cond = {"op": "gte", "path": "signals.tenant_count", "value": 2}
     results = {(evaluate(cond, typed).value, evaluate(cond, typed).score) for _ in range(20)}
     assert results == {(True, 1.0)}
+
+
+# --- review minors -----------------------------------------------------------------------
+
+
+def test_prebuilt_nodes_are_bounded_too():
+    """A node built in code (not parsed) is still checked for depth and size."""
+    from oracle.v2.contract import MAX_CONDITION_DEPTH, Not, Presence
+
+    node = Presence(op="present", path="brief.title")
+    for _ in range(MAX_CONDITION_DEPTH + 1):
+        node = Not(op="not", arg=node)
+    with pytest.raises(ConditionInvalidError):
+        evaluate(node, INPUTS)
+
+
+def test_prebuilt_nodes_are_bounded_in_size():
+    from oracle.v2.contract import MAX_CONDITION_NODES, AllOf, Presence
+
+    leaves = [Presence(op="present", path="brief.title")] * 50
+    wide = AllOf.model_construct(op="or", args=[AllOf.model_construct(op="or", args=leaves)] * 5)
+    assert MAX_CONDITION_NODES < 5 * 51
+    with pytest.raises(ConditionInvalidError):
+        evaluate(wide, INPUTS)
+
+
+def test_in_type_checks_every_value():
+    """`in` with mixed value types is refused, whichever value comes first."""
+    from oracle.v2.contract import Membership
+
+    for values in (["ai_agent_platform", 2], [2, "ai_agent_platform"]):
+        node = Membership.model_construct(op="in", path="category", values=values)
+        with pytest.raises(ConditionTypeError):
+            evaluate(node, INPUTS)
+    with pytest.raises(ConditionTypeError):
+        evaluate({"op": "in", "path": "signals.end_user_facing", "values": [1, 2]}, INPUTS)
+    ok = evaluate({"op": "in", "path": "signals.tenant_count", "values": [1, 12.0]}, INPUTS)
+    assert ok.value
