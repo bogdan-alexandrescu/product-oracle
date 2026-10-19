@@ -1,0 +1,73 @@
+# Built-in module packs (build prompt §4.4). A pack is an ordered list of module ids; the
+# modules themselves (core.yaml, platform.yaml) say whether each is required, conditional
+# or optional. Templates only: no example product, feature, brand or character content.
+
+- id: startup.standard
+  version: 1.0.0
+  title: General Tech Startup
+  description: >-
+    The shared core for any product or feature PRD: decision, goals, problem, evidence,
+    users, outcomes, scope, requirements, constraints, economics, risks, validation,
+    release, history and sources.
+  modules:
+    - decision.executive
+    - strategy.alignment
+    - problem.opportunity
+    - evidence.assumptions
+    - users.jtbd
+    - goals.outcomes
+    - solution.alternatives
+    - scope.non-goals
+    - requirements.functional
+    - constraints.solutions
+    - requirements.nonfunctional
+    - economics.value
+    - risks.register
+    - validation.plan
+    - release.rollout
+    - decision.history
+    - sources.data-points
+
+- id: ai-agent.platform
+  version: 1.0.0
+  title: Multi-tenant AI Agent Platform
+  description: >-
+    The shared core plus conditional modules for a reusable platform capability that
+    serves many customers and agent types. Specialised modules apply only when the
+    capability scope or company policy calls for them. Individual characters, personas,
+    relationship modes and brand canon belong in linked configuration artifacts.
+  # Categories (composition input `category`) that select this pack when none is chosen.
+  categories: [ai_agent_platform]
+  modules:
+    - decision.executive
+    - strategy.alignment
+    - problem.opportunity
+    - evidence.assumptions
+    - users.jtbd
+    - goals.outcomes
+    - solution.alternatives
+    - scope.non-goals
+    - requirements.functional
+    - constraints.solutions
+    - requirements.nonfunctional
+    - economics.value
+    - risks.register
+    - validation.plan
+    - release.rollout
+    - decision.history
+    - sources.data-points
+    - platform.customer-onboarding
+    - platform.tenant-isolation
+    - platform.config-precedence
+    - agents.archetypes
+    - agents.tool-policies
+    - agents.knowledge-memory
+    - agents.evaluation
+    - platform.rollout-migration
+    - platform.fleet-operations
+    - platform.cost-quotas
+    - agents.external-channels
+    - agents.human-interaction
+    - platform.brand-governance
+    - agents.continuous-improvement
+    - agents.capability-portability

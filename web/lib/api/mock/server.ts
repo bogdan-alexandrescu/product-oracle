@@ -14,6 +14,7 @@ import { connectionsRoute } from "./connections";
 import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeV2, seedV2, type V2Db } from "./v2";
@@ -52,6 +53,8 @@ export interface Db {
   llm?: LlmDb;
   /** Product Oracle v2 tables (./v2.ts); absent in data saved before v2. */
   v2?: V2Db;
+  /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
+  modules?: ModulesDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -854,6 +857,28 @@ async function route(db: Db, req: Request): Promise<Response> {
   const llm = llmContext(db, me.id, me.role);
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
+  // Modules and compositions check roles themselves (viewers may ask for a recommendation).
+  if (!db.modules) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    db.modules = seedModules(prd?.id ?? null, db.user_id);
+  }
+  const modules = await routeModules(
+    db.modules,
+    {
+      userId: me.id,
+      role: me.role,
+      document: (ref) => {
+        const doc = findDocument(db, ref);
+        return doc && doc.kind === "prd" ? { id: doc.id, slug: doc.slug, template: doc.template ?? null } : null;
+      },
+      approvedVersion: (documentId, n) =>
+        db.versions.find((v) => v.document_id === documentId && v.number === n && v.approved_at)?.id ?? null,
+    },
+    req,
+    p,
+    q,
+  );
+  if (modules) return modules;
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
