@@ -40,22 +40,6 @@ function StatusChip({ status, hero = false }: { status: Doc["status"]; hero?: bo
   );
 }
 
-function BuiltLinks({ built }: { built: Doc[] }) {
-  if (built.length === 0) return <span className="text-text2">—</span>;
-  return (
-    <span className="truncate">
-      {built.map((r, i) => (
-        <span key={r.id}>
-          {i > 0 && ", "}
-          <Link href={`/documents/${r.slug}`} onClick={(e) => e.stopPropagation()} className="underline-offset-2 hover:underline">
-            {r.title}
-          </Link>
-        </span>
-      ))}
-    </span>
-  );
-}
-
 function RoadmapInspector({ d }: { d: Doc }) {
   return (
     <Inspector
@@ -172,22 +156,21 @@ export default function RoadmapPage() {
     {
       key: "template",
       header: "Template",
-      width: "250px",
+      width: "180px",
       hideOnPhone: true,
+      // An approved PRD has no template or source of its own; the roadmaps it built are in its inspector.
       cell: (r) =>
         r.kind === "roadmap" ? (
           <span className="font-mono text-sm text-text2" title={[r.d.template, r.d.theme].filter(Boolean).join(" · ")}>
             {r.d.template ?? "—"}
             {r.d.theme && <> · {r.d.theme}</>}
           </span>
-        ) : (
-          <BuiltLinks built={r.built} />
-        ),
+        ) : null,
     },
     {
       key: "state",
       header: "State",
-      width: "170px",
+      width: "150px",
       cell: (r) =>
         r.kind === "roadmap" ? (
           <span className="flex items-center gap-2">
@@ -208,7 +191,7 @@ export default function RoadmapPage() {
     {
       key: "source",
       header: "Source PRD",
-      width: "230px",
+      width: "170px",
       hideOnPhone: true,
       cell: (r) =>
         r.kind === "roadmap" ? (
@@ -217,11 +200,22 @@ export default function RoadmapPage() {
           ) : (
             <span className="text-text2">—</span>
           )
-        ) : (
+        ) : null,
+    },
+    {
+      // The row's action, kept on a phone (right of the title).
+      key: "action",
+      header: <span className="sr-only">Action</span>,
+      width: "176px",
+      align: "right",
+      phone: "action",
+      className: "overflow-visible",
+      cell: (r) =>
+        r.kind === "prd" ? (
           <span className="flex justify-end">
             <BuildRoadmapButton prd={r.d} size="sm" />
           </span>
-        ),
+        ) : null,
     },
   ];
 

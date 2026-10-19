@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef } from "react";
 
 import { ScrollStrip } from "@/components/ds";
 
@@ -21,22 +20,13 @@ const ITEMS = [
  */
 export function SettingsNav() {
   const pathname = usePathname();
-  const strip = useRef<HTMLDivElement>(null);
-  // On a phone the strip scrolls: bring the current tab into view.
-  useEffect(() => {
-    const s = strip.current;
-    const on = s?.querySelector<HTMLElement>("[aria-current=page]");
-    if (!s || !on) return;
-    const right = on.offsetLeft - s.offsetLeft + on.offsetWidth;
-    if (right > s.scrollLeft + s.clientWidth) s.scrollLeft = right - s.clientWidth + 32;
-  }, [pathname]);
   return (
     <nav
       aria-label="Settings"
       data-testid="settings-nav"
       className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
     >
-      <ScrollStrip ref={strip} className="min-h-9" stripClassName="items-center gap-1">
+      <ScrollStrip className="min-h-9" stripClassName="items-center gap-1">
         {ITEMS.map((it) => {
           const on =
             pathname === it.href ||

@@ -30,11 +30,18 @@ test("members: invite someone, then revoke the invite", async ({ page }) => {
   await page.goto("/settings/members");
   const invites = page.getByTestId("invite-row");
   await expect(invites).toHaveCount(1);
+  // Initials come from the email's local part, never from its domain.
+  const rows = page.getByTestId("member-row");
+  await expect(rows.filter({ hasText: "admin@example.com" }).getByRole("img")).toHaveText("AD");
+  await expect(rows.filter({ hasText: "approver@example.com" }).getByRole("img")).toHaveText("AP");
   await expect(invites.first()).toContainText("new.hire@example.com");
 
+  // The header's Invite takes you to the form; the form's own button sends it.
+  await page.getByRole("button", { name: "Invite", exact: true }).click();
+  await expect(page.getByLabel("Email")).toBeFocused();
   await page.getByLabel("Email").fill("Pat@Example.com");
   await page.getByLabel("Role", { exact: true }).selectOption("approver");
-  await page.getByRole("button", { name: "Invite", exact: true }).click();
+  await page.getByRole("button", { name: "Send invite" }).click();
   await expect(invites).toHaveCount(2);
   await expect(invites.first()).toContainText("pat@example.com");
   await expect(invites.first()).toContainText("Approver");
@@ -42,7 +49,7 @@ test("members: invite someone, then revoke the invite", async ({ page }) => {
 
   // An existing member cannot be invited.
   await page.getByLabel("Email").fill("viewer@example.com");
-  await page.getByRole("button", { name: "Invite", exact: true }).click();
+  await page.getByRole("button", { name: "Send invite" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "already a member" })).toBeVisible();
 
   await page.getByRole("button", { name: "Revoke invite for pat@example.com" }).click();

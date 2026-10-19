@@ -4,7 +4,7 @@ export { Button, LinkButton, type ButtonVariant } from "./Button";
 export { Bars, Meter, Ring, Sparkline, type RingTone } from "./Charts";
 export { Chip, GoalTag, type ChipKind } from "./Chip";
 export { DataTable, type Column } from "./DataTable";
-export { Avatar, CostFigure, KpiStrip, Numeral, ToGo, type Kpi } from "./Figures";
+export { Avatar, CostFigure, initialsOf, KpiStrip, Numeral, ToGo, type Kpi } from "./Figures";
 export { Icon, type IconName } from "./Icon";
 export { InfoTip } from "./InfoTip";
 export { Inspector, InspectorRow, InspectorSection, type InspectorStat } from "./Inspector";

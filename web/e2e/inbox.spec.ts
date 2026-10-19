@@ -24,9 +24,9 @@ test("inbox lists checkpoints, cost approvals, overruns and open feedback", asyn
   await page.getByTestId("inbox-overruns").getByRole("button", { name: "Resume" }).click();
   await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
 
-  // Review goes to the run.
-  await checkpoints.getByRole("link", { name: "Review" }).first().click();
-  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  // Decide goes to the run, at the decision.
+  await checkpoints.getByRole("link", { name: "Decide" }).first().click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+#decide$/);
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Waiting");
 });
 

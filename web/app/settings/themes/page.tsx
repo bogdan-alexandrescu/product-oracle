@@ -36,7 +36,9 @@ function Swatches({ t, size = 20 }: { t: Theme; size?: number }) {
         <span
           key={name}
           title={`${name} ${t.tokens.colors?.[name] ?? ""}`}
-          className="-ml-1 flex-none rounded-full border border-line-strong first:ml-0"
+          // A hairline ring in the text colour, so a dark swatch shows on the dark surface (and a
+          // light one on the light surface); the surface ring parts the overlapping swatches.
+          className="-ml-1 flex-none rounded-full shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_45%,transparent),0_0_0_1.5px_var(--surface)] first:ml-0"
           style={{ background: t.tokens.colors?.[name], width: size, height: size }}
         />
       ))}

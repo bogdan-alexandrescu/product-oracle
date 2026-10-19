@@ -14,7 +14,7 @@ test("login: rejects a wrong password, then signs in", async ({ page }) => {
   await page.getByLabel("Password").fill(ADMIN.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/documents$/);
-  await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "PRDs", exact: true })).toBeVisible();
   await expect(page.getByTestId("signed-in-as")).toHaveText("admin@example.com");
 });
 
@@ -147,6 +147,11 @@ test("open the diff: section badges and word-level changes", async ({ page }) =>
   const words = byKey("s-5-2").getByTestId("word-diff");
   await expect(words.locator("ins").first()).toContainText("and the cheapest option is preselected");
   await expect(byKey("metrics").locator("ins").first()).toContainText("Refund rate");
+  // A markdown table is drawn as a table, as in the version view, not as pipe text.
+  const table = byKey("metrics").getByTestId("diff-table");
+  await expect(table.getByRole("columnheader")).toHaveText(["Metric", "Baseline", "Target"]);
+  await expect(table.getByRole("row").filter({ hasText: "Refund rate" }).locator("ins").first()).toBeVisible();
+  await expect(byKey("metrics")).not.toContainText("Metric | Baseline");
 
   // Unchanged sections are collapsed until asked for.
   await expect(byKey("goal-trace")).toHaveCount(0);

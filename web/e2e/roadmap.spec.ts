@@ -38,7 +38,10 @@ test("roadmap screen lists roadmaps with status, template and source PRD; PRDs l
   // Approved PRDs, each with the roadmap built from it.
   await expect(page.getByTestId("approved-prd")).toHaveCount(1);
   await expect(approvedPrd(page)).toContainText("v1 approved");
-  await expect(approvedPrd(page).getByRole("link", { name: "Usage alerts roadmap" })).toBeVisible();
+  // The roadmaps it built are in its inspector, not in the Template column.
+  await expect(approvedPrd(page).getByRole("link", { name: "Usage alerts roadmap" })).toHaveCount(0);
+  await approvedPrd(page).locator("td").nth(2).click();
+  await expect(page.getByTestId("roadmap-inspector").getByRole("link", { name: "Usage alerts roadmap" })).toBeVisible();
 
   // A roadmap opens in the document view.
   await row.getByRole("link", { name: "Usage alerts roadmap" }).click();

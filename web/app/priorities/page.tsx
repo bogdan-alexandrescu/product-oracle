@@ -51,8 +51,8 @@ const FLAGS: Record<string, { label: string; kind: ChipKind; title: string }> = 
     title: "Part of a set of features that depend on each other.",
   },
   missing_inputs: { label: "Missing inputs", kind: "warn", title: "Some inputs this method needs are not set." },
-  no_confidence: { label: "No confidence data", kind: "warn", title: "No evidence or confidence value: 0.5 assumed." },
-  low_confidence: { label: "Low confidence", kind: "warn", title: "Confidence below 0.4." },
+  no_confidence: { label: "No confidence data", kind: "warn", title: "No evidence or confidence value: 50 assumed." },
+  low_confidence: { label: "Low confidence", kind: "warn", title: "Confidence below 40." },
   moved_for_dependency: {
     label: "Moved for a dependency",
     kind: "acc",
@@ -79,8 +79,23 @@ function FlagChip({ flag, hero = false }: { flag: string; hero?: boolean }) {
 }
 
 const fmt = (n: number | null | undefined) => (n == null ? "—" : String(Math.round(n * 100) / 100));
-/** Confidence 0-1 as 0-100, for the bar and the ring. */
+/** Confidence 0-1 as 0-100: the one scale the page shows it in (ring, bar, figures). */
 const pct = (n: number | null | undefined) => (n == null ? null : Math.round(n * 100));
+
+/**
+ * A score step with its confidence factor on the page's 0-100 scale: "score = 6 × 0.75 ÷ 2"
+ * reads "score = 6 × 75% ÷ 2" (the same arithmetic).
+ */
+function stepText(step: string, confidence: number | null | undefined): string {
+  if (confidence == null || !/^score\b/.test(step)) return step;
+  // The last "× c": confidence is the last factor in every formula (impact comes before it in RICE).
+  const factor = [` × ${confidence}`, ` × ${fmt(confidence)}`].find((f) => step.includes(f));
+  if (!factor) return step;
+  const at = step.lastIndexOf(factor);
+  const end = at + factor.length;
+  if (end < step.length && step[end] !== " ") return step;
+  return `${step.slice(0, at)} × ${pct(confidence)}%${step.slice(end)}`;
+}
 
 function inputValue(v: unknown): string {
   if (v == null) return "—";
@@ -170,7 +185,7 @@ function FeatureInspector({ f, id }: { f: RankedFeature; id: string }) {
           >
             <ol className="list-decimal space-y-1 pl-5 font-mono text-[13px] leading-5" aria-label="Steps">
               {e.steps.map((s, i) => (
-                <li key={i}>{s}</li>
+                <li key={i}>{stepText(s, e.confidence.value)}</li>
               ))}
             </ol>
             {e.missing.length > 0 && (
@@ -195,7 +210,9 @@ function FeatureInspector({ f, id }: { f: RankedFeature; id: string }) {
                   {inputs.map(([name, v]) => (
                     <tr key={name} className="border-t border-line">
                       <td className="truncate py-1 pr-2">{name.replace(/_/g, " ")}</td>
-                      <td className="tnum truncate py-1 pr-2 font-mono">{inputValue(v?.value)}</td>
+                      <td className="tnum truncate py-1 pr-2 font-mono">
+                        {name === "confidence" && typeof v?.value === "number" ? pct(v.value) : inputValue(v?.value)}
+                      </td>
                       <td className="truncate py-1 text-text2">
                         {name === "goal_value" ? (
                           "goal terms"
@@ -231,7 +248,7 @@ function FeatureInspector({ f, id }: { f: RankedFeature; id: string }) {
             }
           >
             <div className="flex items-center gap-2.5">
-              <b className="tnum font-mono">{fmt(e.confidence.value)}</b>
+              <b className="tnum font-mono">{pct(e.confidence.value) ?? "—"}</b>
               <span className="text-sm text-text2">{CONFIDENCE_SOURCE[e.confidence.source]}</span>
             </div>
             {e.confidence.evidence.length > 0 && (
@@ -239,7 +256,7 @@ function FeatureInspector({ f, id }: { f: RankedFeature; id: string }) {
                 {e.confidence.evidence.map((ev) => (
                   <li key={ev.id} className="flex min-w-0 items-center gap-2">
                     <span className="flex-none font-mono">{ev.id}</span>
-                    <span className="tnum flex-none text-text2">{fmt(ev.confidence)}</span>
+                    <span className="tnum flex-none text-text2">{pct(ev.confidence) ?? "—"}</span>
                     {ev.ref && (
                       <a
                         href={ev.ref}

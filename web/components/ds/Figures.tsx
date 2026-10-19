@@ -1,6 +1,17 @@
 import type { ReactNode } from "react";
 
 /** Initials in a circle. `oracle` is the Oracle's own lime avatar; `me` the signed-in user's. */
+/**
+ * Two letters for a person: from their name ("Ada Lovelace" -> "AL"), else from an
+ * email's local part ("pat.lee@" -> "PL", "admin@" -> "AD"), never from the domain.
+ */
+export function initialsOf(name: string): string {
+  const local = name.includes("@") ? name.slice(0, name.indexOf("@")) : name;
+  const parts = local.split(/[\s._-]+/).filter(Boolean);
+  const letters = parts.length >= 2 ? parts[0]![0]! + parts[1]![0]! : (parts[0] ?? "").slice(0, 2);
+  return letters.toUpperCase() || "?";
+}
+
 export function Avatar({
   name,
   initials,
@@ -12,15 +23,7 @@ export function Avatar({
   size?: 28 | 32 | 38;
   tone?: "default" | "oracle" | "me";
 }) {
-  const ini =
-    initials ??
-    (name
-      .split(/[\s@._-]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((s) => s[0]!.toUpperCase())
-      .join("") ||
-      "?");
+  const ini = initials ?? initialsOf(name);
   const cls =
     tone === "oracle"
       ? "bg-lime text-on-lime"

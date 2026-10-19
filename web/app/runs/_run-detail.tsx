@@ -12,6 +12,7 @@ import {
   Inspector,
   InspectorRow,
   InspectorSection,
+  LinkButton,
   Page,
   PageHeader,
   Panel,
@@ -103,6 +104,7 @@ export function RunDetail({ id }: { id: string }) {
       ),
     );
   const done = run.segments.filter((s) => s.status === "succeeded").length;
+  const deciding = run.checkpoints.some((c) => c.status === "pending" && c.can_decide);
   const open = !FINAL_STATUSES.includes(run.status) && run.status !== "draft";
 
   return (
@@ -140,6 +142,12 @@ export function RunDetail({ id }: { id: string }) {
               <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/approve", path)))}>
                 Approve {usd(run.estimate_usd)} and start
               </Button>
+            )}
+            {deciding && (
+              // The run waits on a checkpoint this member decides: jump to its decision.
+              <LinkButton variant="primary" href="#decide" icon="flag">
+                Decide
+              </LinkButton>
             )}
             {owner && run.status === "paused_overrun" && (
               <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/resume", path)))}>
@@ -185,7 +193,7 @@ export function RunDetail({ id }: { id: string }) {
         >
           <div
             aria-hidden
-            className="grid h-9 grid-cols-[40px_minmax(0,1fr)_minmax(0,190px)_120px_minmax(0,200px)] items-center gap-2 bg-surface2 px-4 text-[13px] font-semibold text-text2 max-[600px]:grid-cols-[28px_minmax(0,1fr)_auto] max-[600px]:px-3"
+            className="grid h-9 grid-cols-[40px_minmax(0,1fr)_minmax(0,170px)_120px_minmax(0,240px)] items-center gap-2 bg-surface2 px-4 text-[13px] font-semibold text-text2 max-[600px]:grid-cols-[28px_minmax(0,1fr)_auto] max-[600px]:px-3"
           >
             <span>#</span>
             <span>Segment</span>
@@ -308,6 +316,8 @@ const CP_KIND: Record<CheckpointOut["status"], ChipKind> = {
   changes_requested: "warn",
   skipped: "na",
 };
+/** A checkpoint name in full: it wraps to a second line rather than truncating. */
+const WRAP_CHIP = "h-auto min-h-[26px] py-1 leading-4 whitespace-normal";
 const CP_LABEL = { pending: "Waiting", approved: "Approved", changes_requested: "Changes requested", skipped: "Skipped" } as const;
 
 function SegmentItem({
@@ -333,15 +343,18 @@ function SegmentItem({
       className={`border-t border-line ${waiting ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)]" : ""}`}
       data-testid={`segment-${s.name}`}
     >
-      <div className="grid min-h-12 grid-cols-[40px_minmax(0,1fr)_minmax(0,190px)_120px_minmax(0,200px)] items-center gap-2 px-4 py-1.5 max-[600px]:grid-cols-[28px_minmax(0,1fr)_auto] max-[600px]:px-3">
+      <div className="grid min-h-12 grid-cols-[40px_minmax(0,1fr)_minmax(0,170px)_120px_minmax(0,240px)] items-center gap-2 px-4 py-1.5 max-[600px]:grid-cols-[28px_minmax(0,1fr)_auto] max-[600px]:px-3">
         <span className="tnum font-semibold">{s.seq}</span>
         <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium max-[600px]:whitespace-normal">{s.title}</span>
+          <span className="truncate font-medium max-[600px]:whitespace-normal" title={s.title}>
+            {s.title}
+          </span>
           {s.attempts.length > 1 && <Chip kind="na">attempt {s.attempts.length}</Chip>}
         </span>
         <span className="flex min-w-0 gap-1.5 overflow-hidden max-[600px]:hidden">
           {s.roles.map((r) => (
-            <Chip key={r} kind="acc">
+            // On the tinted waiting row an accent chip would vanish into the tint.
+            <Chip key={r} kind={waiting ? "line" : "acc"}>
               {r}
             </Chip>
           ))}
@@ -355,21 +368,21 @@ function SegmentItem({
         <span className="flex min-w-0 flex-wrap gap-1.5 max-[600px]:col-span-full max-[600px]:col-start-2">
           {checkpoints.length === 0 &&
             (s.checkpoint_on ? (
-              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`}>
+              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP}>
                 <span className="sr-only">Stops for </span>
-                <span className="truncate">{CHECKPOINT_LABEL[kind]}</span>
+                {CHECKPOINT_LABEL[kind]}
               </Chip>
             ) : (
-              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`}>
-                <span className="truncate">{CHECKPOINT_LABEL[kind]}: off</span>
+              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`} className={WRAP_CHIP}>
+                {CHECKPOINT_LABEL[kind]}: off
               </Chip>
             ))}
-          {deciding.length > 0 && compact.length === 0 && (
-            <Chip kind="warn">
+          {deciding.map((cp) => (
+            <Chip key={cp.id} kind="warn" title={`Waiting: ${CHECKPOINT_LABEL[cp.kind]}`} className={WRAP_CHIP}>
               <Icon name="clock" size={16} />
-              Waiting
+              {CHECKPOINT_LABEL[cp.kind]}
             </Chip>
-          )}
+          ))}
           {compact.map((cp) => (
             <span key={cp.id} data-testid={`checkpoint-${cp.kind}`} className="inline-flex max-w-full">
               <Chip
@@ -392,8 +405,8 @@ function SegmentItem({
           {s.items_check && <ItemsCheckLine check={s.items_check} />}
           {s.draft_import && <DraftImportLine imp={s.draft_import} />}
           {s.artifacts.length > 0 && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} />}
-          {deciding.map((cp) => (
-            <CheckpointRow key={cp.id} cp={cp} busy={busy} onDecide={onDecide} />
+          {deciding.map((cp, i) => (
+            <CheckpointRow key={cp.id} cp={cp} busy={busy} onDecide={onDecide} anchor={i === 0} />
           ))}
         </div>
       )}
@@ -503,10 +516,14 @@ function Artifacts({ runId, seq, names }: { runId: string; seq: number; names: s
   );
 }
 
-function CheckpointRow({ cp, busy, onDecide }: { cp: CheckpointOut; busy: boolean; onDecide: Decide }) {
+function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy: boolean; onDecide: Decide; anchor?: boolean }) {
   const [note, setNote] = useState("");
   return (
-    <div className="rounded-button border border-line bg-surface p-3" data-testid={`checkpoint-${cp.kind}`}>
+    <div
+      id={anchor ? "decide" : undefined}
+      className="scroll-mt-24 rounded-button border border-line bg-surface p-3"
+      data-testid={`checkpoint-${cp.kind}`}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <Icon name="flag" size={16} className="text-accent-ink" />
         <span className="font-semibold">{CHECKPOINT_LABEL[cp.kind]}</span>

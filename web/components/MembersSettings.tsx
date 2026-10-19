@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
 import {
@@ -131,7 +131,9 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
 
-  // The invite form lives in the inspector; its submit is the page's one primary action.
+  // The invite form lives in the inspector with its own submit; the header's Invite (the
+  // page's one primary action) takes you to it, which on a phone is below the table.
+  const emailRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("commenter");
   const [pending, setPending] = useState(false);
@@ -241,6 +243,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
         <form id={INVITE_FORM} onSubmit={invite} aria-label="Invite" className="flex flex-col gap-3">
           <Field label="Email">
             <input
+              ref={emailRef}
               type="email"
               required
               value={email}
@@ -253,6 +256,11 @@ function OwnerView({ selfId }: { selfId: string | null }) {
             <RoleSelect value={inviteRole} label="Role" onChange={setInviteRole} />
           </Field>
           {inviteError && <Notice tone="error">{inviteError}</Notice>}
+          <div>
+            <Button type="submit" variant="solid" icon="plus" disabled={pending || !email.trim()}>
+              {pending ? "Inviting…" : "Send invite"}
+            </Button>
+          </div>
         </form>
       </InspectorSection>
       <InspectorSection label="Open invites" testId="open-invites">
@@ -289,8 +297,16 @@ function OwnerView({ selfId }: { selfId: string | null }) {
         title="Members"
         status={pageTip}
         action={
-          <Button type="submit" form={INVITE_FORM} variant="primary" icon="plus" disabled={pending || !email.trim()}>
-            {pending ? "Inviting…" : "Invite"}
+          <Button
+            variant="primary"
+            icon="plus"
+            aria-controls={INVITE_FORM}
+            onClick={() => {
+              emailRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+              emailRef.current?.focus({ preventScroll: true });
+            }}
+          >
+            Invite
           </Button>
         }
       />

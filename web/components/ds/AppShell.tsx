@@ -9,6 +9,7 @@ import { resetMockData } from "@/lib/api/mock/server";
 import { useMe } from "@/lib/me";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
+import { initialsOf } from "./Figures";
 import { Icon, type IconName } from "./Icon";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string; match?: string };
@@ -109,13 +110,7 @@ function UserMenu({ placement }: { placement: "rail" | "sheet" }) {
     router.push("/login");
   }
 
-  const initials =
-    email
-      .split(/[@._-]/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((s) => s[0]!.toUpperCase())
-      .join("") || "?";
+  const initials = initialsOf(email);
 
   const panel = (
     <div

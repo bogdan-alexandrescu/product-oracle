@@ -386,11 +386,47 @@ const STATE_KIND: Record<string, ChipKind> = {
   REAUTH_REQUIRED: "warn",
 };
 
-/** The state word, lower case with spaces; the platform's spelling is the title. */
+const STATE_LABEL: Record<string, string> = {
+  AVAILABLE: "Available",
+  PAUSED: "Paused",
+  DRAINING: "Draining",
+  REAUTH_REQUIRED: "Needs sign-in",
+};
+
+/** A state as a plain label; an unknown one in sentence case. */
+export function stateLabel(state: string): string {
+  return STATE_LABEL[state] ?? sentence(state.toLowerCase().replace(/_/g, " "));
+}
+
+/** The platform's reason codes, in words. */
+const REASON_LABEL: Record<string, string> = {
+  reauth_required: "sign-in needed",
+  unreadable: "credential unreadable",
+  refresh_failed: "refresh failed",
+  refreshed: "refreshed",
+  still_valid: "still valid",
+  published: "published",
+  held_deferred: "deferred while in use",
+};
+
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** A reason ("refresh failed: reauth_required") with its codes in words: "Refresh failed: sign-in needed". */
+export function reasonLabel(reason: string): string {
+  if (REASON_LABEL[reason]) return sentence(REASON_LABEL[reason]);
+  // A reason someone typed reads as they typed it.
+  if (!/[a-z]+(?:_[a-z]+)+/.test(reason)) return reason;
+  const words = reason.replace(/[a-z]+(?:_[a-z]+)+/g, (code) =>
+    code === NO_REFRESH ? "nothing to refresh" : (REASON_LABEL[code] ?? code.replace(/_/g, " ")),
+  );
+  return sentence(words);
+}
+
+/** The state as a chip; the platform's spelling is the title. */
 function AcctState({ state }: { state: string }) {
   return (
     <Chip kind={STATE_KIND[state] ?? "na"} dot title={state}>
-      {state.toLowerCase().replace(/_/g, " ")}
+      {stateLabel(state)}
     </Chip>
   );
 }
@@ -580,18 +616,24 @@ function Detail({
       ]}
     >
       <InspectorSection label="Facts">
-        {account.reason && <Fact label="Reason">{account.reason}</Fact>}
+        {account.reason && <Fact label="Reason">{reasonLabel(account.reason)}</Fact>}
         <Fact label="Jobs on it">{account.assigned}</Fact>
         <Fact label="Last read">
           {account.observed_at === null
             ? "not measured"
             : `${timeAgo(account.observed_at, now)}${account.stale ? " (old: figures are projected)" : ""}`}
         </Fact>
-        <Fact label="Token expires">{account.token_expires_at ? `in ${clearsIn(account.token_expires_at, now)}` : "—"}</Fact>
+        <Fact label="Token expires">
+          {!account.token_expires_at
+            ? "—"
+            : new Date(account.token_expires_at).getTime() <= now
+              ? "Expired"
+              : `in ${clearsIn(account.token_expires_at, now)}`}
+        </Fact>
         <Fact label="Last refresh">
           {account.last_refresh_at
-            ? `${timeAgo(account.last_refresh_at, now)}: ${account.last_refresh_reason ?? "—"}`
-            : "no sweep yet"}
+            ? `${account.last_refresh_reason ? `${reasonLabel(account.last_refresh_reason)} · ` : ""}${timeAgo(account.last_refresh_at, now)}`
+            : "No sweep yet"}
         </Fact>
         <Fact label="Id" mono>
           {account.account_id}
@@ -785,10 +827,10 @@ function HoldingHistory({ account, now }: { account: Account; now: number }) {
   );
 }
 
-const TARGETS: { to: StateName; why: string }[] = [
-  { to: "AVAILABLE", why: "assignable to new jobs" },
-  { to: "PAUSED", why: "no new jobs; the ones on it keep running" },
-  { to: "DRAINING", why: "no new jobs, and the ones on it are moved off" },
+const TARGETS: { to: StateName; verb: string; why: string }[] = [
+  { to: "AVAILABLE", verb: "Make available", why: "assignable to new jobs" },
+  { to: "PAUSED", verb: "Pause", why: "no new jobs; the ones on it keep running" },
+  { to: "DRAINING", verb: "Drain", why: "no new jobs, and the ones on it are moved off" },
 ];
 
 /** Taking an account out of rotation is the move that has to say why. */
@@ -832,19 +874,19 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
       <div className="flex flex-wrap gap-2">
         {TARGETS.map((t) => (
           <Button key={t.to} title={t.why} disabled={account.state === t.to} onClick={() => setAsking(t.to)}>
-            move to {t.to.toLowerCase()}
+            {t.verb}
           </Button>
         ))}
       </div>
       {asked && (
         <div
           role="dialog"
-          aria-label={`Move ${account.label} to ${asked.to.toLowerCase()}?`}
+          aria-label={`${asked.verb} ${account.label}?`}
           className="mt-3 flex flex-col gap-2.5 rounded-button border border-line-strong bg-surface2 p-3"
         >
           <p className="flex items-center gap-2 font-semibold">
             <span className="min-w-0 flex-1">
-              Move {account.label} to {asked.to.toLowerCase()}?
+              {asked.verb} {account.label}?
             </span>
             <InfoTip label="this state">After: {asked.why}.</InfoTip>
           </p>
@@ -866,10 +908,10 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
           </Field>
           <div className="flex flex-wrap gap-2">
             <Button variant="solid" disabled={busy || (needsReason && !reason.trim())} onClick={() => void move(asked.to)}>
-              {busy ? "saving…" : `move to ${asked.to.toLowerCase()}`}
+              {busy ? "Saving…" : asked.verb}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setAsking(null)}>
-              Leave it {account.state.toLowerCase().replace(/_/g, " ")}
+              Cancel
             </Button>
           </div>
           {error && <Notice tone="error">{error} The state was not changed.</Notice>}
@@ -969,7 +1011,7 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
           onChange={(e) => setTyped(e.target.value)}
         />
         <Button variant="danger" disabled={!armed || busy} onClick={() => void run()}>
-          {busy ? "removing…" : `remove ${account.label}`}
+          {busy ? "Removing…" : "Remove"}
         </Button>
       </div>
       {error && (
@@ -1134,13 +1176,7 @@ function SignInAgain({
   if (prominent) {
     return (
       <InspectorSection
-        label={
-          <>
-            <Chip kind="warn" dot>
-              Sign in again
-            </Chip>
-          </>
-        }
+        label="Sign-in"
         tools={tip}
       >
         {steps}

@@ -466,10 +466,18 @@ export function NewDraft({ kind }: { kind: Kind }) {
           </InspectorSection>
         )}
         {rec && (
-          <InspectorSection label="Why">
+          <InspectorSection
+            label="Why"
+            tools={
+              // I3 rule 1: the reasoning is prose, so it sits behind the (i).
+              <InfoTip label="the recommendation">
+                <span data-testid="recommendation-reason">{rec.reason}</span>
+              </InfoTip>
+            }
+          >
             <div data-testid="recommendation">
-              <p data-testid="recommendation-reason" className="text-[15px] leading-[22px] text-text">
-                {rec.reason}
+              <p className="font-semibold text-text">
+                {rec.company_default?.template === rec.template.key ? "Company default" : "Fits your answers"}
               </p>
               {rec.warnings.length > 0 && (
                 <ul data-testid="recommendation-warnings" className="mt-2.5 flex flex-col gap-1.5">
@@ -526,7 +534,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
             className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
           >
             <Icon name="back" size={16} />
-            {kind === "roadmap" ? "Roadmap" : "Documents"}
+            {kind === "roadmap" ? "Roadmap" : "PRDs"}
           </Link>
         }
         title={`New ${label}`}

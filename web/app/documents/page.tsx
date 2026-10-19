@@ -133,7 +133,7 @@ export default function DocumentsPage() {
   return (
     <Page>
       <PageHeader
-        title="Documents"
+        title="PRDs"
         status={
           q.data && (
             <>

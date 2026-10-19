@@ -47,7 +47,7 @@ test("app shell: each destination routes to its page", async ({ page }) => {
     ["nav-roadmap", "Roadmap", "/roadmap"],
     ["nav-inbox", "Inbox", "/inbox"],
     ["nav-settings", "Members", "/settings/members"],
-    ["nav-prds", "Documents", "/documents"],
+    ["nav-prds", "PRDs", "/documents"],
   ]) {
     await nav.getByTestId(id).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));

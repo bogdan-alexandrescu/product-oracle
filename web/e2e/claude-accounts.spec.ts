@@ -41,7 +41,13 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
 
   // With nothing chosen, the pane shows the most urgent account.
   await expect(detail(page).getByRole("heading", { name: "old-laptop" })).toBeVisible();
-  await expect(detail(page)).toContainText("refresh failed: reauth_required");
+  await expect(detail(page)).toContainText("Refresh failed: sign-in needed");
+  // Plain labels, no raw codes; one way to sign in again in the pane.
+  await expect(page.locator("body")).not.toContainText(/reauth|REAUTH/);
+  await expect(row(page, "old-laptop")).toContainText("Needs sign-in");
+  await expect(detail(page)).toContainText("Expired");
+  await expect(detail(page)).not.toContainText("in now");
+  await expect(detail(page).getByText(/^Sign in again/)).toHaveCount(1);
 
   // Choosing a row shows its tiles.
   await row(page, "personal").getByRole("button").click();
@@ -75,20 +81,20 @@ test("claude accounts: an owner drains with a reason, refreshes, and removes onl
   await row(page, "personal").getByRole("button").click();
   const pane = detail(page);
 
-  await pane.getByRole("button", { name: "move to draining" }).click();
-  const confirm = pane.getByRole("dialog", { name: "Move personal to draining?" });
+  await pane.getByRole("button", { name: "Drain", exact: true }).click();
+  const confirm = pane.getByRole("dialog", { name: "Drain personal?" });
   await expect(confirm).toContainText("1 job on it now will be moved off at their next turn.");
-  const go = confirm.getByRole("button", { name: "move to draining" });
+  const go = confirm.getByRole("button", { name: "Drain", exact: true });
   await expect(go).toBeDisabled();
   await confirm.getByLabel("Reason (required)").fill("retiring this laptop");
   await go.click();
-  await expect(row(page, "personal")).toContainText("draining");
+  await expect(row(page, "personal")).toContainText("Draining");
   await expect(pane).toContainText("retiring this laptop");
 
   await pane.getByRole("button", { name: "Refresh now" }).click();
   await expect(pane.getByRole("status").filter({ hasText: "Refreshed" })).toBeVisible();
 
-  const remove = pane.getByRole("button", { name: "remove personal" });
+  const remove = pane.getByRole("button", { name: "Remove", exact: true });
   await expect(remove).toBeDisabled();
   await pane.getByLabel("Type personal to confirm removal").fill("persona");
   await expect(remove).toBeDisabled();
@@ -143,7 +149,7 @@ test("claude accounts: a pasted saved login must carry a refresh token; signing 
   await (await popup).close();
   await pane.getByLabel("Code from the Claude page").fill("fresh-code");
   await pane.getByRole("button", { name: "Finish sign-in" }).click();
-  await expect(row(page, "old-laptop")).toContainText("available");
+  await expect(row(page, "old-laptop")).toContainText("Available");
   await expect(page.getByTestId("accounts-summary")).not.toContainText("needs a sign-in");
 });
 
@@ -170,7 +176,7 @@ test("claude accounts: other roles read the pool and get no controls", async ({ 
   await expect(page.getByRole("button", { name: "+ Add account" })).toHaveCount(0);
   await row(page, "personal").getByRole("button").click();
   await expect(detail(page)).toContainText("Only an owner changes accounts.");
-  await expect(detail(page).getByRole("button", { name: /move to/ })).toHaveCount(0);
+  await expect(detail(page).getByRole("button", { name: /^(Make available|Pause|Drain)$/ })).toHaveCount(0);
   await expect(page.getByTestId("fallback").getByRole("button")).toHaveCount(0);
 });
 

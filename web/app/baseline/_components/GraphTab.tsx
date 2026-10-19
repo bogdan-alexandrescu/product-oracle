@@ -11,6 +11,7 @@ import {
   ContributionPips,
   DEFAULT_LOW,
   DeliveryChip,
+  NodeStatusBadge,
   FlagBadges,
   formatValue,
   LockMark,
@@ -98,11 +99,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       key: "status",
       header: "State",
       width: "120px",
-      cell: (g) => (
-        <Chip kind={g.status === "confirmed" ? "pass" : g.status === "proposed" ? "warn" : "crit"}>
-          {g.status === "confirmed" ? "Confirmed" : g.status === "proposed" ? "Proposed" : "Rejected"}
-        </Chip>
-      ),
+      cell: (g) => <NodeStatusBadge status={g.status} />,
     },
     {
       key: "metric",
@@ -169,7 +166,9 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     goalCols.push({
       key: "act",
       header: <span className="sr-only">Action</span>,
-      width: "104px",
+      // The whole button: nothing in the action column truncates.
+      width: "128px",
+      className: "overflow-visible",
       align: "right",
       phone: "action",
       cell: (g) =>
@@ -394,7 +393,7 @@ function FeatureRow({
       }`}
     >
       <td role="cell" className="px-2 py-1.5 pl-4 max-[600px]:block max-[600px]:basis-full max-[600px]:p-0">
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 items-center gap-2 max-[600px]:flex-wrap">
           <TitleButton entity={feature} onOpen={onOpen} className="max-[600px]:font-medium max-[600px]:whitespace-normal" />
           <LockMark entity={feature} meId={meId} />
           {feature.status === "proposed" && (
@@ -403,16 +402,9 @@ function FeatureRow({
             </span>
           )}
           {flags.length > 0 && (
-            <span className="flex min-w-0 flex-none gap-1.5 max-[600px]:hidden">
+            <span className="flex min-w-0 flex-none gap-1.5 max-[600px]:flex-wrap">
               <FlagBadges flags={flags} />
             </span>
-          )}
-          {flags.length > 0 && (
-            <span
-              aria-hidden
-              title={`${flags.length} flag${flags.length === 1 ? "" : "s"}`}
-              className="hidden size-2.5 flex-none rounded-full bg-crit max-[600px]:inline-block"
-            />
           )}
         </span>
       </td>

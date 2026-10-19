@@ -312,7 +312,7 @@ function Attrs({ attrs }: { attrs: Record<string, unknown> }) {
           <div key={k} className="contents">
             <dt className="text-text2">{k}</dt>
             <dd className="tnum truncate font-semibold" data-attr={k} title={formatValue(v)}>
-              {formatValue(v)}
+              {k === "status" ? <DeliveryChip value={v} /> : formatValue(v)}
             </dd>
           </div>
         ))}

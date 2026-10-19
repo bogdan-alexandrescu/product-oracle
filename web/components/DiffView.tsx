@@ -35,10 +35,85 @@ function countOf(sections: SectionDiff[]) {
   };
 }
 
-function Words({ words }: { words: NonNullable<SectionDiff["words"]> }) {
+type Op = NonNullable<SectionDiff["words"]>[number];
+type Line = Op[];
+type Block = { kind: "text"; lines: Line[] } | { kind: "table"; rows: Line[][] };
+
+/** Splits the word diff into lines; each line keeps its ops. */
+function linesOf(words: Op[]): Line[] {
+  const lines: Line[] = [[]];
+  for (const w of words) {
+    w.text.split("\n").forEach((part, i) => {
+      if (i > 0) lines.push([]);
+      if (part) lines[lines.length - 1].push({ op: w.op, text: part });
+    });
+  }
+  return lines;
+}
+
+const lineText = (l: Line) => l.map((w) => w.text).join("").trim();
+/** A markdown table's separator row ("| --- | :-: |"): dropped, the table is drawn instead. */
+const TABLE_RULE = /^\|?(\s*:?-{3,}:?\s*\|)+(\s*:?-{3,}:?\s*)?$/;
+
+/** A table row's cells: the line's ops cut at each pipe, the outer pipes dropped. */
+function cellsOf(line: Line): Line[] {
+  const cells: Line[] = [[]];
+  for (const w of line) {
+    w.text.split("|").forEach((part, i) => {
+      if (i > 0) cells.push([]);
+      if (part) cells[cells.length - 1].push({ op: w.op, text: part });
+    });
+  }
+  const blank = (c: Line) => c.every((w) => !w.text.trim());
+  if (cells.length > 1 && blank(cells[0])) cells.shift();
+  if (cells.length > 1 && blank(cells[cells.length - 1])) cells.pop();
+  return cells;
+}
+
+/**
+ * Markdown tables become table blocks, as the version view draws them; the rest stays
+ * text. A table is two or more consecutive lines with the same number of pipe-separated
+ * cells ("| a | b |" or the plain text's "a | b"); its separator row is dropped.
+ */
+function blocksOf(words: Op[]): Block[] {
+  const blocks: Block[] = [];
+  const text = (line: Line) => {
+    const last = blocks[blocks.length - 1];
+    if (last?.kind === "text") last.lines.push(line);
+    else blocks.push({ kind: "text", lines: [line] });
+  };
+  let run: Line[] = [];
+  const flush = () => {
+    if (run.length >= 2) blocks.push({ kind: "table", rows: run.map(cellsOf) });
+    else run.forEach(text);
+    run = [];
+  };
+  for (const line of linesOf(words)) {
+    const t = lineText(line);
+    if (run.length > 0 && TABLE_RULE.test(t)) continue;
+    const cells = t.includes("|") ? cellsOf(line).length : 0;
+    if (cells >= 2 && (run.length === 0 || cellsOf(run[0]).length === cells)) {
+      run.push(line);
+      continue;
+    }
+    flush();
+    if (cells >= 2) run.push(line);
+    else text(line);
+  }
+  flush();
+  // The blank lines around a table belong to the table's margins.
+  for (const b of blocks) {
+    if (b.kind !== "text") continue;
+    while (b.lines.length > 1 && b.lines[0].length === 0) b.lines.shift();
+    while (b.lines.length > 1 && b.lines[b.lines.length - 1].length === 0) b.lines.pop();
+  }
+  return blocks;
+}
+
+function Ops({ ops }: { ops: Op[] }) {
   return (
-    <p className="text-[15px] leading-7 whitespace-pre-wrap text-text" data-testid="word-diff">
-      {words.map((w, i) =>
+    <>
+      {ops.map((w, i) =>
         w.op === "insert" ? (
           <ins key={i} className="rounded-sm bg-pass-bg px-0.5 text-pass no-underline">
             {w.text}
@@ -51,7 +126,68 @@ function Words({ words }: { words: NonNullable<SectionDiff["words"]> }) {
           <span key={i}>{w.text}</span>
         ),
       )}
-    </p>
+    </>
+  );
+}
+
+/** A whole row added or removed is tinted; a changed row shows its words. */
+function rowTone(cells: Line[]): string {
+  const ops = cells.flat().filter((w) => w.text.trim());
+  if (ops.length > 0 && ops.every((w) => w.op === "insert")) return "bg-pass-bg";
+  if (ops.length > 0 && ops.every((w) => w.op === "delete")) return "bg-crit-bg";
+  return "";
+}
+
+function DiffTable({ rows }: { rows: Line[][] }) {
+  const [head, ...body] = rows;
+  return (
+    <div className="doc-body my-2">
+      <div className="table-wrap">
+        <table data-testid="diff-table">
+          <thead>
+            <tr className={rowTone(head)}>
+              {head.map((c, i) => (
+                <th key={i}>
+                  <Ops ops={c} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {body.map((r, j) => (
+              <tr key={j} className={rowTone(r)}>
+                {r.map((c, i) => (
+                  <td key={i}>
+                    <Ops ops={c} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Words({ words }: { words: NonNullable<SectionDiff["words"]> }) {
+  return (
+    <div className="text-[15px] leading-7 text-text" data-testid="word-diff">
+      {blocksOf(words).map((b, i) =>
+        b.kind === "table" ? (
+          <DiffTable key={i} rows={b.rows} />
+        ) : (
+          <p key={i} className="whitespace-pre-wrap">
+            {b.lines.map((l, j) => (
+              <span key={j}>
+                {j > 0 && "\n"}
+                <Ops ops={l} />
+              </span>
+            ))}
+          </p>
+        ),
+      )}
+    </div>
   );
 }
 
@@ -102,12 +238,18 @@ function DiffSection({ d, doc, to, showLayer }: { d: SectionDiff; doc: string; t
             Moved
           </Chip>
         )}
-        <span className="ml-auto truncate font-mono text-[13px] text-text2">#{d.section_key}</span>
-        {d.status !== "removed" && (
-          <Link href={`/documents/${doc}/v/${to}#s-${d.section_key}`} className="text-sm font-medium text-accent-ink hover:underline">
-            View
-          </Link>
-        )}
+        {/* The anchor and View stay on one line: when the row wraps, they move down together. */}
+        <span className="ml-auto flex min-w-0 max-w-full items-center gap-2" data-testid="diff-anchor">
+          <span className="min-w-0 truncate font-mono text-[13px] text-text2">#{d.section_key}</span>
+          {d.status !== "removed" && (
+            <Link
+              href={`/documents/${doc}/v/${to}#s-${d.section_key}`}
+              className="flex-none text-sm font-medium text-accent-ink hover:underline"
+            >
+              View
+            </Link>
+          )}
+        </span>
       </div>
       {(renamed || (d.words && d.words.length > 0)) && (
         <div className="border-t border-line px-4 py-3">

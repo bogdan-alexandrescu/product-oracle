@@ -8,8 +8,24 @@ import { Icon } from "./Icon";
  * A one-line strip that scrolls sideways (sections, tabs). When items overflow, the edge
  * with more to see fades and a chevron button beside the strip scrolls it, so a cut-off
  * item reads as "more". The buttons sit outside the scrolling area: the strip never runs
- * under adjacent content. `ref` and the other props go to the scrolling element.
+ * under adjacent content. The current item (aria-current or aria-selected) is kept in full
+ * view, clear of the fades. `ref` and the other props go to the scrolling element.
  */
+/** Room kept between the current item and an edge: the fade (32 px) plus a little air. */
+const REVEAL_PAD = 40;
+
+/** Scrolls the strip so its current item sits in full view, clear of the edge fades. */
+function reveal(s: HTMLElement) {
+  if (s.scrollWidth <= s.clientWidth) return;
+  const on = s.querySelector<HTMLElement>('[aria-current="page"], [aria-current="true"], [aria-selected="true"]');
+  if (!on) return;
+  const box = s.getBoundingClientRect();
+  const item = on.getBoundingClientRect();
+  const pad = Math.min(REVEAL_PAD, Math.max(0, (box.width - item.width) / 2));
+  if (item.right > box.right - pad) s.scrollLeft += item.right - (box.right - pad);
+  else if (item.left < box.left + pad) s.scrollLeft -= box.left + pad - item.left;
+}
+
 export function ScrollStrip({
   children,
   className = "",
@@ -38,12 +54,20 @@ export function ScrollStrip({
   useEffect(() => {
     const s = el.current;
     if (!s) return;
-    measure();
-    const ro = new ResizeObserver(measure);
+    // On mount and resize only, so the reader can still scroll the current item away.
+    const settle = () => {
+      reveal(s);
+      measure();
+    };
+    settle();
+    // Showing a chevron narrows the strip after the first measure: settle again.
+    const raf = requestAnimationFrame(settle);
+    const ro = new ResizeObserver(settle);
     ro.observe(s);
     for (const c of s.children) ro.observe(c);
     s.addEventListener("scroll", measure, { passive: true });
     return () => {
+      cancelAnimationFrame(raf);
       ro.disconnect();
       s.removeEventListener("scroll", measure);
     };

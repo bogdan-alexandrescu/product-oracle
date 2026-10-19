@@ -102,11 +102,11 @@ export function NodeStatusBadge({ status, hero = false }: { status: NodeStatus; 
   );
 }
 
-/** A feature's delivery state (attrs.status): "in_progress" -> "in progress". */
+/** A feature's delivery state (attrs.status) in sentence case, as goal states are: "in_progress" -> "In progress". */
 export function DeliveryChip({ value, hero = false }: { value: unknown; hero?: boolean }) {
   if (value == null || value === "") return null;
-  const text = formatValue(value).replace(/_/g, " ");
-  const v = text.toLowerCase();
+  const v = formatValue(value).replace(/_/g, " ").toLowerCase();
+  const text = v.charAt(0).toUpperCase() + v.slice(1);
   const kind: ChipKind = v === "shipped" || v === "done" ? "pass" : v === "in progress" || v === "in build" ? "acc" : "na";
   return (
     <Chip kind={kind} hero={hero}>

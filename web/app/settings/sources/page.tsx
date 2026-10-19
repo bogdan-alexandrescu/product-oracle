@@ -1,12 +1,13 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useId, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import { KIND_LABEL } from "@/app/sources/_components/confidence";
 import {
   Button,
   Chip,
   Empty,
+  Icon,
   InfoTip,
   Inspector,
   InspectorSection,
@@ -38,6 +39,72 @@ const ALLOWLIST: Record<Exclude<Kind, "upload">, { key: string; label: string; e
 };
 
 const STATUS_KIND: Record<Source["status"], ChipKind> = { active: "pass", paused: "na", error: "crit" };
+const STATUS_LABEL: Record<Source["status"], string> = { active: "Active", paused: "Paused", error: "Error" };
+
+/**
+ * A row's rarely used actions (Edit allowlist, Delete) behind one "More" button, so the
+ * row's actions stay on one line on a phone.
+ */
+function RowMenu({ label, items }: { label: string; items: { label: string; onSelect: () => void; danger?: boolean }[] }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
+  const id = useId();
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  return (
+    <span ref={box} className="relative">
+      <button
+        type="button"
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? id : undefined}
+        onClick={() => setOpen((v) => !v)}
+        className="grid size-8 place-items-center rounded-lg text-text2 hover:bg-surface2 hover:text-text"
+      >
+        <Icon name="more" size={20} />
+      </button>
+      {open && (
+        <span
+          id={id}
+          role="menu"
+          aria-label={label}
+          className="absolute top-full right-0 z-20 mt-1 flex min-w-40 flex-col rounded-button border border-line bg-surface p-1 shadow-panel"
+        >
+          {items.map((it) => (
+            <button
+              key={it.label}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                it.onSelect();
+              }}
+              className={`flex h-9 items-center rounded-lg px-3 text-left text-[15px] font-medium whitespace-nowrap hover:bg-surface2 ${
+                it.danger ? "text-crit" : "text-text"
+              }`}
+            >
+              {it.label}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
 
 function entries(config: Record<string, unknown>, key: string): string[] {
   const value = config[key];
@@ -190,7 +257,7 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
           </span>
           <Chip kind="acc">{KIND_LABEL[source.kind]}</Chip>
           <Chip kind={STATUS_KIND[source.status]} dot>
-            {source.status}
+            {STATUS_LABEL[source.status]}
           </Chip>
           {!source.connector_available && (
             <Chip kind="warn" title={`The ${KIND_LABEL[source.kind]} connector is not available yet.`}>
@@ -198,7 +265,7 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
             </Chip>
           )}
         </span>
-        <span className="flex flex-wrap items-center gap-1">
+        <span className="flex flex-none items-center gap-1">
           {source.kind === "upload" ? (
             <>
               <input
@@ -223,17 +290,20 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
               >
                 Sync now
               </Button>
-              <Button disabled={busy} aria-expanded={editing} onClick={() => setEditing((v) => !v)}>
-                {editing ? "Close allowlist" : "Edit allowlist"}
-              </Button>
             </>
           )}
           <Button disabled={busy} onClick={togglePause}>
             {source.status === "paused" ? "Resume" : "Pause"}
           </Button>
-          <Button variant="ghost" disabled={busy} onClick={remove}>
-            Delete
-          </Button>
+          <RowMenu
+            label={`More actions for ${source.name}`}
+            items={[
+              ...(allowlist
+                ? [{ label: editing ? "Close allowlist" : "Edit allowlist", onSelect: () => setEditing((v) => !v) }]
+                : []),
+              { label: "Delete", onSelect: () => void remove(), danger: true },
+            ]}
+          />
         </span>
       </div>
       <div className="tnum mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-text2">

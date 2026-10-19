@@ -162,7 +162,7 @@ test("baseline: editing a feature saves and locks it; unlock releases it", async
   await expect(edited.getByRole("status")).toContainText("now locked against agent changes");
   await expect(edited.getByTestId("lock-note")).toContainText("Locked by you");
   await expect(edited.locator('[data-attr="effort"]')).toHaveText("M");
-  await expect(edited.locator('[data-attr="status"]')).toHaveText("in_progress");
+  await expect(edited.locator('[data-attr="status"]')).toHaveText("In progress");
   await expect(row).toContainText("Sample store data");
   await expect(row).toContainText("Locked");
 
@@ -233,7 +233,7 @@ test("baseline: an approver resolves an open material conflict by picking a clai
 
   // The pick is a person's write: it locks the feature.
   await page.getByRole("tab", { name: /Graph/ }).click();
-  await expect(page.getByTestId("feature-f.saved-carts")).toContainText("in progress");
+  await expect(page.getByTestId("feature-f.saved-carts")).toContainText("In progress");
   await expect(page.getByTestId("feature-f.saved-carts")).toContainText("Locked");
 });
 
@@ -267,7 +267,7 @@ test("baseline: an approver accepts and rejects proposals", async ({ page }) => 
   await expect(drawer(page, "Guided setup").locator('[data-attr="effort"]')).toHaveText("L");
   await page.keyboard.press("Escape");
   await page.getByTestId("feature-f.dark-mode").getByRole("button", { name: "Dark mode" }).click();
-  await expect(drawer(page, "Dark mode").locator('[data-attr="status"]')).toHaveText("idea");
+  await expect(drawer(page, "Dark mode").locator('[data-attr="status"]')).toHaveText("Idea");
 });
 
 test("baseline: a viewer reads everything but sees no write buttons", async ({ page }) => {
