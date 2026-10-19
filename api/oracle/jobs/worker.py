@@ -17,9 +17,15 @@ A job left ``running`` past ``stale_after_seconds`` (the worker stopped mid-call
 reclaimed the same way as a transient failure.
 
 A caller with a time limit (the run ticker) passes ``budget_seconds``: no job is
-claimed unless a whole model call (``ORACLE_LLM_TIMEOUT_SECONDS``) still fits. A job
-cancelled anyway (``CancelledError``) goes back to ``queued`` with its attempt given
-back and nothing recorded as spent, so no claim is left to go stale.
+claimed unless a whole model call (``ORACLE_LLM_TIMEOUT_SECONDS``) still fits, and the
+job's calls get that deadline (``gateway.complete``), so no account swap or further call
+starts that could not finish inside it (a transient failure instead). A job cancelled
+anyway (``CancelledError``) leaves no claim to go stale:
+- before any model call started, it goes back to ``queued`` with its attempt given back
+  and nothing recorded as spent;
+- once one had, the cut is a transient failure that counts the attempt (``queued`` once
+  more, then ``failed``), recording what is known (the account, and any call that
+  finished), so a job whose calls keep overrunning cannot run forever.
 """
 
 import asyncio
@@ -51,6 +57,8 @@ MAX_ATTEMPTS = 2
 #: Beyond the model call, what a job may take (claiming it, reading its inputs, writing
 #: its outcome) when deciding whether it fits in a budget.
 JOB_OVERHEAD_SECONDS = 5.0
+#: The error of a job cut off while a model call ran.
+CUT_OFF = "The model call was cut off by the caller's time limit"
 
 
 class JobWorkerSettings(BaseSettings):
@@ -92,7 +100,14 @@ class _Call:
     output_tokens: int = 0
     cost: Decimal | None = None
     calls: int = 0
+    # Calls started (each on account_label / via), finished or not.
+    started: int = 0
     swaps: list[tuple[str, str]] = field(default_factory=list)
+
+    def call_started(self, account_label: str | None, via: str) -> None:
+        self.started += 1
+        self.account_label = account_label
+        self.via = via
 
 
 def _tokens(usage: dict[str, Any]) -> tuple[int, int]:
@@ -205,23 +220,63 @@ async def release_claim(tenant_id: uuid.UUID, job_id: uuid.UUID) -> bool:
         return True
 
 
-async def _shielded_release(tenant_id: uuid.UUID, job_id: uuid.UUID) -> None:
-    # Shielded: the release finishes even if the caller is cancelled again meanwhile.
+async def record_cut(tenant_id: uuid.UUID, job_id: uuid.UUID, call: _Call) -> None:
+    """A claimed job cut off after a model call started: a transient failure, counted."""
+    async with tenant_session(tenant_id) as s:
+        await _finish(s, job_id, call, "transient", CUT_OFF)
+
+
+async def _shielded(work: Any, job_id: uuid.UUID) -> None:
+    # Shielded: the work finishes even if the caller is cancelled again meanwhile.
     try:
-        await asyncio.shield(asyncio.ensure_future(release_claim(tenant_id, job_id)))
+        await asyncio.shield(asyncio.ensure_future(work))
     except Exception:
-        log.exception("could not put cancelled built-in job %s back in the queue", job_id)
+        log.exception("could not record that built-in job %s was cancelled", job_id)
+
+
+async def _shielded_release(tenant_id: uuid.UUID, job_id: uuid.UUID) -> None:
+    await _shielded(release_claim(tenant_id, job_id), job_id)
+
+
+def _call_deadline(deadline: float | None) -> float | None:
+    # Half the overhead is kept for after the call (writing the outcome).
+    return None if deadline is None else deadline - JOB_OVERHEAD_SECONDS / 2
 
 
 async def run_job(
-    tenant_id: uuid.UUID, job_id: uuid.UUID, transports: gateway.Transports | None = None
+    tenant_id: uuid.UUID,
+    job_id: uuid.UUID,
+    transports: gateway.Transports | None = None,
+    *,
+    deadline: float | None = None,
 ) -> Outcome:
-    """Run one claimed (``running``) job to its outcome."""
+    """Run one claimed (``running``) job to its outcome.
+
+    With ``deadline`` (``time.monotonic()``), its calls start only while a whole one fits.
+    Cancelled, it is put back (no call had started) or the cut counted as an attempt.
+    """
+    call = _Call()
+    try:
+        return await _run_job(tenant_id, job_id, call, transports, _call_deadline(deadline))
+    except asyncio.CancelledError:
+        if call.started:
+            await _shielded(record_cut(tenant_id, job_id, call), job_id)
+        else:
+            await _shielded_release(tenant_id, job_id)
+        raise
+
+
+async def _run_job(
+    tenant_id: uuid.UUID,
+    job_id: uuid.UUID,
+    call: _Call,
+    transports: gateway.Transports | None,
+    deadline: float | None,
+) -> Outcome:
     async with tenant_session(tenant_id) as s:
         job = await s.get(LlmJob, job_id)
         if job is None or job.status != "running":
             return Outcome("cancelled")
-        call = _Call()
 
         async def ask(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
             name, system = prompting.current(kind)
@@ -233,6 +288,8 @@ async def run_job(
                 kinds.MAX_TOKENS[kind],
                 job=kind,
                 transports=transports,
+                deadline=deadline,
+                on_call=call.call_started,
             )
             call.calls += 1
             call.account_label = completion.account_label
@@ -293,9 +350,10 @@ async def _finish(
         return Outcome("cancelled")
     if call.prompt:
         job.input = {**job.input, "prompt": call.prompt}
-    if call.calls:
+    if call.started or call.calls:
         job.account_label = call.account_label
         job.via = call.via
+    if call.calls:
         job.model = call.model
         job.input_tokens = call.input_tokens
         job.output_tokens = call.output_tokens
@@ -322,7 +380,9 @@ async def _finish(
 
 
 def job_seconds() -> float:
-    """The longest a job is expected to take: one model call's timeout and the rest."""
+    """What a job needs to be claimed: one model call's timeout and the rest.
+
+    Its calls never start a second one past the deadline (``gateway.complete``)."""
     return get_llm_settings().timeout_seconds + JOB_OVERHEAD_SECONDS
 
 
@@ -335,7 +395,8 @@ async def run_pending(
 ) -> LlmJobsTick:
     """Run queued jobs of one company until none is runnable or ``limit`` ran.
 
-    With ``budget_seconds``, no job is claimed once one could not finish inside it.
+    With ``budget_seconds``, no job is claimed once one could not finish inside it, and
+    a job's calls are given the deadline.
     """
     limit = limit if limit is not None else get_worker_settings().max_per_tick
     deadline = None if budget_seconds is None else time.monotonic() + budget_seconds
@@ -346,11 +407,8 @@ async def run_pending(
         job_id = await claim_next(tenant_id)
         if job_id is None:
             break
-        try:
-            outcome = await run_job(tenant_id, job_id, transports)
-        except asyncio.CancelledError:
-            await _shielded_release(tenant_id, job_id)
-            raise
+        # Cancelled, run_job itself puts the job back or counts the cut.
+        outcome = await run_job(tenant_id, job_id, transports, deadline=deadline)
         out.ran += 1
         if outcome.status == "succeeded":
             out.succeeded += 1

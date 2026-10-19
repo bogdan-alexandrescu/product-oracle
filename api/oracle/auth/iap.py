@@ -47,7 +47,9 @@ async def _fetch_jwks() -> dict[str, Any]:
 
 
 # A lambda, so a test that replaces _fetch_jwks is seen.
-_keys = KeyCache(lambda: _fetch_jwks(), "ES256", "IAP")
+# A short back-off: while it lasts every IAP sign-in is a 503, so one failed fetch on a
+# cold instance must not refuse people for long.
+_keys = KeyCache(lambda: _fetch_jwks(), "ES256", "IAP", backoff_seconds=5)
 
 
 async def verify_assertion(assertion: str, audiences: list[str]) -> dict[str, Any]:

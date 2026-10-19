@@ -242,6 +242,36 @@ async def test_key_endpoint_down_is_503(client, monkeypatch):
     iap._keys.clear()
 
 
+async def test_a_failed_or_empty_key_fetch_backs_off_only_briefly(client, monkeypatch):
+    fetched: list[int] = []
+
+    async def empty() -> dict:
+        fetched.append(1)
+        return {"keys": []}
+
+    monkeypatch.setattr(get_settings(), "iap_audiences", [AUDIENCE])
+    monkeypatch.setattr(iap, "_fetch_jwks", empty)
+    iap._keys.clear()
+    await seed()
+    for _ in range(3):
+        resp = await client.get("/v1/me", headers={HEADER: assertion("admin@example.com")})
+        assert resp.status_code == 503
+    # Zero usable keys is a failed fetch: backed off, not refetched on every sign-in.
+    assert fetched == [1]
+    # Briefly: one failed fetch on a cold instance must not refuse sign-ins for long.
+    assert iap._keys.backoff_seconds == 5
+    monkeypatch.setattr(iap._keys, "backoff_seconds", 0)
+
+    async def up() -> dict:
+        fetched.append(1)
+        return _jwks()
+
+    monkeypatch.setattr(iap, "_fetch_jwks", up)
+    resp = await client.get("/v1/me", headers={HEADER: assertion("admin@example.com")})
+    assert resp.status_code == 200 and fetched == [1, 1]
+    iap._keys.clear()
+
+
 # --- Roles on provisioning (Lane A) ----------------------------------------------------------
 
 

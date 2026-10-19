@@ -28,7 +28,7 @@ from oracle.jobs import kinds
 from oracle.jobs import worker as llm_jobs
 from oracle.jobs.models import LlmJob
 from oracle.llm import gateway
-from oracle.llm.transports import get_llm_settings
+from oracle.llm.transports import LlmRateLimited, get_llm_settings
 from oracle.mcp.tools import app_operations
 from oracle.runs import service as runs_service
 from oracle.swarm import FakeRuntime, set_runtime
@@ -346,7 +346,7 @@ async def test_unreachable_certs_are_fetched_once_then_backed_off(client, ticker
     assert (await client.post(PATH, headers=bearer(id_token()))).status_code == 503
     assert fetched == [1]
     # After it, the next request tries again.
-    monkeypatch.setattr(jwks, "_FAILED_FETCH_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr(idtoken._keys, "backoff_seconds", 0)
 
     async def up() -> dict:
         fetched.append(1)
@@ -355,6 +355,23 @@ async def test_unreachable_certs_are_fetched_once_then_backed_off(client, ticker
     monkeypatch.setattr(idtoken, "_fetch_certs", up)
     assert (await client.post(PATH, headers=bearer(id_token()))).status_code == 200
     assert fetched == [1, 1]
+
+
+@pytest.mark.parametrize("answer", [{"keys": []}, {"keys": [{"kid": "x", "alg": "ES256"}]}])
+async def test_certs_without_a_usable_key_back_off_too(client, ticker_on, monkeypatch, answer):
+    fetched: list[int] = []
+
+    async def empty() -> dict:
+        fetched.append(1)
+        return answer
+
+    monkeypatch.setattr(idtoken, "_fetch_certs", empty)
+    idtoken._keys.clear()
+    for _ in range(3):
+        assert (await client.post(PATH, headers=bearer(id_token()))).status_code == 503
+    assert fetched == [1]
+    # The ticker keeps the 30 s back-off (IAP's is shorter: sign-in waits on it).
+    assert idtoken._keys.backoff_seconds == jwks.DEFAULT_BACKOFF_SECONDS == 30
 
 
 async def test_a_failure_after_taking_the_lock_releases_it(client, ticker_on, monkeypatch):
@@ -441,6 +458,63 @@ async def test_the_account_sweep_runs_once_per_interval(client, ticker_on, usage
     assert (third["polled"], third["not_due"]) == (2, 0)
 
 
+@pytest.mark.parametrize("interval", [0, 60, -1])
+async def test_the_ticker_sweeps_at_most_every_five_minutes_whatever_the_setting(
+    client, ticker_on, usage_polls, monkeypatch, interval
+):
+    # 0 turns the in-process sweep off; it must not make the ticker sweep every minute.
+    monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", interval)
+    polls, _ = usage_polls
+    tenant_id, _ = await seed_auth()
+    await add_account(tenant_id, "one")
+
+    first = (await client.post(PATH, headers=bearer(id_token()))).json()["claude_accounts"]
+    assert (first["polled"], first["not_due"]) == (1, 0)
+    for _ in range(4):
+        await _age_sweep(tenant_id, 60)
+        out = (await client.post(PATH, headers=bearer(id_token()))).json()["claude_accounts"]
+        assert (out["polled"], out["not_due"]) == (0, 1)
+    assert polls == ["acc-one"]
+    await _age_sweep(tenant_id, 60)
+    out = (await client.post(PATH, headers=bearer(id_token()))).json()["claude_accounts"]
+    assert (out["polled"], out["not_due"]) == (1, 0)
+
+
+async def test_a_longer_interval_is_kept(client, ticker_on, usage_polls, monkeypatch):
+    monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", 900)
+    tenant_id, _ = await seed_auth()
+    await add_account(tenant_id, "one")
+    await client.post(PATH, headers=bearer(id_token()))
+    await _age_sweep(tenant_id, 600)
+    out = (await client.post(PATH, headers=bearer(id_token()))).json()["claude_accounts"]
+    assert out["not_due"] == 1
+
+
+@pytest.mark.parametrize("interval", [0, 300])
+async def test_the_v1_tick_sweeps_only_when_due(
+    client, ticker_on, usage_polls, monkeypatch, interval
+):
+    # POST /v1/internal/tick is what `oracle tick` (and a cron running it) calls.
+    monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", interval)
+    polls, _ = usage_polls
+    tenant_id, _ = await seed_auth()
+    await add_account(tenant_id, "one")
+    headers = await token_with_role(tenant_id, "owner")
+
+    first = (await client.post("/v1/internal/tick", headers=headers)).json()["claude_accounts"]
+    assert (first["lease"], first["polled"]) == ("ran", 1)
+    await _age_sweep(tenant_id, 60)
+    again = (await client.post("/v1/internal/tick", headers=headers)).json()["claude_accounts"]
+    assert (again["lease"], again["polled"], again["examined"]) == ("not_due", 0, 0)
+    # The scheduled tick shares the same record: not due there either.
+    out = (await client.post(PATH, headers=bearer(id_token()))).json()["claude_accounts"]
+    assert out["not_due"] == 1
+    assert polls == ["acc-one"]
+    await _age_sweep(tenant_id, 300)
+    out = (await client.post("/v1/internal/tick", headers=headers)).json()["claude_accounts"]
+    assert (out["lease"], out["polled"]) == ("ran", 1)
+
+
 async def test_a_429_backs_the_next_usage_poll_off(client, ticker_on, usage_polls):
     polls, answers = usage_polls
     tenant_id, _ = await seed_auth()
@@ -468,6 +542,20 @@ async def test_a_429_backs_the_next_usage_poll_off(client, ticker_on, usage_poll
     await _age_sweep(tenant_id, 301)
     out = (await client.post(PATH, headers=bearer(id_token()))).json()["claude_accounts"]
     assert out["polled"] == 2 and len(polls) == 3
+
+
+@pytest.mark.parametrize("retry_after", [10**30, 10**12, -(10**30)])
+async def test_a_huge_retry_after_is_clamped(client, ticker_on, usage_polls, retry_after):
+    _, answers = usage_polls
+    tenant_id, _ = await seed_auth()
+    await add_account(tenant_id, "one")
+    answers.append(usage.RateLimited(retry_after))
+    out = await claude_sweep.poll_usage(tenant_id)
+    assert "error" not in out
+    async with tenant_session(tenant_id) as s:
+        retry_at = await s.scalar(select(ClaudeSweepLease.usage_retry_at))
+    assert retry_at is not None
+    assert retry_at <= datetime.now(UTC) + claude_sweep.MAX_USAGE_RETRY_AFTER
 
 
 # --- built-in model jobs: never cut mid-call, put back when cancelled, one share each ----
@@ -542,7 +630,7 @@ async def test_no_job_is_claimed_when_less_than_a_call_remains(
     assert (job.status, job.attempts) == ("queued", 0)
 
 
-async def test_a_job_cancelled_mid_call_goes_back_to_the_queue(
+async def test_a_job_whose_calls_keep_overrunning_fails_after_its_attempts(
     client, ticker_on, claude, monkeypatch
 ):
     tenant_id = await _backlog(client, 1)
@@ -554,19 +642,78 @@ async def test_a_job_cancelled_mid_call_goes_back_to_the_queue(
         await asyncio.sleep(30)
 
     claude.on_call = hang
+    for attempt in range(1, llm_jobs.MAX_ATTEMPTS + 1):
+        out = (await client.post(PATH, headers=bearer(id_token()))).json()
+        assert out["timed_out"] is True and len(claude.calls) == attempt
+        [job] = await _jobs(tenant_id)
+        # The call had started: the cut is an attempt, with what is known of it.
+        assert job.attempts == attempt and "cut off" in (job.error or "")
+        assert (job.account_label, job.via) == ("personal", "account")
+        assert job.output is None
+    assert job.status == "failed" and job.finished_at is not None
+    # Failed for good: the next tick runs nothing, instead of the same job forever.
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
-    assert out["timed_out"] is True and len(claude.calls) == 1
+    assert out["llm_jobs"]["ran"] == 0 and len(claude.calls) == llm_jobs.MAX_ATTEMPTS
+
+
+async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
+    client, ticker_on, claude, monkeypatch
+):
+    tenant_id = await _backlog(client, 1)
+    monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.01)
+    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.0)
+    reading = asyncio.Event()
+
+    async def slow_inputs(s, job, ask):
+        # Reading the job's inputs outlives the tick: no model call has started.
+        if not reading.is_set():
+            await asyncio.sleep(30)
+        return await ask("review_comments", {"job": str(job.id)})
+
+    monkeypatch.setitem(kinds.RUNNERS, "review_comments", slow_inputs)
+    out = (await client.post(PATH, headers=bearer(id_token()))).json()
+    assert out["timed_out"] is True and claude.calls == []
     [job] = await _jobs(tenant_id)
     assert (job.status, job.attempts) == ("queued", 0)
     assert job.finished_at is None and job.output is None
     assert (job.account_label, job.input_tokens, job.cost_usd) == (None, None, None)
     # Its claim is released: the next tick runs it.
-    claude.on_call = None
+    reading.set()
     monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 240.0)
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
     assert out["llm_jobs"]["succeeded"] == 1
     [job] = await _jobs(tenant_id)
     assert (job.status, job.attempts) == ("succeeded", 1)
+
+
+async def test_a_job_swaps_to_no_account_it_has_no_time_left_for(
+    client, ticker_on, claude, monkeypatch
+):
+    tenant_id = await _backlog(client, 1)
+    await add_account(tenant_id, "spare", windows={"five_hour": window(0.3)})
+    monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
+    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.6)
+
+    async def slow(kind, payload):
+        await asyncio.sleep(0.7)
+
+    claude.on_call = slow
+    claude.script["review_comments"] = [LlmRateLimited("out of quota")]
+    out = (await client.post(PATH, headers=bearer(id_token()))).json()
+    # The first account was spent, and no second call fits: a retry, not a cut.
+    assert out["timed_out"] is False and len(claude.calls) == 1
+    assert out["llm_jobs"]["retried"] == 1
+    [job] = await _jobs(tenant_id)
+    assert (job.status, job.attempts) == ("queued", 1)
+
+
+async def test_no_job_runs_with_a_limit_of_zero(client, ticker_on, claude, monkeypatch):
+    tenant_id = await _backlog(client, 2)
+    monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.05)
+    monkeypatch.setattr(llm_jobs.get_worker_settings(), "max_per_tick", 0)
+    out = (await client.post(PATH, headers=bearer(id_token()))).json()
+    assert out["llm_jobs"]["ran"] == 0 and claude.calls == []
+    assert [j.status for j in await _jobs(tenant_id)] == ["queued", "queued"]
 
 
 async def test_a_backlog_defers_no_other_companys_runs(

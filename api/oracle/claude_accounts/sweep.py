@@ -3,8 +3,12 @@
 Ported from SwarmCloud's ``/v1/quota/sweep`` (``quota_broker/main.py``:
 ``_prune_all_holds``, ``_sweep_account_pool``, ``_record_refreshes``, ``_poll_block``,
 ``_credential_phase``) and ``quota_broker/sweeplease.py``. Cloud Scheduler is replaced
-by ``oracle tick`` (``POST /v1/internal/tick``) and a background task in the API
-process (``ORACLE_CLAUDE_SWEEP_SECONDS``, every five minutes by default).
+by the run ticker, ``oracle tick`` (``POST /v1/internal/tick``) and a background task in
+the API process (``ORACLE_CLAUDE_SWEEP_SECONDS``, every five minutes by default). The
+ticks sweep a company only when its last sweep completed at least
+``ORACLE_CLAUDE_SWEEP_SECONDS`` ago, and never more often than every five minutes
+(``MIN_TICK_SWEEP_INTERVAL``), whatever that setting: the usage endpoint allows about
+five calls per five minutes per account.
 
 The hold backstop runs outside the lease (it is idempotent). The credential phase --
 every exchange and every usage poll -- runs under the company's sweep lease, renewed
@@ -54,6 +58,11 @@ LEASE_TTL = timedelta(seconds=120)
 SWEEP_OK = "ok"
 SWEEP_ERROR = "error"
 
+#: A tick (scheduled, ``POST /v1/internal/tick`` or ``oracle tick``) sweeps a company at
+#: most this often, even with ORACLE_CLAUDE_SWEEP_SECONDS lower (or 0, the background
+#: sweep off): Anthropic's usage endpoint allows about 5 calls per 5 minutes per account.
+MIN_TICK_SWEEP_INTERVAL = timedelta(seconds=300)
+
 #: A 429's retry-after is kept for at most this long (a bogus header stops no poll for days).
 MAX_USAGE_RETRY_AFTER = timedelta(hours=1)
 
@@ -66,7 +75,8 @@ _WROTE_A_VERSION = ("refreshed", "published", "published_unverified")
 class PoolSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ORACLE_CLAUDE_", env_file=".env", extra="ignore")
 
-    # The background sweep's interval; 0 turns it off (``oracle tick`` still sweeps).
+    # The background sweep's interval; 0 turns it off (ticks still sweep, at most every
+    # MIN_TICK_SWEEP_INTERVAL).
     sweep_seconds: int = 300
     # Usage polls per sweep (the endpoint allows ~5 per 5 minutes, shared).
     max_polls_per_sweep: int = usage.DEFAULT_MAX_POLLS_PER_SWEEP
@@ -194,6 +204,19 @@ async def is_due(tenant_id: uuid.UUID, interval: timedelta, now: datetime) -> bo
     async with tenant_session(tenant_id) as s:
         last = await s.scalar(select(ClaudeSweepLease.last_completed_at))
     return last is None or now - last > interval
+
+
+def tick_sweep_interval() -> timedelta:
+    """How long after a company's last sweep a tick sweeps it again: at least 5 minutes."""
+    configured = timedelta(seconds=max(0, get_pool_settings().sweep_seconds))
+    return max(configured, MIN_TICK_SWEEP_INTERVAL)
+
+
+async def sweep_if_due(tenant_id: uuid.UUID) -> dict[str, Any] | None:
+    """A tick's sweep: the company's sweep if due (``tick_sweep_interval``), else None."""
+    if not await is_due(tenant_id, tick_sweep_interval(), datetime.now(UTC)):
+        return None
+    return await sweep(tenant_id)
 
 
 async def usage_retry_at(tenant_id: uuid.UUID) -> datetime | None:
@@ -385,10 +408,10 @@ async def poll_usage(
         )
         limited = [o for o in outcomes if o.reason == "rate_limited"]
         if limited:
-            wait = timedelta(seconds=max(0, limited[0].retry_after_seconds or 0))
-            await set_usage_retry_at(
-                tenant_id, datetime.now(UTC) + min(wait, MAX_USAGE_RETRY_AFTER)
-            )
+            # Clamped before the timedelta: a bogus huge header would overflow it.
+            longest = MAX_USAGE_RETRY_AFTER.total_seconds()
+            wait = min(max(0, limited[0].retry_after_seconds or 0), longest)
+            await set_usage_retry_at(tenant_id, datetime.now(UTC) + timedelta(seconds=wait))
     except Exception as exc:
         log.error("account usage poll failed", extra={"error": type(exc).__name__})
         return {"error": type(exc).__name__}
@@ -469,10 +492,15 @@ async def run_scheduler(interval: float) -> None:
             log.exception("the Claude account sweep failed")
 
 
-def summarise_sweep(result: dict[str, Any]) -> Any:
-    """The sweep's result as ``oracle.runs.schemas.ClaudeSweepSummary`` for ``oracle tick``."""
+def summarise_sweep(result: dict[str, Any] | None) -> Any:
+    """The sweep's result as ``oracle.runs.schemas.ClaudeSweepSummary`` for ``oracle tick``.
+
+    None (``sweep_if_due``: not due) is lease ``not_due``.
+    """
     from oracle.runs.schemas import ClaudeSweepSummary
 
+    if result is None:
+        return ClaudeSweepSummary(lease="not_due")
     errors = [
         f"{block}: {result[block]['error']}"
         for block in ("holds", "accounts", "usage")

@@ -12,9 +12,11 @@ Both implement :class:`Transport`; tests swap in a fake (``gateway.set_transport
 """
 
 import asyncio
+import contextlib
 import json
 import os
 import re
+import signal
 import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -61,6 +63,10 @@ class LlmAuthError(LlmError):
 
 class LlmUnavailable(LlmError):
     """The call failed for another reason (network, rate limit, Claude Code missing)."""
+
+
+class LlmOutOfTime(LlmUnavailable):
+    """No time left before the caller's deadline for another whole call; not started."""
 
 
 class LlmRateLimited(LlmUnavailable):
@@ -191,6 +197,8 @@ class ClaudeCodeTransport:
                     stderr=asyncio.subprocess.PIPE,
                     cwd=home,
                     env=self.environment(token, request, home),
+                    # Its own process group, so a kill reaches anything it started.
+                    start_new_session=True,
                 )
             except FileNotFoundError:
                 raise LlmUnavailable(
@@ -201,9 +209,13 @@ class ClaudeCodeTransport:
                     proc.communicate(render_prompt(request.messages).encode()), self.timeout
                 )
             except TimeoutError:
-                proc.kill()
-                await proc.wait()
+                await _kill(proc)
                 raise LlmUnavailable(f"Claude Code did not answer in {self.timeout:.0f}s") from None
+            except BaseException:
+                # Cancelled (the run ticker's time limit) or anything else: Claude Code
+                # must be gone before the caller gives the account's hold back.
+                await _kill(proc)
+                raise
         return self.parse(stdout, stderr, request)
 
     @staticmethod
@@ -264,6 +276,24 @@ class ClaudeCodeTransport:
             usage=usage,
             readings=readings,
         )
+
+
+async def _kill(proc: asyncio.subprocess.Process) -> None:
+    """Kill Claude Code's process group and wait until it is gone, even if cancelled."""
+    if proc.returncode is None:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+    waiting = asyncio.ensure_future(proc.wait())
+    cancelled = False
+    while not waiting.done():
+        try:
+            await asyncio.shield(waiting)
+        except asyncio.CancelledError:
+            cancelled = True
+    if cancelled:
+        raise asyncio.CancelledError
 
 
 class MessagesApiTransport:

@@ -4,8 +4,9 @@ Used by IAP sign-in (``oracle.auth.iap``, ES256) and the run ticker's ID tokens
 (``oracle.ticker.idtoken``, RS256). Keys are refetched hourly, and early when a token
 names an unknown kid (Google rotated its keys), at most once a minute. A failed fetch
 keeps serving the cached keys; with none cached it raises ``KeysUnavailable``, and so
-does every request for the next ``_FAILED_FETCH_BACKOFF_SECONDS`` without fetching
-again (concurrent requests share the one failed fetch).
+does every request for the cache's ``backoff_seconds`` without fetching again
+(concurrent requests share the one failed fetch). A fetch that returns no usable key
+is a failed fetch.
 """
 
 import asyncio
@@ -21,8 +22,8 @@ log = logging.getLogger(__name__)
 _TTL_SECONDS = 60 * 60
 # An unknown kid triggers a refetch (Google rotated keys), at most this often.
 _MIN_REFRESH_SECONDS = 60
-# With no keys cached, a failed fetch is not retried for this long.
-_FAILED_FETCH_BACKOFF_SECONDS = 30
+# With no keys cached, a failed fetch is not retried for this long (unless a cache says).
+DEFAULT_BACKOFF_SECONDS = 30
 
 
 class KeysUnavailable(Exception):
@@ -30,10 +31,18 @@ class KeysUnavailable(Exception):
 
 
 class KeyCache:
-    def __init__(self, fetch: Callable[[], Awaitable[dict[str, Any]]], alg: str, name: str):
+    def __init__(
+        self,
+        fetch: Callable[[], Awaitable[dict[str, Any]]],
+        alg: str,
+        name: str,
+        *,
+        backoff_seconds: float = DEFAULT_BACKOFF_SECONDS,
+    ):
         self._fetch = fetch
         self.alg = alg
         self.name = name
+        self.backoff_seconds = backoff_seconds
         self.keys: dict[str, jwt.PyJWK] = {}
         self.fetched_at = 0.0
         self.failed_at: float | None = None
@@ -48,7 +57,7 @@ class KeyCache:
         return (
             not self.keys
             and self.failed_at is not None
-            and time.monotonic() - self.failed_at < _FAILED_FETCH_BACKOFF_SECONDS
+            and time.monotonic() - self.failed_at < self.backoff_seconds
         )
 
     async def get(self, kid: str) -> jwt.PyJWK | None:
@@ -73,6 +82,8 @@ class KeyCache:
                     for k in data["keys"]
                     if k.get("alg", self.alg) == self.alg
                 }
+                if not keys:
+                    raise ValueError(f"no {self.alg} key in the answer")
             except Exception as e:
                 log.warning("fetching %s keys failed: %s", self.name, e)
                 if not self.keys:

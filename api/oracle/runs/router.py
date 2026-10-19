@@ -16,7 +16,7 @@ from fastapi.responses import PlainTextResponse
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role
 from oracle.claude_accounts.sweep import summarise_sweep
-from oracle.claude_accounts.sweep import sweep as sweep_claude_accounts
+from oracle.claude_accounts.sweep import sweep_if_due as sweep_claude_accounts_if_due
 from oracle.jobs.worker import run_pending as run_llm_jobs
 from oracle.runs import service
 from oracle.runs.schemas import (
@@ -180,6 +180,7 @@ async def tick(principal: CurrentPrincipal, db: TenantDB) -> TickOut:
     if principal.kind != "token" and principal.role != "owner":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Requires the owner role or an API token")
     out = await service.tick(db, principal)
-    out.claude_accounts = summarise_sweep(await sweep_claude_accounts(principal.tenant_id))
+    # Only when due, at most every five minutes however often this is called.
+    out.claude_accounts = summarise_sweep(await sweep_claude_accounts_if_due(principal.tenant_id))
     out.llm_jobs = await run_llm_jobs(principal.tenant_id)
     return out
