@@ -58,9 +58,13 @@ own, before the rest of the tick. A confirmed cancel reads the workflow's final 
 recorded cost is never lowered), and the spend is checked against the ceiling before
 every submission and before anything follows an answer.
 
-W5: an answered wait Oracle cannot read yet (SwarmCloud errors, a 404, a record that lags
-the step, or a 409 already_answered whose record does not read) holds the run token
-read-only (``needs: unread``) until the answer is read; the approver rule applies then.
+W5 (owner, 2026-10-19, 'Open waits'): while any checkpoint wait of the run is open in
+SwarmCloud, from the moment the workflow reaches it, the run token is read-only; writes
+return once Oracle has read an answer that counts. A wait Oracle has not opened a
+checkpoint for yet is read from SwarmCloud when the token is checked (:func:`token_hold`);
+an answered one Oracle cannot read yet (SwarmCloud errors, a 404, a record that lags the
+step, or a 409 already_answered whose record does not read) is shown as ``needs: unread``
+until the answer is read; the approver rule applies then.
 
 Segment ``artifacts`` (jsonb) hold ``files`` (name -> text), ``attempts`` (one entry
 per submission or in-workflow round: workflow id, label, cost, the reviewer's note),
@@ -504,7 +508,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         notes=notes,
         segments=[_segment_out(run, s, knobs, kind) for s in segments],
         checkpoints=[_checkpoint_out(c, principal) for c in checkpoints],
-        token_read_only=any(_holds_token(c) for c in checkpoints),
+        token_read_only=await token_hold(db, run.id, live=False) is not None,
     )
 
 
@@ -515,43 +519,99 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
 # every tick). Each waits for an approver or for the read, and the run's token is
 # read-only meanwhile.
 _HOLDING = ("confirm", "unreadable", "unread")
+# A counted console answer whose follow-up (Redo or Continue) is still to choose: the
+# answer counts and Oracle has read it, so the wait no longer holds the token.
+_COUNTED = ("redo_or_continue",)
 
 
 def _holds_token(cp: Checkpoint) -> bool:
-    """W5 (owner, 2026-10-19): a console answer that did not count, waiting for an
-    approver to confirm it or decide, makes the run's token read-only."""
-    console = ((cp.payload or {}).get("wait") or {}).get("console") or {}
-    return cp.status == "pending" and console.get("needs") in _HOLDING
+    """W5 (owner, 2026-10-19): the run's token is read-only while a checkpoint wait is
+    open in SwarmCloud (unanswered, answered and not read yet, unreadable, or answered by
+    someone whose answer does not count); writes return once Oracle has read an answer
+    that counts. A wait that ended (expired, closed, paused) is no longer open."""
+    if cp.status != "pending":
+        return False
+    wait = (cp.payload or {}).get("wait") or {}
+    needs = (wait.get("console") or {}).get("needs")
+    if needs in _HOLDING:
+        return True
+    return bool(wait.get("workflow_id")) and not wait.get("ended") and needs not in _COUNTED
 
 
-async def token_hold(db: AsyncSession, run_id: uuid.UUID) -> str | None:
-    """Why the run's token is read-only now (W5), or None: its agents may read Oracle,
-    and their writes (drafts, proposals) are refused until an approver confirms the
-    console's answer or decides the checkpoint (confirming restores the token)."""
-    held = (
-        await db.execute(
-            select(Checkpoint.kind, Checkpoint.payload["wait"]["console"]["needs"].astext)
-            .where(
-                Checkpoint.run_id == run_id,
-                Checkpoint.status == "pending",
-                Checkpoint.payload["wait"]["console"]["needs"].astext.in_(_HOLDING),
-            )
-            .limit(1)
-        )
-    ).first()
-    if held is None:
-        return None
-    kind, needs = held
+def _hold_reason(cp: Checkpoint) -> str:
+    needs = (((cp.payload or {}).get("wait") or {}).get("console") or {}).get("needs")
     if needs == "confirm":
-        why = "by someone whose answer does not count until an Oracle approver confirms it"
+        why = (
+            "was answered in SwarmCloud's console by someone whose answer does not count "
+            "until an Oracle approver confirms it"
+        )
     elif needs == "unread":
-        why = "and Oracle has not read the recorded answer yet (it reads it again each tick)"
+        why = (
+            "was answered in SwarmCloud's console and Oracle has not read the recorded "
+            "answer yet (it reads it again each tick)"
+        )
+    elif needs == "unreadable":
+        why = (
+            "was answered in SwarmCloud's console and Oracle could not read the recorded "
+            "answer, so an Oracle approver decides"
+        )
     else:
-        why = "and Oracle could not read the recorded answer, so an Oracle approver decides"
+        why = "waits for a decision in SwarmCloud"
+    return f"{cp.kind} {why}"
+
+
+def _held(why: str) -> str:
     return (
-        f"waiting for approval: {kind} was answered in SwarmCloud's console {why}; until "
-        "then this run's token may read Oracle but not write to it"
+        f"waiting for approval: {why}; until Oracle reads an answer that counts, this run's "
+        "token may read Oracle but not write to it"
     )
+
+
+async def token_hold(db: AsyncSession, run_id: uuid.UUID, *, live: bool = True) -> str | None:
+    """Why the run's token is read-only now (W5), or None: its agents may read Oracle,
+    and their writes (drafts, proposals) are refused while any checkpoint wait of the
+    run is open in SwarmCloud, until Oracle has read an answer that counts.
+
+    From the moment the wait opens, not from Oracle's next look at it: a wait of the
+    live workflow that no checkpoint stands for yet (Oracle has not opened it, or is
+    opening it) is read from SwarmCloud here, and an unreadable workflow holds too.
+    ``live`` False: from what Oracle recorded only (the run's page; the token's check
+    reads SwarmCloud)."""
+    checkpoints = await _checkpoints(db, [run_id])
+    held = next((c for c in checkpoints if _holds_token(c)), None)
+    if held is not None:
+        return _held(_hold_reason(held))
+    run = await db.get(Run, run_id)
+    if run is None:
+        return None
+    wf = _drivable(run)
+    if wf is None:
+        return None
+    opening = (run.knobs or {}).get("opening_wait")
+    if isinstance(opening, dict) and opening.get("workflow_id") == wf.get("id"):
+        # _advance is opening a checkpoint on this wait (its import commits first).
+        return _held(f"{opening.get('kind') or 'a checkpoint'} waits for a decision in SwarmCloud")
+    known = {
+        ((c.payload or {}).get("wait") or {}).get("step_id")
+        for c in checkpoints
+        if ((c.payload or {}).get("wait") or {}).get("workflow_id") == wf.get("id")
+    }
+    reviews = [r for e in wf.get("segments") or [] for r in e.get("reviews") or []]
+    unknown = [r for r in reviews if r not in known]
+    if not live or not unknown or not wf.get("id"):
+        return None
+    try:
+        status = await get_runtime().status(wf["id"])
+    except RuntimeUnavailable as exc:
+        return _held(
+            f"Oracle could not read whether a checkpoint of this run waits in SwarmCloud "
+            f"({_shown(exc)})"
+        )
+    for review in unknown:
+        step = status.step(review)
+        if step is not None and step.state in ("PARKED", "SUCCEEDED"):
+            return _held(f"checkpoint step {review} waits for a decision in SwarmCloud")
+    return None
 
 
 def _console_findings(console: dict[str, Any]) -> list[str]:
@@ -2048,6 +2108,19 @@ async def _advance(
     if attempt.get("advanced"):
         return False
     attempt["advanced"] = True
+    checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
+    if wait is not None:
+        # W5: the token is held from before the import's commit until the checkpoint
+        # that stands for this wait is added (cleared in the same transaction).
+        _set_knob(
+            run,
+            "opening_wait",
+            {
+                "workflow_id": wait.get("workflow_id"),
+                "step_id": wait.get("step_id"),
+                "kind": checkpoint_kind,
+            },
+        )
     imported: dict[str, Any] | None = None
     baseline_import: dict[str, Any] | None = None
     if sdef.imports_baseline:
@@ -2099,7 +2172,7 @@ async def _advance(
         payload["items_check"] = items_check
     if wait is not None:
         payload["wait"] = wait
-    checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
+        _set_knob(run, "opening_wait", None)
     if knobs.checkpoints.get(sdef.checkpoint, True):
         db.add(
             Checkpoint(

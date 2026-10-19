@@ -2619,9 +2619,13 @@ async def test_a_console_answer_that_does_not_count_makes_the_run_token_read_onl
     await _member(tenant_id, "viewer@example.com", "viewer")
     run = await _at_baseline(client, auth, swarm)
     token = token_of(swarm)
-    assert run["token_read_only"] is False
+    # W5 'Open waits' (owner, 2026-10-19): the open wait holds the token already.
+    assert run["token_read_only"] is True
     before = await _writes(token)
-    assert all("waiting for approval" not in v for v in before.values()), before
+    assert all("waiting for approval" in before[n] for n in ("push_draft", "import_version")), (
+        before
+    )
+    swarm.steps_per_poll = 0  # the next segment's agents (and its wait) wait for the test
     swarm.console_answer(
         "wf_1", "baseline-review1", "NOT_YET", ["Missing goal"], by="viewer@example.com"
     )
@@ -2649,6 +2653,9 @@ async def test_deciding_over_a_console_answer_that_did_not_count_ends_the_hold(c
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
     token = token_of(swarm)
+    # The revision (and the wait after it) runs when the test lets it: W5 holds the
+    # token again once the next wait opens.
+    swarm.steps_per_poll = 0
     swarm.console_answer("wf_1", "next_draft-review1", "NOT_YET", ["Add a metric"], by="x@y.z")
     await tick(client, auth)
     run = await get(client, auth, run["id"])
