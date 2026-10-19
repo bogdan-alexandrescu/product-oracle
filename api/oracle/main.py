@@ -29,6 +29,7 @@ from oracle.runs.router import router as runs_router
 from oracle.sources.router import router as sources_router
 from oracle.templates.router import router as templates_router
 from oracle.tenant_settings_api import router as settings_router
+from oracle.ticker.router import router as ticker_router
 from oracle.v2.router import router as v2_router
 
 
@@ -106,6 +107,8 @@ def create_app() -> FastAPI:
     app.include_router(quality_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
+    # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).
+    app.include_router(ticker_router)
     # Every REST operation above (and any added later) is also an MCP tool here.
     mount_mcp(app)
     return app

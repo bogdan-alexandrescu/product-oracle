@@ -8,10 +8,8 @@ when its domain is allowed: with the role of its open invite, else the company's
 ``iap_default_role`` setting (commenter when unset). Existing users keep their role.
 """
 
-import asyncio
 import logging
 import secrets
-import time
 import uuid
 from typing import Any
 
@@ -21,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from oracle.audit import record
+from oracle.auth.jwks import KeyCache
 from oracle.auth.models import User
 from oracle.auth.service import hash_password
 from oracle.config import get_settings
@@ -34,17 +33,10 @@ ASSERTION_HEADER = "x-goog-iap-jwt-assertion"
 ISSUER = "https://cloud.google.com/iap"
 JWKS_URL = "https://www.gstatic.com/iap/verify/public_key-jwk"
 LEEWAY_SECONDS = 30
-_JWKS_TTL_SECONDS = 60 * 60
-# An unknown kid triggers a refetch (Google rotated keys), at most this often.
-_JWKS_MIN_REFRESH_SECONDS = 60
 
 
 class InvalidAssertion(Exception):
     """The assertion is malformed, unsigned by Google, expired or for another audience."""
-
-
-class KeysUnavailable(Exception):
-    """Google's public keys could not be fetched and none are cached."""
 
 
 async def _fetch_jwks() -> dict[str, Any]:
@@ -54,45 +46,8 @@ async def _fetch_jwks() -> dict[str, Any]:
         return resp.json()
 
 
-class _KeyCache:
-    def __init__(self) -> None:
-        self.keys: dict[str, jwt.PyJWK] = {}
-        self.fetched_at = 0.0
-        self._lock = asyncio.Lock()
-
-    def clear(self) -> None:
-        self.keys = {}
-        self.fetched_at = 0.0
-
-    async def get(self, kid: str) -> jwt.PyJWK | None:
-        age = time.monotonic() - self.fetched_at
-        stale = not self.keys or age > _JWKS_TTL_SECONDS
-        if stale or (kid not in self.keys and age > _JWKS_MIN_REFRESH_SECONDS):
-            await self._refresh(self.fetched_at)
-        return self.keys.get(kid)
-
-    async def _refresh(self, seen_fetched_at: float) -> None:
-        async with self._lock:
-            if self.fetched_at != seen_fetched_at:
-                return  # another request refreshed while this one waited
-            try:
-                data = await _fetch_jwks()
-                keys = {
-                    k["kid"]: jwt.PyJWK(k, algorithm="ES256")
-                    for k in data["keys"]
-                    if k.get("alg", "ES256") == "ES256"
-                }
-            except Exception as e:
-                log.warning("fetching IAP keys failed: %s", e)
-                if not self.keys:
-                    raise KeysUnavailable from e
-                # Keep serving the cached keys; retry after the minimum interval.
-                self.fetched_at = time.monotonic() - _JWKS_TTL_SECONDS + _JWKS_MIN_REFRESH_SECONDS
-                return
-            self.keys, self.fetched_at = keys, time.monotonic()
-
-
-_keys = _KeyCache()
+# A lambda, so a test that replaces _fetch_jwks is seen.
+_keys = KeyCache(lambda: _fetch_jwks(), "ES256", "IAP")
 
 
 async def verify_assertion(assertion: str, audiences: list[str]) -> dict[str, Any]:
