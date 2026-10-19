@@ -245,7 +245,6 @@ async def test_section_links_are_created_by_approvers_on_existing_sections(clien
                 "claim": "Repeat checkout takes under a minute",
                 "evidence_id": str(strong),
             },
-            {"section_key": "metrics", "kind": "evidences", "source_item_id": str(item)},
             {
                 "section_key": "requirements",
                 "kind": "implements",
@@ -257,8 +256,14 @@ async def test_section_links_are_created_by_approvers_on_existing_sections(clien
     resp = await client.post(url, json=body, headers=ctx.as_("approver"))
     assert resp.status_code == 201, resp.text
     created = resp.json()
-    assert len(created) == 4
+    assert len(created) == 3
     assert all(c["version_id"] == str(v1.id) and c["section_hash"] for c in created)
+
+    # A source item: only its owner may link it; to others it does not exist (AUD-9).
+    own = {"links": [{"section_key": "metrics", "kind": "evidences", "source_item_id": str(item)}]}
+    assert (await client.post(url, json=own, headers=ctx.as_("approver"))).status_code == 422
+    resp = await client.post(url, json=own, headers=ctx.as_("owner"))
+    assert resp.status_code == 201, resp.text
 
     for bad in (
         {"section_key": "no-such-section", "kind": "claims", "evidence_id": str(weak)},

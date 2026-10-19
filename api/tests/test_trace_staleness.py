@@ -19,8 +19,8 @@ from tests.trace_helpers import (
     DOC,
     PRD_V2,
     artifact_version,
-    dependency,
     depend,
+    dependency,
     import_md,
     link_section,
     prd_v1,
@@ -213,8 +213,15 @@ async def test_decision_blocker_status_and_composition_changes_mark_downstream(c
         comp = m.DocumentComposition(document_id=v1.document_id, current_revision=2)
         s.add(comp)
         await s.flush()
-        mod = {"key": "risks.privacy", "version": "1.0.0", "policy": "required",
-               "included": True, "reason": "policy", "order": 1, "section_ids": ["risks"]}  # fmt: skip
+        mod = {
+            "key": "risks.privacy",
+            "version": "1.0.0",
+            "policy": "required",
+            "included": True,
+            "reason": "policy",
+            "order": 1,
+            "section_ids": ["risks"],
+        }
         first = m.CompositionRevision(
             composition_id=comp.id, number=1, status="superseded", modules=[mod], inputs={}
         )
@@ -443,3 +450,47 @@ async def test_dependencies_can_be_registered_for_a_stub_artifact(client):
     bad = {**body, "upstream": [{"version_id": str(v1.id), "section_key": "no-such"}]}
     resp = await client.post("/v1/trace/dependencies", json=bad, headers=ctx.as_("approver"))
     assert resp.status_code == 422
+
+
+async def test_links_carry_forward_and_still_reach_a_reconciled_dependency(client):
+    ctx = await make_ctx()
+    chain = await seed_chain(ctx.tenant_id)
+    v1 = await prd_v1(client, ctx)
+    for key in ("requirements", "summary"):
+        await link_section(
+            ctx.tenant_id, v1.document_id, v1.id, key, entity_id=chain["requirement"]
+        )
+    _, spec = await stub_artifact(ctx.tenant_id, v1.document_id, v1.id)
+    dep = await depend(
+        ctx.tenant_id, artifact_version_id=spec, upstream_version_id=v1.id,
+        section_key="requirements",
+    )  # fmt: skip
+    assert (await import_md(client, ctx.as_("approver"), PRD_V2)).status_code == 201
+    v2 = await version_row(ctx.tenant_id, 2)
+    async with tenant_session(ctx.tenant_id) as s:
+        carried = (
+            await s.scalars(
+                select(m.DocumentSectionLink.section_key).where(
+                    m.DocumentSectionLink.version_id == v2.id
+                )
+            )
+        ).all()
+    # Unchanged sections keep their links; the changed one is linked again by a person.
+    assert carried == ["summary"]
+
+    resp = await client.post(
+        ACTIONS,
+        json={"action": "reconcile", "artifact_version_id": str(spec), "reason": "Still holds"},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 200, resp.text
+    assert (await dependency(ctx.tenant_id, dep)).upstream_version_id == v2.id
+
+    # The v1 link still ties the re-anchored dependency to the requirement.
+    resp = await client.patch(
+        f"/v1/baseline/entities/{chain['requirement']}",
+        json={"title": "Save up to ten addresses", "origin": "user"},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 200
+    assert (await dependency(ctx.tenant_id, dep)).freshness == "potentially_stale"

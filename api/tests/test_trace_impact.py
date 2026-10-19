@@ -9,8 +9,8 @@ from tests.baseline_helpers import make_ctx
 from tests.trace_helpers import (
     PRD_V2,
     artifact_version,
-    dependency,
     depend,
+    dependency,
     import_md,
     link_section,
     prd_v1,
