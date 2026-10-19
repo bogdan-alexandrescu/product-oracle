@@ -4,6 +4,9 @@ The known keys and how each value is checked:
 
 - ``iap_default_role``: one of the roles; the role of a Google sign-in without an invite.
 - ``confidence_weights``: overrides of ``oracle.confidence.DEFAULTS``, same shape.
+- ``review_policy``: the company's default review policy (``oracle.review.state``):
+  designated decider, mandatory reviewers, required sections, which sections need an
+  approval before a publish, re-review on change. A document's own policy replaces it.
 
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
@@ -28,6 +31,13 @@ from oracle.tenant_settings import TenantSetting
 DEFAULTS: dict[str, Any] = {
     "iap_default_role": "commenter",
     "confidence_weights": {},
+    "review_policy": {
+        "decider_id": None,
+        "mandatory_reviewer_ids": [],
+        "required_section_keys": [],
+        "section_approval": "required_sections",
+        "rereview_on_change": True,
+    },
 }
 KNOWN_KEYS = tuple(DEFAULTS)
 
@@ -114,6 +124,13 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         return value
     if key == "confidence_weights":
         return validate_confidence_weights(value)
+    if key == "review_policy":
+        from oracle.review.state import PolicyError, validate_policy
+
+        try:
+            return await validate_policy(session, value)
+        except PolicyError as e:
+            raise InvalidSetting(str(e)) from None
     raise KeyError(key)
 
 

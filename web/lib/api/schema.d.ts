@@ -144,6 +144,10 @@ export interface paths {
         /**
          * Import Version
          * @description Import a draft (markdown + YAML front matter). Creates the document on first import.
+         *
+         *     ``base_version``: the version the draft was written on. When a newer version
+         *     changed sections the draft does not have as the latest has them, the import is a
+         *     409 naming both versions and those sections (never a silent overwrite).
          */
         post: operations["import_version"];
         delete?: never;
@@ -266,7 +270,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Review Section */
+        /**
+         * Review Section
+         * @description A verdict on a section, bound to its revision. Send ``revision`` (the section's
+         *     content hash you read) and a verdict on text that changed since is a 409.
+         */
         put: operations["review_section"];
         post?: never;
         delete?: never;
@@ -354,6 +362,410 @@ export interface paths {
         put?: never;
         /** Approve Version */
         post: operations["approve_version"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/section-states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Section States
+         * @description Review status of every section of a version: its revision, status (approved on
+         *     this revision, stale, changes requested...), the approval it holds, owner,
+         *     reviewers, due date, open feedback by severity, and whether a publish needs it.
+         */
+        get: operations["get_section_states"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/section-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Section Assignments */
+        get: operations["list_section_assignments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/sections/{key}/assignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Section Assignment
+         * @description Set a section's owner, reviewer assignees and due date. Send the ``lock_version``
+         *     from the section states (null for a section with none); a stale one is a 409.
+         */
+        put: operations["put_section_assignment"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/review-queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Review Queue
+         * @description Sections the caller owns or was asked to review, soonest due first.
+         */
+        get: operations["get_my_review_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/review-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Review Policy
+         * @description The document's review policy, else the company's ``review_policy`` setting.
+         */
+        get: operations["get_review_policy"];
+        /**
+         * Put Review Policy
+         * @description Designated decider, mandatory reviewers, extra required sections, which sections
+         *     need approval before a publish, and whether a change requests re-review.
+         */
+        put: operations["put_review_policy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/sections/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Edit Document Section
+         * @description Save one section as the next version. Send the version and section revision you
+         *     loaded: another section changed since is fine (the edit applies on the latest
+         *     version); the same section changed since is a 409 with its current text. Approvers
+         *     edit any section; a section's owner edits their own.
+         */
+        put: operations["edit_document_section"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/section-patches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Section Patches
+         * @description Proposed replacements of section text (an agent rewrite of an approved
+         *     section), newest first.
+         */
+        get: operations["list_section_patches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/section-patches/{patch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Section Patch
+         * @description A patch with its word diff against the section's current text.
+         */
+        get: operations["get_section_patch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/section-patches/{patch_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Section Patch
+         * @description Accept a patch (optionally edited): the section's next revision, as a new
+         *     version. ``base_revision`` is the current revision you compared against.
+         */
+        post: operations["accept_section_patch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/section-patches/{patch_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Section Patch */
+        post: operations["reject_section_patch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Review Campaigns */
+        get: operations["list_review_campaigns"];
+        put?: never;
+        /**
+         * Create Review Campaign
+         * @description Ask the organization for feedback on a version: everyone with an audience role
+         *     is notified. Comments are gathered; approval stays with the decider.
+         */
+        post: operations["create_review_campaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/campaigns/{campaign_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Review Campaign */
+        get: operations["get_review_campaign"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Review Campaign
+         * @description Close (or reopen) a campaign.
+         */
+        patch: operations["update_review_campaign"];
+        trace?: never;
+    };
+    "/v1/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Notifications
+         * @description The caller's in-app notifications, newest first (empty for API tokens).
+         */
+        get: operations["list_my_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Notification */
+        post: operations["read_notification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read All Notifications */
+        post: operations["read_all_notifications"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/publish-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Publish Check
+         * @description Everything that blocks publishing this version, and the advisory warnings.
+         */
+        get: operations["get_publish_check"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Version
+         * @description Publish an approved version, immutably. Refused (409, nothing written) while
+         *     the publish check lists a blocker.
+         */
+        post: operations["publish_version"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/publications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Publications */
+        get: operations["list_publications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/publications/{p}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Publication
+         * @description A publication with everything it pinned.
+         */
+        get: operations["get_publication"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/publications/{p}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Publication
+         * @description The published HTML (full, brief or deck), its PDF, or the full markdown. Served
+         *     from what was stored at publish time, so later edits, theme changes and source
+         *     updates never change it.
+         */
+        get: operations["export_publication"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4043,6 +4455,105 @@ export interface components {
              */
             files: string[];
         };
+        /** CampaignCreate */
+        CampaignCreate: {
+            /** Title */
+            title: string;
+            /** Message */
+            message?: string | null;
+            /** Version */
+            version?: number | null;
+            /** Due At */
+            due_at?: string | null;
+            /**
+             * Audience Roles
+             * @default [
+             *       "commenter",
+             *       "approver",
+             *       "owner"
+             *     ]
+             */
+            audience_roles: ("viewer" | "commenter" | "approver" | "owner")[];
+        };
+        /** CampaignOut */
+        CampaignOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Version Number */
+            version_number: number;
+            /** Title */
+            title: string;
+            /** Message */
+            message?: string | null;
+            /** Due At */
+            due_at?: string | null;
+            /**
+             * Audience Roles
+             * @default []
+             */
+            audience_roles: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "closed";
+            /** Created By */
+            created_by?: string | null;
+            /** Closed By */
+            closed_by?: string | null;
+            /** Closed At */
+            closed_at?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Invited
+             * @default 0
+             */
+            invited: number;
+            /**
+             * Comments
+             * @default 0
+             */
+            comments: number;
+            /**
+             * Participants
+             * @default 0
+             */
+            participants: number;
+            /**
+             * Open Change Requests
+             * @default 0
+             */
+            open_change_requests: number;
+        };
+        /** CampaignPatch */
+        CampaignPatch: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "closed";
+            /** Lock Version */
+            lock_version: number;
+        };
         /** ChangeEventOut */
         ChangeEventOut: {
             /**
@@ -4294,6 +4805,8 @@ export interface components {
             anchor: components["schemas"]["TextQuoteSelector"];
             /** Body */
             body: string;
+            /** Severity */
+            severity?: ("critical" | "major" | "minor") | null;
         };
         /** CommentOut */
         CommentOut: {
@@ -4580,6 +5093,46 @@ export interface components {
             value?: unknown;
             /** Note */
             note?: string | null;
+        };
+        /**
+         * ConflictResponse
+         * @description 409: the save started from an older state. Reload ``latest_version``, merge the
+         *     listed sections and save again with the new base.
+         */
+        ConflictResponse: {
+            /** Detail */
+            detail: string;
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "version_conflict" | "section_conflict" | "stale_lock_version";
+            /** Base Version */
+            base_version?: number | null;
+            /** Latest Version */
+            latest_version?: number | null;
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["ConflictSection"][];
+            /** Current Lock Version */
+            current_lock_version?: number | null;
+        };
+        /** ConflictSection */
+        ConflictSection: {
+            /** Section Key */
+            section_key: string;
+            /** Base Revision */
+            base_revision?: string | null;
+            /** Current Revision */
+            current_revision?: string | null;
+            /** Your Revision */
+            your_revision?: string | null;
+            /** Current Heading */
+            current_heading?: string | null;
+            /** Current Body Md */
+            current_body_md?: string | null;
         };
         /** ConnectionChoice */
         ConnectionChoice: {
@@ -5715,6 +6268,8 @@ export interface components {
             addressed_in_version?: number | null;
             /** Resolution Note */
             resolution_note?: string | null;
+            /** Severity */
+            severity?: ("critical" | "major" | "minor") | null;
             /**
              * Created At
              * Format: date-time
@@ -5763,6 +6318,8 @@ export interface components {
             resolution_note?: string | null;
             /** Addressed In Version */
             addressed_in_version?: number | null;
+            /** Severity */
+            severity?: ("critical" | "major" | "minor") | null;
         };
         /** FlowCatalog */
         FlowCatalog: {
@@ -6590,6 +7147,16 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MandatoryApproval */
+        MandatoryApproval: {
+            /**
+             * Reviewer Id
+             * Format: uuid
+             */
+            reviewer_id: string;
+            /** Approved */
+            approved: boolean;
+        };
         /** Me */
         Me: {
             /**
@@ -6717,6 +7284,52 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+        };
+        /** NotificationOut */
+        NotificationOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "comment" | "reply" | "assignment" | "rereview_requested" | "campaign" | "patch_proposed" | "published";
+            /** Title */
+            title: string;
+            /** Document Id */
+            document_id?: string | null;
+            /** Version Number */
+            version_number?: number | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Comment Id */
+            comment_id?: string | null;
+            /** Campaign Id */
+            campaign_id?: string | null;
+            /** Actor */
+            actor: string;
+            /**
+             * Data
+             * @default {}
+             */
+            data: {
+                [key: string]: unknown;
+            };
+            /** Read At */
+            read_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** NotificationsRead */
+        NotificationsRead: {
+            /** Marked */
+            marked: number;
         };
         /** OAuthErrorOut */
         OAuthErrorOut: {
@@ -7017,6 +7630,177 @@ export interface components {
             /** Token Help */
             token_help: string;
         };
+        /**
+         * PublicationOut
+         * @description A publication with everything it pinned (immutable).
+         */
+        PublicationOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Number */
+            number: number;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Version Number */
+            version_number: number;
+            /** Content Hash */
+            content_hash: string;
+            /** Manifest Hash */
+            manifest_hash: string;
+            /** Published By */
+            published_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Has Brief
+             * @default false
+             */
+            has_brief: boolean;
+            /** Manifest */
+            manifest: {
+                [key: string]: unknown;
+            };
+            /** Markdown */
+            markdown: string;
+        };
+        /** PublicationSummary */
+        PublicationSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Number */
+            number: number;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Version Number */
+            version_number: number;
+            /** Content Hash */
+            content_hash: string;
+            /** Manifest Hash */
+            manifest_hash: string;
+            /** Published By */
+            published_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Has Brief
+             * @default false
+             */
+            has_brief: boolean;
+        };
+        /**
+         * PublishCheckOut
+         * @description Whether a version can be published, and everything that blocks it.
+         */
+        PublishCheckOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Version */
+            version: number;
+            /** Content Hash */
+            content_hash: string;
+            /** Can Publish */
+            can_publish: boolean;
+            /**
+             * Blockers
+             * @default []
+             */
+            blockers: components["schemas"]["PublishProblem"][];
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["PublishProblem"][];
+            /**
+             * Required Sections
+             * @default []
+             */
+            required_sections: string[];
+            /**
+             * Approval Required Sections
+             * @default []
+             */
+            approval_required_sections: string[];
+            /** Decider Id */
+            decider_id?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Approved By */
+            approved_by?: string | null;
+            /**
+             * Readiness
+             * @default []
+             */
+            readiness: components["schemas"]["ReadinessResultOut"][];
+        };
+        /** PublishIn */
+        PublishIn: {
+            /** Content Hash */
+            content_hash?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** PublishProblem */
+        PublishProblem: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "version_not_approved" | "approval_not_by_decider" | "missing_required_section" | "stale_approval" | "missing_approval" | "mandatory_reviewer_pending" | "readiness_critical" | "source_permission_revoked" | "already_published" | "open_critical_change_request" | "open_change_request" | "readiness_warning" | "approval_stale_optional" | "review_overdue";
+            /** Message */
+            message: string;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /** Check Key */
+            check_key?: string | null;
+            /**
+             * Ids
+             * @default []
+             */
+            ids: string[];
+        };
+        /**
+         * PublishRefused
+         * @description 409: the publish transaction refused; nothing was published.
+         */
+        PublishRefused: {
+            /** Detail */
+            detail: string;
+            check: components["schemas"]["PublishCheckOut"];
+        };
         /** Pushback */
         Pushback: {
             /** Reason */
@@ -7078,6 +7862,34 @@ export interface components {
             unscored: number;
             /** In Cycles */
             in_cycles: number;
+        };
+        /** ReadinessResultOut */
+        ReadinessResultOut: {
+            /** Key */
+            key: string;
+            /** Hard */
+            hard: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /** Error */
+            error?: string | null;
         };
         /** RecommendIn */
         RecommendIn: {
@@ -7243,6 +8055,24 @@ export interface components {
             /** Edges */
             edges: number;
         };
+        /**
+         * Resolution
+         * @description One entry of a draft's front-matter ``resolutions`` list.
+         */
+        Resolution: {
+            /**
+             * Feedback Id
+             * Format: uuid
+             */
+            feedback_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "addressed" | "declined";
+            /** Note */
+            note?: string | null;
+        };
         /** ResolutionNarrative */
         ResolutionNarrative: {
             /** Summary */
@@ -7272,6 +8102,116 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+        };
+        /** ReviewPolicyIn */
+        ReviewPolicyIn: {
+            /** Decider Id */
+            decider_id?: string | null;
+            /**
+             * Mandatory Reviewer Ids
+             * @default []
+             */
+            mandatory_reviewer_ids: string[];
+            /**
+             * Required Section Keys
+             * @default []
+             */
+            required_section_keys: string[];
+            /**
+             * Section Approval
+             * @default required_sections
+             * @enum {string}
+             */
+            section_approval: "required_sections" | "all_sections" | "none";
+            /**
+             * Rereview On Change
+             * @default true
+             */
+            rereview_on_change: boolean;
+            /** Lock Version */
+            lock_version?: number | null;
+        };
+        /** ReviewPolicyOut */
+        ReviewPolicyOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Decider Id */
+            decider_id?: string | null;
+            /**
+             * Mandatory Reviewer Ids
+             * @default []
+             */
+            mandatory_reviewer_ids: string[];
+            /**
+             * Required Section Keys
+             * @default []
+             */
+            required_section_keys: string[];
+            /**
+             * Section Approval
+             * @default required_sections
+             * @enum {string}
+             */
+            section_approval: "required_sections" | "all_sections" | "none";
+            /**
+             * Rereview On Change
+             * @default true
+             */
+            rereview_on_change: boolean;
+            /**
+             * Source
+             * @default default
+             * @enum {string}
+             */
+            source: "document" | "company" | "default";
+            /** Lock Version */
+            lock_version?: number | null;
+        };
+        /**
+         * ReviewQueueItem
+         * @description A section the caller owns or reviews, in the latest version of its document.
+         */
+        ReviewQueueItem: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "owner" | "reviewer";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "unreviewed" | "approved" | "approval_stale" | "changes_requested" | "rejected" | "revised";
+            /**
+             * Rereview Requested
+             * @default false
+             */
+            rereview_requested: boolean;
+            /** Due At */
+            due_at?: string | null;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
         };
         /** RevisionOut */
         RevisionOut: {
@@ -7536,6 +8476,73 @@ export interface components {
             /** Hits */
             hits: components["schemas"]["SearchHit"][];
         };
+        /**
+         * SectionApproval
+         * @description The approval a section's current revision holds (or held, when stale).
+         */
+        SectionApproval: {
+            /**
+             * Review Id
+             * Format: uuid
+             */
+            review_id: string;
+            /** Reviewer Id */
+            reviewer_id?: string | null;
+            /** Version */
+            version: number;
+            /** Revision */
+            revision?: string | null;
+            /**
+             * Approved At
+             * Format: date-time
+             */
+            approved_at: string;
+        };
+        /** SectionAssignmentIn */
+        SectionAssignmentIn: {
+            /** Owner Id */
+            owner_id?: string | null;
+            /**
+             * Reviewer Ids
+             * @default []
+             */
+            reviewer_ids: string[];
+            /** Due At */
+            due_at?: string | null;
+            /** Lock Version */
+            lock_version?: number | null;
+        };
+        /** SectionAssignmentOut */
+        SectionAssignmentOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Section Key */
+            section_key: string;
+            /** Owner Id */
+            owner_id?: string | null;
+            /**
+             * Reviewer Ids
+             * @default []
+             */
+            reviewer_ids: string[];
+            /** Due At */
+            due_at?: string | null;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** SectionDiff */
         SectionDiff: {
             /** Section Key */
@@ -7564,6 +8571,37 @@ export interface components {
             to_layer?: ("brief" | "detail") | null;
             /** Words */
             words?: components["schemas"]["WordOp"][] | null;
+        };
+        /**
+         * SectionEditIn
+         * @description Save one section: the next version is the latest with this section replaced.
+         */
+        SectionEditIn: {
+            /** Base Version */
+            base_version: number;
+            /** Base Revision */
+            base_revision: string;
+            /** Heading */
+            heading?: string | null;
+            /** Body Md */
+            body_md: string;
+            /**
+             * Resolutions
+             * @default []
+             */
+            resolutions: components["schemas"]["Resolution"][];
+        };
+        /** SectionInvalidation */
+        SectionInvalidation: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Change Id */
+            change_id?: string | null;
+            /** Revision */
+            revision?: string | null;
         };
         /** SectionOut */
         SectionOut: {
@@ -7601,6 +8639,165 @@ export interface components {
             /** Notes */
             notes?: string | null;
         };
+        /** SectionPatchAccept */
+        SectionPatchAccept: {
+            /** Base Revision */
+            base_revision: string;
+            /** Lock Version */
+            lock_version: number;
+            /** Heading */
+            heading?: string | null;
+            /** Body Md */
+            body_md?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * SectionPatchDetail
+         * @description A patch with its word diff against the section's text in the latest version.
+         */
+        SectionPatchDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Section Key */
+            section_key: string;
+            /** Base Version */
+            base_version: number;
+            /** Base Hash */
+            base_hash: string;
+            /** Heading */
+            heading: string;
+            /** Body Md */
+            body_md: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "run" | "llm_job" | "agent" | "person";
+            /** Run Id */
+            run_id?: string | null;
+            /** Rationale */
+            rationale?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "accepted" | "rejected" | "superseded";
+            /** Created By */
+            created_by?: string | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /** Applied Version */
+            applied_version?: number | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Latest Version */
+            latest_version: number;
+            /** Current Revision */
+            current_revision?: string | null;
+            /** Current Heading */
+            current_heading?: string | null;
+            /** Current Body Md */
+            current_body_md?: string | null;
+            /**
+             * Rebase Needed
+             * @default false
+             */
+            rebase_needed: boolean;
+            /**
+             * Words
+             * @default []
+             */
+            words: components["schemas"]["WordOp"][];
+        };
+        /** SectionPatchOut */
+        SectionPatchOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Section Key */
+            section_key: string;
+            /** Base Version */
+            base_version: number;
+            /** Base Hash */
+            base_hash: string;
+            /** Heading */
+            heading: string;
+            /** Body Md */
+            body_md: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "run" | "llm_job" | "agent" | "person";
+            /** Run Id */
+            run_id?: string | null;
+            /** Rationale */
+            rationale?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "accepted" | "rejected" | "superseded";
+            /** Created By */
+            created_by?: string | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /** Applied Version */
+            applied_version?: number | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** SectionPatchReject */
+        SectionPatchReject: {
+            /** Lock Version */
+            lock_version: number;
+            /** Note */
+            note?: string | null;
+        };
         /** SectionReviewIn */
         SectionReviewIn: {
             /**
@@ -7610,6 +8807,10 @@ export interface components {
             verdict: "approved" | "changes_requested" | "rejected";
             /** Note */
             note?: string | null;
+            /** Revision */
+            revision?: string | null;
+            /** Severity */
+            severity?: ("critical" | "major" | "minor") | null;
         };
         /** SectionReviewOut */
         SectionReviewOut: {
@@ -7639,10 +8840,106 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Section Hash */
+            section_hash?: string | null;
             /** Feedback Item Id */
             feedback_item_id?: string | null;
             /** Layer */
             layer?: ("brief" | "detail") | null;
+        };
+        /**
+         * SectionStateOut
+         * @description Review status of one section of a version, for the document views.
+         */
+        SectionStateOut: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Ordinal */
+            ordinal: number;
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "brief" | "detail";
+            /** Revision */
+            revision: string;
+            /** Revision Since Version */
+            revision_since_version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "unreviewed" | "approved" | "approval_stale" | "changes_requested" | "rejected" | "revised";
+            approval?: components["schemas"]["SectionApproval"] | null;
+            invalidated?: components["schemas"]["SectionInvalidation"] | null;
+            /**
+             * Rereview Requested
+             * @default false
+             */
+            rereview_requested: boolean;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Approval Required
+             * @default false
+             */
+            approval_required: boolean;
+            /**
+             * Mandatory Approvals
+             * @default []
+             */
+            mandatory_approvals: components["schemas"]["MandatoryApproval"][];
+            /** Owner Id */
+            owner_id?: string | null;
+            /**
+             * Reviewer Ids
+             * @default []
+             */
+            reviewer_ids: string[];
+            /** Due At */
+            due_at?: string | null;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
+            /**
+             * Open Feedback
+             * @default 0
+             */
+            open_feedback: number;
+            /**
+             * Open By Severity
+             * @default {}
+             */
+            open_by_severity: {
+                [key: string]: number;
+            };
+            /** Lock Version */
+            lock_version?: number | null;
+        };
+        /** SectionStatesOut */
+        SectionStatesOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Version */
+            version: number;
+            /** Latest Version */
+            latest_version: number;
+            /** Sections */
+            sections: components["schemas"]["SectionStateOut"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
         };
         /**
          * SectionVerdict
@@ -9322,7 +10619,9 @@ export interface operations {
     };
     import_version: {
         parameters: {
-            query?: never;
+            query?: {
+                base_version?: number | null;
+            };
             header?: never;
             path: {
                 doc: string;
@@ -9351,6 +10650,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description The draft's base version is older than the latest, and the draft would overwrite sections changed since */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictResponse"];
                 };
             };
             /** @description Draft rejected */
@@ -9627,6 +10935,15 @@ export interface operations {
                     "application/json": components["schemas"]["SectionReviewOut"];
                 };
             };
+            /** @description The section changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -9800,6 +11117,814 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_section_states: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionStatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_section_assignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionAssignmentOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_section_assignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionAssignmentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionAssignmentOut"];
+                };
+            };
+            /** @description Changed since you loaded it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_review_queue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewQueueItem"][];
+                };
+            };
+        };
+    };
+    get_review_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewPolicyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_review_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewPolicyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewPolicyOut"];
+                };
+            };
+            /** @description Changed since you loaded it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_document_section: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionEditIn"];
+            };
+        };
+        responses: {
+            /** @description Nothing changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Changed since you loaded it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictResponse"];
+                };
+            };
+            /** @description The edited draft is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportErrorResponse"];
+                };
+            };
+        };
+    };
+    list_section_patches: {
+        parameters: {
+            query?: {
+                status?: ("open" | "accepted" | "rejected" | "superseded") | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionPatchOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_section_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionPatchDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_section_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionPatchAccept"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Changed since you loaded it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_section_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionPatchReject"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionPatchOut"];
+                };
+            };
+            /** @description Changed since you loaded it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_review_campaigns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_review_campaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_review_campaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_review_campaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Changed since you loaded it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_notifications: {
+        parameters: {
+            query?: {
+                unread?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_notification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_all_notifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsRead"];
+                };
+            };
+        };
+    };
+    get_publish_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishCheckOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationOut"];
+                };
+            };
+            /** @description The publish was refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishRefused"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_publications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_publication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                p: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_publication: {
+        parameters: {
+            query?: {
+                format?: "html" | "pdf" | "md";
+                layer?: "full" | "brief" | "deck";
+            };
+            header?: never;
+            path: {
+                doc: string;
+                p: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The published file, exactly as published */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                    "application/pdf": string;
+                    "text/markdown": string;
+                };
+            };
+            /** @description Format not offered for the layer, or no brief */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

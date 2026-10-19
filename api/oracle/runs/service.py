@@ -1171,6 +1171,10 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
                 theme=knobs.get("theme"),
                 template=template,
                 source_version_id=source_id,
+                # An agent's draft never replaces approved text: it becomes a patch.
+                cause="run_draft",
+                origin="run",
+                run_id=run.id,
             )
         except DraftError as exc:
             problems = "; ".join(f"[{p.code}] {p.message}" for p in exc.problems)

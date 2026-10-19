@@ -55,9 +55,11 @@ class UnknownFeedbackItemsError(ValueError):
 class ReviewError(Exception):
     """A request the review service refuses; the router maps ``kind`` to an HTTP status."""
 
-    def __init__(self, kind: str, message: str):
-        self.kind = kind  # "not_found" | "invalid" | "forbidden"
+    def __init__(self, kind: str, message: str, conflict: dict | None = None):
+        self.kind = kind  # "not_found" | "invalid" | "forbidden" | "conflict"
         self.message = message
+        # For "conflict": a ConflictResponse body (oracle.review.schemas).
+        self.conflict = conflict
         super().__init__(message)
 
 
@@ -192,6 +194,7 @@ async def feedback_out(
                 status=item.status,
                 addressed_in_version=item.addressed_in_version,
                 resolution_note=item.resolution_note,
+                severity=item.severity,
                 created_at=item.created_at,
                 updated_at=item.updated_at,
                 suggestion=SuggestionOut.model_validate(suggestion) if suggestion else None,
@@ -215,8 +218,11 @@ async def create_comment(
     section_key: str,
     anchor: TextQuoteSelector,
     body: str,
+    severity: str | None = None,
 ) -> CommentOut:
-    """Top-level inline comment; also opens a ``comment`` feedback item."""
+    """Top-level inline comment; also opens a ``comment`` feedback item (a change
+    request of ``severity`` when given). The section's owner and reviewers are
+    notified."""
     version = await get_version(session, doc, n)
     section = await _get_section(session, version, section_key)
     comment = Comment(
@@ -237,11 +243,16 @@ async def create_comment(
         section_key=section_key,
         summary=body,
         status="open",
+        severity=severity,
         created_at=comment.created_at,
     )
     session.add(item)
     await session.flush()
-    await _mark_in_review(session, await session.get(Document, version.document_id))
+    document = await session.get(Document, version.document_id)
+    await _mark_in_review(session, document)
+    from oracle.review import collab
+
+    await collab.on_comment(session, principal, document, version.number, comment)
     await audit.record(
         session,
         principal,
@@ -256,7 +267,12 @@ async def create_comment(
         "feedback.create",
         "feedback_item",
         item.id,
-        {"kind": "comment", "comment_id": str(comment.id), "raised_on_version": version.number},
+        {
+            "kind": "comment",
+            "comment_id": str(comment.id),
+            "raised_on_version": version.number,
+            **({"severity": severity} if severity else {}),
+        },
     )
     return _comment_out(comment, feedback_item_id=item.id, layer=section.layer)
 
@@ -322,6 +338,11 @@ async def reply_to_comment(
     await audit.record(
         session, principal, "comment.reply", "comment", reply.id, {"parent_id": str(parent.id)}
     )
+    from oracle.review import collab
+
+    version = await session.get(DocumentVersion, reply.version_id)
+    document = await session.get(Document, version.document_id)
+    await collab.on_comment(session, principal, document, version.number, reply, parent)
     return _comment_out(
         reply, layer=await section_layer(session, reply.version_id, reply.section_key)
     )
@@ -409,14 +430,23 @@ async def review_section(
     section_key: str,
     verdict: str,
     note: str | None,
+    revision: str | None = None,
+    severity: str | None = None,
 ) -> tuple[SectionReview, FeedbackItem | None]:
     """Record a verdict (history is kept; the latest wins).
 
     Any still-open ``section_review`` item for the same section, raised on this or an
     earlier version, becomes ``superseded``. A non-approved verdict opens a new item.
+
+    The verdict binds to the section's revision (its content hash). With ``revision``
+    (what the reviewer read), a verdict whose revision is no longer the latest
+    version's is a ``conflict``: an approval is never given on stale text. A verdict
+    clears a pending re-review request on the section.
     """
     version = await get_version(session, doc, n)
     section = await _get_section(session, version, section_key)
+    if revision is not None:
+        await _check_revision(session, version, section, revision)
     review = SectionReview(
         version_id=version.id,
         section_key=section_key,
@@ -473,6 +503,7 @@ async def review_section(
             section_key=section_key,
             summary=f"{label}: {note}" if note else f"{label} (section {section_key})",
             status="open",
+            severity=severity,
             created_at=review.created_at,
         )
         session.add(item)
@@ -489,9 +520,64 @@ async def review_section(
                 "raised_on_version": version.number,
             },
         )
+    from oracle.review.models import SectionReviewState
+
+    state = await session.scalar(
+        select(SectionReviewState).where(
+            SectionReviewState.document_id == version.document_id,
+            SectionReviewState.section_key == section_key,
+        )
+    )
+    if state is not None and state.rereview_requested_at is not None:
+        state.rereview_requested_at = None
     await _mark_in_review(session, await session.get(Document, version.document_id))
     await session.flush()
     return review, item
+
+
+async def _check_revision(
+    session: AsyncSession, version: DocumentVersion, section: Section, revision: str
+) -> None:
+    latest = await session.scalar(
+        select(DocumentVersion)
+        .where(DocumentVersion.document_id == version.document_id)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    current = await session.scalar(
+        select(Section).where(
+            Section.version_id == latest.id, Section.section_key == section.section_key
+        )
+    )
+    if (
+        revision == section.content_hash
+        and current is not None
+        and (current.content_hash == revision)
+    ):
+        return
+    message = (
+        f"section {section.section_key!r} changed: version {latest.number} has another "
+        "revision; review the current text"
+    )
+    raise ReviewError(
+        "conflict",
+        message,
+        {
+            "detail": message,
+            "code": "section_conflict",
+            "base_version": version.number,
+            "latest_version": latest.number,
+            "sections": [
+                {
+                    "section_key": section.section_key,
+                    "base_revision": revision,
+                    "current_revision": current.content_hash if current else None,
+                    "current_heading": current.heading if current else None,
+                    "current_body_md": current.body_md if current else None,
+                }
+            ],
+        },
+    )
 
 
 # --- Feedback ----------------------------------------------------------------------------
@@ -683,9 +769,33 @@ async def resolution_report(session: AsyncSession, doc: str, n: int) -> Resoluti
 async def approve_version(
     session: AsyncSession, principal: "Principal", doc: str, n: int
 ) -> tuple[Document, DocumentVersion]:
-    """Stamp the version's ``approved_at`` (kept if already set); document -> approved."""
+    """Stamp the version's ``approved_at`` (kept if already set); document -> approved.
+
+    The final approval is the designated decider's when the review policy names one
+    (others review and give section verdicts), and it is of the current version only:
+    approving a version a newer one replaced is a ``conflict``.
+    """
     version = await get_version(session, doc, n)
     document = await session.get(Document, version.document_id)
+    from oracle.review.state import effective_policy
+
+    policy = await effective_policy(session, document)
+    if policy.decider_id is not None and principal.id != policy.decider_id:
+        raise ReviewError(
+            "forbidden", "Only the designated decider approves this document's versions"
+        )
+    latest = await session.scalar(
+        select(DocumentVersion.number)
+        .where(DocumentVersion.document_id == document.id)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    if version.approved_at is None and latest != version.number:
+        raise ReviewError(
+            "conflict",
+            f"version {version.number} is not the current version (version {latest} is); "
+            "approve the current version",
+        )
     already = version.approved_at is not None
     if not already:
         version.approved_at = _now()

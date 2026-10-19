@@ -55,7 +55,17 @@ from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: 
 from oracle.members.models import Invite  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
 from oracle.priorities.models import PrioritySnapshot  # noqa: E402
-from oracle.review.models import Comment, FeedbackItem, SectionReview  # noqa: E402
+from oracle.review.models import (  # noqa: E402
+    Comment,
+    DocumentPublication,
+    DocumentReviewPolicy,
+    FeedbackItem,
+    Notification,
+    ReviewCampaign,
+    SectionPatch,
+    SectionReview,
+    SectionReviewState,
+)
 from oracle.runs.models import Checkpoint, Run, RunSegment  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
 from oracle.sources.models import (  # noqa: E402
@@ -116,6 +126,8 @@ __all__ = [
     "Connection",
     "Document",
     "DocumentComposition",
+    "DocumentPublication",
+    "DocumentReviewPolicy",
     "DocumentSectionLink",
     "DocumentVersion",
     "Edge",
@@ -133,17 +145,21 @@ __all__ = [
     "LlmSuggestion",
     "ModuleDefinition",
     "ModuleVersion",
+    "Notification",
     "OAuthClient",
     "OAuthCode",
     "OAuthToken",
     "PrioritySnapshot",
     "ProductIntake",
     "Proposal",
+    "ReviewCampaign",
     "Run",
     "RunSegment",
     "RunToken",
     "Section",
+    "SectionPatch",
     "SectionReview",
+    "SectionReviewState",
     "Snapshot",
     "Source",
     "SourceItem",

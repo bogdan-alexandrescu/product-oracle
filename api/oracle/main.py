@@ -24,6 +24,7 @@ from oracle.members.router import router as members_router
 from oracle.preferences.router import router as preferences_router
 from oracle.priorities.router import router as priorities_router
 from oracle.review.router import router as review_router
+from oracle.review.v2_router import router as review_v2_router
 from oracle.runs.router import router as runs_router
 from oracle.sources.router import router as sources_router
 from oracle.templates.router import router as templates_router
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
     app.include_router(preferences_router)
     app.include_router(docs_router)
     app.include_router(review_router)
+    app.include_router(review_v2_router)
     app.include_router(export_router)
     app.include_router(llm_jobs_router)
     # v1 lanes add their routes to these (empty until then).

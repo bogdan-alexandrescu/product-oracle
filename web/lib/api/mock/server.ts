@@ -16,6 +16,7 @@ import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
@@ -52,6 +53,8 @@ export interface Db {
   llm?: LlmDb;
   /** Product Oracle v2 tables (./v2.ts); absent in data saved before v2. */
   v2?: V2Db;
+  /** v2 review state, campaigns, notifications, publications (./review-v2.ts). */
+  review_v2?: ReviewV2Db;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -800,6 +803,43 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   return notFound("Route");
 }
 
+/** The v2 review mock's view of the db; a section save copies the latest version. */
+function reviewV2Context(db: Db, userId: string, role: Role) {
+  return {
+    db: db.review_v2!,
+    documents: db.documents,
+    versions: db.versions,
+    reviews: db.reviews,
+    me: { id: userId, role },
+    uuid,
+    now,
+    hash,
+    exportHtml: (doc: { id: string }, v: { id: string }) =>
+      exportHtml(db.documents.find((d) => d.id === doc.id)!, db.versions.find((x) => x.id === v.id)!),
+    editSection: (doc: { id: string }, key: string, heading: string | null, bodyMd: string) => {
+      const latest = docVersions(db, db.documents.find((d) => d.id === doc.id)!).pop()!;
+      const sections = latest.sections.map((s) =>
+        s.section_key === key
+          ? { ...s, id: uuid(), heading: heading ?? s.heading, body_md: bodyMd, body_text: plainText(bodyMd), content_hash: hash(`${s.level}\n${heading ?? s.heading}\n${bodyMd}`) }
+          : { ...s, id: uuid() },
+      );
+      const next: VersionRow = {
+        ...latest,
+        id: uuid(),
+        number: latest.number + 1,
+        content_hash: hash(sections.map((s) => s.content_hash).join(":")),
+        approved_at: null,
+        warnings: [],
+        created_at: now(),
+        sections,
+      };
+      db.versions.push(next);
+      touch(db, doc.id);
+      return versionOut(db, next);
+    },
+  };
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -826,6 +866,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   const member = db.members.find((x) => x.email === db.session);
   if (!member) return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
+  // v2 review routes (./review-v2.ts) check roles themselves.
+  if (!db.review_v2) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id);
+  }
+  const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
+  if (reviewV2) return reviewV2;
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
     const mine = (db.preferences[me.email] ??= { document_view: "brief" });

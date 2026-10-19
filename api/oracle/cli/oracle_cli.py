@@ -1,6 +1,6 @@
 """``oracle``: the agent track's bridge to the API.
 
-    oracle push <draft.md> [--doc slug]
+    oracle push <draft.md> [--doc slug] [--base N]
     oracle pull <doc> --version N [--out dir]
     oracle sync [--source ID]
     oracle baseline push <graph.yaml>
@@ -111,6 +111,7 @@ def push(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: T
             client,
             "POST",
             f"/v1/documents/{quote(str(slug), safe='')}/versions",
+            params={"base_version": args.base} if getattr(args, "base", None) else None,
             content=markdown.encode("utf-8"),
             headers={"Content-Type": "text/markdown; charset=utf-8"},
         )
@@ -533,6 +534,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("push", parents=[common], help="import a draft as the next version")
     p.add_argument("draft", help="draft markdown file with YAML front matter")
     p.add_argument("--doc", help="document slug (default: `document` from the front matter)")
+    p.add_argument(
+        "--base",
+        type=int,
+        metavar="N",
+        help="the version the draft was written on; a newer version that changed the same "
+        "sections refuses the push instead of overwriting them",
+    )
     p.set_defaults(func=push)
 
     p = sub.add_parser("pull", parents=[common], help="write a version's feedback package")

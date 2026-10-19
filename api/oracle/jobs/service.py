@@ -647,7 +647,15 @@ async def apply_refinement(
     resolutions = [r for r in resolutions if uuid.UUID(r["feedback_id"]) in open_items]
     markdown = compose_markdown(base.front_matter, sections, replace, resolutions)
     try:
-        result = await docs_service.import_draft(db, document.slug, markdown, principal)
+        # An accepted AI patch: the change event invalidates the section's approval.
+        result = await docs_service.import_draft(
+            db,
+            document.slug,
+            markdown,
+            principal,
+            base_version=base.number,
+            cause="patch_accepted",
+        )
     except docs_service.DraftError as e:
         await db.rollback()
         raise JobError(422, f"the revised draft does not import: {e}") from e
