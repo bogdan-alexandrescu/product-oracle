@@ -1,8 +1,10 @@
 """Built-in model calls on the Claude account pool, and how each credential is called."""
 
+import asyncio
 import json
 import os
 import stat
+import time
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -15,11 +17,13 @@ from oracle.llm import NoClaudeAccount, gateway
 from oracle.llm.transports import (
     ClaudeCodeTransport,
     LlmAuthError,
+    LlmOutOfTime,
     LlmRateLimited,
     LlmRequest,
     LlmUnavailable,
     MessagesApiTransport,
     TransportResult,
+    get_llm_settings,
     reading_of,
     render_prompt,
 )
@@ -367,3 +371,143 @@ def test_claude_code_transport_passes_the_reported_cost_on():
     ).encode()
     out = ClaudeCodeTransport.parse(stdout, b"", _request())
     assert out.usage == {"input_tokens": 10, "output_tokens": 2, "total_cost_usd": 0.0123}
+
+
+# --- a deadline: no swap or call starts that cannot finish before it ------------------
+
+
+async def _call_by(tenant_id, fakes, deadline, on_call=None):
+    async with tenant_session(tenant_id) as s:
+        return await gateway.complete(
+            s,
+            "Be brief.",
+            MESSAGES,
+            256,
+            job="reporting",
+            transports=fakes,
+            deadline=deadline,
+            on_call=on_call,
+        )
+
+
+async def test_no_swap_starts_that_cannot_finish_before_the_deadline(tenant_id, fakes, monkeypatch):
+    monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
+    spent = await add_account(tenant_id, "alpha")
+    spare = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
+    fakes.plan.answers["acc-alpha"] = LlmRateLimited("out of quota", _reading(1.0))
+    started: list[tuple[str | None, str]] = []
+    real_complete = fakes.plan.complete
+
+    async def slow(token, request):
+        await asyncio.sleep(0.6)
+        return await real_complete(token, request)
+
+    monkeypatch.setattr(fakes.plan, "complete", slow)
+    # Time for one call, not for a second one on another account.
+    with pytest.raises(LlmOutOfTime) as info:
+        await _call_by(
+            tenant_id,
+            fakes,
+            time.monotonic() + 1.5,
+            lambda label, via: started.append((label, via)),
+        )
+    # A transient outcome: the job counts the attempt and retries later.
+    assert isinstance(info.value, LlmUnavailable)
+    assert [token for token, _ in fakes.plan.calls] == ["acc-alpha"]
+    assert started == [("alpha", "account")]
+    # The rate limit's reading was still kept, and every hold given back.
+    after = await get_account(tenant_id, spent.account_id)
+    assert after.windows["five_hour"].utilization == 1.0 and after.assigned == 0
+    assert (await get_account(tenant_id, spare.account_id)).assigned == 0
+
+
+async def test_no_call_starts_that_cannot_finish_before_the_deadline(tenant_id, fakes, monkeypatch):
+    monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 10.0)
+    account = await add_account(tenant_id, "alpha")
+    with pytest.raises(LlmOutOfTime):
+        await _call_by(tenant_id, fakes, time.monotonic() + 5)
+    assert fakes.plan.calls == []
+    assert (await get_account(tenant_id, account.account_id)).assigned == 0
+    # With the time, it runs.
+    out = await _call_by(tenant_id, fakes, time.monotonic() + 30)
+    assert out.account_label == "alpha"
+
+
+async def test_the_fallback_call_respects_the_deadline_too(tenant_id, fakes, monkeypatch):
+    monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 10.0)
+    async with tenant_session(tenant_id) as s:
+        from oracle.claude_accounts import fallback
+
+        await fallback.store(s, PLAN_TOKEN_PREFIX + "01-spare", None)
+        await s.commit()
+    with pytest.raises(LlmOutOfTime):
+        await _call_by(tenant_id, fakes, time.monotonic() + 5)
+    assert fakes.plan.calls == [] and fakes.api_key.calls == []
+
+
+SLOW_CLAUDE = """#!/usr/bin/env python3
+import os, time
+with open(__PID__, "w") as f:
+    f.write(str(os.getpid()))
+time.sleep(120)
+"""
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+@pytest.fixture
+def slow_claude(tmp_path):
+    pidfile = tmp_path / "pid"
+    script = tmp_path / "claude"
+    script.write_text(SLOW_CLAUDE.replace("__PID__", repr(str(pidfile))))
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    return str(script), pidfile
+
+
+async def _started_pid(pidfile) -> int:
+    for _ in range(400):
+        if pidfile.exists() and pidfile.read_text():
+            return int(pidfile.read_text())
+        await asyncio.sleep(0.025)
+    raise AssertionError("Claude Code never started")
+
+
+async def test_a_cancelled_call_leaves_no_claude_code_process(slow_claude):
+    script, pidfile = slow_claude
+    transport = ClaudeCodeTransport(claude_bin=script, timeout=120)
+    task = asyncio.create_task(transport.complete(PLAN_TOKEN_PREFIX + "01-good", _request()))
+    pid = await _started_pid(pidfile)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not _alive(pid)
+
+
+async def test_a_cancelled_call_gives_its_hold_back_only_once_the_process_is_gone(
+    tenant_id, slow_claude, monkeypatch
+):
+    script, pidfile = slow_claude
+    account = await add_account(tenant_id, "alpha")
+    real_release = gateway.pool.release
+    alive_at_release: list[bool] = []
+
+    async def release(tenant, assignment, **kw):
+        alive_at_release.append(_alive(int(pidfile.read_text())))
+        return await real_release(tenant, assignment, **kw)
+
+    monkeypatch.setattr(gateway.pool, "release", release)
+    plan = ClaudeCodeTransport(claude_bin=script, timeout=120)
+    fakes = gateway.Transports(plan=plan, api_key=FakeTransport("api"))
+    task = asyncio.create_task(_call(tenant_id, fakes))
+    pid = await _started_pid(pidfile)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert alive_at_release == [False] and not _alive(pid)
+    assert (await get_account(tenant_id, account.account_id)).assigned == 0

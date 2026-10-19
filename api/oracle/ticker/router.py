@@ -7,8 +7,10 @@ pool and run its queued built-in model jobs. One company's failure stops none of
 others, and the answer carries counts only (no ids, no error text).
 
 The account sweep runs only when the company's last one completed more than
-``ORACLE_CLAUDE_SWEEP_SECONDS`` ago: Anthropic's usage endpoint allows about five calls
-per five minutes per account, which a sweep every minute would spend.
+``ORACLE_CLAUDE_SWEEP_SECONDS`` ago, and never more often than every five minutes even
+with that setting lower or 0 (``claude_sweep.MIN_TICK_SWEEP_INTERVAL``): Anthropic's usage
+endpoint allows about five calls per five minutes per account, which a sweep every minute
+would spend.
 
 Auth is a Google ID token from ORACLE_TICKER_SERVICE_ACCOUNT for ORACLE_TICKER_AUDIENCE
 (``oracle.ticker.idtoken``), nothing else; with either setting empty the endpoint is a
@@ -21,9 +23,11 @@ database connection must be a session-mode one (not a transaction-mode pooler).
 First every company's runs and sweep, in a random order, none started after
 ``BUDGET_SECONDS``; then the built-in jobs of the companies ticked, one job per company
 in turn, so a company's backlog neither delays another's runs nor takes all the job
-time. A job is claimed only when a whole model call still fits before
-``HARD_LIMIT_SECONDS``, where the whole tick is cut off (a job cut off anyway goes back
-to the queue, ``oracle.jobs.worker``).
+time (none with ``ORACLE_LLM_JOBS_MAX_PER_TICK=0``). A job is claimed only when a whole
+model call still fits before ``HARD_LIMIT_SECONDS``, where the whole tick is cut off, and
+its calls are given that deadline: no account swap or further call starts that could not
+finish before it. A job cut off anyway is put back with its attempt refunded if no model
+call had started, and otherwise counts the attempt (``oracle.jobs.worker``).
 """
 
 import asyncio
@@ -31,7 +35,6 @@ import logging
 import random
 import time
 import uuid
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -76,7 +79,8 @@ class _ClaudeAccounts(BaseModel):
     polled: int = 0
     # Companies whose sweep lease another sweep held.
     lease_skipped: int = 0
-    # Companies not swept: their last sweep completed within ORACLE_CLAUDE_SWEEP_SECONDS.
+    # Companies not swept: their last sweep completed within the sweep interval
+    # (ORACLE_CLAUDE_SWEEP_SECONDS, at least 300 s).
     not_due: int = 0
     errors: int = 0
 
@@ -143,12 +147,12 @@ class _Failures:
 
 
 async def _sweep_if_due(tenant_id: uuid.UUID, out: TickerOut) -> None:
-    interval = timedelta(seconds=claude_sweep.get_pool_settings().sweep_seconds)
     acc = out.claude_accounts
-    if not await claude_sweep.is_due(tenant_id, interval, datetime.now(UTC)):
+    result = await claude_sweep.sweep_if_due(tenant_id)
+    if result is None:
         acc.not_due += 1
         return
-    swept = claude_sweep.summarise_sweep(await claude_sweep.sweep(tenant_id))
+    swept = claude_sweep.summarise_sweep(result)
     acc.reclaimed += swept.reclaimed
     acc.examined += swept.examined
     acc.refreshed += swept.refreshed
@@ -187,6 +191,8 @@ async def _run_jobs(
     ``max_per_tick`` or failed; the turn ends once no job fits in the time left.
     """
     limit = llm_jobs.get_worker_settings().max_per_tick
+    if limit <= 0:
+        return
     ran = dict.fromkeys(tenant_ids, 0)
     waiting = list(tenant_ids)
     while waiting:

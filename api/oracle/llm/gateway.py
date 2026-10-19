@@ -14,12 +14,21 @@ swaps (``runners/cliagent.py``): before the call, a hold marked ``drain`` moves;
 the account refused for quota (a rejected ``rate_limit_event``) moves the hold to
 another account (``exhausted``) and runs again there; a credential that will not read
 moves it too (``unusable``). Every reading the stream carried is merged into the
-account. The hold is released when the call ends, however it ends.
+account. The hold is released when the call ends, however it ends (a cancelled call's
+Claude Code process is gone first, ``transports``).
+
+A caller with a time limit (the run ticker) passes ``deadline`` (``time.monotonic()``):
+no account swap or call starts unless a whole call (``ORACLE_LLM_TIMEOUT_SECONDS``) still
+fits before it; :class:`LlmOutOfTime`, a transient failure, instead. ``on_call`` is told
+the account (label, via) each time a call starts, so a caller cut off mid-call knows one
+had.
 
 Agent workflows do not run here: they run in SwarmCloud on SwarmCloud's accounts.
 """
 
+import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -36,6 +45,7 @@ from oracle.claude_accounts.accounts import (
 from oracle.llm.transports import (
     ClaudeCodeTransport,
     LlmAuthError,
+    LlmOutOfTime,
     LlmRateLimited,
     LlmRequest,
     MessagesApiTransport,
@@ -119,6 +129,14 @@ async def _record(tenant_id: uuid.UUID, account_id: str, readings: dict[str, Any
         await store.record_reading(tenant_id, account_id, windows, datetime.now(UTC))
 
 
+def _time_for_a_call(deadline: float | None) -> None:
+    """Raise :class:`LlmOutOfTime` unless a whole call still fits before ``deadline``."""
+    if deadline is None:
+        return
+    if deadline - time.monotonic() < get_llm_settings().timeout_seconds:
+        raise LlmOutOfTime("No time left for a whole model call before the deadline")
+
+
 async def complete(
     session: AsyncSession,
     system: str,
@@ -128,6 +146,8 @@ async def complete(
     job: str,
     model: str | None = None,
     transports: Transports | None = None,
+    deadline: float | None = None,
+    on_call: Callable[[str | None, str], None] | None = None,
 ) -> Completion:
     """Run one built-in model call for the session's company."""
     if job not in JOBS:
@@ -153,6 +173,10 @@ async def complete(
         spare = await fallback.load(session)
         if spare is None:
             raise NoClaudeAccount(NO_ACCOUNT_MESSAGE, got.reason.value)
+        via = "fallback_api_key" if spare.kind == "api_key" else "fallback_plan"
+        _time_for_a_call(deadline)
+        if on_call is not None:
+            on_call(None, via)
         result = await ts.for_kind(spare.kind).complete(spare.token, request)
         return Completion(
             text=result.text,
@@ -161,7 +185,7 @@ async def complete(
             usage=result.usage,
             account_id=None,
             account_label=None,
-            via="fallback_api_key" if spare.kind == "api_key" else "fallback_plan",
+            via=via,
         )
 
     assignment: pool.Assignment = got
@@ -172,26 +196,38 @@ async def complete(
             # The turn boundary: a hold marked to move (the account is draining) moves
             # before the call starts on it.
             if await pool.must_move(tenant_id, assignment) == SWAP_DRAIN:
+                _time_for_a_call(deadline)
                 assignment = await _swap(tenant_id, assignment, SWAP_DRAIN, swaps)
             try:
                 token = await pool.access_token(tenant_id, assignment)
             except Exception:
                 # If no account can take it, the hold is released as unusable.
                 unusable = "the credential could not be read"
+                _time_for_a_call(deadline)
                 assignment = await _swap(tenant_id, assignment, SWAP_UNUSABLE, swaps)
                 unusable = ""
                 continue
+            _time_for_a_call(deadline)
+            if on_call is not None:
+                on_call(assignment.account.label, "account")
             try:
                 result: TransportResult = await ts.plan.complete(token, request)
             except LlmRateLimited as e:
                 await _record(tenant_id, assignment.account_id, e.readings)
                 if attempt == MAX_ATTEMPTS - 1:
                     raise
+                _time_for_a_call(deadline)
                 assignment = await _swap(tenant_id, assignment, SWAP_EXHAUSTED, swaps)
                 continue
             except LlmAuthError:
                 # The access token was refused: the sweep refreshes it; this call moves.
                 if attempt == MAX_ATTEMPTS - 1:
+                    unusable = "the access token was refused"
+                    raise
+                try:
+                    _time_for_a_call(deadline)
+                except LlmOutOfTime:
+                    # As on the last attempt: no other account will try it.
                     unusable = "the access token was refused"
                     raise
                 assignment = await _swap(tenant_id, assignment, SWAP_UNUSABLE, swaps)

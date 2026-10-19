@@ -23,8 +23,10 @@ balancer). Use your own values; none are written here.
 - Anything else is `401 {"detail": "Not authenticated"}`, whichever check failed (the API
   log says which, at DEBUG). API tokens, MCP OAuth tokens, session cookies and IAP
   assertions are all refused here, and the ID token opens no other endpoint.
-- Google's certs unreachable with none cached: `503`, and every request for the next 30 s
-  is a `503` without another fetch. Either setting empty: `404`.
+- Google's certs unreachable (or an answer with no usable RS256 key) with none cached:
+  `503`, and every request for the next 30 s is a `503` without another fetch. Either
+  setting empty: `404`. (IAP sign-in shares the key cache code with a 5 s back-off, so one
+  failed fetch on a cold instance does not refuse sign-ins for long.)
 - The answer is counts only: companies ticked, failed and deferred; runs checked, segments
   finished, runs advanced and paused, run errors; the account sweep's counts; built-in
   jobs ran, succeeded, failed, retried; and `timed_out`. Errors are in the API log.
@@ -33,18 +35,30 @@ balancer). Use your own values; none are written here.
   account sweep: no company is started after 45 s (the rest are `deferred` to the next
   minute; the order is random each tick). Then the built-in jobs of the companies ticked,
   one job per company in turn, so one company's backlog delays neither another's runs
-  nor its jobs. A tick is cut off after 240 s.
+  nor its jobs (`ORACLE_LLM_JOBS_MAX_PER_TICK=0` runs none). A tick is cut off after
+  240 s.
 - The Claude account sweep runs for a company only when its last sweep completed more
-  than `ORACLE_CLAUDE_SWEEP_SECONDS` (300 s) ago (`claude_accounts.not_due` counts the
-  others): Anthropic's usage endpoint allows about five calls per five minutes per
-  account. A `429` from it is kept with its `retry-after` (at most an hour): no usage
+  than `ORACLE_CLAUDE_SWEEP_SECONDS` (300 s) ago, and never more often than every 300 s
+  whatever that setting, including `0`, which only turns the API's in-process sweep off
+  (`claude_accounts.not_due` counts the others): Anthropic's usage endpoint allows about
+  five calls per five minutes per account. `POST /v1/internal/tick` and `oracle tick`
+  apply the same check (their `claude_accounts.lease` is `not_due`), so a cron running
+  `oracle tick` every minute sweeps no more often either. A `429` from it is kept with its `retry-after` (at most an hour): no usage
   poll of that company starts before it, from any sweep.
 - A built-in job is claimed only when a whole model call (`ORACLE_LLM_TIMEOUT_SECONDS`,
-  plus 5 s) still fits before the 240 s cut-off, so the tick never cuts a job mid-call.
-  With the default 300 s timeout no job fits, and built-in jobs run only from the API's
-  background worker (`ORACLE_LLM_JOBS_WORKER_SECONDS`) and `oracle tick`; set
-  `ORACLE_LLM_TIMEOUT_SECONDS` to at most 180 for the scheduled tick to run them. A job cut off anyway goes back to `queued`, its attempt given back and nothing
-  recorded as spent.
+  plus 5 s) still fits before the 240 s cut-off, and its calls get that deadline: no
+  account swap and no further call (a call can move to up to three accounts) starts unless
+  a whole call still fits. Out of time, the job fails transiently, which counts as an
+  attempt. With the default 300 s timeout no job fits, and built-in jobs run only from the
+  API's background worker (`ORACLE_LLM_JOBS_WORKER_SECONDS`) and `oracle tick`; set
+  `ORACLE_LLM_TIMEOUT_SECONDS` to at most 180 for the scheduled tick to run them.
+- The tick can still cut a job mid-call, when a call or the work around it overruns. Claude
+  Code's process is then killed, and the account's hold given back once it is gone. A job
+  cut before any model call started goes back to `queued` with its attempt given back and
+  nothing recorded as spent. A job cut after one started counts the attempt and records
+  what is known (the account, any call that finished; not the cut call's usage, which
+  never arrived): it goes back to `queued` once, then fails, so a job whose calls keep
+  overrunning cannot hold the tick forever.
 - It is not in the OpenAPI document, so it is no MCP tool and the web client never sees it.
 
 ## 1. The service account (no roles)
@@ -70,22 +84,30 @@ gcloud projects add-iam-policy-binding "$PROJECT" \
 Whoever creates the job needs `iam.serviceAccounts.actAs` on `oracle-ticker` (Service
 Account User on that one account, not the project).
 
-Anyone who can mint an ID token as `oracle-ticker` can tick Oracle. So no workload or
-person other than Cloud Scheduler's service agent may hold Service Account Token Creator
-(`roles/iam.serviceAccountTokenCreator`) or Service Account User
-(`roles/iam.serviceAccountUser`) at the PROJECT level, where it covers `oracle-ticker`
-too; grant them on single service accounts instead. Check:
+Anyone who can mint an ID token as `oracle-ticker` can tick Oracle. That is not only
+Service Account Token Creator and Service Account User: Owner, Editor, custom roles and
+bindings on the folder or organization above the project can carry the same permissions.
+Ask Policy Analyzer who holds any of them on the `oracle-ticker` account, through any
+role at any level:
 
 ```sh
-gcloud projects get-iam-policy "$PROJECT" --flatten='bindings[].members' \
-  --filter='bindings.role:(roles/iam.serviceAccountTokenCreator roles/iam.serviceAccountUser)' \
-  --format='table(bindings.role,bindings.members)'
-gcloud iam service-accounts get-iam-policy "oracle-ticker@$PROJECT.iam.gserviceaccount.com" \
-  --project="$PROJECT"
+gcloud asset analyze-iam-policy \
+  --project="$PROJECT" \
+  --full-resource-name="//iam.googleapis.com/projects/$PROJECT/serviceAccounts/oracle-ticker@$PROJECT.iam.gserviceaccount.com" \
+  --permissions="iam.serviceAccounts.getOpenIdToken,iam.serviceAccounts.actAs,iam.serviceAccounts.signJwt,iam.serviceAccounts.implicitDelegation" \
+  --expand-groups --expand-roles --output-group-edges
 ```
 
-The first should list nobody (or only Google-managed service agents); the second only
-the people who manage the Cloud Scheduler job.
+(Policy Analyzer needs the Cloud Asset API enabled and `cloudasset.assets.analyzeIamPolicy`
+for whoever runs it. To include bindings on the folder or organization above the project,
+run it with `--organization=<ORG_ID>` or `--folder=<FOLDER_ID>` in place of `--project`.)
+
+The answer should name only Cloud Scheduler's service agent and the people who manage the
+Cloud Scheduler job (they need `actAs`). Anyone else, a person, a group or a workload,
+holding one of these through a project-level, folder-level or organization-level role
+(Owner, Editor, Service Account Token Creator, Service Account User, or a custom role)
+can tick Oracle: move that grant to the single service accounts it was meant for, or
+remove the permission from the custom role.
 
 ## 2. The API settings
 
@@ -180,8 +202,9 @@ off as well, unset `ORACLE_TICKER_AUDIENCE` (it answers 404).
 |---|---|
 | 401 every minute | Audience differs from `ORACLE_TICKER_AUDIENCE` (scheme, host, path, trailing slash), or the job uses another service account. The API log's DEBUG line names the check. |
 | 404 | A setting is unset on the running revision. |
-| 503 | The API cannot reach www.googleapis.com for Google's certs (after a failure, retried every 30 s). |
+| 503 | The API cannot reach www.googleapis.com for Google's certs, or the answer had no usable key (after a failure, retried every 30 s). |
 | `llm_jobs.ran` always 0 while jobs wait | `ORACLE_LLM_TIMEOUT_SECONDS` is over 180: no model call fits in a tick (see above). |
 | `{"skipped": "running"}` every minute | A tick never released the lock: check the database URL is session-mode (see step 2). |
 | 302 or IAP 403 | The path rule is missing: the request went to the IAP backend. |
+| A job `failed` with "cut off by the caller's time limit" | Its model calls kept running past the tick's 240 s cut-off twice: lower `ORACLE_LLM_TIMEOUT_SECONDS`, or let the background worker run it. |
 | `companies.failed` > 0 | One company's runs, sweep or jobs raised; the API log has the traceback. Others still ticked. |
