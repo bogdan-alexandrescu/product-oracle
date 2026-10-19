@@ -296,9 +296,10 @@ async def test_full_shows_everything_and_the_read_is_audited(client, fake, who):
             await s.scalars(select(AuditEvent).where(AuditEvent.action == "intake.evidence_read"))
         ).all()
     reader = ctx.users["author" if who == "run" else who].id
-    mine = [e for e in reads if e.actor == f"user:{reader}"]
+    # (A run token reads every route; its question batch read is audited too.)
+    mine = [e for e in reads if e.actor == f"user:{reader}"
+            and e.data["route"] == "get_intake_summary"]  # fmt: skip
     assert mine and str(items["a"]) in mine[-1].data["item_ids"]
-    assert mine[-1].data["route"] == "get_intake_summary"
 
 
 async def test_the_author_lowers_a_level_again_and_every_change_is_audited(client, fake):

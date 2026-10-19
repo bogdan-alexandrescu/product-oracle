@@ -21,12 +21,15 @@ The levels live in the intake's analysis (``analysis["findings"]``, keyed by fin
 id: an item's id, a gap's id, or a stable id for a conflict or stale item), so a
 re-analysis keeps them. Model output written from shared text only is registered with
 ``restricted: false``. Anything drawn from sources that is not registered (an intake
-analysed before S6) fails closed: others see it as ``private`` until the author
-re-runs the analysis. Viewers, commenters, approvers, owners and run tokens all see
+analysed before S6) fails closed: others see it as ``private``, and a model-written gap
+never registered as such is registered as a private model finding by the next
+analysis. Conflict and stale findings get random ids, so an id never confirms a
+guessed topic. Viewers, commenters, approvers, owners and run tokens all see
 only what the level allows; the author (never as a run token) sees everything. Every
 change of level is audited, and the author can lower a level again at any time.
 """
 
+import hashlib
 import re
 import uuid
 from collections import Counter
@@ -93,15 +96,18 @@ def viewer(principal: Principal | None, intake: ProductIntake) -> Viewer:
 
 class Registry(dict):
     """An intake's findings by id. ``unregistered``: the intake was analysed before
-    findings were registered, so what its sources gave is not listed (fail closed)."""
+    findings were registered, so what its sources gave is not listed (fail closed).
+    ``analysed``: the intake engine analysed it (so its sources may have been read)."""
 
     unregistered: bool = False
+    analysed: bool = False
 
 
 def registry(intake: ProductIntake) -> Registry:
     analysis = intake.analysis or {}
     reg = Registry(analysis.get("findings") or {})
     reg.unregistered = "coverage" in analysis and "findings" not in analysis
+    reg.analysed = "coverage" in analysis or "findings" in analysis
     return reg
 
 
@@ -132,9 +138,14 @@ def register(
     summary: str,
     gap_id: uuid.UUID | None = None,
     restricted: bool = True,
+    match: str | None = None,
+    public_state: str | None = None,
 ) -> dict[str, Any]:
     """Add or refresh a finding; an existing finding keeps the level its author set.
-    ``restricted=False``: drawn from shared text only (shown to everyone)."""
+    ``restricted=False``: drawn from shared text only (shown to everyone). ``match``:
+    what finds a conflict or stale finding again on the next analysis
+    (:func:`finding_id`). ``public_state``: a rule-made gap's knowledge state without
+    the author's sources (what others see while its evidence is not shared)."""
     previous = reg.get(finding_id) or {}
     entry = {
         "kind": kind,
@@ -146,6 +157,10 @@ def register(
     }
     if gap_id is not None:
         entry["gap_id"] = str(gap_id)
+    if match is not None:
+        entry["match"] = match
+    if public_state is not None:
+        entry["public_state"] = public_state
     if not restricted:
         entry["restricted"] = False
     reg[finding_id] = entry
@@ -153,8 +168,26 @@ def register(
 
 
 def stable_id(intake_id: uuid.UUID, *parts: str) -> str:
-    """A finding id that survives re-analysis (conflicts and stale items)."""
+    """The id conflicts and stale items had before ids were random. Anyone who knows
+    the intake and the item ids could confirm a guessed topic with it, so it is only
+    read to carry an old finding's level over (:func:`finding_id`)."""
     return str(uuid.uuid5(intake_id, ":".join(parts)))
+
+
+def finding_id(
+    old: dict[str, dict[str, Any]], intake_id: uuid.UUID, kind: str, *parts: str
+) -> tuple[str, dict[str, Any], str]:
+    """(id, previous entry, match) of a conflict or stale finding.
+
+    The id is random, so it says nothing about the topic or the items; the stored
+    ``match`` (a digest, never shown) finds the same finding on the next analysis, so
+    its id and level survive. A finding registered under its old :func:`stable_id`
+    keeps its level under a new random id."""
+    match = hashlib.sha256(":".join([str(intake_id), kind, *parts]).encode()).hexdigest()
+    for fid, entry in old.items():
+        if entry.get("match") == match:
+            return fid, entry, match
+    return str(uuid.uuid4()), old.get(stable_id(intake_id, kind, *parts)) or {}, match
 
 
 # --- Oracle's own summaries -------------------------------------------------------------
@@ -162,7 +195,7 @@ def stable_id(intake_id: uuid.UUID, *parts: str) -> str:
 _NUMBER = re.compile(r"[$€£]?\s?\d[\d.,:/]*\s?%?|\b(?:percent|per cent)\b", re.I)
 _QUOTE = re.compile(r"[\"“”‘’`«»]")
 _WORDS = re.compile(r"[a-z0-9']+")
-SHINGLE = 4
+SHINGLE = 3
 MAX_SUMMARY = 240
 
 
@@ -186,7 +219,7 @@ def _identifying(token: str, first: bool) -> bool:
 def oracle_summary(text: str, source_texts: list[str], fallback: str, shared: str = "") -> str:
     """A model sentence fit for the ``summary`` level, else ``fallback``.
 
-    Numbers and quotation marks are removed. A sentence that repeats any four
+    Numbers and quotation marks are removed. A sentence that repeats any three
     consecutive words of a source text, or any name, code or figure a source contains
     (and the shared text, ``shared``, does not), is replaced by the fallback (Oracle's
     fixed wording). So a summary never carries a verbatim excerpt, a figure or a name
@@ -268,8 +301,9 @@ def _copy(row: Any, out: type, **changes: Any) -> SimpleNamespace:
     return SimpleNamespace(**data)
 
 
-def _unregistered_model_gap(gap: KnowledgeGap) -> bool:
-    """A gap the model wrote before findings were registered (fail closed)."""
+def model_written(gap: KnowledgeGap) -> bool:
+    """A gap the model wrote: no person created it and it is not its category's fixed
+    rule-made statement."""
     return (
         gap.created_by is None
         and gap.intake_id is not None
@@ -277,39 +311,66 @@ def _unregistered_model_gap(gap: KnowledgeGap) -> bool:
     )
 
 
-def gap_view(gap: KnowledgeGap, reg: dict[str, dict[str, Any]], v: Viewer) -> Any | None:
-    """The gap as ``v`` may see it, or None when it is hidden from them."""
+def gap_changes(
+    gap: KnowledgeGap, reg: dict[str, dict[str, Any]], v: Viewer
+) -> dict[str, Any] | None:
+    """What ``v`` sees differently of the gap: None when it is hidden from them, ``{}``
+    when they see it as it is."""
     entry = reg.get(str(gap.id))
     if v.is_author or is_open(entry):
-        return gap
-    if entry is None and not getattr(reg, "unregistered", False):
-        return gap
+        return {}
+    if (
+        getattr(reg, "analysed", False)
+        and model_written(gap)
+        and (entry is None or entry.get("origin") != "model")
+    ):
+        # Model text never registered as a model finding (written before S6): private,
+        # whatever else the intake registered.
+        return None
     if entry is None:
-        if _unregistered_model_gap(gap):
-            return None
+        if not getattr(reg, "unregistered", False):
+            return {}
         if gap.created_by is None and gap.knowledge_state == "ai_inference" and gap.evidence_ids:
             # A rule-made gap whose source evidence was never registered.
             entry = {"origin": "rules", "sharing": DEFAULT,
                      "source_item_ids": [str(e) for e in gap.evidence_ids]}  # fmt: skip
         else:
-            return gap
+            return {}
     level = entry.get("sharing", DEFAULT)
     if entry.get("origin") == "model":
         if RANK[level] < RANK["summary"]:
             return None
-        if level == "summary":
-            return _copy(gap, KnowledgeGapOut, statement=entry["summary"])
-        return gap
+        return {"statement": entry["summary"]} if level == "summary" else {}
     if RANK[level] >= RANK["summary"]:
-        return gap
+        return {}
     # A rule-made gap: its statement is a fixed category text; what the author's
     # sources say about it (evidence, confidence, the inferred state) is not shared.
     private = set(entry.get("source_item_ids") or [])
     kept = [e for e in gap.evidence_ids if str(e) not in private]
     if len(kept) == len(gap.evidence_ids):
-        return gap
-    state = "unknown" if gap.knowledge_state == "ai_inference" else gap.knowledge_state
-    return _copy(gap, KnowledgeGapOut, evidence_ids=kept, confidence=None, knowledge_state=state)
+        return {}
+    state = gap.knowledge_state
+    if state == "ai_inference":
+        state = entry.get("public_state", "unknown")
+    return {"evidence_ids": kept, "confidence": None, "knowledge_state": state}
+
+
+def gap_view(gap: KnowledgeGap, reg: dict[str, dict[str, Any]], v: Viewer) -> Any | None:
+    """The gap as ``v`` may see it, or None when it is hidden from them."""
+    changes = gap_changes(gap, reg, v)
+    if changes is None:
+        return None
+    return _copy(gap, KnowledgeGapOut, **changes) if changes else gap
+
+
+def statement_restricted(gap: KnowledgeGap, reg: dict[str, dict[str, Any]]) -> bool:
+    """Whether the gap's own words are a restricted finding (model text drawn from the
+    author's sources, or never registered), whatever its level now: they never travel
+    where their output could be shared."""
+    entry = reg.get(str(gap.id))
+    if entry is not None and entry.get("origin") == "model":
+        return not is_open(entry)
+    return model_written(gap)
 
 
 def gap_views(

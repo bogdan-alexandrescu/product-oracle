@@ -2,7 +2,9 @@
 
 Viewers read jobs, suggestions and reports; approvers queue, retry and cancel jobs,
 accept, edit and dismiss suggestions, and refine sections; owners turn job kinds on or
-off per document. Logic lives in :mod:`oracle.jobs.service`; each handler commits once.
+off per document. An intake job's output (what it read and wrote from the author's
+sources) is shown to the intake's author only (S6). Logic lives in
+:mod:`oracle.jobs.service`; each handler commits once.
 """
 
 import uuid
@@ -16,6 +18,7 @@ from markupsafe import escape
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.docs.schemas import VersionOut
+from oracle.intake import sharing
 from oracle.jobs import service
 from oracle.jobs.schemas import (
     JobCreate,
@@ -31,9 +34,11 @@ from oracle.jobs.schemas import (
     SuggestionStatus,
     VersionReports,
 )
+from oracle.v2.models import ProductIntake
 
 router = APIRouter(prefix="/v1", tags=["llm-jobs"], dependencies=[Depends(require_role("viewer"))])
 Approver = Annotated[Principal, Depends(require_role("approver"))]
+Viewer = Annotated[Principal, Depends(require_role("viewer"))]
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 DOC = "/documents/{doc}"
 VERSION = DOC + "/versions/{n}"
@@ -44,6 +49,17 @@ async def _call[T](op: Awaitable[T]) -> T:
         return await op
     except service.JobError as e:
         raise HTTPException(e.status, str(e)) from e
+
+
+async def _shown(db: TenantDB, principal: Principal, job) -> LlmJobOut:
+    """The job as the caller may see it: an intake job's output counts how many items
+    and gaps it drew from the author's sources, so only the author sees it (S6)."""
+    out = await service.job_out(db, job)
+    if out.intake_id is not None and out.output is not None:
+        intake = await db.get(ProductIntake, out.intake_id)
+        if intake is None or not sharing.is_author(principal, intake):
+            out.output = None
+    return out
 
 
 # --- jobs -----------------------------------------------------------------------------
@@ -79,22 +95,22 @@ async def put_llm_job_settings(
 
 
 @router.get("/llm-jobs/{job_id}", response_model=LlmJobOut)
-async def get_llm_job(job_id: uuid.UUID, db: TenantDB) -> LlmJobOut:
-    return await service.job_out(db, await _call(service.get_job(db, job_id)))
+async def get_llm_job(job_id: uuid.UUID, principal: Viewer, db: TenantDB) -> LlmJobOut:
+    return await _shown(db, principal, await _call(service.get_job(db, job_id)))
 
 
 @router.post("/llm-jobs/{job_id}/cancel", response_model=LlmJobOut)
 async def cancel_llm_job(job_id: uuid.UUID, principal: Approver, db: TenantDB) -> LlmJobOut:
     job = await _call(service.cancel(db, principal, job_id))
     await db.commit()
-    return await service.job_out(db, job)
+    return await _shown(db, principal, job)
 
 
 @router.post("/llm-jobs/{job_id}/retry", response_model=LlmJobOut)
 async def retry_llm_job(job_id: uuid.UUID, principal: Approver, db: TenantDB) -> LlmJobOut:
     job = await _call(service.retry(db, principal, job_id))
     await db.commit()
-    return await service.job_out(db, job)
+    return await _shown(db, principal, job)
 
 
 # --- refinement -----------------------------------------------------------------------

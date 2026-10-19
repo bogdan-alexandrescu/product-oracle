@@ -55,7 +55,7 @@ from oracle.runs.schemas import RunOut
 from oracle.sources import search as source_search
 from oracle.sources.models import Snapshot
 from oracle.v2.concurrency import expect_version, flush_or_conflict
-from oracle.v2.models import KnowledgeGap
+from oracle.v2.models import KnowledgeGap, ProductIntake
 from oracle.v2.schemas import (
     AssumptionDecisionOut,
     CompositionInputs,
@@ -312,8 +312,17 @@ async def list_intake_proposals(
     return await summary.proposals_of(db, intake, principal)
 
 
-async def _proposal(db: TenantDB, proposal_id: uuid.UUID) -> IntakeProposal:
+async def _proposal(db: TenantDB, proposal_id: uuid.UUID, principal: Principal) -> IntakeProposal:
+    """A proposal the caller may see; one of a gap the author has not shared is 404."""
     proposal = await db.get(IntakeProposal, proposal_id)
+    if proposal is not None and proposal.gap_id is not None:
+        gap = await db.get(KnowledgeGap, proposal.gap_id)
+        intake = await db.get(ProductIntake, proposal.intake_id)
+        if gap is not None and intake is not None:
+            try:
+                answers.check_visible(principal, intake, gap)
+            except service.IntakeError:
+                proposal = None
     if proposal is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Proposal not found")
     return proposal
@@ -325,7 +334,7 @@ async def accept_intake_proposal(
 ) -> IntakeProposalOut:
     """Accept: a research proposal becomes a draft run; a PRD patch becomes feedback on
     the PRD's latest version."""
-    proposal = await _proposal(db, proposal_id)
+    proposal = await _proposal(db, proposal_id, principal)
     try:
         await answers.accept(db, principal, proposal)
     except service.IntakeError as e:
@@ -339,7 +348,7 @@ async def accept_intake_proposal(
 async def dismiss_intake_proposal(
     proposal_id: uuid.UUID, principal: Approver, db: TenantDB, body: DismissIn | None = None
 ) -> IntakeProposalOut:
-    proposal = await _proposal(db, proposal_id)
+    proposal = await _proposal(db, proposal_id, principal)
     try:
         await answers.dismiss(db, principal, proposal, body.reason if body else None)
     except service.IntakeError as e:
@@ -559,7 +568,8 @@ async def answer_question(
     question_id: uuid.UUID, body: AnswerIn, principal: Commenter, db: TenantDB
 ) -> AnswerResult:
     """Answer, or say "I don't know", defer, ask someone else, or "Research this". The
-    gap updates; what the answer implies elsewhere is proposed, never applied."""
+    gap updates; what the answer implies elsewhere is proposed, never applied. The
+    question and gap come back as the reads show them to the caller (S6)."""
     try:
         question = await service.get_question(db, question_id)
         result = await answers.answer(db, principal, question, body)
@@ -569,9 +579,12 @@ async def answer_question(
     for row in (result["answer"], result["question"], result["gap"], *result["proposals"]):
         if row is not None:
             await db.refresh(row)
+    shown = await views.Readers(db, principal).question(result["question"])
+    if shown is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Question not found")
     return AnswerResult(
         answer=StakeholderAnswerOut.model_validate(result["answer"]),
-        question=StakeholderQuestionOut.model_validate(result["question"]),
+        question=StakeholderQuestionOut.model_validate(shown),
         gap=_gap_out(await _gap_intake(db, result["gap"]), principal, result["gap"])
         if result["gap"]
         else None,

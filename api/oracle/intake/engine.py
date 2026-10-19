@@ -6,7 +6,8 @@ registry up to date:
 1. extract from the brief and the pinned items (``oracle.intake.extract``);
 2. check the baseline first (confirmed goals, their metrics and owners, confirmed
    constraints) and gaps already decided for the same PRD: those categories are
-   *covered* and never asked;
+   *covered* and never asked. A decision elsewhere never clears a critical gap here
+   (B4: an owner only): the gap is marked answered pending review, for an owner;
 3. label every gap with its knowledge state (brief = hypothesis, sources = AI inference
    with its confidence, baseline = user decision);
 4. keep source conflicts and stale evidence for the summary;
@@ -17,7 +18,9 @@ It never rewrites a decided gap (answered, answered pending review, validated, a
 risk, deferred): later evidence only reaches open gaps, so in-progress decisions survive
 a repin (S4). What the author's sources say (conflicts, stale evidence, a gap's
 evidence) is registered as a finding with its sharing level (S6, ``oracle.intake.
-sharing``). Nothing here commits.
+sharing``). Questions are ranked, and batches asked, by what everyone may see: the
+order never tells others which categories the author's private sources speak to.
+Nothing here commits.
 """
 
 import uuid
@@ -128,7 +131,8 @@ async def _owned_by(db: AsyncSession, ids: list[uuid.UUID]) -> bool:
 
 
 async def _decided_elsewhere(db: AsyncSession, intake: ProductIntake) -> dict[str, KnowledgeGap]:
-    """Gaps decided for the same PRD (another intake, or the document itself)."""
+    """Gaps decided for the same PRD (another intake, or the document itself), as
+    everyone may see them: a gap its author has not shared decides nothing here."""
     if intake.document_id is None:
         return {}
     others = select(ProductIntake.id).where(
@@ -149,8 +153,17 @@ async def _decided_elsewhere(db: AsyncSession, intake: ProductIntake) -> dict[st
         )
     ).all()
     out: dict[str, KnowledgeGap] = {}
+    registries: dict[uuid.UUID, Any] = {}
     for gap in rows:
-        out.setdefault(gap.category, gap)
+        if gap.category in out:
+            continue
+        if gap.intake_id is not None:
+            if gap.intake_id not in registries:
+                other = await db.get(ProductIntake, gap.intake_id)
+                registries[gap.intake_id] = sharing.registry(other) if other else {}
+            if sharing.gap_view(gap, registries[gap.intake_id], sharing.EVERYONE) is None:
+                continue
+        out[gap.category] = gap
     return out
 
 
@@ -196,10 +209,56 @@ async def coverage_from_baseline(
             {
                 "reason": "Already decided for the same PRD: " + sharing.public_statement(reg, gap),
                 "entity_ids": [str(i) for i in gap.entity_ids],
-                "knowledge_state": gap.knowledge_state,
+                # A person decided it; how the other gap was known (its author's
+                # sources, a hypothesis) is not copied.
+                "knowledge_state": "user_decision",
+                "elsewhere": True,
             },
         )
     return covered
+
+
+ELSEWHERE_REASON = (
+    "Answered for the same PRD in another intake; an owner reviews it here before it "
+    "counts as decided."
+)
+
+
+def _pending_elsewhere(
+    db: AsyncSession,
+    intake: ProductIntake,
+    cat: cats.Category,
+    existing: KnowledgeGap | None,
+    importance: str,
+    info: dict[str, Any],
+    gaps: list[KnowledgeGap],
+) -> KnowledgeGap:
+    """A critical gap decided for the same PRD elsewhere: answered, pending an owner's
+    review here (B4). It is not asked again, and it still holds the review gate."""
+    entity_ids = [uuid.UUID(i) for i in info["entity_ids"]]
+    if existing is None:
+        existing = KnowledgeGap(
+            intake_id=intake.id,
+            document_id=intake.document_id,
+            category=cat.key,
+            statement=cat.statement,
+            impact=list(cat.impact),
+            importance=importance,
+            evidence_ids=[],
+            knowledge_state="user_decision",
+            status=PENDING,
+            related_modules=list(cat.modules),
+            stop_condition=cat.stop,
+            entity_ids=entity_ids,
+            section_keys=[],
+        )
+        db.add(existing)
+        gaps.append(existing)
+    elif existing.status == "unknown":
+        existing.status = PENDING
+        existing.knowledge_state = "user_decision"
+        existing.entity_ids = entity_ids
+    return existing
 
 
 async def intake_gaps(db: AsyncSession, intake_id: uuid.UUID) -> list[KnowledgeGap]:
@@ -268,11 +327,34 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
         by_field.setdefault(item["field"], []).append(item)
 
     coverage: list[dict[str, Any]] = []
+    # What each category's knowledge state is without the author's sources (S6).
+    public_states: dict[str, str] = {}
     for cat in cats.CATEGORIES:
         existing = rules_gap(gaps, cat.key)
         if cat.key in covered:
             info = covered[cat.key]
             state = info.get("knowledge_state", "user_decision")
+            importance = (
+                existing.importance
+                if existing is not None
+                else cats.importance_for(cat, brief.signals)
+            )
+            if info.get("elsewhere") and importance == "critical":
+                existing = _pending_elsewhere(db, intake, cat, existing, importance, info, gaps)
+                if existing.status not in DECIDED:
+                    coverage.append(
+                        {
+                            "category": cat.key,
+                            "state": "partial",
+                            "knowledge_state": existing.knowledge_state,
+                            "reason": ELSEWHERE_REASON
+                            if existing.status == PENDING
+                            else info["reason"],
+                            "entity_ids": info["entity_ids"],
+                            "gap_id": None,
+                        }
+                    )
+                    continue
             coverage.append(
                 {
                     "category": cat.key,
@@ -297,10 +379,13 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
             evidence_ids = [i.id for i in found[:MAX_EVIDENCE]]
             conf = ev.aggregate([i.confidence for i in found[:MAX_EVIDENCE]])
         brief_says = by_field.get(BRIEF_FIELDS.get(cat.key, ""), [])
+        public_states[cat.key] = "hypothesis" if brief_says else "unknown"
         if brief_says and state == "unknown":
             state = "hypothesis"
+        # From the brief alone (everyone reads it), never from the author's sources: a
+        # gap's importance must not tell others which categories those sources speak to.
         importance = cats.importance_for(cat, brief.signals)
-        if state == "hypothesis":
+        if brief_says:
             importance = LOWER[importance]
         reason = {
             "unknown": "Nothing in the pinned sources or the baseline answers it.",
@@ -356,7 +441,7 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
             gap = rules_gap(gaps, row["category"])
             row["gap_id"] = str(gap.id) if gap else None
 
-    reg = register_findings(intake, gaps, sources, {i.id for i in items})
+    reg, stale_ids = register_findings(intake, gaps, sources, {i.id for i in items}, public_states)
 
     hit_items = {
         cat: [str(i.id) for i in found] for cat, found in sources.by_category.items() if found
@@ -393,11 +478,7 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
         "source_signals": sources.signals,
         "conflicts": sources.conflicts,
         "stale": [
-            {
-                "item_id": str(i.id),
-                "freshness": i.freshness,
-                "finding_id": sharing.stable_id(intake.id, "stale", str(i.id)),
-            }
+            {"item_id": str(i.id), "freshness": i.freshness, "finding_id": stale_ids[i.id]}
             for i in sources.stale
         ],
         "coverage": coverage,
@@ -425,33 +506,52 @@ def register_findings(
     gaps: list[KnowledgeGap],
     sources: extract.SourceFacts,
     pinned_ids: set[uuid.UUID],
-) -> dict[str, dict[str, Any]]:
+    public_states: dict[str, str] | None = None,
+) -> tuple[dict[str, dict[str, Any]], dict[uuid.UUID, str]]:
     """Register what the author's sources say as findings (S6), keeping every level the
-    author set. Conflicts and stale items no longer found are dropped; model-written
-    items and gaps stay (the job registered them)."""
+        author set. Conflicts and stale items no longer found are dropped; model-written
+        items and gaps stay (the job registered them; one it never registered becomes a
+        private model finding). A rule-made gap's finding keeps the knowledge state it has
+    without the author's sources (``public_states``), which is what others see. Returns the
+    registry and the stale items' finding ids."""
     old = sharing.registry(intake)
     reg = {k: v for k, v in old.items() if v.get("kind") in ("item", "gap")}
     for c in sources.conflicts:
         ids = sorted({cl["item_id"] for cl in c["claims"]})
-        fid = sharing.stable_id(intake.id, "conflict", c["topic"], *ids)
+        fid, previous, match = sharing.finding_id(old, intake.id, "conflict", c["topic"], *ids)
         c["finding_id"] = fid
         category = conflict_category(c, sources)
-        reg[fid] = old.get(fid, {})
+        reg[fid] = previous
         sharing.register(
             reg, fid, kind="conflict", origin="rules", category=category, source_item_ids=ids,
             summary=f"{len(ids)} of the author's sources disagree on a figure in "
-            f"{sharing.category_label(category)} evidence.",
+            f"{sharing.category_label(category)} evidence.", match=match,
         )  # fmt: skip
+    stale_ids: dict[uuid.UUID, str] = {}
     for item in sources.stale:
-        fid = sharing.stable_id(intake.id, "stale", str(item.id))
-        reg[fid] = old.get(fid, {})
+        fid, previous, match = sharing.finding_id(old, intake.id, "stale", str(item.id))
+        stale_ids[item.id] = fid
+        reg[fid] = previous
         sharing.register(
             reg, fid, kind="stale", origin="rules", category=None, source_item_ids=[item.id],
             summary=f"An item of the author's {item.row.source_kind} source was old when "
-            "pinned.",
+            "pinned.", match=match,
         )  # fmt: skip
     for gap in gaps:
         if str(gap.id) in reg and reg[str(gap.id)].get("origin") == "model":
+            continue
+        if sharing.model_written(gap):
+            # Model text never registered as such (written before S6): a private model
+            # finding, which its author may share.
+            known = old.get(str(gap.id)) or {}
+            reg[str(gap.id)] = known
+            sharing.register(
+                reg, str(gap.id), kind="gap", origin="model", category=gap.category,
+                source_item_ids=[e for e in gap.evidence_ids if e in pinned_ids],
+                gap_id=gap.id,
+                summary=f"Oracle found an open question about "
+                f"{sharing.category_label(gap.category)} in the author's sources.",
+            )  # fmt: skip
             continue
         private = [e for e in gap.evidence_ids if e in pinned_ids]
         known = old.get(str(gap.id))
@@ -463,14 +563,44 @@ def register_findings(
         sharing.register(
             reg, str(gap.id), kind="gap", origin="rules", category=gap.category,
             source_item_ids=private, gap_id=gap.id,
+            public_state=(public_states or {}).get(gap.category, "unknown"),
             summary=f"Oracle found evidence about {sharing.category_label(gap.category)} in "
             "the author's sources.",
         )  # fmt: skip
-    return reg
+    return reg, stale_ids
 
 
 def question_prompt(gap: KnowledgeGap) -> str:
     return sharing.question_prompt(gap)
+
+
+def priorities(intake: ProductIntake, gaps: list[KnowledgeGap]) -> dict[uuid.UUID, int]:
+    """Each gap's question priority, from what everyone may see (S6).
+
+    A gap's evidence, confidence and inferred state from the author's private sources
+    do not move it: the gaps everyone sees are ranked as everyone sees them (10, 20,
+    ...). A gap hidden from everyone else sits between them (an odd priority, seen by
+    its author only), where its own facts rank it."""
+    reg = sharing.registry(intake)
+    public: dict[uuid.UUID, tuple] = {}
+    for gap in gaps:
+        changes = sharing.gap_changes(gap, reg, sharing.EVERYONE)
+        if changes is None:
+            continue
+        state = changes.get("knowledge_state", gap.knowledge_state)
+        conf = changes["confidence"] if "confidence" in changes else gap.confidence
+        score = cats.rank_score(
+            gap.importance, list(gap.impact), state, float(conf) if conf is not None else None
+        )
+        public[gap.id] = (group_of(gap), -score, cats.ORDER.get(gap.category, 99), gap.created_at)
+    out = {gid: n * 10 for n, gid in enumerate(sorted(public, key=lambda g: public[g]), start=1)}
+    seen = 0
+    for gap in ranked(gaps):
+        if gap.id in public:
+            seen = max(seen, out[gap.id])
+        else:
+            out[gap.id] = seen + 5
+    return out
 
 
 async def sync_questions(
@@ -484,7 +614,8 @@ async def sync_questions(
     for q in questions:
         if q.gap_id is not None:
             by_gap.setdefault(q.gap_id, []).append(q)
-    for position, gap in enumerate(ranked(gaps), start=1):
+    priority = priorities(intake, gaps)
+    for gap in ranked(gaps):
         mine = by_gap.get(gap.id, [])
         live = [q for q in mine if q.status != "withdrawn"]
         if gap.status not in OPEN:
@@ -496,7 +627,7 @@ async def sync_questions(
         rationale = cats.rank_reason(cat, gap.importance, list(gap.impact), gap.knowledge_state)
         drafts = [q for q in live if q.status == "draft"]
         for q in drafts:
-            q.priority = position * 10
+            q.priority = priority[gap.id]
             q.rationale = rationale
         if live:
             continue
@@ -510,7 +641,7 @@ async def sync_questions(
                 category=gap.category,
                 prompt=question_prompt(gap),
                 rationale=rationale,
-                priority=position * 10,
+                priority=priority[gap.id],
                 asked_to=gap.owner_id,
                 module_key=(gap.related_modules or [None])[0],
                 section_key=(gap.section_keys or [None])[0],
@@ -521,11 +652,16 @@ async def sync_questions(
 
 
 async def ask_batch(
-    db: AsyncSession, intake: ProductIntake, asked_by: uuid.UUID | None, size: int
+    db: AsyncSession,
+    intake: ProductIntake,
+    asked_by: uuid.UUID | None,
+    size: int,
+    skip: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> list[StakeholderQuestion]:
-    """Ask the next short batch: the highest-priority drafts, at most ``size``."""
+    """Ask the next short batch: the highest-priority drafts, at most ``size``.
+    ``skip``: gaps the asker may not see; their questions stay drafts."""
     questions = await intake_questions(db, intake.id)
-    drafts = [q for q in questions if q.status == "draft"][:size]
+    drafts = [q for q in questions if q.status == "draft" and q.gap_id not in skip][:size]
     if not drafts:
         return []
     number = max((q.batch or 0 for q in questions), default=0) + 1

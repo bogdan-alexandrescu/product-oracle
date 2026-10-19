@@ -9,7 +9,9 @@ the user message carries, outside ``untrusted_data``, only Oracle's own fixed va
 fields, category keys and labels, gap categories and statuses, limits). Everything a
 person or a source wrote travels inside ``untrusted_data``: the intake's title, the
 brief, every gap statement (any commenter can write one), the confirmed goals and the
-pinned source excerpts.
+pinned source excerpts. A gap whose own words are a restricted finding (model text drawn
+from the author's sources) travels by its category and status only, so a later run that
+reads none of the author's sources (its output is shared) cannot restate it.
 
 What comes back is checked before it is stored: known fields and categories only,
 bounded text, at most ``MAX_ITEMS`` items and ``MAX_GAPS`` gaps per run (and
@@ -101,6 +103,7 @@ async def payload(
     ).all()
     gaps = await engine.intake_gaps(s, intake.id)
     gap_refs = [(f"gap:{n}", g) for n, g in enumerate(gaps, start=1)]
+    reg = sharing.registry(intake)
     body = {
         "intake": {"id": str(intake.id)},
         "fields": sorted(FIELDS),
@@ -113,7 +116,13 @@ async def payload(
         "untrusted_data": {
             "title": intake.title,
             "brief": intake.brief,
-            "gap_statements": [{"ref": ref, "statement": g.statement} for ref, g in gap_refs],
+            # A restricted gap's own words never go in: a run that reads none of the
+            # author's sources writes shared output, which must not restate them.
+            "gap_statements": [
+                {"ref": ref, "statement": g.statement}
+                for ref, g in gap_refs
+                if not sharing.statement_restricted(g, reg)
+            ],
             "goals": [{"ref": f"goal:{g.key}", "title": g.title} for g in goals],
             "sources": [
                 {

@@ -196,7 +196,18 @@ async def queue_extraction(db: AsyncSession, principal: Principal | None, intake
 async def ask(
     db: AsyncSession, principal: Principal, intake: ProductIntake, size: int
 ) -> list[StakeholderQuestion]:
-    asked = await engine.ask_batch(db, intake, principal.id, size)
+    """Ask the next batch. Questions of gaps the asker may not see (S6) are left as
+    drafts, so they are neither asked nor take a place in the batch."""
+    v = sharing.viewer(principal, intake)
+    skip: set[uuid.UUID] = set()
+    if not v.is_author:
+        reg = sharing.registry(intake)
+        skip = {
+            g.id
+            for g in await engine.intake_gaps(db, intake.id)
+            if sharing.gap_view(g, reg, v) is None
+        }
+    asked = await engine.ask_batch(db, intake, principal.id, size, skip)
     if asked:
         await audit.record(
             db,

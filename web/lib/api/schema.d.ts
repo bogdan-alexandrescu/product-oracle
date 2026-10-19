@@ -3735,7 +3735,8 @@ export interface paths {
         /**
          * Answer Question
          * @description Answer, or say "I don't know", defer, ask someone else, or "Research this". The
-         *     gap updates; what the answer implies elsewhere is proposed, never applied.
+         *     gap updates; what the answer implies elsewhere is proposed, never applied. The
+         *     question and gap come back as the reads show them to the caller (S6).
          */
         post: operations["answer_question"];
         delete?: never;
