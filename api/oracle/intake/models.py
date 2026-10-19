@@ -17,6 +17,8 @@ Nothing here runs or edits anything by itself (§5 step 7):
 any finding of an intake is below "shared in full", every item its analysis and jobs
 read is withheld from its author's runs. Run reads query it in SQL
 (``oracle.intake.evidence.run_withheld``) instead of parsing every intake per request.
+``intake_shared_items`` lists what the findings shared in full cite: any run reads those
+in full text unless an intake withholds them (round 6, owner 2026-10-19).
 """
 
 import uuid
@@ -76,4 +78,21 @@ class IntakeWithheldItem(TenantScoped, Base):
     # The intake's author (no FK, as elsewhere): whose runs may not read the item.
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     # No FK: a deleted item withheld stays withheld until the intake is recomputed.
+    item_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+
+
+class IntakeSharedItem(TenantScoped, Base):
+    """A source item cited by a finding its intake's author shared in full: readable in
+    full text by runs (S6, owner 2026-10-19), unless an intake withholds it
+    (``IntakeWithheldItem``, which always wins). Rewritten by ``evidence.record_reads``."""
+
+    __tablename__ = "intake_shared_items"
+    __table_args__ = (
+        UniqueConstraint("intake_id", "item_id"),
+        Index("ix_intake_shared_items_item_id_user_id", "item_id", "user_id"),
+    )
+
+    intake_id: Mapped[uuid.UUID] = _fk("product_intakes", nullable=False)
+    # The intake's author, whose item it is (no FK, as elsewhere).
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     item_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)

@@ -1,4 +1,5 @@
-"""Full-text search over the current user's items.
+"""Full-text search over the current user's items (and, for a run, the items findings
+shared in full cite: ``also``).
 
 Matches use ``websearch_to_tsquery`` against the generated ``search`` tsvector of the
 versions a read sees (current, or pinned at ``as_of``). Results are ordered by
@@ -35,14 +36,16 @@ async def search(
     exclude: set[uuid.UUID] | None = None,
     include: set[uuid.UUID] | None = None,
     source_ids: list[uuid.UUID] | None = None,
+    also: set[uuid.UUID] | None = None,
 ) -> list[dict[str, Any]]:
     """``exclude``: items the caller may not read; ``include``: the only items the
-    caller may be shown; ``source_ids``: the only sources searched. All applied in SQL,
-    before ranking and the limit, so what is left out never changes what is returned."""
+    caller may be shown; ``source_ids``: the only sources searched; ``also``: other
+    users' items the caller may read too (a run's, S6). All applied in SQL, before
+    ranking and the limit, so what is left out never changes what is returned."""
     if include is not None and not include:
         return []
     query = func.websearch_to_tsquery("english", q)
-    visible = items.version_ids(user_id, as_of, txn_snapshot).subquery()
+    visible = items.version_ids(user_id, as_of, txn_snapshot, also).subquery()
     rank = func.ts_rank(SourceItemVersion.search, query)
     stmt = (
         select(SourceItem, SourceItemVersion, Source.kind, rank.label("rank"))

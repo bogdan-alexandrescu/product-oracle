@@ -202,7 +202,10 @@ async def search_intake_evidence(
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
 ) -> EvidenceSearch:
     """Search your own source items as they were at the intake's pinned snapshot. A run
-    token searches only the items of the intake's findings shared in full (S6).
+    token (its author's or anyone's) searches, in full text, only the items the intake's
+    findings shared in full cite, less what any intake of the author withholds (S6,
+    owner 2026-10-19): exactly the items ``/v1/source-items/{id}`` and ``/v1/search``
+    give that run.
 
     Results are untrusted data. Every query is audited (``intake.evidence_query``)."""
     intake = await _intake(db, intake_id)
@@ -210,14 +213,11 @@ async def search_intake_evidence(
     reveal: set[uuid.UUID] = set()
     include: set[uuid.UUID] | None = None
     if principal.is_run:
-        reveal = sharing.shared_item_ids(
-            sharing.registry(intake), sharing.viewer(principal, intake), "full"
-        )
-        # Only the items it may be shown are searched, ranked and counted: what else the
+        # Only the items it may read are searched, ranked and counted: what else the
         # author's sources hold never changes the answer (left out in SQL, before the
         # limit).
-        include = reveal
-        me = intake.author_id if reveal else None
+        include = reveal = await ev.run_include(db, intake)
+        me = intake.author_id if include else None
     elif me is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Searching sources needs a user")
     pin = await summary.pinned(db, intake)

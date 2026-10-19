@@ -49,6 +49,7 @@ from tests.test_intake_sharing import (
     add_author,
     findings,
     read_summary,
+    share_all,
 )
 from tests.test_intake_sharing_writes import as_run
 
@@ -142,8 +143,9 @@ async def test_a_runs_intake_search_reads_the_same_whether_hidden_items_match(cl
     responses = {}
     for hidden in (False, True):
         ctx, intake_id, _ = await world(client, fake, hidden=hidden)
-        conflict = await finding_of(client, ctx, intake_id, "conflict")
-        await share(client, ctx, intake_id, conflict["id"], "full")
+        # Every finding in full (round 6: a finding below full withholds the intake's
+        # items from runs, so nothing would be searched at all).
+        await share_all(client, ctx, intake_id, "full")
         out = []
         for q in ("buyers", "zebra or buyers", "buyers or zebra or address", "zebra"):
             for limit in (1, 2, 3, 5):

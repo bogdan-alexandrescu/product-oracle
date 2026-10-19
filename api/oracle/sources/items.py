@@ -100,14 +100,20 @@ def deleted_at_pin(as_of: datetime, txn_snapshot: str | None = None) -> ColumnEl
 
 
 def version_ids(
-    user_id: uuid.UUID, as_of: datetime | None = None, txn_snapshot: str | None = None
+    user_id: uuid.UUID,
+    as_of: datetime | None = None,
+    txn_snapshot: str | None = None,
+    also: set[uuid.UUID] | None = None,
 ) -> Select:
     """Ids of the versions a read sees: current ones, or the pinned ones at ``as_of``
-    (and, given the pin's ``txn_snapshot``, committed when it was taken)."""
-    owned = select(Source.id).where(Source.owner_user_id == user_id)
+    (and, given the pin's ``txn_snapshot``, committed when it was taken). ``also``:
+    other users' items the read may see too (a run's, S6)."""
+    owned = SourceItem.source_id.in_(select(Source.id).where(Source.owner_user_id == user_id))
+    if also:
+        owned = or_(owned, SourceItem.id.in_(also))
     if as_of is None:
         return select(SourceItem.current_version_id.label("id")).where(
-            SourceItem.source_id.in_(owned),
+            owned,
             SourceItem.deleted_at.is_(None),
             SourceItem.current_version_id.is_not(None),
         )
@@ -115,7 +121,7 @@ def version_ids(
         select(SourceItemVersion.id)
         .join(SourceItem, SourceItem.id == SourceItemVersion.item_id)
         .where(
-            SourceItem.source_id.in_(owned),
+            owned,
             version_at_pin(as_of, txn_snapshot),
             ~deleted_at_pin(as_of, txn_snapshot),
         )
@@ -189,6 +195,20 @@ async def owned_item(
         await session.execute(
             select(SourceItem, SourceItemVersion, Source.kind)
             .join(Source, and_(Source.id == SourceItem.source_id, Source.owner_user_id == user_id))
+            .outerjoin(SourceItemVersion, SourceItemVersion.id == SourceItem.current_version_id)
+            .where(SourceItem.id == item_id)
+        )
+    ).first()
+    return ItemRow(row[0], row[1], row[2]) if row else None
+
+
+async def item_row(session: AsyncSession, item_id: uuid.UUID) -> ItemRow | None:
+    """An item with its current version, whoever owns it: only for a read already
+    allowed (a run reading an item a finding shared in full cites, S6)."""
+    row = (
+        await session.execute(
+            select(SourceItem, SourceItemVersion, Source.kind)
+            .join(Source, Source.id == SourceItem.source_id)
             .outerjoin(SourceItemVersion, SourceItemVersion.id == SourceItem.current_version_id)
             .where(SourceItem.id == item_id)
         )

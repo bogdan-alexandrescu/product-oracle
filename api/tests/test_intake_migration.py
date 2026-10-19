@@ -193,3 +193,43 @@ def test_existing_intakes_withhold_everything_their_analysis_names(scratch_db):
     assert "ix_knowledge_gaps_legacy_importance" in names
     command.downgrade(cfg, "0013")
     command.upgrade(cfg, "0014_intake")
+
+
+def test_the_backfills_skip_malformed_item_ids_and_record_full_findings(scratch_db):
+    """Round 6: a stored analysis naming an id that is not a UUID never aborts the
+    migration (the id is skipped); the items findings shared in full cite are recorded
+    (intake_shared_items); proposals may be withdrawn."""
+    import json
+
+    cfg = _cfg()
+    command.upgrade(cfg, "0013")
+    t, intake, author = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    ids = [str(uuid.uuid4()) for _ in range(3)]
+    _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
+    analysis = {
+        "read_item_ids": [ids[0], "not-a-uuid"],
+        "stale": [{"item_id": "", "freshness": 0.1}],
+        "findings": {
+            "f1": {"kind": "gap", "source_item_ids": [ids[1], "item-7"], "sharing": "full"},
+            "f2": {"kind": "gap", "source_item_ids": [ids[2]], "sharing": "summary"},
+        },
+    }
+    _run(
+        "INSERT INTO product_intakes (id, tenant_id, title, brief, author_id, analysis) "
+        "VALUES (:i, :t, 'Saved addresses', 'Returning buyers.', :a, CAST(:an AS jsonb))",
+        i=intake,
+        t=t,
+        a=author,
+        an=json.dumps(analysis),
+    )
+    command.upgrade(cfg, "0014_intake")
+    withheld = _run("SELECT item_id FROM intake_withheld_items")
+    assert sorted(str(r[0]) for r in withheld) == sorted(ids)
+    shared = _run("SELECT intake_id, user_id, item_id FROM intake_shared_items")
+    assert [(r[0], r[1], str(r[2])) for r in shared] == [(intake, author, ids[1])]
+    checks = _run(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_proposals_status'"
+    )
+    assert "withdrawn" in checks[0][0]
+    command.downgrade(cfg, "0013")
+    command.upgrade(cfg, "0014_intake")

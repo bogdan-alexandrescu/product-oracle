@@ -499,13 +499,18 @@ class View:
         self, db: AsyncSession, ids: set[uuid.UUID], pin: Pinned
     ) -> dict[uuid.UUID, EvidenceRef]:
         snapshot = await pinned_snapshot(db, pin)
+        reveal = self.reveal
+        if self.v.is_run:
+            # A run reads an item a finding shared in full cites only while no intake
+            # withholds it (S6, owner 2026-10-19): not its title or excerpt either.
+            reveal = reveal & await ev.run_include(db, self.intake)
         return await ev.refs(
             db,
             ids,
             self.principal,
             pin.as_of,
             txn_snapshot=snapshot.txn_snapshot if snapshot else None,
-            reveal=self.reveal,
+            reveal=reveal,
         )
 
 

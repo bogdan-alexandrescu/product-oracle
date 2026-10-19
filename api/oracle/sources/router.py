@@ -4,7 +4,10 @@ Sources are owned (S3 revised): every route acts for the signed-in user, who see
 syncs only their own sources and items. Another user's source or item is a 404. A run
 token acting for its user never reads raw an item behind one of the user's intake
 findings not shared in full (S6, ``oracle.intake.evidence.run_withheld``): the item is
-left out of every list, count and search, and is a 404.
+left out of every list, count and search, and is a 404. Any run also reads in full text
+the items a finding shared in full cites (``oracle.intake.evidence.run_shared``, owner
+2026-10-19), whoever owns them, unless an intake withholds them: ``/v1/source-items/{id}``
+returns them and ``/v1/search`` finds them, as ``/v1/intakes/{id}/evidence`` does.
 """
 
 import uuid
@@ -50,6 +53,13 @@ async def _withheld(db: TenantDB, principal: Principal) -> set[uuid.UUID]:
     from oracle.intake.evidence import run_withheld
 
     return await run_withheld(db, principal) or set()
+
+
+async def _shared(db: TenantDB, principal: Principal) -> set[uuid.UUID]:
+    """Items beyond its user's own a run reads (empty for anyone else)."""
+    from oracle.intake.evidence import run_shared
+
+    return await run_shared(db, principal)
 
 
 def _http(exc: Exception) -> HTTPException:
@@ -289,6 +299,8 @@ async def get_source_item(
     item_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> ItemDetail:
     row = await items.owned_item(db, _user(principal), item_id)
+    if row is None and item_id in await _shared(db, principal):
+        row = await items.item_row(db, item_id)
     if row is None or item_id in await _withheld(db, principal):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
     versions = await db.scalar(select(func.count()).where(SourceItemVersion.item_id == row.item.id))
@@ -412,13 +424,14 @@ async def search_sources(
     as_of: datetime | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> SearchResults:
-    """Search the user's own items. Ranked by relevance x confidence weight; ``as_of``
-    searches the versions pinned at that time."""
+    """Search the user's own items (a run: also those a finding shared in full cites).
+    Ranked by relevance x confidence weight; ``as_of`` searches the versions pinned at
+    that time."""
     user_id = _user(principal)
     if as_of is not None and as_of.tzinfo is None:
         as_of = as_of.replace(tzinfo=UTC)
     hits = await search_service.search(
         db, user_id, q, kinds=_kinds(kinds), source_id=source, as_of=as_of, limit=limit,
-        exclude=await _withheld(db, principal),
+        exclude=await _withheld(db, principal), also=await _shared(db, principal),
     )  # fmt: skip
     return SearchResults(query=q, as_of=as_of, hits=hits)  # type: ignore[arg-type]

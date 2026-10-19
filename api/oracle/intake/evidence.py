@@ -136,10 +136,12 @@ def note_reads(intake: ProductIntake, analysis: dict, item_ids) -> None:
     analysis["read_item_ids"] = sorted(str(i) for i in known | set(item_ids))
 
 
-def withholds(intake: ProductIntake) -> bool:
-    """Whether the intake withholds what it read from its author's runs (S6, owner
-    2026-10-19): while any finding of it is below "shared in full", or (fail closed)
-    it was analysed before findings or reads were recorded."""
+def withholds(intake: ProductIntake, gaps: list | None = None) -> bool:
+    """Whether the intake withholds what it read from runs (S6, owner 2026-10-19):
+    while any finding of it is below "shared in full", or (fail closed) it was analysed
+    before findings or reads were recorded. ``gaps``: the intake's gaps; a model-written
+    gap never registered as a model finding (written before S6) is private, so it
+    withholds too, whatever the registered findings say."""
     from oracle.intake import sharing
 
     reg = sharing.registry(intake)
@@ -147,23 +149,58 @@ def withholds(intake: ProductIntake) -> bool:
         # Analysed before findings, or before reads, were recorded: what it read is not
         # known for sure, so all it names stays withheld until it is analysed again.
         return True
+    if reg.analysed and any(
+        sharing.model_written(g) and (reg.get(str(g.id)) or {}).get("origin") != "model"
+        for g in gaps or []
+    ):
+        return True
     return any(
         not sharing.is_open(e) and e.get("sharing", sharing.DEFAULT) != "full" for e in reg.values()
     )
 
 
-async def record_reads(db: AsyncSession, intake: ProductIntake) -> None:
-    """Rewrite the intake's rows of ``intake_withheld_items``: everything it read while
-    it withholds, nothing once every finding is shared in full. Called wherever the
-    analysis or a level changes."""
-    from oracle.intake.models import IntakeWithheldItem
+def shared_full_ids(intake: ProductIntake) -> set[uuid.UUID]:
+    """The items the intake's findings shared in full cite (S6, owner 2026-10-19): runs
+    read them in full text, unless an intake withholds them."""
+    from oracle.intake import sharing
 
-    await db.execute(delete(IntakeWithheldItem).where(IntakeWithheldItem.intake_id == intake.id))
-    if intake.author_id is not None and withholds(intake):
-        db.add_all(
-            IntakeWithheldItem(intake_id=intake.id, user_id=intake.author_id, item_id=i)
-            for i in sorted(read_item_ids(intake))
-        )
+    reg = sharing.registry(intake)
+    return sharing.shared_item_ids(reg, sharing.EVERYONE, "full")
+
+
+async def _rewrite(db: AsyncSession, model: type, intake: ProductIntake, ids: set) -> None:
+    """Make the intake's rows of ``model`` exactly ``ids``: stale rows go, new ones are
+    inserted with ON CONFLICT DO NOTHING, so two writers recomputing the same intake at
+    once never trip its (intake_id, item_id) unique constraint."""
+    from sqlalchemy.dialects.postgresql import insert
+
+    gone = delete(model).where(model.intake_id == intake.id)
+    if ids:
+        gone = gone.where(model.item_id.not_in(ids))
+    await db.execute(gone)
+    if ids and intake.author_id is not None:
+        rows = [
+            {"id": uuid.uuid4(), "tenant_id": intake.tenant_id, "intake_id": intake.id,
+             "user_id": intake.author_id, "item_id": i}
+            for i in sorted(ids)
+        ]  # fmt: skip
+        await db.execute(insert(model).values(rows).on_conflict_do_nothing())
+
+
+async def record_reads(db: AsyncSession, intake: ProductIntake) -> None:
+    """Rewrite the intake's rows of ``intake_withheld_items`` (everything it read while
+    it withholds, nothing once every finding is shared in full) and of
+    ``intake_shared_items`` (what its findings shared in full cite). Called wherever the
+    analysis or a level changes."""
+    from oracle.intake import engine
+    from oracle.intake.models import IntakeSharedItem, IntakeWithheldItem
+
+    await db.flush()
+    author = intake.author_id is not None
+    gaps = await engine.intake_gaps(db, intake.id)
+    withheld = read_item_ids(intake) if author and withholds(intake, gaps) else set()
+    await _rewrite(db, IntakeWithheldItem, intake, withheld)
+    await _rewrite(db, IntakeSharedItem, intake, shared_full_ids(intake) if author else set())
     await db.flush()
 
 
@@ -172,6 +209,19 @@ def withheld_ids(user_id: uuid.UUID) -> Select:
     from oracle.intake.models import IntakeWithheldItem
 
     return select(IntakeWithheldItem.item_id).where(IntakeWithheldItem.user_id == user_id)
+
+
+def readable_shared_ids() -> Select:
+    """SQL: the items any run reads in full text because a finding shared in full cites
+    them (S6, owner 2026-10-19), less what an intake of their owner withholds (the
+    intake rule always wins)."""
+    from oracle.intake.models import IntakeSharedItem, IntakeWithheldItem
+
+    held = select(IntakeWithheldItem.id).where(
+        IntakeWithheldItem.item_id == IntakeSharedItem.item_id,
+        IntakeWithheldItem.user_id == IntakeSharedItem.user_id,
+    )
+    return select(IntakeSharedItem.item_id).where(~held.exists())
 
 
 async def run_withheld(db: AsyncSession, principal: Principal | None) -> set[uuid.UUID] | None:
@@ -183,6 +233,25 @@ async def run_withheld(db: AsyncSession, principal: Principal | None) -> set[uui
     if principal.user_id is None:
         return set()
     return set((await db.scalars(withheld_ids(principal.user_id).distinct())).all())
+
+
+async def run_shared(db: AsyncSession, principal: Principal | None) -> set[uuid.UUID]:
+    """Items beyond its user's own a run reads in full text: those cited by findings
+    shared in full and withheld by no intake (empty for anyone but a run)."""
+    if principal is None or not principal.is_run:
+        return set()
+    return set((await db.scalars(readable_shared_ids().distinct())).all())
+
+
+async def run_include(db: AsyncSession, intake: ProductIntake) -> set[uuid.UUID]:
+    """What a run (its author's or anyone's) may search and be shown of the intake's
+    items: those its findings shared in full cite, less what any intake of the author
+    withholds. The same items ``/v1/source-items/{id}`` and ``/v1/search`` give a run."""
+    reveal = shared_full_ids(intake)
+    if not reveal or intake.author_id is None:
+        return set()
+    held = set((await db.scalars(withheld_ids(intake.author_id).distinct())).all())
+    return reveal - held
 
 
 async def refs(
