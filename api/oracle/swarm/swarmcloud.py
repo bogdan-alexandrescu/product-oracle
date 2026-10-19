@@ -277,7 +277,7 @@ class SwarmCloudRuntime:
                 for t in payload.get("tasks") or []
                 if t.get("last_error") and _STATES.get(str(t.get("state")).upper()) == "failed"
             ]
-            error = errors[0] if errors else f"workflow ended {raw}"
+            error = _redact(str(errors[0])) if errors else f"workflow ended {raw}"
         return WorkflowStatus(state, self._cost(payload), error)
 
     async def cost(self, workflow_id: str) -> Decimal:
@@ -317,11 +317,30 @@ def _detail(resp: httpx.Response) -> str:
     detail = body.get("detail") if isinstance(body, dict) else None
     if isinstance(detail, dict):
         detail = detail.get("message") or detail.get("code")
-    return _TOKEN_SHAPED.sub("<withheld>", str(detail))[:200] if detail else ""
+    return _redact(str(detail)) if detail else ""
 
 
-# A bearer value or a JWT that an upstream might echo back in an error message.
-_TOKEN_SHAPED = re.compile(r"(?i)bearer\s+\S+|eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}")
+def _redact(text: str) -> str:
+    """Withhold credential-shaped strings from upstream text and keep 200 characters."""
+    if len(text) > _DETAIL_SCAN_CHARS:
+        # Scan a bounded prefix, since an upstream may send text of any size. Redaction can
+        # shrink what precedes the cut into the 200 kept, so drop the word the cut lands
+        # in: a token that lost its tail may no longer match the pattern.
+        head = text[:_DETAIL_SCAN_CHARS].rsplit(None, 1)
+        text = head[0] if len(head) == 2 else ""
+    return _TOKEN_SHAPED.sub("<withheld>", text)[:200]
+
+
+_DETAIL_SCAN_CHARS = 4096
+# What an upstream might echo back in an error: a bearer value however it is joined to
+# the word, a JWT, a Google access token, a GitHub token or a token in a git URL.
+_TOKEN_SHAPED = re.compile(
+    r"(?i)bearer[\s:=]+\S+"
+    r"|eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}"
+    r"|ya29\.[A-Za-z0-9_.-]+"
+    r"|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
+    r"|x-access-token:[^@\s]+"
+)
 
 
 class UnconfiguredSwarmCloud:

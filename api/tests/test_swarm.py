@@ -413,3 +413,89 @@ async def test_whoami_has_one_deadline_and_never_echoes_a_token():
         else:
             with pytest.raises(RuntimeUnavailable, match="unexpected body"):
                 await runtime.whoami()
+
+
+@pytest.mark.parametrize(
+    "echo",
+    [
+        "Bearer sc-secret",
+        "Bearer:sc-secret",
+        "bearer=sc-secret",
+        "Authorization: Bearer:  sc-secret",
+    ],
+)
+def test_error_detail_withholds_bearer_values_however_written(echo):
+    from oracle.swarm.swarmcloud import _detail
+
+    detail = _detail(httpx.Response(403, json={"detail": f"refused {echo} for u-or"}))
+    assert "sc-secret" not in detail
+    assert "<withheld>" in detail
+
+
+def test_error_detail_is_bounded_before_redaction(monkeypatch):
+    from oracle.swarm import swarmcloud
+
+    scanned: list[int] = []
+    pattern = swarmcloud._TOKEN_SHAPED
+
+    class Spy:
+        def sub(self, repl, text):
+            scanned.append(len(text))
+            return pattern.sub(repl, text)
+
+    monkeypatch.setattr(swarmcloud, "_TOKEN_SHAPED", Spy())
+    huge = "Bearer sc-secret " + "x" * 2_000_000
+    detail = swarmcloud._detail(httpx.Response(500, json={"detail": huge}))
+    assert len(detail) <= 200 and "sc-secret" not in detail
+    assert scanned and max(scanned) <= swarmcloud._DETAIL_SCAN_CHARS
+
+
+def test_redaction_drops_the_token_the_scan_limit_cuts():
+    from oracle.swarm.swarmcloud import _DETAIL_SCAN_CHARS, _redact
+
+    # Seventeen long bearer values shrink to 187 characters, so a JWT that starts ten
+    # characters before the scan limit lands inside the 200 kept. Cut there, it is too
+    # short to match the pattern; the cut word must be dropped, not shown as a fragment.
+    width = (_DETAIL_SCAN_CHARS - 10) // 17
+    prefix = ("Bearer " + "t" * (width - 8) + " ") * 17
+    text = prefix + " " * (_DETAIL_SCAN_CHARS - 10 - len(prefix))
+    text += "eyJhbGciOiJSUzI1NiJ9.e30.sig and more"
+    assert "eyJ" not in _redact(text)
+    assert _redact("x" * (_DETAIL_SCAN_CHARS + 50)) == ""
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "ya29.a0AfB_byCSECRETSECRET",
+        "ghs_" + "A" * 36,
+        "github_pat_" + "B" * 30,
+        "https://x-access-token:SECRETVALUE@github.com/o/r.git",
+    ],
+)
+def test_redaction_withholds_google_and_github_tokens(secret):
+    from oracle.swarm.swarmcloud import _redact
+
+    out = _redact(f"clone failed: {secret} (exit 128)")
+    assert "SECRET" not in out and "AAAA" not in out and "BBBB" not in out
+    assert "<withheld>" in out
+
+
+async def test_failed_task_error_is_redacted_and_capped():
+    leak = "git clone https://x-access-token:SECRETVALUE@github.com/o/r.git failed " + "y" * 500
+
+    def failed(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "workflow": {"workflow_id": "wf_1", "state": "FAILED", "steps": []},
+                "tasks": [{"id": "t1", "state": "FAILED", "last_error": leak}],
+            },
+        )
+
+    runtime = SwarmCloudRuntime(
+        "https://swarm.test", StaticBearer("sc-bearer"), transport=httpx.MockTransport(failed)
+    )
+    status = await runtime.status("wf_1")
+    assert status.state == "failed"
+    assert "SECRETVALUE" not in status.error and len(status.error) <= 200
