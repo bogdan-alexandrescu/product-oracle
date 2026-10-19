@@ -3483,7 +3483,7 @@
           "claude-accounts"
         ],
         "summary": "Sweep Claude Accounts",
-        "description": "Run the sweep now: reclaim holds, refresh credentials, read usage.",
+        "description": "Run the sweep now: reclaim holds, refresh credentials, read usage. Within five\nminutes of the last sweep's completion only the holds are reclaimed\n(``sweep_lease.not_due``): Claude's usage endpoint allows about five calls per five\nminutes per account.",
         "operationId": "sweep_claude_accounts",
         "responses": {
           "200": {

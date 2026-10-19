@@ -7,10 +7,11 @@ pool and run its queued built-in model jobs. One company's failure stops none of
 others, and the answer carries counts only (no ids, no error text).
 
 The account sweep runs only when the company's last one completed more than
-``ORACLE_CLAUDE_SWEEP_SECONDS`` ago, and never more often than every five minutes even
-with that setting lower or 0 (``claude_sweep.MIN_TICK_SWEEP_INTERVAL``): Anthropic's usage
-endpoint allows about five calls per five minutes per account, which a sweep every minute
-would spend.
+``ORACLE_CLAUDE_SWEEP_SECONDS`` ago, and never within five minutes of it, even with that
+setting lower or 0, whoever else swept (``claude_sweep.MIN_SWEEP_INTERVAL``, checked again
+as the sweep lease is taken): Anthropic's usage endpoint allows about five calls per five
+minutes per account, which a sweep every minute would spend. While this ticker is
+configured the API starts no background sweep of its own (``oracle.main``).
 
 Auth is a Google ID token from ORACLE_TICKER_SERVICE_ACCOUNT for ORACLE_TICKER_AUDIENCE
 (``oracle.ticker.idtoken``), nothing else; with either setting empty the endpoint is a
@@ -148,11 +149,8 @@ class _Failures:
 
 async def _sweep_if_due(tenant_id: uuid.UUID, out: TickerOut) -> None:
     acc = out.claude_accounts
-    result = await claude_sweep.sweep_if_due(tenant_id)
-    if result is None:
-        acc.not_due += 1
-        return
-    swept = claude_sweep.summarise_sweep(result)
+    swept = claude_sweep.summarise_sweep(await claude_sweep.sweep_if_due(tenant_id))
+    acc.not_due += swept.lease == "not_due"
     acc.reclaimed += swept.reclaimed
     acc.examined += swept.examined
     acc.refreshed += swept.refreshed
