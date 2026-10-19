@@ -211,6 +211,23 @@ def normalize_url(url: str) -> str:
     return urlunsplit((scheme, host, path, query, ""))
 
 
+def external_key(value: str | None) -> str:
+    """A provider's id as compared: a UUID in any spelling (undashed, uppercase, in
+    braces, ``urn:uuid:``) as its canonical form, so a Notion page id cited one way
+    matches the item stored another; anything else as is, stripped."""
+    text_value = str(value or "").strip()
+    try:
+        return str(uuid.UUID(text_value))
+    except ValueError:
+        return text_value
+
+
+def _hex32(value: Any) -> Any:
+    """SQL: a stored id with dashes, braces and a ``urn:uuid:`` prefix removed,
+    lowercased; a UUID in any spelling becomes its 32 hex digits."""
+    return func.lower(func.regexp_replace(value, "^urn:uuid:|[{}-]", "", "gi"))
+
+
 def _as_uuid(value: str | None) -> uuid.UUID | None:
     try:
         return uuid.UUID(str(value).strip()) if value else None
@@ -345,17 +362,26 @@ async def _external_items(
     a source of that kind with that external id (any kind for a web citation)."""
     if not refs:
         return []
+    wanted = {ref for _, ref in refs}
+    hexes = {uuid.UUID(ref).hex for ref in wanted if _as_uuid(ref) is not None}
+    match = SourceItem.external_id.in_(wanted)
+    if hexes:
+        # Stored ids are compared in canonical form too (a page id saved undashed).
+        match = match | _hex32(SourceItem.external_id).in_(hexes)
     rows = (
         await db.execute(
             select(SourceItem, Source.kind)
             .join(Source, Source.id == SourceItem.source_id)
-            .where(SourceItem.external_id.in_({ref for _, ref in refs}))
+            .where(match)
         )
     ).all()
     return [
         (item, kind)
         for item, kind in rows
-        if any(ref == item.external_id and _same_kind(source, kind) for source, ref in refs)
+        if any(
+            ref == external_key(item.external_id) and _same_kind(source, kind)
+            for source, ref in refs
+        )
     ]
 
 
@@ -411,15 +437,15 @@ async def source_permission_problems(
             item_keys[ref_id] |= keys
             evidence_keys[ref_id] |= keys
             # A UUID can also be a provider's id (a Notion page id): an external id too.
-            external_keys[(c.source, ref)] |= keys
+            external_keys[(c.source, external_key(ref))] |= keys
         elif "://" in ref:
             url_keys[normalize_url(ref)] |= keys
         elif ref:
-            external_keys[(c.source, ref)] |= keys
+            external_keys[(c.source, external_key(ref))] |= keys
     for item, _ in await _external_items(db, external_keys):
-        for (_, ref), keys in external_keys.items():
-            if ref == item.external_id:
-                item_keys[item.id] |= keys
+        for (_, ref), cited in external_keys.items():
+            if ref == external_key(item.external_id):
+                item_keys[item.id] |= cited
     if evidence_keys or entity_keys:
         for e in await db.scalars(
             select(Evidence).where(
@@ -483,9 +509,9 @@ async def source_permission_problems(
         for u in data.get("urls") or []:
             hit |= url_keys.get(normalize_url(u), set())
         for x in data.get("external_ids") or []:
-            for (source, ref), keys in external_keys.items():
-                if ref == x and _same_kind(source, data.get("source_kind")):
-                    hit |= keys
+            for (source, ref), cited in external_keys.items():
+                if ref == external_key(x) and _same_kind(source, data.get("source_kind")):
+                    hit |= cited
         for i in data.get("evidence_ids") or []:
             hit |= evidence_keys.get(_as_uuid(i), set())
         for link in data.get("links") or []:

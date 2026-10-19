@@ -482,3 +482,74 @@ async def test_a_verdict_through_a_grant_revoked_while_waiting_is_refused(client
     monkeypatch.setattr(publish, "gate_lock", spy)
     resp = await verdict(client, {"Authorization": f"Bearer {access}"}, 1, "problem")
     assert resp.status_code == 403, resp.text
+
+
+# --- minors -------------------------------------------------------------------------------
+
+
+def _uuid_forms(page: uuid.UUID) -> list[str]:
+    return [page.hex, page.hex.upper(), "{" + str(page) + "}", f"urn:uuid:{page}", str(page)]
+
+
+@pytest.mark.parametrize("form", range(5))
+@pytest.mark.parametrize("stored", ["dashed", "undashed"])
+@pytest.mark.parametrize("revoke", ["delete_source", "disable_owner"])
+async def test_a_notion_page_id_in_any_uuid_form_is_matched(client, form, stored, revoke):
+    from oracle.sources.models import Source, SourceItem
+    from tests.review_v2_helpers import DRAFT, import_md, replace
+    from tests.test_review_v2_security_2 import approved, blocker, check, codes
+
+    ctx = await setup(client)
+    owner = await person(ctx.tenant_id, "approver", "source-owner")
+    page = uuid.uuid4()
+    async with tenant_session(ctx.tenant_id) as s:
+        source = Source(owner_user_id=owner.user_id, kind="notion", name="Wiki")
+        s.add(source)
+        await s.flush()
+        external = str(page) if stored == "dashed" else page.hex
+        s.add(SourceItem(source_id=source.id, external_id=external, kind="page", title="Plan"))
+        await s.commit()
+        source_id = source.id
+    ref = _uuid_forms(page)[form]
+    draft = replace(
+        replace(DRAFT, "ref: https://example.com/calendar-survey", f'ref: "{ref}"'),
+        "source: web",
+        "source: notion",
+    )
+    assert (await import_md(client, ctx.auth, draft, base=1)).status_code == 201
+    await approved(client, ctx, 2)
+    assert (await check(client, ctx, 2))["can_publish"] is True
+    if revoke == "delete_source":
+        resp = await client.delete(f"/v1/sources/{source_id}", headers=owner.headers)
+        assert resp.status_code == 204, resp.text
+    else:
+        assert (await disable(client, ctx, owner.user_id)).status_code == 200
+    body = await check(client, ctx, 2)
+    assert "source_permission_revoked" in codes(body), (ref, external)
+    assert blocker(body, "source_permission_revoked")["section_keys"] == ["goal-trace"]
+
+
+async def test_an_unrelated_revoked_notion_source_does_not_block(client):
+    """A revoked source's external ids match only citations of those ids (a loop
+    variable once shadowed the matched section keys, so any match flagged them all)."""
+    from oracle.sources.models import Source, SourceItem
+    from tests.review_v2_helpers import DRAFT, import_md, replace
+    from tests.test_review_v2_security_2 import approved, check
+
+    ctx = await setup(client)
+    owner = await person(ctx.tenant_id, "approver", "source-owner")
+    async with tenant_session(ctx.tenant_id) as s:
+        source = Source(owner_user_id=owner.user_id, kind="notion", name="Other wiki")
+        s.add(source)
+        await s.flush()
+        s.add(SourceItem(source_id=source.id, external_id=str(uuid.uuid4()), kind="page"))
+        await s.commit()
+    draft = replace(
+        replace(DRAFT, "ref: https://example.com/calendar-survey", f"ref: {uuid.uuid4()}"),
+        "source: web",
+        "source: notion",
+    )
+    assert (await import_md(client, ctx.auth, draft, base=1)).status_code == 201
+    await approved(client, ctx, 2)
+    assert (await disable(client, ctx, owner.user_id)).status_code == 200
+    assert (await check(client, ctx, 2))["can_publish"] is True
