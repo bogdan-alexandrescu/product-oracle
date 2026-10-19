@@ -288,6 +288,8 @@ class TickOut(BaseModel):
     errors: list[str]
     claude_accounts: ClaudeSweepSummary | None = None
     llm_jobs: LlmJobsTick | None = None
+    # Calls a member's disable still owed (a provider revoke, a runtime cancel), retried.
+    member_follow_ups: int = 0
 
 
 class InboxCheckpoint(CheckpointOut):

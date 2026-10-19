@@ -38,6 +38,7 @@ async def verify_access_token(raw: str) -> Principal | None:
             kind="user",
             role=effective_role(user.role, token.scope),
             user_id=user.id,
+            grant_id=token.family_id,
         )
 
 

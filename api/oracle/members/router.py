@@ -26,7 +26,13 @@ from oracle.members.schemas import (
 router = APIRouter(prefix="/v1", tags=["members"], dependencies=[Depends(require_role("owner"))])
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 
-_STATUS = {"not_found": status.HTTP_404_NOT_FOUND, "conflict": status.HTTP_409_CONFLICT}
+_STATUS = {
+    "not_found": status.HTTP_404_NOT_FOUND,
+    "conflict": status.HTTP_409_CONFLICT,
+    # The caller is no longer an owner, or their token or grant was revoked, by a change
+    # that committed while their request waited (re-read under the gate).
+    "forbidden": status.HTTP_403_FORBIDDEN,
+}
 
 
 async def _call[T](op: Awaitable[T]) -> T:
@@ -68,10 +74,15 @@ async def disable_member(
     connections are disconnected (revoked at the provider) and their sources recorded
     as revoked, so documents citing them cannot publish; their API tokens and OAuth
     grants are revoked, their runs cancelled, the open invite for their email revoked;
-    their approvals lapse for good. The member stays in the list (history keeps the
-    name); an owner can restore them. A no-op for a disabled member."""
-    user = await _call(service.disable_member(db, principal, user_id, http))
+    their approvals lapse for good; every session they signed is ended. The calls at
+    the providers and the runtime are made after the disable commits, outside the
+    review gate, and retried by the tick when they fail. The member stays in the list
+    (history keeps the name); an owner can restore them, and they sign in fresh. A
+    no-op for a disabled member."""
+    user = await _call(service.disable_member(db, principal, user_id))
     await db.commit()
+    # The provider and runtime calls it owes, outside the review gate (retried by the tick).
+    await service.after_disable(db, principal, user.id, http)
     return MemberOut.model_validate(user)
 
 
@@ -99,8 +110,9 @@ async def remove_member(
 ) -> None:
     """Remove a member: the same as ``POST /v1/members/{user_id}/disable`` (a member is
     never deleted; their row keeps the history's names)."""
-    await _call(service.disable_member(db, principal, user_id, http))
+    user = await _call(service.disable_member(db, principal, user_id))
     await db.commit()
+    await service.after_disable(db, principal, user.id, http)
 
 
 @router.get("/api-tokens", response_model=list[ApiTokenOut])

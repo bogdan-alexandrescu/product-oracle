@@ -345,9 +345,8 @@ async def test_restore_is_owner_only_and_audited(client):
     login = await client.post("/v1/auth/login", json={"email": email, "password": "pw"})
     assert login.status_code == 200
     client.cookies.clear()
-    fresh = {
-        "Cookie": f"{get_settings().session_cookie_name}={login.cookies[get_settings().session_cookie_name]}"
-    }
+    name = get_settings().session_cookie_name
+    fresh = {"Cookie": f"{name}={login.cookies[name]}"}
     assert (await client.get(f"/v1/documents/{DOC}", headers=fresh)).status_code == 200
     assert (await restore(client, ctx, uuid.uuid4())).status_code == 404
     async with tenant_session(ctx.tenant_id) as s:

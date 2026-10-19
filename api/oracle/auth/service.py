@@ -5,6 +5,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
@@ -12,9 +13,12 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle.auth.models import ApiToken, User
+from oracle.auth.models import ApiToken, Role, User
 from oracle.config import get_settings
 from oracle.tenancy import unscoped_session
+
+if TYPE_CHECKING:
+    from oracle.auth.deps import Principal
 
 TOKEN_PREFIX = "po_"
 _hasher = PasswordHasher()
@@ -128,6 +132,47 @@ def session_is_current(user: User | None, signed_at: datetime) -> bool:
         return False
     after = user.sessions_valid_after  # type: ignore[union-attr]
     return after is None or signed_at >= after
+
+
+async def caller_refusal(session: AsyncSession, principal: "Principal", role: Role) -> str | None:
+    """Why ``principal`` may no longer act with ``role``, read now, or ``None``.
+
+    For a re-read under the review gate: a request authenticates before it waits on the
+    gate, and a disable, a demotion or a revocation may commit while it waits. Its API
+    token or MCP OAuth grant must still be active, a user-less token still have the
+    role, and the person behind it still be an active member with the role."""
+    from oracle.authz import has_role
+    from oracle.mcp.oauth.models import OAuthToken
+
+    if principal.token_id is not None:
+        row = (
+            await session.execute(
+                select(ApiToken.revoked_at, ApiToken.role).where(ApiToken.id == principal.token_id)
+            )
+        ).first()
+        if row is None or row.revoked_at is not None:
+            return "This API token was revoked"
+        if principal.user_id is None and not has_role(row.role, role):
+            return f"Requires the {role} role"
+    if principal.grant_id is not None:
+        live = await session.scalar(
+            select(OAuthToken.id)
+            .where(OAuthToken.family_id == principal.grant_id, OAuthToken.revoked_at.is_(None))
+            .limit(1)
+        )
+        if live is None:
+            return "This OAuth grant was revoked"
+    if principal.user_id is not None:
+        row = (
+            await session.execute(
+                select(User.role, User.disabled_at).where(User.id == principal.user_id)
+            )
+        ).first()
+        if row is None or row.disabled_at is not None:
+            return "Your access to this company was removed"
+        if not has_role(row.role, role):
+            return f"Requires the {role} role"
+    return None
 
 
 _DUMMY_HASH = hash_password(secrets.token_hex(16))

@@ -57,6 +57,49 @@ def upgrade() -> None:
         ["approved_token_id"],
         unique=False,
     )
+    op.create_table(
+        "member_follow_ups",
+        sa.Column("member_id", sa.Uuid(), nullable=False),
+        sa.Column("kind", sa.Text(), nullable=False),
+        sa.Column("target_id", sa.Uuid(), nullable=False),
+        sa.Column("provider", sa.Text(), nullable=True),
+        sa.Column("auth_mode", sa.Text(), nullable=True),
+        sa.Column("ciphertext", sa.LargeBinary(), nullable=True),
+        sa.Column("key_version", sa.Integer(), nullable=True),
+        sa.Column("workflow_id", sa.Text(), nullable=True),
+        sa.Column("status", sa.Text(), nullable=False),
+        sa.Column("attempts", sa.Integer(), nullable=False),
+        sa.Column("outcome", sa.Text(), nullable=True),
+        sa.Column("last_error", sa.Text(), nullable=True),
+        sa.Column("done_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "kind IN ('provider_revoke', 'run_cancel')", name=op.f("ck_member_follow_ups_kind")
+        ),
+        sa.CheckConstraint(
+            "status IN ('pending', 'done', 'failed')", name=op.f("ck_member_follow_ups_status")
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_member_follow_ups_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_member_follow_ups")),
+    )
+    op.create_index(
+        op.f("ix_member_follow_ups_member_id"), "member_follow_ups", ["member_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_member_follow_ups_tenant_id"), "member_follow_ups", ["tenant_id"], unique=False
+    )
 
 
 def downgrade() -> None:
@@ -70,6 +113,15 @@ def downgrade() -> None:
     # Dropping lapsed_at would let a lapsed approval count again.
     if bind.execute(sa.text("SELECT 1 FROM section_reviews WHERE lapsed_at IS NOT NULL")).first():
         raise RuntimeError("cannot downgrade: an approval lapsed and would count again")
+    # A pending follow-up is a provider revoke or a runtime cancel a disable still owes.
+    if bind.execute(sa.text("SELECT 1 FROM member_follow_ups WHERE status = 'pending'")).first():
+        raise RuntimeError(
+            "cannot downgrade: a removed member's provider revoke or run cancel is still "
+            "pending; run the tick until it is done"
+        )
+    op.drop_index(op.f("ix_member_follow_ups_tenant_id"), table_name="member_follow_ups")
+    op.drop_index(op.f("ix_member_follow_ups_member_id"), table_name="member_follow_ups")
+    op.drop_table("member_follow_ups")
     op.drop_index(op.f("ix_document_versions_approved_token_id"), table_name="document_versions")
     op.drop_column("document_versions", "approval_lapse_reason")
     op.drop_column("document_versions", "approval_lapsed_by")

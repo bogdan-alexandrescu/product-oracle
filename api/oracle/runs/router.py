@@ -17,7 +17,9 @@ from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role
 from oracle.claude_accounts.sweep import summarise_sweep
 from oracle.claude_accounts.sweep import sweep as sweep_claude_accounts
+from oracle.connections.router import ProviderHttp
 from oracle.jobs.worker import run_pending as run_llm_jobs
+from oracle.members import service as members_service
 from oracle.runs import service
 from oracle.runs.schemas import (
     CheckpointDecision,
@@ -174,12 +176,15 @@ async def get_inbox(principal: CurrentPrincipal, db: TenantDB) -> InboxOut:
 
 
 @router.post("/internal/tick", response_model=TickOut)
-async def tick(principal: CurrentPrincipal, db: TenantDB) -> TickOut:
-    """Advance this company's active runs, sweep its Claude account pool and run its
-    queued built-in model jobs (``oracle tick`` calls it on a schedule)."""
+async def tick(principal: CurrentPrincipal, db: TenantDB, http: ProviderHttp) -> TickOut:
+    """Advance this company's active runs, sweep its Claude account pool, run its
+    queued built-in model jobs and retry the provider and runtime calls a member's
+    disable still owes (``oracle tick`` calls it on a schedule)."""
     if principal.kind != "token" and principal.role != "owner":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Requires the owner role or an API token")
+    follow_ups = await members_service.run_follow_ups(db, principal, http)
     out = await service.tick(db, principal)
+    out.member_follow_ups = follow_ups
     out.claude_accounts = summarise_sweep(await sweep_claude_accounts(principal.tenant_id))
     out.llm_jobs = await run_llm_jobs(principal.tenant_id)
     return out

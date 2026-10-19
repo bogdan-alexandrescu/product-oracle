@@ -412,26 +412,18 @@ async def update_comment(
 
 async def _still_an_approver(session: AsyncSession, principal: "Principal") -> None:
     """Under the review gate (shared): the caller still is an approver now. A role
-    change, a disable or a token revocation takes the gate exclusively and lapses the
-    approvals it ends; this re-read keeps one that raced with it from landing after."""
-    from oracle.auth.models import ApiToken, User
+    change, a disable or a token or grant revocation takes the gate exclusively and
+    lapses the approvals it ends; this re-read keeps one that raced with it from
+    landing after."""
+    from oracle.auth.service import caller_refusal
     from oracle.review.publish import gate_lock
 
     await gate_lock(session, shared=True)
-    if principal.token_id is not None:
-        revoked = await session.scalar(
-            select(ApiToken.revoked_at).where(ApiToken.id == principal.token_id)
-        )
-        if revoked is not None:
-            raise ReviewError("forbidden", "This API token was revoked")
-    if principal.user_id is not None:
-        row = (
-            await session.execute(
-                select(User.role, User.disabled_at).where(User.id == principal.user_id)
-            )
-        ).first()
-        if row is None or row.disabled_at is not None or not has_role(row.role, "approver"):
-            raise ReviewError("forbidden", "Requires the approver role")
+    refusal = await caller_refusal(session, principal, "approver")
+    if refusal is not None:
+        if refusal.startswith("Your access"):
+            refusal = "Requires the approver role"
+        raise ReviewError("forbidden", refusal)
 
 
 async def latest_verdicts(session: AsyncSession, version_id: uuid.UUID) -> dict[str, SectionReview]:

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
 from oracle.auth.models import ROLES, ApiToken, Role, User
-from oracle.members.models import Invite
+from oracle.members.models import Invite, MemberFollowUp
 from oracle.members.schemas import InviteOut, InviteStatus
 from oracle.tenant_settings import TenantSetting
 
@@ -28,7 +28,7 @@ class MemberError(Exception):
     """A request the members service refuses; the router maps ``kind`` to an HTTP status."""
 
     def __init__(self, kind: str, message: str):
-        self.kind = kind  # "not_found" | "conflict"
+        self.kind = kind  # "not_found" | "conflict" | "forbidden"
         self.message = message
         super().__init__(message)
 
@@ -77,12 +77,22 @@ async def _other_active_owner(session: AsyncSession, user_id: uuid.UUID) -> bool
     return any(i != user_id and disabled is None for i, disabled in owners)
 
 
-async def _gate(session: AsyncSession) -> None:
-    # The review gate reads approvers' roles and standing: a change to them never lands
-    # while a publish renders (oracle.review.publish.gate_lock).
+async def _gate(session: AsyncSession, principal: "Principal", *, shared: bool = False) -> None:
+    """Take the review gate, then re-read the caller under it.
+
+    The gate reads approvers' roles and standing: a change to them never lands while
+    a publish renders (oracle.review.publish.gate_lock); member changes take it
+    exclusively, invites shared. The caller authenticated before waiting on it, and a
+    disable, a demotion or a revocation may have committed meanwhile (an owner being
+    disabled must not act with a request already in flight): they must still be an
+    active owner, through an active token or grant, now."""
+    from oracle.auth.service import caller_refusal
     from oracle.review import publish
 
-    await publish.gate_lock(session, shared=False)
+    await publish.gate_lock(session, shared=shared)
+    refusal = await caller_refusal(session, principal, "owner")
+    if refusal is not None:
+        raise MemberError("forbidden", refusal)
 
 
 async def set_role(
@@ -94,7 +104,7 @@ async def set_role(
     from oracle.authz import has_role
     from oracle.review.state import lapse_approvals
 
-    await _gate(session)
+    await _gate(session, principal)
     user = await session.get(User, user_id, with_for_update=True)
     if user is None:
         raise MemberError("not_found", f"Member {user_id} not found")
@@ -126,26 +136,29 @@ async def set_role(
     return user
 
 
-async def disable_member(
-    session: AsyncSession, principal: "Principal", user_id: uuid.UUID, http: "httpx.AsyncClient"
-) -> User:
+async def disable_member(session: AsyncSession, principal: "Principal", user_id: uuid.UUID) -> User:
     """Remove a member by disabling them (C2). The user row stays, so every ``*_by``
     reference and the verdict history keep the name; no sign-in path accepts them
-    (``oracle.auth.service.may_sign_in``). In this transaction:
+    (``oracle.auth.service.may_sign_in``) and every session signed so far is dead
+    (``sessions_valid_after``). In this transaction:
 
-    - each connection is disconnected the normal way: revoked at the provider (best
-      effort), a ``connection.disconnect`` audit, a ``source_permission`` revocation for
-      each source it synced, Oracle's copy of the credential deleted;
+    - each connection is disconnected: a ``connection.disconnect`` audit, a
+      ``source_permission`` revocation for each source it synced, Oracle's copy of the
+      credential deleted; the revoke at the provider is a follow-up (below);
     - every other source of theirs gets a ``source_permission`` revocation, so documents
-      citing it cannot publish; all their sources are paused;
+      citing them cannot publish; all their sources are paused;
     - their API tokens and OAuth grants are revoked, their unfinished runs cancelled
-      (with the runs' tokens), the open invite for their email revoked;
+      (with the runs' tokens; the cancel at the runtime is a follow-up), the open
+      invite for their email revoked;
     - their approvals lapse for good (``oracle.review.state.lapse_approvals``).
+
+    No network call is made here: the review gate is company-wide, and publishes and
+    verdicts wait on it. The calls a disable owes are recorded as
+    :class:`MemberFollowUp` rows; the caller commits, then runs them
+    (:func:`after_disable`), and the tick retries the ones that failed.
 
     Disabling a disabled member is a no-op. The last active owner cannot be disabled.
     :func:`restore_member` re-enables sign-in only."""
-    from oracle.connections.models import Connection
-    from oracle.connections.service import revoke_at_provider
     from oracle.mcp.oauth.models import OAuthToken
     from oracle.review.publish import record_source_revocation
     from oracle.review.state import lapse_approvals
@@ -153,7 +166,7 @@ async def disable_member(
     from oracle.runs.service import FINAL, stop_run
     from oracle.sources.models import Source
 
-    await _gate(session)
+    await _gate(session, principal)
     user = await session.get(User, user_id, with_for_update=True)
     if user is None:
         raise MemberError("not_found", f"Member {user_id} not found")
@@ -164,26 +177,7 @@ async def disable_member(
     at = datetime.now(UTC)
     via = {"via": "member.disable", "member_id": str(user.id)}
 
-    connections = list(
-        await session.scalars(
-            select(Connection).where(Connection.user_id == user.id).with_for_update()
-        )
-    )
-    revoked_ids: set[uuid.UUID] = set()
-    for conn in connections:
-        revoked = await revoke_at_provider(http, conn)
-        await audit.record(
-            session, principal, "connection.disconnect", "connection", conn.id,
-            {"provider": conn.provider, "account": conn.account_label,
-             "provider_revoke": revoked, **via},
-        )  # fmt: skip
-        synced = list(await session.scalars(select(Source).where(Source.connection_id == conn.id)))
-        revoked_ids |= {x.id for x in synced}
-        await record_source_revocation(
-            session, principal, synced, "connection_revoked", drop_links=False
-        )
-        await session.delete(conn)
-    await session.flush()
+    connections, revoked_ids = await _disconnect_all(session, principal, user, via)
     sources = list(await session.scalars(select(Source).where(Source.owner_user_id == user.id)))
     rest = [x for x in sources if x.id not in revoked_ids]
     await record_source_revocation(session, principal, rest, "source_revoked", drop_links=False)
@@ -209,8 +203,18 @@ async def disable_member(
             select(Run).where(Run.created_by == user.id, Run.status.not_in(FINAL)).with_for_update()
         )
     )
+    segments: list = []
     for run in runs:
-        await stop_run(session, principal, run, via)
+        await stop_run(session, principal, run, via, deferred=segments)
+    for segment in segments:
+        session.add(
+            MemberFollowUp(
+                member_id=user.id,
+                kind="run_cancel",
+                target_id=segment.id,
+                workflow_id=segment.swarm_workflow_id,
+            )
+        )
     invites = list(
         await session.scalars(select(Invite).where(Invite.email == user.email, *_open()))
     )
@@ -256,12 +260,236 @@ async def disable_member(
     return user
 
 
+async def _disconnect_all(
+    session: AsyncSession, principal: "Principal | None", user: User, via: dict[str, str]
+) -> tuple[list, set[uuid.UUID]]:
+    """Disconnect every connection of ``user`` (under the gate, held exclusively): audit,
+    a ``source_permission`` revocation for each source it synced, the credential
+    deleted, and a ``provider_revoke`` follow-up holding a copy of it until the
+    provider has revoked the grant. Returns the connections and the synced sources."""
+    from oracle.connections.models import Connection
+    from oracle.review.publish import record_source_revocation
+    from oracle.sources.models import Source
+
+    connections = list(
+        await session.scalars(
+            select(Connection).where(Connection.user_id == user.id).with_for_update()
+        )
+    )
+    revoked_ids: set[uuid.UUID] = set()
+    for conn in connections:
+        session.add(
+            MemberFollowUp(
+                member_id=user.id,
+                kind="provider_revoke",
+                target_id=conn.id,
+                provider=conn.provider,
+                auth_mode=conn.auth_mode,
+                ciphertext=conn.ciphertext,
+                key_version=conn.key_version,
+            )
+        )
+        await audit.record(
+            session, principal, "connection.disconnect", "connection", conn.id,
+            {"provider": conn.provider, "account": conn.account_label,
+             "provider_revoke": "pending", **via},
+        )  # fmt: skip
+        synced = list(await session.scalars(select(Source).where(Source.connection_id == conn.id)))
+        revoked_ids |= {x.id for x in synced}
+        await record_source_revocation(
+            session, principal, synced, "connection_revoked", drop_links=False
+        )
+        await session.delete(conn)
+    await session.flush()
+    return connections, revoked_ids
+
+
+async def after_disable(
+    session: AsyncSession,
+    principal: "Principal",
+    user_id: uuid.UUID,
+    http: "httpx.AsyncClient",
+) -> None:
+    """After a disable commits: revoke anything of theirs that slipped in while it ran
+    (a credential created by a request that authenticated before it), then make the
+    calls the disable owes (:func:`run_follow_ups`). Commits."""
+    await sweep_disabled(session, principal, user_id)
+    await run_follow_ups(session, principal, http, member_id=user_id)
+
+
+async def sweep_disabled(
+    session: AsyncSession, principal: "Principal | None", user_id: uuid.UUID
+) -> bool:
+    """Re-check a disabled member after the disable committed: an API token, an OAuth
+    grant or a connection of theirs still active is revoked now, as the disable would
+    have. Commits; ``True`` when something was revoked."""
+    from oracle.connections.models import Connection
+    from oracle.mcp.oauth.models import OAuthToken
+
+    user = await session.get(User, user_id)
+    if user is None or user.disabled_at is None:
+        return False
+    tokens = list(
+        await session.scalars(
+            select(ApiToken.id).where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+        )
+    )
+    grants = list(
+        await session.scalars(
+            select(OAuthToken.id).where(
+                OAuthToken.user_id == user_id, OAuthToken.revoked_at.is_(None)
+            )
+        )
+    )
+    conns = list(await session.scalars(select(Connection.id).where(Connection.user_id == user_id)))
+    if not (tokens or grants or conns):
+        return False
+    from oracle.review import publish
+
+    await publish.gate_lock(session, shared=False)
+    at = datetime.now(UTC)
+    via = {"via": "member.disable.sweep", "member_id": str(user_id)}
+    await session.execute(
+        update(ApiToken)
+        .where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+        .values(revoked_at=at)
+        .execution_options(synchronize_session=False)
+    )
+    await session.execute(
+        update(OAuthToken)
+        .where(OAuthToken.user_id == user_id, OAuthToken.revoked_at.is_(None))
+        .values(revoked_at=at)
+        .execution_options(synchronize_session=False)
+    )
+    await _disconnect_all(session, principal, user, via)
+    await audit.record(
+        session,
+        principal,
+        "member.disable_sweep",
+        "user",
+        user_id,
+        {
+            "api_tokens": [str(i) for i in tokens],
+            "oauth_tokens": [str(i) for i in grants],
+            "connections": [str(i) for i in conns],
+        },
+    )
+    await session.commit()
+    return True
+
+
+# How often a follow-up is tried (once after the disable, then from the tick) and how
+# long one call may take in all, whatever the HTTP client's own timeouts.
+FOLLOW_UP_ATTEMPTS = 5
+FOLLOW_UP_DEADLINE_SECONDS = 30.0
+
+
+async def run_follow_ups(
+    session: AsyncSession,
+    principal: "Principal | None",
+    http: "httpx.AsyncClient",
+    *,
+    member_id: uuid.UUID | None = None,
+) -> int:
+    """Make the pending follow-ups (of ``member_id``, or all of the session's tenant),
+    one transaction each, outside the review gate; record each outcome (on the row
+    and in the audit log). A failed call stays pending for the tick to retry, up to
+    :data:`FOLLOW_UP_ATTEMPTS` attempts, then is marked failed. A finished
+    ``provider_revoke`` drops its copy of the credential. Returns how many ran."""
+    stmt = select(MemberFollowUp.id).where(MemberFollowUp.status == "pending")
+    if member_id is not None:
+        stmt = stmt.where(MemberFollowUp.member_id == member_id)
+    ids = list(await session.scalars(stmt.order_by(MemberFollowUp.created_at)))
+    await session.commit()
+    ran = 0
+    for follow_up_id in ids:
+        row = await session.scalar(
+            select(MemberFollowUp)
+            .where(MemberFollowUp.id == follow_up_id, MemberFollowUp.status == "pending")
+            .with_for_update(skip_locked=True)
+        )
+        if row is None:
+            await session.rollback()
+            continue
+        ran += 1
+        ok, outcome, error = await _follow_up(session, row, http)
+        row.attempts += 1
+        row.outcome = outcome
+        row.last_error = error
+        if ok or row.attempts >= FOLLOW_UP_ATTEMPTS:
+            row.status = "done" if ok else "failed"
+            row.done_at = datetime.now(UTC)
+            row.ciphertext = None
+        await audit.record(
+            session,
+            principal,
+            "connection.provider_revoke" if row.kind == "provider_revoke" else "run.runtime_cancel",
+            "connection" if row.kind == "provider_revoke" else "run_segment",
+            row.target_id,
+            {
+                "member_id": str(row.member_id),
+                "outcome": outcome,
+                "attempt": row.attempts,
+                "status": row.status,
+                **({"error": error} if error else {}),
+            },
+        )
+        await session.commit()
+    return ran
+
+
+async def _follow_up(
+    session: AsyncSession, row: MemberFollowUp, http: "httpx.AsyncClient"
+) -> tuple[bool, str, str | None]:
+    """Make one follow-up call: (succeeded, outcome, error)."""
+    import asyncio
+
+    if row.kind == "provider_revoke":
+        from oracle.connections import service as connections
+        from oracle.connections.models import Connection
+
+        if row.ciphertext is None:
+            return True, "unreadable", None
+        # A detached copy of the deleted connection: what the revoke reads.
+        conn = Connection(
+            id=row.target_id,
+            user_id=row.member_id,
+            provider=row.provider,
+            auth_mode=row.auth_mode,
+            account_id="",
+            ciphertext=row.ciphertext,
+            key_version=row.key_version,
+        )
+        try:
+            async with asyncio.timeout(FOLLOW_UP_DEADLINE_SECONDS):
+                outcome = await connections.revoke_at_provider(http, conn)
+        except TimeoutError:
+            return False, "failed", "the provider did not answer in time"
+        return outcome != "failed", outcome, None
+
+    from oracle.runs.models import RunSegment
+    from oracle.swarm import RuntimeUnavailable, get_runtime
+
+    segment = await session.get(RunSegment, row.target_id)
+    try:
+        async with asyncio.timeout(FOLLOW_UP_DEADLINE_SECONDS):
+            await get_runtime().cancel(row.workflow_id or "")
+    except (RuntimeUnavailable, TimeoutError) as exc:
+        error = str(exc) or "the runtime did not answer in time"
+        if segment is not None:
+            segment.error = f"cancel not confirmed by the runtime: {error}"
+        return False, "failed", error
+    if segment is not None:
+        segment.error = None
+    return True, "cancelled", None
+
+
 async def restore_member(session: AsyncSession, principal: "Principal", user_id: uuid.UUID) -> User:
     """Re-enable a disabled member's sign-in, with the role they had. Nothing else comes
     back: their approvals stay lapsed, their tokens revoked, their connections gone and
     their sources revoked (they reconnect and approve again). A no-op for an active
     member."""
-    await _gate(session)
+    await _gate(session, principal)
     user = await session.get(User, user_id, with_for_update=True)
     if user is None:
         raise MemberError("not_found", f"Member {user_id} not found")
@@ -308,7 +536,7 @@ async def revoke_api_token(
     approvals its user gave in person stand. Revoking twice is a no-op."""
     from oracle.review.state import lapse_approvals
 
-    await _gate(session)
+    await _gate(session, principal)
     token = await session.get(ApiToken, token_id, with_for_update=True)
     if token is None:
         raise MemberError("not_found", f"API token {token_id} not found")
@@ -417,6 +645,7 @@ async def list_invites(session: AsyncSession, status: str) -> list[Invite]:
 async def create_invite(
     session: AsyncSession, principal: "Principal", email: str, role: Role
 ) -> Invite:
+    await _gate(session, principal, shared=True)
     member = await session.scalar(select(User).where(User.email == email))
     if member is not None and member.disabled_at is not None:
         raise MemberError("conflict", f"{email} is a removed member; restore them instead")
@@ -440,6 +669,7 @@ async def create_invite(
 async def revoke_invite(
     session: AsyncSession, principal: "Principal", invite_id: uuid.UUID
 ) -> Invite:
+    await _gate(session, principal, shared=True)
     invite = await session.get(Invite, invite_id, with_for_update=True)
     if invite is None:
         raise MemberError("not_found", f"Invite {invite_id} not found")
