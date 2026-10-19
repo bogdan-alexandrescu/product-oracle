@@ -45,6 +45,7 @@ from tests.test_intake_sharing import (
     authored_intake,
     findings,
     read_summary,
+    share_all,
 )
 from tests.test_intake_sharing_round3 import (
     UNRELATED,
@@ -280,10 +281,14 @@ async def test_answering_a_private_finding_proposes_nothing_until_it_is_shared(c
     # At counts, the gap's id and category only (owner, 2026-10-19; round 5).
     assert attrs == {"gap_id": str(q.gap_id), "category": "security_privacy"}
     assert MODEL_GAP not in json.dumps(proposal.payload)
-    # Lowering and sharing again proposes nothing new.
+    # Lowering to private withdraws the open proposal; sharing again makes a new one
+    # (round 6, owner 2026-10-19).
     await share(client, ctx, intake_id, str(q.gap_id), "private")
+    [withdrawn] = await _baseline_proposals(ctx)
+    assert withdrawn.id == proposal.id and withdrawn.status == "withdrawn"
     await share(client, ctx, intake_id, str(q.gap_id), "summary")
-    assert len(await _baseline_proposals(ctx)) == 1
+    rows = await _baseline_proposals(ctx)
+    assert sorted(p.status for p in rows) == ["open", "withdrawn"]
 
 
 # --- S6 decision 1: a private critical gap gates publishing only once shared -------------
@@ -464,16 +469,20 @@ async def test_a_run_never_reads_a_private_findings_items(client, fake, real_run
     resp = await client.get("/v1/search", params={"q": "buyers"}, headers=ctx.as_("author"))
     assert str(items["a"]) in resp.text
 
-    # Shared in full: a run of the intake reads what the finding cites.
+    # One finding in full while the others stay private: the intake still withholds what
+    # it read (round 6, owner 2026-10-19: the intake rule wins), so nothing is searched.
     rows = await findings(client, ctx, intake_id)
     [conflict] = [r for r in rows if r["kind"] == "conflict"]
     assert (await share(client, ctx, intake_id, conflict["id"], "full")).status_code == 200
     resp = await client.get(f"/v1/intakes/{intake_id}/evidence", params={"q": "buyers"},
                             headers=h)  # fmt: skip
+    assert resp.json()["hits"] == []
+    # Every finding in full: a run of the intake reads what the conflict cites.
+    await share_all(client, ctx, intake_id, "full")
+    resp = await client.get(f"/v1/intakes/{intake_id}/evidence", params={"q": "buyers"},
+                            headers=h)  # fmt: skip
     hits = {x["source_item_id"]: x for x in resp.json()["hits"]}
-    assert str(items["old"]) not in hits
-    if real_run:
-        assert str(items["a"]) in hits and hits[str(items["a"])]["visible"]
+    assert str(items["a"]) in hits and hits[str(items["a"])]["visible"]
     for hit in hits.values():
         assert hit["visible"] or hit["snippet"] is None
 
