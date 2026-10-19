@@ -47,7 +47,7 @@ from oracle.llm.transports import (
 from oracle.tenancy import current_tenant
 
 #: The built-in jobs that run on the pool; recorded as the hold's task.
-JOBS = ("review_comments", "reporting", "refinement")
+JOBS = ("review_comments", "reporting", "refinement", "quality_review")
 
 #: Accounts one call may try before giving up (the first plus two swaps).
 MAX_ATTEMPTS = 3

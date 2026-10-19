@@ -23,6 +23,7 @@ from oracle.mcp.server import mount_mcp
 from oracle.members.router import router as members_router
 from oracle.preferences.router import router as preferences_router
 from oracle.priorities.router import router as priorities_router
+from oracle.quality.router import router as quality_router
 from oracle.review.router import router as review_router
 from oracle.runs.router import router as runs_router
 from oracle.sources.router import router as sources_router
@@ -101,6 +102,8 @@ def create_app() -> FastAPI:
     app.include_router(runs_router)
     # Product Oracle v2: thin read routes over the shared tables; lanes add writes.
     app.include_router(v2_router)
+    # CR-08: PRD quality and readiness, outcome tracking and learnings.
+    app.include_router(quality_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Every REST operation above (and any added later) is also an MCP tool here.

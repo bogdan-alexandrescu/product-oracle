@@ -16,6 +16,7 @@ import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { routeQuality, seedQuality, type QualityDb } from "./quality";
 import { routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
@@ -52,6 +53,8 @@ export interface Db {
   llm?: LlmDb;
   /** Product Oracle v2 tables (./v2.ts); absent in data saved before v2. */
   v2?: V2Db;
+  /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
+  quality?: QualityDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -854,6 +857,30 @@ async function route(db: Db, req: Request): Promise<Response> {
   const llm = llmContext(db, me.id, me.role);
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
+  // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
+  if (!db.v2) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
+    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
+  }
+  db.quality ??= seedQuality();
+  const quality = await routeQuality(
+    {
+      db: db.quality,
+      v2: db.v2,
+      userId: me.id,
+      role: me.role,
+      findVersion: (ref, n) => {
+        const doc = findDocument(db, ref);
+        const v = doc && findVersion(db, doc, n);
+        return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
+      },
+    },
+    req,
+    p,
+    q,
+  );
+  if (quality) return quality;
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
