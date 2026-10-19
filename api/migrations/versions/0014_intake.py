@@ -17,6 +17,10 @@ Security review fixes (same lane, same revision):
   the pinned set. Rows from before this revision have no xid and count as committed.
 - ``knowledge_gaps.status`` gains ``answered_pending_review``: a critical gap answered
   by someone below the owner role waits for review instead of clearing (B4).
+- ``knowledge_gaps.rule_key`` (round 3): the category key of a gap the intake engine
+  made by rule. A rule-made gap was told from a model-written one by its statement
+  text, so rewording a category in code turned rule gaps private (S6). Existing rows
+  are backfilled from the statements as they stand at this revision.
 
 The integrator re-chains this revision in merge order (waves.md).
 
@@ -45,6 +49,28 @@ GAP_STATUSES_REVIEW = (
     "status IN ('unknown', 'under_investigation', 'asked', 'answered', "
     "'answered_pending_review', 'validated', 'deferred', 'accepted_risk')"
 )
+# The rule-made statements at this revision, frozen (the backfill never follows code).
+RULE_STATEMENTS = {
+    "customer_user": "The primary user or customer segment is not confirmed.",
+    "pain_evidence": "There is no confirmed evidence that the pain is real and frequent.",
+    "goal_alignment": "No confirmed company goal is linked to this idea.",
+    "success_metric": "No success metric with a baseline value and a target is agreed.",
+    "differentiation": "Why this beats what competitors or the status quo offer is not stated.",
+    "alternatives": "Alternatives (including doing nothing) have not been compared.",
+    "constraints": "Technical, legal or organisational constraints are not listed.",
+    "blockers": "It is unknown whether anything could stop this from shipping.",
+    "economic_benefit": "The expected economic benefit is not estimated.",
+    "effort_cost": "Effort and running cost are not estimated.",
+    "security_privacy": "Security and privacy impact is not assessed.",
+    "ownership": "No team or person owns the outcome.",
+    "non_goals": "What is deliberately out of scope is not stated.",
+    "release_rollout": "How this is released and rolled back is not planned.",
+    "evaluation_criteria": "How quality is evaluated before launch is not defined.",
+    "third_party_policy": (
+        "Third-party API eligibility, limits, permissions and policies are not checked."
+    ),
+    "configurability_scaling": "Expected scale and what must be configurable are not known.",
+}
 XID = "(pg_current_xact_id()::text)::bigint"
 TXN_SNAPSHOT = "pg_current_snapshot()::text"
 
@@ -156,8 +182,18 @@ def upgrade() -> None:
         op.f("ck_knowledge_gaps_status"), "knowledge_gaps", GAP_STATUSES_REVIEW
     )
 
+    op.add_column("knowledge_gaps", sa.Column("rule_key", sa.Text(), nullable=True))
+    for key, statement in RULE_STATEMENTS.items():
+        op.execute(
+            sa.text(
+                "UPDATE knowledge_gaps SET rule_key = :key WHERE category = :key "
+                "AND statement = :statement AND created_by IS NULL AND intake_id IS NOT NULL"
+            ).bindparams(key=key, statement=statement)
+        )
+
 
 def downgrade() -> None:
+    op.drop_column("knowledge_gaps", "rule_key")
     # A gap waiting for review goes back to answered (what it was before B4).
     op.execute(
         "UPDATE knowledge_gaps SET status = 'answered' WHERE status = 'answered_pending_review'"

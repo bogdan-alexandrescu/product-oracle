@@ -12,8 +12,9 @@ everyone else sees:
 
 Findings are the model-written items and gaps (``origin: model``), source conflicts,
 stale evidence, and what a rule-made gap's evidence says (``origin: rules``: the gap
-itself, a fixed category text, stays shared; its evidence, confidence and inferred
-state are the finding). A finding drawn only from sources everyone may read is not
+itself, a fixed category text known by its ``rule_key``, stays shared; its evidence,
+confidence, inferred state and coverage row are the finding, and its importance comes
+from the brief and public facts only). A finding drawn only from sources everyone may read is not
 restricted; under AUD-9 every source is its owner's alone, so every finding drawn from
 an intake's pinned items is.
 
@@ -46,7 +47,6 @@ LEVELS = ("private", "counts", "summary", "full")
 RANK = {level: n for n, level in enumerate(LEVELS)}
 DEFAULT = "private"
 KINDS = ("item", "gap", "conflict", "stale")
-REDACTED_REASON = "Nothing in the shared sources or the baseline answers it."
 FIELD_LABELS = {
     "users": "users",
     "problem": "problem",
@@ -97,10 +97,14 @@ def viewer(principal: Principal | None, intake: ProductIntake) -> Viewer:
 class Registry(dict):
     """An intake's findings by id. ``unregistered``: the intake was analysed before
     findings were registered, so what its sources gave is not listed (fail closed).
-    ``analysed``: the intake engine analysed it (so its sources may have been read)."""
+    ``analysed``: the intake engine analysed it (so its sources may have been read).
+    ``signals`` and ``brief_fields``: what the brief says (public facts), from which a
+    rule-made gap's importance is read for everyone else."""
 
     unregistered: bool = False
     analysed: bool = False
+    signals: dict[str, bool] | None = None
+    brief_fields: frozenset[str] = frozenset()
 
 
 def registry(intake: ProductIntake) -> Registry:
@@ -108,7 +112,15 @@ def registry(intake: ProductIntake) -> Registry:
     reg = Registry(analysis.get("findings") or {})
     reg.unregistered = "coverage" in analysis and "findings" not in analysis
     reg.analysed = "coverage" in analysis or "findings" in analysis
+    if "signals" in analysis:
+        reg.signals = analysis.get("signals") or {}
+        reg.brief_fields = frozenset(i["field"] for i in brief_items(analysis))
     return reg
+
+
+def brief_items(analysis: dict[str, Any]) -> list[dict[str, Any]]:
+    """The items the brief itself states (everyone reads the brief)."""
+    return [i for i in analysis.get("items") or [] if i.get("origin", "brief") == "brief"]
 
 
 def is_open(entry: dict[str, Any] | None) -> bool:
@@ -161,6 +173,9 @@ def register(
         entry["match"] = match
     if public_state is not None:
         entry["public_state"] = public_state
+    if previous.get("public_importance"):
+        # A person set the gap's importance: a public fact, kept.
+        entry["public_importance"] = previous["public_importance"]
     if not restricted:
         entry["restricted"] = False
     reg[finding_id] = entry
@@ -301,14 +316,29 @@ def _copy(row: Any, out: type, **changes: Any) -> SimpleNamespace:
     return SimpleNamespace(**data)
 
 
+def rule_made(gap: Any) -> bool:
+    """A gap the intake engine made by rule: told by its stable category key, never by
+    its statement text (which may be reworded in code)."""
+    return getattr(gap, "rule_key", None) is not None
+
+
 def model_written(gap: KnowledgeGap) -> bool:
-    """A gap the model wrote: no person created it and it is not its category's fixed
-    rule-made statement."""
-    return (
-        gap.created_by is None
-        and gap.intake_id is not None
-        and gap.statement != cats.BY_KEY[gap.category].statement
-    )
+    """A gap the model wrote: no person created it and the engine did not make it."""
+    return gap.created_by is None and gap.intake_id is not None and not rule_made(gap)
+
+
+def public_importance(gap: KnowledgeGap, reg: dict[str, dict[str, Any]], entry: dict) -> str:
+    """A rule-made gap's importance as everyone else sees it (S6, owner 2026-10-19):
+    from the brief and public facts only. A person's edit (``public_importance``) is a
+    public fact; otherwise the brief decides, so a row written while the author's
+    sources still moved importance shows what the brief gives."""
+    if entry.get("public_importance"):
+        return entry["public_importance"]
+    signals = getattr(reg, "signals", None)
+    if not rule_made(gap) or signals is None:
+        return gap.importance
+    speaks = cats.BRIEF_FIELDS.get(gap.category) in getattr(reg, "brief_fields", frozenset())
+    return cats.brief_importance(cats.BY_KEY[gap.category], signals, speaks)
 
 
 def gap_changes(
@@ -344,15 +374,32 @@ def gap_changes(
     if RANK[level] >= RANK["summary"]:
         return {}
     # A rule-made gap: its statement is a fixed category text; what the author's
-    # sources say about it (evidence, confidence, the inferred state) is not shared.
+    # sources say about it (evidence, confidence, the inferred state, any importance
+    # they once gave it) is not shared.
+    changes: dict[str, Any] = {}
+    importance = public_importance(gap, reg, entry)
+    if importance != gap.importance:
+        changes["importance"] = importance
     private = set(entry.get("source_item_ids") or [])
     kept = [e for e in gap.evidence_ids if str(e) not in private]
     if len(kept) == len(gap.evidence_ids):
-        return {}
+        return changes
     state = gap.knowledge_state
     if state == "ai_inference":
         state = entry.get("public_state", "unknown")
-    return {"evidence_ids": kept, "confidence": None, "knowledge_state": state}
+    return {**changes, "evidence_ids": kept, "confidence": None, "knowledge_state": state}
+
+
+def set_public_importance(intake: ProductIntake, gap: KnowledgeGap) -> None:
+    """Record a person's choice of a rule-made gap's importance in its finding, so
+    everyone else reads it rather than what the brief alone gives."""
+    analysis = intake.analysis or {}
+    reg = dict(analysis.get("findings") or {})
+    entry = reg.get(str(gap.id))
+    if entry is None or entry.get("origin") == "model":
+        return
+    reg[str(gap.id)] = {**entry, "public_importance": gap.importance}
+    intake.analysis = {**analysis, "findings": reg}
 
 
 def gap_view(gap: KnowledgeGap, reg: dict[str, dict[str, Any]], v: Viewer) -> Any | None:
@@ -385,35 +432,42 @@ def gap_views(
     return out
 
 
-def question_prompt(gap: Any) -> str:
+def question_prompt(gap: Any, rule: bool | None = None) -> str:
+    """The question a gap asks: its category's prompt for a rule-made gap, else the
+    gap's own words."""
     cat = cats.BY_KEY[gap.category]
-    if gap.statement != cat.statement:
-        return gap.statement if gap.statement.endswith("?") else f"{gap.statement} {cat.prompt}"
-    return cat.prompt
+    if rule_made(gap) if rule is None else rule:
+        return cat.prompt
+    return gap.statement if gap.statement.endswith("?") else f"{gap.statement} {cat.prompt}"
 
 
 def question_view(
     q: StakeholderQuestion,
     raw: dict[uuid.UUID, KnowledgeGap],
     views: dict[uuid.UUID, Any],
+    priorities: dict[uuid.UUID, int] | None = None,
 ) -> Any | None:
-    """A question as the reader may see it: hidden with its gap, reworded with it."""
+    """A question as the reader may see it: hidden with its gap, reworded with it.
+    ``priorities``: its place among what everyone may see (anyone but the author), so a
+    priority stored while private facts still moved it never shows."""
     if q.gap_id is None or q.gap_id not in raw:
         return q
     view = views.get(q.gap_id)
     if view is None:
         return None
     gap = raw[q.gap_id]
-    if view is gap:
-        return q
-    cat = cats.BY_KEY[gap.category]
-    changes: dict[str, Any] = {
-        "rationale": cats.rank_reason(cat, view.importance, list(view.impact), view.knowledge_state)
-    }
-    if view.statement != gap.statement:
-        # Only the summary of a model-written gap is shared: never its own words.
-        changes["prompt"] = question_prompt(view)
-    return _copy(q, StakeholderQuestionOut, **changes)
+    changes: dict[str, Any] = {}
+    if priorities is not None and priorities.get(q.gap_id, q.priority) != q.priority:
+        changes["priority"] = priorities[q.gap_id]
+    if view is not gap:
+        cat = cats.BY_KEY[gap.category]
+        changes["rationale"] = cats.rank_reason(
+            cat, view.importance, list(view.impact), view.knowledge_state
+        )
+        if view.statement != gap.statement:
+            # Only the summary of a model-written gap is shared: never its own words.
+            changes["prompt"] = question_prompt(view, rule=False)
+    return _copy(q, StakeholderQuestionOut, **changes) if changes else q
 
 
 def public_prompt(reg: dict[str, dict[str, Any]], gap: KnowledgeGap, prompt: str) -> str:
@@ -489,15 +543,31 @@ def stale_view(s: dict[str, Any], reg: dict[str, dict[str, Any]], v: Viewer) -> 
     return None
 
 
-def coverage_view(row: dict[str, Any], reg: dict[str, dict[str, Any]], v: Viewer) -> dict[str, Any]:
-    """A coverage row: what the author's sources say about a category is a finding."""
+def coverage_view(
+    row: dict[str, Any],
+    reg: dict[str, dict[str, Any]],
+    v: Viewer,
+    analysis: dict[str, Any],
+) -> dict[str, Any]:
+    """A coverage row: what the author's sources say about a category is a finding.
+
+    Anyone who may not see it reads the row the analysis stored for everyone
+    (``public_coverage``: the row as the brief and the baseline alone give it), so the
+    row reads exactly as a plain intake's with the same brief: same state, same words.
+    An intake analysed before those rows were stored gets one from its brief."""
     entry = reg.get(str(row.get("gap_id"))) if row.get("gap_id") else None
     if v.is_author or (entry is not None and v.sees(entry.get("sharing", DEFAULT), "summary")):
         return row
+    if "public_coverage" in analysis:
+        return {**row, **(analysis["public_coverage"].get(row["category"]) or {})}
     if row.get("state") != "partial" or row.get("knowledge_state") != "ai_inference":
         return row
     # What the author's sources say about the category (registered or not: fail closed).
-    return {**row, "state": "missing", "knowledge_state": "unknown", "reason": REDACTED_REASON}
+    field = cats.BRIEF_FIELDS.get(row["category"])
+    texts = [i["text"] for i in brief_items(analysis) if field and i["field"] == field]
+    if texts:
+        return {**row, "knowledge_state": "hypothesis", "reason": cats.brief_reason(texts)}
+    return {**row, "state": "missing", "knowledge_state": "unknown", "reason": cats.UNKNOWN_REASON}
 
 
 def analysis_view(intake: ProductIntake, v: Viewer) -> dict[str, Any]:
@@ -508,6 +578,7 @@ def analysis_view(intake: ProductIntake, v: Viewer) -> dict[str, Any]:
     reg = registry(intake)
     shared = shared_item_ids(reg, v, "summary")
     analysis.pop("findings", None)
+    analysis.pop("public_coverage", None)
     analysis["items"] = [
         x
         for x in (item_view(i, reg, v, shared) for i in analysis.get("items") or [])
@@ -521,7 +592,8 @@ def analysis_view(intake: ProductIntake, v: Viewer) -> dict[str, Any]:
     analysis["stale"] = [
         x for x in (stale_view(s, reg, v) for s in analysis.get("stale") or []) if x is not None
     ]
-    analysis["coverage"] = [coverage_view(r, reg, v) for r in analysis.get("coverage") or []]
+    source = intake.analysis or {}
+    analysis["coverage"] = [coverage_view(r, reg, v, source) for r in source.get("coverage") or []]
     # Which of the author's items matter, and what their text signals, is drawn from
     # the author's sources: only what a shared finding cites is listed.
     analysis["relevant_item_ids"] = [

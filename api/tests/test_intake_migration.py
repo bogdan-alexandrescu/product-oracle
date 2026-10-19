@@ -119,3 +119,39 @@ def test_upgrade_keeps_document_jobs_and_downgrade_reverses(scratch_db):
         )
     command.upgrade(cfg, "0014_intake")
     assert _run("SELECT count(*) FROM intake_proposals") == [(0,)]
+
+
+def test_rule_made_gaps_are_keyed_by_category_not_by_text(scratch_db):
+    """Round 3 (S6): a rule-made gap carries its category key, backfilled from the
+    statements as they stand at this revision; model and person gaps carry none."""
+    cfg = _cfg()
+    command.upgrade(cfg, "0013")
+    t, intake, person = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
+    _run(
+        "INSERT INTO product_intakes (id, tenant_id, title, brief) "
+        "VALUES (:i, :t, 'Saved addresses', 'Returning buyers retype addresses.')",
+        i=intake,
+        t=t,
+    )
+    rows = {
+        "rule": ("ownership", "No team or person owns the outcome.", None),
+        "model": ("ownership", "Is the checkout team staffed for this?", None),
+        "person": ("ownership", "No team or person owns the outcome.", person),
+    }
+    ids = {}
+    for name, (category, statement, created_by) in rows.items():
+        ids[name] = uuid.uuid4()
+        _run(
+            "INSERT INTO knowledge_gaps (id, tenant_id, intake_id, category, statement, "
+            "impact, importance, created_by) VALUES (:g, :t, :i, :c, :s, '{}', 'high', :by)",
+            g=ids[name], t=t, i=intake, c=category, s=statement, by=created_by,
+        )  # fmt: skip
+    command.upgrade(cfg, "0014_intake")
+    keys = dict(_run("SELECT id, rule_key FROM knowledge_gaps"))
+    assert keys == {ids["rule"]: "ownership", ids["model"]: None, ids["person"]: None}
+    command.downgrade(cfg, "0013")
+    columns = _run(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = 'knowledge_gaps'"
+    )
+    assert ("rule_key",) not in columns

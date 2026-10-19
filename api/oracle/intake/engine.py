@@ -6,8 +6,9 @@ registry up to date:
 1. extract from the brief and the pinned items (``oracle.intake.extract``);
 2. check the baseline first (confirmed goals, their metrics and owners, confirmed
    constraints) and gaps already decided for the same PRD: those categories are
-   *covered* and never asked. A decision elsewhere never clears a critical gap here
-   (B4: an owner only): the gap is marked answered pending review, for an owner;
+   *covered* and never asked. Neither a decision elsewhere nor the baseline clears a
+   critical gap here (B4): the gap is marked answered pending review, for the role
+   that reviews it (an owner for a hard blocker, else an approver);
 3. label every gap with its knowledge state (brief = hypothesis, sources = AI inference
    with its confidence, baseline = user decision);
 4. keep source conflicts and stale evidence for the summary;
@@ -19,8 +20,10 @@ risk, deferred): later evidence only reaches open gaps, so in-progress decisions
 a repin (S4). What the author's sources say (conflicts, stale evidence, a gap's
 evidence) is registered as a finding with its sharing level (S6, ``oracle.intake.
 sharing``). Questions are ranked, and batches asked, by what everyone may see: the
-order never tells others which categories the author's private sources speak to.
-Nothing here commits.
+order never tells others which categories the author's private sources speak to;
+batch sizes and numbers, the intake's status and each coverage row are counted in what
+everyone may see too. Rule-made gaps carry their category as ``rule_key``. Nothing here
+commits.
 """
 
 import uuid
@@ -42,15 +45,8 @@ PENDING = "answered_pending_review"
 SETTLED = DECIDED | {"deferred", PENDING}
 # Decided by an explicit decision: later non-answers never rewrite it.
 FROZEN = frozenset({"validated", "accepted_risk"})
-LOWER = {"critical": "critical", "high": "medium", "medium": "low", "low": "low"}
 STATE_ORDER = ["unknown", "hypothesis", "ai_inference", "user_decision", "verified_fact"]
-# Brief fields that speak to a category (the author's claim, a hypothesis).
-BRIEF_FIELDS = {
-    "customer_user": "users",
-    "non_goals": "non_goals",
-    "constraints": "dependencies",
-    "blockers": "blockers",
-}
+BRIEF_FIELDS = cats.BRIEF_FIELDS
 MAX_EVIDENCE = 5
 
 
@@ -218,10 +214,20 @@ async def coverage_from_baseline(
     return covered
 
 
-ELSEWHERE_REASON = (
-    "Answered for the same PRD in another intake; an owner reviews it here before it "
-    "counts as decided."
-)
+def elsewhere_reason(category: str) -> str:
+    """Why a critical gap decided elsewhere waits here, naming who reviews it (B4)."""
+    return (
+        f"Answered for the same PRD in another intake; an {cats.reviewer(category)} reviews "
+        "it here before it counts as decided."
+    )
+
+
+def baseline_reason(category: str, reason: str) -> str:
+    """Why a critical gap the baseline answers waits for review here (B4)."""
+    return (
+        f"{reason.rstrip('.')}. A critical gap is not closed by the baseline alone: an "
+        f"{cats.reviewer(category)} reviews it here before it counts as decided."
+    )
 
 
 def _pending_elsewhere(
@@ -242,6 +248,7 @@ def _pending_elsewhere(
             document_id=intake.document_id,
             category=cat.key,
             statement=cat.statement,
+            rule_key=cat.key,
             impact=list(cat.impact),
             importance=importance,
             evidence_ids=[],
@@ -286,8 +293,8 @@ async def intake_questions(db: AsyncSession, intake_id: uuid.UUID) -> list[Stake
 
 
 def rules_gap(gaps: list[KnowledgeGap], category: str) -> KnowledgeGap | None:
-    statement = cats.BY_KEY[category].statement
-    return next((g for g in gaps if g.category == category and g.statement == statement), None)
+    """The category's rule-made gap, by its stable key (never by its statement text)."""
+    return next((g for g in gaps if g.category == category and g.rule_key == category), None)
 
 
 def score_of(gap: KnowledgeGap) -> float:
@@ -309,6 +316,16 @@ def ranked(gaps: list[KnowledgeGap]) -> list[KnowledgeGap]:
     )
 
 
+def _row(gap: KnowledgeGap, knowledge: str, reason: str) -> dict[str, Any]:
+    """A coverage row's state, knowledge state and reason for a rule-made gap."""
+    return {
+        "state": "covered" if gap.status in DECIDED else
+        ("missing" if knowledge == "unknown" else "partial"),
+        "knowledge_state": knowledge,
+        "reason": f"Decided ({gap.status})." if gap.status in SETTLED else reason,
+    }  # fmt: skip
+
+
 async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
     """Bring the intake's analysis, gaps and draft questions up to date (no commit)."""
     items, _ = await ev.pinned_items(db, intake)
@@ -327,8 +344,10 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
         by_field.setdefault(item["field"], []).append(item)
 
     coverage: list[dict[str, Any]] = []
-    # What each category's knowledge state is without the author's sources (S6).
+    # What each category's knowledge state is without the author's sources (S6), and
+    # each coverage row that reads differently without them.
     public_states: dict[str, str] = {}
+    public_coverage: dict[str, dict[str, Any]] = {}
     for cat in cats.CATEGORIES:
         existing = rules_gap(gaps, cat.key)
         if cat.key in covered:
@@ -347,7 +366,7 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
                             "category": cat.key,
                             "state": "partial",
                             "knowledge_state": existing.knowledge_state,
-                            "reason": ELSEWHERE_REASON
+                            "reason": elsewhere_reason(cat.key)
                             if existing.status == PENDING
                             else info["reason"],
                             "entity_ids": info["entity_ids"],
@@ -355,6 +374,24 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
                         }
                     )
                     continue
+            if existing is not None and existing.status == "unknown":
+                # The baseline answers it now, as the baseline says; a critical gap
+                # still waits for its review (B4: the baseline never clears it alone).
+                existing.status = PENDING if existing.importance == "critical" else "answered"
+                existing.knowledge_state = state
+                existing.entity_ids = [uuid.UUID(i) for i in info["entity_ids"]]
+            if existing is not None and existing.status == PENDING:
+                coverage.append(
+                    {
+                        "category": cat.key,
+                        "state": "partial",
+                        "knowledge_state": existing.knowledge_state,
+                        "reason": baseline_reason(cat.key, info["reason"]),
+                        "entity_ids": info["entity_ids"],
+                        "gap_id": str(existing.id),
+                    }
+                )
+                continue
             coverage.append(
                 {
                     "category": cat.key,
@@ -365,11 +402,6 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
                     "gap_id": str(existing.id) if existing else None,
                 }
             )
-            if existing is not None and existing.status == "unknown":
-                # The baseline answers it now: close it, as the baseline says.
-                existing.status = "answered"
-                existing.knowledge_state = state
-                existing.entity_ids = [uuid.UUID(i) for i in info["entity_ids"]]
             continue
 
         state, evidence_ids, conf = "unknown", [], None
@@ -384,20 +416,20 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
             state = "hypothesis"
         # From the brief alone (everyone reads it), never from the author's sources: a
         # gap's importance must not tell others which categories those sources speak to.
-        importance = cats.importance_for(cat, brief.signals)
-        if brief_says:
-            importance = LOWER[importance]
-        reason = {
-            "unknown": "Nothing in the pinned sources or the baseline answers it.",
-            "hypothesis": "Only the brief states it: " + "; ".join(i["text"] for i in brief_says),
+        importance = cats.brief_importance(cat, brief.signals, bool(brief_says))
+        reasons = {
+            "unknown": cats.UNKNOWN_REASON,
+            "hypothesis": cats.brief_reason([i["text"] for i in brief_says]),
             "ai_inference": f"{len(found)} pinned source item(s) seem to speak to it.",
-        }[state]
+        }
+        reason = reasons[state]
         if existing is None:
             existing = KnowledgeGap(
                 intake_id=intake.id,
                 document_id=intake.document_id,
                 category=cat.key,
                 statement=cat.statement,
+                rule_key=cat.key,
                 impact=list(cat.impact),
                 importance=importance,
                 evidence_ids=evidence_ids,
@@ -423,18 +455,22 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
             stronger = _stronger(existing.knowledge_state, state)
             if stronger != existing.knowledge_state and existing.knowledge_state != "user_decision":
                 existing.knowledge_state = stronger
-        settled = existing.status in SETTLED
         coverage.append(
             {
                 "category": cat.key,
-                "state": "covered" if existing.status in DECIDED else
-                ("missing" if existing.knowledge_state == "unknown" else "partial"),
-                "knowledge_state": existing.knowledge_state,
-                "reason": f"Decided ({existing.status})." if settled else reason,
+                **_row(existing, existing.knowledge_state, reason),
                 "entity_ids": [str(i) for i in existing.entity_ids],
                 "gap_id": None,
             }
-        )  # fmt: skip
+        )
+        # The same row as the brief and the baseline alone give it (S6): what anyone
+        # but the author reads, word for word what a plain intake would show.
+        known = existing.knowledge_state
+        if known == "ai_inference":
+            known = public_states[cat.key]
+        shown = _row(existing, known, reasons[public_states[cat.key]])
+        if shown != {k: coverage[-1][k] for k in shown}:
+            public_coverage[cat.key] = shown
     await db.flush()
     for row in coverage:
         if row["gap_id"] is None:
@@ -482,12 +518,43 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
             for i in sources.stale
         ],
         "coverage": coverage,
+        "public_coverage": public_coverage,
         "relevant_item_ids": [str(i.id) for i in hits],
     }
     await sync_questions(db, intake, gaps)
-    if intake.status in ("draft", "analyzing", "awaiting_answers", "ready"):
-        intake.status = "awaiting_answers" if any(g.status in OPEN for g in gaps) else "ready"
+    refresh_status(intake, gaps, ("draft", "analyzing", "awaiting_answers", "ready"))
     await db.flush()
+
+
+def refresh_status(
+    intake: ProductIntake,
+    gaps: list[KnowledgeGap],
+    among: tuple[str, ...] = ("analyzing", "awaiting_answers", "ready"),
+) -> None:
+    """``awaiting_answers`` while a gap everyone may see is open, else ``ready`` (S6:
+    a gap hidden from others never keeps the intake waiting in their eyes, nor writes
+    to the intake row; the author's view adds their own, :func:`status_for`)."""
+    if intake.status not in among:
+        return
+    reg = sharing.registry(intake)
+    shown = any(
+        sharing.gap_changes(g, reg, sharing.EVERYONE) is not None for g in gaps if g.status in OPEN
+    )
+    intake.status = "awaiting_answers" if shown else "ready"
+
+
+async def status_for(db: AsyncSession, intake: ProductIntake, v: sharing.Viewer) -> str:
+    """The intake's status as ``v`` reads it: the author also waits on their own
+    hidden gaps (``ready`` with an open gap: only a hidden one can be open)."""
+    if v.is_author and intake.status == "ready":
+        waiting = await db.scalar(
+            select(func.count())
+            .select_from(KnowledgeGap)
+            .where(KnowledgeGap.intake_id == intake.id, KnowledgeGap.status.in_(OPEN))
+        )
+        if waiting:
+            return "awaiting_answers"
+    return intake.status
 
 
 def conflict_category(conflict: dict[str, Any], sources: extract.SourceFacts) -> str:
@@ -578,9 +645,10 @@ def priorities(intake: ProductIntake, gaps: list[KnowledgeGap]) -> dict[uuid.UUI
     """Each gap's question priority, from what everyone may see (S6).
 
     A gap's evidence, confidence and inferred state from the author's private sources
-    do not move it: the gaps everyone sees are ranked as everyone sees them (10, 20,
-    ...). A gap hidden from everyone else sits between them (an odd priority, seen by
-    its author only), where its own facts rank it."""
+    (nor any importance they once gave it) do not move it: the gaps everyone sees are
+    ranked as everyone sees them (10, 20, ...). A gap hidden from everyone else sits
+    between them (an odd priority, seen by its author only), where its own facts rank
+    it. The reads show anyone but the author these priorities, whatever is stored."""
     reg = sharing.registry(intake)
     public: dict[uuid.UUID, tuple] = {}
     for gap in gaps:
@@ -590,7 +658,10 @@ def priorities(intake: ProductIntake, gaps: list[KnowledgeGap]) -> dict[uuid.UUI
         state = changes.get("knowledge_state", gap.knowledge_state)
         conf = changes["confidence"] if "confidence" in changes else gap.confidence
         score = cats.rank_score(
-            gap.importance, list(gap.impact), state, float(conf) if conf is not None else None
+            changes.get("importance", gap.importance),
+            list(gap.impact),
+            state,
+            float(conf) if conf is not None else None,
         )
         public[gap.id] = (group_of(gap), -score, cats.ORDER.get(gap.category, 99), gap.created_at)
     out = {gid: n * 10 for n, gid in enumerate(sorted(public, key=lambda g: public[g]), start=1)}
@@ -659,19 +730,40 @@ async def ask_batch(
     skip: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> list[StakeholderQuestion]:
     """Ask the next short batch: the highest-priority drafts, at most ``size``.
-    ``skip``: gaps the asker may not see; their questions stay drafts."""
+    ``skip``: gaps the asker may not see; their questions stay drafts.
+
+    Sizes and numbers are counted in what everyone may see (S6): a batch holds ``size``
+    questions everyone sees, and the author's hidden questions ranked among them ride
+    along; hidden questions asked on their own join the latest batch instead of
+    opening a new number. So no reader but the author learns from a short batch or a
+    skipped number that a hidden question exists."""
     questions = await intake_questions(db, intake.id)
-    drafts = [q for q in questions if q.status == "draft" and q.gap_id not in skip][:size]
+    by_id = {g.id: g for g in await intake_gaps(db, intake.id)}
+    reg = sharing.registry(intake)
+
+    def shown(q: StakeholderQuestion) -> bool:
+        gap = by_id.get(q.gap_id) if q.gap_id else None
+        return gap is None or sharing.gap_changes(gap, reg, sharing.EVERYONE) is not None
+
+    waiting = [q for q in questions if q.status == "draft" and q.gap_id not in skip]
+    public = [q for q in waiting if shown(q)]
+    chosen = public[:size]
+    if len(public) > size:
+        # Hidden drafts ranked before the first public draft left for later.
+        cut = waiting.index(public[size])
+        riders = [q for q in waiting[:cut] if not shown(q)]
+    else:
+        riders = [q for q in waiting if not shown(q)][: max(0, size - len(chosen))]
+    drafts = [q for q in waiting if q in chosen or q in riders]
     if not drafts:
         return []
-    number = max((q.batch or 0 for q in questions), default=0) + 1
-    gap_ids = {q.gap_id for q in drafts if q.gap_id}
-    gaps = {g.id: g for g in await intake_gaps(db, intake.id) if g.id in gap_ids}
+    latest = max((q.batch or 0 for q in questions if shown(q)), default=0)
+    number = latest + 1 if chosen else max(latest, 1)
     for q in drafts:
         q.status = "asked"
         q.batch = number
         q.asked_by = asked_by
-        gap = gaps.get(q.gap_id) if q.gap_id else None
+        gap = by_id.get(q.gap_id) if q.gap_id else None
         if gap is not None and gap.status == "unknown":
             gap.status = "asked"
     await db.flush()

@@ -104,10 +104,13 @@ async def _summary(db: TenantDB, intake, principal: Principal, route: str) -> In
 
 
 def _gap_out(intake, principal: Principal, gap: KnowledgeGap) -> KnowledgeGapOut:
+    """The gap as the caller may see it; one hidden from them is 404 (fail closed)."""
     if intake is None:
         return KnowledgeGapOut.model_validate(gap)
     view = sharing.gap_view(gap, sharing.registry(intake), sharing.viewer(principal, intake))
-    return KnowledgeGapOut.model_validate(view if view is not None else gap)
+    if view is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Gap not found")
+    return KnowledgeGapOut.model_validate(view)
 
 
 # --- intakes -----------------------------------------------------------------------------
@@ -138,7 +141,7 @@ async def update_intake(
         raise _http(e) from e
     await db.commit()
     await db.refresh(intake)
-    return summary.intake_out(intake, principal)
+    return await summary.intake_out(db, intake, principal)
 
 
 @router.get("/intakes/{intake_id}/summary", response_model=IntakeSummary)
@@ -517,7 +520,13 @@ async def update_knowledge_gap(
     if changed:
         await audit.record(db, principal, "intake.gap_updated", "knowledge_gap", gap.id, changed)
         if gap.intake_id is not None:
-            await engine.sync_questions(db, await service.get_intake(db, gap.intake_id))
+            intake = await service.get_intake(db, gap.intake_id)
+            if "importance" in changed:
+                # A person set it: a public fact, which everyone else reads (S6).
+                sharing.set_public_importance(intake, gap)
+            await engine.sync_questions(db, intake)
+            engine.refresh_status(intake, await engine.intake_gaps(db, intake.id))
+            await db.flush()
     await db.commit()
     await db.refresh(gap)
     return _gap_out(await _gap_intake(db, gap), principal, gap)

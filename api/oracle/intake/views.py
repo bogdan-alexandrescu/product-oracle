@@ -7,17 +7,20 @@
 findings it may not see, no gap the author has not shared (nor its questions, answers,
 decisions and change events), and a gap shared as a summary in Oracle's words. The
 lists leave those rows out in SQL, before paging (:func:`register`), so a reader's
-pages never shift because of rows they may not see.
+pages never shift because of rows they may not see. Only rows the call itself may
+list are read to find them, and the hidden ids travel as one array parameter. A
+question's priority shows to anyone but the author as everyone may see it.
 """
 
 import uuid
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import Text, Uuid, any_, bindparam, cast, not_, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
-from oracle.intake import sharing, summary
+from oracle.intake import engine, sharing, summary
 from oracle.v2 import router as v2_router
 from oracle.v2.models import (
     AssumptionDecision,
@@ -43,6 +46,7 @@ class Readers:
         self.db = db
         self.principal = principal
         self.intakes: dict[uuid.UUID, ProductIntake | None] = {}
+        self.priorities: dict[uuid.UUID, dict[uuid.UUID, int] | None] = {}
 
     async def intake(self, intake_id: uuid.UUID | None) -> ProductIntake | None:
         if intake_id is None:
@@ -68,16 +72,29 @@ class Readers:
             return None, None
         return gap, await self.gap(gap)
 
+    async def public_priorities(self, intake: ProductIntake) -> dict[uuid.UUID, int] | None:
+        """Question priorities as everyone may see them; None for the author."""
+        if intake.id not in self.priorities:
+            v = sharing.viewer(self.principal, intake)
+            self.priorities[intake.id] = (
+                None
+                if v.is_author
+                else engine.priorities(intake, await engine.intake_gaps(self.db, intake.id))
+            )
+        return self.priorities[intake.id]
+
     async def question(self, q: StakeholderQuestion) -> Any | None:
         gap, view = await self.gap_by_id(q.gap_id)
         if gap is None:
             return q
         views = {gap.id: view} if view is not None else {}
-        return sharing.question_view(q, {gap.id: gap}, views)
+        intake = await self.intake(gap.intake_id)
+        priorities = await self.public_priorities(intake) if intake is not None else None
+        return sharing.question_view(q, {gap.id: gap}, views, priorities)
 
 
 async def intakes(db: AsyncSession, principal: Principal, rows: list[Any]) -> list[Any]:
-    return [summary.intake_out(i, principal) for i in rows]
+    return [await summary.intake_out(db, i, principal) for i in rows]
 
 
 async def gaps(db: AsyncSession, principal: Principal, rows: list[Any]) -> list[Any]:
@@ -151,53 +168,132 @@ async def change_events(db: AsyncSession, principal: Principal, rows: list[Any])
 # --- hidden rows, in SQL (applied before limit and offset) -------------------------------
 
 
-async def hidden_gap_ids(db: AsyncSession, principal: Principal) -> set[uuid.UUID]:
-    """Gaps of the company's intakes that ``principal`` may not see (S6)."""
+def _where(model: Any, filters: dict[str, Any]) -> list[Any]:
+    return [getattr(model, name) == value for name, value in filters.items()]
+
+
+async def hidden_gap_ids(
+    db: AsyncSession, principal: Principal, scope: Any = None
+) -> set[uuid.UUID]:
+    """Gaps of the company's intakes that ``principal`` may not see (S6).
+
+    Only a gap no person created and the engine did not make by rule (one the model
+    wrote) can be hidden, so only those are read; ``scope``: a condition on
+    ``KnowledgeGap`` narrowing them to what the list call may return."""
+    stmt = select(KnowledgeGap).where(
+        KnowledgeGap.intake_id.is_not(None),
+        KnowledgeGap.created_by.is_(None),
+        KnowledgeGap.rule_key.is_(None),
+    )
+    if scope is not None:
+        stmt = stmt.where(scope)
+    gaps = (await db.scalars(stmt)).all()
+    if not gaps:
+        return set()
+    ids = list({g.intake_id for g in gaps})
     readers: dict[uuid.UUID, tuple[Any, sharing.Viewer]] = {}
-    for intake in (await db.scalars(select(ProductIntake))).all():
+    for intake in (
+        await db.scalars(select(ProductIntake).where(ProductIntake.id == any_(_uuids(ids))))
+    ).all():
         v = sharing.viewer(principal, intake)
         if not v.is_author:
             readers[intake.id] = (sharing.registry(intake), v)
-    if not readers:
-        return set()
-    gaps = (
-        await db.scalars(select(KnowledgeGap).where(KnowledgeGap.intake_id.in_(list(readers))))
-    ).all()
-    return {g.id for g in gaps if sharing.gap_view(g, *readers[g.intake_id]) is None}
+    return {
+        g.id
+        for g in gaps
+        if g.intake_id in readers and sharing.gap_view(g, *readers[g.intake_id]) is None
+    }
 
 
-def _hidden(clause):
-    async def visible(db: AsyncSession, principal: Principal) -> Any:
-        hidden = await hidden_gap_ids(db, principal)
+def _uuids(ids: Any) -> Any:
+    """Ids as one array parameter (a list of binds hits the driver's 32767 limit)."""
+    return bindparam(None, list(ids), type_=ARRAY(Uuid()))
+
+
+def _not_hidden(column: Any, hidden: set[uuid.UUID], nullable: bool = True) -> Any:
+    kept = not_(column == any_(_uuids(hidden)))
+    return or_(column.is_(None), kept) if nullable else kept
+
+
+def _hidden(scope, clause):
+    """The list's WHERE clause: ``scope(filters)`` narrows the gaps read (None: all
+    the list may reach), ``clause(hidden)`` leaves their rows out."""
+
+    async def visible(db: AsyncSession, principal: Principal, filters: dict[str, Any]) -> Any:
+        hidden = await hidden_gap_ids(db, principal, scope(filters))
         return clause(hidden) if hidden else None
 
     return visible
 
 
-def _not_hidden(column, hidden: set[uuid.UUID]) -> Any:
-    return or_(column.is_(None), column.not_in(hidden))
+def _gap_scope(filters: dict[str, Any]) -> Any:
+    return (KnowledgeGap.id.in_(select(KnowledgeGap.id).where(*_where(KnowledgeGap, filters)))
+            if filters else None)  # fmt: skip
+
+
+def _question_scope(filters: dict[str, Any]) -> Any:
+    if not filters:
+        return None
+    return KnowledgeGap.id.in_(
+        select(StakeholderQuestion.gap_id).where(*_where(StakeholderQuestion, filters))
+    )
+
+
+def _answer_scope(filters: dict[str, Any]) -> Any:
+    if not filters:
+        return None
+    return KnowledgeGap.id.in_(
+        select(StakeholderQuestion.gap_id).where(
+            StakeholderQuestion.id.in_(
+                select(StakeholderAnswer.question_id).where(*_where(StakeholderAnswer, filters))
+            )
+        )
+    )
+
+
+def _decision_scope(filters: dict[str, Any]) -> Any:
+    if not filters:
+        return None
+    return KnowledgeGap.id.in_(
+        select(AssumptionDecision.gap_id).where(*_where(AssumptionDecision, filters))
+    )
+
+
+def _event_scope(filters: dict[str, Any]) -> Any:
+    if not filters:
+        return None
+    return cast(KnowledgeGap.id, Text).in_(
+        select(ChangeEvent.data["gap_id"].astext).where(*_where(ChangeEvent, filters))
+    )
+
+
+def _answers_kept(hidden: set[uuid.UUID]) -> Any:
+    hidden_questions = select(StakeholderQuestion.id).where(
+        StakeholderQuestion.gap_id == any_(_uuids(hidden))
+    )
+    return StakeholderAnswer.question_id.not_in(hidden_questions)
+
+
+def _events_kept(hidden: set[uuid.UUID]) -> Any:
+    text = ChangeEvent.data["gap_id"].astext
+    ids = bindparam(None, [str(i) for i in hidden], type_=ARRAY(Text()))
+    return or_(text.is_(None), not_(text == any_(ids)))
 
 
 def register() -> None:
-    v2_router.register_hidden("/gaps", _hidden(lambda h: KnowledgeGap.id.not_in(h)))
     v2_router.register_hidden(
-        "/questions", _hidden(lambda h: _not_hidden(StakeholderQuestion.gap_id, h))
+        "/gaps", _hidden(_gap_scope, lambda h: _not_hidden(KnowledgeGap.id, h, nullable=False))
     )
     v2_router.register_hidden(
-        "/answers",
-        _hidden(
-            lambda h: StakeholderAnswer.question_id.not_in(
-                select(StakeholderQuestion.id).where(StakeholderQuestion.gap_id.in_(h))
-            )
-        ),
+        "/questions",
+        _hidden(_question_scope, lambda h: _not_hidden(StakeholderQuestion.gap_id, h)),
     )
+    v2_router.register_hidden("/answers", _hidden(_answer_scope, _answers_kept))
     v2_router.register_hidden(
-        "/assumption-decisions", _hidden(lambda h: _not_hidden(AssumptionDecision.gap_id, h))
+        "/assumption-decisions",
+        _hidden(_decision_scope, lambda h: _not_hidden(AssumptionDecision.gap_id, h)),
     )
-    v2_router.register_hidden(
-        "/change-events",
-        _hidden(lambda h: _not_hidden(ChangeEvent.data["gap_id"].astext, {str(i) for i in h})),
-    )
+    v2_router.register_hidden("/change-events", _hidden(_event_scope, _events_kept))
     v2_router.register_view("/intakes", intakes)
     v2_router.register_view("/gaps", gaps)
     v2_router.register_view("/questions", questions)

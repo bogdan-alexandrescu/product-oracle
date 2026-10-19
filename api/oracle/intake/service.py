@@ -332,6 +332,10 @@ async def set_sharing(
              "from": before, "to": level},
         )  # fmt: skip
     intake.analysis = {**(intake.analysis or {}), "findings": reg}
+    # What others see changed: so may the order of their questions and the status.
+    gaps = await engine.intake_gaps(db, intake.id)
+    await engine.sync_questions(db, intake, gaps)
+    engine.refresh_status(intake, gaps)
     await flush_or_conflict(db)
     return done
 

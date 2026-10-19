@@ -75,12 +75,14 @@ NO_GOAL = (
 )
 
 
-def intake_out(intake: ProductIntake, principal: Principal | None) -> IntakeOut:
+async def intake_out(
+    db: AsyncSession, intake: ProductIntake, principal: Principal | None
+) -> IntakeOut:
+    v = sharing.viewer(principal, intake)
     out = IntakeOut.model_validate(intake)
+    out.status = await engine.status_for(db, intake, v)  # type: ignore[assignment]
     out.source_ids = ev.source_ids_of(intake)
-    out.analysis = IntakeAnalysis.model_validate(
-        sharing.analysis_view(intake, sharing.viewer(principal, intake))
-    )
+    out.analysis = IntakeAnalysis.model_validate(sharing.analysis_view(intake, v))
     return out
 
 
@@ -135,13 +137,19 @@ def ranked_gaps(
     gaps: list,
     refs: dict[uuid.UUID, EvidenceRef],
     reg: dict[str, dict] | None = None,
+    v: sharing.Viewer = sharing.EVERYONE,
 ) -> list[RankedGap]:
+    """Gaps in rank order. A gap's finding id and level show to its author, and to
+    others only once it is shared at counts or above: a private finding's id or level
+    would tell them the author's sources speak to its category (S6)."""
     reg = reg or {}
     out = []
     for position, gap in enumerate(engine.ranked(gaps), start=1):
         cat = cats.BY_KEY[gap.category]
         base = KnowledgeGapOut.model_validate(gap).model_dump()
         level = sharing.level_of(reg, gap.id)
+        if level is not None and not v.is_author and sharing.RANK[level] < sharing.RANK["counts"]:
+            level = None
         out.append(
             RankedGap(
                 **base,
@@ -451,14 +459,17 @@ class View:
         self.raw = {g.id: g for g in raw}
         self.views = sharing.gap_views(raw, self.reg, self.v)
         self.gaps = [self.views[g.id] for g in raw if g.id in self.views]
+        # Anyone but the author reads each question's place among what everyone sees.
+        priorities = None if self.v.is_author else engine.priorities(self.intake, raw)
         self.questions = [
             q
             for q in (
-                sharing.question_view(q, self.raw, self.views)
+                sharing.question_view(q, self.raw, self.views, priorities)
                 for q in await engine.intake_questions(db, self.intake.id)
             )
             if q is not None
         ]
+        self.questions.sort(key=lambda q: (q.priority, q.created_at))
         return self
 
     async def refs(
@@ -508,7 +519,7 @@ async def build(
     item_ids |= {uuid.UUID(s["item_id"]) for s in stale_rows}
     refs = await view.refs(db, item_ids, pin)
 
-    ranked = ranked_gaps(gaps, refs, view.reg)
+    ranked = ranked_gaps(gaps, refs, view.reg, view.v)
     open_ranked = [g for g in ranked if g.status in engine.OPEN]
     goals, features = await goals_and_features(db, intake)
     by_gap = {str(g.id): g for g in gaps}
@@ -531,9 +542,11 @@ async def build(
                 gap_id=row.get("gap_id") if gap is not None else None,
             )
         )
-    actions = [a for g in gaps if g.importance == "critical" for a in next_actions(g)]
+    actions = [
+        a for g in engine.ranked(gaps) if g.importance == "critical" for a in next_actions(g)
+    ]
     return IntakeSummary(
-        intake=intake_out(intake, principal),
+        intake=await intake_out(db, intake, principal),
         pinned=pin,
         new_evidence=await new_evidence(db, intake, principal, pin),
         extracted=[

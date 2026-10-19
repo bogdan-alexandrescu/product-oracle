@@ -172,6 +172,25 @@ ORDER: dict[str, int] = {c.key: i for i, c in enumerate(CATEGORIES)}
 # a critical unresolved hard blocker, or an unsupported third-party operation).
 HARD_BLOCKER_CATEGORIES = frozenset({"blockers", "third_party_policy"})
 
+
+def reviewer(category: str) -> str:
+    """Who reviews a critical gap answered below the owner role (B4): an owner for a
+    hard blocker, an approver otherwise."""
+    return "owner" if category in HARD_BLOCKER_CATEGORIES else "approver"
+
+
+# Brief fields that speak to a category (the author's claim, a hypothesis).
+BRIEF_FIELDS = {
+    "customer_user": "users",
+    "non_goals": "non_goals",
+    "constraints": "dependencies",
+    "blockers": "blockers",
+}
+# What the brief speaking to a category does to its importance.
+LOWER = {"critical": "critical", "high": "medium", "medium": "low", "low": "low"}
+# A category nothing public speaks to: the same words whoever reads (S6).
+UNKNOWN_REASON = "Nothing in the pinned sources or the baseline answers it."
+
 # §5 step 5: how much each area weighs when ranking a missing answer.
 IMPACT_WEIGHTS: dict[str, float] = {
     "goals": 3.0,
@@ -236,6 +255,19 @@ def importance_for(category: Category, signals: dict[str, bool]) -> Importance:
     if category.raised_by and category.quiet:
         return category.quiet
     return category.importance
+
+
+def brief_importance(
+    category: Category, signals: dict[str, bool], brief_speaks: bool
+) -> Importance:
+    """A rule-made gap's importance from the brief alone (S6, owner 2026-10-19): a
+    person's private sources never raise or lower it."""
+    importance = importance_for(category, signals)
+    return LOWER[importance] if brief_speaks else importance  # type: ignore[return-value]
+
+
+def brief_reason(texts: list[str]) -> str:
+    return "Only the brief states it: " + "; ".join(texts)
 
 
 def rank_score(

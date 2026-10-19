@@ -124,11 +124,11 @@ def next_actions(gap: Any) -> list[NextAction]:
     label = cats.BY_KEY[gap.category].label.lower()
     owner = "owner" if gap.importance == "critical" else "approver"
     if gap.status == engine.PENDING:
-        hard = gap.importance == "critical" and gap.category in cats.HARD_BLOCKER_CATEGORIES
         return [
             NextAction(gap_id=gap.id, kind="validate",
                        label=f"Review the answer to the {label} question",
-                       role="owner" if hard else "approver"),
+                       role=cats.reviewer(gap.category)
+                       if gap.importance == "critical" else "approver"),
         ]  # fmt: skip
     if gap.status not in engine.OPEN and gap.status != "deferred":
         return []
@@ -276,11 +276,9 @@ async def answer(
     )  # fmt: skip
     if intake is not None:
         await engine.sync_questions(db, intake)
-        if intake.status in ("awaiting_answers", "ready"):
-            gaps = await engine.intake_gaps(db, intake.id)
-            intake.status = (
-                "awaiting_answers" if any(g.status in engine.OPEN for g in gaps) else "ready"
-            )
+        engine.refresh_status(
+            intake, await engine.intake_gaps(db, intake.id), ("awaiting_answers", "ready")
+        )
     await db.flush()
     return {
         "answer": row,

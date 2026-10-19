@@ -53,12 +53,14 @@ async def _call[T](op: Awaitable[T]) -> T:
 
 async def _shown(db: TenantDB, principal: Principal, job) -> LlmJobOut:
     """The job as the caller may see it: an intake job's output counts how many items
-    and gaps it drew from the author's sources, so only the author sees it (S6)."""
+    and gaps it drew from the author's sources, and its usage (tokens, cost) how much
+    it read and wrote from them, so only the author sees either (S6)."""
     out = await service.job_out(db, job)
-    if out.intake_id is not None and out.output is not None:
+    if out.intake_id is not None:
         intake = await db.get(ProductIntake, out.intake_id)
         if intake is None or not sharing.is_author(principal, intake):
             out.output = None
+            out.input_tokens = out.output_tokens = out.cost_usd = None
     return out
 
 

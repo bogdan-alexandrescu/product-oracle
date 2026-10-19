@@ -267,10 +267,7 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
     intake.analysis = analysis
     await s.flush()
     await engine.sync_questions(s, intake, gaps)
-    if intake.status in ("ready", "awaiting_answers", "analyzing"):
-        intake.status = (
-            "awaiting_answers" if any(g.status in engine.OPEN for g in gaps) else "ready"
-        )
+    engine.refresh_status(intake, gaps)
     return {
         "intake_id": str(intake.id),
         "items_added": added,

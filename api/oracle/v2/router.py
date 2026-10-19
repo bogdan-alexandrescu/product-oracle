@@ -39,9 +39,10 @@ View = Callable[[Any, Principal, list[Any]], Awaitable[list[Any]]]
 VIEWS: dict[str, View] = {}
 
 
-# path -> async (db, principal) -> a WHERE clause keeping only rows the principal may
-# see, or None when nothing is hidden from them.
-Hidden = Callable[[Any, Principal], Awaitable[Any]]
+# path -> async (db, principal, filters) -> a WHERE clause keeping only rows the
+# principal may see, or None when nothing is hidden from them. ``filters``: the list
+# call's own filters (column name -> value), so only rows the call may list are read.
+Hidden = Callable[[Any, Principal, dict[str, Any]], Awaitable[Any]]
 HIDDEN: dict[str, Hidden] = {}
 
 
@@ -283,12 +284,12 @@ def _list_endpoint(res: Resource) -> Callable[..., Any]:
     async def endpoint(db: TenantDB, principal: Principal, **params: Any) -> list[Any]:
         limit, offset = params.pop("limit"), params.pop("offset")
         stmt = select(res.model)
-        for name, value in params.items():
-            if value is not None:
-                stmt = stmt.where(getattr(res.model, name) == value)
+        filters = {name: value for name, value in params.items() if value is not None}
+        for name, value in filters.items():
+            stmt = stmt.where(getattr(res.model, name) == value)
         hidden = HIDDEN.get(res.path)
         if hidden is not None:
-            visible = await hidden(db, principal)
+            visible = await hidden(db, principal, filters)
             if visible is not None:
                 stmt = stmt.where(visible)
         stmt = stmt.order_by(res.model.created_at.desc(), res.model.id).limit(limit).offset(offset)
