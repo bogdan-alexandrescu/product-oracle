@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     # Email domains (e.g. ["example.com"]) whose IAP users are created on first visit.
     iap_allowed_domains: list[str] = []
     iap_auto_provision: bool = True
+    # The run ticker (POST /internal/scheduler/tick, docs/ops-run-ticker.md): Cloud
+    # Scheduler calls it every minute with a Google ID token minted for this audience
+    # (https://<host>/internal/scheduler/tick) by this service account's email
+    # (oracle-ticker@<project>.iam.gserviceaccount.com). Either empty = off (404).
+    ticker_audience: str = ""
+    ticker_service_account: str = ""
 
 
 @lru_cache
