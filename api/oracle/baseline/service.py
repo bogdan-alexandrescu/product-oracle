@@ -535,10 +535,17 @@ async def batched_changes(db: AsyncSession) -> AsyncIterator[None]:
         )
 
 
-async def _record_edge_change(db: AsyncSession, actor: str, edge: Edge, cause: str) -> None:
+async def _record_edge_change(
+    db: AsyncSession, actor: str, edge: Edge, cause: str, *, was: str | None
+) -> None:
     """An edge created, removed or changed (a re-parent is a removal and a creation):
-    recorded against its downstream end, with the whole it joins or leaves."""
+    recorded against its downstream end, with the whole it joins or leaves. Only an edge
+    that is or was confirmed: a proposed (or rejected) edge is not in the trace, so
+    nothing was built on it; confirming one is a change. ``was``: its status before."""
     if edge.type in UNTRACED_EDGES:
+        return
+    now = None if cause == "edge_deleted" else edge.status
+    if "confirmed" not in (was, now):
         return
     target_id = edge.dst_id if edge.type in DST_DOWNSTREAM_EDGES else edge.src_id
     target = await db.get(Entity, target_id)
@@ -760,7 +767,7 @@ async def create_edge(
     if type_ == "supports":
         await scoring.rescore_around(db, [src_id])
     await db.flush()
-    await _record_edge_change(db, writer.actor, edge, "edge_created")
+    await _record_edge_change(db, writer.actor, edge, "edge_created", was=None)
     return WriteResult(edge=edge)
 
 
@@ -794,7 +801,7 @@ async def update_edge(
     if edge.type == "supports":
         await scoring.rescore_around(db, [edge.src_id])
     await db.flush()
-    await _record_edge_change(db, writer.actor, edge, "edge_updated")
+    await _record_edge_change(db, writer.actor, edge, "edge_updated", was=before["status"])
     return WriteResult(edge=edge)
 
 
@@ -811,7 +818,7 @@ async def delete_edge(db: AsyncSession, writer: Writer, edge: Edge) -> WriteResu
         edge.id,
         {"before": edge_snapshot(edge), "origin": writer.origin, "reason": writer.reason},
     )
-    await _record_edge_change(db, writer.actor, edge, "edge_deleted")
+    await _record_edge_change(db, writer.actor, edge, "edge_deleted", was=edge.status)
     await db.delete(edge)
     await db.flush()
     if type_ == "supports":

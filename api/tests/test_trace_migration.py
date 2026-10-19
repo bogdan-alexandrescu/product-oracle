@@ -123,3 +123,22 @@ def test_upgrade_keeps_rows_and_a_deleted_entity_leaves_its_dependency(scratch_d
     _run("DELETE FROM entities WHERE id = :e", e=ent2)
     assert _run("SELECT count(*) FROM artifact_dependencies") == [(0,)]
     command.upgrade(cfg, "head")
+
+
+def _link_item_on_delete() -> str:
+    (row,) = _run(
+        "SELECT confdeltype::text FROM pg_constraint "
+        "WHERE conname = 'fk_document_section_links_source_item_id_source_items'"
+    )
+    return row[0]
+
+
+def test_a_section_links_source_item_cascades_like_its_other_targets(scratch_db):
+    cfg = _cfg()
+    command.upgrade(cfg, "0013")
+    assert _link_item_on_delete() == "n"  # SET NULL: at odds with the target check
+    command.upgrade(cfg, "0014_trace")
+    assert _link_item_on_delete() == "c"
+    command.downgrade(cfg, "0013")
+    assert _link_item_on_delete() == "n"
+    command.upgrade(cfg, "head")
