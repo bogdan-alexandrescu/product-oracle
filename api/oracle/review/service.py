@@ -410,6 +410,30 @@ async def update_comment(
 # --- Section verdicts --------------------------------------------------------------------
 
 
+async def _still_an_approver(session: AsyncSession, principal: "Principal") -> None:
+    """Under the review gate (shared): the caller still is an approver now. A role
+    change, a disable or a token revocation takes the gate exclusively and lapses the
+    approvals it ends; this re-read keeps one that raced with it from landing after."""
+    from oracle.auth.models import ApiToken, User
+    from oracle.review.publish import gate_lock
+
+    await gate_lock(session, shared=True)
+    if principal.token_id is not None:
+        revoked = await session.scalar(
+            select(ApiToken.revoked_at).where(ApiToken.id == principal.token_id)
+        )
+        if revoked is not None:
+            raise ReviewError("forbidden", "This API token was revoked")
+    if principal.user_id is not None:
+        row = (
+            await session.execute(
+                select(User.role, User.disabled_at).where(User.id == principal.user_id)
+            )
+        ).first()
+        if row is None or row.disabled_at is not None or not has_role(row.role, "approver"):
+            raise ReviewError("forbidden", "Requires the approver role")
+
+
 async def latest_verdicts(session: AsyncSession, version_id: uuid.UUID) -> dict[str, SectionReview]:
     """Latest verdict per section key in a version (Lane 1 can use it for VersionOut)."""
     reviews = (
@@ -446,7 +470,9 @@ async def review_section(
     from oracle.review.publish import lock_document
 
     version = await get_version(session, doc, n)
-    # The publish lock: a verdict never commits while a publish renders.
+    # The review gate, then the publish lock (publish's order): a verdict never commits
+    # while a publish renders, nor lands after a role change that ended it.
+    await _still_an_approver(session, principal)
     await lock_document(session, version.document_id)
     section = await _get_section(session, version, section_key)
     if revision is not None:
@@ -462,6 +488,8 @@ async def review_section(
         verdict=verdict,
         note=note,
         reviewer_id=principal.user_id or principal.id,
+        # The token the verdict came through (C2: revoking it voids its approvals).
+        token_id=principal.token_id,
         # The review revision: the section's revision and its section links.
         section_hash=bound[section_key],
         created_at=_now(),
@@ -708,7 +736,7 @@ async def locked_section_keys(session: AsyncSession, version_id: uuid.UUID) -> s
     return {
         k
         for k, r in (await latest_verdicts(session, version_id)).items()
-        if r.verdict == "approved"
+        if r.verdict == "approved" and r.lapsed_at is None
     }
 
 
@@ -789,7 +817,9 @@ async def approve_version(
     from oracle.review.state import effective_policy
 
     version = await get_version(session, doc, n)
-    # The publish lock: an approval never commits while a publish renders.
+    # The review gate, then the publish lock (publish's order): an approval never
+    # commits while a publish renders, nor lands after a role change that ended it.
+    await _still_an_approver(session, principal)
     document = await lock_document(session, version.document_id)
     await session.refresh(version)
     policy = await effective_policy(session, document)
@@ -818,6 +848,11 @@ async def approve_version(
     if not already or previous_approver != who:
         version.approved_at = _now()
         version.approved_by = who
+        version.approved_token_id = principal.token_id
+        # A new approval; a lapsed one stays in the audit log, never counts again.
+        version.approval_lapsed_at = None
+        version.approval_lapsed_by = None
+        version.approval_lapse_reason = None
     previous_status = document.status
     document.status = "approved"
     await session.flush()

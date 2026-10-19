@@ -145,7 +145,13 @@ function seed(): Db {
     feedback: [],
     baseline: seedBaseline(uuid),
   };
-  db.members = MOCK_MEMBERS.map((m) => ({ ...m, id: m.email === MOCK_LOGIN.email ? db.user_id : uuid() }));
+  db.members = MOCK_MEMBERS.map((m) => ({
+    ...m,
+    id: m.email === MOCK_LOGIN.email ? db.user_id : uuid(),
+    disabled_at: null,
+    disabled_by: null,
+    status: "active" as const,
+  }));
   db.invites = MOCK_INVITES.map((i) => ({
     ...i,
     id: uuid(),
@@ -756,12 +762,31 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
     if (!p[2] && m === "GET") return json(200, db.members);
     const target = db.members.find((x) => x.id === p[2]);
     if (!target) return notFound("Member");
+    // A disabled owner is not another owner.
+    const otherOwner = db.members.some((x) => x.id !== target.id && x.role === "owner" && x.status !== "disabled");
     if (m === "PATCH") {
       const { role } = await body<Schemas["MemberPatch"]>();
-      if (target.role === "owner" && role !== "owner" && db.members.filter((x) => x.role === "owner").length <= 1) {
+      if (target.role === "owner" && role !== "owner" && target.status !== "disabled" && !otherOwner) {
         return json(409, { detail: "Cannot demote the last owner; make someone else owner" });
       }
       target.role = role;
+      return json(200, target);
+    }
+    // Removing a member disables them (C2): the row stays; an owner can restore them.
+    if ((m === "POST" && p[3] === "disable") || (m === "DELETE" && !p[3])) {
+      if (target.status !== "disabled") {
+        if (target.role === "owner" && !otherOwner) {
+          return json(409, { detail: "Cannot remove the last owner; make someone else owner" });
+        }
+        Object.assign(target, { status: "disabled", disabled_at: now(), disabled_by: me.id });
+        for (const i of db.invites) {
+          if (i.email === target.email && i.status === "open") Object.assign(i, { status: "revoked", revoked_at: now() });
+        }
+      }
+      return m === "DELETE" ? json(204, undefined) : json(200, target);
+    }
+    if (m === "POST" && p[3] === "restore") {
+      Object.assign(target, { status: "active", disabled_at: null, disabled_by: null });
       return json(200, target);
     }
   }
@@ -855,7 +880,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "auth" && p[2] === "login" && m === "POST") {
     const { email, password } = await body<Schemas["LoginRequest"]>();
     const member = db.members.find((x) => x.email === email.trim().toLowerCase());
-    if (!member || password !== MOCK_LOGIN.password) {
+    if (!member || member.status === "disabled" || password !== MOCK_LOGIN.password) {
       return json(401, { detail: "Invalid credentials" });
     }
     db.session = member.email;
@@ -866,7 +891,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(204, undefined);
   }
   const member = db.members.find((x) => x.email === db.session);
-  if (!member) return json(401, { detail: "Not authenticated" });
+  if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
   // v2 review routes (./review-v2.ts) check roles themselves.
   if (!db.review_v2) {

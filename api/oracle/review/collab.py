@@ -68,7 +68,9 @@ async def notify(
     ids = list(dict.fromkeys(r for r in recipients if r is not None))
     if not ids:
         return 0
-    users = set(await db.scalars(select(User.id).where(User.id.in_(ids))))
+    users = set(
+        await db.scalars(select(User.id).where(User.id.in_(ids), User.disabled_at.is_(None)))
+    )
     written = 0
     for uid in ids:
         if uid not in users or actor == f"user:{uid}":

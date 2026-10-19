@@ -56,13 +56,19 @@ async def create_api_token(
     return token, raw
 
 
+def may_sign_in(user: User | None) -> bool:
+    """Whether ``user`` may sign in on any path: it exists and is not disabled (C2)."""
+    return user is not None and user.disabled_at is None
+
+
 async def authenticate_user(email: str, password: str) -> User | None:
     # Runs before a tenant is known, hence unscoped.
     async with unscoped_session() as s:
         users = (await s.scalars(select(User).where(User.email == email.strip().lower()))).all()
     for user in users:
         if verify_password(user.password_hash, password):
-            return user
+            # A disabled member's password no longer signs in.
+            return user if may_sign_in(user) else None
     # Equalise timing when the email is unknown.
     if not users:
         verify_password(_DUMMY_HASH, password)

@@ -5,7 +5,8 @@ Google. It is verified here (signature against Google's published keys, issuer,
 audience, expiry); the unsigned ``x-goog-authenticated-user-email`` header is never
 read. A verified email maps to a user of the default tenant, created on first visit
 when its domain is allowed: with the role of its open invite, else the company's
-``iap_default_role`` setting (commenter when unset). Existing users keep their role.
+``iap_default_role`` setting (commenter when unset). Existing users keep their role; a
+disabled member is refused (and never provisioned again: their row keeps the email).
 """
 
 import asyncio
@@ -138,6 +139,11 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
     async with tenant_session(tenant_id) as s:
         user = await s.scalar(select(User).where(User.email == email))
         if user is not None:
+            # A disabled member keeps their row, so their email is never provisioned
+            # again: refused until an owner restores them.
+            if user.disabled_at is not None:
+                log.info("IAP sign-in for %s refused: the member is disabled", email)
+                return None
             return user
         settings = get_settings()
         domain = email.rsplit("@", 1)[1]

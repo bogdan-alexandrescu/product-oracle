@@ -25,6 +25,8 @@ class AuditEvent(TenantScoped, Base):
 
     # "user:<uuid>", "token:<uuid>" or "system".
     actor: Mapped[str] = mapped_column(Text, nullable=False)
+    # The API token the actor acted through (also a token acting for a user), C2.
+    actor_token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     action: Mapped[str] = mapped_column(Text, nullable=False)
     entity: Mapped[str] = mapped_column(Text, nullable=False)
     entity_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)

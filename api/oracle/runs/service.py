@@ -1088,6 +1088,9 @@ async def _next(
 
 
 def _creator(principal_tenant: uuid.UUID, user: User | None, token: ApiToken | None) -> Principal:
+    if user is not None and user.disabled_at is not None:
+        # A disabled member's runs act for no one (C2); disabling cancels them too.
+        raise LookupError("run creator is disabled")
     if user is not None:
         return Principal(
             tenant_id=principal_tenant,
@@ -1521,6 +1524,15 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         raise Forbidden("Only an owner or the approver who created the run can cancel it")
     if run.status in FINAL:
         raise RunError(f"run is already {run.status}")
+    await stop_run(db, principal, run)
+    await db.commit()
+
+
+async def stop_run(
+    db: AsyncSession, principal: Principal, run: Run, data: dict[str, Any] | None = None
+) -> None:
+    """Cancel a run that is not final (locked by the caller, who commits): its running
+    segments at the runtime, its pending checkpoints, its tokens."""
     runtime = get_runtime()
     segments = await _segments(db, run.id)
     for s in segments:
@@ -1539,8 +1551,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
             cp.note = "Run cancelled."
             cp.decided_at = _now()
     await _finish(db, run, "cancelled")
-    await audit.record(db, principal, "run.cancelled", "run", run.id, {})
-    await db.commit()
+    await audit.record(db, principal, "run.cancelled", "run", run.id, data or {})
 
 
 async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:

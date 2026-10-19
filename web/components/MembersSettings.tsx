@@ -53,7 +53,9 @@ export function MembersSettings() {
     <div className="mx-auto max-w-4xl px-6 py-8">
       <h1 className="mb-2 text-2xl font-semibold tracking-tight text-neutral-900">Members</h1>
       <p className="mb-6 text-sm text-neutral-600">
-        Everyone who signs in to this company&apos;s Oracle has one role.
+        Everyone who signs in to this company&apos;s Oracle has one role. Removing someone disables them: they can no
+        longer sign in, their connections and sources are revoked and their approvals stop counting for good. History
+        keeps their name, and an owner can restore them.
       </p>
       <dl className="mb-8 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[8rem_1fr]">
         {ROLES.map((r) => (
@@ -82,6 +84,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   const invitesQ = useQuery("invites", () => unwrap(api.GET("/v1/invites")));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   async function changeRole(m: Member, role: Role) {
     setSaving(m.id);
@@ -95,6 +98,27 @@ function OwnerView({ selfId }: { selfId: string | null }) {
       setError(errorMessage(e));
     } finally {
       setSaving(null);
+    }
+  }
+
+  async function setDisabled(m: Member, disable: boolean) {
+    setSaving(m.id);
+    setError(null);
+    try {
+      const path = { params: { path: { user_id: m.id } } };
+      const updated = await unwrap(
+        disable
+          ? api.POST("/v1/members/{user_id}/disable", path)
+          : api.POST("/v1/members/{user_id}/restore", path),
+      );
+      membersQ.setData((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)));
+      // Removing someone also revokes the open invite for their email.
+      if (disable) invitesQ.setData((prev) => prev?.filter((i) => i.email !== updated.email));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(null);
+      setConfirming(null);
     }
   }
 
@@ -125,26 +149,68 @@ function OwnerView({ selfId }: { selfId: string | null }) {
                 <th className="py-2 font-medium">Email</th>
                 <th className="py-2 font-medium">Role</th>
                 <th className="py-2 font-medium">Since</th>
+                <th className="py-2 font-medium">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {membersQ.data.map((m) => (
-                <tr key={m.id} data-testid="member-row" className="border-b border-neutral-100">
-                  <td className="py-2 text-neutral-900">
-                    {m.email}
-                    {m.id === selfId && <span className="ml-2 text-xs text-neutral-500">(you)</span>}
-                  </td>
-                  <td className="py-2">
-                    <RoleSelect
-                      value={m.role}
-                      label={`Role for ${m.email}`}
-                      disabled={saving === m.id}
-                      onChange={(role) => changeRole(m, role)}
-                    />
-                  </td>
-                  <td className="py-2 text-neutral-500">{formatDate(m.created_at)}</td>
-                </tr>
-              ))}
+              {membersQ.data.map((m) => {
+                const disabled = m.status === "disabled";
+                return (
+                  <tr
+                    key={m.id}
+                    data-testid="member-row"
+                    data-status={m.status}
+                    className={`border-b border-neutral-100 ${disabled ? "text-neutral-500" : ""}`}
+                  >
+                    <td className={`py-2 ${disabled ? "text-neutral-500" : "text-neutral-900"}`}>
+                      {m.email}
+                      {m.id === selfId && <span className="ml-2 text-xs text-neutral-500">(you)</span>}
+                      {disabled && (
+                        <span className="ml-2">
+                          <Badge title={m.disabled_at ? `Removed ${formatDate(m.disabled_at)}` : undefined}>Removed</Badge>
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2">
+                      <RoleSelect
+                        value={m.role}
+                        label={`Role for ${m.email}`}
+                        disabled={saving === m.id || disabled}
+                        onChange={(role) => changeRole(m, role)}
+                      />
+                    </td>
+                    <td className="py-2 text-neutral-500">{formatDate(m.created_at)}</td>
+                    <td className="py-2 text-right">
+                      {disabled ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`Restore ${m.email}`}
+                          disabled={saving === m.id}
+                          onClick={() => setDisabled(m, false)}
+                        >
+                          Restore
+                        </Button>
+                      ) : m.id === selfId ? null : confirming === m.id ? (
+                        <span className="inline-flex items-center gap-1" role="group" aria-label={`Confirm removing ${m.email}`}>
+                          <Button size="sm" variant="primary" disabled={saving === m.id} onClick={() => setDisabled(m, true)}>
+                            {saving === m.id ? "Removing…" : "Confirm"}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+                            Cancel
+                          </Button>
+                        </span>
+                      ) : (
+                        <Button size="sm" variant="ghost" aria-label={`Remove ${m.email}`} onClick={() => setConfirming(m.id)}>
+                          Remove
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

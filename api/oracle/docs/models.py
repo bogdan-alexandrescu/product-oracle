@@ -89,6 +89,13 @@ class DocumentVersion(TenantScoped, Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Who approved it (user or API token id); null on approvals before 0013.
     approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # The API token the approval was given through, when a token acted (C2).
+    approved_token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    # A lapsed approval (approver demoted or disabled, token revoked) moves here and
+    # approved_at / approved_by are cleared: it never counts again (C2).
+    approval_lapsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approval_lapsed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    approval_lapse_reason: Mapped[str | None] = mapped_column(Text)
     # Optimistic concurrency: the version number an edit started from. An import whose
     # base is older than the latest version, and that changes a section changed since,
     # is a conflict (no silent last-write-wins). Null: not given (legacy imports).

@@ -20,8 +20,11 @@ section in the verdict's version), so:
 A verdict binds to the section's **review revision** (:func:`review_revision`): its
 revision plus its section links, read at gate time, so a link added after an approval
 leaves it stale. And an approval counts only while its approver still is one
-(:func:`standing`, :func:`counting_history`): a demoted or removed member's approvals and
-a revoked token's are left out wherever approvals are counted.
+(:func:`standing`, :func:`counting_history`): a demoted or disabled member's approvals and
+a revoked token's are left out wherever approvals are counted. Those lapse for good
+(C2): the role change, the disable or the token revocation marks them lapsed in its own
+transaction (:func:`lapse_approvals`), so a re-promotion or a restore never revives
+them. A verdict given through an API token records the token (``token_id``).
 
 The legacy per-version view is unchanged: ``SectionOut.verdict`` and
 ``locked_section_keys`` still read the verdicts of one version only.
@@ -41,7 +44,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
@@ -102,7 +105,7 @@ async def _approver_users(db: AsyncSession, ids: list[uuid.UUID], what: str) -> 
     users = {u.id: u for u in await db.scalars(select(User).where(User.id.in_(ids)))}
     for uid in ids:
         user = users.get(uid)
-        if user is None:
+        if user is None or user.disabled_at is not None:
             raise PolicyError(f"{what}: user {uid} is not a member of this company")
         if not has_role(user.role, "approver"):
             raise PolicyError(f"{what}: user {uid} needs the approver role")
@@ -285,6 +288,10 @@ class Verdict:
     created_at: datetime
     # The section's stored revision in the verdict's version (without its links).
     base: str | None = None
+    # The API token the verdict was given through, if any.
+    token_id: uuid.UUID | None = None
+    # Why the approval lapsed for good (:func:`lapse_approvals`); None while it holds.
+    lapsed: str | None = None
 
 
 @dataclass
@@ -332,6 +339,8 @@ async def history(
                 revision,
                 review.created_at,
                 base,
+                review.token_id,
+                (review.lapse_reason or "lapsed") if review.lapsed_at is not None else None,
             )
         )
     return out
@@ -383,10 +392,10 @@ async def standing(
 ) -> dict[uuid.UUID, str | None]:
     """Whether each reviewer may approve now: ``None`` when they may, else why not.
 
-    Read at gate time, never only at verdict time: a user with the approver role (or
-    above) today; an API token acting for a user is that user; a user-less API token
-    that is active and has the approver role. A removed member, a demoted one, a revoked
-    token: their approvals no longer count (CR-06)."""
+    Read at gate time, never only at verdict time: an active user with the approver role
+    (or above) today; an API token acting for a user is that user; a user-less API token
+    that is active and has the approver role. A disabled member, a demoted one, a
+    revoked token: their approvals no longer count (CR-06, C2)."""
     wanted = {i for i in ids if i is not None}
     if not wanted:
         return {}
@@ -407,7 +416,9 @@ async def standing(
             out[i] = "is an API token that was revoked"
             continue
         user = users.get(token.user_id if token is not None and token.user_id else i)
-        if user is not None:
+        if user is not None and user.disabled_at is not None:
+            out[i] = "was removed from this company (disabled)"
+        elif user is not None:
             ok = has_role(user.role, "approver")
             out[i] = None if ok else f"no longer has the approver role (now {user.role})"
         elif token is not None and token.user_id is None:
@@ -421,25 +432,143 @@ async def standing(
 async def counting_history(
     db: AsyncSession, document_id: uuid.UUID, upto: int | None = None, key: str | None = None
 ) -> tuple[History, dict[str, dict[uuid.UUID | None, str]]]:
-    """The verdict history with only the approvals that count now (:func:`standing`),
-    and per section key the approvals left out: reviewer id -> why it no longer counts.
-    Other verdicts (changes requested, rejected) stay: an objection never lapses."""
+    """The verdict history with only the approvals that count now (not lapsed for good,
+    and :func:`standing` of the reviewer and of the token they acted through), and per
+    section key the approvals left out: reviewer id -> why it no longer counts. Other
+    verdicts (changes requested, rejected) stay: an objection never lapses."""
     hist = await history(db, document_id, upto=upto, key=key)
-    approvers = {
-        v.reviewer_id for vs in hist.by_key.values() for v in vs if v.verdict == "approved"
-    }
-    why = await standing(db, approvers)
+    approvals = [v for vs in hist.by_key.values() for v in vs if v.verdict == "approved"]
+    why = await standing(
+        db, {v.reviewer_id for v in approvals} | {v.token_id for v in approvals if v.token_id}
+    )
     lapsed: dict[str, dict[uuid.UUID | None, str]] = {}
     for section_key, verdicts in hist.by_key.items():
         kept = []
         for v in verdicts:
-            reason = why.get(v.reviewer_id) if v.reviewer_id else "has no reviewer"
+            reason = (
+                v.lapsed
+                or (why.get(v.reviewer_id) if v.reviewer_id else "has no reviewer")
+                or (why.get(v.token_id) if v.token_id else None)
+            )
             if v.verdict == "approved" and reason:
                 lapsed.setdefault(section_key, {})[v.reviewer_id] = reason
             else:
                 kept.append(v)
         hist.by_key[section_key] = kept
     return hist, lapsed
+
+
+async def lapse_approvals(
+    db: AsyncSession,
+    principal: "Principal | None",
+    *,
+    reason: str,
+    reviewer_id: uuid.UUID | None = None,
+    token_id: uuid.UUID | None = None,
+) -> dict[str, list[str]]:
+    """Mark lapsed for good every approval ``reviewer_id`` gave (a member demoted below
+    approver, or disabled), or every approval given through ``token_id`` (a revoked
+    API token, user-less or acting for a user): section approvals get ``lapsed_at``,
+    version approvals move to ``approval_lapsed_*`` (``approved_at`` and ``approved_by``
+    cleared, ``approved_token_id`` kept, so exports
+    and the document's status stop saying approved). Nothing revives them: a
+    re-promotion, a restore, a new token. Re-review is requested where the policy says
+    so, as an edit does. In the caller's transaction (it holds the review gate)."""
+    from oracle.review import collab
+
+    if reviewer_id is None and token_id is None:
+        return {"section_review_ids": [], "version_ids": []}
+    at = now()
+    review_who = []
+    version_who = []
+    if reviewer_id is not None:
+        review_who.append(SectionReview.reviewer_id == reviewer_id)
+        version_who.append(DocumentVersion.approved_by == reviewer_id)
+    if token_id is not None:
+        review_who += [SectionReview.token_id == token_id, SectionReview.reviewer_id == token_id]
+        version_who += [
+            DocumentVersion.approved_token_id == token_id,
+            DocumentVersion.approved_by == token_id,
+        ]
+    rows = (
+        await db.execute(
+            select(SectionReview, DocumentVersion.document_id, DocumentVersion.number)
+            .join(DocumentVersion, DocumentVersion.id == SectionReview.version_id)
+            .where(
+                SectionReview.verdict == "approved",
+                SectionReview.lapsed_at.is_(None),
+                or_(*review_who),
+            )
+            .with_for_update(of=SectionReview)
+        )
+    ).all()
+    sections: dict[tuple[uuid.UUID, str], int] = {}
+    for review, document_id, number in rows:
+        review.lapsed_at = at
+        review.lapse_reason = reason
+        key = (document_id, review.section_key)
+        sections[key] = max(sections.get(key, 0), number)
+    versions = list(
+        await db.scalars(
+            select(DocumentVersion)
+            .where(DocumentVersion.approved_at.is_not(None), or_(*version_who))
+            .with_for_update()
+        )
+    )
+    for v in versions:
+        v.approval_lapsed_at = at
+        v.approval_lapsed_by = v.approved_by
+        v.approval_lapse_reason = reason
+        # approved_token_id stays: which token gave the lapsed approval.
+        v.approved_at = None
+        v.approved_by = None
+    await db.flush()
+    for document_id in {v.document_id for v in versions}:
+        document = await db.get(Document, document_id, with_for_update=True)
+        still = await db.scalar(
+            select(DocumentVersion.id)
+            .where(
+                DocumentVersion.document_id == document_id,
+                DocumentVersion.approved_at.is_not(None),
+            )
+            .limit(1)
+        )
+        if document is not None and document.status == "approved" and still is None:
+            document.status = "in_review"
+    policies: dict[uuid.UUID, ReviewPolicyOut] = {}
+    for (document_id, key), number in sections.items():
+        if document_id not in policies:
+            policies[document_id] = await effective_policy(db, await db.get(Document, document_id))
+        if not policies[document_id].rereview_on_change:
+            continue
+        row = await get_or_create_state(db, document_id, key)
+        row.rereview_requested_at = at
+        await collab.notify(
+            db,
+            [row.owner_id, *row.reviewer_ids],
+            kind="rereview_requested",
+            title=f"Re-review requested: an approval of {key} lapsed",
+            actor=principal.actor if principal else "system",
+            document_id=document_id,
+            version_number=number,
+            section_key=key,
+            data={"cause": "approval_lapsed", "reason": reason},
+        )
+    await db.flush()
+    out = {
+        "section_review_ids": [str(r.id) for r, _, _ in rows],
+        "version_ids": [str(v.id) for v in versions],
+    }
+    if rows or versions:
+        await audit.record(
+            db,
+            principal,
+            "approval.lapse",
+            "api_token" if token_id is not None else "user",
+            token_id or reviewer_id,
+            {"reason": reason, **out},
+        )
+    return out
 
 
 @dataclass

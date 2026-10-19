@@ -27,16 +27,58 @@ so they are read at gate time: a link added or changed after an approval leaves 
 approval stale. Edits, patches and verdict conflicts still compare `revision`.
 
 An approval counts only while its approver still is one, read at gate time
-(`oracle.review.state.standing`): a user with the approver role or above today, or an
-active user-less API token with that role (a token acting for a user approves as the
-user). A demoted or removed member's approvals, and a revoked token's, are left out of
-the section states, the mandatory reviewers' approvals and the publish check, and come
-back if the member gets the role again (a removed member never comes back: a new
-member is a new id). Their objections (changes requested, rejected) stay. A role change
-(`PATCH /v1/members/{id}`) and a removal (`DELETE /v1/members/{id}`, owner, audited
-`member.remove`; the last owner cannot be removed) record a `member` change event
-(`role_changed`, `member_removed`). A removal deletes the user with their sessions, API
-tokens, connections and sources; each source gets a `source_deleted` revocation first.
+(`oracle.review.state.standing`): an active user with the approver role or above today,
+or an active user-less API token with that role (a token acting for a user approves as
+the user). A demoted or disabled member's approvals, and a revoked token's, are left out
+of the section states, the mandatory reviewers' approvals and the publish check.
+
+**They lapse for good (C2).** A demotion below approver, a disable and a token
+revocation mark the approvals they end as lapsed in their own transaction
+(`oracle.review.state.lapse_approvals`, audited `approval.lapse`): section approvals get
+`section_reviews.lapsed_at` and `lapse_reason`; a version approval moves to
+`document_versions.approval_lapsed_at`, `approval_lapsed_by` and `approval_lapse_reason`
+(`approved_at` and `approved_by` are cleared, so exports, `VersionOut.approved_at` and
+the document's status stop saying approved; `approved_token_id` is kept). Re-review is
+requested where the policy asks for it, as an edit does. A re-promotion or a restore
+never revives them: the approver approves again. Owner to approver is not a lapse.
+Objections (changes requested, rejected) never lapse.
+
+**Approvals name their token.** A verdict or version approval given through an API token
+records it (`section_reviews.token_id`, `document_versions.approved_token_id`), also when
+the token acts for a user, and every audit event records the actor's token
+(`audit_events.actor_token_id`). Owners list the company's tokens (`GET /v1/api-tokens`),
+see the approvals a token gave (`GET /v1/api-tokens/{id}/approvals`, lapsed ones with
+`lapsed_at`) and revoke it (`DELETE /v1/api-tokens/{id}`, audited `api_token.revoke`):
+the approvals it gave lapse, the approvals its user gave in person stand. A token revoked
+any other way voids its approvals at gate time too.
+
+**Removing a member disables them (C2).** `POST /v1/members/{id}/disable` (owner;
+`DELETE /v1/members/{id}` is kept as the same operation, deprecated) sets
+`users.disabled_at` and `disabled_by`; the row stays, so every `*_by` reference and the
+verdict history keep the name. Sign-in is refused on every path
+(`oracle.auth.service.may_sign_in`): the session cookie (also one minted earlier),
+password login, IAP (a disabled email is refused and never provisioned again), API
+tokens and MCP OAuth tokens acting for them, an OAuth code or refresh exchange, the MCP
+verifiers and a run token or run-token header of a run they started. In the same
+transaction, under the review gate: each connection is disconnected the normal way
+(revoked at the provider, `connection.disconnect` audit, a `connection_revoked`
+revocation for the sources it synced, the credential deleted); every other source of
+theirs gets a `source_revoked` revocation, so documents citing it cannot publish; all
+their sources are paused; their API tokens and OAuth grants are revoked; their
+unfinished runs are cancelled with their run tokens; the open invite for their email is
+revoked; their approvals lapse. Audited `member.disable`, change event
+`member_disabled`. The last active owner cannot be disabled or demoted (a disabled owner
+is not another owner). `POST /v1/members/{id}/restore` (owner, audited
+`member.restore`, change event `member_restored`) lets them sign in again with their
+role; nothing else comes back (approvals stay lapsed, tokens revoked, connections gone,
+sources revoked). A disabled member cannot be the designated decider or a mandatory
+reviewer and gets no notifications.
+
+A role change (`PATCH /v1/members/{id}`) records a `member` change event
+(`role_changed`). Role changes, disables, restores and token revocations take the review
+gate exclusively; a verdict and a version approval take it shared before the document
+lock and re-read the caller's role, disabled state and token, so neither lands after a
+change that ended it.
 
 So, per stable section id (`{#id}`):
 
@@ -122,7 +164,9 @@ unbroken run of versions still show as approved.
   citation entries are kept (the draft's front matter cannot redefine them) and so is
   their brief membership. Unapproved sections take the draft's text as before. A body
   that leaves a code fence open is closed before the next section when the held draft is
-  composed, and the held draft is checked like a section edit: every approved section
+  composed (trailing whitespace-only or blank lines in the fence ignored), every draft
+  composed from sections is checked to keep every section key in order (422
+  `section_lost` otherwise, nothing imported), and the held draft is checked like a section edit: every approved section
   must be there with its approved revision, or the import is refused (422
   `approved_section_not_held`).
 - An agent's draft closes feedback (front-matter `resolutions`) only as `addressed`, and
@@ -141,7 +185,8 @@ unbroken run of versions still show as approved.
   `lock_version`) saves it as the next version with cause `patch_accepted`, which
   invalidates that section's approval; `POST .../reject` closes it. Accepting runs
   under the document's row lock, so `applied_version` is the version it creates.
-- Oracle's refinement job keeps its preview-and-apply flow; applying now records
+- Oracle's refinement job keeps its preview-and-apply flow; applying refuses (422) a
+  composed draft that would lose any section of the base version; applying now records
   `patch_accepted` (and its `base_version`).
 
 ## Policy, owners, reviewers, campaigns, notifications
@@ -189,7 +234,7 @@ nothing the check reads commits while a publish renders.
 | Blocker | When |
 |---|---|
 | `version_not_approved` / `approval_not_by_decider` | The version lacks the final approval, or it is not the designated decider's. |
-| `version_approval_lapsed` | The version's approver is no longer an approver (demoted, removed, a revoked token). |
+| `version_approval_lapsed` | The version's approval lapsed for good (its approver demoted or disabled, its token revoked), or its approver is no longer one now. |
 | `decider_not_current` | The policy's designated decider is no longer an approver; change the review policy. |
 | `missing_required_section` | A required section (template version, composition, policy) is absent. |
 | `stale_approval` / `missing_approval` | A section the policy requires has no approval of its current revision. |
@@ -198,9 +243,12 @@ nothing the check reads commits while a publish renders.
 | `readiness_critical` | A **hard** check of `oracle.readiness.evaluate(purpose="publish")` is critical (the blockers lane's critical-blocker check, security and policy checks). |
 | `template_unresolved` | The version names a template whose required sections cannot be read (unknown template, a `template_version` that is not a number or does not exist). Fails closed. |
 | `source_permission_revoked` | Evidence of the version comes from a revoked source. The evidence is followed back to source items: section links to an item, to baseline evidence and to an entity (and its evidence), and citations by normalized URL (`http` as
-`https`, no `www.`, no trailing slash, no tracking query parameters, the rest sorted),
-by item id, by evidence id, or by the item's external id in a source of the citation's
-kind. Revoked: a deleted item, a source on a revoked connection, a source / item whose last `source_permission` event revoked it, or a revocation tombstone naming the item, its URL, the evidence or the link. |
+`https`, no `www.`, no trailing slash, percent-escapes in one form, no tracking query
+parameters, the rest sorted; a Google Docs, Sheets, Slides, Forms or Drive URL is its
+document id whatever the view, `/edit`, `/view`, `/preview`, `/u/<n>` or `?usp=`; the
+host lookup also finds a URL with a user name), by item id, by evidence id, or by the
+item's external id in a source of the citation's kind (a ref that parses as a UUID is
+tried as an item id, an evidence id and an external id, so a Notion page id is matched). Revoked: a deleted item, a source on a revoked connection, a source / item whose last `source_permission` event revoked it, or a revocation tombstone naming the item, its URL, the evidence or the link. |
 | `superseded_version` | A newer version exists and the company setting `publish_latest_only` (default true) is on. |
 | `already_published` | The version is already a publication. |
 
@@ -276,6 +324,13 @@ Extended: `POST .../versions?base_version=`, `PUT .../sections/{key}/review` (`r
 (backfilled), and `change_events.subject_kind` admits `member`. Nothing in 0013 or
 earlier changes; legacy rows read as before.
 
+`0014_member_disable` (additive, on `0014_review`): `users.disabled_at`, `disabled_by`;
+`section_reviews.token_id` (indexed), `lapsed_at`, `lapse_reason`;
+`document_versions.approved_token_id` (indexed), `approval_lapsed_at`,
+`approval_lapsed_by`, `approval_lapse_reason`; `audit_events.actor_token_id`. Its
+downgrade refuses while a member is disabled or an approval has lapsed (dropping the
+columns would let them back).
+
 ## Tests
 
 `api/tests/test_review_v2_state.py` (§16.10), `test_review_v2_concurrency.py` (409s,
@@ -285,4 +340,8 @@ next to the legacy suite), `test_review_v2_security.py` (the security review fix
 revocations, confined section edits, agent drafts, evidence in revisions, the minors),
 `test_review_v2_security_2.py` (round 2: approvals by current approvers only, member
 removal, the unclosed fence, revocation matching, links in the review revision, one
-markdown env per exported section, criticals gate, run resolutions).
+markdown env per exported section, criticals gate, run resolutions),
+`test_review_v2_security_3.py` (round 3, C2: disable instead of delete on every sign-in
+path, lapses for good, approvals by token, the fence with trailing blank lines and lost
+sections, a UUID citation as an external id, Google Docs and percent-encoded URLs, URLs
+with a user name).

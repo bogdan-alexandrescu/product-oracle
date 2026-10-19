@@ -31,7 +31,7 @@ async def verify_access_token(raw: str) -> Principal | None:
         if token.expires_at <= datetime.now(UTC):
             return None
         user = await s.get(User, token.user_id)
-        if user is None or user.tenant_id != token.tenant_id:
+        if user is None or user.tenant_id != token.tenant_id or user.disabled_at is not None:
             return None
         return Principal(
             tenant_id=token.tenant_id,

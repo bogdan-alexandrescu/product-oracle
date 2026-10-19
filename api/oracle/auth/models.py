@@ -23,6 +23,12 @@ class User(TenantScoped, Base):
     email: Mapped[str] = mapped_column(Text, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(Text, nullable=False, default="owner")
+    # Removing a member disables them (C2): the row stays, so every *_by reference and
+    # the verdict history keep the name, but no sign-in path accepts them. An owner can
+    # restore them (oracle.members.service).
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The owner (user or API token id) who disabled them; no FK, like the other *_by.
+    disabled_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
 
 class ApiToken(TenantScoped, Base):

@@ -199,8 +199,12 @@ def body_text(body_md: str) -> str:
 def unclosed_fence(body_md: str) -> str | None:
     """The marker of a code fence ``body_md`` leaves open at its end, else ``None``. An
     open fence swallows whatever follows it, headings of later sections included, so a
-    draft composed from sections closes it (``oracle.jobs.service.compose_markdown``)."""
-    lines = body_md.rstrip("\n").split("\n")
+    draft composed from sections closes it (``oracle.jobs.service.compose_markdown``).
+    Trailing whitespace-only lines are ignored: the parser may or may not count them
+    into the fence."""
+    lines = body_md.split("\n")
+    while lines and not lines[-1].strip():
+        lines.pop()
     for token in reversed(_md.parse(body_md)):
         if token.level != 0 or token.map is None:
             continue
@@ -211,10 +215,18 @@ def unclosed_fence(body_md: str) -> str | None:
             return None
         marker = token.markup
         closing = re.compile(rf" {{0,3}}{re.escape(marker[0])}{{{len(marker)},}}[ \t]*")
-        if end - 1 > start and closing.fullmatch(lines[end - 1]):
+        last = len(lines) - 1
+        if last > start and closing.fullmatch(lines[last]):
             return None
         return marker
     return None
+
+
+def section_keys(markdown: str) -> list[str]:
+    """The section keys of a draft, in order, as :func:`parse_draft` reads them; other
+    problems are ignored (a composed draft is checked for lost sections with it)."""
+    _, body, offset = split_front_matter(normalize(markdown))
+    return [s.section_key for s in _parse_sections(body, offset, []) if s.section_key]
 
 
 def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) -> dict[str, Any]:

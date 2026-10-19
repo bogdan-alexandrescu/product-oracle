@@ -65,6 +65,7 @@ class World:
     feedback_id: str
     member_id: uuid.UUID
     invite_id: str
+    token_id: uuid.UUID
 
     def ids(self) -> dict[str, object]:
         return {
@@ -75,6 +76,7 @@ class World:
             "feedback_id": self.feedback_id,
             "user_id": self.member_id,
             "invite_id": self.invite_id,
+            "token_id": self.token_id,
         }
 
 
@@ -118,6 +120,9 @@ async def world(client) -> World:
         "/v1/invites", json={"email": "new@example.com", "role": "viewer"}, headers=owner
     )
     assert inv.status_code == 201, inv.text
+    async with tenant_session(r.tenant_id) as s:
+        bot, _ = await create_api_token(s, "member-bot", user_id=member_id)
+        await s.commit()
     return World(
         r.tenant_id,
         owner,
@@ -126,6 +131,7 @@ async def world(client) -> World:
         v.json()["feedback_item_id"],
         member_id,
         inv.json()["id"],
+        bot.id,
     )
 
 
@@ -173,6 +179,11 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", "/v1/members", "owner", {}),
     ("PATCH", "/v1/members/{user_id}", "owner", {"json": {"role": "commenter"}}),
     ("DELETE", "/v1/members/{user_id}", "owner", {}),
+    ("POST", "/v1/members/{user_id}/disable", "owner", {}),
+    ("POST", "/v1/members/{user_id}/restore", "owner", {}),
+    ("GET", "/v1/api-tokens", "owner", {}),
+    ("DELETE", "/v1/api-tokens/{token_id}", "owner", {}),
+    ("GET", "/v1/api-tokens/{token_id}/approvals", "owner", {}),
     ("GET", "/v1/invites", "owner", {}),
     ("POST", "/v1/invites", "owner", {"json": {"email": "x@example.com", "role": "viewer"}}),
     ("DELETE", "/v1/invites/{invite_id}", "owner", {}),
@@ -289,7 +300,17 @@ async def test_list_members(client, world):
         ("admin@example.com", "owner"),
         ("member@example.com", "approver"),
     ]
-    assert set(resp.json()[0]) == {"id", "email", "role", "created_at"}  # no password hash
+    # No password hash; a removed member is disabled, not gone (C2).
+    assert set(resp.json()[0]) == {
+        "id",
+        "email",
+        "role",
+        "created_at",
+        "disabled_at",
+        "disabled_by",
+        "status",
+    }
+    assert resp.json()[0]["status"] == "active"
 
 
 async def test_change_role_is_audited(client, world):

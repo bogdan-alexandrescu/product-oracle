@@ -363,8 +363,8 @@ async def exchange_code(
         if not secrets.compare_digest(s256(code_verifier), row.code_challenge):
             raise OAuthError("invalid_grant", "PKCE verification failed")
         user = await s.get(User, row.user_id)
-        if user is None:
-            raise OAuthError("invalid_grant", "The user no longer exists")
+        if user is None or user.disabled_at is not None:
+            raise OAuthError("invalid_grant", "The user no longer exists or is disabled")
         row.used_at = _now()
         token, issued = _new_token_row(
             client_id=client.id,
@@ -411,8 +411,9 @@ async def refresh(
             if not set(asked) <= set(granted):
                 raise OAuthError("invalid_scope", "Cannot widen the scope on refresh")
             granted = asked
-        if await s.get(User, row.user_id) is None:
-            raise OAuthError("invalid_grant", "The user no longer exists")
+        user = await s.get(User, row.user_id)
+        if user is None or user.disabled_at is not None:
+            raise OAuthError("invalid_grant", "The user no longer exists or is disabled")
         row.revoked_at = _now()
         token, issued = _new_token_row(
             client_id=client.id,

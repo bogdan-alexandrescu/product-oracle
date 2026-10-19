@@ -74,7 +74,7 @@ async def _iap_user(request: Request) -> User | None:
             status.HTTP_503_SERVICE_UNAVAILABLE, "Cannot verify the sign-in right now"
         ) from None
     user = await iap.user_for_claims(claims)
-    if user is None:
+    if not service.may_sign_in(user):
         raise _unauthorized()
     return user
 
@@ -97,7 +97,7 @@ async def _bearer_principal(raw: str) -> Principal:
         # A token for a user acts as that user: the user's role and own data.
         async with tenant_session(token.tenant_id) as s:
             user = await s.get(User, token.user_id)
-        if user is None:
+        if not service.may_sign_in(user):
             raise _unauthorized()
         return Principal(
             tenant_id=token.tenant_id,
@@ -125,7 +125,9 @@ async def _for_run(principal: Principal, raw: str) -> Principal:
         raise _unauthorized()
     async with tenant_session(claims.tenant_id) as s:
         run = await s.get(Run, claims.run_id)
-    if run is None or run.created_by != principal.user_id:
+        creator = await s.get(User, run.created_by) if run and run.created_by else None
+    # A disabled creator's runs act for no one.
+    if run is None or run.created_by != principal.user_id or not service.may_sign_in(creator):
         raise _unauthorized()
     return replace(principal, run_id=run.id)
 
@@ -160,7 +162,8 @@ async def _get_principal(
             user_id, tenant_id = ids
             async with tenant_session(tenant_id) as s:
                 user = await s.get(User, user_id)
-                if user is not None:
+                # A session minted before the member was disabled no longer signs in.
+                if service.may_sign_in(user):
                     return Principal(
                         tenant_id=tenant_id, kind="user", role=user.role, user_id=user_id
                     )

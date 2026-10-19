@@ -1095,7 +1095,8 @@ export interface paths {
         };
         /**
          * List Members
-         * @description The users of this company's Oracle and their roles.
+         * @description The users of this company's Oracle, their roles, and whether each is active or
+         *     disabled (a removed member: kept so history keeps their name).
          */
         get: operations["list_members"];
         put?: never;
@@ -1118,14 +1119,124 @@ export interface paths {
         post?: never;
         /**
          * Remove Member
-         * @description Remove a member with their sessions, API tokens, connections and sources (each
-         *     source is recorded as revoked first). Their approvals stop counting at once.
+         * @deprecated
+         * @description Remove a member: the same as ``POST /v1/members/{user_id}/disable`` (a member is
+         *     never deleted; their row keeps the history's names).
          */
         delete: operations["remove_member"];
         options?: never;
         head?: never;
         /** Update Member */
         patch: operations["update_member"];
+        trace?: never;
+    };
+    "/v1/members/{user_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable Member
+         * @description Remove a member by disabling them: sign-in is refused on every path; their
+         *     connections are disconnected (revoked at the provider) and their sources recorded
+         *     as revoked, so documents citing them cannot publish; their API tokens and OAuth
+         *     grants are revoked, their runs cancelled, the open invite for their email revoked;
+         *     their approvals lapse for good. The member stays in the list (history keeps the
+         *     name); an owner can restore them. A no-op for a disabled member.
+         */
+        post: operations["disable_member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{user_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Member
+         * @description Let a disabled member sign in again, with their role. Their approvals stay
+         *     lapsed, their tokens revoked and their connections gone: nothing else comes back.
+         */
+        post: operations["restore_member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Api Tokens
+         * @description Every API token of this company (never the secret), revoked ones included.
+         */
+        get: operations["list_api_tokens"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Api Token
+         * @description Revoke an API token. The approvals given through it lapse for good (section
+         *     verdicts and version approvals); its user's own approvals stand. Revoking twice is
+         *     a no-op.
+         */
+        delete: operations["revoke_api_token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-tokens/{token_id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Token Approvals
+         * @description The approvals given through an API token, oldest first, lapsed ones included
+         *     (``lapsed_at``): what revoking it voids, or voided.
+         */
+        get: operations["token_approvals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/invites": {
@@ -4005,6 +4116,32 @@ export interface components {
             description: string;
             /** Base Usd */
             base_usd: number;
+        };
+        /** ApiTokenOut */
+        ApiTokenOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /** User Id */
+            user_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Used At */
+            last_used_at?: string | null;
+            /** Revoked At */
+            revoked_at?: string | null;
         };
         /** ApproveOut */
         ApproveOut: {
@@ -7217,6 +7354,15 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Disabled At */
+            disabled_at?: string | null;
+            /** Disabled By */
+            disabled_by?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            readonly status: "active" | "disabled";
         };
         /** MemberPatch */
         MemberPatch: {
@@ -10015,6 +10161,33 @@ export interface components {
             claude_accounts?: components["schemas"]["ClaudeSweepSummary"] | null;
             llm_jobs?: components["schemas"]["LlmJobsTick"] | null;
         };
+        /**
+         * TokenApprovalOut
+         * @description An approval given through an API token: a section verdict or a version approval.
+         */
+        TokenApprovalOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "section" | "version";
+            /** Document */
+            document: string;
+            /** Version */
+            version: number;
+            /** Section Key */
+            section_key?: string | null;
+            /** Review Id */
+            review_id?: string | null;
+            /** Approver Id */
+            approver_id?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Lapsed At */
+            lapsed_at?: string | null;
+            /** Lapse Reason */
+            lapse_reason?: string | null;
+        };
         /** TokenIn */
         TokenIn: {
             /** Token */
@@ -12658,6 +12831,183 @@ export interface operations {
             };
             /** @description Would demote the last owner */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The last owner */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_api_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTokenOut"][];
+                };
+            };
+        };
+    };
+    revoke_api_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such token */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    token_approvals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenApprovalOut"][];
+                };
+            };
+            /** @description No such token */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

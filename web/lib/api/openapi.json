@@ -3909,7 +3909,7 @@
           "members"
         ],
         "summary": "List Members",
-        "description": "The users of this company's Oracle and their roles.",
+        "description": "The users of this company's Oracle, their roles, and whether each is active or\ndisabled (a removed member: kept so history keeps their name).",
         "operationId": "list_members",
         "responses": {
           "200": {
@@ -4005,8 +4005,9 @@
           "members"
         ],
         "summary": "Remove Member",
-        "description": "Remove a member with their sessions, API tokens, connections and sources (each\nsource is recorded as revoked first). Their approvals stop counting at once.",
+        "description": "Remove a member: the same as ``POST /v1/members/{user_id}/disable`` (a member is\nnever deleted; their row keeps the history's names).",
         "operationId": "remove_member",
+        "deprecated": true,
         "security": [
           {
             "HTTPBearer": []
@@ -4036,6 +4037,260 @@
           },
           "409": {
             "description": "The last owner"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/members/{user_id}/disable": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Disable Member",
+        "description": "Remove a member by disabling them: sign-in is refused on every path; their\nconnections are disconnected (revoked at the provider) and their sources recorded\nas revoked, so documents citing them cannot publish; their API tokens and OAuth\ngrants are revoked, their runs cancelled, the open invite for their email revoked;\ntheir approvals lapse for good. The member stays in the list (history keeps the\nname); an owner can restore them. A no-op for a disabled member.",
+        "operationId": "disable_member",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "409": {
+            "description": "The last owner"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/members/{user_id}/restore": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Restore Member",
+        "description": "Let a disabled member sign in again, with their role. Their approvals stay\nlapsed, their tokens revoked and their connections gone: nothing else comes back.",
+        "operationId": "restore_member",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/api-tokens": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "List Api Tokens",
+        "description": "Every API token of this company (never the secret), revoked ones included.",
+        "operationId": "list_api_tokens",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApiTokenOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Api Tokens"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/api-tokens/{token_id}": {
+      "delete": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Revoke Api Token",
+        "description": "Revoke an API token. The approvals given through it lapse for good (section\nverdicts and version approvals); its user's own approvals stand. Revoking twice is\na no-op.",
+        "operationId": "revoke_api_token",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such token"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/api-tokens/{token_id}/approvals": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Token Approvals",
+        "description": "The approvals given through an API token, oldest first, lapsed ones included\n(``lapsed_at``): what revoking it voids, or voided.",
+        "operationId": "token_approvals",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TokenApprovalOut"
+                  },
+                  "title": "Response Token Approvals"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such token"
           },
           "422": {
             "description": "Validation Error",
@@ -14797,6 +15052,78 @@
         ],
         "title": "AgentRoleOut"
       },
+      "ApiTokenOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role",
+          "created_at"
+        ],
+        "title": "ApiTokenOut"
+      },
       "ApproveOut": {
         "properties": {
           "document_id": {
@@ -23635,6 +23962,39 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled At"
+          },
+          "disabled_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled By"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -23642,7 +24002,8 @@
           "id",
           "email",
           "role",
-          "created_at"
+          "created_at",
+          "status"
         ],
         "title": "MemberOut"
       },
@@ -31708,6 +32069,104 @@
           "errors"
         ],
         "title": "TickOut"
+      },
+      "TokenApprovalOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "section",
+              "version"
+            ],
+            "title": "Kind"
+          },
+          "document": {
+            "type": "string",
+            "title": "Document"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "review_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Id"
+          },
+          "approver_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver Id"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "lapsed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lapsed At"
+          },
+          "lapse_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lapse Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "document",
+          "version"
+        ],
+        "title": "TokenApprovalOut",
+        "description": "An approval given through an API token: a section verdict or a version approval."
       },
       "TokenIn": {
         "properties": {

@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
-from oracle.docs.schemas import VersionOut
+from oracle.docs.schemas import ImportProblem, VersionOut
 from oracle.jobs import kinds, prompting
 from oracle.jobs.models import JOB_KINDS, LlmJob, LlmSuggestion
 from oracle.jobs.schemas import (
@@ -556,9 +556,11 @@ def compose_markdown(
     Untouched sections come out byte-for-byte as stored, so their content hash (and an
     approved section's lock) is unchanged. A body that leaves a code fence open is
     closed before the next section, so it cannot swallow the sections after it (a
-    stored version never has one but in its last section).
+    stored version never has one but in its last section). And the draft is checked:
+    every section key must come out, in order, or it raises
+    :class:`~oracle.docs.parser.DraftError` (``section_lost``) rather than drop one.
     """
-    from oracle.docs.parser import unclosed_fence
+    from oracle.docs import parser
 
     fm = {k: v for k, v in front_matter.items() if k != "resolutions"}
     if resolutions:
@@ -568,11 +570,36 @@ def compose_markdown(
     for i, s in enumerate(sections):
         heading, body = replace.get(s.section_key, (s.heading, s.body_md))
         parts.append(f"{'#' * s.level} {heading} {{#{s.section_key}}}\n")
-        if body and i + 1 < len(sections) and (marker := unclosed_fence(body)):
+        if body and i + 1 < len(sections) and (marker := parser.unclosed_fence(body)):
             body = f"{body}\n{marker}"
         if body:
             parts.append(f"{body}\n")
-    return "\n".join(parts)
+    out = "\n".join(parts)
+    lost = lost_sections([s.section_key for s in sections], out)
+    if lost:
+        raise parser.DraftError(
+            [
+                ImportProblem(
+                    code="section_lost",
+                    message=f"composing the draft would lose section {k!r}; nothing was imported",
+                    section_key=k,
+                )
+                for k in lost
+            ]
+        )
+    return out
+
+
+def lost_sections(expected: list[str], markdown: str) -> list[str]:
+    """Keys of ``expected`` that ``markdown`` does not have, in order, as its sections."""
+    from oracle.docs.parser import section_keys
+
+    keys = section_keys(markdown)
+    if keys == expected:
+        return []
+    return [k for k in expected if k not in keys] or [
+        k for k, got in zip(expected, keys, strict=False) if k != got
+    ][:1]
 
 
 async def apply_refinement(
@@ -651,7 +678,18 @@ async def apply_refinement(
                 }
             )
     resolutions = [r for r in resolutions if uuid.UUID(r["feedback_id"]) in open_items]
-    markdown = compose_markdown(base.front_matter, sections, replace, resolutions)
+    try:
+        markdown = compose_markdown(base.front_matter, sections, replace, resolutions)
+    except docs_service.DraftError as e:
+        raise JobError(422, f"the revised draft does not import: {e}") from e
+    # Imported as a person, so nothing downstream holds sections: every section of the
+    # base must survive, or nothing is imported.
+    lost = lost_sections([s.section_key for s in sections], markdown)
+    if lost:
+        raise JobError(
+            422,
+            f"the revised draft would lose section(s) {', '.join(lost)}; nothing was imported",
+        )
     try:
         # An accepted AI patch: the change event invalidates the section's approval.
         result = await docs_service.import_draft(

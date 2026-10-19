@@ -111,9 +111,9 @@ async def test_a_demoted_approvers_approvals_stop_counting(client):
         assert (event.cause, event.subject_id) == ("role_changed", pm.user_id)
         assert (event.data["before"], event.data["after"]) == ("approver", "viewer")
 
-    # Promoted again: the gate reads the current role, so the approvals count again.
+    # Promoted again: the approvals lapsed for good (C2), they never come back.
     assert (await set_role(client, ctx, pm.user_id, "approver")).status_code == 200
-    assert (await check(client, ctx))["can_publish"] is True
+    assert codes(await check(client, ctx)) == ["version_approval_lapsed", "missing_approval"]
 
 
 async def test_a_demoted_designated_decider_blocks(client):
@@ -153,6 +153,7 @@ async def test_a_demoted_mandatory_reviewer_blocks(client):
 
 
 async def test_a_removed_members_approvals_stop_counting(client):
+    """Removing a member disables them (C2): the row stays, their approvals lapse."""
     ctx = await setup(client)
     await policy(client, ctx, section_approval="all_sections")
     pm = await person(ctx.tenant_id, "approver", "pm")
@@ -165,20 +166,22 @@ async def test_a_removed_members_approvals_stop_counting(client):
     assert resp.status_code == 403
     resp = await client.delete(f"/v1/members/{pm.user_id}", headers=ctx.auth)
     assert resp.status_code == 204, resp.text
-    assert (await client.delete(f"/v1/members/{pm.user_id}", headers=ctx.auth)).status_code == 404
+    # Removing a disabled member again is a no-op.
+    assert (await client.delete(f"/v1/members/{pm.user_id}", headers=ctx.auth)).status_code == 204
     # The removed member cannot sign in with their session any more.
     assert (await client.get(f"/v1/documents/{DOC}", headers=pm.headers)).status_code == 401
 
     body = await check(client, ctx)
     assert codes(body) == ["version_approval_lapsed", "missing_approval"]
     async with tenant_session(ctx.tenant_id) as s:
-        assert await s.get(User, pm.user_id) is None
+        user = await s.get(User, pm.user_id)
+        assert user is not None and user.disabled_at is not None
         [event] = (
             await s.scalars(select(ChangeEvent).where(ChangeEvent.subject_kind == "member"))
         ).all()
-        assert (event.cause, event.subject_id) == ("member_removed", pm.user_id)
+        assert (event.cause, event.subject_id) == ("member_disabled", pm.user_id)
         [audit] = (
-            await s.scalars(select(AuditEvent).where(AuditEvent.action == "member.remove"))
+            await s.scalars(select(AuditEvent).where(AuditEvent.action == "member.disable"))
         ).all()
         assert audit.entity_id == pm.user_id and audit.data["role"] == "approver"
 
@@ -192,8 +195,8 @@ async def test_the_last_owner_cannot_be_removed(client):
 
 
 async def test_a_removed_members_sources_are_revoked_first(client):
-    """Removing a member deletes their sources (and connections) with them: each gets a
-    source_permission revocation first, so documents citing them cannot publish."""
+    """Removing (disabling) a member revokes their sources: each gets a
+    source_permission revocation, so documents citing them cannot publish."""
     ctx = await setup(client)
     await approved(client, ctx)
     analyst = await person(ctx.tenant_id, "commenter", "analyst")
@@ -238,9 +241,9 @@ async def test_a_revoked_tokens_verdicts_stop_counting(client):
     assert blocker(body, "version_approval_lapsed")["ids"] == [str(token_id)]
 
 
-async def test_a_member_tokens_approval_is_the_members(client):
-    """A token acting for a user approves as the user; revoking that token leaves the
-    user's approvals standing (they are the user's, and the user still is an approver)."""
+async def test_a_member_tokens_approval_lapses_with_the_token(client):
+    """A token acting for a user approves as the user, and Oracle records the token:
+    revoking it voids the approvals it gave (C2), even when revoked outside the API."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     async with tenant_session(ctx.tenant_id) as s:
@@ -248,10 +251,11 @@ async def test_a_member_tokens_approval_is_the_members(client):
         await s.commit()
         token_id = token.id
     await approved(client, ctx, headers={"Authorization": f"Bearer {raw}"})
+    assert (await check(client, ctx))["can_publish"] is True
     async with tenant_session(ctx.tenant_id) as s:
         (await s.get(ApiToken, token_id)).revoked_at = datetime.now(UTC)
         await s.commit()
-    assert (await check(client, ctx))["can_publish"] is True
+    assert codes(await check(client, ctx)) == ["version_approval_lapsed"]
 
 
 # --- MAJOR: an unclosed code fence cannot swallow an approved section -------------------

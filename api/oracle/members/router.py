@@ -1,4 +1,4 @@
-"""Members and invites. Owners only.
+"""Members, invites and API tokens. Owners only.
 
 Logic lives in :mod:`oracle.members.service`; each handler commits once.
 """
@@ -11,8 +11,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
+from oracle.connections.router import ProviderHttp
 from oracle.members import service
-from oracle.members.schemas import InviteCreate, InviteOut, InviteStatus, MemberOut, MemberPatch
+from oracle.members.schemas import (
+    ApiTokenOut,
+    InviteCreate,
+    InviteOut,
+    InviteStatus,
+    MemberOut,
+    MemberPatch,
+    TokenApprovalOut,
+)
 
 router = APIRouter(prefix="/v1", tags=["members"], dependencies=[Depends(require_role("owner"))])
 Owner = Annotated[Principal, Depends(require_role("owner"))]
@@ -29,7 +38,8 @@ async def _call[T](op: Awaitable[T]) -> T:
 
 @router.get("/members", response_model=list[MemberOut])
 async def list_members(db: TenantDB) -> list[MemberOut]:
-    """The users of this company's Oracle and their roles."""
+    """The users of this company's Oracle, their roles, and whether each is active or
+    disabled (a removed member: kept so history keeps their name)."""
     return [MemberOut.model_validate(u) for u in await service.list_members(db)]
 
 
@@ -46,16 +56,84 @@ async def update_member(
     return MemberOut.model_validate(user)
 
 
+@router.post(
+    "/members/{user_id}/disable",
+    response_model=MemberOut,
+    responses={404: {"description": "No such member"}, 409: {"description": "The last owner"}},
+)
+async def disable_member(
+    user_id: uuid.UUID, principal: Owner, db: TenantDB, http: ProviderHttp
+) -> MemberOut:
+    """Remove a member by disabling them: sign-in is refused on every path; their
+    connections are disconnected (revoked at the provider) and their sources recorded
+    as revoked, so documents citing them cannot publish; their API tokens and OAuth
+    grants are revoked, their runs cancelled, the open invite for their email revoked;
+    their approvals lapse for good. The member stays in the list (history keeps the
+    name); an owner can restore them. A no-op for a disabled member."""
+    user = await _call(service.disable_member(db, principal, user_id, http))
+    await db.commit()
+    return MemberOut.model_validate(user)
+
+
+@router.post(
+    "/members/{user_id}/restore",
+    response_model=MemberOut,
+    responses={404: {"description": "No such member"}},
+)
+async def restore_member(user_id: uuid.UUID, principal: Owner, db: TenantDB) -> MemberOut:
+    """Let a disabled member sign in again, with their role. Their approvals stay
+    lapsed, their tokens revoked and their connections gone: nothing else comes back."""
+    user = await _call(service.restore_member(db, principal, user_id))
+    await db.commit()
+    return MemberOut.model_validate(user)
+
+
 @router.delete(
     "/members/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    deprecated=True,
     responses={404: {"description": "No such member"}, 409: {"description": "The last owner"}},
 )
-async def remove_member(user_id: uuid.UUID, principal: Owner, db: TenantDB) -> None:
-    """Remove a member with their sessions, API tokens, connections and sources (each
-    source is recorded as revoked first). Their approvals stop counting at once."""
-    await _call(service.remove_member(db, principal, user_id))
+async def remove_member(
+    user_id: uuid.UUID, principal: Owner, db: TenantDB, http: ProviderHttp
+) -> None:
+    """Remove a member: the same as ``POST /v1/members/{user_id}/disable`` (a member is
+    never deleted; their row keeps the history's names)."""
+    await _call(service.disable_member(db, principal, user_id, http))
     await db.commit()
+
+
+@router.get("/api-tokens", response_model=list[ApiTokenOut])
+async def list_api_tokens(db: TenantDB) -> list[ApiTokenOut]:
+    """Every API token of this company (never the secret), revoked ones included."""
+    return [ApiTokenOut.model_validate(t) for t in await service.list_api_tokens(db)]
+
+
+@router.delete(
+    "/api-tokens/{token_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"description": "No such token"}},
+)
+async def revoke_api_token(token_id: uuid.UUID, principal: Owner, db: TenantDB) -> None:
+    """Revoke an API token. The approvals given through it lapse for good (section
+    verdicts and version approvals); its user's own approvals stand. Revoking twice is
+    a no-op."""
+    await _call(service.revoke_api_token(db, principal, token_id))
+    await db.commit()
+
+
+@router.get(
+    "/api-tokens/{token_id}/approvals",
+    response_model=list[TokenApprovalOut],
+    responses={404: {"description": "No such token"}},
+)
+async def token_approvals(token_id: uuid.UUID, db: TenantDB) -> list[TokenApprovalOut]:
+    """The approvals given through an API token, oldest first, lapsed ones included
+    (``lapsed_at``): what revoking it voids, or voided."""
+    rows = await service.token_approvals(db, token_id)
+    if rows is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"API token {token_id} not found")
+    return [TokenApprovalOut.model_validate(r) for r in rows]
 
 
 @router.get("/invites", response_model=list[InviteOut])

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, section, selectText } from "./helpers";
+import { ADMIN, login, section, selectText } from "./helpers";
 
 const memberRow = (page: Page, email: string) => page.getByTestId("member-row").filter({ hasText: email });
 
@@ -50,6 +50,38 @@ test("members: invite someone, then revoke the invite", async ({ page }) => {
   await page.reload();
   await expect(page.getByTestId("invite-row")).toHaveCount(1);
   await expect(page.getByText("pat@example.com")).toHaveCount(0);
+});
+
+test("members: remove disables a member, restore lets them sign in again", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  const row = memberRow(page, "commenter@example.com");
+  // No remove control on your own row.
+  await expect(memberRow(page, "admin@example.com").getByRole("button", { name: /^Remove/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Remove commenter@example.com" }).click();
+  await page.getByRole("group", { name: "Confirm removing commenter@example.com" }).getByRole("button", { name: "Confirm" }).click();
+  // Disabled, not deleted: the row stays, marked removed, with the role locked.
+  await expect(row).toHaveAttribute("data-status", "disabled");
+  await expect(row).toContainText("Removed");
+  await expect(page.getByTestId("member-row")).toHaveCount(4);
+  await expect(page.getByLabel("Role for commenter@example.com")).toBeDisabled();
+  await page.reload();
+  await expect(memberRow(page, "commenter@example.com")).toHaveAttribute("data-status", "disabled");
+
+  // A removed member cannot sign in.
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await page.getByLabel("Email").fill("commenter@example.com");
+  await page.getByLabel("Password").fill(ADMIN.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/login/);
+
+  await login(page);
+  await page.goto("/settings/members");
+  await page.getByRole("button", { name: "Restore commenter@example.com" }).click();
+  await expect(memberRow(page, "commenter@example.com")).toHaveAttribute("data-status", "active");
+  await expect(page.getByLabel("Role for commenter@example.com")).toBeEnabled();
 });
 
 test("members: non-owners see a note instead of the member list", async ({ page }) => {

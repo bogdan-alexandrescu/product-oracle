@@ -106,6 +106,11 @@ async def verify_api_token(raw: str) -> McpCaller | None:
     token = await service.resolve_api_token(raw)
     if token is None:
         return None
+    if token.user_id is not None:
+        # A token for a disabled member acts for no one.
+        async with tenant_session(token.tenant_id) as s:
+            if not service.may_sign_in(await s.get(User, token.user_id)):
+                return None
     return McpCaller(
         tenant_id=token.tenant_id,
         kind="token",
@@ -147,8 +152,8 @@ async def verify_run_token_caller(raw: str) -> McpCaller | None:
     async with tenant_session(claims.tenant_id) as s:
         run = await s.get(Run, claims.run_id)
         user = await s.get(User, run.created_by) if run and run.created_by else None
-    # A run nobody started (or whose creator is gone) has no one to act for.
-    if user is None:
+    # A run nobody started (or whose creator is gone or disabled) has no one to act for.
+    if not service.may_sign_in(user):
         return None
     return user_caller(
         user,

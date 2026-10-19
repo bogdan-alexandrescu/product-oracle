@@ -40,6 +40,8 @@ and source updates never change it; its exports are served from the stored HTML.
 
 import hashlib
 import json
+import re
+import string
 import uuid
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
@@ -144,13 +146,34 @@ async def lock_document(db: AsyncSession, document_id: uuid.UUID) -> Document | 
 TRACKING_PARAMS = frozenset({"fbclid", "gclid", "dclid", "msclkid", "mc_cid", "mc_eid", "_hsenc"})
 # A citation's ``source`` and the source kinds its external ids come from.
 CITATION_SOURCE_KINDS = {"gdocs": "google_docs"}
+# Google Docs, Sheets, Slides, Forms and Drive files: one document whatever the view
+# (/edit, /view, /preview, a /u/<n> account prefix) and the share parameter (usp).
+GOOGLE_HOSTS = frozenset({"docs.google.com", "drive.google.com"})
+_GOOGLE_DOC = re.compile(
+    r"/(document|spreadsheets|presentation|forms|file|drawings)(?:/u/\d+)?/d/([^/]+)(?:/.*)?"
+)
+GOOGLE_VIEW_PARAMS = frozenset({"usp"})
+_ESCAPE = re.compile(r"%([0-9A-Fa-f]{2})")
+_UNRESERVED = frozenset(string.ascii_letters + string.digits + "-._~")
+
+
+def _escapes(path: str) -> str:
+    """Percent-escapes in one form: an unreserved character decoded, others upper-cased."""
+
+    def fix(m: re.Match[str]) -> str:
+        ch = chr(int(m.group(1), 16))
+        return ch if ch in _UNRESERVED else "%" + m.group(1).upper()
+
+    return _ESCAPE.sub(fix, path)
 
 
 def normalize_url(url: str) -> str:
     """A URL as citations and source items are matched: ``http`` is ``https``, the host
     lower-cased without ``www.``, the default port, fragment and trailing slash dropped,
-    the query without tracking parameters (``utm_*``, click ids) and sorted. Idempotent,
-    so URLs a tombstone recorded with an earlier normalization still match."""
+    percent-escapes in one form, the query without tracking parameters (``utm_*``, click
+    ids) and sorted; a Google document is its id whatever the view (``/edit``,
+    ``/view``, ``?usp=``). Idempotent, so URLs a tombstone recorded with an earlier
+    normalization still match."""
     raw = url.strip()
     try:
         parts = urlsplit(raw)
@@ -171,12 +194,17 @@ def normalize_url(url: str) -> str:
     if parts.username or parts.password:
         auth = parts.username or ""
         host = f"{auth}@{host}"
-    path = parts.path.rstrip("/")
+    path = _escapes(parts.path).rstrip("/")
+    google = host in GOOGLE_HOSTS
+    if google and (doc := _GOOGLE_DOC.fullmatch(path)):
+        path = f"/{doc.group(1)}/d/{doc.group(2)}"
     query = urlencode(
         sorted(
             (k, v)
             for k, v in parse_qsl(parts.query, keep_blank_values=True)
-            if not k.lower().startswith("utm_") and k.lower() not in TRACKING_PARAMS
+            if not k.lower().startswith("utm_")
+            and k.lower() not in TRACKING_PARAMS
+            and not (google and k.lower() in GOOGLE_VIEW_PARAMS)
         )
     )
     return urlunsplit((scheme, host, path, query, ""))
@@ -291,15 +319,17 @@ async def _url_items(db: AsyncSession, urls: set[str]) -> list[SourceItem]:
     if not hosts:
         return []
     # Not indexed: a scan of the company's items by host, then an exact match on the
-    # normalized URL (an indexed lookup needs a normalized-URL column; see the PR).
+    # normalized URL (an indexed lookup needs a normalized-URL column; see the PR). The
+    # host follows "://" or, in a URL with a user name, "@".
     candidates = await db.scalars(
         select(SourceItem).where(
             SourceItem.url.is_not(None),
             or_(
                 *(
-                    func.lower(SourceItem.url).contains(f"://{w}{h}")
+                    func.lower(SourceItem.url).contains(f"{p}{w}{h}")
                     for h in hosts
                     for w in ("", "www.")
+                    for p in ("://", "@")
                 )
             ),
         )
@@ -379,6 +409,8 @@ async def source_permission_problems(
         if ref_id is not None:
             item_keys[ref_id] |= keys
             evidence_keys[ref_id] |= keys
+            # A UUID can also be a provider's id (a Notion page id): an external id too.
+            external_keys[(c.source, ref)] |= keys
         elif "://" in ref:
             url_keys[normalize_url(ref)] |= keys
         elif ref:
@@ -524,8 +556,16 @@ async def review_problems(
     # token no longer approves; read at gate time, not only when the approval was given.
     _, lapsed = await counting_history(db, document.id, upto=version.number)
     why = await standing(
-        db, [policy.decider_id, version.approved_by, *policy.mandatory_reviewer_ids]
+        db,
+        [
+            policy.decider_id,
+            version.approved_by,
+            version.approved_token_id,
+            *policy.mandatory_reviewer_ids,
+        ],
     )
+    # The token an approval came through: revoked (even outside the API), it voids it.
+    token_reason = why.get(version.approved_token_id) if version.approved_token_id else None
     if policy.decider_id is not None and why.get(policy.decider_id):
         blockers.append(
             _problem(
@@ -535,13 +575,27 @@ async def review_problems(
                 ids=[policy.decider_id],
             )
         )
-    if version.approved_at is None:
+    if version.approved_at is None and version.approval_lapsed_at is not None:
+        # Lapsed for good (C2): the approver was demoted or disabled, or the token revoked.
+        by = version.approval_lapsed_by
+        blockers.append(
+            _problem(
+                "version_approval_lapsed",
+                f"Version {version.number} was approved by {by or 'someone'}, whose "
+                "approval no longer counts and never will again "
+                f"({version.approval_lapse_reason or 'lapsed'}); it needs an approval again",
+                ids=[by] if by else [],
+            )
+        )
+    elif version.approved_at is None:
         who = "the designated decider" if policy.decider_id else "an approver"
         blockers.append(
             _problem("version_not_approved", f"Version {version.number} needs {who}'s approval")
         )
-    elif version.approved_by is None or why.get(version.approved_by):
-        reason = why.get(version.approved_by) if version.approved_by else "is unknown"
+    elif version.approved_by is None or why.get(version.approved_by) or token_reason:
+        reason = (
+            (why.get(version.approved_by) or token_reason) if version.approved_by else "is unknown"
+        )
         blockers.append(
             _problem(
                 "version_approval_lapsed",
