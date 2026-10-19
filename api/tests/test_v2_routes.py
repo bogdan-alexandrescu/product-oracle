@@ -1,6 +1,7 @@
 """The thin v2 read routes: list and get per entity, role guard, company scoping."""
 
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -14,7 +15,7 @@ from tests.v2_helpers import seed_v2
 # Route path -> the table its rows come from.
 TABLE = {r.path: r.model.__tablename__ for r in RESOURCES}
 PATHS = sorted(TABLE)
-FIXTURES_DIR_PRD = "tests/fixtures/prd_v1.md"
+FIXTURES_DIR_PRD = Path(__file__).parent / "fixtures" / "prd_v1.md"
 
 
 def test_every_new_table_has_a_list_and_a_get():
