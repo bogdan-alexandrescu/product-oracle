@@ -2469,6 +2469,886 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/modules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Modules
+         * @description List modules, newest first.
+         */
+        get: operations["list_modules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/modules/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Module
+         * @description One module by id.
+         */
+        get: operations["get_module"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Module Versions
+         * @description List module versions, newest first.
+         */
+        get: operations["list_module_versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-versions/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Module Version
+         * @description One module version by id.
+         */
+        get: operations["get_module_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/template-module-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Template Module Assignments
+         * @description List template module assignments, newest first.
+         */
+        get: operations["list_template_module_assignments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/template-module-assignments/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Template Module Assignment
+         * @description One template module assignment by id.
+         */
+        get: operations["get_template_module_assignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compositions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Compositions
+         * @description List compositions, newest first.
+         */
+        get: operations["list_compositions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compositions/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Composition
+         * @description One composition by id.
+         */
+        get: operations["get_composition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/composition-revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Composition Revisions
+         * @description List composition revisions, newest first.
+         */
+        get: operations["list_composition_revisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/composition-revisions/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Composition Revision
+         * @description One composition revision by id.
+         */
+        get: operations["get_composition_revision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Intakes
+         * @description List intakes, newest first.
+         */
+        get: operations["list_intakes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake
+         * @description One intake by id.
+         */
+        get: operations["get_intake"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Knowledge Gaps
+         * @description List knowledge gaps, newest first.
+         */
+        get: operations["list_knowledge_gaps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/gaps/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Knowledge Gap
+         * @description One knowledge gap by id.
+         */
+        get: operations["get_knowledge_gap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Stakeholder Questions
+         * @description List stakeholder questions, newest first.
+         */
+        get: operations["list_stakeholder_questions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/questions/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Stakeholder Question
+         * @description One stakeholder question by id.
+         */
+        get: operations["get_stakeholder_question"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Stakeholder Answers
+         * @description List stakeholder answers, newest first.
+         */
+        get: operations["list_stakeholder_answers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/answers/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Stakeholder Answer
+         * @description One stakeholder answer by id.
+         */
+        get: operations["get_stakeholder_answer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/assumption-decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Assumption Decisions
+         * @description List assumption decisions, newest first.
+         */
+        get: operations["list_assumption_decisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/assumption-decisions/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Assumption Decision
+         * @description One assumption decision by id.
+         */
+        get: operations["get_assumption_decision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocker-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Blocker Options
+         * @description List blocker options, newest first.
+         */
+        get: operations["list_blocker_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocker-options/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Blocker Option
+         * @description One blocker option by id.
+         */
+        get: operations["get_blocker_option"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feasibility-experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Feasibility Experiments
+         * @description List feasibility experiments, newest first.
+         */
+        get: operations["list_feasibility_experiments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feasibility-experiments/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Feasibility Experiment
+         * @description One feasibility experiment by id.
+         */
+        get: operations["get_feasibility_experiment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocker-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Blocker Events
+         * @description List blocker events, newest first.
+         */
+        get: operations["list_blocker_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocker-events/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Blocker Event
+         * @description One blocker event by id.
+         */
+        get: operations["get_blocker_event"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/change-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Change Events
+         * @description List change events, newest first.
+         */
+        get: operations["list_change_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/change-events/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Change Event
+         * @description One change event by id.
+         */
+        get: operations["get_change_event"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/section-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Section Links
+         * @description List section links, newest first.
+         */
+        get: operations["list_section_links"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/section-links/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Section Link
+         * @description One section link by id.
+         */
+        get: operations["get_section_link"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifact-dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Artifact Dependencies
+         * @description List artifact dependencies, newest first.
+         */
+        get: operations["list_artifact_dependencies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifact-dependencies/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Artifact Dependency
+         * @description One artifact dependency by id.
+         */
+        get: operations["get_artifact_dependency"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/evaluation-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Evaluation Reports
+         * @description List evaluation reports, newest first.
+         */
+        get: operations["list_evaluation_reports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/evaluation-reports/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Evaluation Report
+         * @description One evaluation report by id.
+         */
+        get: operations["get_evaluation_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/evaluation-findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Evaluation Findings
+         * @description List evaluation findings, newest first.
+         */
+        get: operations["list_evaluation_findings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/evaluation-findings/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Evaluation Finding
+         * @description One evaluation finding by id.
+         */
+        get: operations["get_evaluation_finding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifact-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Artifact Requests
+         * @description List artifact requests, newest first.
+         */
+        get: operations["list_artifact_requests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifact-requests/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Artifact Request
+         * @description One artifact request by id.
+         */
+        get: operations["get_artifact_request"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifact-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Artifact Versions
+         * @description List artifact versions, newest first.
+         */
+        get: operations["list_artifact_versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifact-versions/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Artifact Version
+         * @description One artifact version by id.
+         */
+        get: operations["get_artifact_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifact-outputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Artifact Outputs
+         * @description List artifact outputs, newest first.
+         */
+        get: operations["list_artifact_outputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifact-outputs/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Artifact Output
+         * @description One artifact output by id.
+         */
+        get: operations["get_artifact_output"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifact-review-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Artifact Review Events
+         * @description List artifact review events, newest first.
+         */
+        get: operations["list_artifact_review_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifact-review-events/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Artifact Review Event
+         * @description One artifact review event by id.
+         */
+        get: operations["get_artifact_review_event"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -2718,6 +3598,253 @@ export interface components {
             document_status: "draft" | "in_review" | "approved";
             version: components["schemas"]["VersionSummary"];
         };
+        /** ArtifactDependencyOut */
+        ArtifactDependencyOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Upstream Version Id */
+            upstream_version_id?: string | null;
+            /** Upstream Section Key */
+            upstream_section_key?: string | null;
+            /** Upstream Section Hash */
+            upstream_section_hash?: string | null;
+            /** Upstream Entity Id */
+            upstream_entity_id?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            /** Caused By Change Id */
+            caused_by_change_id?: string | null;
+            /** Stale Since */
+            stale_since?: string | null;
+            /** Reconciled By */
+            reconciled_by?: string | null;
+            /** Reconciled At */
+            reconciled_at?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ArtifactOutputOut
+         * @description Metadata of an output; its content comes from a lane's download route.
+         */
+        ArtifactOutputOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Name */
+            name: string;
+            /** Media Type */
+            media_type: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Sha256 */
+            sha256: string;
+            /** Meta */
+            meta: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ArtifactRequestOut */
+        ArtifactRequestOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "tech_brief" | "engineering_spec" | "user_flow" | "wireframe" | "prototype" | "acceptance_tests" | "figma_design";
+            /** Title */
+            title: string;
+            /**
+             * Source Document Id
+             * Format: uuid
+             */
+            source_document_id: string;
+            /** Source Version Id */
+            source_version_id?: string | null;
+            /** Requirement Ids */
+            requirement_ids: string[];
+            /** Section Keys */
+            section_keys: string[];
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "requested" | "queued" | "running" | "succeeded" | "partial" | "failed" | "blocked" | "cancelled";
+            /** Run Id */
+            run_id?: string | null;
+            /** Requested By */
+            requested_by?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ArtifactReviewEventOut */
+        ArtifactReviewEventOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "comment" | "approved" | "changes_requested" | "rejected" | "marked_stale" | "reconciled";
+            /** Body */
+            body?: string | null;
+            /** Actor */
+            actor: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ArtifactVersionOut */
+        ArtifactVersionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Number */
+            number: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "in_review" | "approved" | "rejected" | "superseded";
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            /** Source Version Id */
+            source_version_id?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /** Content Hash */
+            content_hash?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /** Provenance */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /** Created By */
+            created_by?: string | null;
+            /** Approved By */
+            approved_by?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** AssumptionDecisionOut */
+        AssumptionDecisionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Gap Id */
+            gap_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "accept_assumption" | "accept_risk" | "validate" | "reject";
+            /** Rationale */
+            rationale: string;
+            /** Decided By */
+            decided_by?: string | null;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /** Review At */
+            review_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** AuthorizationServerMetadata */
         AuthorizationServerMetadata: {
             /** Issuer */
@@ -2751,6 +3878,134 @@ export interface components {
         AuthorizeIn: {
             /** Label */
             label: string;
+        };
+        /**
+         * BlockerOptionDetails
+         * @description ``blocker_options.details``.
+         */
+        BlockerOptionDetails: {
+            /** Expected Outcome */
+            expected_outcome?: string | null;
+            /** Cost */
+            cost?: string | null;
+            /** Effort */
+            effort?: string | null;
+            /** Risk */
+            risk?: string | null;
+            /** Residual Limitations */
+            residual_limitations?: string | null;
+            /** Fallback */
+            fallback?: string | null;
+            /** Monitoring Signal */
+            monitoring_signal?: string | null;
+            /** Scaling Trigger */
+            scaling_trigger?: string | null;
+            /** Corrective Action */
+            corrective_action?: string | null;
+            /** Review At */
+            review_at?: string | null;
+        };
+        /** BlockerOptionOut */
+        BlockerOptionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Approach
+             * @enum {string}
+             */
+            approach: "direct_remedy" | "alternative_workflow" | "architecture" | "partnership" | "operations" | "distribution";
+            /** Description */
+            description?: string | null;
+            /**
+             * Technical Feasibility
+             * @enum {string}
+             */
+            technical_feasibility: "high" | "medium" | "low" | "unknown";
+            /**
+             * Policy Feasibility
+             * @enum {string}
+             */
+            policy_feasibility: "high" | "medium" | "low" | "unknown";
+            /**
+             * Compliance
+             * @enum {string}
+             */
+            compliance: "compliant" | "needs_review" | "non_compliant";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "evaluating" | "selected" | "fallback" | "rejected";
+            details: components["schemas"]["BlockerOptionDetails"];
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Selected Reason */
+            selected_reason?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** BlockerResolutionEventOut */
+        BlockerResolutionEventOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Option Id */
+            option_id?: string | null;
+            /** Experiment Id */
+            experiment_id?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "status_changed" | "option_selected" | "experiment_started" | "experiment_concluded" | "risk_accepted" | "feasibility_scope_approved" | "reopened";
+            /** From Status */
+            from_status?: ("open" | "mitigating" | "resolved" | "accepted_risk" | "feasibility_only") | null;
+            /** To Status */
+            to_status?: ("open" | "mitigating" | "resolved" | "accepted_risk" | "feasibility_only") | null;
+            /** Reason */
+            reason?: string | null;
+            /** Actor */
+            actor: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** Body_oauth_revoke */
         Body_oauth_revoke: {
@@ -2787,6 +4042,40 @@ export interface components {
              * @description .md, .txt or .pdf files
              */
             files: string[];
+        };
+        /** ChangeEventOut */
+        ChangeEventOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version";
+            /** Subject Id */
+            subject_id?: string | null;
+            /** Subject Ref */
+            subject_ref?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /** Cause */
+            cause: string;
+            /** Actor */
+            actor: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /** Handled By */
+            handled_by: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** ChangedSection */
         ChangedSection: {
@@ -3051,6 +4340,166 @@ export interface components {
             /** Body */
             body?: string | null;
         };
+        /**
+         * CompositionInputs
+         * @description What a composition was computed from (§4.3 step 1). Conditions read these roots.
+         */
+        CompositionInputs: {
+            /**
+             * Template
+             * @default {}
+             */
+            template: {
+                [key: string]: unknown;
+            };
+            /**
+             * Brief
+             * @default {}
+             */
+            brief: {
+                [key: string]: unknown;
+            };
+            /** Category */
+            category?: string | null;
+            /**
+             * Scope
+             * @default {}
+             */
+            scope: {
+                [key: string]: unknown;
+            };
+            /**
+             * Signals
+             * @default {}
+             */
+            signals: {
+                [key: string]: unknown;
+            };
+            /**
+             * Baseline
+             * @default {}
+             */
+            baseline: {
+                [key: string]: unknown;
+            };
+            /**
+             * Sources
+             * @default {}
+             */
+            sources: {
+                [key: string]: unknown;
+            };
+            /**
+             * Stakeholders
+             * @default {}
+             */
+            stakeholders: {
+                [key: string]: unknown;
+            };
+            /**
+             * Outputs
+             * @default []
+             */
+            outputs: ("prd" | "roadmap" | "tech_brief" | "engineering_spec" | "user_flow" | "wireframe" | "prototype" | "acceptance_tests")[];
+            /**
+             * Blockers
+             * @default {}
+             */
+            blockers: {
+                [key: string]: unknown;
+            };
+            /**
+             * Policy
+             * @default {}
+             */
+            policy: {
+                [key: string]: unknown;
+            };
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Baseline Snapshot Id */
+            baseline_snapshot_id?: string | null;
+            /**
+             * Source Snapshot Ids
+             * @default []
+             */
+            source_snapshot_ids: string[];
+        };
+        /**
+         * CompositionModule
+         * @description One module in a composition revision (``composition_revisions.modules``).
+         */
+        CompositionModule: {
+            /** Key */
+            key: string;
+            /** Version */
+            version: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Included */
+            included: boolean;
+            /** Reason */
+            reason: string;
+            /** Order */
+            order: number;
+            /**
+             * Section Ids
+             * @default []
+             */
+            section_ids: string[];
+            /**
+             * Driven By
+             * @default []
+             */
+            driven_by: string[];
+            /** Score */
+            score?: number | null;
+            /** Overridden By */
+            overridden_by?: string | null;
+        };
+        /** CompositionRevisionOut */
+        CompositionRevisionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Composition Id
+             * Format: uuid
+             */
+            composition_id: string;
+            /** Number */
+            number: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "confirmed" | "published" | "superseded";
+            /** Modules */
+            modules: components["schemas"]["CompositionModule"][];
+            inputs: components["schemas"]["CompositionInputs"];
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Parent Number */
+            parent_number?: number | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** ConfidenceOut */
         ConfidenceOut: {
             /** Value */
@@ -3283,6 +4732,37 @@ export interface components {
             /** Sections */
             sections: components["schemas"]["SectionDiff"][];
         };
+        /** DocumentCompositionOut */
+        DocumentCompositionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: string | null;
+            /** Current Revision */
+            current_revision?: number | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** DocumentOut */
         DocumentOut: {
             /**
@@ -3331,6 +4811,54 @@ export interface components {
              * @default []
              */
             versions: components["schemas"]["VersionSummary"][];
+        };
+        /** DocumentSectionLinkOut */
+        DocumentSectionLinkOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Version Id */
+            version_id?: string | null;
+            /** Section Key */
+            section_key: string;
+            /** Section Hash */
+            section_hash?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /** Module Key */
+            module_key?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "implements" | "evidences" | "claims" | "tests" | "mentions";
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Evidence Id */
+            evidence_id?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+            /**
+             * Precision
+             * @enum {string}
+             */
+            precision: "section" | "paragraph" | "claim";
+            /** Claim */
+            claim?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** DocumentSummary */
         DocumentSummary: {
@@ -3422,7 +4950,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "supports" | "depends_on" | "blocks" | "part_of" | "owned_by";
+            type: "supports" | "depends_on" | "blocks" | "part_of" | "owned_by" | "derived_from" | "verifies" | "affects" | "mitigates";
             /**
              * Attrs
              * @default {}
@@ -3464,7 +4992,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "supports" | "depends_on" | "blocks" | "part_of" | "owned_by";
+            type: "supports" | "depends_on" | "blocks" | "part_of" | "owned_by" | "derived_from" | "verifies" | "affects" | "mitigates";
             /** Attrs */
             attrs: {
                 [key: string]: unknown;
@@ -3531,7 +5059,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "supports" | "depends_on" | "blocks" | "part_of" | "owned_by";
+            type: "supports" | "depends_on" | "blocks" | "part_of" | "owned_by" | "derived_from" | "verifies" | "affects" | "mitigates";
             /** Attrs */
             attrs: {
                 [key: string]: unknown;
@@ -3604,7 +5132,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person";
+            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk";
             /** Key */
             key: string;
             /** Title */
@@ -3642,7 +5170,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person";
+            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk";
             /** Key */
             key: string;
             /** Title */
@@ -3720,7 +5248,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person";
+            type: "goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk";
             /** Key */
             key: string;
             /** Title */
@@ -3824,6 +5352,128 @@ export interface components {
             budget_usd?: number | null;
             /** Within Budget */
             within_budget: boolean;
+        };
+        /** EvaluationFindingOut */
+        EvaluationFindingOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Criterion */
+            criterion: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Hard */
+            hard: boolean;
+            /** Rationale */
+            rationale: string;
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Section Keys */
+            section_keys: string[];
+            /** Module Key */
+            module_key?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** EvaluationReportDetail */
+        EvaluationReportDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Version Id */
+            version_id?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /**
+             * Evaluator
+             * @enum {string}
+             */
+            evaluator: "rules" | "llm_job" | "agent" | "human";
+            /** Policy */
+            policy: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "complete" | "failed";
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            };
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["EvaluationFindingOut"][];
+        };
+        /** EvaluationReportOut */
+        EvaluationReportOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Version Id */
+            version_id?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /**
+             * Evaluator
+             * @enum {string}
+             */
+            evaluator: "rules" | "llm_job" | "agent" | "human";
+            /** Policy */
+            policy: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "complete" | "failed";
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            };
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * EvidenceCreate
@@ -3974,6 +5624,52 @@ export interface components {
             kind: "plan" | "api_key";
             /** Label */
             label: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** FeasibilityExperimentOut */
+        FeasibilityExperimentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Option Id */
+            option_id?: string | null;
+            /** Hypothesis */
+            hypothesis: string;
+            /** Method */
+            method?: string | null;
+            /** Success Threshold */
+            success_threshold?: string | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Decision Gate At */
+            decision_gate_at?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "planned" | "running" | "succeeded" | "failed" | "inconclusive" | "cancelled";
+            /** Result */
+            result?: string | null;
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
             /**
              * Updated At
              * Format: date-time
@@ -4359,6 +6055,66 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * IntakeAnalysis
+         * @description What Oracle extracted from a brief (§5 step 1), each item with its knowledge state.
+         */
+        IntakeAnalysis: {
+            /**
+             * Users
+             * @default []
+             */
+            users: {
+                [key: string]: unknown;
+            }[];
+            /** Problem */
+            problem?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Outcomes
+             * @default []
+             */
+            outcomes: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
+            /**
+             * Scope
+             * @default []
+             */
+            scope: string[];
+            /**
+             * Non Goals
+             * @default []
+             */
+            non_goals: string[];
+            /**
+             * Dependencies
+             * @default []
+             */
+            dependencies: string[];
+            /**
+             * Blockers
+             * @default []
+             */
+            blockers: {
+                [key: string]: unknown;
+            }[];
+            /** Category */
+            category?: string | null;
+            /**
+             * Conflicts
+             * @default []
+             */
+            conflicts: {
+                [key: string]: unknown;
+            }[];
+        };
         /** InviteCreate */
         InviteCreate: {
             /** Email */
@@ -4592,6 +6348,70 @@ export interface components {
             /** Budget Usd */
             budget_usd?: number | null;
         };
+        /** KnowledgeGapOut */
+        KnowledgeGapOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling";
+            /** Statement */
+            statement: string;
+            /** Impact */
+            impact: ("goals" | "feasibility" | "scope" | "economics" | "risks" | "module_selection")[];
+            /**
+             * Importance
+             * @enum {string}
+             */
+            importance: "critical" | "high" | "medium" | "low";
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Confidence */
+            confidence?: string | null;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "unknown" | "under_investigation" | "asked" | "answered" | "validated" | "deferred" | "accepted_risk";
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Related Modules */
+            related_modules: string[];
+            /** Stop Condition */
+            stop_condition?: string | null;
+            /** Entity Ids */
+            entity_ids: string[];
+            /** Section Keys */
+            section_keys: string[];
+            /** Created By */
+            created_by?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /**
          * LinkErrorOut
          * @description A link that cannot be used: ``not_public``, ``blocked_address``, ``not_https``...
@@ -4824,6 +6644,64 @@ export interface components {
              */
             role: "viewer" | "commenter" | "approver" | "owner";
         };
+        /** ModuleDefinitionOut */
+        ModuleDefinitionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Builtin */
+            builtin: boolean;
+            /** Archived At */
+            archived_at?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ModuleVersionOut */
+        ModuleVersionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Module Id
+             * Format: uuid
+             */
+            module_id: string;
+            /** Version */
+            version: string;
+            /** Contract */
+            contract: {
+                [key: string]: unknown;
+            };
+            /** Contract Hash */
+            contract_hash: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "builtin" | "company";
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** NewSource */
         NewSource: {
             /** Title */
@@ -5004,6 +6882,42 @@ export interface components {
             detail: string;
             /** Problems */
             problems: components["schemas"]["Problem"][];
+        };
+        /** ProductIntakeOut */
+        ProductIntakeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Brief */
+            brief: string;
+            /** Author Id */
+            author_id?: string | null;
+            /** Source Snapshot Ids */
+            source_snapshot_ids: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "analyzing" | "awaiting_answers" | "ready" | "converted" | "archived";
+            analysis: components["schemas"]["IntakeAnalysis"];
+            /** Document Id */
+            document_id?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /**
          * ProposalCreate
@@ -6037,6 +7951,92 @@ export interface components {
             /** Swapped To Reason */
             swapped_to_reason: string | null;
         };
+        /** StakeholderAnswerOut */
+        StakeholderAnswerOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "answer" | "dont_know" | "defer" | "delegate" | "research";
+            /** Body */
+            body?: string | null;
+            /** Answered By */
+            answered_by?: string | null;
+            /** Delegated To */
+            delegated_to?: string | null;
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** StakeholderQuestionOut */
+        StakeholderQuestionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Gap Id */
+            gap_id?: string | null;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling";
+            /** Prompt */
+            prompt: string;
+            /** Rationale */
+            rationale?: string | null;
+            /** Priority */
+            priority: number;
+            /** Batch */
+            batch?: number | null;
+            /** Asked To */
+            asked_to?: string | null;
+            /** Asked By */
+            asked_by?: string | null;
+            /** Module Key */
+            module_key?: string | null;
+            /** Section Key */
+            section_key?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** StartDraftIn */
         StartDraftIn: {
             /**
@@ -6248,6 +8248,43 @@ export interface components {
             body: string;
             /** Required Sections */
             required_sections?: string[] | null;
+        };
+        /** TemplateModuleAssignmentOut */
+        TemplateModuleAssignmentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Template Id
+             * Format: uuid
+             */
+            template_id: string;
+            /** Module Key */
+            module_key: string;
+            /** Module Version */
+            module_version?: string | null;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Display Order */
+            display_order: number;
+            /** Section Ids */
+            section_ids: string[];
+            /** Since Template Version */
+            since_template_version?: number | null;
+            /** Manifest Format */
+            manifest_format: number;
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** TemplateOption */
         TemplateOption: {
@@ -9750,7 +11787,7 @@ export interface operations {
     list_entities: {
         parameters: {
             query?: {
-                type?: ("goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person") | null;
+                type?: ("goal" | "product" | "feature" | "requirement" | "constraint" | "decision" | "person" | "outcome" | "acceptance_criterion" | "assumption" | "risk") | null;
                 status?: ("proposed" | "confirmed" | "rejected") | null;
             };
             header?: never;
@@ -10068,7 +12105,7 @@ export interface operations {
     list_edges: {
         parameters: {
             query?: {
-                type?: ("supports" | "depends_on" | "blocks" | "part_of" | "owned_by") | null;
+                type?: ("supports" | "depends_on" | "blocks" | "part_of" | "owned_by" | "derived_from" | "verifies" | "affects" | "mitigates") | null;
                 entity_id?: string | null;
             };
             header?: never;
@@ -12138,6 +14175,1444 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TickOut"];
+                };
+            };
+        };
+    };
+    list_modules: {
+        parameters: {
+            query?: {
+                key?: string | null;
+                builtin?: boolean | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModuleDefinitionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_module: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModuleDefinitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_module_versions: {
+        parameters: {
+            query?: {
+                module_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModuleVersionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_module_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModuleVersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_template_module_assignments: {
+        parameters: {
+            query?: {
+                template_id?: string | null;
+                module_key?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateModuleAssignmentOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_template_module_assignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateModuleAssignmentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_compositions: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCompositionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_composition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCompositionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_composition_revisions: {
+        parameters: {
+            query?: {
+                composition_id?: string | null;
+                status?: ("working" | "confirmed" | "published" | "superseded") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompositionRevisionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_composition_revision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompositionRevisionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_intakes: {
+        parameters: {
+            query?: {
+                status?: ("draft" | "analyzing" | "awaiting_answers" | "ready" | "converted" | "archived") | null;
+                document_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductIntakeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductIntakeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_knowledge_gaps: {
+        parameters: {
+            query?: {
+                intake_id?: string | null;
+                document_id?: string | null;
+                status?: ("unknown" | "under_investigation" | "asked" | "answered" | "validated" | "deferred" | "accepted_risk") | null;
+                category?: ("customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling") | null;
+                importance?: ("critical" | "high" | "medium" | "low") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeGapOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_knowledge_gap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeGapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_stakeholder_questions: {
+        parameters: {
+            query?: {
+                intake_id?: string | null;
+                document_id?: string | null;
+                gap_id?: string | null;
+                status?: ("draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StakeholderQuestionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_stakeholder_question: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StakeholderQuestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_stakeholder_answers: {
+        parameters: {
+            query?: {
+                question_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StakeholderAnswerOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_stakeholder_answer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StakeholderAnswerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_assumption_decisions: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                gap_id?: string | null;
+                entity_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssumptionDecisionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_assumption_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssumptionDecisionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_blocker_options: {
+        parameters: {
+            query?: {
+                blocker_id?: string | null;
+                status?: ("proposed" | "evaluating" | "selected" | "fallback" | "rejected") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerOptionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_blocker_option: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerOptionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feasibility_experiments: {
+        parameters: {
+            query?: {
+                blocker_id?: string | null;
+                option_id?: string | null;
+                status?: ("planned" | "running" | "succeeded" | "failed" | "inconclusive" | "cancelled") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeasibilityExperimentOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_feasibility_experiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeasibilityExperimentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_blocker_events: {
+        parameters: {
+            query?: {
+                blocker_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerResolutionEventOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_blocker_event: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerResolutionEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_change_events: {
+        parameters: {
+            query?: {
+                subject_kind?: ("document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version") | null;
+                subject_id?: string | null;
+                document_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeEventOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_change_event: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_section_links: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                version_id?: string | null;
+                section_key?: string | null;
+                entity_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSectionLinkOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_section_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSectionLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_artifact_dependencies: {
+        parameters: {
+            query?: {
+                artifact_version_id?: string | null;
+                document_version_id?: string | null;
+                upstream_version_id?: string | null;
+                upstream_entity_id?: string | null;
+                freshness?: ("fresh" | "potentially_stale" | "under_review" | "reconciled") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactDependencyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_artifact_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactDependencyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_evaluation_reports: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                version_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationReportOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_evaluation_report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_evaluation_findings: {
+        parameters: {
+            query?: {
+                report_id?: string | null;
+                status?: ("pass" | "warning" | "critical" | "not_applicable") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationFindingOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_evaluation_finding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationFindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_artifact_requests: {
+        parameters: {
+            query?: {
+                source_document_id?: string | null;
+                kind?: ("tech_brief" | "engineering_spec" | "user_flow" | "wireframe" | "prototype" | "acceptance_tests" | "figma_design") | null;
+                status?: ("requested" | "queued" | "running" | "succeeded" | "partial" | "failed" | "blocked" | "cancelled") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactRequestOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_artifact_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactRequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_artifact_versions: {
+        parameters: {
+            query?: {
+                request_id?: string | null;
+                freshness?: ("fresh" | "potentially_stale" | "under_review" | "reconciled") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactVersionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_artifact_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactVersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_artifact_outputs: {
+        parameters: {
+            query?: {
+                version_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactOutputOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_artifact_output: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactOutputOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_artifact_review_events: {
+        parameters: {
+            query?: {
+                version_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactReviewEventOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_artifact_review_event: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactReviewEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
