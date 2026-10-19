@@ -144,6 +144,86 @@ async def test_a_withheld_item_is_searched_read_and_shown_by_no_run(client, fake
         assert await run_view(client, ctx, who, items["a"]) == (200, True), who
 
 
+# --- item 2 (decision 2): lowering to private withdraws the open proposal ------------------
+
+
+async def _answer_model_gap(client, ctx) -> KnowledgeGap:
+    async with tenant_session(ctx.tenant_id) as s:
+        gap = await s.scalar(select(KnowledgeGap).where(KnowledgeGap.statement == MODEL_GAP))
+        q = await s.scalar(select(StakeholderQuestion).where(StakeholderQuestion.gap_id == gap.id))
+    resp = await client.post(
+        f"/v1/questions/{q.id}/answers", json={"kind": "answer", "body": ANSWER},
+        headers=ctx.as_("author"),
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    return gap
+
+
+async def _status(ctx, proposal_id) -> str:
+    async with tenant_session(ctx.tenant_id) as s:
+        return (await s.get(Proposal, proposal_id)).status
+
+
+async def test_private_withdraws_the_open_proposal_and_sharing_again_recreates_it(client, fake):
+    ctx, intake_id, _ = await world(client, fake, hidden=False, model=_blocker_gap)
+    gap = await _answer_model_gap(client, ctx)
+    await share(client, ctx, intake_id, str(gap.id), "summary")
+    [first] = await _baseline_proposals(ctx)
+    assert ANSWER in json.dumps(first.payload)
+
+    await share(client, ctx, intake_id, str(gap.id), "private")
+    assert await _status(ctx, first.id) == "withdrawn"
+    listed = await client.get("/v1/baseline/proposals", headers=ctx.as_("owner"))
+    assert str(first.id) not in listed.text and ANSWER not in listed.text
+    resp = await client.post(f"/v1/baseline/proposals/{first.id}/accept", headers=ctx.as_("owner"))
+    assert resp.status_code == 404, resp.text
+
+    # Shared again: a new proposal, at the new level (the question only at counts).
+    await share(client, ctx, intake_id, str(gap.id), "counts")
+    opened = [p for p in await _baseline_proposals(ctx) if p.status == "open"]
+    assert len(opened) == 1 and opened[0].id != first.id
+    assert ANSWER not in json.dumps(opened[0].payload)
+    await share(client, ctx, intake_id, str(gap.id), "summary")
+    [again] = [p for p in await _baseline_proposals(ctx) if p.status == "open"]
+    assert again.id == opened[0].id and ANSWER in json.dumps(again.payload)
+
+
+async def test_decided_proposals_stay_and_the_answer_follows_a_decided_question(client, fake):
+    """A question-only proposal is never accepted (409); once rejected it stays rejected
+    through every level, and the answer reaches the baseline as a follow-up proposal
+    from summary up."""
+    ctx, intake_id, _ = await world(client, fake, hidden=False, model=_blocker_gap)
+    gap = await _answer_model_gap(client, ctx)
+    await share(client, ctx, intake_id, str(gap.id), "counts")
+    [question] = await _baseline_proposals(ctx)
+    resp = await client.post(
+        f"/v1/baseline/proposals/{question.id}/accept", headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 409, resp.text
+    assert "waits for the author to share the answer" in resp.text
+    assert await _status(ctx, question.id) == "open"
+    resp = await client.post(
+        f"/v1/baseline/proposals/{question.id}/reject", headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 200, resp.text
+
+    await share(client, ctx, intake_id, str(gap.id), "summary")
+    rows = await _baseline_proposals(ctx)
+    [follow_up] = [p for p in rows if p.id != question.id]
+    assert follow_up.status == "open" and ANSWER in json.dumps(follow_up.payload)
+    assert await _status(ctx, question.id) == "rejected"
+    resp = await client.post(
+        f"/v1/baseline/proposals/{follow_up.id}/accept", headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    # Decided proposals stay as decided, whatever the level becomes.
+    for level in ("private", "counts", "summary"):
+        await share(client, ctx, intake_id, str(gap.id), level)
+        assert await _status(ctx, question.id) == "rejected", level
+        assert await _status(ctx, follow_up.id) == "accepted", level
+        assert len(await _baseline_proposals(ctx)) == 2, level
+
+
 # --- minors ----------------------------------------------------------------------------------
 
 

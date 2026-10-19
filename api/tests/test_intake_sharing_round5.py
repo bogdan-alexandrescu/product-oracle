@@ -343,12 +343,16 @@ async def test_counts_proposes_only_the_categorys_question(client, fake):
         expected = importance_of(intake, await s.get(KnowledgeGap, gap.id))
     assert same.payload["fields"]["attrs"]["blocker"]["severity"] == expected
 
-    # Back to counts: stripped again; private: still stripped.
-    for level in ("counts", "private"):
-        await share(client, ctx, intake_id, str(gap.id), level)
-        [again] = await _baseline_proposals(ctx)
-        assert again.id == proposal.id and ANSWER not in json.dumps(again.payload), level
-        assert "severity" not in json.dumps(again.payload), level
+    # Back to counts: stripped again.
+    await share(client, ctx, intake_id, str(gap.id), "counts")
+    [again] = await _baseline_proposals(ctx)
+    assert again.id == proposal.id and ANSWER not in json.dumps(again.payload)
+    assert "severity" not in json.dumps(again.payload)
+    # Private (round 6, owner 2026-10-19): the open proposal is withdrawn, still stripped.
+    await share(client, ctx, intake_id, str(gap.id), "private")
+    [again] = await _baseline_proposals(ctx)
+    assert again.id == proposal.id and again.status == "withdrawn"
+    assert ANSWER not in json.dumps(again.payload) and "severity" not in json.dumps(again.payload)
 
 
 async def test_answering_a_finding_at_counts_proposes_only_the_question(client, fake):

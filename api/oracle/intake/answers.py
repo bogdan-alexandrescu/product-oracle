@@ -336,11 +336,14 @@ def proposal_mode(intake: ProductIntake, gap: KnowledgeGap) -> str | None:
 async def propose_shared(
     db: AsyncSession, principal: Principal, intake: ProductIntake, gaps: list[KnowledgeGap]
 ) -> list[uuid.UUID]:
-    """Bring the baseline proposals of answers to these gaps to their new level (S6):
-    proposed once per answer when first shared at counts or above, whatever became of
-    an earlier proposal of it; an open proposal is rewritten in place as the level
-    allows (the question alone at counts or below, the answer and severity from
-    summary up). A decided proposal is left as it was decided."""
+    """Bring the baseline proposals of answers to these gaps to their new level (S6,
+    owner 2026-10-19): proposed once per answer when shared at counts or above; an open
+    proposal is rewritten in place as the level allows (the question alone at counts,
+    the answer and severity from summary up) and **withdrawn** when the finding goes
+    back to private (hidden from the list and from acceptance); sharing it again makes
+    a new one. A decided proposal is left as it was decided; once a question-only one
+    is decided, the answer reaches the baseline as a follow-up proposal from summary
+    up."""
     out: list[uuid.UUID] = []
     for gap in gaps:
         if gap.category not in BASELINE_TYPES:
@@ -373,15 +376,20 @@ async def propose_shared(
             ):
                 await _propose_patch(db, principal, intake, gap, question, row)
             existing = await _proposal_of(db, intake, gap, row)
-            if existing is not None:
-                if existing.status == "open":
-                    fields, reason = _baseline_fields(
-                        intake, gap, question, row, mode or "question"
-                    )
+            if existing is not None and existing.status == "open":
+                if mode is None:
+                    existing.status = "withdrawn"
+                else:
+                    fields, reason = _baseline_fields(intake, gap, question, row, mode)
                     existing.payload = {**existing.payload, "fields": fields, "reason": reason}
                 continue
             if mode is None:
                 continue
+            if existing is not None and existing.status != "withdrawn":
+                # Decided: it stays as decided. Only the answer a decided question-only
+                # proposal never carried is proposed, once others may read it.
+                if not (mode == "full" and baseline_service.awaits_answer(existing.payload)):
+                    continue
             proposal = await _propose_baseline(db, principal, intake, gap, question, row, mode)
             if proposal is not None:
                 out.append(proposal)
@@ -466,7 +474,10 @@ def _baseline_fields(
         attrs["blocker"] = {
             "type": "unknown",
             "limit_kind": "policy" if gap.category == "third_party_policy" else "other",
-            # The severity everyone reads (S6), never one the author's sources set.
+            # The gap's importance as everyone reads it (importance_of, S6): a rule-made
+            # gap's from the brief and public facts only; a model-written gap's is the
+            # model's, which may draw on the author's sources, so it travels only from
+            # summary up (owner 2026-10-19), never in a question-only proposal.
             "severity": importance_of(intake, gap),
             "status": "open",
         }

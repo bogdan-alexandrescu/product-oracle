@@ -278,8 +278,26 @@ async def propose(
     return proposal
 
 
+def awaits_answer(payload: dict[str, Any]) -> bool:
+    """A question-only proposal an intake made of an answer to a finding shared as
+    counts (S6): the category's question, the gap's id and category, no answer. It waits
+    for the author to share the answer (a follow-up proposal carries it) and is never
+    accepted itself: it would make an entity of the question."""
+    fields = payload.get("fields") or {}
+    attrs = fields.get("attrs") or {}
+    return (
+        payload.get("origin") == "agent"
+        and payload.get("op") == "create"
+        and set(attrs) == {"gap_id", "category"}
+    )
+
+
 async def list_proposals(db: AsyncSession, status: str | None = None) -> list[Proposal]:
-    stmt = select(Proposal).order_by(Proposal.created_at.desc())
+    """Proposals, newest first; a withdrawn one (its finding lowered back to private,
+    S6) is never listed."""
+    stmt = (
+        select(Proposal).where(Proposal.status != "withdrawn").order_by(Proposal.created_at.desc())
+    )
     if status:
         stmt = stmt.where(Proposal.status == status)
     return list((await db.scalars(stmt)).all())
@@ -289,10 +307,12 @@ async def decide_proposal(
     db: AsyncSession, proposal_id: uuid.UUID, principal: Principal, accept: bool, note: str | None
 ) -> Proposal:
     proposal = await db.get(Proposal, proposal_id)
-    if proposal is None:
+    if proposal is None or proposal.status == "withdrawn":
         raise NotFoundError("Proposal not found")
     if proposal.status != "open":
         raise ConflictError(f"Proposal is already {proposal.status}")
+    if accept and awaits_answer(proposal.payload):
+        raise ConflictError("This proposal waits for the author to share the answer")
     if accept:
         p = proposal.payload
         reason = note or p.get("reason") or f"accepted proposal {proposal.id}"
