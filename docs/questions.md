@@ -68,9 +68,11 @@ Facts checked against SwarmCloud's live catalogue on 2026-10-16 (`swarm_profiles
 | S4 | Freshness: continuous sync or snapshot when a pipeline runs? | answered | Background incremental sync (webhooks + polling); each run pins the snapshot it started on; between drafts Oracle offers "N new items since draft k, refresh?". |
 | S5 | Connector auth | answered, revised 2026-10-17 | **Per user:** each person connects their own GitHub, Slack, Notion, Fireflies, Google Docs (and later others) through each tool's OAuth or a personal token. Oracle's own LLM calls can run on a connected Claude plan, the way the owner's other internal tools do. |
 | S5b | What disconnecting an integration revokes | answered | Grants Oracle obtained through a provider's OAuth (GitHub, Slack, Google) are revoked at the provider, then deleted; a token the user pasted is only deleted from Oracle, since it may be in use elsewhere. The audit event records the outcome. |
+| S6 | What other members see of findings drawn from a person's private sources | answered | 2026-10-19 (owner): the author chooses, per finding, from several levels: private (the default: others see nothing from it), counts and categories only, Oracle's summary (no verbatim excerpts), or full detail with excerpts. Sharing is audited and the author can lower it again. Applies to intake analysis, conflicts, model-written gaps and items, and anything else derived from owner-only sources. |
 | B1 | Baseline shape: structured graph (goals -> products -> features -> requirements) the user can correct, or document search? | answered | Correctable graph: typed entities + links, evidence on every node, search on top for agents; user corrections are first-class and locked (agents must ask before overriding). |
 | B2 | Goals framework: OKRs, north star, free-form? What do short / medium / long term mean in time? | answered | Goals are spread across everything: a written OKRs/goals doc, a board/strategy deck, founders' heads, and Slack, Notion, Fireflies, Google Docs and uploaded docs. Oracle must extract goals from all sources, propose measurable versions, and confirm them with the user (goals interview where gaps remain). Horizons default (veto any time): short = current quarter, medium = next 2 quarters, long = 12-24 months. |
 | B3 | When sources disagree, who wins? Must every claim cite its source? | answered | Cite every claim. Resolve by stated precedence (code > tracker > docs > chat; newer beats older) with reasoning shown; ask the user only when a conflict changes a feature or priority; immaterial conflicts logged. |
+| B4 | Who may accept a critical hard blocker's risk or approve a feasibility-only scope | answered | 2026-10-19 (owner): owners only (approvers may propose). An acceptance must be reviewed within at most 90 days. Built as company settings; these are the defaults. |
 
 ## Round 4 — Pipelines and outputs
 
@@ -115,6 +117,7 @@ Facts checked against SwarmCloud's live catalogue on 2026-10-16 (`swarm_profiles
 | C2 | Multiple reviewers? Who can approve, and does approval need everyone? | answered | Approver per stop: user approves baseline, feature set, priority, PRD stops; eng lead approves the eng review stop; anyone invited comments. Roles: owner, approver, commenter, viewer. |
 | C3 | Version history: diffs between drafts, "how each comment was addressed" report? | default | Every draft version kept; diff between any two versions; per-version report of how each feedback item was addressed (or why not). |
 | C4 | Write-back: push approved PRD/roadmap into Linear/Jira/Notion/Slack? | answered | Covered by E1 Eng alignment (tracker write) and O1b PRD home (exports). Slack notifications/feedback: see C1. |
+| C5 | Publishing an older approved version after a newer one exists | answered | 2026-10-19 (owner): latest version only. To publish older text, restore it as a new version first. |
 
 ## Round 6 — Interfaces
 
