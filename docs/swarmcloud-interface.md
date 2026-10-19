@@ -123,7 +123,8 @@ to build only after the switches; it moved once all three were merged.)
    claude-code step; one `mcp_credentials` map.
 4. **Checkpoints:** checkpoints become await-input verdict steps in the unrolled shape.
    The Inbox decision is posted as the answer with a stable `answer_id`, once a service
-   principal may answer. **Wait (W2b in docs/questions.md):** `on_expire: fail`, never an
+   principal may answer. **Wait (W2b in docs/questions.md):** 20 h (`expires_after_seconds:
+   72000`) so draft, wait and revise fit in one 24 h credential; `on_expire: fail`, never an
    expiry default; on expiry the checkpoint stays open in the Inbox and the run continues
    as a new workflow once someone decides. The run token is one credential from submission
    (at most 86400 s), so a decision that arrives when too little of it is left for the
