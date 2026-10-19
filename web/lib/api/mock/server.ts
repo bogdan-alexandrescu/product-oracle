@@ -8,6 +8,7 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
@@ -52,6 +53,8 @@ export interface Db {
   llm?: LlmDb;
   /** Product Oracle v2 tables (./v2.ts); absent in data saved before v2. */
   v2?: V2Db;
+  /** Blocker strategies (./blockers.ts) on the v2 rows; absent in older saved data. */
+  blockers?: BlockersDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -907,6 +910,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
     db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
   }
+  // Blocker strategy routes (CR-04): writes on the v2 option, experiment and event rows.
+  db.blockers ??= seedBlockers(db.documents.find((d) => d.kind === "prd")?.id ?? db.tenant_id, db.user_id);
+  const blockerContext = { userId: me.id, role: me.role, v2: db.v2, documents: db.documents };
+  const blockers = await routeBlockers(blockerContext, db.blockers, req, p, q);
+  if (blockers) return blockers;
   const v2 = routeV2(db.v2, req, p, q);
   if (v2) return v2;
 

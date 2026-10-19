@@ -1,0 +1,1231 @@
+"""Blocker strategy (CR-04, build prompt §6) on the baseline graph's constraint entities.
+
+A blocker is a baseline ``constraint`` entity whose ``attrs["blocker"]`` holds the
+strategy (:class:`~oracle.blockers.schemas.BlockerSpec`). Its options, feasibility
+experiments and resolution events are the foundation's tables; their ``blocker_id``
+references any ``entities.id``, so **this module is where ``type = 'constraint'`` is
+enforced** (:func:`require_constraint`): every write path goes through it.
+
+Entity writes go through :mod:`oracle.baseline.service` (a person's write: revisions,
+lock). Every status change appends a :class:`~oracle.v2.models.BlockerResolutionEvent`
+and calls :func:`oracle.changes.record_change` (subject ``blocker_status``) once per
+document the blocker gates. A blocker's status is only trusted when a recorded event
+carries it: :func:`assess` checks that, so a status written around these functions (a
+generic baseline edit of ``attrs``) never clears the readiness gate.
+
+The caller commits.
+"""
+
+import uuid
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
+
+from pydantic import ValidationError
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from oracle import audit, changes
+from oracle.auth.deps import Principal
+from oracle.auth.models import User
+from oracle.baseline import service as baseline
+from oracle.baseline.models import Edge, Entity, Evidence
+from oracle.blockers import policy
+from oracle.blockers.schemas import (
+    BlockerCreate,
+    BlockerGate,
+    BlockerOptionCreate,
+    BlockerOptionDecision,
+    BlockerOptionFallback,
+    BlockerOptionPatch,
+    BlockerPatch,
+    BlockerRiskAcceptanceIn,
+    BlockerSpec,
+    BlockerStatusIn,
+    FeasibilityExperimentCreate,
+    FeasibilityExperimentPatch,
+    FeasibilityScopeIn,
+    dump,
+)
+from oracle.docs.models import Document
+from oracle.v2.concurrency import expect_version, flush_or_conflict
+from oracle.v2.models import (
+    AssumptionDecision,
+    BlockerOption,
+    BlockerResolutionEvent,
+    DocumentSectionLink,
+    FeasibilityExperiment,
+)
+
+# What a blocker may impact (§6: outcomes, requirements, users) and which of those get
+# an ``affects`` edge (the foundation: constraint -> requirement or feature).
+IMPACT_TYPES = (
+    "goal",
+    "outcome",
+    "product",
+    "feature",
+    "requirement",
+    "acceptance_criterion",
+    "person",
+)
+EDGE_IMPACT_TYPES = ("requirement", "feature")
+UNRESOLVED = ("open", "mitigating")
+LIVE_EXPERIMENT = ("planned", "running")
+# An experiment carrying a feasibility scope keeps it while it is one of these.
+SCOPE_EXPERIMENT = ("planned", "running", "succeeded")
+EXPERIMENT_TERMINAL = ("succeeded", "failed", "inconclusive", "cancelled")
+SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
+class BlockerError(Exception):
+    status_code = 400
+
+
+class NotFoundError(BlockerError):
+    status_code = 404
+
+
+class InvalidError(BlockerError):
+    status_code = 422
+
+
+class NotAConstraintError(InvalidError):
+    """The entity exists but is not a ``constraint``: no blocker rows may point at it."""
+
+
+class ConflictError(BlockerError):
+    status_code = 409
+
+
+class NotABlockerError(ConflictError):
+    """A constraint entity without a strategy yet."""
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _writer(principal: Principal, reason: str | None) -> baseline.Writer:
+    return baseline.Writer(principal, "user", reason=reason)
+
+
+# --- lookups: the constraint-only rule ---------------------------------------------------
+
+
+async def require_constraint(
+    db: AsyncSession, entity_id: uuid.UUID, *, for_update: bool = False
+) -> Entity:
+    """The entity, if it is a ``constraint`` of this company; raises otherwise."""
+    stmt = select(Entity).where(Entity.id == entity_id)
+    if for_update:
+        stmt = stmt.with_for_update()
+    entity = await db.scalar(stmt)
+    if entity is None:
+        raise NotFoundError("Blocker not found")
+    if entity.type != "constraint":
+        raise NotAConstraintError(
+            f"{entity.type}:{entity.key} is a {entity.type}, not a constraint; "
+            "blockers, their options, experiments and events live on constraint entities"
+        )
+    return entity
+
+
+def spec_of(entity: Entity) -> BlockerSpec:
+    raw = (entity.attrs or {}).get("blocker")
+    if raw is None:
+        raise NotABlockerError(
+            f"constraint:{entity.key} has no blocker strategy yet; "
+            "make it one with POST /v1/blockers and its entity_id"
+        )
+    try:
+        return BlockerSpec.model_validate(raw)
+    except ValidationError as e:
+        raise InvalidError(
+            f"The blocker strategy of constraint:{entity.key} cannot be read: {e}"
+        ) from e
+
+
+async def get_blocker(
+    db: AsyncSession, entity_id: uuid.UUID, *, for_update: bool = False
+) -> tuple[Entity, BlockerSpec]:
+    entity = await require_constraint(db, entity_id, for_update=for_update)
+    return entity, spec_of(entity)
+
+
+async def _option(db: AsyncSession, option_id: uuid.UUID) -> BlockerOption:
+    option = await db.scalar(
+        select(BlockerOption).where(BlockerOption.id == option_id).with_for_update()
+    )
+    if option is None:
+        raise NotFoundError("Blocker option not found")
+    return option
+
+
+async def _experiment(db: AsyncSession, experiment_id: uuid.UUID) -> FeasibilityExperiment:
+    exp = await db.scalar(
+        select(FeasibilityExperiment)
+        .where(FeasibilityExperiment.id == experiment_id)
+        .with_for_update()
+    )
+    if exp is None:
+        raise NotFoundError("Feasibility experiment not found")
+    return exp
+
+
+# --- validation of references (all company-scoped by the session) ----------------------
+
+
+async def _check_entities(db: AsyncSession, ids: list[uuid.UUID]) -> list[Entity]:
+    if not ids:
+        return []
+    rows = (await db.scalars(select(Entity).where(Entity.id.in_(ids)))).all()
+    found = {e.id: e for e in rows}
+    if missing := [str(i) for i in ids if i not in found]:
+        raise InvalidError(f"Unknown impacted entities: {', '.join(missing)}")
+    if wrong := [f"{e.type}:{e.key}" for e in rows if e.type not in IMPACT_TYPES]:
+        raise InvalidError(f"A blocker impacts {', '.join(IMPACT_TYPES)}; not {', '.join(wrong)}")
+    return [found[i] for i in ids]
+
+
+async def _check_documents(db: AsyncSession, ids: list[uuid.UUID]) -> None:
+    if not ids:
+        return
+    found = set((await db.scalars(select(Document.id).where(Document.id.in_(ids)))).all())
+    if missing := [str(i) for i in ids if i not in found]:
+        raise InvalidError(f"Unknown documents: {', '.join(missing)}")
+
+
+async def _check_user(db: AsyncSession, user_id: uuid.UUID | None, what: str = "owner") -> None:
+    if user_id is not None and await db.get(User, user_id) is None:
+        raise InvalidError(f"The {what} is not a user of this company")
+
+
+async def _check_evidence(db: AsyncSession, ids: list[uuid.UUID]) -> None:
+    if not ids:
+        return
+    found = set((await db.scalars(select(Evidence.id).where(Evidence.id.in_(ids)))).all())
+    if missing := [str(i) for i in ids if i not in found]:
+        raise InvalidError(f"Unknown evidence: {', '.join(missing)}")
+
+
+def _check_classification(spec: BlockerSpec) -> None:
+    """§16 item 8: a third party's limit is capacity, eligibility, permission or policy."""
+    if spec.third_party and spec.limit_kind not in policy.THIRD_PARTY_KINDS:
+        raise InvalidError(
+            "Classify a third-party limit: capacity (rate or capacity), eligibility (API "
+            "eligibility), permission or policy"
+        )
+
+
+def _dedupe(ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    return list(dict.fromkeys(ids))
+
+
+# --- affects edges for impacted requirements and features (§7) ---------------------------
+
+
+async def _sync_affects(
+    db: AsyncSession, principal: Principal, entity: Entity, impacted: list[Entity]
+) -> None:
+    wanted = {e.id for e in impacted if e.type in EDGE_IMPACT_TYPES}
+    existing = {
+        e.dst_id: e
+        for e in (
+            await db.scalars(select(Edge).where(Edge.src_id == entity.id, Edge.type == "affects"))
+        ).all()
+    }
+    writer = _writer(principal, "blocker impact")
+    for dst in wanted - set(existing):
+        await baseline.create_edge(db, writer, src_id=entity.id, dst_id=dst, type_="affects")
+    for dst in set(existing) - wanted:
+        await baseline.delete_edge(db, writer, existing[dst])
+
+
+# --- the strategy record ----------------------------------------------------------------
+
+
+async def _save(
+    db: AsyncSession,
+    principal: Principal,
+    entity: Entity,
+    spec: BlockerSpec,
+    reason: str | None,
+    **fields: Any,
+) -> None:
+    """Write ``spec`` (and title/body) as a person's baseline edit; bumps the revision."""
+    spec.revision += 1
+    changes_ = {"attrs": {"blocker": dump(spec)}, **fields}
+    await baseline.update_entity(db, _writer(principal, reason), entity, changes_)
+
+
+async def linked_document_ids(
+    db: AsyncSession, entity: Entity, spec: BlockerSpec
+) -> list[uuid.UUID]:
+    linked = (
+        await db.scalars(
+            select(DocumentSectionLink.document_id)
+            .where(DocumentSectionLink.entity_id == entity.id)
+            .distinct()
+        )
+    ).all()
+    return _dedupe([*spec.document_ids, *linked])
+
+
+async def _event(
+    db: AsyncSession,
+    principal: Principal,
+    entity: Entity,
+    kind: str,
+    *,
+    from_status: str | None = None,
+    to_status: str | None = None,
+    reason: str | None = None,
+    option_id: uuid.UUID | None = None,
+    experiment_id: uuid.UUID | None = None,
+    data: dict[str, Any] | None = None,
+) -> BlockerResolutionEvent:
+    event = BlockerResolutionEvent(
+        blocker_id=entity.id,
+        option_id=option_id,
+        experiment_id=experiment_id,
+        kind=kind,
+        from_status=from_status,
+        to_status=to_status,
+        reason=reason,
+        actor=principal.actor,
+        data=data or {},
+        # Python's clock, not the transaction's: two events of one request stay ordered.
+        created_at=_now(),
+    )
+    db.add(event)
+    await db.flush()
+    return event
+
+
+async def _record(
+    db: AsyncSession,
+    principal: Principal,
+    entity: Entity,
+    spec: BlockerSpec,
+    cause: str,
+    data: dict[str, Any],
+) -> None:
+    """``record_change`` once per document the blocker gates (once with none)."""
+    docs = await linked_document_ids(db, entity, spec)
+    for doc_id in docs or [None]:
+        await changes.record_change(
+            db,
+            "blocker_status",
+            cause=cause,
+            actor=principal,
+            subject_id=entity.id,
+            subject_ref=f"constraint:{entity.key}",
+            document_id=doc_id,
+            data=data,
+        )
+
+
+async def _transition(
+    db: AsyncSession,
+    principal: Principal,
+    entity: Entity,
+    spec: BlockerSpec,
+    to_status: str,
+    *,
+    kind: str,
+    reason: str | None,
+    cause: str | None = None,
+    option_id: uuid.UUID | None = None,
+    experiment_id: uuid.UUID | None = None,
+    data: dict[str, Any] | None = None,
+) -> BlockerResolutionEvent:
+    """Change the blocker's status: event, entity write, change event and audit."""
+    from_status = spec.status
+    spec.status = to_status  # type: ignore[assignment]
+    await _save(db, principal, entity, spec, reason)
+    event = await _event(
+        db,
+        principal,
+        entity,
+        kind,
+        from_status=from_status,
+        to_status=to_status,
+        reason=reason,
+        option_id=option_id,
+        experiment_id=experiment_id,
+        data=data,
+    )
+    payload = {
+        "from_status": from_status,
+        "to_status": to_status,
+        "reason": reason,
+        "event_id": str(event.id),
+        "kind": kind,
+        **(data or {}),
+    }
+    if option_id:
+        payload["option_id"] = str(option_id)
+    if experiment_id:
+        payload["experiment_id"] = str(experiment_id)
+    await _record(db, principal, entity, spec, cause or kind, payload)
+    await audit.record(db, principal, "blocker.status_changed", "entity", entity.id, payload)
+    return event
+
+
+# --- blockers -------------------------------------------------------------------------------
+
+
+async def create_blocker(db: AsyncSession, principal: Principal, body: BlockerCreate) -> Entity:
+    if (body.entity_id is None) == (body.key is None and body.statement is None):
+        raise InvalidError("Give either entity_id (an existing constraint) or key and statement")
+    if body.entity_id is None and (body.key is None or body.statement is None):
+        raise InvalidError("A new blocker needs both a key and a statement")
+    impacted = await _check_entities(db, _dedupe(body.impacted_entity_ids or []))
+    document_ids = _dedupe(body.document_ids or [])
+    await _check_documents(db, document_ids)
+    await _check_user(db, body.owner_id)
+    spec = BlockerSpec(
+        type=body.type,
+        limit_kind=body.limit_kind or "other",
+        third_party=body.third_party,
+        severity=body.severity or "medium",
+        status=body.status,
+        timing=body.timing,
+        threshold=body.threshold,
+        impacted_entity_ids=[e.id for e in impacted],
+        impacted_users=body.impacted_users or [],
+        owner_id=body.owner_id,
+        review_at=body.review_at,
+        document_ids=document_ids,
+        scaling=body.scaling or {},
+        revision=1,
+    )
+    _check_classification(spec)
+    writer = _writer(principal, body.reason or "blocker created")
+    if body.entity_id is not None:
+        entity = await require_constraint(db, body.entity_id, for_update=True)
+        if "blocker" in (entity.attrs or {}):
+            raise ConflictError(f"constraint:{entity.key} is already a blocker; PATCH it")
+        fields: dict[str, Any] = {"attrs": {"blocker": dump(spec)}}
+        if body.statement is not None:
+            fields["title"] = body.statement
+        if body.detail is not None:
+            fields["body"] = body.detail
+        await baseline.update_entity(db, writer, entity, fields)
+    else:
+        if await baseline.find_entity(db, "constraint", body.key) is not None:
+            raise ConflictError(f"constraint:{body.key} already exists; give its entity_id")
+        result = await baseline.create_entity(
+            db,
+            writer,
+            type_="constraint",
+            key=body.key,
+            title=body.statement,
+            body=body.detail,
+            attrs={"blocker": dump(spec)},
+        )
+        entity = result.entity
+    await _sync_affects(db, principal, entity, impacted)
+    await _event(
+        db,
+        principal,
+        entity,
+        "status_changed",
+        to_status=spec.status,
+        reason=body.reason or "Blocker recorded",
+    )
+    await audit.record(
+        db,
+        principal,
+        "blocker.created",
+        "entity",
+        entity.id,
+        {"key": entity.key, "blocker": dump(spec)},
+    )
+    return entity
+
+
+async def update_blocker(
+    db: AsyncSession, principal: Principal, entity_id: uuid.UUID, body: BlockerPatch
+) -> Entity:
+    entity, spec = await get_blocker(db, entity_id, for_update=True)
+    if spec.revision != body.revision:
+        raise ConflictError("Someone else changed this blocker since you loaded it; reload")
+    given = body.model_fields_set - {"revision", "reason"}
+    fields: dict[str, Any] = {}
+    before = dump(spec)
+    if "statement" in given and body.statement is not None:
+        fields["title"] = body.statement
+    if "detail" in given:
+        fields["body"] = body.detail
+    if "impacted_entity_ids" in given:
+        impacted = await _check_entities(db, _dedupe(body.impacted_entity_ids or []))
+        spec.impacted_entity_ids = [e.id for e in impacted]
+        await _sync_affects(db, principal, entity, impacted)
+    if "document_ids" in given:
+        spec.document_ids = _dedupe(body.document_ids or [])
+        await _check_documents(db, spec.document_ids)
+    if "owner_id" in given:
+        await _check_user(db, body.owner_id)
+        spec.owner_id = body.owner_id
+    for name in ("type", "limit_kind", "severity"):
+        if name in given and getattr(body, name) is not None:
+            setattr(spec, name, getattr(body, name))
+    for name in ("third_party", "timing", "threshold", "review_at"):
+        if name in given:
+            setattr(spec, name, getattr(body, name))
+    if "impacted_users" in given:
+        spec.impacted_users = body.impacted_users or []
+    if "scaling" in given and body.scaling is not None:
+        spec.scaling = body.scaling
+    _check_classification(spec)
+    await _save(db, principal, entity, spec, body.reason, **fields)
+    after = dump(spec)
+    if (before["type"], before["severity"]) != (after["type"], after["severity"]):
+        await _record(
+            db,
+            principal,
+            entity,
+            spec,
+            "blocker_reclassified",
+            {
+                "from_status": spec.status,
+                "to_status": spec.status,
+                "before": {"type": before["type"], "severity": before["severity"]},
+                "after": {"type": after["type"], "severity": after["severity"]},
+            },
+        )
+    await audit.record(
+        db,
+        principal,
+        "blocker.updated",
+        "entity",
+        entity.id,
+        {"fields": sorted(given), "reason": body.reason},
+    )
+    return entity
+
+
+async def set_status(
+    db: AsyncSession, principal: Principal, entity_id: uuid.UUID, body: BlockerStatusIn
+) -> Entity:
+    entity, spec = await get_blocker(db, entity_id, for_update=True)
+    if body.status == "resolved" and not (body.reason or "").strip():
+        raise InvalidError("Say why the blocker is resolved")
+    if body.status == spec.status:
+        return entity
+    kind = (
+        "reopened" if body.status == "open" and spec.status not in UNRESOLVED else "status_changed"
+    )
+    await _transition(db, principal, entity, spec, body.status, kind=kind, reason=body.reason)
+    return entity
+
+
+async def accept_risk(
+    db: AsyncSession, principal: Principal, entity_id: uuid.UUID, body: BlockerRiskAcceptanceIn
+) -> Entity:
+    """An authorized person accepts the risk of an unresolved blocker: who, why, until."""
+    entity, spec = await get_blocker(db, entity_id, for_update=True)
+    if not body.reason.strip():
+        raise InvalidError("Say why the risk is accepted")
+    review_at = _aware(body.review_at)
+    if review_at <= _now():
+        raise InvalidError("The review date of an accepted risk must be in the future")
+    if spec.status == "resolved":
+        raise ConflictError("The blocker is resolved; there is no risk left to accept")
+    docs = await linked_document_ids(db, entity, spec)
+    decision = AssumptionDecision(
+        entity_id=entity.id,
+        document_id=docs[0] if len(docs) == 1 else None,
+        statement=entity.title,
+        decision="accept_risk",
+        rationale=body.reason,
+        decided_by=principal.id,
+        review_at=review_at,
+    )
+    db.add(decision)
+    await db.flush()
+    spec.review_at = review_at
+    data = {
+        "assumption_decision_id": str(decision.id),
+        "review_at": review_at.isoformat(),
+        "type": spec.type,
+        "severity": spec.severity,
+    }
+    await _transition(
+        db,
+        principal,
+        entity,
+        spec,
+        "accepted_risk",
+        kind="risk_accepted",
+        reason=body.reason,
+        data=data,
+    )
+    await audit.record(
+        db,
+        principal,
+        "blocker.risk_accepted",
+        "entity",
+        entity.id,
+        {"reason": body.reason, **data},
+    )
+    return entity
+
+
+async def approve_feasibility_scope(
+    db: AsyncSession, principal: Principal, entity_id: uuid.UUID, body: FeasibilityScopeIn
+) -> Entity:
+    """Proceed only as a scoped feasibility experiment (§6): owner, threshold, gate."""
+    entity, spec = await get_blocker(db, entity_id, for_update=True)
+    exp = await db.get(FeasibilityExperiment, body.experiment_id)
+    if exp is None or exp.blocker_id != entity.id:
+        raise InvalidError("No such feasibility experiment on this blocker")
+    if spec.status == "resolved":
+        raise ConflictError("The blocker is resolved; it needs no feasibility scope")
+    missing = []
+    if exp.owner_id is None:
+        missing.append("an owner")
+    if not exp.success_threshold:
+        missing.append("a success threshold")
+    if exp.decision_gate_at is None:
+        missing.append("a decision gate date")
+    if exp.status not in LIVE_EXPERIMENT:
+        missing.append("a planned or running experiment")
+    if missing:
+        raise InvalidError(f"A feasibility scope needs {', '.join(missing)}")
+    data = {"hypothesis": exp.hypothesis, "decision_gate_at": exp.decision_gate_at.isoformat()}
+    await _transition(
+        db,
+        principal,
+        entity,
+        spec,
+        "feasibility_only",
+        kind="feasibility_scope_approved",
+        reason=body.reason,
+        experiment_id=exp.id,
+        data=data,
+    )
+    await audit.record(
+        db,
+        principal,
+        "blocker.feasibility_scope_approved",
+        "entity",
+        entity.id,
+        {"reason": body.reason, "experiment_id": str(exp.id), **data},
+    )
+    return entity
+
+
+# --- options --------------------------------------------------------------------------------
+
+
+def option_texts(
+    title: str | None, description: str | None, details: dict[str, Any] | None
+) -> list[str]:
+    texts = [title or "", description or ""]
+    texts += [v for v in (details or {}).values() if isinstance(v, str)]
+    return texts
+
+
+def flags_of(option: BlockerOption) -> list[policy.BlockerPolicyFlag]:
+    return policy.screen(*option_texts(option.title, option.description, option.details))
+
+
+async def create_option(
+    db: AsyncSession, principal: Principal, blocker_id: uuid.UUID, body: BlockerOptionCreate
+) -> BlockerOption:
+    entity, _spec = await get_blocker(db, blocker_id)
+    await _check_evidence(db, body.evidence_ids)
+    await _check_user(db, body.owner_id)
+    details = body.details.model_dump(mode="json", exclude_none=True)
+    flags = policy.screen(*option_texts(body.title, body.description, details))
+    option = BlockerOption(
+        blocker_id=entity.id,
+        title=body.title,
+        approach=body.approach,
+        description=body.description,
+        technical_feasibility=body.technical_feasibility,
+        policy_feasibility="low" if flags else body.policy_feasibility,
+        compliance="non_compliant" if flags else "needs_review",
+        status="rejected" if flags else "proposed",
+        details=details,
+        evidence_ids=_dedupe(body.evidence_ids),
+        owner_id=body.owner_id,
+        created_by=principal.id,
+    )
+    db.add(option)
+    await db.flush()
+    await audit.record(
+        db,
+        principal,
+        "blocker_option.created",
+        "blocker_option",
+        option.id,
+        {
+            "blocker_id": str(entity.id),
+            "approach": option.approach,
+            "compliance": option.compliance,
+            "policy_flags": [f.model_dump() for f in flags],
+        },
+    )
+    return option
+
+
+async def update_option(
+    db: AsyncSession, principal: Principal, option_id: uuid.UUID, body: BlockerOptionPatch
+) -> BlockerOption:
+    option = await _option(db, option_id)
+    await get_blocker(db, option.blocker_id)
+    expect_version(option, body.lock_version)
+    given = body.model_fields_set - {"lock_version", "reason"}
+    decided = option.status in ("selected", "fallback")
+    if decided and given & {"title", "approach", "description"}:
+        raise ConflictError(
+            f"The {option.status} option is a decision on this exact text; add another "
+            "option instead of rewriting it"
+        )
+    title = body.title if "title" in given and body.title else option.title
+    description = body.description if "description" in given else option.description
+    details = option.details
+    if "details" in given and body.details is not None:
+        details = body.details.model_dump(mode="json", exclude_none=True)
+    flags = policy.screen(*option_texts(title, description, details))
+    if flags and decided:
+        raise InvalidError(
+            f"A {option.status} option must stay within platform rules: "
+            + "; ".join(f"{f.message} ('{f.match}')" for f in flags)
+        )
+    if flags and body.compliance == "compliant":
+        raise InvalidError(
+            "Flagged text cannot be marked compliant: "
+            + "; ".join(f"{f.message} ('{f.match}')" for f in flags)
+        )
+    if body.compliance is not None and body.compliance != "compliant" and decided:
+        raise InvalidError(f"Reject the {option.status} option before changing its review")
+    if "evidence_ids" in given:
+        await _check_evidence(db, body.evidence_ids or [])
+        option.evidence_ids = _dedupe(body.evidence_ids or [])
+    if "owner_id" in given:
+        await _check_user(db, body.owner_id)
+        option.owner_id = body.owner_id
+    text_changed = (title, description, details, option.approach) != (
+        option.title,
+        option.description,
+        option.details,
+        body.approach or option.approach,
+    )
+    option.title, option.description, option.details = title, description, details
+    for name in ("approach", "technical_feasibility", "policy_feasibility"):
+        if name in given and getattr(body, name) is not None:
+            setattr(option, name, getattr(body, name))
+    if flags:
+        option.compliance = "non_compliant"
+        option.policy_feasibility = "low"
+        option.status = "rejected"
+    elif body.compliance is not None:
+        option.compliance = body.compliance
+    elif text_changed and option.compliance == "compliant" and not decided:
+        # The review was of the old text.
+        option.compliance = "needs_review"
+    await flush_or_conflict(db)
+    await audit.record(
+        db,
+        principal,
+        "blocker_option.updated",
+        "blocker_option",
+        option.id,
+        {
+            "fields": sorted(given),
+            "compliance": option.compliance,
+            "reason": body.reason,
+            "policy_flags": [f.model_dump() for f in flags],
+        },
+    )
+    return option
+
+
+def _require_choosable(option: BlockerOption, what: str) -> None:
+    if option.status == "rejected":
+        raise InvalidError(f"A rejected option cannot be the {what}")
+    if option.compliance != "compliant":
+        raise InvalidError(
+            f"Only an option reviewed as compliant can be the {what} (it is "
+            f"{option.compliance.replace('_', ' ')})"
+        )
+    if flags := flags_of(option):
+        raise InvalidError(
+            f"The {what} must stay within platform rules: "
+            + "; ".join(f"{f.message} ('{f.match}')" for f in flags)
+        )
+
+
+async def select_option(
+    db: AsyncSession, principal: Principal, option_id: uuid.UUID, body: BlockerOptionDecision
+) -> Entity:
+    option = await _option(db, option_id)
+    entity, spec = await get_blocker(db, option.blocker_id, for_update=True)
+    expect_version(option, body.lock_version)
+    _require_choosable(option, "selected option")
+    others = (
+        await db.scalars(
+            select(BlockerOption)
+            .where(
+                BlockerOption.blocker_id == entity.id,
+                BlockerOption.status == "selected",
+                BlockerOption.id != option.id,
+            )
+            .with_for_update()
+        )
+    ).all()
+    for other in others:
+        other.status = "evaluating"
+    option.status = "selected"
+    option.selected_reason = body.reason
+    await flush_or_conflict(db)
+    previous = spec.selected_option_id
+    spec.selected_option_id = option.id
+    from_status = spec.status
+    to_status = "mitigating" if spec.status == "open" else None
+    if to_status:
+        spec.status = to_status  # type: ignore[assignment]
+    await _save(db, principal, entity, spec, body.reason)
+    data = {
+        "from_status": from_status,
+        "to_status": to_status or from_status,
+        "option_id": str(option.id),
+        "previous_option_id": str(previous) if previous else None,
+        "reason": body.reason,
+    }
+    await _event(
+        db,
+        principal,
+        entity,
+        "option_selected",
+        from_status=from_status,
+        to_status=to_status,
+        reason=body.reason,
+        option_id=option.id,
+        data={"previous_option_id": data["previous_option_id"]},
+    )
+    await _record(db, principal, entity, spec, "option_selected", data)
+    await audit.record(db, principal, "blocker_option.selected", "blocker_option", option.id, data)
+    return entity
+
+
+async def mark_fallback(
+    db: AsyncSession, principal: Principal, option_id: uuid.UUID, body: BlockerOptionFallback
+) -> BlockerOption:
+    option = await _option(db, option_id)
+    await get_blocker(db, option.blocker_id)
+    expect_version(option, body.lock_version)
+    if option.status == "selected":
+        raise ConflictError("The selected option cannot also be its own fallback")
+    _require_choosable(option, "fallback")
+    option.status = "fallback"
+    await flush_or_conflict(db)
+    await audit.record(
+        db,
+        principal,
+        "blocker_option.fallback",
+        "blocker_option",
+        option.id,
+        {"reason": body.reason},
+    )
+    return option
+
+
+async def reject_option(
+    db: AsyncSession, principal: Principal, option_id: uuid.UUID, body: BlockerOptionDecision
+) -> BlockerOption:
+    option = await _option(db, option_id)
+    entity, spec = await get_blocker(db, option.blocker_id, for_update=True)
+    expect_version(option, body.lock_version)
+    was_selected = option.status == "selected"
+    option.status = "rejected"
+    await flush_or_conflict(db)
+    if was_selected or spec.selected_option_id == option.id:
+        spec.selected_option_id = None
+        await _save(db, principal, entity, spec, body.reason)
+        await _record(
+            db,
+            principal,
+            entity,
+            spec,
+            "option_rejected",
+            {
+                "from_status": spec.status,
+                "to_status": spec.status,
+                "option_id": str(option.id),
+                "reason": body.reason,
+            },
+        )
+    await audit.record(
+        db,
+        principal,
+        "blocker_option.rejected",
+        "blocker_option",
+        option.id,
+        {"reason": body.reason, "was_selected": was_selected},
+    )
+    return option
+
+
+# --- experiments ----------------------------------------------------------------------------
+
+
+async def create_experiment(
+    db: AsyncSession, principal: Principal, blocker_id: uuid.UUID, body: FeasibilityExperimentCreate
+) -> FeasibilityExperiment:
+    entity, _spec = await get_blocker(db, blocker_id)
+    if body.option_id is not None:
+        option = await db.get(BlockerOption, body.option_id)
+        if option is None or option.blocker_id != entity.id:
+            raise InvalidError("The option is not one of this blocker's options")
+    await _check_user(db, body.owner_id)
+    await _check_evidence(db, body.evidence_ids)
+    exp = FeasibilityExperiment(
+        blocker_id=entity.id,
+        option_id=body.option_id,
+        hypothesis=body.hypothesis,
+        method=body.method,
+        success_threshold=body.success_threshold,
+        owner_id=body.owner_id,
+        decision_gate_at=body.decision_gate_at,
+        evidence_ids=_dedupe(body.evidence_ids),
+    )
+    db.add(exp)
+    await db.flush()
+    await audit.record(
+        db,
+        principal,
+        "feasibility_experiment.created",
+        "feasibility_experiment",
+        exp.id,
+        {
+            "blocker_id": str(entity.id),
+            "option_id": str(body.option_id) if body.option_id else None,
+        },
+    )
+    return exp
+
+
+async def update_experiment(
+    db: AsyncSession,
+    principal: Principal,
+    experiment_id: uuid.UUID,
+    body: FeasibilityExperimentPatch,
+) -> FeasibilityExperiment:
+    exp = await _experiment(db, experiment_id)
+    entity, spec = await get_blocker(db, exp.blocker_id, for_update=True)
+    expect_version(exp, body.lock_version)
+    given = body.model_fields_set - {"lock_version"}
+    old_status = exp.status
+    new_status = body.status if "status" in given and body.status else old_status
+    if new_status != old_status:
+        if old_status in EXPERIMENT_TERMINAL:
+            raise ConflictError(f"The experiment already concluded ({old_status})")
+        if new_status == "planned":
+            raise InvalidError("A started experiment cannot go back to planned")
+    if "owner_id" in given:
+        await _check_user(db, body.owner_id)
+    if "evidence_ids" in given:
+        await _check_evidence(db, body.evidence_ids or [])
+        exp.evidence_ids = _dedupe(body.evidence_ids or [])
+    for name in (
+        "hypothesis",
+        "method",
+        "success_threshold",
+        "owner_id",
+        "decision_gate_at",
+        "result",
+    ):
+        if name in given and not (name == "hypothesis" and body.hypothesis is None):
+            setattr(exp, name, getattr(body, name))
+    if new_status in ("succeeded", "failed", "inconclusive") and not (exp.result or "").strip():
+        raise InvalidError("Record the result when an experiment concludes")
+    exp.status = new_status
+    await flush_or_conflict(db)
+    if new_status != old_status:
+        kind = "experiment_started" if new_status == "running" else "experiment_concluded"
+        await _event(
+            db,
+            principal,
+            entity,
+            kind,
+            experiment_id=exp.id,
+            option_id=exp.option_id,
+            data={"from": old_status, "to": new_status, "result": exp.result},
+        )
+        if (
+            new_status in EXPERIMENT_TERMINAL
+            and new_status != "succeeded"
+            and spec.status == "feasibility_only"
+            and await _scope_experiment_id(db, entity.id) == exp.id
+        ):
+            await _transition(
+                db,
+                principal,
+                entity,
+                spec,
+                "open",
+                kind="status_changed",
+                reason=f"The feasibility experiment {new_status}; its scope no longer holds",
+                cause="feasibility_scope_withdrawn",
+                experiment_id=exp.id,
+            )
+    await audit.record(
+        db,
+        principal,
+        "feasibility_experiment.updated",
+        "feasibility_experiment",
+        exp.id,
+        {"fields": sorted(given), "from": old_status, "to": new_status},
+    )
+    return exp
+
+
+async def _scope_experiment_id(db: AsyncSession, blocker_id: uuid.UUID) -> uuid.UUID | None:
+    last = await _last_status_events(db, [blocker_id])
+    event = last.get(blocker_id)
+    if event is not None and event.kind == "feasibility_scope_approved":
+        return event.experiment_id
+    return None
+
+
+# --- the readiness gate per blocker ------------------------------------------------------
+
+
+async def _last_status_events(
+    db: AsyncSession, blocker_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, BlockerResolutionEvent]:
+    """The latest recorded event that set each blocker's status."""
+    if not blocker_ids:
+        return {}
+    rows = (
+        await db.scalars(
+            select(BlockerResolutionEvent)
+            .where(
+                BlockerResolutionEvent.blocker_id.in_(blocker_ids),
+                BlockerResolutionEvent.to_status.is_not(None),
+            )
+            .order_by(BlockerResolutionEvent.created_at.desc(), BlockerResolutionEvent.id)
+        )
+    ).all()
+    out: dict[uuid.UUID, BlockerResolutionEvent] = {}
+    for r in rows:
+        out.setdefault(r.blocker_id, r)
+    return out
+
+
+@dataclass
+class GateInputs:
+    """What :func:`assess` needs, loaded in bulk for many blockers."""
+
+    last_event: dict[uuid.UUID, BlockerResolutionEvent] = field(default_factory=dict)
+    decisions: dict[uuid.UUID, AssumptionDecision] = field(default_factory=dict)
+    experiments: dict[uuid.UUID, FeasibilityExperiment] = field(default_factory=dict)
+
+
+async def gate_inputs(db: AsyncSession, blocker_ids: list[uuid.UUID]) -> GateInputs:
+    last = await _last_status_events(db, blocker_ids)
+    decision_ids = []
+    for e in last.values():
+        raw = (e.data or {}).get("assumption_decision_id")
+        if e.kind == "risk_accepted" and raw:
+            try:
+                decision_ids.append(uuid.UUID(raw))
+            except ValueError:
+                pass
+    experiment_ids = [e.experiment_id for e in last.values() if e.experiment_id]
+    decisions = {}
+    if decision_ids:
+        decisions = {
+            d.id: d
+            for d in (
+                await db.scalars(
+                    select(AssumptionDecision).where(AssumptionDecision.id.in_(decision_ids))
+                )
+            ).all()
+        }
+    experiments = {}
+    if experiment_ids:
+        experiments = {
+            x.id: x
+            for x in (
+                await db.scalars(
+                    select(FeasibilityExperiment).where(
+                        FeasibilityExperiment.id.in_(experiment_ids)
+                    )
+                )
+            ).all()
+        }
+    return GateInputs(last, decisions, experiments)
+
+
+def _name(entity: Entity) -> str:
+    return f"'{entity.title}' ({entity.key})"
+
+
+def assess(entity: Entity, spec: BlockerSpec | None, inputs: GateInputs) -> BlockerGate:
+    """This blocker's readiness: ``critical`` for a critical hard blocker that is
+    unresolved, unless its status rests on a recorded, still valid decision: a
+    resolution, a risk acceptance before its review date, or a scoped feasibility
+    experiment that has not failed."""
+    if spec is None:
+        return BlockerGate(
+            status="critical",
+            rationale=f"The blocker strategy of {_name(entity)} cannot be read; it cannot vouch "
+            "for readiness until it is fixed",
+        )
+    gating = spec.type == "hard" and spec.severity == "critical"
+    if not gating:
+        if spec.status in UNRESOLVED and (
+            spec.type in ("hard", "unknown") or spec.severity == "critical"
+        ):
+            what = f"{spec.type.capitalize()} {spec.severity}"
+            return BlockerGate(
+                status="warning",
+                rationale=f"{what} blocker {_name(entity)} is {spec.status}; "
+                "research it or decide a path",
+            )
+        return BlockerGate(status="pass", rationale=f"{_name(entity)} does not stop a publish")
+    event = inputs.last_event.get(entity.id)
+    recorded = event.to_status if event else None
+    if recorded != spec.status:
+        return BlockerGate(
+            status="critical",
+            rationale=f"Critical hard blocker {_name(entity)} says '{spec.status}', but that "
+            "status was set outside the blocker strategy (no recorded decision); set it "
+            "through the blocker routes",
+        )
+    if spec.status in UNRESOLVED:
+        return BlockerGate(
+            status="critical",
+            rationale=f"Critical hard blocker {_name(entity)} is unresolved ({spec.status}); "
+            "resolve it, approve a scoped feasibility experiment or accept the risk",
+        )
+    if spec.status == "resolved":
+        return BlockerGate(
+            status="pass",
+            rationale=f"{_name(entity)} is resolved: {event.reason or 'no reason given'}",
+        )
+    if spec.status == "accepted_risk":
+        raw = (event.data or {}).get("assumption_decision_id")
+        decision = None
+        try:
+            decision = inputs.decisions.get(uuid.UUID(raw)) if raw else None
+        except ValueError:
+            decision = None
+        if (
+            event.kind != "risk_accepted"
+            or decision is None
+            or decision.decision != "accept_risk"
+            or decision.entity_id != entity.id
+        ):
+            return BlockerGate(
+                status="critical",
+                rationale=f"{_name(entity)} has no valid risk acceptance on record",
+            )
+        if decision.review_at is not None and _aware(decision.review_at) <= _now():
+            return BlockerGate(
+                status="critical",
+                rationale=f"The accepted risk of {_name(entity)} is past its review date "
+                f"({decision.review_at.date().isoformat()}); review it again",
+            )
+        until = decision.review_at.date().isoformat() if decision.review_at else "no date"
+        return BlockerGate(
+            status="pass",
+            rationale=f"Risk of {_name(entity)} accepted by {event.actor} until {until}: "
+            f"{decision.rationale}",
+        )
+    # feasibility_only
+    exp = inputs.experiments.get(event.experiment_id) if event.experiment_id else None
+    if event.kind != "feasibility_scope_approved" or exp is None:
+        return BlockerGate(
+            status="critical",
+            rationale=f"{_name(entity)} has no approved feasibility experiment on record",
+        )
+    if exp.status not in SCOPE_EXPERIMENT:
+        return BlockerGate(
+            status="critical",
+            rationale=f"The feasibility experiment of {_name(entity)} {exp.status}; the scope "
+            "no longer holds",
+        )
+    return BlockerGate(
+        status="pass",
+        rationale=f"{_name(entity)} proceeds only as a scoped feasibility experiment "
+        f"({exp.status}): {exp.hypothesis}",
+    )
+
+
+def safe_spec(entity: Entity) -> BlockerSpec | None:
+    try:
+        return spec_of(entity)
+    except BlockerError:
+        return None
+
+
+# --- reads ----------------------------------------------------------------------------------
+
+
+async def blockers_for_document(db: AsyncSession, document_id: uuid.UUID) -> list[Entity]:
+    """Constraint entities with a strategy that gate this document: listed in their
+    ``document_ids`` or linked from one of its sections."""
+    linked = select(DocumentSectionLink.entity_id).where(
+        DocumentSectionLink.document_id == document_id,
+        DocumentSectionLink.entity_id.is_not(None),
+    )
+    stmt = select(Entity).where(
+        Entity.type == "constraint",
+        Entity.attrs.has_key("blocker"),
+        or_(
+            Entity.attrs.contains({"blocker": {"document_ids": [str(document_id)]}}),
+            Entity.id.in_(linked),
+        ),
+    )
+    return list((await db.scalars(stmt)).all())
+
+
+async def all_blockers(db: AsyncSession) -> list[Entity]:
+    stmt = select(Entity).where(Entity.type == "constraint", Entity.attrs.has_key("blocker"))
+    return list((await db.scalars(stmt.order_by(Entity.created_at, Entity.id))).all())
+
+
+def rank(entity: Entity, spec: BlockerSpec | None, gate: BlockerGate) -> tuple:
+    order = {"critical": 0, "warning": 1, "pass": 2, "not_applicable": 3}
+    sev = SEVERITY_RANK.get(spec.severity, 9) if spec else -1
+    return (sev, order[gate.status], entity.title.lower(), str(entity.id))
+
+
+def recommended_option(options: list[BlockerOption]) -> uuid.UUID | None:
+    """The best reviewed, compliant, unflagged and not rejected option (advisory)."""
+    score = {"high": 3, "medium": 2, "low": 1, "unknown": 0}
+    candidates = [
+        o
+        for o in options
+        if o.compliance == "compliant" and o.status != "rejected" and not flags_of(o)
+    ]
+    if not candidates:
+        return None
+    best = max(
+        candidates,
+        key=lambda o: (
+            score[o.technical_feasibility] + score[o.policy_feasibility],
+            score[o.policy_feasibility],
+            -o.created_at.timestamp(),
+        ),
+    )
+    return best.id
+
+
+def grouped(rows: list[Any], attr: str = "blocker_id") -> dict[uuid.UUID, list[Any]]:
+    out: dict[uuid.UUID, list[Any]] = defaultdict(list)
+    for r in rows:
+        out[getattr(r, attr)].append(r)
+    return out

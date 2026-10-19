@@ -88,8 +88,11 @@ async def test_create_a_blocker_makes_a_constraint_entity_with_the_strategy(clie
     assert b["key"] == "partner-api-rate-limit"
     assert b["statement"] == "The partner API allows 100 requests a minute per company"
     assert (b["type"], b["limit_kind"], b["severity"], b["status"]) == (
-        "hard", "capacity", "critical", "open",
-    )  # fmt: skip
+        "hard",
+        "capacity",
+        "critical",
+        "open",
+    )
     assert b["limit_kind_label"] == "Rate or capacity limit"
     assert b["threshold"] == "More than 100 requests a minute per company"
     assert b["revision"] == 1
@@ -109,16 +112,21 @@ async def test_an_existing_constraint_entity_becomes_a_blocker(client):
     entity_id = await make_entity(ctx, "constraint", "data-residency")
     resp = await client.post(
         "/v1/blockers",
-        json={"entity_id": str(entity_id), "type": "soft", "limit_kind": "policy",
-              "severity": "high"},
+        json={
+            "entity_id": str(entity_id),
+            "type": "soft",
+            "limit_kind": "policy",
+            "severity": "high",
+        },
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 201, resp.text
     assert resp.json()["blocker"]["id"] == str(entity_id)
     again = await client.post(
-        "/v1/blockers", json={"entity_id": str(entity_id), "type": "soft"},
+        "/v1/blockers",
+        json={"entity_id": str(entity_id), "type": "soft"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert again.status_code == 409
 
 
@@ -175,9 +183,10 @@ async def test_roles(client):
     ctx = await make_ctx()
     for who in ("viewer", "commenter"):
         resp = await client.post(
-            "/v1/blockers", json={"key": "k", "statement": "s", "type": "hard"},
+            "/v1/blockers",
+            json={"key": "k", "statement": "s", "type": "hard"},
             headers=ctx.as_(who),
-        )  # fmt: skip
+        )
         assert resp.status_code == 403, who
     b = (await create_blocker(client, ctx))["blocker"]
     assert (await client.get(f"/v1/blockers/{b['id']}", headers=ctx.as_("viewer"))).is_success
@@ -188,13 +197,15 @@ async def test_roles(client):
     opt = opt.json()
     resp = await client.post(
         f"/v1/blocker-options/{opt['id']}/select",
-        json={"lock_version": opt["lock_version"], "reason": "r"}, headers=ctx.as_("commenter"),
-    )  # fmt: skip
+        json={"lock_version": opt["lock_version"], "reason": "r"},
+        headers=ctx.as_("commenter"),
+    )
     assert resp.status_code == 403
     resp = await client.post(
-        f"/v1/blockers/{b['id']}/accept-risk", json={"reason": "r", "review_at": LATER},
+        f"/v1/blockers/{b['id']}/accept-risk",
+        json={"reason": "r", "review_at": LATER},
         headers=ctx.as_("commenter"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 403
 
 
@@ -206,32 +217,41 @@ async def test_another_companys_blockers_are_invisible(client):
     theirs = (await create_blocker(client, b))["blocker"]
     opt = (await add_option(client, b, theirs["id"])).json()
     exp = await client.post(
-        f"/v1/blockers/{theirs['id']}/experiments", json={"hypothesis": "h"},
+        f"/v1/blockers/{theirs['id']}/experiments",
+        json={"hypothesis": "h"},
         headers=b.as_("approver"),
-    )  # fmt: skip
+    )
     exp = exp.json()
     for who in ("viewer", "approver", "owner", "token"):
         h = a.as_(who)
         assert (await client.get(f"/v1/blockers/{theirs['id']}", headers=h)).status_code == 404
         listed = (await client.get("/v1/blockers", headers=h)).json()
         assert theirs["id"] not in {x["id"] for x in listed}
-        assert (await client.get("/v1/documents/their-prd/blocker-strategy",
-                                 headers=h)).status_code == 404  # fmt: skip
+        assert (
+            await client.get("/v1/documents/their-prd/blocker-strategy", headers=h)
+        ).status_code == 404
     h = a.as_("owner")
     calls = [
         ("PATCH", f"/v1/blockers/{theirs['id']}", {"revision": 1, "severity": "low"}),
         ("POST", f"/v1/blockers/{theirs['id']}/status", {"status": "resolved", "reason": "x"}),
         ("POST", f"/v1/blockers/{theirs['id']}/accept-risk", {"reason": "x", "review_at": LATER}),
-        ("POST", f"/v1/blockers/{theirs['id']}/feasibility-scope",
-         {"experiment_id": exp["id"], "reason": "x"}),
+        (
+            "POST",
+            f"/v1/blockers/{theirs['id']}/feasibility-scope",
+            {"experiment_id": exp["id"], "reason": "x"},
+        ),
         ("POST", f"/v1/blockers/{theirs['id']}/options", {"title": "t", "approach": "operations"}),
         ("POST", f"/v1/blockers/{theirs['id']}/experiments", {"hypothesis": "h"}),
         ("PATCH", f"/v1/blocker-options/{opt['id']}", {"lock_version": 1, "title": "x"}),
         ("POST", f"/v1/blocker-options/{opt['id']}/select", {"lock_version": 1, "reason": "x"}),
         ("POST", f"/v1/blocker-options/{opt['id']}/fallback", {"lock_version": 1}),
         ("POST", f"/v1/blocker-options/{opt['id']}/reject", {"lock_version": 1, "reason": "x"}),
-        ("PATCH", f"/v1/feasibility-experiments/{exp['id']}", {"lock_version": 1, "status": "running"}),
-    ]  # fmt: skip
+        (
+            "PATCH",
+            f"/v1/feasibility-experiments/{exp['id']}",
+            {"lock_version": 1, "status": "running"},
+        ),
+    ]
     for method, path, body in calls:
         resp = await client.request(method, path, json=body, headers=h)
         assert resp.status_code == 404, (method, path, resp.text)
@@ -239,10 +259,9 @@ async def test_another_companys_blockers_are_invisible(client):
     mine = await make_entity(a, "constraint", "mine")
     resp = await client.post(
         "/v1/blockers",
-        json={"entity_id": str(mine), "type": "hard",
-              "impacted_entity_ids": [theirs["id"]]},
+        json={"entity_id": str(mine), "type": "hard", "impacted_entity_ids": [theirs["id"]]},
         headers=h,
-    )  # fmt: skip
+    )
     assert resp.status_code == 422
 
 
@@ -250,10 +269,15 @@ async def test_a_third_party_limit_must_be_classified(client):
     ctx = await make_ctx()
     resp = await client.post(
         "/v1/blockers",
-        json={"key": "k", "statement": "s", "type": "hard", "third_party": "Example network",
-              "limit_kind": "other"},
+        json={
+            "key": "k",
+            "statement": "s",
+            "type": "hard",
+            "third_party": "Example network",
+            "limit_kind": "other",
+        },
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 422
     assert "capacity" in resp.text
 
@@ -263,9 +287,10 @@ async def test_patch_needs_the_current_revision(client):
     b = (await create_blocker(client, ctx))["blocker"]
     h = ctx.as_("approver")
     ok = await client.patch(
-        f"/v1/blockers/{b['id']}", json={"revision": 1, "severity": "high", "reason": "r"},
+        f"/v1/blockers/{b['id']}",
+        json={"revision": 1, "severity": "high", "reason": "r"},
         headers=h,
-    )  # fmt: skip
+    )
     assert ok.status_code == 200, ok.text
     assert ok.json()["blocker"]["severity"] == "high"
     assert ok.json()["blocker"]["revision"] == 2
@@ -284,18 +309,23 @@ async def test_impacted_requirements_get_affects_edges(client):
     ctx = await make_ctx()
     req = await make_entity(ctx, "requirement", "saved-addresses")
     outcome = await make_entity(ctx, "outcome", "faster-repeat-checkout")
-    b = (await create_blocker(
-        client, ctx, impacted_entity_ids=[str(req), str(outcome)],
-        impacted_users=["Returning buyers"],
-    ))["blocker"]  # fmt: skip
+    b = (
+        await create_blocker(
+            client,
+            ctx,
+            impacted_entity_ids=[str(req), str(outcome)],
+            impacted_users=["Returning buyers"],
+        )
+    )["blocker"]
     assert {i["key"] for i in b["impacted"]} == {"saved-addresses", "faster-repeat-checkout"}
     async with tenant_session(ctx.tenant_id) as s:
         edges = (await s.scalars(select(Edge).where(Edge.src_id == uuid.UUID(b["id"])))).all()
         assert [(e.type, e.dst_id) for e in edges] == [("affects", req)]
     resp = await client.patch(
-        f"/v1/blockers/{b['id']}", json={"revision": 1, "impacted_entity_ids": [str(outcome)]},
+        f"/v1/blockers/{b['id']}",
+        json={"revision": 1, "impacted_entity_ids": [str(outcome)]},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 200
     async with tenant_session(ctx.tenant_id) as s:
         assert (await s.scalars(select(Edge).where(Edge.src_id == uuid.UUID(b["id"])))).all() == []
@@ -311,15 +341,24 @@ async def test_a_status_change_records_a_change_event(client):
     seen = []
 
     async def handler(db, event):
-        seen.append((event.subject_kind, event.subject_id, event.document_id, event.cause,
-                     event.data["from_status"], event.data["to_status"]))  # fmt: skip
+        seen.append(
+            (
+                event.subject_kind,
+                event.subject_id,
+                event.document_id,
+                event.cause,
+                event.data["from_status"],
+                event.data["to_status"],
+            )
+        )
 
     with changes.isolated_handlers():
         changes.register_handler("test.capture", handler, subjects={"blocker_status"})
         resp = await client.post(
-            f"/v1/blockers/{b['id']}/status", json={"status": "mitigating", "reason": "Work began"},
+            f"/v1/blockers/{b['id']}/status",
+            json={"status": "mitigating", "reason": "Work began"},
             headers=ctx.as_("approver"),
-        )  # fmt: skip
+        )
     assert resp.status_code == 200, resp.text
     assert resp.json()["blocker"]["status"] == "mitigating"
     assert seen == [
@@ -344,9 +383,10 @@ async def test_a_handler_that_fails_aborts_the_status_change(client):
         changes.register_handler("test.boom", boom)
         with pytest.raises(RuntimeError):
             await client.post(
-                f"/v1/blockers/{b['id']}/status", json={"status": "resolved", "reason": "x"},
+                f"/v1/blockers/{b['id']}/status",
+                json={"status": "resolved", "reason": "x"},
                 headers=ctx.as_("approver"),
-            )  # fmt: skip
+            )
     got = await client.get(f"/v1/blockers/{b['id']}", headers=ctx.as_("viewer"))
     assert got.json()["blocker"]["status"] == "open"
 
@@ -366,13 +406,15 @@ async def test_status_route_rules(client):
     assert resp.status_code == 422  # resolving needs a reason
     resp = await client.post(
         f"/v1/blockers/{b['id']}/status",
-        json={"status": "resolved", "reason": "The provider raised our tier"}, headers=h,
-    )  # fmt: skip
+        json={"status": "resolved", "reason": "The provider raised our tier"},
+        headers=h,
+    )
     assert resp.json()["blocker"]["status"] == "resolved"
     resp = await client.post(
-        f"/v1/blockers/{b['id']}/status", json={"status": "open", "reason": "Tier withdrawn"},
+        f"/v1/blockers/{b['id']}/status",
+        json={"status": "open", "reason": "Tier withdrawn"},
         headers=h,
-    )  # fmt: skip
+    )
     assert resp.json()["blocker"]["status"] == "open"
     kinds = [(e.kind, e.from_status, e.to_status) for e in await _events(ctx, b["id"])]
     assert kinds[-2:] == [("status_changed", "open", "resolved"), ("reopened", "resolved", "open")]
@@ -391,14 +433,25 @@ async def test_select_an_option_with_a_reason(client):
     assert first["details"]["fallback"] == "Queue lookups and retry within the permitted rate"
     resp = await client.post(
         f"/v1/blocker-options/{first['id']}/select",
-        json={"lock_version": first["lock_version"], "reason": "Cheapest"}, headers=h,
-    )  # fmt: skip
+        json={"lock_version": first["lock_version"], "reason": "Cheapest"},
+        headers=h,
+    )
     assert resp.status_code == 422  # not reviewed for compliance yet
     first = await approve_compliance(client, ctx, first)
     assert first["compliance"] == "compliant"
-    second = await approve_compliance(client, ctx, (await add_option(
-        client, ctx, b["id"], title="Ask the provider for a higher tier", approach="partnership",
-    )).json())  # fmt: skip
+    second = await approve_compliance(
+        client,
+        ctx,
+        (
+            await add_option(
+                client,
+                ctx,
+                b["id"],
+                title="Ask the provider for a higher tier",
+                approach="partnership",
+            )
+        ).json(),
+    )
 
     seen = []
 
@@ -411,19 +464,21 @@ async def test_select_an_option_with_a_reason(client):
             f"/v1/blocker-options/{first['id']}/select",
             json={"lock_version": first["lock_version"], "reason": "Fastest within the quota"},
             headers=h,
-        )  # fmt: skip
+        )
         assert resp.status_code == 200, resp.text
         strategy = resp.json()
         assert strategy["blocker"]["selected_option_id"] == first["id"]
         assert strategy["blocker"]["status"] == "mitigating"
         chosen = next(o for o in strategy["options"] if o["id"] == first["id"])
         assert (chosen["status"], chosen["selected_reason"]) == (
-            "selected", "Fastest within the quota",
-        )  # fmt: skip
+            "selected",
+            "Fastest within the quota",
+        )
         resp = await client.post(
             f"/v1/blocker-options/{second['id']}/select",
-            json={"lock_version": second["lock_version"], "reason": "Tier approved"}, headers=h,
-        )  # fmt: skip
+            json={"lock_version": second["lock_version"], "reason": "Tier approved"},
+            headers=h,
+        )
         assert resp.status_code == 200, resp.text
     statuses = {o["id"]: o["status"] for o in resp.json()["options"]}
     assert statuses == {first["id"]: "evaluating", second["id"]: "selected"}
@@ -434,8 +489,9 @@ async def test_select_an_option_with_a_reason(client):
     # A stale lock_version is a conflict, not a silent overwrite.
     resp = await client.post(
         f"/v1/blocker-options/{second['id']}/reject",
-        json={"lock_version": second["lock_version"], "reason": "x"}, headers=h,
-    )  # fmt: skip
+        json={"lock_version": second["lock_version"], "reason": "x"},
+        headers=h,
+    )
     assert resp.status_code == 409
 
 
@@ -445,20 +501,29 @@ async def test_fallback_and_reject(client):
     h = ctx.as_("approver")
     opt = (await add_option(client, ctx, b["id"])).json()
     resp = await client.post(
-        f"/v1/blocker-options/{opt['id']}/fallback", json={"lock_version": opt["lock_version"]},
+        f"/v1/blocker-options/{opt['id']}/fallback",
+        json={"lock_version": opt["lock_version"]},
         headers=h,
-    )  # fmt: skip
+    )
     assert resp.status_code == 422  # a fallback must be reviewed as compliant too
     opt = await approve_compliance(client, ctx, opt)
     resp = await client.post(
-        f"/v1/blocker-options/{opt['id']}/fallback", json={"lock_version": opt["lock_version"]},
+        f"/v1/blocker-options/{opt['id']}/fallback",
+        json={"lock_version": opt["lock_version"]},
         headers=h,
-    )  # fmt: skip
+    )
     assert resp.json()["status"] == "fallback"
+    rewrite = await client.patch(
+        f"/v1/blocker-options/{opt['id']}",
+        json={"lock_version": resp.json()["lock_version"], "title": "Something else"},
+        headers=h,
+    )
+    assert rewrite.status_code == 409  # the reviewed fallback is this exact text
     resp = await client.post(
         f"/v1/blocker-options/{opt['id']}/reject",
-        json={"lock_version": resp.json()["lock_version"], "reason": "Too slow"}, headers=h,
-    )  # fmt: skip
+        json={"lock_version": resp.json()["lock_version"], "reason": "Too slow"},
+        headers=h,
+    )
     assert resp.json()["status"] == "rejected"
 
 
@@ -470,7 +535,7 @@ async def test_editing_a_reviewed_option_needs_a_new_review(client):
         f"/v1/blocker-options/{opt['id']}",
         json={"lock_version": opt["lock_version"], "description": "Cache for an hour instead."},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 200
     assert resp.json()["compliance"] == "needs_review"
 
@@ -491,9 +556,14 @@ async def test_option_evidence_must_be_this_companys(client):
 
 
 async def _experiment(client, ctx, blocker_id, **body):
-    payload = {"hypothesis": "Batching halves calls", "method": "Replay a synthetic day",
-               "success_threshold": "Under 50 requests a minute at peak",
-               "owner_id": str(ctx.users["approver"].id), "decision_gate_at": LATER, **body}  # fmt: skip
+    payload = {
+        "hypothesis": "Batching halves calls",
+        "method": "Replay a synthetic day",
+        "success_threshold": "Under 50 requests a minute at peak",
+        "owner_id": str(ctx.users["approver"].id),
+        "decision_gate_at": LATER,
+        **body,
+    }
     resp = await client.post(
         f"/v1/blockers/{blocker_id}/experiments", json=payload, headers=ctx.as_("approver")
     )
@@ -508,27 +578,28 @@ async def test_experiment_lifecycle(client):
     other_opt = (await add_option(client, ctx, other["id"])).json()
     resp = await client.post(
         f"/v1/blockers/{b['id']}/experiments",
-        json={"hypothesis": "h", "option_id": other_opt["id"]}, headers=ctx.as_("approver"),
-    )  # fmt: skip
+        json={"hypothesis": "h", "option_id": other_opt["id"]},
+        headers=ctx.as_("approver"),
+    )
     assert resp.status_code == 422  # the option belongs to another blocker
     exp = await _experiment(client, ctx, b["id"])
     resp = await client.patch(
         f"/v1/feasibility-experiments/{exp['id']}",
         json={"lock_version": exp["lock_version"], "status": "running"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 200, resp.text
     resp2 = await client.patch(
         f"/v1/feasibility-experiments/{exp['id']}",
         json={"lock_version": exp["lock_version"], "status": "succeeded"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp2.status_code == 409
     resp = await client.patch(
         f"/v1/feasibility-experiments/{exp['id']}",
         json={"lock_version": resp.json()["lock_version"], "status": "succeeded"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 422  # concluding needs a result
     kinds = [e.kind for e in await _events(ctx, b["id"])]
     assert "experiment_started" in kinds
@@ -542,7 +613,7 @@ async def test_feasibility_scope_needs_a_scoped_experiment(client):
         f"/v1/blockers/{b['id']}/feasibility-scope",
         json={"experiment_id": loose["id"], "reason": "Prove it first"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 422
     assert "owner" in resp.text and "decision gate" in resp.text
     exp = await _experiment(client, ctx, b["id"])
@@ -550,17 +621,20 @@ async def test_feasibility_scope_needs_a_scoped_experiment(client):
         f"/v1/blockers/{b['id']}/feasibility-scope",
         json={"experiment_id": exp["id"], "reason": "Ship to one pilot company only"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 200, resp.text
     assert resp.json()["blocker"]["status"] == "feasibility_only"
     assert resp.json()["gate"]["status"] == "pass"
     # The experiment fails: the feasibility scope no longer holds, the blocker reopens.
     resp = await client.patch(
         f"/v1/feasibility-experiments/{exp['id']}",
-        json={"lock_version": exp["lock_version"], "status": "failed",
-              "result": "Peak stayed at 140 a minute"},
+        json={
+            "lock_version": exp["lock_version"],
+            "status": "failed",
+            "result": "Peak stayed at 140 a minute",
+        },
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 200, resp.text
     got = (await client.get(f"/v1/blockers/{b['id']}", headers=ctx.as_("viewer"))).json()
     assert got["blocker"]["status"] == "open"
@@ -576,16 +650,21 @@ async def test_risk_acceptance_records_who_and_why(client):
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
     h = ctx.as_("approver")
     past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
-    for body in ({"reason": "", "review_at": LATER}, {"reason": "ok", "review_at": past},
-                 {"reason": "ok"}):  # fmt: skip
+    for body in (
+        {"reason": "", "review_at": LATER},
+        {"reason": "ok", "review_at": past},
+        {"reason": "ok"},
+    ):
         resp = await client.post(f"/v1/blockers/{b['id']}/accept-risk", json=body, headers=h)
         assert resp.status_code == 422, body
     resp = await client.post(
         f"/v1/blockers/{b['id']}/accept-risk",
-        json={"reason": "Launch to the pilot company; the limit holds at its volume",
-              "review_at": LATER},
+        json={
+            "reason": "Launch to the pilot company; the limit holds at its volume",
+            "review_at": LATER,
+        },
         headers=h,
-    )  # fmt: skip
+    )
     assert resp.status_code == 200, resp.text
     out = resp.json()
     assert out["blocker"]["status"] == "accepted_risk"
@@ -616,11 +695,18 @@ async def test_document_strategy_lists_linked_blockers(client):
         "blocker"
     ]
     async with tenant_session(ctx.tenant_id) as s:
-        s.add(m.DocumentSectionLink(document_id=doc_id, section_key="risks", kind="mentions",
-                                    entity_id=uuid.UUID(via_link["id"])))  # fmt: skip
+        s.add(
+            m.DocumentSectionLink(
+                document_id=doc_id,
+                section_key="risks",
+                kind="mentions",
+                entity_id=uuid.UUID(via_link["id"]),
+            )
+        )
         await s.commit()
-    resp = await client.get("/v1/documents/checkout-redesign/blocker-strategy",
-                            headers=ctx.as_("viewer"))  # fmt: skip
+    resp = await client.get(
+        "/v1/documents/checkout-redesign/blocker-strategy", headers=ctx.as_("viewer")
+    )
     assert resp.status_code == 200, resp.text
     out = resp.json()
     assert {b["blocker"]["id"] for b in out["blockers"]} == {linked["id"], via_link["id"]}
@@ -631,3 +717,17 @@ async def test_document_strategy_lists_linked_blockers(client):
     assert {b["id"] for b in listed.json()} == {linked["id"], via_link["id"]}
     filtered = await client.get("/v1/blockers?severity=low", headers=ctx.as_("viewer"))
     assert [b["id"] for b in filtered.json()] == [via_link["id"]]
+
+
+def test_agents_read_blockers_but_never_decide():
+    """Run tokens (agents) read blocker strategies with the baseline; every write here is
+    a person's decision, so no run-token scope allows it."""
+    from oracle.mcp.scopes import required_scope
+
+    for path in ("/v1/blockers", "/v1/blockers/{blocker_id}", "/v1/blocker-options",
+                 "/v1/feasibility-experiments", "/v1/blocker-events"):  # fmt: skip
+        assert required_scope("GET", path) == "read:baseline", path
+    assert required_scope("GET", "/v1/documents/{doc}/blocker-strategy") == "read:documents"
+    for method, path in NEW_ROUTES:
+        if method != "GET":
+            assert required_scope(method, path) is None, (method, path)

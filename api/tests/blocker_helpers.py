@@ -50,8 +50,13 @@ async def make_document(ctx: Ctx, slug: str = "checkout-redesign") -> uuid.UUID:
 
 async def make_entity(ctx: Ctx, type_: str, key: str, attrs: dict | None = None) -> uuid.UUID:
     async with tenant_session(ctx.tenant_id) as s:
-        entity = Entity(type=type_, key=key, title=key.replace("-", " ").capitalize(),
-                        origin="user", attrs=attrs or {})  # fmt: skip
+        entity = Entity(
+            type=type_,
+            key=key,
+            title=key.replace("-", " ").capitalize(),
+            origin="user",
+            attrs=attrs or {},
+        )
         s.add(entity)
         await s.commit()
         return entity.id
@@ -80,17 +85,18 @@ async def create_blocker(client, ctx: Ctx, who: str = "approver", **overrides) -
 
 async def add_option(client, ctx: Ctx, blocker_id: str, who: str = "approver", **overrides):
     body = {**COMPLIANT_OPTION, **overrides}
-    return await client.post(
-        f"/v1/blockers/{blocker_id}/options", json=body, headers=ctx.as_(who)
-    )
+    return await client.post(f"/v1/blockers/{blocker_id}/options", json=body, headers=ctx.as_(who))
 
 
 async def approve_compliance(client, ctx: Ctx, option: dict) -> dict:
     resp = await client.patch(
         f"/v1/blocker-options/{option['id']}",
-        json={"lock_version": option["lock_version"], "compliance": "compliant",
-              "reason": "Within the provider's published terms"},
+        json={
+            "lock_version": option["lock_version"],
+            "compliance": "compliant",
+            "reason": "Within the provider's published terms",
+        },
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()

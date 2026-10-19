@@ -46,8 +46,11 @@ async def test_no_blockers_is_not_applicable():
 async def test_a_critical_unresolved_hard_blocker_blocks(client):
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
-    b = (await create_blocker(client, ctx, document_ids=[str(doc_id)],
-                              owner_id=str(ctx.users["approver"].id)))["blocker"]  # fmt: skip
+    b = (
+        await create_blocker(
+            client, ctx, document_ids=[str(doc_id)], owner_id=str(ctx.users["approver"].id)
+        )
+    )["blocker"]
     out = await _check(ctx, doc_id)
     assert out.status == "critical"
     assert "Partner API" in out.rationale or "partner API" in out.rationale
@@ -71,12 +74,11 @@ async def test_mitigating_is_still_unresolved(client):
 async def test_lesser_blockers_warn_but_do_not_block(client):
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
-    await create_blocker(client, ctx, key="hard-high", severity="high",
-                         document_ids=[str(doc_id)])  # fmt: skip
-    await create_blocker(client, ctx, key="soft-critical", type="soft",
-                         document_ids=[str(doc_id)])  # fmt: skip
-    await create_blocker(client, ctx, key="unknown-critical", type="unknown",
-                         document_ids=[str(doc_id)])  # fmt: skip
+    await create_blocker(client, ctx, key="hard-high", severity="high", document_ids=[str(doc_id)])
+    await create_blocker(client, ctx, key="soft-critical", type="soft", document_ids=[str(doc_id)])
+    await create_blocker(
+        client, ctx, key="unknown-critical", type="unknown", document_ids=[str(doc_id)]
+    )
     out = await _check(ctx, doc_id)
     assert out.status == "warning"
     assert "unknown-critical" in out.rationale or "Unknown critical" in out.rationale
@@ -90,7 +92,7 @@ async def test_a_resolved_blocker_passes(client):
         f"/v1/blockers/{b['id']}/status",
         json={"status": "resolved", "reason": "The provider raised our tier"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert (await _check(ctx, doc_id)).status == "pass"
 
 
@@ -102,7 +104,7 @@ async def test_an_accepted_risk_passes_until_its_review_date(client):
         f"/v1/blockers/{b['id']}/accept-risk",
         json={"reason": "Pilot company volume stays under the limit", "review_at": LATER},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 200, resp.text
     out = await _check(ctx, doc_id)
     assert out.status == "pass"
@@ -123,16 +125,20 @@ async def test_an_approved_feasibility_experiment_passes(client):
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
     exp = await client.post(
         f"/v1/blockers/{b['id']}/experiments",
-        json={"hypothesis": "Batching halves calls", "success_threshold": "Under 50 a minute",
-              "owner_id": str(ctx.users["approver"].id), "decision_gate_at": LATER},
+        json={
+            "hypothesis": "Batching halves calls",
+            "success_threshold": "Under 50 a minute",
+            "owner_id": str(ctx.users["approver"].id),
+            "decision_gate_at": LATER,
+        },
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     exp = exp.json()
     resp = await client.post(
         f"/v1/blockers/{b['id']}/feasibility-scope",
         json={"experiment_id": exp["id"], "reason": "One pilot company only"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 200, resp.text
     out = await _check(ctx, doc_id)
     assert out.status == "pass"
@@ -142,7 +148,7 @@ async def test_an_approved_feasibility_experiment_passes(client):
         f"/v1/feasibility-experiments/{exp['id']}",
         json={"lock_version": exp["lock_version"], "status": "cancelled"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert (await _check(ctx, doc_id)).status == "critical"
 
 
@@ -154,10 +160,13 @@ async def test_a_status_written_around_the_strategy_does_not_count(client):
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
     resp = await client.patch(
         f"/v1/baseline/entities/{b['id']}",
-        json={"attrs": {"blocker": {**_attrs_of(await _entity(ctx, b["id"])),
-                                    "status": "accepted_risk"}}},
+        json={
+            "attrs": {
+                "blocker": {**_attrs_of(await _entity(ctx, b["id"])), "status": "accepted_risk"}
+            }
+        },
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 200, resp.text
     out = await _check(ctx, doc_id)
     assert out.status == "critical"
@@ -169,8 +178,14 @@ async def test_a_blocker_linked_from_a_section_counts(client):
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx))["blocker"]
     async with tenant_session(ctx.tenant_id) as s:
-        s.add(m.DocumentSectionLink(document_id=doc_id, section_key="risks", kind="mentions",
-                                    entity_id=uuid.UUID(b["id"])))  # fmt: skip
+        s.add(
+            m.DocumentSectionLink(
+                document_id=doc_id,
+                section_key="risks",
+                kind="mentions",
+                entity_id=uuid.UUID(b["id"]),
+            )
+        )
         await s.commit()
     assert (await _check(ctx, doc_id)).status == "critical"
 
@@ -178,11 +193,15 @@ async def test_a_blocker_linked_from_a_section_counts(client):
 async def test_unreadable_blocker_data_fails_closed():
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
-    entity_id = await make_entity(ctx, "constraint", "garbled",
-                                  {"blocker": {"type": "hard", "severity": "catastrophic"}})  # fmt: skip
+    entity_id = await make_entity(
+        ctx, "constraint", "garbled", {"blocker": {"type": "hard", "severity": "catastrophic"}}
+    )
     async with tenant_session(ctx.tenant_id) as s:
-        s.add(m.DocumentSectionLink(document_id=doc_id, section_key="risks", kind="mentions",
-                                    entity_id=entity_id))  # fmt: skip
+        s.add(
+            m.DocumentSectionLink(
+                document_id=doc_id, section_key="risks", kind="mentions", entity_id=entity_id
+            )
+        )
         await s.commit()
     out = await _check(ctx, doc_id)
     assert out.status == "critical"
@@ -202,8 +221,9 @@ async def test_an_advisory_result_alone_never_blocks(client):
         report = await _report(ctx, doc_id)
     assert not report.blocked
     assert {r.key: r.status for r in report.results} == {
-        CHECK_KEY: "not_applicable", "problem_clarity": "critical",
-    }  # fmt: skip
+        CHECK_KEY: "not_applicable",
+        "problem_clarity": "critical",
+    }
 
 
 async def _entity(ctx, entity_id: str) -> Entity:

@@ -74,10 +74,15 @@ def test_limit_kinds_are_separated_with_their_own_paths():
     assert "partnership" in approaches["eligibility"]
     assert "alternative_workflow" in approaches["permission"]
     assert "alternative_workflow" in approaches["policy"]
-    labels = {policy.LIMIT_KIND_LABELS[k] for k in ("capacity", "eligibility", "permission",
-                                                      "policy")}  # fmt: skip
-    assert labels == {"Rate or capacity limit", "API eligibility", "Permissions",
-                      "Third-party policy"}  # fmt: skip
+    labels = {
+        policy.LIMIT_KIND_LABELS[k] for k in ("capacity", "eligibility", "permission", "policy")
+    }
+    assert labels == {
+        "Rate or capacity limit",
+        "API eligibility",
+        "Permissions",
+        "Third-party policy",
+    }
 
 
 async def test_four_third_party_limits_are_classified_separately(client):
@@ -89,14 +94,22 @@ async def test_four_third_party_limits_are_classified_separately(client):
         "policy": "The network forbids automated first messages",
     }
     for kind, statement in kinds.items():
-        await create_blocker(client, ctx, key=f"network-{kind}", statement=statement,
-                             limit_kind=kind, third_party="Example social network")  # fmt: skip
+        await create_blocker(
+            client,
+            ctx,
+            key=f"network-{kind}",
+            statement=statement,
+            limit_kind=kind,
+            third_party="Example social network",
+        )
     for kind in kinds:
-        listed = (await client.get(f"/v1/blockers?limit_kind={kind}",
-                                   headers=ctx.as_("viewer"))).json()  # fmt: skip
+        listed = (
+            await client.get(f"/v1/blockers?limit_kind={kind}", headers=ctx.as_("viewer"))
+        ).json()
         assert [b["key"] for b in listed] == [f"network-{kind}"]
-        strategy = (await client.get(f"/v1/blockers/{listed[0]['id']}",
-                                     headers=ctx.as_("viewer"))).json()  # fmt: skip
+        strategy = (
+            await client.get(f"/v1/blockers/{listed[0]['id']}", headers=ctx.as_("viewer"))
+        ).json()
         assert strategy["blocker"]["limit_kind"] == kind
         assert strategy["blocker"]["third_party"] == "Example social network"
         assert {p["approach"] for p in strategy["compliant_paths"]} == {
@@ -107,14 +120,18 @@ async def test_four_third_party_limits_are_classified_separately(client):
 
 @pytest.mark.parametrize(
     ("title", "category"),
-    [(EVASION[0], "evasion"), (IDENTITY[0], "identity_abuse"),
-     (MESSAGING[0], "unauthorized_messaging")],
-)  # fmt: skip
+    [
+        (EVASION[0], "evasion"),
+        (IDENTITY[0], "identity_abuse"),
+        (MESSAGING[0], "unauthorized_messaging"),
+    ],
+)
 async def test_a_prohibited_option_is_flagged_and_can_never_be_chosen(client, title, category):
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
-    resp = await add_option(client, ctx, b["id"], title=title, technical_feasibility="high",
-                            policy_feasibility="high")  # fmt: skip
+    resp = await add_option(
+        client, ctx, b["id"], title=title, technical_feasibility="high", policy_feasibility="high"
+    )
     assert resp.status_code == 201, resp.text
     opt = resp.json()
     assert opt["compliance"] == "non_compliant"
@@ -124,15 +141,17 @@ async def test_a_prohibited_option_is_flagged_and_can_never_be_chosen(client, ti
     h = ctx.as_("approver")
     v = opt["lock_version"]
     resp = await client.patch(
-        f"/v1/blocker-options/{opt['id']}", json={"lock_version": v, "compliance": "compliant"},
+        f"/v1/blocker-options/{opt['id']}",
+        json={"lock_version": v, "compliance": "compliant"},
         headers=h,
-    )  # fmt: skip
+    )
     assert resp.status_code == 422
     for action, body in (("select", {"reason": "fast"}), ("fallback", {})):
         resp = await client.post(
-            f"/v1/blocker-options/{opt['id']}/{action}", json={"lock_version": v, **body},
+            f"/v1/blocker-options/{opt['id']}/{action}",
+            json={"lock_version": v, **body},
             headers=h,
-        )  # fmt: skip
+        )
         assert resp.status_code == 422, action
     strategy = (await client.get(f"/v1/blockers/{b['id']}", headers=h)).json()
     assert strategy["recommended_option_id"] is None
@@ -153,19 +172,19 @@ async def test_a_selected_option_cannot_be_edited_into_a_prohibited_one(client):
         f"/v1/blocker-options/{opt['id']}/select",
         json={"lock_version": opt["lock_version"], "reason": "Within quota"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     chosen = next(o for o in resp.json()["options"] if o["id"] == opt["id"])
     resp = await client.patch(
         f"/v1/blocker-options/{opt['id']}",
         json={"lock_version": chosen["lock_version"], "details": {"fallback": EVASION[0]}},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 422
     resp = await client.patch(
         f"/v1/blocker-options/{opt['id']}",
         json={"lock_version": chosen["lock_version"], "title": "Something else"},
         headers=ctx.as_("approver"),
-    )  # fmt: skip
+    )
     assert resp.status_code == 409  # a selection is a decision on this exact option
 
 
@@ -173,14 +192,34 @@ async def test_the_recommendation_is_always_a_compliant_option(client):
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
     # The evasive option claims the best feasibility; it must still lose.
-    await add_option(client, ctx, b["id"], title=EVASION[0], technical_feasibility="high",
-                     policy_feasibility="high")  # fmt: skip
-    unreviewed = (await add_option(client, ctx, b["id"], title="Unreviewed idea",
-                                   technical_feasibility="high")).json()  # fmt: skip
-    medium = await approve_compliance(client, ctx, (await add_option(
-        client, ctx, b["id"], title="Queue within the permitted rate", approach="operations",
-        technical_feasibility="medium", policy_feasibility="high",
-    )).json())  # fmt: skip
+    await add_option(
+        client,
+        ctx,
+        b["id"],
+        title=EVASION[0],
+        technical_feasibility="high",
+        policy_feasibility="high",
+    )
+    unreviewed = (
+        await add_option(
+            client, ctx, b["id"], title="Unreviewed idea", technical_feasibility="high"
+        )
+    ).json()
+    medium = await approve_compliance(
+        client,
+        ctx,
+        (
+            await add_option(
+                client,
+                ctx,
+                b["id"],
+                title="Queue within the permitted rate",
+                approach="operations",
+                technical_feasibility="medium",
+                policy_feasibility="high",
+            )
+        ).json(),
+    )
     strategy = (await client.get(f"/v1/blockers/{b['id']}", headers=ctx.as_("viewer"))).json()
     assert strategy["recommended_option_id"] == medium["id"]
     assert strategy["recommended_option_id"] != unreviewed["id"]
