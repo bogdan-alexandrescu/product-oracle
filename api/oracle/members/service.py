@@ -1,6 +1,7 @@
 """Members (users of one company's Oracle) and invites. Functions flush, never commit;
 the router commits once per request. Every change writes an audit event."""
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -19,6 +20,8 @@ if TYPE_CHECKING:
     import httpx
 
     from oracle.auth.deps import Principal
+
+log = logging.getLogger(__name__)
 
 IAP_DEFAULT_ROLE_KEY = "iap_default_role"
 FALLBACK_IAP_ROLE: Role = "commenter"
@@ -490,7 +493,11 @@ async def run_follow_ups(
             await session.rollback()
             continue
         ran += 1
-        ok, outcome, error = await _follow_up(session, row, http)
+        try:
+            ok, outcome, error = await _follow_up(session, row, http)
+        except Exception as exc:  # noqa: BLE001 - one broken call must not stop the others
+            log.exception("follow-up %s (%s) failed", row.id, row.kind)
+            ok, outcome, error = False, "failed", type(exc).__name__
         row.attempts += 1
         row.outcome = outcome
         row.last_error = error
