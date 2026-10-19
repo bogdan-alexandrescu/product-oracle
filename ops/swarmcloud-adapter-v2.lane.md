@@ -27,7 +27,8 @@ Build, behind feature detection so today's flow keeps working while a feature is
 3. **Run tokens through SwarmCloud.** Each workflow sends:
    - `mcp_servers: ["oracle"]` in every claude-code step's input;
    - one top-level `mcp_credentials: {"oracle": {"value": <run token>, "expires_in": N}}`,
-     where N covers the whole workflow, waits included, and is at most 86400. Mint the run
+     where N is the whole workflow's budget, waits included, capped at 86400 (with W2b's
+     24 h wait it is the cap, and the tail rule in 4 covers late decisions). Mint the run
      token with the same lifetime.
    - `can_reach_oracle` turns true, and segment prompts stop pasting earlier outputs: they
      name the Oracle tools to use instead.
@@ -68,7 +69,8 @@ Tests against an extended fake SwarmCloud:
 - each feature on and off;
 - registration, idempotently;
 - the credential map and step inputs exactly as in the contract;
-- the TTL covers the waits;
+- the TTL and the run token's lifetime match and never exceed 86400; a late decision
+  (inside the tail) cancels and continues as a new workflow, and an early one is posted;
 - the egress check, with an X-Forwarded-For spoof refused;
 - a two-round unrolled workflow;
 - answer posting, replay and 409;
