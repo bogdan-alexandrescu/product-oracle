@@ -27,8 +27,33 @@ from sqlalchemy.orm import Mapped, mapped_column
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-ENTITY_TYPES = ("goal", "product", "feature", "requirement", "constraint", "decision", "person")
-EDGE_TYPES = ("supports", "depends_on", "blocks", "part_of", "owned_by")
+# v2 (§7, migration 0013) adds outcome, acceptance_criterion, assumption and risk, and the
+# edges derived_from, verifies, affects and mitigates, so traceability stays in this one
+# graph. A blocker is a "constraint" entity (oracle.v2.schemas.BlockerAttrs in attrs).
+ENTITY_TYPES = (
+    "goal",
+    "product",
+    "feature",
+    "requirement",
+    "constraint",
+    "decision",
+    "person",
+    "outcome",
+    "acceptance_criterion",
+    "assumption",
+    "risk",
+)
+EDGE_TYPES = (
+    "supports",
+    "depends_on",
+    "blocks",
+    "part_of",
+    "owned_by",
+    "derived_from",
+    "verifies",
+    "affects",
+    "mitigates",
+)
 NODE_STATUSES = ("proposed", "confirmed", "rejected")
 ORIGINS = ("user", "agent", "import")
 PROPOSAL_STATUSES = ("open", "accepted", "rejected")

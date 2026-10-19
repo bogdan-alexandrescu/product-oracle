@@ -83,6 +83,12 @@ class DocumentVersion(TenantScoped, Base):
     # User id or API token id; no FK because it can be either.
     imported_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Who approved it (user or API token id); null on approvals before 0013.
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # Optimistic concurrency: the version number an edit started from. An import whose
+    # base is older than the latest version, and that changes a section changed since,
+    # is a conflict (no silent last-write-wins). Null: not given (legacy imports).
+    base_number: Mapped[int | None] = mapped_column(Integer)
     # Where the brief layer came from: the draft's front matter, its template's markers,
     # a "Full version" heading, or none (the version opens on the full document).
     brief_source: Mapped[str] = mapped_column(Text, nullable=False, server_default="none")

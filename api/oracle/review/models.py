@@ -57,6 +57,9 @@ class SectionReview(TenantScoped, Base):
     verdict: Mapped[str] = mapped_column(Text, nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
     reviewer_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # The section's content hash the verdict was given on (sections.content_hash), so an
+    # approval is tied to an exact section revision. Null on verdicts before 0013.
+    section_hash: Mapped[str | None] = mapped_column(Text)
 
 
 class FeedbackItem(TenantScoped, Base):

@@ -16,6 +16,7 @@ import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
@@ -49,6 +50,8 @@ export interface Db {
   runs?: RunsDb;
   /** Built-in model jobs and suggestions (./llm-jobs.ts); absent in older saved data. */
   llm?: LlmDb;
+  /** Product Oracle v2 tables (./v2.ts); absent in data saved before v2. */
+  v2?: V2Db;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -897,6 +900,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     Object.assign(f, await body<Schemas["FeedbackPatch"]>(), { updated_at: now() });
     return json(200, f);
   }
+
+  // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
+  if (!db.v2) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
+    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
+  }
+  const v2 = routeV2(db.v2, req, p, q);
+  if (v2) return v2;
 
   const handled = await laneF(db, req, p, m);
   if (handled) return handled;

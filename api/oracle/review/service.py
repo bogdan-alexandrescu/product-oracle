@@ -416,13 +416,14 @@ async def review_section(
     earlier version, becomes ``superseded``. A non-approved verdict opens a new item.
     """
     version = await get_version(session, doc, n)
-    await _get_section(session, version, section_key)
+    section = await _get_section(session, version, section_key)
     review = SectionReview(
         version_id=version.id,
         section_key=section_key,
         verdict=verdict,
         note=note,
         reviewer_id=principal.id,
+        section_hash=section.content_hash,
         created_at=_now(),
     )
     session.add(review)
@@ -688,6 +689,7 @@ async def approve_version(
     already = version.approved_at is not None
     if not already:
         version.approved_at = _now()
+        version.approved_by = principal.id
     previous_status = document.status
     document.status = "approved"
     await session.flush()
