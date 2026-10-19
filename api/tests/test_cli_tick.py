@@ -72,3 +72,13 @@ def test_tick_prints_the_built_in_jobs(monkeypatch):
     assert code == 0, err
     assert "Built-in jobs: 3 ran, 1 succeeded, 1 failed, 1 retried" in out
     assert "  error: job j1: No Claude account can take this call" in out
+
+
+def test_tick_says_when_the_account_sweep_was_not_due(monkeypatch):
+    monkeypatch.setenv("ORACLE_URL", "http://oracle.test:8000")
+    monkeypatch.setenv("ORACLE_API_TOKEN", "po_secret")
+    pool = {"reclaimed": 0, "examined": 0, "refreshed": 0, "polled": 0, "lease": "not_due"}
+    result = {**RESULT, "errors": [], "claude_accounts": pool}
+    code, out, err, _ = _run(["tick"], lambda r: httpx.Response(200, json=result))
+    assert code == 0, err
+    assert "(sweep not due yet)" in out

@@ -12,10 +12,15 @@ Both implement :class:`Transport`; tests swap in a fake (``gateway.set_transport
 """
 
 import asyncio
+import contextlib
+import ctypes
 import json
 import os
 import re
+import signal
+import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -34,7 +39,9 @@ class LlmSettings(BaseSettings):
     model: str = "claude-opus-5"
     # The Claude Code executable used for subscription tokens.
     claude_bin: str = "claude"
-    timeout_seconds: float = 300.0
+    # One call's limit. 180 s (with a job's 5 s around it) fits in a run ticker's 240 s,
+    # so the scheduled tick and `oracle tick` run built-in jobs; over 235 no job fits.
+    timeout_seconds: float = 180.0
 
 
 @lru_cache
@@ -61,6 +68,10 @@ class LlmAuthError(LlmError):
 
 class LlmUnavailable(LlmError):
     """The call failed for another reason (network, rate limit, Claude Code missing)."""
+
+
+class LlmOutOfTime(LlmUnavailable):
+    """No time left before the caller's deadline for another whole call; not started."""
 
 
 class LlmRateLimited(LlmUnavailable):
@@ -191,6 +202,9 @@ class ClaudeCodeTransport:
                     stderr=asyncio.subprocess.PIPE,
                     cwd=home,
                     env=self.environment(token, request, home),
+                    # Its own process group, so a kill reaches anything it started.
+                    start_new_session=True,
+                    preexec_fn=_die_with_parent(),
                 )
             except FileNotFoundError:
                 raise LlmUnavailable(
@@ -201,9 +215,13 @@ class ClaudeCodeTransport:
                     proc.communicate(render_prompt(request.messages).encode()), self.timeout
                 )
             except TimeoutError:
-                proc.kill()
-                await proc.wait()
+                await _kill(proc)
                 raise LlmUnavailable(f"Claude Code did not answer in {self.timeout:.0f}s") from None
+            except BaseException:
+                # Cancelled (the run ticker's time limit) or anything else: Claude Code
+                # must be gone before the caller gives the account's hold back.
+                await _kill(proc)
+                raise
         return self.parse(stdout, stderr, request)
 
     @staticmethod
@@ -264,6 +282,64 @@ class ClaudeCodeTransport:
             usage=usage,
             readings=readings,
         )
+
+
+#: prctl(2) option: the signal the calling process gets when its parent dies.
+PR_SET_PDEATHSIG = 1
+
+
+def _die_with_parent() -> Callable[[], None] | None:
+    """On Linux, what makes Claude Code die (SIGKILL) when the API process does.
+
+    A cancelled call kills the process group itself (``_kill``); this covers the API
+    process dying first, SIGKILLed or OOM-killed, which runs no ``finally``. It reaches
+    Claude Code only, not what Claude Code started (``--tools ""``: nothing, normally),
+    and fires when the thread that started it exits (the event loop's thread). Elsewhere,
+    and for those, nothing kills them but the container's end (Cloud Run's instance
+    shutdown, or a restart); the account's hold expires meanwhile and the sweep
+    reclaims it (``store.prune_holds``).
+    """
+    if not sys.platform.startswith("linux"):
+        return None
+    prctl = _prctl()
+    if prctl is None:
+        return None
+    parent = os.getpid()
+
+    def preexec() -> None:
+        # In the child, after fork and setsid, before exec: no allocation, no locks.
+        prctl(PR_SET_PDEATHSIG, signal.SIGKILL, 0, 0, 0)
+        if os.getppid() != parent:
+            os._exit(1)  # the parent died before the signal was armed
+
+    return preexec
+
+
+@lru_cache
+def _prctl() -> Callable[..., int] | None:
+    # Resolved before any fork: loading a library in the child is not safe.
+    try:
+        return ctypes.CDLL(None, use_errno=True).prctl
+    except (OSError, AttributeError):
+        return None
+
+
+async def _kill(proc: asyncio.subprocess.Process) -> None:
+    """Kill Claude Code's process group and wait until it is gone, even if cancelled."""
+    if proc.returncode is None:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+    waiting = asyncio.ensure_future(proc.wait())
+    cancelled = False
+    while not waiting.done():
+        try:
+            await asyncio.shield(waiting)
+        except asyncio.CancelledError:
+            cancelled = True
+    if cancelled:
+        raise asyncio.CancelledError
 
 
 class MessagesApiTransport:

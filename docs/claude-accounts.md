@@ -50,8 +50,11 @@ call ends.
 
 ## The sweep
 
-Every five minutes (`ORACLE_CLAUDE_SWEEP_SECONDS`, `0` turns the background task off),
-and on every `oracle tick`:
+Every five minutes (`ORACLE_CLAUDE_SWEEP_SECONDS`, `0` turns the background task off;
+the task is not started while the run ticker is configured, `docs/ops-run-ticker.md`),
+and on every `oracle tick` or run ticker tick when due. No sweep of a company starts
+within 300 s of its last one's completion, whatever the setting or entry point (the
+owner's "sweep now" included): that is checked as the lease is taken. Otherwise:
 
 1. Expired holds are pruned and their records closed `expired` at their own deadline;
    hold records past retention are deleted.

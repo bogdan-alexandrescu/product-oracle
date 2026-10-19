@@ -1021,7 +1021,10 @@ export interface paths {
         put?: never;
         /**
          * Sweep Claude Accounts
-         * @description Run the sweep now: reclaim holds, refresh credentials, read usage.
+         * @description Run the sweep now: reclaim holds, refresh credentials, read usage. Within five
+         *     minutes of the last sweep's completion only the holds are reclaimed
+         *     (``sweep_lease.not_due``): Claude's usage endpoint allows about five calls per five
+         *     minutes per account.
          */
         post: operations["sweep_claude_accounts"];
         delete?: never;
@@ -3063,7 +3066,11 @@ export interface paths {
         get: operations["get_section_link"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Section Link
+         * @description Remove a section link. An approved version's links are pinned (409).
+         */
+        delete: operations["delete_section_link"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3571,6 +3578,453 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/module-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Module Catalog
+         * @description Every module the company can compose with.
+         */
+        get: operations["list_module_catalog"];
+        put?: never;
+        /**
+         * Create Company Module
+         * @description Add a company module (not a built-in).
+         */
+        post: operations["create_company_module"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-catalog/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Module Catalog Entry
+         * @description One module with its effective contract and its release history.
+         */
+        get: operations["get_module_catalog_entry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-catalog/{key}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Module Override
+         * @description A company release of a module (an override of a built-in, or a new release of a
+         *     company module). Built-in upgrades never overwrite it.
+         */
+        post: operations["create_module_override"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Module Packs
+         * @description The built-in packs: General Tech Startup, the Multi-tenant AI Agent Platform and the
+         *     industry packs (O1h), each with its modules in order and their policy tier.
+         */
+        get: operations["list_module_packs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Module Policy
+         * @description Which modules the company makes mandatory, optional or disabled.
+         */
+        get: operations["get_module_policy"];
+        /**
+         * Put Module Policy
+         * @description Set the company module policy. Each document's composition in force gets a change
+         *     event saying what changed; a person re-confirms it to apply the policy.
+         */
+        put: operations["put_module_policy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/template-manifests/{template}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Template Manifest
+         * @description A template's module manifest: which module renders which of its sections, and the
+         *     sections no module claims (template-owned, preserved as-is). Empty for a template
+         *     without a manifest, which composes exactly as before.
+         */
+        get: operations["get_template_manifest"];
+        /**
+         * Put Template Manifest
+         * @description Replace a template's manifest. The template and its versions are not touched; a
+         *     company-edited manifest is never replaced by a packaged one.
+         */
+        put: operations["put_template_manifest"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compositions/recommend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recommend Composition
+         * @description Recommend a module composition for a document, an intake or a template, with the
+         *     reason, source and missing information behind each module. Changes nothing; pass
+         *     `changes` to preview adding, removing or reordering modules.
+         */
+        post: operations["recommend_composition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/composition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Document Composition
+         * @description The composition inspector: for each module, mandatory, suggested or optional; the
+         *     reason and the source or assumption behind it; missing information; brief/full
+         *     impact; dependencies and conflicts; version history; and the revision history. A
+         *     document without a composition is legacy and gets a recommendation instead.
+         */
+        get: operations["get_document_composition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/composition/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Composition Revision
+         * @description Confirm a composition revision, or save it as a working draft: who decided and
+         *     why. It starts from the newest revision, so earlier decisions carry. Mandatory
+         *     modules and dependencies are never removed silently. Confirming puts it in force and
+         *     records change events for the affected sections; a working draft supersedes nothing
+         *     and records none. An earlier decision set aside comes back in `problems`.
+         */
+        post: operations["confirm_composition_revision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/composition/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Composition
+         * @description Pin the confirmed composition to an approved document version: template version,
+         *     module ids and versions, company overrides and inputs. Never changed afterwards.
+         */
+        post: operations["publish_composition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version Trace
+         * @description A version's trace: its anchors (template, composition revision, snapshots), each
+         *     section's links to the baseline and the goals they serve, and the outputs that
+         *     depend on each section (artifacts, roadmap items) with their freshness.
+         */
+        get: operations["get_version_trace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version Evidence
+         * @description The evidence inspector: each section's claim-to-source links (strongest source
+         *     first) and the draft's own per-claim citations. Rendered bodies carry none of these
+         *     (O1c); exports list them in the Sources and data points appendix.
+         */
+        get: operations["get_version_evidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version Impact
+         * @description What this version changes for outputs built on earlier versions, why, and a
+         *     targeted regeneration plan (proposals only), with the changes recorded for it.
+         */
+        get: operations["get_version_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/section-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Section Links
+         * @description Link sections of a version to baseline items, evidence or source items (the
+         *     internal per-claim links behind O1c). Pinned to the section's current hash. An
+         *     approved version's links are pinned with it (409).
+         */
+        post: operations["create_section_links"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entity Trace
+         * @description A baseline node's trace: up to the goals it serves, down to requirements and
+         *     acceptance criteria, the sections linking it and the outputs built on it; for a
+         *     requirement, its assumptions, blockers, alternatives, experiments, decisions, owners
+         *     and risks. A feature serving no confirmed goal is flagged, with its priority.
+         */
+        get: operations["get_entity_trace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entity Impact
+         * @description What a change to this node would make potentially stale, why, and a targeted
+         *     regeneration plan. A preview: nothing is marked.
+         */
+        get: operations["get_entity_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/changes/{change_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Change Impact
+         * @description A recorded change: the outputs it marked potentially stale, why, and a targeted
+         *     regeneration plan (proposals only).
+         */
+        get: operations["get_change_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/staleness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Stale Outputs
+         * @description Outputs that are not fresh (potentially stale or under review by default), a page
+         *     at a time, stalest first, with the dependencies that make them so and why (from the
+         *     change that marked each); ``document_id`` filters by upstream document.
+         */
+        get: operations["list_stale_outputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/staleness/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Act On Staleness
+         * @description Settle a stale output: ``review`` (someone is checking it), ``accept_regeneration``
+         *     (its regeneration proposal is accepted) or ``reconcile`` (confirmed still valid
+         *     against the current upstream, with a reason). Recorded and audited; the output's
+         *     content and approval are never changed.
+         */
+        post: operations["act_on_staleness"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Artifact Dependencies
+         * @description Record what an artifact version (or a derived document version) was made from:
+         *     document sections, whole document versions or baseline items, anchored at their
+         *     current hash. Idempotent per anchor.
+         */
+        post: operations["create_artifact_dependencies"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -3795,6 +4249,16 @@ export interface components {
             refresh_sweep: components["schemas"]["RefreshSweepOut"];
             fallback: components["schemas"]["FallbackOut"] | null;
         };
+        /**
+         * AdvisoryIn
+         * @description An advisory signal for a conditional module (AI analysis or a priority score).
+         */
+        AdvisoryIn: {
+            /** Score */
+            score: number;
+            /** Rationale */
+            rationale: string;
+        };
         /** AgentRoleOut */
         AgentRoleOut: {
             /** Key */
@@ -3846,6 +4310,12 @@ export interface components {
             upstream_section_hash?: string | null;
             /** Upstream Entity Id */
             upstream_entity_id?: string | null;
+            /** Upstream Snapshot */
+            upstream_snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /** Upstream Deleted At */
+            upstream_deleted_at?: string | null;
             /** Composition Revision */
             composition_revision?: number | null;
             /**
@@ -4156,6 +4626,36 @@ export interface components {
             label: string;
         };
         /**
+         * Basis
+         * @description One input that drove a decision: what was read, what it held, and how we know.
+         */
+        Basis: {
+            /** Path */
+            path: string;
+            /** Op */
+            op: string;
+            /** Expected */
+            expected?: unknown;
+            /** Actual */
+            actual?: unknown;
+            /** Holds */
+            holds: boolean;
+            /** Missing */
+            missing: boolean;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Source */
+            source?: string | null;
+        };
+        /**
          * BlockerOptionDetails
          * @description ``blocker_options.details``.
          */
@@ -4319,6 +4819,100 @@ export interface components {
              */
             files: string[];
         };
+        /** CatalogModuleDetail */
+        CatalogModuleDetail: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Builtin */
+            builtin: boolean;
+            /** Archived */
+            archived: boolean;
+            /** Version */
+            version: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "builtin" | "company";
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Company Policy */
+            company_policy?: ("required" | "optional" | "disabled") | null;
+            /** Applies To */
+            applies_to: string[];
+            /** Depends On */
+            depends_on: string[];
+            /** Conflicts With */
+            conflicts_with: string[];
+            /** Section Ids */
+            section_ids: string[];
+            /** Brief Layer */
+            brief_layer: boolean;
+            /** Full Layer */
+            full_layer: boolean;
+            /** Required Review Role */
+            required_review_role: string;
+            /** Upgrade Available */
+            upgrade_available?: string | null;
+            /** Versions */
+            versions: components["schemas"]["ModuleVersionSummary"][];
+            /** Contract */
+            contract: {
+                [key: string]: unknown;
+            };
+        };
+        /** CatalogModuleOut */
+        CatalogModuleOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Builtin */
+            builtin: boolean;
+            /** Archived */
+            archived: boolean;
+            /** Version */
+            version: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "builtin" | "company";
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Company Policy */
+            company_policy?: ("required" | "optional" | "disabled") | null;
+            /** Applies To */
+            applies_to: string[];
+            /** Depends On */
+            depends_on: string[];
+            /** Conflicts With */
+            conflicts_with: string[];
+            /** Section Ids */
+            section_ids: string[];
+            /** Brief Layer */
+            brief_layer: boolean;
+            /** Full Layer */
+            full_layer: boolean;
+            /** Required Review Role */
+            required_review_role: string;
+            /** Upgrade Available */
+            upgrade_available?: string | null;
+            /** Versions */
+            versions: components["schemas"]["ModuleVersionSummary"][];
+        };
         /** ChangeEventOut */
         ChangeEventOut: {
             /**
@@ -4369,6 +4963,21 @@ export interface components {
              * @default
              */
             summary: string;
+        };
+        /** ChangesIn */
+        ChangesIn: {
+            /**
+             * Add
+             * @default []
+             */
+            add: string[];
+            /**
+             * Remove
+             * @default []
+             */
+            remove: string[];
+            /** Order */
+            order?: string[] | null;
         };
         /** ChangesReport */
         ChangesReport: {
@@ -4617,6 +5226,133 @@ export interface components {
             body?: string | null;
         };
         /**
+         * ComposedModule
+         * @description A module in a composition, with everything the inspector explains (§4.5).
+         */
+        ComposedModule: {
+            /** Key */
+            key: string;
+            /** Version */
+            version: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Included */
+            included: boolean;
+            /** Reason */
+            reason: string;
+            /** Order */
+            order: number;
+            /**
+             * Section Ids
+             * @default []
+             */
+            section_ids: string[];
+            /**
+             * Driven By
+             * @default []
+             */
+            driven_by: string[];
+            /** Score */
+            score?: number | null;
+            /** Overridden By */
+            overridden_by?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Origin
+             * @default builtin
+             */
+            origin: string;
+            /**
+             * Selection
+             * @default optional
+             * @enum {string}
+             */
+            selection: "mandatory" | "suggested" | "optional";
+            /**
+             * Decided By
+             * @default none
+             * @enum {string}
+             */
+            decided_by: "policy" | "template" | "condition" | "dependency" | "user" | "conflict" | "none";
+            /**
+             * Policy Source
+             * @default catalog
+             * @enum {string}
+             */
+            policy_source: "company" | "pack" | "template" | "catalog";
+            /**
+             * Explanation
+             * @default []
+             */
+            explanation: string[];
+            /**
+             * Basis
+             * @default []
+             */
+            basis: components["schemas"]["Basis"][];
+            /**
+             * Missing Information
+             * @default []
+             */
+            missing_information: string[];
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["QuestionRef"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Required By
+             * @default []
+             */
+            required_by: string[];
+            /**
+             * Conflicts With
+             * @default []
+             */
+            conflicts_with: string[];
+            /**
+             * @default {
+             *       "brief_sections": [],
+             *       "full_sections": [],
+             *       "new_sections": [],
+             *       "template_sections": [],
+             *       "absent_template_sections": []
+             *     }
+             */
+            layer_impact: components["schemas"]["LayerImpact"];
+            /**
+             * Field Problems
+             * @default []
+             */
+            field_problems: components["schemas"]["FieldProblem"][];
+            /** Condition Error */
+            condition_error?: string | null;
+            /** User Reason */
+            user_reason?: string | null;
+            /**
+             * Ordered By User
+             * @default false
+             */
+            ordered_by_user: boolean;
+            /**
+             * Required Review Role
+             * @default approver
+             */
+            required_review_role: string;
+        };
+        /**
          * CompositionInputs
          * @description What a composition was computed from (§4.3 step 1). Conditions read these roots.
          */
@@ -4736,6 +5472,67 @@ export interface components {
             /** Overridden By */
             overridden_by?: string | null;
         };
+        /** CompositionProblem */
+        CompositionProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Module */
+            module?: string | null;
+            /**
+             * Fatal
+             * @default true
+             */
+            fatal: boolean;
+        };
+        /**
+         * CompositionRecommendIn
+         * @description Recommend for a document (id or slug), an intake, or neither (a template alone).
+         */
+        CompositionRecommendIn: {
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: number | null;
+            /** Packs */
+            packs?: string[] | null;
+            /** Intake Id */
+            intake_id?: string | null;
+            /**
+             * Inputs
+             * @default {}
+             */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Provenance
+             * @default {}
+             */
+            provenance: {
+                [key: string]: components["schemas"]["ProvenanceIn"];
+            };
+            /**
+             * Advisory
+             * @default {}
+             */
+            advisory: {
+                [key: string]: components["schemas"]["AdvisoryIn"];
+            };
+            /**
+             * Field Values
+             * @default {}
+             */
+            field_values: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            changes?: components["schemas"]["ChangesIn"] | null;
+            /** Document */
+            document?: string | null;
+        };
         /** CompositionRevisionOut */
         CompositionRevisionOut: {
             /**
@@ -4775,6 +5572,19 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** CompositionSummary */
+        CompositionSummary: {
+            /** Mandatory */
+            mandatory: number;
+            /** Suggested */
+            suggested: number;
+            /** Optional */
+            optional: number;
+            /** Included */
+            included: number;
+            /** Excluded */
+            excluded: number;
         };
         /** ConfidenceOut */
         ConfidenceOut: {
@@ -5007,6 +5817,15 @@ export interface components {
             /** Slides */
             slides: components["schemas"]["SlideOut"][];
         };
+        /** DependenciesCreate */
+        DependenciesCreate: {
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Upstream */
+            upstream: components["schemas"]["TraceUpstreamRef"][];
+        };
         /** DiffOut */
         DiffOut: {
             /**
@@ -5148,6 +5967,16 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** DocumentSectionsOut */
+        DocumentSectionsOut: {
+            /** Version */
+            version?: number | null;
+            /**
+             * Unmapped
+             * @default []
+             */
+            unmapped: string[];
         };
         /** DocumentSummary */
         DocumentSummary: {
@@ -5607,6 +6436,31 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** EntityTrace */
+        EntityTrace: {
+            entity: components["schemas"]["TraceEntityRef"];
+            /** Flags */
+            flags: string[];
+            /** Goals */
+            goals: components["schemas"]["TraceEntityRef"][];
+            /** Upstream */
+            upstream: components["schemas"]["TraceChainStep"][];
+            /** Downstream */
+            downstream: components["schemas"]["TraceChainStep"][];
+            related: components["schemas"]["TraceRelated"];
+            /** Evidence */
+            evidence: components["schemas"]["TraceEvidenceRef"][];
+            /** Sections */
+            sections: components["schemas"]["TraceSectionRef"][];
+            /** Outputs */
+            outputs: components["schemas"]["TraceOutput"][];
+            priority?: components["schemas"]["RankedFeature"] | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
         /**
          * EntityWriteOut
          * @description A write either applied (``entity``) or became a proposal (the item is locked).
@@ -5765,6 +6619,24 @@ export interface components {
             created_at: string;
         };
         /**
+         * EvidenceCitation
+         * @description A ``[c:id]`` marker the stored draft carries in this section (its per-claim link).
+         */
+        EvidenceCitation: {
+            /** Cite Key */
+            cite_key: string;
+            /** Source */
+            source: string;
+            /** Ref */
+            ref: string;
+            /** Title */
+            title?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Retrieved At */
+            retrieved_at?: string | null;
+        };
+        /**
          * EvidenceCreate
          * @description Evidence from one of your own source items (url, ref and an excerpt are copied
          *     from it unless given), or free-standing (url / ref / excerpt only).
@@ -5780,6 +6652,29 @@ export interface components {
             ref?: string | null;
             /** Retrieved At */
             retrieved_at?: string | null;
+        };
+        /** EvidenceInspector */
+        EvidenceInspector: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Number */
+            number: number;
+            /** Approved */
+            approved: boolean;
+            /** Snapshot */
+            snapshot?: string | null;
+            /** Sections */
+            sections: components["schemas"]["SectionEvidence"][];
         };
         /** EvidenceLinkCreate */
         EvidenceLinkCreate: {
@@ -6053,6 +6948,15 @@ export interface components {
             /** Addressed In Version */
             addressed_in_version?: number | null;
         };
+        /** FieldProblem */
+        FieldProblem: {
+            /** Field */
+            field: string;
+            /** Kind */
+            kind: string;
+            /** Message */
+            message: string;
+        };
         /** FlowCatalog */
         FlowCatalog: {
             /** Flows */
@@ -6250,6 +7154,49 @@ export interface components {
              */
             created_at: string;
         };
+        /** ImpactReport */
+        ImpactReport: {
+            subject: components["schemas"]["ImpactSubject"];
+            change?: components["schemas"]["ChangeEventOut"] | null;
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["ChangeEventOut"][];
+            /** Preview */
+            preview: boolean;
+            /** Affected */
+            affected: components["schemas"]["TraceOutput"][];
+            /**
+             * Affected Entities
+             * @default []
+             */
+            affected_entities: components["schemas"]["TraceEntityRef"][];
+            /** Plan */
+            plan: components["schemas"]["RegenerationProposal"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /** ImpactSubject */
+        ImpactSubject: {
+            /** Kind */
+            kind: string;
+            /** Id */
+            id?: string | null;
+            /** Ref */
+            ref?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+        };
         /**
          * ImportErrorResponse
          * @description 422 body when a draft cannot be imported. Lists every problem, not just the first.
@@ -6392,6 +7339,181 @@ export interface components {
             feedback: components["schemas"]["InboxDocument"][];
             /** Total */
             total: number;
+        };
+        /** InspectedModule */
+        InspectedModule: {
+            /** Key */
+            key: string;
+            /** Version */
+            version: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Included */
+            included: boolean;
+            /** Reason */
+            reason: string;
+            /** Order */
+            order: number;
+            /**
+             * Section Ids
+             * @default []
+             */
+            section_ids: string[];
+            /**
+             * Driven By
+             * @default []
+             */
+            driven_by: string[];
+            /** Score */
+            score?: number | null;
+            /** Overridden By */
+            overridden_by?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Origin
+             * @default builtin
+             */
+            origin: string;
+            /**
+             * Selection
+             * @default optional
+             * @enum {string}
+             */
+            selection: "mandatory" | "suggested" | "optional";
+            /**
+             * Decided By
+             * @default none
+             * @enum {string}
+             */
+            decided_by: "policy" | "template" | "condition" | "dependency" | "user" | "conflict" | "none";
+            /**
+             * Policy Source
+             * @default catalog
+             * @enum {string}
+             */
+            policy_source: "company" | "pack" | "template" | "catalog";
+            /**
+             * Explanation
+             * @default []
+             */
+            explanation: string[];
+            /**
+             * Basis
+             * @default []
+             */
+            basis: components["schemas"]["Basis"][];
+            /**
+             * Missing Information
+             * @default []
+             */
+            missing_information: string[];
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["QuestionRef"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Required By
+             * @default []
+             */
+            required_by: string[];
+            /**
+             * Conflicts With
+             * @default []
+             */
+            conflicts_with: string[];
+            /**
+             * @default {
+             *       "brief_sections": [],
+             *       "full_sections": [],
+             *       "new_sections": [],
+             *       "template_sections": [],
+             *       "absent_template_sections": []
+             *     }
+             */
+            layer_impact: components["schemas"]["LayerImpact"];
+            /**
+             * Field Problems
+             * @default []
+             */
+            field_problems: components["schemas"]["FieldProblem"][];
+            /** Condition Error */
+            condition_error?: string | null;
+            /** User Reason */
+            user_reason?: string | null;
+            /**
+             * Ordered By User
+             * @default false
+             */
+            ordered_by_user: boolean;
+            /**
+             * Required Review Role
+             * @default approver
+             */
+            required_review_role: string;
+            /**
+             * Sections Present
+             * @default []
+             */
+            sections_present: string[];
+            /**
+             * Sections Missing
+             * @default []
+             */
+            sections_missing: string[];
+            /**
+             * Versions
+             * @default []
+             */
+            versions: components["schemas"]["ModuleVersionSummary"][];
+            /** Latest Version */
+            latest_version?: string | null;
+            /** Upgrade Available */
+            upgrade_available?: string | null;
+        };
+        /**
+         * InspectorOut
+         * @description Everything the composition inspector shows for one document (§4.5).
+         */
+        InspectorOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Legacy */
+            legacy: boolean;
+            /** Composition Id */
+            composition_id?: string | null;
+            /** Lock Version */
+            lock_version?: number | null;
+            /** Head Revision */
+            head_revision?: number | null;
+            current?: components["schemas"]["RevisionDetail"] | null;
+            working?: components["schemas"]["RevisionDetail"] | null;
+            recommendation?: components["schemas"]["RecommendationOut"] | null;
+            /** Revisions */
+            revisions: components["schemas"]["RevisionSummary"][];
+            sections: components["schemas"]["DocumentSectionsOut"];
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["CompositionProblem"][];
         };
         /**
          * IntakeAnalysis
@@ -6755,6 +7877,37 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * LayerImpact
+         * @description Where the module shows up in the document (O1f brief and full layers).
+         */
+        LayerImpact: {
+            /**
+             * Brief Sections
+             * @default []
+             */
+            brief_sections: string[];
+            /**
+             * Full Sections
+             * @default []
+             */
+            full_sections: string[];
+            /**
+             * New Sections
+             * @default []
+             */
+            new_sections: string[];
+            /**
+             * Template Sections
+             * @default []
+             */
+            template_sections: string[];
+            /**
+             * Absent Template Sections
+             * @default []
+             */
+            absent_template_sections: string[];
+        };
         /** LearningCreate */
         LearningCreate: {
             /** Outcome Id */
@@ -7061,6 +8214,78 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** ManifestIn */
+        ManifestIn: {
+            /** Modules */
+            modules: components["schemas"]["ManifestModuleIn"][];
+        };
+        /** ManifestModuleIn */
+        ManifestModuleIn: {
+            /** Module Key */
+            module_key: string;
+            /**
+             * Section Ids
+             * @default []
+             */
+            section_ids: string[];
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Module Version */
+            module_version?: string | null;
+            /** Display Order */
+            display_order?: number | null;
+        };
+        /** ManifestModuleOut */
+        ManifestModuleOut: {
+            /** Module Key */
+            module_key: string;
+            /** Module Version */
+            module_version?: string | null;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Display Order */
+            display_order: number;
+            /** Section Ids */
+            section_ids: string[];
+            /**
+             * Sections Present
+             * @default []
+             */
+            sections_present: string[];
+            /**
+             * Sections Absent
+             * @default []
+             */
+            sections_absent: string[];
+            /** Created By */
+            created_by?: string | null;
+        };
+        /** ManifestOut */
+        ManifestOut: {
+            /** Template */
+            template: string;
+            /**
+             * Template Id
+             * Format: uuid
+             */
+            template_id: string;
+            /** Template Version */
+            template_version: number;
+            /** Edited */
+            edited: boolean;
+            /** Manifest Format */
+            manifest_format: number;
+            /** Modules */
+            modules: components["schemas"]["ManifestModuleOut"][];
+            /** Unmapped Sections */
+            unmapped_sections: string[];
+        };
         /** Me */
         Me: {
             /**
@@ -7163,6 +8388,16 @@ export interface components {
              */
             report_id: string;
         };
+        /**
+         * ModuleContractIn
+         * @description A module contract (oracle.v2.contract.ModuleContract) as JSON.
+         */
+        ModuleContractIn: {
+            /** Contract */
+            contract: {
+                [key: string]: unknown;
+            };
+        };
         /** ModuleDefinitionOut */
         ModuleDefinitionOut: {
             /**
@@ -7187,6 +8422,59 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ModulePolicyOut */
+        ModulePolicyOut: {
+            /**
+             * Required
+             * @default []
+             */
+            required: string[];
+            /**
+             * Optional
+             * @default []
+             */
+            optional: string[];
+            /**
+             * Disabled
+             * @default []
+             */
+            disabled: string[];
+            /**
+             * Default Packs
+             * @default []
+             */
+            default_packs: string[];
+            /** Is Default */
+            is_default: boolean;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * ModulePolicySettings
+         * @description The ``module_policy`` company setting (owner writes).
+         */
+        ModulePolicySettings: {
+            /**
+             * Required
+             * @default []
+             */
+            required: string[];
+            /**
+             * Optional
+             * @default []
+             */
+            optional: string[];
+            /**
+             * Disabled
+             * @default []
+             */
+            disabled: string[];
+            /**
+             * Default Packs
+             * @default []
+             */
+            default_packs: string[];
         };
         /** ModuleVersionOut */
         ModuleVersionOut: {
@@ -7213,6 +8501,25 @@ export interface components {
              * @enum {string}
              */
             origin: "builtin" | "company";
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ModuleVersionSummary */
+        ModuleVersionSummary: {
+            /** Version */
+            version: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "builtin" | "company";
+            /** Contract Hash */
+            contract_hash: string;
             /** Created By */
             created_by?: string | null;
             /**
@@ -7335,6 +8642,54 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** OutlineEntry */
+        OutlineEntry: {
+            /** Section Id */
+            section_id: string;
+            /** Heading */
+            heading: string;
+            /** Level */
+            level: number;
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "brief" | "full";
+            /** Module */
+            module?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "template" | "module";
+        };
+        /** PackModuleOut */
+        PackModuleOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+        };
+        /** PackOut */
+        PackOut: {
+            /** Id */
+            id: string;
+            /** Version */
+            version: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Categories */
+            categories: string[];
+            /** Modules */
+            modules: components["schemas"]["PackModuleOut"][];
         };
         /**
          * PrdAnswers
@@ -7501,6 +8856,16 @@ export interface components {
             section_key?: string | null;
         };
         /**
+         * ProblemsOut
+         * @description A refused request: every problem found, each with a stable code.
+         */
+        ProblemsOut: {
+            /** Detail */
+            detail: string;
+            /** Problems */
+            problems: components["schemas"]["CompositionProblem"][];
+        };
+        /**
          * ProblemsResponse
          * @description 422 body when a template or theme fails validation: every problem at once.
          */
@@ -7629,6 +8994,21 @@ export interface components {
             /** Resource Name */
             resource_name: string;
         };
+        /** ProvenanceIn */
+        ProvenanceIn: {
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Source */
+            source?: string | null;
+        };
         /** ProviderOut */
         ProviderOut: {
             /** Key */
@@ -7643,6 +9023,11 @@ export interface components {
             oauth_scopes: string[];
             /** Token Help */
             token_help: string;
+        };
+        /** PublishIn */
+        PublishIn: {
+            /** Version */
+            version: number;
         };
         /** Pushback */
         Pushback: {
@@ -7668,6 +9053,22 @@ export interface components {
             excerpt?: string | null;
             /** Confidence */
             confidence?: number | null;
+        };
+        /** QuestionRef */
+        QuestionRef: {
+            /** Key */
+            key: string;
+            /** Prompt */
+            prompt: string;
+            /** Category */
+            category: string;
+            /** Importance */
+            importance: string;
+            /**
+             * Fills
+             * @default []
+             */
+            fills: string[];
         };
         /** RankedFeature */
         RankedFeature: {
@@ -7832,6 +9233,29 @@ export interface components {
             /** Themes */
             themes: components["schemas"]["ThemeOption"][];
         };
+        /** RecommendationOut */
+        RecommendationOut: {
+            /** Document Id */
+            document_id?: string | null;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: string | null;
+            /** Packs */
+            packs: string[];
+            /** Valid */
+            valid: boolean;
+            summary: components["schemas"]["CompositionSummary"];
+            /** Modules */
+            modules: components["schemas"]["ComposedModule"][];
+            /** Problems */
+            problems: components["schemas"]["CompositionProblem"][];
+            /** Outline */
+            outline: components["schemas"]["OutlineEntry"][];
+            inputs: components["schemas"]["CompositionInputs"];
+        };
         /** ReconnectIn */
         ReconnectIn: {
             /** Token */
@@ -7898,6 +9322,58 @@ export interface components {
             last_outcome: ("ok" | "error") | null;
             /** Readable */
             readable: boolean;
+        };
+        /**
+         * RegenerationProposal
+         * @description A targeted regeneration proposal (§11.5). Nothing runs until a person accepts it,
+         *     and an approved output is never overwritten: regenerating makes a new version.
+         */
+        RegenerationProposal: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "artifact_version" | "document_version";
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "engineering_spec" | "wireframe" | "prototype" | "acceptance_tests" | "roadmap" | "document";
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "regenerate" | "review";
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /**
+             * Entity Ids
+             * @default []
+             */
+            entity_ids: string[];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+            /** Approved */
+            approved: boolean;
+            /**
+             * Keeps Approved Version
+             * @default true
+             */
+            keeps_approved_version: boolean;
+            /** How */
+            how: string;
         };
         /** RegisterIn */
         RegisterIn: {
@@ -8000,6 +9476,132 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** RevisionDetail */
+        RevisionDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "confirmed" | "published" | "superseded";
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Parent Number */
+            parent_number?: number | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            diff: components["schemas"]["RevisionDiff"];
+            /** Lock Version */
+            lock_version: number;
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: string | null;
+            /**
+             * Packs
+             * @default []
+             */
+            packs: string[];
+            inputs: components["schemas"]["CompositionInputs"];
+            /** Modules */
+            modules: components["schemas"]["InspectedModule"][];
+            summary: components["schemas"]["CompositionSummary"];
+        };
+        /** RevisionDiff */
+        RevisionDiff: {
+            /**
+             * Added
+             * @default []
+             */
+            added: string[];
+            /**
+             * Removed
+             * @default []
+             */
+            removed: string[];
+            /**
+             * Version Changed
+             * @default []
+             */
+            version_changed: components["schemas"]["VersionChange"][];
+            /**
+             * Reordered
+             * @default false
+             */
+            reordered: boolean;
+            /**
+             * Material
+             * @default false
+             */
+            material: boolean;
+            /**
+             * Affected Sections
+             * @default []
+             */
+            affected_sections: string[];
+        };
+        /** RevisionIn */
+        RevisionIn: {
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: number | null;
+            /** Packs */
+            packs?: string[] | null;
+            /** Intake Id */
+            intake_id?: string | null;
+            /**
+             * Inputs
+             * @default {}
+             */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Provenance
+             * @default {}
+             */
+            provenance: {
+                [key: string]: components["schemas"]["ProvenanceIn"];
+            };
+            /**
+             * Advisory
+             * @default {}
+             */
+            advisory: {
+                [key: string]: components["schemas"]["AdvisoryIn"];
+            };
+            /**
+             * Field Values
+             * @default {}
+             */
+            field_values: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            changes?: components["schemas"]["ChangesIn"] | null;
+            /** Base Revision */
+            base_revision?: number | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Status
+             * @default confirmed
+             * @enum {string}
+             */
+            status: "confirmed" | "working";
+        };
         /** RevisionOut */
         RevisionOut: {
             /**
@@ -8028,6 +9630,32 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** RevisionSummary */
+        RevisionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "confirmed" | "published" | "superseded";
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Parent Number */
+            parent_number?: number | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            diff: components["schemas"]["RevisionDiff"];
         };
         /**
          * RoadmapAnswers
@@ -8292,6 +9920,124 @@ export interface components {
             /** Words */
             words?: components["schemas"]["WordOp"][] | null;
         };
+        /** SectionEvidence */
+        SectionEvidence: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Level */
+            level: number;
+            /** Layer */
+            layer: string;
+            /** Section Hash */
+            section_hash: string;
+            /** Links */
+            links: components["schemas"]["SectionLinkView"][];
+            /** Citations */
+            citations: components["schemas"]["EvidenceCitation"][];
+        };
+        /** SectionLinkCreate */
+        SectionLinkCreate: {
+            /** Section Key */
+            section_key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "implements" | "evidences" | "claims" | "tests" | "mentions";
+            /**
+             * Precision
+             * @default section
+             * @enum {string}
+             */
+            precision: "section" | "paragraph" | "claim";
+            /** Claim */
+            claim?: string | null;
+            /** Module Key */
+            module_key?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Evidence Id */
+            evidence_id?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+        };
+        /** SectionLinkTarget */
+        SectionLinkTarget: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "entity" | "evidence" | "source_item";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title?: string | null;
+            /** Entity Type */
+            entity_type?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Locked */
+            locked?: boolean | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Url */
+            url?: string | null;
+            /** Ref */
+            ref?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Source Kind */
+            source_kind?: string | null;
+            /**
+             * Restricted
+             * @default false
+             */
+            restricted: boolean;
+        };
+        /** SectionLinkView */
+        SectionLinkView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "implements" | "evidences" | "claims" | "tests" | "mentions";
+            /**
+             * Precision
+             * @enum {string}
+             */
+            precision: "section" | "paragraph" | "claim";
+            /** Claim */
+            claim?: string | null;
+            /** Module Key */
+            module_key?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /** Current */
+            current: boolean;
+            target: components["schemas"]["SectionLinkTarget"];
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** SectionLinksCreate */
+        SectionLinksCreate: {
+            /** Links */
+            links: components["schemas"]["SectionLinkCreate"][];
+        };
         /** SectionOut */
         SectionOut: {
             /**
@@ -8370,6 +10116,27 @@ export interface components {
             feedback_item_id?: string | null;
             /** Layer */
             layer?: ("brief" | "detail") | null;
+        };
+        /** SectionTrace */
+        SectionTrace: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Level */
+            level: number;
+            /** Layer */
+            layer: string;
+            /** Section Hash */
+            section_hash: string;
+            /** Links */
+            links: components["schemas"]["SectionLinkView"][];
+            /** Entities */
+            entities: components["schemas"]["TraceEntityRef"][];
+            /** Goals */
+            goals: components["schemas"]["TraceEntityRef"][];
+            /** Downstream */
+            downstream: components["schemas"]["TraceOutput"][];
         };
         /**
          * SectionVerdict
@@ -8763,6 +10530,48 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * StaleOutputsPage
+         * @description A page of outputs that are not fresh, stalest first.
+         */
+        StaleOutputsPage: {
+            /** Items */
+            items: components["schemas"]["TraceOutput"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Next Offset */
+            next_offset?: number | null;
+        };
+        /**
+         * StalenessAction
+         * @description A person's decision on a downstream output's staleness.
+         *
+         *     ``review``: someone is checking it (under_review). ``accept_regeneration``: the
+         *     regeneration proposal is accepted (under_review until the new version arrives).
+         *     ``reconcile``: confirmed still valid against the current upstream, with a reason.
+         */
+        StalenessAction: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "review" | "accept_regeneration" | "reconcile";
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /**
+             * Dependency Ids
+             * @default []
+             */
+            dependency_ids: string[];
+            /** Reason */
+            reason?: string | null;
         };
         /** StartDraftIn */
         StartDraftIn: {
@@ -9439,6 +11248,156 @@ export interface components {
             /** Scope */
             scope: string;
         };
+        /** TraceAlternativeRef */
+        TraceAlternativeRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Title */
+            title: string;
+            /** Approach */
+            approach: string;
+            /** Status */
+            status: string;
+            /** Compliance */
+            compliance: string;
+        };
+        /** TraceAssumptionDecisionRef */
+        TraceAssumptionDecisionRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Statement */
+            statement: string;
+            /** Decision */
+            decision: string;
+            /** Rationale */
+            rationale: string;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+        };
+        /** TraceChainStep */
+        TraceChainStep: {
+            entity: components["schemas"]["TraceEntityRef"];
+            /**
+             * Edge Id
+             * Format: uuid
+             */
+            edge_id: string;
+            /** Edge Type */
+            edge_type: string;
+            /** Edge Status */
+            edge_status: string;
+            /**
+             * Via
+             * Format: uuid
+             */
+            via: string;
+            /** Depth */
+            depth: number;
+        };
+        /** TraceDependency */
+        TraceDependency: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            upstream: components["schemas"]["TraceUpstream"];
+            /** Caused By Change Id */
+            caused_by_change_id?: string | null;
+            /** Stale Since */
+            stale_since?: string | null;
+            /** Reconciled By */
+            reconciled_by?: string | null;
+            /** Reconciled At */
+            reconciled_at?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+        };
+        /** TraceEntityRef */
+        TraceEntityRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Locked */
+            locked: boolean;
+            /** Confidence */
+            confidence?: number | null;
+        };
+        /** TraceEvidenceRef */
+        TraceEvidenceRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ref */
+            ref?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Kind */
+            kind?: string | null;
+            /** Rank */
+            rank: number;
+        };
+        /** TraceExperimentRef */
+        TraceExperimentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Option Id */
+            option_id?: string | null;
+            /** Hypothesis */
+            hypothesis: string;
+            /** Status */
+            status: string;
+        };
         /** TraceFeature */
         TraceFeature: {
             /**
@@ -9517,6 +11476,110 @@ export interface components {
             /** Contribution */
             contribution: number;
         };
+        /**
+         * TraceOutput
+         * @description A derived output: an artifact version or a document version (a roadmap).
+         */
+        TraceOutput: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "artifact_version" | "document_version";
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "engineering_spec" | "wireframe" | "prototype" | "acceptance_tests" | "roadmap" | "document";
+            /** Artifact Kind */
+            artifact_kind?: ("tech_brief" | "engineering_spec" | "user_flow" | "wireframe" | "prototype" | "acceptance_tests" | "figma_design") | null;
+            /** Document Kind */
+            document_kind?: string | null;
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Approved */
+            approved: boolean;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            /**
+             * Dependencies
+             * @default []
+             */
+            dependencies: components["schemas"]["TraceDependency"][];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+        };
+        /**
+         * TraceRelated
+         * @description What §7 links to a requirement besides the chain itself.
+         */
+        TraceRelated: {
+            /**
+             * Assumptions
+             * @default []
+             */
+            assumptions: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Blockers
+             * @default []
+             */
+            blockers: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Alternatives
+             * @default []
+             */
+            alternatives: components["schemas"]["TraceAlternativeRef"][];
+            /**
+             * Experiments
+             * @default []
+             */
+            experiments: components["schemas"]["TraceExperimentRef"][];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Owners
+             * @default []
+             */
+            owners: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Risks
+             * @default []
+             */
+            risks: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Assumption Decisions
+             * @default []
+             */
+            assumption_decisions: components["schemas"]["TraceAssumptionDecisionRef"][];
+        };
         /** TraceReport */
         TraceReport: {
             /** Low */
@@ -9528,6 +11591,33 @@ export interface components {
             /** Goals */
             goals: components["schemas"]["TraceGoal"][];
             summary: components["schemas"]["TraceSummary"];
+        };
+        /** TraceSectionRef */
+        TraceSectionRef: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Document Kind */
+            document_kind: string;
+            /** Version Id */
+            version_id?: string | null;
+            /** Version Number */
+            version_number?: number | null;
+            /** Section Key */
+            section_key: string;
+            /**
+             * Link Id
+             * Format: uuid
+             */
+            link_id: string;
+            /** Link Kind */
+            link_kind: string;
+            /** Entity Id */
+            entity_id?: string | null;
         };
         /** TraceSummary */
         TraceSummary: {
@@ -9545,6 +11635,49 @@ export interface components {
             confirmed_goals: number;
             /** Uncovered Goals */
             uncovered_goals: number;
+        };
+        /**
+         * TraceUpstream
+         * @description What a dependency points at (its version anchor).
+         */
+        TraceUpstream: {
+            /** Document Id */
+            document_id?: string | null;
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Document Kind */
+            document_kind?: string | null;
+            /** Version Id */
+            version_id?: string | null;
+            /** Version Number */
+            version_number?: number | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Section Hash */
+            section_hash?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            entity?: components["schemas"]["TraceEntityRef"] | null;
+            /**
+             * Deleted
+             * @default false
+             */
+            deleted: boolean;
+            /** Deleted At */
+            deleted_at?: string | null;
+        };
+        /**
+         * TraceUpstreamRef
+         * @description A dependency's upstream: a document version (a section of it, or all of it), or a
+         *     baseline entity.
+         */
+        TraceUpstreamRef: {
+            /** Version Id */
+            version_id?: string | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
         };
         /** UploadResult */
         UploadResult: {
@@ -9565,6 +11698,60 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * VersionAnchors
+         * @description The version anchors of §7 for one document version.
+         */
+        VersionAnchors: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Document Kind */
+            document_kind: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Number */
+            number: number;
+            /** Content Hash */
+            content_hash: string;
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /** Composition Status */
+            composition_status?: string | null;
+            /** Baseline Snapshot Id */
+            baseline_snapshot_id?: string | null;
+            /**
+             * Source Snapshot Ids
+             * @default []
+             */
+            source_snapshot_ids: string[];
+            /** Snapshot */
+            snapshot?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Source Version Id */
+            source_version_id?: string | null;
+        };
+        /** VersionChange */
+        VersionChange: {
+            /** Key */
+            key: string;
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
         };
         /** VersionOut */
         VersionOut: {
@@ -9709,6 +11896,24 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** VersionTrace */
+        VersionTrace: {
+            anchors: components["schemas"]["VersionAnchors"];
+            /** Sections */
+            sections: components["schemas"]["SectionTrace"][];
+            /** Whole Version Downstream */
+            whole_version_downstream: components["schemas"]["TraceOutput"][];
+            /**
+             * Upstream
+             * @default []
+             */
+            upstream: components["schemas"]["TraceDependency"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /**
          * VersionWarning
@@ -15887,6 +18092,35 @@ export interface operations {
             };
         };
     };
+    delete_section_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_artifact_dependencies: {
         parameters: {
             query?: {
@@ -16751,6 +18985,758 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LearningOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_module_catalog: {
+        parameters: {
+            query?: {
+                pack?: string | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_company_module: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModuleContractIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleDetail"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    get_module_catalog_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_module_override: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModuleContractIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleDetail"];
+                };
+            };
+            /** @description No such module */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    list_module_packs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOut"][];
+                };
+            };
+        };
+    };
+    get_module_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModulePolicyOut"];
+                };
+            };
+        };
+    };
+    put_module_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModulePolicySettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModulePolicyOut"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    get_template_manifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_template_manifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManifestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestOut"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    recommend_composition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompositionRecommendIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationOut"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    get_document_composition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_composition_revision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectorOut"];
+                };
+            };
+            /** @description Changed since loaded, or not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    publish_composition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompositionRevisionOut"];
+                };
+            };
+            /** @description Changed since loaded, or not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_trace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionTrace"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_evidence: {
+        parameters: {
+            query?: {
+                section?: string | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceInspector"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_section_links: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionLinksCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSectionLinkOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entity_trace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityTrace"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entity_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_change_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_stale_outputs: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                freshness?: ("fresh" | "potentially_stale" | "under_review" | "reconciled") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleOutputsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    act_on_staleness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StalenessAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceOutput"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_artifact_dependencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependenciesCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactDependencyOut"][];
                 };
             };
             /** @description Validation Error */

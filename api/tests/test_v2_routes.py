@@ -1,6 +1,7 @@
 """The thin v2 read routes: list and get per entity, role guard, company scoping."""
 
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -8,12 +9,13 @@ from oracle.main import app
 from oracle.mcp.tools import app_operations
 from oracle.v2.router import RESOURCES
 from tests.baseline_helpers import make_ctx
+from tests.conftest import seed_company
 from tests.v2_helpers import seed_v2
 
 # Route path -> the table its rows come from.
 TABLE = {r.path: r.model.__tablename__ for r in RESOURCES}
 PATHS = sorted(TABLE)
-FIXTURES_DIR_PRD = "tests/fixtures/prd_v1.md"
+FIXTURES_DIR_PRD = Path(__file__).parent / "fixtures" / "prd_v1.md"
 
 
 def test_every_new_table_has_a_list_and_a_get():
@@ -136,6 +138,7 @@ async def test_typed_json_columns_come_back_typed(client):
 async def test_legacy_documents_and_templates_load_as_before(client):
     """A document with no composition and a template with no manifest behave as before."""
     ctx = await make_ctx()
+    await seed_company(ctx.tenant_id)
     owner = ctx.as_("owner")
     with open(FIXTURES_DIR_PRD, encoding="utf-8") as f:
         markdown = f.read()

@@ -127,6 +127,8 @@ class ClaudeSweepLease(TenantScoped, Base):
     generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_outcome: Mapped[str | None] = mapped_column(Text)
+    # A 429 from the usage endpoint: no usage poll before this (its retry-after).
+    usage_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ClaudeFallbackCredential(TenantScoped, Base):
