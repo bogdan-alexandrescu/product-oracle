@@ -21,6 +21,7 @@ from oracle.claude_accounts.sweep import sweep as sweep_claude_accounts
 from oracle.jobs.worker import run_pending as run_llm_jobs
 from oracle.runs import service
 from oracle.runs.schemas import (
+    CancelAgain,
     CheckpointDecision,
     EstimateOut,
     FlowCatalog,
@@ -190,8 +191,30 @@ async def stop_cancelling_run(run_id: uuid.UUID, principal: Approver, db: Tenant
 async def retry_lookup_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
     """Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status
     did not read past its search's end, or SwarmCloud answered it with 404s that prove
-    nothing. Read, its cost is counted on the run and it is followed until it ends."""
+    nothing, or its confirmed cancel still reads CANCELLING. Read, its cost is counted
+    on the run and it is followed until it ends. That workflow only, at most once per
+    30 s per run (429 sooner)."""
     await _call(service.retry_lookup(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
+@router.post("/runs/{run_id}/cancel-again", response_model=RunOut)
+async def cancel_again_run(
+    run_id: uuid.UUID, body: CancelAgain, principal: Approver, db: TenantDB
+) -> RunOut:
+    """Cancel again (Inbox: ``cancel_again``): a workflow an approver stopped cancelling,
+    whose spend took the ended run over its ceiling, has Oracle's cancel calls turned
+    back on; its status and cost are still read until it ends, and nothing restarts
+    (P3d). An owner or the approver who created the run; audited."""
+    await _call(service.cancel_again(db, principal, run_id, body.workflow_id))
+    return await service.read_run(db, run_id, principal)
+
+
+@router.post("/runs/{run_id}/dismiss-overrun", response_model=RunOut)
+async def dismiss_overrun_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+    """Clear an ended run's overrun from the Inbox (``can_dismiss_overrun``: nothing of
+    the run is left to read). The overrun stays recorded on the run; audited."""
+    await _call(service.dismiss_overrun(db, principal, run_id))
     return await service.read_run(db, run_id, principal)
 
 

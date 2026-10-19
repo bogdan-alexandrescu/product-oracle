@@ -253,7 +253,7 @@ async def test_cancel_again_turns_the_cancel_calls_back_on(client, owner, monkey
     assert swarm.cancels.count("wf_1") == cancels  # stopped: no cancel call
     [item] = (await _inbox(client, auth))["lookups"]
     assert item["cancel_again"] == ["wf_1"]
-    assert "ceiling" in item["stuck"] and f"${item['spent_usd']}" in item["stuck"]
+    assert "ceiling" in item["stuck"] and f"${item['spent_usd']:.2f}" in item["stuck"]
     # Not the run's creator: refused.
     other = await as_user(tenant_id, "approver")
     resp = await client.post(

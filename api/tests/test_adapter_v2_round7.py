@@ -211,6 +211,11 @@ async def test_stop_cancelling_a_run_that_has_not_ended_ends_it_and_keeps_counti
     run = await get(client, auth, run["id"])
     assert run["status"] == "cancelled" and run["spent_usd"] == _wf_cost(swarm, "wf_1")
     assert run["searching"] is None
+    # Round 8: the overrun stays in the Inbox (nothing left to cancel) until dismissed.
+    [over] = (await _inbox(client, auth))["lookups"]
+    assert over["cancel_again"] == [] and over["can_dismiss_overrun"] is True
+    resp = await client.post(f"/v1/runs/{run['id']}/dismiss-overrun", headers=auth)
+    assert resp.status_code == 200, resp.text
     assert (await _inbox(client, auth))["lookups"] == []
     assert len(swarm.submissions()) == 1
 

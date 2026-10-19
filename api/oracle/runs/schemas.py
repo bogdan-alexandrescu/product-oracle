@@ -293,10 +293,21 @@ class RunSummary(BaseModel):
     can_stop_cancelling: bool = False
     # Retry lookup: read a workflow whose cost is unknown now, not at its next rest.
     can_retry_lookup: bool = False
+    # An ended run's spend over its ceiling (P3d, shown in ``stuck`` with the spend and
+    # the ceiling): the workflows an approver stopped cancelling that still run, each
+    # with Cancel again (Oracle's cancel calls back on; nothing restarts), and whether
+    # Dismiss clears the item (once nothing of the run is left to read).
+    cancel_again: list[str] = []
+    can_dismiss_overrun: bool = False
     # Work given up on that Oracle still checks: submissions it looks for (Retry, or
     # Cancel past the lookup cap), to cancel them and count their cost if they landed,
     # and workflows it stopped cancelling, whose cost it reads until they end.
     searching: str | None = None
+
+
+class CancelAgain(BaseModel):
+    # The stopped workflow whose cancel calls Oracle turns back on.
+    workflow_id: str = Field(min_length=1, max_length=200)
 
 
 class RunOut(RunSummary):
