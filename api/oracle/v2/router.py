@@ -6,12 +6,14 @@ Every route needs the viewer role; the tenant-scoped session keeps each company 
 own rows, so another company's id is a 404.
 
 The routes are generated from :data:`RESOURCES`; each list takes the filters declared
-there plus ``limit`` and ``offset``, and returns rows newest first.
+there plus ``limit`` and ``offset``, and returns rows newest first. A lane may register
+a reader's view of a resource (:func:`register_view`): rows the reader may not see are
+left out (a get is 404), and the rest are returned as the view shapes them.
 """
 
 import inspect
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Annotated, Any
 
@@ -19,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from oracle.auth.deps import TenantDB
+from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role
 from oracle.db import Base
 from oracle.v2 import models as m
@@ -28,6 +30,14 @@ from oracle.v2 import schemas as s
 router = APIRouter(prefix="/v1", tags=["v2"], dependencies=[Depends(require_role("viewer"))])
 
 MAX_LIMIT = 500
+
+# path -> async (db, principal, rows) -> the rows' outputs the principal may see.
+View = Callable[[Any, Principal, list[Any]], Awaitable[list[Any]]]
+VIEWS: dict[str, View] = {}
+
+
+def register_view(path: str, view: View) -> None:
+    VIEWS[path] = view
 
 
 @dataclass(frozen=True)
@@ -257,18 +267,24 @@ RESOURCES: list[Resource] = [
 
 
 def _list_endpoint(res: Resource) -> Callable[..., Any]:
-    async def endpoint(db: TenantDB, **params: Any) -> list[Any]:
+    async def endpoint(db: TenantDB, principal: Principal, **params: Any) -> list[Any]:
         limit, offset = params.pop("limit"), params.pop("offset")
         stmt = select(res.model)
         for name, value in params.items():
             if value is not None:
                 stmt = stmt.where(getattr(res.model, name) == value)
         stmt = stmt.order_by(res.model.created_at.desc(), res.model.id).limit(limit).offset(offset)
-        rows = (await db.scalars(stmt)).all()
+        rows = list((await db.scalars(stmt)).all())
+        view = VIEWS.get(res.path)
+        if view is not None:
+            return await view(db, principal, rows)
         return [res.out.model_validate(r) for r in rows]
 
     kw = inspect.Parameter.KEYWORD_ONLY
-    parameters = [inspect.Parameter("db", kw, annotation=TenantDB)]
+    parameters = [
+        inspect.Parameter("db", kw, annotation=TenantDB),
+        inspect.Parameter("principal", kw, annotation=CurrentPrincipal),
+    ]
     for name, annotation in res.filters.items():
         parameters.append(inspect.Parameter(name, kw, default=None, annotation=annotation))
     parameters += [
@@ -285,10 +301,16 @@ def _list_endpoint(res: Resource) -> Callable[..., Any]:
 def _get_endpoint(res: Resource) -> Callable[..., Any]:
     label = res.singular.replace("_", " ")
 
-    async def endpoint(item_id: uuid.UUID, db: TenantDB) -> Any:
+    async def endpoint(item_id: uuid.UUID, db: TenantDB, principal: CurrentPrincipal) -> Any:
         row = await db.get(res.model, item_id)
         if row is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"{label.capitalize()} not found")
+        view = VIEWS.get(res.path)
+        if view is not None:
+            shown = await view(db, principal, [row])
+            if not shown:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, f"{label.capitalize()} not found")
+            return shown[0]
         if res.load_detail is not None:
             return await res.load_detail(db, row)
         return res.out.model_validate(row)

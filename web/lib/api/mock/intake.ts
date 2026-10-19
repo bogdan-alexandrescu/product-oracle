@@ -3,7 +3,10 @@
  * New product idea, the Opportunity and Gaps summary, question batches, answers,
  * decisions and proposals. It works on the v2 mock tables (./v2.ts) and keeps the API's
  * shapes and role rules; its analysis is a fixed, simplified stand-in for the engine
- * (one gap per category, ranked by importance and impact). Synthetic placeholders only.
+ * (one gap per category, ranked by importance and impact). It has no source items, so it
+ * has no S6 findings: GET .../findings is empty and only the author may set a level.
+ * B4 (owners clear critical gaps) and the author-only repin and re-analysis hold here too.
+ * Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
 import type { V2Db } from "./v2";
@@ -28,6 +31,7 @@ const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
 const OPEN = new Set<Gap["status"]>(["unknown", "under_investigation", "asked"]);
 const DECIDED = new Set<Gap["status"]>(["answered", "validated", "accepted_risk"]);
+const FROZEN = new Set<Gap["status"]>(["validated", "accepted_risk"]);
 const PATHS: Schemas["QuestionCard"]["answer_paths"] = ["answer", "dont_know", "defer", "delegate", "research"];
 const HARD = new Set<Category>(["blockers", "third_party_policy"]);
 
@@ -144,7 +148,7 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
   return {
     intake: intakeOut(intake),
     pinned: { version: versions.length, snapshot_id: last?.snapshot_id ?? null, as_of: last?.as_of ?? null, versions },
-    new_evidence: { since_version: versions.length, as_of: last?.as_of ?? null, count: 0, visible: intake.author_id === userId, items: [] },
+    new_evidence: { since_version: versions.length, as_of: last?.as_of ?? null, count: intake.author_id === userId ? 0 : null, visible: intake.author_id === userId, items: [] },
     extracted: [
       { field: "problem", text: intake.brief.split(/(?<=[.!?])\s+/)[0].replace(/\.$/, ""), knowledge_state: "hypothesis", origin: "brief", evidence: [] },
       ...scope.map((s) => ({ field: "scope" as const, text: s, knowledge_state: "hypothesis" as const, origin: "brief" as const, evidence: [] })),
@@ -176,6 +180,8 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
       remaining: questions.filter((q) => q.status === "draft").length,
     },
     proposals: (db.intake_proposals ?? []).filter((p) => p.intake_id === intake.id),
+    shared_counts: [],
+    is_author: intake.author_id === userId,
   };
 }
 
@@ -290,6 +296,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver can do this");
       const patch = await body<Schemas["IntakePatch"]>();
       if (patch.lock_version !== intake.lock_version) return fail(409, "Someone else changed this since you loaded it; reload and try again");
+      if ("document" in patch && !atLeast(ctx.role, "approver")) return fail(403, "Linking an intake to a PRD needs an approver");
       if (patch.title) intake.title = patch.title;
       if (patch.status) intake.status = patch.status;
       intake.lock_version += 1;
@@ -317,17 +324,24 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       });
     }
     if (leaf === "proposals" && m === "GET") return json(200, (db.intake_proposals ?? []).filter((x) => x.intake_id === intake.id));
+    if (leaf === "findings" && m === "GET") return json(200, [] satisfies Schemas["FindingOut"][]);
+    if (leaf === "findings" && (m === "PATCH" || m === "POST")) {
+      if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can share its findings");
+      return fail(404, "Finding not found");
+    }
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
     if (leaf === "analyze" && m === "POST") {
+      if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can re-run its analysis");
       syncQuestions(db, intake);
       return json(200, summary(db, intake, ctx.userId));
     }
     if (leaf === "repin" && m === "POST") {
-      if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver can do this");
+      if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can repin it");
       intake.source_snapshot_ids = [...intake.source_snapshot_ids, uuid()];
       return json(200, summary(db, intake, ctx.userId));
     }
     if (leaf === "question-batches" && m === "POST") {
+      if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver asks the next batch");
       const asked = askBatch(db, intake, ctx.userId, Number(q.get("size") ?? 5));
       if (!asked.length) return fail(409, "No questions left to ask");
       return json(200, batchView(db, intake, asked[0].batch ?? null));
@@ -390,6 +404,9 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (!gap) return fail(404, "Gap not found");
       const patch = await body<Schemas["GapPatch"]>();
       if (patch.lock_version !== gap.lock_version) return fail(409, "Someone else changed this since you loaded it; reload and try again");
+      if (gap.importance === "critical" && patch.importance && patch.importance !== "critical" && !atLeast(ctx.role, "owner")) {
+        return fail(403, "Lowering a critical gap's importance needs an owner");
+      }
       if (patch.importance) gap.importance = patch.importance;
       if (patch.status) gap.status = patch.status;
       if (patch.owner_id) gap.owner_id = patch.owner_id;
@@ -403,6 +420,10 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (!input.rationale?.trim()) return fail(422, "A decision needs a rationale");
       if (gap.importance === "critical" && (input.decision === "accept_risk" || input.decision === "accept_assumption") && !atLeast(ctx.role, "owner")) {
         return fail(403, "Accepting a critical gap's risk or assumption needs an owner");
+      }
+      const answered = gap.status === "answered" || gap.status === "answered_pending_review";
+      if (gap.importance === "critical" && input.decision === "validate" && (HARD.has(gap.category) || !answered) && !atLeast(ctx.role, "owner")) {
+        return fail(403, "Validating an unanswered critical gap or a critical blocker needs an owner");
       }
       gap.status = { accept_risk: "accepted_risk", accept_assumption: "accepted_risk", validate: "validated", reject: "unknown" }[input.decision] as Gap["status"];
       gap.lock_version += 1;
@@ -442,12 +463,13 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       answer: ["answered", "answered"], dont_know: ["answered", "unknown"], defer: ["deferred", "deferred"],
       delegate: ["delegated", null], research: ["researching", "under_investigation"],
     };
-    const [qs, gs] = effects[input.kind];
+    const [qs, effect] = effects[input.kind];
     question.status = qs;
     if (input.kind === "delegate") question.asked_to = input.delegated_to ?? null;
     const gap = db.gaps.find((g) => g.id === question.gap_id) ?? null;
     const proposals: Proposal[] = [];
-    if (gap) {
+    const gs = gap && effect === "answered" && gap.importance === "critical" && !atLeast(ctx.role, "owner") ? "answered_pending_review" : effect;
+    if (gap && !FROZEN.has(gap.status)) {
       if (gs) gap.status = gs;
       if (input.kind === "answer") gap.knowledge_state = answer.knowledge_state;
       if (input.kind === "dont_know") gap.knowledge_state = "unknown";

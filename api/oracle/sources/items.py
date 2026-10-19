@@ -5,6 +5,11 @@
 A pinned read selects, per item, the newest version with ``fetched_at <= as_of``;
 items deleted at or before ``as_of`` are left out, items deleted later are kept.
 Confidence is computed on read (oracle.confidence), never stored on items.
+
+Pin stability: a version is stamped when it is written, not when its transaction
+commits. Given the snapshot's ``txn_snapshot``, a pinned read also leaves out every
+version (and every deletion) whose transaction had not committed when the pin was
+taken, so the pinned set never grows after the fact (``pinned_at``).
 """
 
 import uuid
@@ -12,9 +17,22 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import (
+    BigInteger,
+    ColumnElement,
+    Select,
+    Text,
+    and_,
+    cast,
+    func,
+    literal,
+    or_,
+    select,
+    true,
+)
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.types import UserDefinedType
 
 from oracle import confidence
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
@@ -30,8 +48,62 @@ class ItemRow:
     source_kind: str
 
 
-def version_ids(user_id: uuid.UUID, as_of: datetime | None = None) -> Select:
-    """Ids of the versions a read sees: current ones, or the pinned ones at ``as_of``."""
+class _Xid8(UserDefinedType):
+    cache_ok = True
+
+    def get_col_spec(self, **kw: Any) -> str:
+        return "xid8"
+
+
+class _PgSnapshot(UserDefinedType):
+    cache_ok = True
+
+    def get_col_spec(self, **kw: Any) -> str:
+        return "pg_snapshot"
+
+
+def current_xid() -> ColumnElement[int]:
+    """The writing transaction's id, as stored in ``*_xid`` columns."""
+    return cast(cast(func.pg_current_xact_id(), Text), BigInteger)
+
+
+def committed_at_pin(xid: Any, txn_snapshot: str | None) -> ColumnElement[bool]:
+    """True when the transaction ``xid`` had committed when the pin was taken.
+
+    NULL xids (rows older than pin stability) count as committed; without a recorded
+    transaction snapshot, only ``as_of`` decides."""
+    if not txn_snapshot:
+        return true()
+    return or_(
+        xid.is_(None),
+        func.pg_visible_in_snapshot(
+            cast(cast(xid, Text), _Xid8()), cast(literal(txn_snapshot, Text), _PgSnapshot())
+        ),
+    )
+
+
+def version_at_pin(as_of: datetime, txn_snapshot: str | None = None) -> ColumnElement[bool]:
+    """The version had been written and committed when the pin was taken."""
+    return and_(
+        SourceItemVersion.fetched_at <= as_of,
+        committed_at_pin(SourceItemVersion.xid, txn_snapshot),
+    )
+
+
+def deleted_at_pin(as_of: datetime, txn_snapshot: str | None = None) -> ColumnElement[bool]:
+    """The item's deletion had been committed when the pin was taken."""
+    return and_(
+        SourceItem.deleted_at.is_not(None),
+        SourceItem.deleted_at <= as_of,
+        committed_at_pin(SourceItem.deleted_xid, txn_snapshot),
+    )
+
+
+def version_ids(
+    user_id: uuid.UUID, as_of: datetime | None = None, txn_snapshot: str | None = None
+) -> Select:
+    """Ids of the versions a read sees: current ones, or the pinned ones at ``as_of``
+    (and, given the pin's ``txn_snapshot``, committed when it was taken)."""
     owned = select(Source.id).where(Source.owner_user_id == user_id)
     if as_of is None:
         return select(SourceItem.current_version_id.label("id")).where(
@@ -44,8 +116,8 @@ def version_ids(user_id: uuid.UUID, as_of: datetime | None = None) -> Select:
         .join(SourceItem, SourceItem.id == SourceItemVersion.item_id)
         .where(
             SourceItem.source_id.in_(owned),
-            SourceItemVersion.fetched_at <= as_of,
-            or_(SourceItem.deleted_at.is_(None), SourceItem.deleted_at > as_of),
+            version_at_pin(as_of, txn_snapshot),
+            ~deleted_at_pin(as_of, txn_snapshot),
         )
         .ext(distinct_on(SourceItemVersion.item_id))
         .order_by(SourceItemVersion.item_id, SourceItemVersion.fetched_at.desc())
@@ -58,9 +130,10 @@ async def items_as_of(
     as_of: datetime,
     *,
     source_id: uuid.UUID | None = None,
+    txn_snapshot: str | None = None,
 ) -> list[ItemRow]:
     """The user's items as they were at ``as_of`` (one row per item, its pinned version)."""
-    pinned = version_ids(user_id, as_of).subquery()
+    pinned = version_ids(user_id, as_of, txn_snapshot).subquery()
     stmt = (
         select(SourceItem, SourceItemVersion, Source.kind)
         .join(SourceItemVersion, SourceItemVersion.item_id == SourceItem.id)

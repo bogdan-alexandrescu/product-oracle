@@ -19,8 +19,14 @@ READ_AREAS = {
     },
     "read:documents": {"documents", "feedback", "exports"},
 }
-# GET /v1/<area>/{id}/<leaf> that read source content: they need read:sources.
-SOURCE_READS = {("intakes", "evidence"), ("intakes", "new-evidence")}
+# GET /v1/<area>/{id}/<leaf> that can return source titles, links or excerpts: they
+# need read:sources (an intake's summary and question batch carry evidence refs).
+SOURCE_READS = {
+    ("intakes", "evidence"),
+    ("intakes", "new-evidence"),
+    ("intakes", "summary"),
+    ("intakes", "question-batch"),
+}
 # Creating a proposal or a piece of evidence; deciding one stays with people.
 PROPOSAL_WRITES = {"proposals", "evidence"}
 

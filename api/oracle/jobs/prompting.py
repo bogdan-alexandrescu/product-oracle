@@ -24,7 +24,7 @@ CURRENT = {
     "review_comments": "review_comments.v1",
     "reporting": "reporting.v1",
     "refinement": "refinement.v1",
-    "intake_analysis": "intake_analysis.v1",
+    "intake_analysis": "intake_analysis.v2",
 }
 
 

@@ -2713,7 +2713,8 @@ export interface paths {
         head?: never;
         /**
          * Update Intake
-         * @description Rename, link to a PRD, archive or reopen (the author or an approver).
+         * @description Rename, archive or reopen (the author or an approver); link to a PRD (an approver;
+         *     moving an intake with an unresolved critical blocker off its PRD: an owner).
          */
         patch: operations["update_intake"];
         trace?: never;
@@ -2762,6 +2763,7 @@ export interface paths {
         /**
          * Update Knowledge Gap
          * @description Triage a gap: importance, owner, sections, stop condition; defer or reopen.
+         *     Lowering a critical gap's importance takes an owner (B4).
          */
         patch: operations["update_knowledge_gap"];
         trace?: never;
@@ -3376,7 +3378,8 @@ export interface paths {
         /**
          * Get Intake Summary
          * @description Opportunity and Gaps: extracted items, coverage, goals and features, conflicts,
-         *     stale evidence, assumptions, top uncertainties, the template and the review gate.
+         *     stale evidence, assumptions, top uncertainties, the template and the review gate,
+         *     as the reader may see them (S6).
          */
         get: operations["get_intake_summary"];
         put?: never;
@@ -3398,8 +3401,8 @@ export interface paths {
         put?: never;
         /**
          * Analyze Intake
-         * @description Re-read the pinned snapshot and the baseline. Decided gaps are never changed and
-         *     answered questions never asked again.
+         * @description Re-read the pinned snapshot and the baseline (the author only). Decided gaps are
+         *     never changed and answered questions never asked again.
          */
         post: operations["analyze_intake"];
         delete?: never;
@@ -3417,7 +3420,8 @@ export interface paths {
         };
         /**
          * Get Intake New Evidence
-         * @description Evidence added or changed since the pinned version (items for the author only).
+         * @description Evidence added or changed since the pinned version (the author only; anyone else
+         *     sees neither the items nor their number).
          */
         get: operations["get_intake_new_evidence"];
         put?: never;
@@ -3439,7 +3443,8 @@ export interface paths {
         put?: never;
         /**
          * Repin Intake
-         * @description Pin a new snapshot and re-analyse; decided gaps stay as decided.
+         * @description Pin a new snapshot and re-analyse (the author only); decided gaps stay as
+         *     decided.
          */
         post: operations["repin_intake"];
         delete?: never;
@@ -3480,7 +3485,7 @@ export interface paths {
         /**
          * Get Question Batch
          * @description A batch of questions (default: the latest) with their gaps, evidence, answers
-         *     and answer paths.
+         *     and answer paths, as the reader may see them (S6).
          */
         get: operations["get_question_batch"];
         put?: never;
@@ -3502,7 +3507,8 @@ export interface paths {
         put?: never;
         /**
          * Ask Next Question Batch
-         * @description Ask the next short batch: the highest-ranked questions not asked yet.
+         * @description Ask the next short batch: the highest-ranked questions not asked yet (the author
+         *     or an approver).
          */
         post: operations["ask_next_question_batch"];
         delete?: never;
@@ -3611,6 +3617,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/intakes/{intake_id}/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Intake Findings
+         * @description Findings drawn from the author's own sources and their sharing levels. The author
+         *     sees every one; anyone else those shared at counts or above, as far as each allows.
+         */
+        get: operations["list_intake_findings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings/{finding_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Intake Finding Sharing
+         * @description Set what others see of one finding: private, counts, summary or full (the
+         *     author only; audited; lower it again at any time).
+         */
+        patch: operations["set_intake_finding_sharing"];
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings/sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Intake Findings Sharing
+         * @description Set the sharing level of several findings at once (the author only; every change
+         *     is audited).
+         */
+        post: operations["set_intake_findings_sharing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/gaps/{gap_id}/decisions": {
         parameters: {
             query?: never;
@@ -3623,7 +3692,8 @@ export interface paths {
         /**
          * Decide Knowledge Gap
          * @description Accept an assumption or a risk, validate, or reject, with a rationale. On a
-         *     critical gap, accepting needs an owner.
+         *     critical gap, accepting, validating it unanswered, or validating a hard blocker
+         *     needs an owner (B4).
          */
         post: operations["decide_knowledge_gap"];
         delete?: never;
@@ -4991,6 +5061,15 @@ export interface components {
             material: boolean;
             /** Conflict Id */
             conflict_id?: string | null;
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
+            /**
+             * Summary Only
+             * @default false
+             */
+            summary_only: boolean;
         };
         /** ConnectionChoice */
         ConnectionChoice: {
@@ -6173,6 +6252,10 @@ export interface components {
              * @default []
              */
             evidence: components["schemas"]["EvidenceRef"][];
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
         };
         /** FactorOut */
         FactorOut: {
@@ -6363,6 +6446,64 @@ export interface components {
             resolution_note?: string | null;
             /** Addressed In Version */
             addressed_in_version?: number | null;
+        };
+        /**
+         * FindingCount
+         * @description Findings shared as counts and categories only (S6).
+         */
+        FindingCount: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "item" | "gap" | "conflict" | "stale";
+            /** Category */
+            category?: string | null;
+            /** Count */
+            count: number;
+            /** Label */
+            label: string;
+        };
+        /**
+         * FindingOut
+         * @description A finding drawn from the author's own sources and what others see of it (S6).
+         *
+         *     The author sees every finding. Anyone else sees those shared at "counts" or above:
+         *     the kind and category; from "summary" Oracle's summary and the gap; at "full" the
+         *     source items it cites.
+         */
+        FindingOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "item" | "gap" | "conflict" | "stale";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "model" | "rules";
+            /** Category */
+            category?: string | null;
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "counts" | "summary" | "full";
+            /** Summary */
+            summary?: string | null;
+            /** Gap Id */
+            gap_id?: string | null;
+            /**
+             * Source Item Ids
+             * @default []
+             */
+            source_item_ids: string[];
         };
         /** FlowCatalog */
         FlowCatalog: {
@@ -6943,7 +7084,7 @@ export interface components {
         };
         /**
          * IntakeSummary
-         * @description The Opportunity and Gaps summary.
+         * @description The Opportunity and Gaps summary, as the reader may see it (S6).
          */
         IntakeSummary: {
             intake: components["schemas"]["IntakeOut"];
@@ -6976,6 +7117,16 @@ export interface components {
             batch: components["schemas"]["BatchState"];
             /** Proposals */
             proposals: components["schemas"]["IntakeProposalOut"][];
+            /**
+             * Shared Counts
+             * @default []
+             */
+            shared_counts: components["schemas"]["FindingCount"][];
+            /**
+             * Is Author
+             * @default false
+             */
+            is_author: boolean;
         };
         /** InviteCreate */
         InviteCreate: {
@@ -7248,7 +7399,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "unknown" | "under_investigation" | "asked" | "answered" | "validated" | "deferred" | "accepted_risk";
+            status: "unknown" | "under_investigation" | "asked" | "answered" | "answered_pending_review" | "validated" | "deferred" | "accepted_risk";
             /** Owner Id */
             owner_id?: string | null;
             /** Related Modules */
@@ -7590,7 +7741,7 @@ export interface components {
             /** As Of */
             as_of?: string | null;
             /** Count */
-            count: number;
+            count: number | null;
             /** Visible */
             visible: boolean;
             /**
@@ -7661,7 +7812,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "answer" | "research" | "delegate" | "accept_assumption" | "accept_risk";
+            kind: "answer" | "research" | "delegate" | "accept_assumption" | "accept_risk" | "validate";
             /** Label */
             label: string;
             /**
@@ -8112,7 +8263,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "unknown" | "under_investigation" | "asked" | "answered" | "validated" | "deferred" | "accepted_risk";
+            status: "unknown" | "under_investigation" | "asked" | "answered" | "answered_pending_review" | "validated" | "deferred" | "accepted_risk";
             /** Owner Id */
             owner_id?: string | null;
             /** Related Modules */
@@ -8148,6 +8299,10 @@ export interface components {
              * @default []
              */
             evidence: components["schemas"]["EvidenceRef"][];
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
         };
         /** RankingCounts */
         RankingCounts: {
@@ -8842,6 +8997,32 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
+        /** SharingBulkIn */
+        SharingBulkIn: {
+            /** Changes */
+            changes: components["schemas"]["SharingChange"][];
+        };
+        /** SharingChange */
+        SharingChange: {
+            /**
+             * Finding Id
+             * Format: uuid
+             */
+            finding_id: string;
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "counts" | "summary" | "full";
+        };
+        /** SharingIn */
+        SharingIn: {
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "counts" | "summary" | "full";
+        };
         /** SlideOut */
         SlideOut: {
             /** Index */
@@ -9123,6 +9304,10 @@ export interface components {
             evidence: components["schemas"]["EvidenceRef"];
             /** Reason */
             reason: string;
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
         };
         /** StartDraftIn */
         StartDraftIn: {
@@ -15743,7 +15928,7 @@ export interface operations {
             query?: {
                 intake_id?: string | null;
                 document_id?: string | null;
-                status?: ("unknown" | "under_investigation" | "asked" | "answered" | "validated" | "deferred" | "accepted_risk") | null;
+                status?: ("unknown" | "under_investigation" | "asked" | "answered" | "answered_pending_review" | "validated" | "deferred" | "accepted_risk") | null;
                 category?: ("customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling") | null;
                 importance?: ("critical" | "high" | "medium" | "low") | null;
                 limit?: number;
@@ -17230,6 +17415,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntakeProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_intake_findings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_intake_finding_sharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_intake_findings_sharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharingBulkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"][];
                 };
             };
             /** @description Validation Error */

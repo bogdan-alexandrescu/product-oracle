@@ -4,9 +4,15 @@ view and the composition inputs the modules lane's composer reads.
 The baseline parts (goals, features and their traceability flags, conflicts) are read
 live, so a goal confirmed after the intake shows at once; gaps change only through the
 engine, answers and decisions.
+
+Every read model is built for its reader (S6, ``oracle.intake.sharing``): the intake's
+author sees every finding; anyone else, and every run token, sees each finding drawn
+from the author's sources only as its sharing level allows, including in counts,
+rankings and the review gate shown here.
 """
 
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +23,7 @@ from oracle.baseline import scoring
 from oracle.baseline import trace as baseline_trace
 from oracle.baseline.models import Conflict, Entity
 from oracle.intake import categories as cats
-from oracle.intake import engine
+from oracle.intake import engine, sharing
 from oracle.intake import evidence as ev
 from oracle.intake.answers import next_actions
 from oracle.intake.models import IntakeProposal
@@ -31,6 +37,7 @@ from oracle.intake.schemas import (
     EvidenceRef,
     ExtractedItem,
     FeatureTrace,
+    FindingCount,
     GateView,
     GoalLink,
     IntakeOut,
@@ -50,9 +57,10 @@ from oracle.intake.schemas import (
 from oracle.sources.models import Snapshot
 from oracle.templates import service as templates_service
 from oracle.templates.schemas import PrdAnswers, RecommendIn
-from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderAnswer, StakeholderQuestion
+from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderAnswer
 from oracle.v2.schemas import (
     CompositionInputs,
+    IntakeAnalysis,
     KnowledgeGapOut,
     StakeholderAnswerOut,
     StakeholderQuestionOut,
@@ -67,10 +75,17 @@ NO_GOAL = (
 )
 
 
-def intake_out(intake: ProductIntake) -> IntakeOut:
+def intake_out(intake: ProductIntake, principal: Principal | None) -> IntakeOut:
     out = IntakeOut.model_validate(intake)
     out.source_ids = ev.source_ids_of(intake)
+    out.analysis = IntakeAnalysis.model_validate(
+        sharing.analysis_view(intake, sharing.viewer(principal, intake))
+    )
     return out
+
+
+async def pinned_snapshot(db: AsyncSession, pin: Pinned) -> Snapshot | None:
+    return await db.get(Snapshot, pin.snapshot_id) if pin.snapshot_id else None
 
 
 async def pinned(db: AsyncSession, intake: ProductIntake) -> Pinned:
@@ -92,11 +107,15 @@ async def pinned(db: AsyncSession, intake: ProductIntake) -> Pinned:
 async def new_evidence(
     db: AsyncSession, intake: ProductIntake, principal: Principal | None, pin: Pinned
 ) -> NewEvidence:
-    snapshot = await db.get(Snapshot, pin.snapshot_id) if pin.snapshot_id else None
+    """What changed in the author's sources since the pin: for the author only (it is
+    drawn from their sources); anyone else sees neither the items nor their number."""
+    visible = sharing.is_author(principal, intake)
+    if not visible:
+        return NewEvidence(since_version=pin.version, as_of=pin.as_of, count=None, visible=False)
+    snapshot = await pinned_snapshot(db, pin)
     found = await ev.new_since(db, intake, snapshot)
-    visible = principal is not None and principal.id == intake.author_id
     items: list[NewEvidenceItem] = []
-    if visible and found:
+    if found:
         refs = await ev.refs(db, [i for i, _ in found], principal, None)
         items = [
             NewEvidenceItem(**refs[i].model_dump(), change=change)  # type: ignore[arg-type]
@@ -107,16 +126,22 @@ async def new_evidence(
         since_version=pin.version,
         as_of=pin.as_of,
         count=len(found),
-        visible=visible,
+        visible=True,
         items=items,
     )
 
 
-def ranked_gaps(gaps: list[KnowledgeGap], refs: dict[uuid.UUID, EvidenceRef]) -> list[RankedGap]:
+def ranked_gaps(
+    gaps: list,
+    refs: dict[uuid.UUID, EvidenceRef],
+    reg: dict[str, dict] | None = None,
+) -> list[RankedGap]:
+    reg = reg or {}
     out = []
     for position, gap in enumerate(engine.ranked(gaps), start=1):
         cat = cats.BY_KEY[gap.category]
         base = KnowledgeGapOut.model_validate(gap).model_dump()
+        level = sharing.level_of(reg, gap.id)
         out.append(
             RankedGap(
                 **base,
@@ -126,6 +151,8 @@ def ranked_gaps(gaps: list[KnowledgeGap], refs: dict[uuid.UUID, EvidenceRef]) ->
                     cat, gap.importance, list(gap.impact), gap.knowledge_state
                 ),
                 evidence=[refs[i] for i in gap.evidence_ids if i in refs],
+                finding_id=gap.id if level is not None else None,
+                sharing=level,  # type: ignore[arg-type]
             )
         )
     return out
@@ -217,15 +244,26 @@ async def conflicts(
     db: AsyncSession,
     intake: ProductIntake,
     refs: dict[uuid.UUID, EvidenceRef],
+    analysis: dict | None = None,
 ) -> list[ConflictView]:
+    """Source conflicts as the reader may see them (``analysis``: the reader's view of
+    the stored analysis), then the baseline's own conflicts on the linked entities."""
     settings = await scoring.company_weights(db)
+    reg = sharing.registry(intake)
     out: list[ConflictView] = []
-    for c in (intake.analysis or {}).get("conflicts") or []:
+    shown = analysis if analysis is not None else (intake.analysis or {})
+    for c in shown.get("conflicts") or []:
         claims = c["claims"]
-        winner, reason = baseline_conflicts.pick_winner(claims, settings)
+        if c.get("summary_only"):
+            winner, reason = None, "Shared as a summary only: the values stay with the author."
+        else:
+            winner, reason = baseline_conflicts.pick_winner(claims, settings)
         out.append(
             ConflictView(
                 kind="source",
+                finding_id=c.get("finding_id"),
+                sharing=sharing.level_of(reg, c.get("finding_id")),  # type: ignore[arg-type]
+                summary_only=bool(c.get("summary_only")),
                 topic=c["topic"],
                 claims=[
                     ClaimOut(
@@ -344,7 +382,7 @@ async def template_hint(
     )
 
 
-def gate(gaps: list[KnowledgeGap]) -> GateView:
+def gate(gaps: list) -> GateView:
     unresolved = [g for g in gaps if g.importance == "critical" and g.status not in engine.DECIDED]
     blocking = [g.id for g in unresolved if g.category in cats.HARD_BLOCKER_CATEGORIES]
     return GateView(
@@ -354,7 +392,7 @@ def gate(gaps: list[KnowledgeGap]) -> GateView:
     )
 
 
-def batch_state(questions: list[StakeholderQuestion]) -> BatchState:
+def batch_state(questions: list) -> BatchState:
     batches = [q.batch for q in questions if q.batch is not None]
     return BatchState(
         current=max(batches) if batches else None,
@@ -364,24 +402,103 @@ def batch_state(questions: list[StakeholderQuestion]) -> BatchState:
     )
 
 
-async def proposals_of(db: AsyncSession, intake_id: uuid.UUID) -> list[IntakeProposalOut]:
+async def proposals_of(
+    db: AsyncSession, intake: ProductIntake, principal: Principal | None
+) -> list[IntakeProposalOut]:
+    """The intake's proposals, leaving out those of gaps the reader may not see."""
     rows = (
         await db.scalars(
             select(IntakeProposal)
-            .where(IntakeProposal.intake_id == intake_id)
+            .where(IntakeProposal.intake_id == intake.id)
             .order_by(IntakeProposal.created_at.desc(), IntakeProposal.id)
         )
     ).all()
-    return [IntakeProposalOut.model_validate(p) for p in rows]
+    hidden = await hidden_gap_ids(db, intake, principal)
+    return [IntakeProposalOut.model_validate(p) for p in rows if p.gap_id not in hidden]
+
+
+async def hidden_gap_ids(
+    db: AsyncSession, intake: ProductIntake, principal: Principal | None
+) -> set[uuid.UUID]:
+    v = sharing.viewer(principal, intake)
+    if v.is_author:
+        return set()
+    reg = sharing.registry(intake)
+    return {
+        g.id for g in await engine.intake_gaps(db, intake.id) if sharing.gap_view(g, reg, v) is None
+    }
+
+
+class View:
+    """The intake as one reader may see it: gaps, questions, analysis, shared items."""
+
+    def __init__(self, intake: ProductIntake, principal: Principal | None) -> None:
+        self.intake = intake
+        self.principal = principal
+        self.v = sharing.viewer(principal, intake)
+        self.reg = sharing.registry(intake)
+        self.analysis = sharing.analysis_view(intake, self.v)
+        self.reveal = (
+            set() if self.v.is_author else sharing.shared_item_ids(self.reg, self.v, "full")
+        )
+        self.raw: dict[uuid.UUID, KnowledgeGap] = {}
+        self.gaps: list = []
+        self.views: dict[uuid.UUID, Any] = {}
+        self.questions: list = []
+
+    async def load(self, db: AsyncSession) -> "View":
+        raw = await engine.intake_gaps(db, self.intake.id)
+        self.raw = {g.id: g for g in raw}
+        self.views = sharing.gap_views(raw, self.reg, self.v)
+        self.gaps = [self.views[g.id] for g in raw if g.id in self.views]
+        self.questions = [
+            q
+            for q in (
+                sharing.question_view(q, self.raw, self.views)
+                for q in await engine.intake_questions(db, self.intake.id)
+            )
+            if q is not None
+        ]
+        return self
+
+    async def refs(
+        self, db: AsyncSession, ids: set[uuid.UUID], pin: Pinned
+    ) -> dict[uuid.UUID, EvidenceRef]:
+        snapshot = await pinned_snapshot(db, pin)
+        return await ev.refs(
+            db,
+            ids,
+            self.principal,
+            pin.as_of,
+            txn_snapshot=snapshot.txn_snapshot if snapshot else None,
+            reveal=self.reveal,
+        )
+
+
+def excerpt_item_ids(value: Any) -> list[str]:
+    """Source items whose title, link or excerpt a response carries (to audit the read)."""
+    found: list[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if node.get("untrusted") is True and node.get("visible") and node.get("source_item_id"):
+                found.append(str(node["source_item_id"]))
+            for child in node.values():
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(value.model_dump(mode="json") if hasattr(value, "model_dump") else value)
+    return list(dict.fromkeys(found))
 
 
 async def build(
     db: AsyncSession, intake: ProductIntake, principal: Principal | None
 ) -> IntakeSummary:
     pin = await pinned(db, intake)
-    gaps = await engine.intake_gaps(db, intake.id)
-    questions = await engine.intake_questions(db, intake.id)
-    analysis = intake.analysis or {}
+    view = await View(intake, principal).load(db)
+    gaps, questions, analysis = view.gaps, view.questions, view.analysis
     item_ids: set[uuid.UUID] = {i for g in gaps for i in g.evidence_ids}
     for item in analysis.get("items") or []:
         item_ids |= {uuid.UUID(i) for i in item.get("evidence_ids") or []}
@@ -389,9 +506,9 @@ async def build(
         item_ids |= {uuid.UUID(cl["item_id"]) for cl in c["claims"]}
     stale_rows = analysis.get("stale") or []
     item_ids |= {uuid.UUID(s["item_id"]) for s in stale_rows}
-    refs = await ev.refs(db, list(item_ids), principal, pin.as_of)
+    refs = await view.refs(db, item_ids, pin)
 
-    ranked = ranked_gaps(gaps, refs)
+    ranked = ranked_gaps(gaps, refs, view.reg)
     open_ranked = [g for g in ranked if g.status in engine.OPEN]
     goals, features = await goals_and_features(db, intake)
     by_gap = {str(g.id): g for g in gaps}
@@ -411,12 +528,12 @@ async def build(
                 knowledge_state=knowledge,
                 reason=row["reason"],
                 entity_ids=row.get("entity_ids") or [],
-                gap_id=row.get("gap_id"),
+                gap_id=row.get("gap_id") if gap is not None else None,
             )
         )
     actions = [a for g in gaps if g.importance == "critical" for a in next_actions(g)]
     return IntakeSummary(
-        intake=intake_out(intake),
+        intake=intake_out(intake, principal),
         pinned=pin,
         new_evidence=await new_evidence(db, intake, principal, pin),
         extracted=[
@@ -428,6 +545,8 @@ async def build(
                 evidence=[
                     refs[uuid.UUID(e)] for e in i.get("evidence_ids") or [] if uuid.UUID(e) in refs
                 ],
+                finding_id=i.get("finding_id"),
+                sharing=sharing.level_of(view.reg, i.get("finding_id")),  # type: ignore[arg-type]
             )
             for i in analysis.get("items") or []
         ],
@@ -435,11 +554,13 @@ async def build(
         goals=goals,
         missing_goals=not goals,
         features=features,
-        conflicts=await conflicts(db, intake, refs),
+        conflicts=await conflicts(db, intake, refs, analysis),
         stale=[
             StaleEvidence(
                 evidence=refs[uuid.UUID(s["item_id"])],
                 reason=f"Old when pinned: freshness {s['freshness']:.2f} of 1.",
+                finding_id=s.get("finding_id"),
+                sharing=sharing.level_of(view.reg, s.get("finding_id")),  # type: ignore[arg-type]
             )
             for s in stale_rows
             if uuid.UUID(s["item_id"]) in refs
@@ -451,18 +572,21 @@ async def build(
         template=await template_hint(db, intake, gaps),
         readiness=gate(gaps),
         batch=batch_state(questions),
-        proposals=await proposals_of(db, intake.id),
+        proposals=await proposals_of(db, intake, principal),
+        shared_counts=[FindingCount(**c) for c in sharing.counts(view.reg, view.v)],
+        is_author=view.v.is_author,
     )
 
 
 async def question_batch(
     db: AsyncSession, intake: ProductIntake, principal: Principal | None, number: int | None
 ) -> QuestionBatch:
-    questions = await engine.intake_questions(db, intake.id)
+    view = await View(intake, principal).load(db)
+    questions = view.questions
     if number is None:
         number = max((q.batch for q in questions if q.batch is not None), default=None)
     chosen = [q for q in questions if number is not None and q.batch == number]
-    gaps = {g.id: g for g in await engine.intake_gaps(db, intake.id)}
+    gaps = view.views
     answers: dict[uuid.UUID, list[StakeholderAnswer]] = {}
     if chosen:
         rows = (
@@ -475,8 +599,8 @@ async def question_batch(
         for a in rows:
             answers.setdefault(a.question_id, []).append(a)
     pin = await pinned(db, intake)
-    ids = [i for q in chosen if q.gap_id in gaps for i in gaps[q.gap_id].evidence_ids]
-    refs = await ev.refs(db, ids, principal, pin.as_of)
+    ids = {i for q in chosen if q.gap_id in gaps for i in gaps[q.gap_id].evidence_ids}
+    refs = await view.refs(db, ids, pin)
     cards = []
     for q in chosen:
         gap = gaps.get(q.gap_id) if q.gap_id else None
@@ -497,10 +621,17 @@ async def question_batch(
     )
 
 
-async def composition_inputs(db: AsyncSession, intake: ProductIntake) -> CompositionInputs:
-    """What the modules lane's composer reads for a PRD from this intake (§4.3 step 1)."""
-    analysis = intake.analysis or {}
-    gaps = await engine.intake_gaps(db, intake.id)
+async def composition_inputs(
+    db: AsyncSession, intake: ProductIntake, principal: Principal | None
+) -> CompositionInputs:
+    """What the modules lane's composer reads for a PRD from this intake (§4.3 step 1),
+    as the reader may see it (S6)."""
+    view = await View(intake, principal).load(db)
+    analysis = view.analysis
+    gaps = view.gaps
+    conflict_count = len(analysis.get("conflicts") or []) + sum(
+        c["count"] for c in analysis.get("shared_counts") or [] if c["kind"] == "conflict"
+    )
     open_critical = [
         g for g in gaps if g.importance == "critical" and g.status not in engine.DECIDED
     ]
@@ -521,7 +652,7 @@ async def composition_inputs(db: AsyncSession, intake: ProductIntake) -> Composi
         sources={
             "source_ids": analysis.get("source_ids") or [],
             "relevant_items": len(analysis.get("relevant_item_ids") or []),
-            "conflicts": len(analysis.get("conflicts") or []),
+            "conflicts": conflict_count,
         },
         stakeholders={
             "answered": sum(g.status in engine.DECIDED for g in gaps),

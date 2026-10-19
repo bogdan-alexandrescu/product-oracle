@@ -30,10 +30,11 @@ async def search(
     kinds: list[str] | None = None,
     source_id: uuid.UUID | None = None,
     as_of: datetime | None = None,
+    txn_snapshot: str | None = None,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
     query = func.websearch_to_tsquery("english", q)
-    visible = items.version_ids(user_id, as_of).subquery()
+    visible = items.version_ids(user_id, as_of, txn_snapshot).subquery()
     rank = func.ts_rank(SourceItemVersion.search, query)
     stmt = (
         select(SourceItem, SourceItemVersion, Source.kind, rank.label("rank"))

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from oracle.auth import service
+from oracle.auth.deps import RUN_HEADER
 from oracle.auth.models import User
 from oracle.config import get_settings
 from oracle.runtokens import RUN_TOKEN_PREFIX, verify_run_token
@@ -82,10 +83,14 @@ def user_caller(
 ) -> McpCaller:
     """A caller acting for ``user``: the REST call carries a session for that user."""
     cookie = f"{get_settings().session_cookie_name}={service.make_session_cookie(user)}"
+    credentials = {"cookie": cookie}
+    if kind == "run" and run_id is not None:
+        # REST sees the creator's session; this marks the call as the run's (S6).
+        credentials[RUN_HEADER] = str(run_id)
     return McpCaller(
         tenant_id=user.tenant_id,
         kind=kind,
-        credentials={"cookie": cookie},
+        credentials=credentials,
         scopes=scopes,
         user_id=user.id,
         token_id=token_id,

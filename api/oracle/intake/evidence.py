@@ -3,7 +3,9 @@
 Built on ``oracle.sources.items`` (pinned reads) and ``oracle.confidence`` (scores); no
 new connector or store. Source items stay visible to their owner only (S3 as built,
 AUD-9): anyone else sees that a piece of evidence exists, its kind and its confidence,
-never its title, link or text.
+never its title, link or text, unless the intake's author shared a finding citing it in
+full (S6, ``oracle.intake.sharing``). A run token never sees an item's content as its
+owner, even when it acts for the owner.
 
 Everything read from a source is **untrusted data**: it is returned under
 ``data_excerpt`` with ``untrusted: true``, never placed in instructions, and every
@@ -15,7 +17,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import confidence
@@ -70,7 +72,9 @@ async def pinned_items(
     snapshot = await pinned_snapshot(db, intake)
     if snapshot is None or intake.author_id is None:
         return [], snapshot
-    rows = await source_items.items_as_of(db, intake.author_id, snapshot.as_of)
+    rows = await source_items.items_as_of(
+        db, intake.author_id, snapshot.as_of, txn_snapshot=snapshot.txn_snapshot
+    )
     chosen = set(source_ids_of(intake))
     if chosen:
         rows = [r for r in rows if r.item.source_id in chosen]
@@ -98,11 +102,16 @@ def caller_user(principal: Principal | None) -> uuid.UUID | None:
 
 async def refs(
     db: AsyncSession,
-    item_ids: list[uuid.UUID],
+    item_ids: list[uuid.UUID] | set[uuid.UUID],
     principal: Principal | None,
     as_of: datetime | None,
+    *,
+    txn_snapshot: str | None = None,
+    reveal: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> dict[uuid.UUID, EvidenceRef]:
-    """Evidence refs for source items, as they were at ``as_of``, shown per visibility."""
+    """Evidence refs for source items, as they were at the pin, shown per visibility:
+    to the item's owner (never through a run token), and for ``reveal`` (items of
+    findings shared in full) to anyone."""
     if not item_ids:
         return {}
     rows = (
@@ -116,18 +125,18 @@ async def refs(
     for item, _source in rows:
         stmt = select(SourceItemVersion).where(SourceItemVersion.item_id == item.id)
         if as_of is not None:
-            stmt = stmt.where(SourceItemVersion.fetched_at <= as_of)
+            stmt = stmt.where(source_items.version_at_pin(as_of, txn_snapshot))
         version = await db.scalar(stmt.order_by(SourceItemVersion.fetched_at.desc()).limit(1))
         if version is not None:
             versions[item.id] = version
     settings = await source_items.confidence_settings(db)
-    me = caller_user(principal)
+    me = caller_user(principal) if principal is not None and not principal.is_run else None
     out: dict[uuid.UUID, EvidenceRef] = {}
     for item, source in rows:
         version = versions.get(item.id)
         row = source_items.ItemRow(item, version, source.kind)
         score = source_items.item_confidence(row, settings, now=as_of)
-        visible = me is not None and source.owner_user_id == me
+        visible = (me is not None and source.owner_user_id == me) or item.id in reveal
         out[item.id] = EvidenceRef(
             source_item_id=item.id,
             visible=visible,
@@ -148,33 +157,54 @@ def aggregate(confidences: list[float]) -> float | None:
     return None if value is None else min(0.95, value)
 
 
+async def author_items(
+    db: AsyncSession, intake: ProductIntake, item_ids: set[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Which of ``item_ids`` come from the intake author's own sources."""
+    if not item_ids or intake.author_id is None:
+        return set()
+    rows = await db.scalars(
+        select(SourceItem.id)
+        .join(Source, Source.id == SourceItem.source_id)
+        .where(SourceItem.id.in_(item_ids), Source.owner_user_id == intake.author_id)
+    )
+    return set(rows.all())
+
+
 async def new_since(
     db: AsyncSession, intake: ProductIntake, snapshot: Snapshot | None
 ) -> list[tuple[uuid.UUID, str]]:
-    """(item id, new | changed | deleted) of the author's items since the pinned snapshot."""
+    """(item id, new | changed | deleted) of the author's items since the pinned snapshot.
+
+    "Since" is what had not committed when the pin was taken (pin stability). An item
+    that was not in the pinned set and is deleted now was never seen: it is left out,
+    not reported as deleted."""
     if snapshot is None or intake.author_id is None:
         return []
+    as_of, txn = snapshot.as_of, snapshot.txn_snapshot
     owned = select(Source.id).where(Source.owner_user_id == intake.author_id)
     chosen = source_ids_of(intake)
     stmt = select(SourceItem).where(SourceItem.source_id.in_(owned))
     if chosen:
         stmt = stmt.where(SourceItem.source_id.in_(chosen))
-    newer = select(SourceItemVersion.item_id).where(SourceItemVersion.fetched_at > snapshot.as_of)
+    newer = select(SourceItemVersion.item_id).where(~source_items.version_at_pin(as_of, txn))
+    deleted_since = and_(
+        SourceItem.deleted_at.is_not(None), ~source_items.deleted_at_pin(as_of, txn)
+    )
     stmt = stmt.where(
-        or_(SourceItem.id.in_(newer), SourceItem.deleted_at > snapshot.as_of)
+        ~source_items.deleted_at_pin(as_of, txn),
+        or_(SourceItem.id.in_(newer), deleted_since),
     ).order_by(SourceItem.created_at, SourceItem.id)
     out = []
     for item in (await db.scalars(stmt)).all():
-        if item.deleted_at is not None and item.deleted_at > snapshot.as_of:
-            out.append((item.id, "deleted"))
-            continue
         before = await db.scalar(
             select(SourceItemVersion.id)
-            .where(
-                SourceItemVersion.item_id == item.id,
-                SourceItemVersion.fetched_at <= snapshot.as_of,
-            )
+            .where(SourceItemVersion.item_id == item.id, source_items.version_at_pin(as_of, txn))
             .limit(1)
         )
+        if item.deleted_at is not None:
+            if before is not None:
+                out.append((item.id, "deleted"))
+            continue
         out.append((item.id, "changed" if before is not None else "new"))
     return out

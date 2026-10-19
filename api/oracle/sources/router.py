@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.sources import items, service, store, uploads
@@ -323,8 +323,22 @@ async def list_snapshots(principal: CurrentPrincipal, db: TenantDB) -> list[Snap
 
 
 async def _snapshot(db: TenantDB, principal: Principal, snapshot_id: uuid.UUID) -> Snapshot:
+    """A snapshot the user took, or the one a run they created is pinned to.
+
+    A run started from someone else's intake reads the intake's snapshot (S4), taken by
+    the intake's author; its creator (and the agents acting for them) may read it. The
+    items they see are still their own (AUD-9), never the author's."""
+    from oracle.runs.models import Run
+
+    user_id = _user(principal)
+    pinned_by_run = select(Run.snapshot_id).where(
+        Run.created_by == user_id, Run.snapshot_id.is_not(None)
+    )
     snapshot = await db.scalar(
-        select(Snapshot).where(Snapshot.id == snapshot_id, Snapshot.created_by == _user(principal))
+        select(Snapshot).where(
+            Snapshot.id == snapshot_id,
+            or_(Snapshot.created_by == user_id, Snapshot.id.in_(pinned_by_run)),
+        )
     )
     if snapshot is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
@@ -347,7 +361,9 @@ async def list_snapshot_items(
 ) -> list[ItemOut]:
     """The user's items as they were at the snapshot (each at its pinned version)."""
     snapshot = await _snapshot(db, principal, snapshot_id)
-    rows = await items.items_as_of(db, _user(principal), snapshot.as_of, source_id=source)
+    rows = await items.items_as_of(
+        db, _user(principal), snapshot.as_of, source_id=source, txn_snapshot=snapshot.txn_snapshot
+    )
     settings = await items.confidence_settings(db)
     return [ItemOut(**items.item_out(r, settings, now=snapshot.as_of)) for r in rows]
 

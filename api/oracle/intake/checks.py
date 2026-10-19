@@ -6,14 +6,18 @@
   the risk explicitly (``POST /v1/gaps/{id}/decisions``).
 - ``intake.open_decisions`` (advisory): any other critical gap still open; it warns.
 
-A document's gaps are its own and those of every intake linked to it.
+A document's gaps are its own and those of every intake linked to it, as everyone may
+see them (S6): a model-written gap its author has not shared does not count here (the
+rule-made gap of the same category does), a gap shared as a summary is named by
+Oracle's summary, and evidence the author has not shared is not listed. A critical gap
+answered below the owner role (``answered_pending_review``) stays unresolved (B4).
 """
 
 from sqlalchemy import or_, select
 
 from oracle import readiness
 from oracle.intake import categories as cats
-from oracle.intake import engine
+from oracle.intake import engine, sharing
 from oracle.readiness import CheckOutcome, ReadinessContext
 from oracle.v2.models import KnowledgeGap, ProductIntake
 
@@ -21,25 +25,33 @@ CRITICAL_BLOCKERS = "intake.critical_blockers"
 OPEN_DECISIONS = "intake.open_decisions"
 
 
-async def document_gaps(ctx: ReadinessContext) -> list[KnowledgeGap]:
+async def document_gaps(ctx: ReadinessContext) -> list:
     intakes = select(ProductIntake.id).where(ProductIntake.document_id == ctx.document_id)
-    return list(
-        (
-            await ctx.db.scalars(
-                select(KnowledgeGap)
-                .where(
-                    or_(
-                        KnowledgeGap.document_id == ctx.document_id,
-                        KnowledgeGap.intake_id.in_(intakes),
-                    )
+    rows = (
+        await ctx.db.scalars(
+            select(KnowledgeGap)
+            .where(
+                or_(
+                    KnowledgeGap.document_id == ctx.document_id,
+                    KnowledgeGap.intake_id.in_(intakes),
                 )
-                .order_by(KnowledgeGap.created_at, KnowledgeGap.id)
             )
-        ).all()
-    )
+            .order_by(KnowledgeGap.created_at, KnowledgeGap.id)
+        )
+    ).all()
+    registries: dict = {}
+    out = []
+    for gap in rows:
+        if gap.intake_id is not None and gap.intake_id not in registries:
+            intake = await ctx.db.get(ProductIntake, gap.intake_id)
+            registries[gap.intake_id] = sharing.registry(intake) if intake else {}
+        view = sharing.gap_view(gap, registries.get(gap.intake_id) or {}, sharing.EVERYONE)
+        if view is not None:
+            out.append(view)
+    return out
 
 
-def _unresolved(gaps: list[KnowledgeGap], hard: bool) -> list[KnowledgeGap]:
+def _unresolved(gaps: list, hard: bool) -> list:
     return [
         g
         for g in gaps
@@ -49,7 +61,7 @@ def _unresolved(gaps: list[KnowledgeGap], hard: bool) -> list[KnowledgeGap]:
     ]
 
 
-def _outcome(gaps: list[KnowledgeGap], open_: list[KnowledgeGap], bad: str, what: str):
+def _outcome(gaps: list, open_: list, bad: str, what: str):
     if not gaps:
         return CheckOutcome(status="not_applicable", rationale="No intake gaps for this PRD.")
     if not open_:

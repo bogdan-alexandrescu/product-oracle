@@ -22,9 +22,9 @@ nothing is applied without a person. Unresolved critical blockers reach the revi
 | 3. Label every item | every extracted item and gap | `verified_fact` (an answer backed by the answerer's own source items), `user_decision` (a person's answer, or a confirmed baseline item), `ai_inference` (Oracle read it into a source item; carries the items' confidence), `hypothesis` (only the brief says it), `unknown`. Confidence is shown as how much evidence counts, never as proof. |
 | 4. Conflicts and staleness | `extract.from_sources`, `summary.conflicts` | Pinned items that state different percentages for the same measure are a conflict, with the B3 recommendation from `baseline.conflicts.pick_winner` (confidence, then code > tracker > docs > meetings > chat, then newer). Open baseline conflicts on the goals, features and constraints the brief touches are listed with their resolution. Pinned items with freshness ≤ 0.35 are stale. |
 | 5. Rank | `categories.rank_score` | importance weight (critical 4 … low 1) × the areas a missing answer affects (goals 3, feasibility 3, scope 2, economics 2, risks 2, module selection 1) × the unknown share (unknown 1, brief hypothesis 0.9, an inference 1 − its evidence confidence, kept between 0.2 and 0.6). Signals in the brief raise importance: a partner API makes third-party policy critical, personal data makes security critical, a rate limit makes blockers critical, a model-driven feature raises evaluation criteria. |
-| 6. Short batches, every path | `engine.ask_batch`, `answers.answer` | Batches of five (1-10). Each question offers `answer`, `dont_know`, `defer`, `delegate` (to a company member who can answer) and `research`. A delegated question can be answered only by the person asked or an approver. |
+| 6. Short batches, every path | `engine.ask_batch`, `answers.answer` | Batches of five (1-10), asked by the author or an approver. Each question offers `answer`, `dont_know`, `defer`, `delegate` (to a company member who can answer) and `research`. A delegated question can be answered only by the person asked or an approver. A gap decided by an explicit decision (validated, accepted risk) is never rewritten by a later `dont_know`, `defer`, `research` or `delegate`. |
 | 7. Proposals, never approvals | `answers._propose_baseline`, `_propose_patch`, `propose_research` | An answer proposes a baseline entity (outcome, constraint with `attrs.blocker`, risk or decision) in the baseline's proposals; a `decision` change event through `oracle/changes.py` for the modules lane; a `prd_patch` when the intake is linked to a PRD (accepting it opens a feedback item on the latest version, refused on an approved section); a `research_run` for "Research this" and for "I don't know" on a critical gap. |
-| 8. The review gate | `oracle/intake/checks.py` | `intake.critical_blockers` (hard) is critical while a critical blockers or third-party-policy gap of the PRD is unresolved; `intake.open_decisions` (advisory) warns on other critical gaps. An owner lifts either by accepting the risk or assumption with a rationale (`POST /v1/gaps/{id}/decisions`). |
+| 8. The review gate | `oracle/intake/checks.py` | `intake.critical_blockers` (hard) is critical while a critical blockers or third-party-policy gap of the PRD is unresolved; `intake.open_decisions` (advisory) warns on other critical gaps. Only an owner clears a critical gap without review (B4): an answer below the owner role moves it to `answered_pending_review` (still unresolved); validating it unanswered, validating a critical hard blocker, accepting its risk or assumption, lowering its importance, or moving an intake with an open critical blocker off its PRD all take an owner. An approver may validate an answered critical gap that is not a hard blocker. |
 
 All seventeen categories are covered: customer/user, pain evidence, company-goal
 alignment, success metric and baseline, differentiation, alternatives, current and future
@@ -37,68 +37,124 @@ limits, configurability and scaling (`categories.CATEGORIES`).
 - An intake pins a snapshot at creation (`snapshots`, as of the database clock) or one the
   author picks; `product_intakes.source_snapshot_ids` keeps every pin, and the last is the
   one it reads. "Version N" is the Nth pin.
+- Pin stability: a version is stamped when it is written, not when its transaction
+  commits, so `as_of` alone would let a sync that began before the pin and committed after
+  it join the pinned set. A snapshot also records the database's transaction snapshot
+  (`snapshots.txn_snapshot`), each version its writing transaction
+  (`source_item_versions.xid`) and each deletion its transaction
+  (`source_items.deleted_xid`). A pinned read keeps only what had committed when the pin
+  was taken (`sources.items.version_at_pin`, `deleted_at_pin`). Rows from before the
+  migration have no xid and count as committed.
 - Every read goes through `oracle.sources.items.items_as_of`, so later syncs do not reach
   the analysis. Re-analysis on the same pin gives the same gaps.
 - `GET /v1/intakes/{id}/new-evidence` lists the author's items added, changed or deleted
-  since the pinned version: the "new evidence since version X" shown before a redraft.
-- `POST /v1/intakes/{id}/repin` (author or approver) pins anew and re-analyses. A decided
-  gap (answered, validated, accepted risk, deferred) is never touched, not even its
-  `lock_version`; new evidence reaches open gaps only.
+  since the pinned version: the "new evidence since version X" shown before a redraft. An
+  item created and deleted after the pin is not listed (it was never seen). Only the
+  author sees the items or their number.
+- `POST /v1/intakes/{id}/repin` and `/analyze` (the author only: both re-read the
+  author's sources) pin anew or re-analyse. A decided gap (answered, pending review,
+  validated, accepted risk, deferred) is never touched, not even its `lock_version`; new
+  evidence reaches open gaps only.
 - A run started from an intake (`POST /v1/intakes/{id}/runs`, or an accepted research
   proposal) carries `intake_id`, `intake_snapshot_id` and, for research, `intake_gap_ids`
   as Oracle knobs. `runs.service.start` reads the intake's snapshot instead of taking a
   new one. The agents' prompt names the intake id and the tools to read it with, never its
-  text.
+  text. A run created by someone other than the intake's author (an approver) can read
+  that snapshot (`GET /v1/snapshots/{id}/items` allows a snapshot a run of the caller is
+  pinned to); what it reads there is the run creator's own items, never the author's, and
+  the intake itself only as its findings are shared (S6).
 
 ## 3. Untrusted content
 
 - Source text is data. In the API it only appears as `data_excerpt` on an `EvidenceRef`
-  with `untrusted: true`, and only to the item's owner (S3 as built, AUD-9: others see that
-  evidence exists, its kind and confidence).
+  with `untrusted: true`, to the item's owner (never through a run token), or to anyone
+  when the author shared a finding citing it in full (S6, below).
 - The `intake_analysis` job's system prompt is the fixed file
-  `api/oracle/jobs/prompts/intake_analysis.v1.md`. The brief and the source excerpts go
-  only inside the user message's `untrusted_data`, which the prompt declares is never an
-  instruction. The answer is validated: known fields and categories, text cut to 500
-  characters, evidence refs that resolve to items the job was given. Results are AI
-  inferences and open gaps only; the job can neither answer nor close anything.
+  `api/oracle/jobs/prompts/intake_analysis.v2.md`. Outside `untrusted_data` the user
+  message carries only Oracle's own fixed values: the intake id, fields, category keys and
+  labels, existing gaps as `ref`, category and status, the closed categories and the
+  limits. Everything people or sources wrote travels inside `untrusted_data`: the title,
+  the brief, every gap statement (any commenter can write one), the confirmed goals and
+  the excerpts. The answer is validated: known fields and categories, text cut to 500
+  characters, at most 12 items and 8 gaps per run (40 and 24 per intake), evidence refs
+  that resolve to items the job was given, no gap in a category already answered or
+  covered by the baseline, no gap that says what an existing gap of its category says
+  (normalised content words). Results are AI inferences and open gaps only; the job can
+  neither answer nor close anything, and adds nothing to a converted or archived intake.
 - Runs get the intake id, not its text. Run tokens read intakes, gaps, questions and
-  answers with `read:baseline`; the two routes that return source content
-  (`/intakes/{id}/evidence`, `/intakes/{id}/new-evidence`) need `read:sources`; run
-  tokens can never answer, decide or accept.
-- Every evidence search is audited (`intake.evidence_query`: query, hits, item ids, pin).
+  answers with `read:baseline`; the routes that can return source titles, links or
+  excerpts (`/intakes/{id}/summary`, `/question-batch`, `/evidence`, `/new-evidence`) need
+  `read:sources`; run tokens can never answer, decide, accept or share.
+- Every evidence search is audited (`intake.evidence_query`: query, hits, item ids, pin),
+  and so is every read that returns titles, links or excerpts (`intake.evidence_read`:
+  route and item ids).
+
+## 3b. What others see of the author's findings (S6)
+
+The owner decided on 2026-10-19 (S6) that the author chooses, per finding, what others
+see of a finding drawn from their own sources (`oracle/intake/sharing.py`):
+
+| Level | Others see |
+|---|---|
+| `private` (default) | nothing: the finding is left out, a model-written gap is 404 with its questions, answers and decisions, a rule-made gap shows no evidence, confidence or inferred state |
+| `counts` | `shared_counts` on the summary and `analysis`: kind, category and number ("1 conflict in success metric and baseline evidence") |
+| `summary` | Oracle's summary: a model sentence without figures, quotes, any name or code from a source or four words in a row from one, else Oracle's fixed wording; evidence refs without titles, links or excerpts; conflicts without values |
+| `full` | everything, excerpts of the cited items included |
+
+Findings are the model-written items and gaps, source conflicts, stale evidence, and the
+evidence of a rule-made gap (the gap's fixed category text stays shared). They live in
+`product_intakes.analysis.findings`, keyed by finding id, so a re-analysis keeps every
+level. A finding drawn only from text everyone can read (the brief, the title) is not
+restricted. The author sees everything (never through a run token: a run token's calls
+carry `x-oracle-run-id`, which only narrows); viewers, commenters, approvers, owners and
+run tokens see each finding at its level in every read: the summary, the question batch,
+composition inputs, proposals, the foundation's list and get routes for intakes, gaps,
+questions, answers and assumption decisions, and the readiness checks (a model-written
+gap the author has not shared does not count there; its rule-made category gap does).
+`PATCH /v1/intakes/{id}/findings/{finding_id}` and `POST /v1/intakes/{id}/findings/sharing`
+(bulk) set levels, the author only, each change audited (`intake.finding_shared`: from,
+to); the author can lower a level at any time. Text that travels into shared places
+(baseline proposals, PRD patches, research proposals, coverage reasons) never carries a
+model-written gap's own words.
 
 ## 4. Routes (all `/v1`, all MCP tools)
 
 | Route | Tool | Role | Screen |
 |---|---|---|---|
 | `POST /intakes` | `create_intake` | commenter | New product idea |
-| `PATCH /intakes/{item_id}` | `update_intake` | commenter (author) or approver | New product idea |
+| `PATCH /intakes/{item_id}` | `update_intake` | commenter (author) or approver; linking a PRD: approver | New product idea |
 | `GET /intakes/{intake_id}/summary` | `get_intake_summary` | viewer | Opportunity and Gaps |
-| `POST /intakes/{intake_id}/analyze` | `analyze_intake` | commenter | Opportunity and Gaps |
-| `GET /intakes/{intake_id}/new-evidence` | `get_intake_new_evidence` | viewer | Opportunity and Gaps |
-| `POST /intakes/{intake_id}/repin` | `repin_intake` | author or approver | Opportunity and Gaps |
+| `POST /intakes/{intake_id}/analyze` | `analyze_intake` | the author | Opportunity and Gaps |
+| `GET /intakes/{intake_id}/new-evidence` | `get_intake_new_evidence` | viewer (items for the author only) | Opportunity and Gaps |
+| `POST /intakes/{intake_id}/repin` | `repin_intake` | the author | Opportunity and Gaps |
+| `GET /intakes/{intake_id}/findings` | `list_intake_findings` | viewer | Sharing panel |
+| `PATCH /intakes/{intake_id}/findings/{finding_id}` | `set_intake_finding_sharing` | the author | Sharing panel |
+| `POST /intakes/{intake_id}/findings/sharing` | `set_intake_findings_sharing` | the author | Sharing panel |
 | `GET /intakes/{intake_id}/evidence?q=` | `search_intake_evidence` | viewer (own items) | Evidence panel |
 | `GET /intakes/{intake_id}/question-batch` | `get_question_batch` | viewer | Question batch |
-| `POST /intakes/{intake_id}/question-batches` | `ask_next_question_batch` | commenter | Question batch |
+| `POST /intakes/{intake_id}/question-batches` | `ask_next_question_batch` | the author or an approver | Question batch |
 | `GET /intakes/{intake_id}/composition-inputs` | `get_intake_composition_inputs` | viewer | (modules lane) |
 | `POST /intakes/{intake_id}/runs` | `start_intake_run` | approver | Opportunity and Gaps |
 | `GET /intakes/{intake_id}/proposals` | `list_intake_proposals` | viewer | Proposals |
 | `POST /intake-proposals/{id}/accept`, `/dismiss` | `accept_intake_proposal`, `dismiss_intake_proposal` | approver | Proposals |
 | `POST /gaps`, `PATCH /gaps/{item_id}` | `create_knowledge_gap`, `update_knowledge_gap` | commenter, approver | Opportunity and Gaps |
-| `POST /gaps/{gap_id}/decisions` | `decide_knowledge_gap` | approver; owner on a critical gap | Opportunity and Gaps |
+| `POST /gaps/{gap_id}/decisions` | `decide_knowledge_gap` | approver; owner to clear a critical gap without review (B4) | Opportunity and Gaps |
 | `POST /gaps/{gap_id}/research` | `propose_gap_research` | commenter | Question batch |
 | `POST /questions/{question_id}/answers` | `answer_question` | commenter (the person asked, or an approver) | Question batch |
 
-The foundation's list and get routes (`list_intakes`, `get_knowledge_gap`, …) stay as
-they are. Every write is audited (`intake.*`), and another company's id is a 404.
+The foundation's list and get routes (`list_intakes`, `get_knowledge_gap`, …) return
+the reader's view (S6) through `oracle.v2.router.register_view`. Every write is audited (`intake.*`), and another company's id is a 404.
 
 ## 5. Schema
 
 One additive migration, `0014_intake` (down_revision `0013`, re-chained at merge):
 `intake_proposals` (what an intake proposes until a person decides) and, on `llm_jobs`,
 `intake_id`, a nullable `document_id`, the `intake_analysis` kind and a check that a job
-has a document or an intake. Gaps, questions, answers and decisions use the foundation's
-tables unchanged; the chosen sources and the analysis live in `product_intakes.analysis`.
+has a document or an intake. The security review added, in the same revision: the gap
+status `answered_pending_review` (B4), and the pin-stability columns
+`snapshots.txn_snapshot`, `source_item_versions.xid` and `source_items.deleted_xid`.
+Otherwise gaps, questions, answers and decisions use the foundation's tables; the chosen
+sources, the analysis and the findings' sharing levels live in `product_intakes.analysis`.
 
 ## 6. Interfaces for the other lanes
 

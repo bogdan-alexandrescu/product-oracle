@@ -9888,7 +9888,7 @@
           "intake"
         ],
         "summary": "Update Intake",
-        "description": "Rename, link to a PRD, archive or reopen (the author or an approver).",
+        "description": "Rename, archive or reopen (the author or an approver); link to a PRD (an approver;\nmoving an intake with an unresolved critical blocker off its PRD: an owner).",
         "operationId": "update_intake",
         "security": [
           {
@@ -10007,6 +10007,7 @@
                     "under_investigation",
                     "asked",
                     "answered",
+                    "answered_pending_review",
                     "validated",
                     "deferred",
                     "accepted_risk"
@@ -10233,7 +10234,7 @@
           "intake"
         ],
         "summary": "Update Knowledge Gap",
-        "description": "Triage a gap: importance, owner, sections, stop condition; defer or reopen.",
+        "description": "Triage a gap: importance, owner, sections, stop condition; defer or reopen.\nLowering a critical gap's importance takes an owner (B4).",
         "operationId": "update_knowledge_gap",
         "security": [
           {
@@ -12801,7 +12802,7 @@
           "intake"
         ],
         "summary": "Get Intake Summary",
-        "description": "Opportunity and Gaps: extracted items, coverage, goals and features, conflicts,\nstale evidence, assumptions, top uncertainties, the template and the review gate.",
+        "description": "Opportunity and Gaps: extracted items, coverage, goals and features, conflicts,\nstale evidence, assumptions, top uncertainties, the template and the review gate,\nas the reader may see them (S6).",
         "operationId": "get_intake_summary",
         "security": [
           {
@@ -12853,7 +12854,7 @@
           "intake"
         ],
         "summary": "Analyze Intake",
-        "description": "Re-read the pinned snapshot and the baseline. Decided gaps are never changed and\nanswered questions never asked again.",
+        "description": "Re-read the pinned snapshot and the baseline (the author only). Decided gaps are\nnever changed and answered questions never asked again.",
         "operationId": "analyze_intake",
         "security": [
           {
@@ -12905,7 +12906,7 @@
           "intake"
         ],
         "summary": "Get Intake New Evidence",
-        "description": "Evidence added or changed since the pinned version (items for the author only).",
+        "description": "Evidence added or changed since the pinned version (the author only; anyone else\nsees neither the items nor their number).",
         "operationId": "get_intake_new_evidence",
         "security": [
           {
@@ -12957,7 +12958,7 @@
           "intake"
         ],
         "summary": "Repin Intake",
-        "description": "Pin a new snapshot and re-analyse; decided gaps stay as decided.",
+        "description": "Pin a new snapshot and re-analyse (the author only); decided gaps stay as\ndecided.",
         "operationId": "repin_intake",
         "security": [
           {
@@ -13084,7 +13085,7 @@
           "intake"
         ],
         "summary": "Get Question Batch",
-        "description": "A batch of questions (default: the latest) with their gaps, evidence, answers\nand answer paths.",
+        "description": "A batch of questions (default: the latest) with their gaps, evidence, answers\nand answer paths, as the reader may see them (S6).",
         "operationId": "get_question_batch",
         "security": [
           {
@@ -13153,7 +13154,7 @@
           "intake"
         ],
         "summary": "Ask Next Question Batch",
-        "description": "Ask the next short batch: the highest-ranked questions not asked yet.",
+        "description": "Ask the next short batch: the highest-ranked questions not asked yet (the author\nor an approver).",
         "operationId": "ask_next_question_batch",
         "security": [
           {
@@ -13501,13 +13502,207 @@
         }
       }
     },
+    "/v1/intakes/{intake_id}/findings": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "List Intake Findings",
+        "description": "Findings drawn from the author's own sources and their sharing levels. The author\nsees every one; anyone else those shared at counts or above, as far as each allows.",
+        "operationId": "list_intake_findings",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FindingOut"
+                  },
+                  "title": "Response List Intake Findings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/findings/{finding_id}": {
+      "patch": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Set Intake Finding Sharing",
+        "description": "Set what others see of one finding: private, counts, summary or full (the\nauthor only; audited; lower it again at any time).",
+        "operationId": "set_intake_finding_sharing",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SharingIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/findings/sharing": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Set Intake Findings Sharing",
+        "description": "Set the sharing level of several findings at once (the author only; every change\nis audited).",
+        "operationId": "set_intake_findings_sharing",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SharingBulkIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FindingOut"
+                  },
+                  "title": "Response Set Intake Findings Sharing"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/gaps/{gap_id}/decisions": {
       "post": {
         "tags": [
           "intake"
         ],
         "summary": "Decide Knowledge Gap",
-        "description": "Accept an assumption or a risk, validate, or reject, with a rationale. On a\ncritical gap, accepting needs an owner.",
+        "description": "Accept an assumption or a risk, validate, or reject, with a rationale. On a\ncritical gap, accepting, validating it unanswered, or validating a hard blocker\nneeds an owner (B4).",
         "operationId": "decide_knowledge_gap",
         "security": [
           {
@@ -17394,6 +17589,40 @@
               }
             ],
             "title": "Conflict Id"
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id"
+          },
+          "sharing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "counts",
+                  "summary",
+                  "full"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing"
+          },
+          "summary_only": {
+            "type": "boolean",
+            "title": "Summary Only",
+            "default": false
           }
         },
         "type": "object",
@@ -20650,6 +20879,35 @@
             "type": "array",
             "title": "Evidence",
             "default": []
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id"
+          },
+          "sharing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "counts",
+                  "summary",
+                  "full"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing"
           }
         },
         "type": "object",
@@ -21183,6 +21441,136 @@
         },
         "type": "object",
         "title": "FeedbackPatch"
+      },
+      "FindingCount": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "item",
+              "gap",
+              "conflict",
+              "stale"
+            ],
+            "title": "Kind"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "count",
+          "label"
+        ],
+        "title": "FindingCount",
+        "description": "Findings shared as counts and categories only (S6)."
+      },
+      "FindingOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "item",
+              "gap",
+              "conflict",
+              "stale"
+            ],
+            "title": "Kind"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "model",
+              "rules"
+            ],
+            "title": "Origin"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "sharing": {
+            "type": "string",
+            "enum": [
+              "private",
+              "counts",
+              "summary",
+              "full"
+            ],
+            "title": "Sharing"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "gap_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap Id"
+          },
+          "source_item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Source Item Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "origin",
+          "sharing"
+        ],
+        "title": "FindingOut",
+        "description": "A finding drawn from the author's own sources and what others see of it (S6).\n\nThe author sees every finding. Anyone else sees those shared at \"counts\" or above:\nthe kind and category; from \"summary\" Oracle's summary and the gap; at \"full\" the\nsource items it cites."
       },
       "FlowCatalog": {
         "properties": {
@@ -22891,6 +23279,19 @@
             },
             "type": "array",
             "title": "Proposals"
+          },
+          "shared_counts": {
+            "items": {
+              "$ref": "#/components/schemas/FindingCount"
+            },
+            "type": "array",
+            "title": "Shared Counts",
+            "default": []
+          },
+          "is_author": {
+            "type": "boolean",
+            "title": "Is Author",
+            "default": false
           }
         },
         "type": "object",
@@ -22915,7 +23316,7 @@
           "proposals"
         ],
         "title": "IntakeSummary",
-        "description": "The Opportunity and Gaps summary."
+        "description": "The Opportunity and Gaps summary, as the reader may see it (S6)."
       },
       "InviteCreate": {
         "properties": {
@@ -23688,6 +24089,7 @@
               "under_investigation",
               "asked",
               "answered",
+              "answered_pending_review",
               "validated",
               "deferred",
               "accepted_risk"
@@ -24610,7 +25012,14 @@
             "title": "As Of"
           },
           "count": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Count"
           },
           "visible": {
@@ -24802,7 +25211,8 @@
               "research",
               "delegate",
               "accept_assumption",
-              "accept_risk"
+              "accept_risk",
+              "validate"
             ],
             "title": "Kind"
           },
@@ -26111,6 +26521,7 @@
               "under_investigation",
               "asked",
               "answered",
+              "answered_pending_review",
               "validated",
               "deferred",
               "accepted_risk"
@@ -26207,6 +26618,35 @@
             "type": "array",
             "title": "Evidence",
             "default": []
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id"
+          },
+          "sharing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "counts",
+                  "summary",
+                  "full"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing"
           }
         },
         "type": "object",
@@ -28593,6 +29033,68 @@
         ],
         "title": "SettingOut"
       },
+      "SharingBulkIn": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/SharingChange"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changes"
+        ],
+        "title": "SharingBulkIn"
+      },
+      "SharingChange": {
+        "properties": {
+          "finding_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Finding Id"
+          },
+          "sharing": {
+            "type": "string",
+            "enum": [
+              "private",
+              "counts",
+              "summary",
+              "full"
+            ],
+            "title": "Sharing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "finding_id",
+          "sharing"
+        ],
+        "title": "SharingChange"
+      },
+      "SharingIn": {
+        "properties": {
+          "sharing": {
+            "type": "string",
+            "enum": [
+              "private",
+              "counts",
+              "summary",
+              "full"
+            ],
+            "title": "Sharing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sharing"
+        ],
+        "title": "SharingIn"
+      },
       "SlideOut": {
         "properties": {
           "index": {
@@ -29443,6 +29945,35 @@
           "reason": {
             "type": "string",
             "title": "Reason"
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id"
+          },
+          "sharing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "counts",
+                  "summary",
+                  "full"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing"
           }
         },
         "type": "object",

@@ -1,10 +1,15 @@
 """Intake, gap, question and answer routes (CR-03). Every route is also an MCP tool.
 
-Roles: viewers read; commenters create intakes, answer questions, add gaps, propose
-research and ask the next batch; approvers triage gaps, decide them, accept or dismiss
-proposals and start runs; accepting a critical gap's risk or assumption is an owner's
-call. The author of an intake may also edit and repin it. Another company's ids are
-404 (tenant-scoped session).
+Roles: viewers read; commenters create intakes, answer questions, add gaps and propose
+research; the author or an approver asks the next batch; approvers triage gaps, decide
+them, link an intake to a PRD, accept or dismiss proposals and start runs. Clearing a
+critical gap without review is an owner's call (B4): accepting its risk, validating it
+unanswered or as a hard blocker, lowering its importance. Only the author re-runs the
+analysis, repins, and sets what others see of each finding drawn from their own
+sources (S6, ``oracle.intake.sharing``); every read is shaped for its reader, and a gap
+the author has not shared is 404 to everyone else. Reads that return source titles,
+links or excerpts are audited (``intake.evidence_read``). Another company's ids are 404
+(tenant-scoped session).
 
 The foundation's read routes (``oracle.v2.router``) list and get intakes, gaps,
 questions, answers and assumption decisions; these add the writes and the read models
@@ -18,8 +23,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role
-from oracle.intake import answers, checks, engine, service, summary
+from oracle.authz import has_role, require_role
+from oracle.intake import answers, checks, engine, service, sharing, summary, views
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
 from oracle.intake.models import IntakeProposal
@@ -31,6 +36,7 @@ from oracle.intake.schemas import (
     DismissIn,
     EvidenceHit,
     EvidenceSearch,
+    FindingOut,
     GapCreate,
     GapPatch,
     IntakeCreate,
@@ -41,6 +47,8 @@ from oracle.intake.schemas import (
     IntakeSummary,
     NewEvidence,
     QuestionBatch,
+    SharingBulkIn,
+    SharingIn,
 )
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
@@ -63,6 +71,7 @@ Approver = Annotated[Principal, Depends(require_role("approver"))]
 Viewer = Annotated[Principal, Depends(require_role("viewer"))]
 
 checks.register()
+views.register()
 
 
 def _http(exc: service.IntakeError) -> HTTPException:
@@ -76,9 +85,29 @@ async def _intake(db: TenantDB, intake_id: uuid.UUID):
         raise _http(e) from e
 
 
-async def _summary(db: TenantDB, intake, principal: Principal) -> IntakeSummary:
+async def _audit_read(db: TenantDB, principal: Principal, intake, route: str, out) -> None:
+    """Audit a read that returns source titles, links or excerpts (then commit it)."""
+    ids = summary.excerpt_item_ids(out)
+    if ids:
+        await audit.record(
+            db, principal, "intake.evidence_read", "intake", intake.id,
+            {"route": route, "item_ids": ids},
+        )  # fmt: skip
+        await db.commit()
+
+
+async def _summary(db: TenantDB, intake, principal: Principal, route: str) -> IntakeSummary:
     await db.refresh(intake)
-    return await summary.build(db, intake, principal)
+    out = await summary.build(db, intake, principal)
+    await _audit_read(db, principal, intake, route, out)
+    return out
+
+
+def _gap_out(intake, principal: Principal, gap: KnowledgeGap) -> KnowledgeGapOut:
+    if intake is None:
+        return KnowledgeGapOut.model_validate(gap)
+    view = sharing.gap_view(gap, sharing.registry(intake), sharing.viewer(principal, intake))
+    return KnowledgeGapOut.model_validate(view if view is not None else gap)
 
 
 # --- intakes -----------------------------------------------------------------------------
@@ -93,14 +122,15 @@ async def create_intake(body: IntakeCreate, principal: Commenter, db: TenantDB) 
     except service.IntakeError as e:
         raise _http(e) from e
     await db.commit()
-    return await _summary(db, intake, principal)
+    return await _summary(db, intake, principal, "create_intake")
 
 
 @router.patch("/intakes/{item_id}", response_model=IntakeOut)
 async def update_intake(
     item_id: uuid.UUID, body: IntakePatch, principal: Commenter, db: TenantDB
 ) -> IntakeOut:
-    """Rename, link to a PRD, archive or reopen (the author or an approver)."""
+    """Rename, archive or reopen (the author or an approver); link to a PRD (an approver;
+    moving an intake with an unresolved critical blocker off its PRD: an owner)."""
     intake = await _intake(db, item_id)
     try:
         await service.patch(db, principal, intake, body)
@@ -108,7 +138,7 @@ async def update_intake(
         raise _http(e) from e
     await db.commit()
     await db.refresh(intake)
-    return summary.intake_out(intake)
+    return summary.intake_out(intake, principal)
 
 
 @router.get("/intakes/{intake_id}/summary", response_model=IntakeSummary)
@@ -116,39 +146,47 @@ async def get_intake_summary(
     intake_id: uuid.UUID, principal: Viewer, db: TenantDB
 ) -> IntakeSummary:
     """Opportunity and Gaps: extracted items, coverage, goals and features, conflicts,
-    stale evidence, assumptions, top uncertainties, the template and the review gate."""
-    return await _summary(db, await _intake(db, intake_id), principal)
+    stale evidence, assumptions, top uncertainties, the template and the review gate,
+    as the reader may see them (S6)."""
+    return await _summary(db, await _intake(db, intake_id), principal, "get_intake_summary")
 
 
 @router.post("/intakes/{intake_id}/analyze", response_model=IntakeSummary)
 async def analyze_intake(intake_id: uuid.UUID, principal: Commenter, db: TenantDB) -> IntakeSummary:
-    """Re-read the pinned snapshot and the baseline. Decided gaps are never changed and
-    answered questions never asked again."""
+    """Re-read the pinned snapshot and the baseline (the author only). Decided gaps are
+    never changed and answered questions never asked again."""
     intake = await _intake(db, intake_id)
-    await service.reanalyze(db, principal, intake)
+    try:
+        await service.reanalyze(db, principal, intake)
+    except service.IntakeError as e:
+        raise _http(e) from e
     await db.commit()
-    return await _summary(db, intake, principal)
+    return await _summary(db, intake, principal, "analyze_intake")
 
 
 @router.get("/intakes/{intake_id}/new-evidence", response_model=NewEvidence)
 async def get_intake_new_evidence(
     intake_id: uuid.UUID, principal: Viewer, db: TenantDB
 ) -> NewEvidence:
-    """Evidence added or changed since the pinned version (items for the author only)."""
+    """Evidence added or changed since the pinned version (the author only; anyone else
+    sees neither the items nor their number)."""
     intake = await _intake(db, intake_id)
-    return await summary.new_evidence(db, intake, principal, await summary.pinned(db, intake))
+    out = await summary.new_evidence(db, intake, principal, await summary.pinned(db, intake))
+    await _audit_read(db, principal, intake, "get_intake_new_evidence", out)
+    return out
 
 
 @router.post("/intakes/{intake_id}/repin", response_model=IntakeSummary)
 async def repin_intake(intake_id: uuid.UUID, principal: Commenter, db: TenantDB) -> IntakeSummary:
-    """Pin a new snapshot and re-analyse; decided gaps stay as decided."""
+    """Pin a new snapshot and re-analyse (the author only); decided gaps stay as
+    decided."""
     intake = await _intake(db, intake_id)
     try:
         await service.repin(db, principal, intake)
     except service.IntakeError as e:
         raise _http(e) from e
     await db.commit()
-    return await _summary(db, intake, principal)
+    return await _summary(db, intake, principal, "repin_intake")
 
 
 @router.get("/intakes/{intake_id}/evidence", response_model=EvidenceSearch)
@@ -169,12 +207,23 @@ async def search_intake_evidence(
     pin = await summary.pinned(db, intake)
     snapshot = await db.get(Snapshot, pin.snapshot_id) if pin.snapshot_id else None
     hits = await source_search.search(
-        db, me, q, as_of=snapshot.as_of if snapshot else None, limit=limit
+        db,
+        me,
+        q,
+        as_of=snapshot.as_of if snapshot else None,
+        txn_snapshot=snapshot.txn_snapshot if snapshot else None,
+        limit=limit,
     )
     chosen = set(ev.source_ids_of(intake))
     if chosen:
         hits = [h for h in hits if h["item"]["source_id"] in chosen]
-    refs = await ev.refs(db, [h["item"]["id"] for h in hits], principal, pin.as_of)
+    refs = await ev.refs(
+        db,
+        [h["item"]["id"] for h in hits],
+        principal,
+        pin.as_of,
+        txn_snapshot=snapshot.txn_snapshot if snapshot else None,
+    )
     out = [
         EvidenceHit(
             **refs[h["item"]["id"]].model_dump(),
@@ -203,9 +252,11 @@ async def get_question_batch(
     batch: Annotated[int | None, Query(ge=1)] = None,
 ) -> QuestionBatch:
     """A batch of questions (default: the latest) with their gaps, evidence, answers
-    and answer paths."""
+    and answer paths, as the reader may see them (S6)."""
     intake = await _intake(db, intake_id)
-    return await summary.question_batch(db, intake, principal, batch)
+    out = await summary.question_batch(db, intake, principal, batch)
+    await _audit_read(db, principal, intake, "get_question_batch", out)
+    return out
 
 
 @router.post("/intakes/{intake_id}/question-batches", response_model=QuestionBatch)
@@ -215,9 +266,13 @@ async def ask_next_question_batch(
     db: TenantDB,
     size: Annotated[int, Query(ge=1, le=10)] = 5,
 ) -> QuestionBatch:
-    """Ask the next short batch: the highest-ranked questions not asked yet."""
+    """Ask the next short batch: the highest-ranked questions not asked yet (the author
+    or an approver)."""
     intake = await _intake(db, intake_id)
-    asked = await service.ask(db, principal, intake, size)
+    try:
+        asked = await service.ask_next(db, principal, intake, size)
+    except service.IntakeError as e:
+        raise _http(e) from e
     if not asked:
         raise HTTPException(status.HTTP_409_CONFLICT, "No questions left to ask")
     await db.commit()
@@ -230,7 +285,7 @@ async def get_intake_composition_inputs(
 ) -> CompositionInputs:
     """What the module composer reads from this intake (brief, signals, scope, baseline
     links, pinned snapshots, open critical gaps)."""
-    return await summary.composition_inputs(db, await _intake(db, intake_id))
+    return await summary.composition_inputs(db, await _intake(db, intake_id), principal)
 
 
 @router.post("/intakes/{intake_id}/runs", response_model=RunOut, status_code=201)
@@ -254,7 +309,7 @@ async def list_intake_proposals(
 ) -> list[IntakeProposalOut]:
     """Research runs and PRD patches this intake proposed, newest first."""
     intake = await _intake(db, intake_id)
-    return await summary.proposals_of(db, intake.id)
+    return await summary.proposals_of(db, intake, principal)
 
 
 async def _proposal(db: TenantDB, proposal_id: uuid.UUID) -> IntakeProposal:
@@ -294,14 +349,96 @@ async def dismiss_intake_proposal(
     return IntakeProposalOut.model_validate(proposal)
 
 
+# --- findings (S6) -----------------------------------------------------------------------
+
+
+def _finding_out(fid: str, entry: dict, v: sharing.Viewer) -> FindingOut | None:
+    level = entry.get("sharing", sharing.DEFAULT)
+    if not v.sees(level, "counts"):
+        return None
+    out = FindingOut(
+        id=uuid.UUID(fid), kind=entry["kind"], origin=entry.get("origin", "rules"),
+        category=entry.get("category"), sharing=level,
+    )  # fmt: skip
+    if v.sees(level, "summary"):
+        out.summary = entry.get("summary")
+        out.gap_id = uuid.UUID(entry["gap_id"]) if entry.get("gap_id") else None
+    if v.sees(level, "full"):
+        out.source_item_ids = [uuid.UUID(i) for i in entry.get("source_item_ids") or []]
+    return out
+
+
+def _findings(intake, principal: Principal, only: set[str] | None = None) -> list[FindingOut]:
+    v = sharing.viewer(principal, intake)
+    out = []
+    for fid, entry in sharing.registry(intake).items():
+        if only is not None and fid not in only:
+            continue
+        row = _finding_out(fid, entry, v)
+        if row is not None:
+            out.append(row)
+    return out
+
+
+@router.get("/intakes/{intake_id}/findings", response_model=list[FindingOut])
+async def list_intake_findings(
+    intake_id: uuid.UUID, principal: Viewer, db: TenantDB
+) -> list[FindingOut]:
+    """Findings drawn from the author's own sources and their sharing levels. The author
+    sees every one; anyone else those shared at counts or above, as far as each allows."""
+    return _findings(await _intake(db, intake_id), principal)
+
+
+@router.patch("/intakes/{intake_id}/findings/{finding_id}", response_model=FindingOut)
+async def set_intake_finding_sharing(
+    intake_id: uuid.UUID, finding_id: uuid.UUID, body: SharingIn, principal: Viewer, db: TenantDB
+) -> FindingOut:
+    """Set what others see of one finding: private, counts, summary or full (the
+    author only; audited; lower it again at any time)."""
+    intake = await _intake(db, intake_id)
+    try:
+        await service.set_sharing(db, principal, intake, [(str(finding_id), body.sharing)])
+    except service.IntakeError as e:
+        raise _http(e) from e
+    await db.commit()
+    await db.refresh(intake)
+    [out] = _findings(intake, principal, {str(finding_id)})
+    return out
+
+
+@router.post("/intakes/{intake_id}/findings/sharing", response_model=list[FindingOut])
+async def set_intake_findings_sharing(
+    intake_id: uuid.UUID, body: SharingBulkIn, principal: Viewer, db: TenantDB
+) -> list[FindingOut]:
+    """Set the sharing level of several findings at once (the author only; every change
+    is audited)."""
+    intake = await _intake(db, intake_id)
+    changes = [(str(c.finding_id), c.sharing) for c in body.changes]
+    try:
+        done = await service.set_sharing(db, principal, intake, changes)
+    except service.IntakeError as e:
+        raise _http(e) from e
+    await db.commit()
+    await db.refresh(intake)
+    return _findings(intake, principal, set(done))
+
+
 # --- gaps --------------------------------------------------------------------------------
 
 
-async def _gap(db: TenantDB, gap_id: uuid.UUID) -> KnowledgeGap:
+async def _gap(db: TenantDB, gap_id: uuid.UUID, principal: Principal) -> KnowledgeGap:
+    """A gap the caller may see; one the author has not shared is 404 (S6)."""
     try:
-        return await service.get_gap(db, gap_id)
+        gap = await service.get_gap(db, gap_id)
+        if gap.intake_id is not None:
+            answers.check_visible(principal, await service.get_intake(db, gap.intake_id), gap)
     except service.IntakeError as e:
         raise _http(e) from e
+    return gap
+
+
+async def _gap_intake(db: TenantDB, gap: KnowledgeGap):
+    return await service.get_intake(db, gap.intake_id) if gap.intake_id else None
 
 
 @router.post("/gaps", response_model=KnowledgeGapOut, status_code=201)
@@ -336,16 +473,26 @@ async def create_knowledge_gap(
         {"intake_id": str(intake.id), "category": body.category},
     )  # fmt: skip
     await db.commit()
-    return KnowledgeGapOut.model_validate(gap)
+    return _gap_out(intake, principal, gap)
 
 
 @router.patch("/gaps/{item_id}", response_model=KnowledgeGapOut)
 async def update_knowledge_gap(
     item_id: uuid.UUID, body: GapPatch, principal: Approver, db: TenantDB
 ) -> KnowledgeGapOut:
-    """Triage a gap: importance, owner, sections, stop condition; defer or reopen."""
-    gap = await _gap(db, item_id)
+    """Triage a gap: importance, owner, sections, stop condition; defer or reopen.
+    Lowering a critical gap's importance takes an owner (B4)."""
+    gap = await _gap(db, item_id, principal)
     expect_version(gap, body.lock_version)
+    if (
+        gap.importance == "critical"
+        and body.importance is not None
+        and body.importance != "critical"
+        and not has_role(principal.role, "owner")
+    ):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Lowering a critical gap's importance needs an owner"
+        )
     if body.owner_id is not None and await service.member(db, body.owner_id) is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown owner")
     changed = {}
@@ -362,7 +509,7 @@ async def update_knowledge_gap(
             await engine.sync_questions(db, await service.get_intake(db, gap.intake_id))
     await db.commit()
     await db.refresh(gap)
-    return KnowledgeGapOut.model_validate(gap)
+    return _gap_out(await _gap_intake(db, gap), principal, gap)
 
 
 @router.post("/gaps/{gap_id}/decisions", response_model=DecisionResult, status_code=201)
@@ -370,18 +517,19 @@ async def decide_knowledge_gap(
     gap_id: uuid.UUID, body: DecisionIn, principal: Approver, db: TenantDB
 ) -> DecisionResult:
     """Accept an assumption or a risk, validate, or reject, with a rationale. On a
-    critical gap, accepting needs an owner."""
-    gap = await _gap(db, gap_id)
+    critical gap, accepting, validating it unanswered, or validating a hard blocker
+    needs an owner (B4)."""
+    gap = await _gap(db, gap_id, principal)
     try:
         decision = await answers.decide(db, principal, gap, body)
     except service.IntakeError as e:
         raise _http(e) from e
     await db.commit()
     await db.refresh(gap)
-    return DecisionResult(
-        decision=AssumptionDecisionOut.model_validate(decision),
-        gap=KnowledgeGapOut.model_validate(gap),
-    )
+    gap_out = _gap_out(await _gap_intake(db, gap), principal, gap)
+    decision_out = AssumptionDecisionOut.model_validate(decision)
+    decision_out.statement = gap_out.statement
+    return DecisionResult(decision=decision_out, gap=gap_out)
 
 
 @router.post("/gaps/{gap_id}/research", response_model=IntakeProposalOut, status_code=201)
@@ -390,7 +538,7 @@ async def propose_gap_research(
 ) -> IntakeProposalOut:
     """Research this: propose a run that looks into the gap. Nothing runs until an
     approver accepts it and starts the run."""
-    gap = await _gap(db, gap_id)
+    gap = await _gap(db, gap_id, principal)
     if gap.intake_id is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Only an intake's gap can be researched")
     intake = await _intake(db, gap.intake_id)
@@ -422,7 +570,9 @@ async def answer_question(
     return AnswerResult(
         answer=StakeholderAnswerOut.model_validate(result["answer"]),
         question=StakeholderQuestionOut.model_validate(result["question"]),
-        gap=KnowledgeGapOut.model_validate(result["gap"]) if result["gap"] else None,
+        gap=_gap_out(await _gap_intake(db, result["gap"]), principal, result["gap"])
+        if result["gap"]
+        else None,
         proposals=[IntakeProposalOut.model_validate(p) for p in result["proposals"]],
         baseline_proposal_ids=result["baseline_proposal_ids"],
         change_event_id=result["change_event_id"],

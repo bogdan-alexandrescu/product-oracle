@@ -1,7 +1,15 @@
 """Intakes: create one from a short brief, edit, repin, and start a run from it.
 
 Service functions flush but never commit; the router commits once per request. Roles
-are checked by the router; "the author or an approver" rules are checked here.
+are checked by the router; "the author", "the author or an approver" and the S6 sharing
+rules are checked here:
+
+- only the author re-runs the analysis or repins (both re-read the author's sources);
+- the author or an approver asks the next batch of questions;
+- linking an intake to a PRD takes an approver (it brings the intake's gaps into the
+  PRD's review gate), and moving an intake with an unresolved critical blocker off its
+  PRD takes an owner (it would clear ``intake.critical_blockers``, B4);
+- only the author sets what others see of a finding (``set_sharing``), audited.
 """
 
 import re
@@ -16,7 +24,8 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs import service as docs_service
-from oracle.intake import engine
+from oracle.intake import categories as cats
+from oracle.intake import engine, sharing
 from oracle.intake.schemas import IntakeCreate, IntakePatch, IntakeRunIn
 from oracle.jobs.models import LlmJob
 from oracle.runs import service as runs_service
@@ -79,6 +88,11 @@ def author_or(principal: Principal, intake: ProductIntake, role: str = "approver
     raise IntakeError(403, f"Only the intake's author or an {role} can do this")
 
 
+def author_only(principal: Principal, intake: ProductIntake, what: str) -> None:
+    if not sharing.is_author(principal, intake):
+        raise IntakeError(403, f"Only the intake's author can {what}")
+
+
 def actor_user(principal: Principal) -> uuid.UUID | None:
     return principal.user_id if principal.kind == "user" else None
 
@@ -95,6 +109,8 @@ async def pin_snapshot(db: AsyncSession, label: str, created_by: uuid.UUID | Non
 
 
 async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> ProductIntake:
+    if body.document is not None and not has_role(principal.role, "approver"):
+        raise IntakeError(403, "Linking an intake to a PRD needs an approver")
     document_id = await resolve_document(db, body.document)
     if body.snapshot_id is not None:
         snapshot = await db.scalar(
@@ -208,6 +224,15 @@ async def patch(
     if "document" in body.model_fields_set:
         document_id = await resolve_document(db, body.document)
         if document_id != intake.document_id:
+            if not has_role(principal.role, "approver"):  # type: ignore[arg-type]
+                raise IntakeError(403, "Linking an intake to a PRD needs an approver")
+            if intake.document_id is not None and not has_role(principal.role, "owner"):  # type: ignore[arg-type]
+                if await open_hard_blockers(db, intake):
+                    raise IntakeError(
+                        403,
+                        "The intake has an unresolved critical blocker on its PRD; only an "
+                        "owner can move it",
+                    )
             changes["document_id"] = [str(intake.document_id), str(document_id)]
             intake.document_id = document_id
     if body.status is not None and body.status != intake.status:
@@ -221,14 +246,25 @@ async def patch(
     return intake
 
 
+async def open_hard_blockers(db: AsyncSession, intake: ProductIntake) -> list[KnowledgeGap]:
+    return [
+        g
+        for g in await engine.intake_gaps(db, intake.id)
+        if g.importance == "critical"
+        and g.category in cats.HARD_BLOCKER_CATEGORIES
+        and g.status not in engine.DECIDED
+    ]
+
+
 async def reanalyze(db: AsyncSession, principal: Principal, intake: ProductIntake) -> None:
+    author_only(principal, intake, "re-run its analysis")
     await engine.analyze(db, intake)
     await audit.record(db, principal, "intake.analyzed", "intake", intake.id, {})
 
 
 async def repin(db: AsyncSession, principal: Principal, intake: ProductIntake) -> Snapshot:
     """Pin a new snapshot explicitly; decided gaps stay as they are (S4)."""
-    author_or(principal, intake)
+    author_only(principal, intake, "repin it")
     version = len(intake.source_snapshot_ids) + 1
     snapshot = await pin_snapshot(
         db, f"Intake: {intake.title} (v{version})"[:200], intake.author_id
@@ -243,6 +279,50 @@ async def repin(db: AsyncSession, principal: Principal, intake: ProductIntake) -
     if (intake.analysis or {}).get("extraction", {}).get("ai"):
         await queue_extraction(db, principal, intake)
     return snapshot
+
+
+async def ask_next(
+    db: AsyncSession, principal: Principal, intake: ProductIntake, size: int
+) -> list[StakeholderQuestion]:
+    """Ask the next batch: the author or an approver."""
+    if not sharing.is_author(principal, intake) and not has_role(principal.role, "approver"):  # type: ignore[arg-type]
+        raise IntakeError(403, "Only the intake's author or an approver asks the next batch")
+    return await ask(db, principal, intake, size)
+
+
+# --- sharing (S6) ------------------------------------------------------------------------
+
+
+async def set_sharing(
+    db: AsyncSession,
+    principal: Principal,
+    intake: ProductIntake,
+    changes: list[tuple[str, str]],
+) -> list[str]:
+    """Set what others see of the author's findings; every change is audited. Returns
+    the ids of the findings set."""
+    author_only(principal, intake, "share its findings")
+    reg = sharing.registry(intake)
+    missing = [fid for fid, _ in changes if fid not in reg]
+    if missing:
+        raise not_found(f"Finding {missing[0]}")
+    done: list[str] = []
+    for fid, level in changes:
+        entry = dict(reg[fid])
+        before = entry.get("sharing", sharing.DEFAULT)
+        done.append(fid)
+        if before == level:
+            continue
+        entry["sharing"] = level
+        reg[fid] = entry
+        await audit.record(
+            db, principal, "intake.finding_shared", "intake", intake.id,
+            {"finding_id": fid, "kind": entry["kind"], "category": entry.get("category"),
+             "from": before, "to": level},
+        )  # fmt: skip
+    intake.analysis = {**(intake.analysis or {}), "findings": reg}
+    await flush_or_conflict(db)
+    return done
 
 
 # --- runs ----------------------------------------------------------------------------------

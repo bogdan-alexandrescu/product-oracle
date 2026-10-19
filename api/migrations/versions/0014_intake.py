@@ -7,6 +7,17 @@ built-in model jobs; an intake job has no document, so ``document_id`` becomes n
 and a check keeps every job tied to a document or an intake. Existing rows are
 untouched. See docs/product-oracle-v2/03-discovery-and-quality.md.
 
+Security review fixes (same lane, same revision):
+
+- Pin stability: a snapshot records the database's transaction snapshot when it is
+  taken (``snapshots.txn_snapshot``), every source item version the transaction that
+  wrote it (``source_item_versions.xid``), and a deletion its transaction
+  (``source_items.deleted_xid``). A pinned read keeps only what had *committed* when the
+  pin was taken, so a sync that began before the pin and commits after it never joins
+  the pinned set. Rows from before this revision have no xid and count as committed.
+- ``knowledge_gaps.status`` gains ``answered_pending_review``: a critical gap answered
+  by someone below the owner role waits for review instead of clearing (B4).
+
 The integrator re-chains this revision in merge order (waves.md).
 
 Revision ID: 0014_intake
@@ -26,6 +37,16 @@ depends_on: str | Sequence[str] | None = None
 
 DOCUMENT_JOB_KINDS = "kind IN ('review_comments', 'reporting', 'refinement')"
 ALL_JOB_KINDS = "kind IN ('review_comments', 'reporting', 'refinement', 'intake_analysis')"
+GAP_STATUSES = (
+    "status IN ('unknown', 'under_investigation', 'asked', 'answered', 'validated', "
+    "'deferred', 'accepted_risk')"
+)
+GAP_STATUSES_REVIEW = (
+    "status IN ('unknown', 'under_investigation', 'asked', 'answered', "
+    "'answered_pending_review', 'validated', 'deferred', 'accepted_risk')"
+)
+XID = "(pg_current_xact_id()::text)::bigint"
+TXN_SNAPSHOT = "pg_current_snapshot()::text"
 
 
 def upgrade() -> None:
@@ -123,8 +144,30 @@ def upgrade() -> None:
         op.f("ck_llm_jobs_subject"), "llm_jobs", "document_id IS NOT NULL OR intake_id IS NOT NULL"
     )
 
+    # Pin stability. Added without a default first, so existing rows keep NULL (committed).
+    op.add_column("source_item_versions", sa.Column("xid", sa.BigInteger(), nullable=True))
+    op.alter_column("source_item_versions", "xid", server_default=sa.text(XID))
+    op.add_column("source_items", sa.Column("deleted_xid", sa.BigInteger(), nullable=True))
+    op.add_column("snapshots", sa.Column("txn_snapshot", sa.Text(), nullable=True))
+    op.alter_column("snapshots", "txn_snapshot", server_default=sa.text(TXN_SNAPSHOT))
+
+    op.drop_constraint(op.f("ck_knowledge_gaps_status"), "knowledge_gaps", type_="check")
+    op.create_check_constraint(
+        op.f("ck_knowledge_gaps_status"), "knowledge_gaps", GAP_STATUSES_REVIEW
+    )
+
 
 def downgrade() -> None:
+    # A gap waiting for review goes back to answered (what it was before B4).
+    op.execute(
+        "UPDATE knowledge_gaps SET status = 'answered' WHERE status = 'answered_pending_review'"
+    )
+    op.drop_constraint(op.f("ck_knowledge_gaps_status"), "knowledge_gaps", type_="check")
+    op.create_check_constraint(op.f("ck_knowledge_gaps_status"), "knowledge_gaps", GAP_STATUSES)
+    op.drop_column("snapshots", "txn_snapshot")
+    op.drop_column("source_items", "deleted_xid")
+    op.drop_column("source_item_versions", "xid")
+
     # Intake jobs have no document: they go with the column.
     op.execute("DELETE FROM llm_jobs WHERE document_id IS NULL OR kind = 'intake_analysis'")
     op.drop_constraint(op.f("ck_llm_jobs_subject"), "llm_jobs", type_="check")

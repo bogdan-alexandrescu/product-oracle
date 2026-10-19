@@ -29,8 +29,13 @@ ProposalStatus = Literal["proposed", "accepted", "dismissed"]
 ExtractedField = Literal[
     "users", "problem", "outcomes", "scope", "non_goals", "dependencies", "blockers"
 ]
-ActionKind = Literal["answer", "research", "delegate", "accept_assumption", "accept_risk"]
+ActionKind = Literal[
+    "answer", "research", "delegate", "accept_assumption", "accept_risk", "validate"
+]
 AnswerPath = Literal["answer", "dont_know", "defer", "delegate", "research"]
+# S6: what others see of a finding drawn from its author's own sources.
+SharingLevel = Literal["private", "counts", "summary", "full"]
+FindingKind = Literal["item", "gap", "conflict", "stale"]
 ANSWER_PATHS: list[AnswerPath] = ["answer", "dont_know", "defer", "delegate", "research"]
 
 
@@ -164,18 +169,23 @@ class NewEvidence(BaseModel):
 
     since_version: int
     as_of: datetime | None = None
-    count: int
-    # False when the reader is not the author: the count only.
+    # None when the reader is not the author: it is drawn from the author's sources.
+    count: int | None
+    # False when the reader is not the author: no items, no count (S6).
     visible: bool
     items: list[NewEvidenceItem] = []
 
 
 class ExtractedItem(BaseModel):
     field: ExtractedField
+    # Oracle's summary instead of the model's sentence when shared at "summary".
     text: str
     knowledge_state: KnowledgeState
     origin: Literal["brief", "source", "baseline", "llm"]
     evidence: list[EvidenceRef] = []
+    # Set when the item is a finding drawn from the author's sources (S6).
+    finding_id: uuid.UUID | None = None
+    sharing: SharingLevel | None = None
 
 
 class Coverage(BaseModel):
@@ -225,16 +235,22 @@ class ConflictRecommendation(BaseModel):
 
 class ConflictView(BaseModel):
     kind: Literal["source", "baseline"]
+    # A source conflict shared at "summary": Oracle's summary, no values, no excerpts.
     topic: str
     claims: list[ClaimOut]
     recommendation: ConflictRecommendation
     material: bool
     conflict_id: uuid.UUID | None = None
+    finding_id: uuid.UUID | None = None
+    sharing: SharingLevel | None = None
+    summary_only: bool = False
 
 
 class StaleEvidence(BaseModel):
     evidence: EvidenceRef
     reason: str
+    finding_id: uuid.UUID | None = None
+    sharing: SharingLevel | None = None
 
 
 class RankedGap(KnowledgeGapOut):
@@ -242,6 +258,48 @@ class RankedGap(KnowledgeGapOut):
     score: float
     rank_reason: str
     evidence: list[EvidenceRef] = []
+    # Set when the gap (model-written) or its evidence (rule-made) is a finding (S6).
+    finding_id: uuid.UUID | None = None
+    sharing: SharingLevel | None = None
+
+
+class FindingCount(BaseModel):
+    """Findings shared as counts and categories only (S6)."""
+
+    kind: FindingKind
+    category: str | None = None
+    count: int
+    label: str
+
+
+class FindingOut(BaseModel):
+    """A finding drawn from the author's own sources and what others see of it (S6).
+
+    The author sees every finding. Anyone else sees those shared at "counts" or above:
+    the kind and category; from "summary" Oracle's summary and the gap; at "full" the
+    source items it cites."""
+
+    id: uuid.UUID
+    kind: FindingKind
+    origin: Literal["model", "rules"]
+    category: str | None = None
+    sharing: SharingLevel
+    summary: str | None = None
+    gap_id: uuid.UUID | None = None
+    source_item_ids: list[uuid.UUID] = []
+
+
+class SharingIn(BaseModel):
+    sharing: SharingLevel
+
+
+class SharingChange(BaseModel):
+    finding_id: uuid.UUID
+    sharing: SharingLevel
+
+
+class SharingBulkIn(BaseModel):
+    changes: list[SharingChange] = Field(min_length=1, max_length=500)
 
 
 class NextAction(BaseModel):
@@ -302,7 +360,7 @@ class IntakeProposalOut(ORM):
 
 
 class IntakeSummary(BaseModel):
-    """The Opportunity and Gaps summary."""
+    """The Opportunity and Gaps summary, as the reader may see it (S6)."""
 
     intake: IntakeOut
     pinned: Pinned
@@ -323,6 +381,10 @@ class IntakeSummary(BaseModel):
     readiness: GateView
     batch: BatchState
     proposals: list[IntakeProposalOut]
+    # Findings the author shared as counts and categories only.
+    shared_counts: list[FindingCount] = []
+    # Whether the reader is the intake's author (sees every finding, sets sharing).
+    is_author: bool = False
 
 
 class QuestionCard(BaseModel):

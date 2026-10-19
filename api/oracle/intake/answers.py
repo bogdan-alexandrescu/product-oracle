@@ -14,8 +14,12 @@ the ledger and updates its gap. What an answer implies elsewhere is only ever
   text changes only through review and refinement, never over an approved section;
 - research: a ``research_run`` proposal; accepting it creates a *draft* run only.
 
-Unresolved critical gaps reach the review gate through ``oracle.intake.checks``; an
-owner may accept the risk explicitly (``decide``). Nothing here commits.
+Unresolved critical gaps reach the review gate through ``oracle.intake.checks``. Only an
+owner clears one (B4): an answer below the owner role moves a critical gap to
+``answered_pending_review``, validating an unanswered critical gap or a critical hard
+blocker takes an owner, and so does accepting a critical gap's risk (``decide``). A gap
+decided by an explicit decision (validated, accepted risk) is never rewritten by a later
+"don't know", defer, research or delegate answer. Nothing here commits.
 """
 
 import re
@@ -32,7 +36,7 @@ from oracle.authz import has_role
 from oracle.baseline import service as baseline_service
 from oracle.docs.models import Document, DocumentVersion
 from oracle.intake import categories as cats
-from oracle.intake import engine
+from oracle.intake import engine, sharing
 from oracle.intake.models import IntakeProposal
 from oracle.intake.schemas import AnswerIn, DecisionIn, IntakeRunIn, NextAction
 from oracle.intake.service import (
@@ -83,17 +87,51 @@ def _slug(text: str, limit: int = 48) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:limit].strip("-") or "item"
 
 
+def hard_blocker(gap: KnowledgeGap) -> bool:
+    """A gap ``intake.critical_blockers`` counts while it is unresolved."""
+    return gap.importance == "critical" and gap.category in cats.HARD_BLOCKER_CATEGORIES
+
+
+def answered(gap: KnowledgeGap) -> bool:
+    return gap.status in ("answered", engine.PENDING)
+
+
 def needs_owner(gap: KnowledgeGap, decision: str) -> bool:
-    """Proceeding without an answer on a critical gap is the owner's call."""
-    return gap.importance == "critical" and decision in ("accept_risk", "accept_assumption")
+    """Clearing a critical gap without an owner's review is the owner's call (B4):
+    accepting its risk or assumption, validating it unanswered, or validating a
+    critical hard blocker at all."""
+    if gap.importance != "critical":
+        return False
+    if decision in ("accept_risk", "accept_assumption"):
+        return True
+    if decision == "validate":
+        return hard_blocker(gap) or not answered(gap)
+    return False
 
 
-def next_actions(gap: KnowledgeGap) -> list[NextAction]:
-    """What can move an open gap: answer it, research it, ask someone else, or decide."""
-    if gap.status not in engine.OPEN and gap.status != "deferred":
-        return []
+def check_visible(principal: Principal, intake: ProductIntake | None, gap: KnowledgeGap) -> None:
+    """A gap the author has not shared does not exist for anyone else (S6)."""
+    if intake is None:
+        return
+    view = sharing.gap_view(gap, sharing.registry(intake), sharing.viewer(principal, intake))
+    if view is None:
+        raise IntakeError(404, "Gap not found")
+
+
+def next_actions(gap: Any) -> list[NextAction]:
+    """What can move an open gap: answer it, research it, ask someone else, or decide;
+    a critical gap answered below the owner role waits for its review."""
     label = cats.BY_KEY[gap.category].label.lower()
     owner = "owner" if gap.importance == "critical" else "approver"
+    if gap.status == engine.PENDING:
+        hard = gap.importance == "critical" and gap.category in cats.HARD_BLOCKER_CATEGORIES
+        return [
+            NextAction(gap_id=gap.id, kind="validate",
+                       label=f"Review the answer to the {label} question",
+                       role="owner" if hard else "approver"),
+        ]  # fmt: skip
+    if gap.status not in engine.OPEN and gap.status != "deferred":
+        return []
     return [
         NextAction(gap_id=gap.id, kind="answer", label=f"Answer the {label} question",
                    role="commenter"),
@@ -123,6 +161,11 @@ async def answer(
 ) -> dict[str, Any]:
     intake = await get_intake(db, question.intake_id) if question.intake_id else None
     gap = await db.get(KnowledgeGap, question.gap_id) if question.gap_id else None
+    if gap is not None:
+        try:
+            check_visible(principal, intake, gap)
+        except IntakeError:
+            raise IntakeError(404, "Question not found") from None
     approver = has_role(principal.role, "approver")
     if question.status == "answered" and not (approver and body.kind == "answer"):
         raise IntakeError(409, "This question is answered; it is not asked again")
@@ -155,7 +198,17 @@ async def answer(
     question.status = question_status
     if body.kind == "delegate":
         question.asked_to = body.delegated_to
-    if gap is not None:
+    # Decided by an explicit decision: the ledger keeps the answer, the gap stays.
+    frozen = gap is not None and gap.status in engine.FROZEN
+    if (
+        gap is not None
+        and gap_status == "answered"
+        and gap.importance == "critical"
+        and not has_role(principal.role, "owner")
+    ):
+        # B4: an answer below the owner role never clears a critical gap on its own.
+        gap_status = engine.PENDING
+    if gap is not None and not frozen:
         if gap_status is not None:
             gap.status = gap_status
         if body.kind == "answer":
@@ -180,7 +233,9 @@ async def answer(
             patch = await _propose_patch(db, principal, intake, gap, question, row)
             if patch is not None:
                 proposals.append(patch)
-        if body.kind == "research" or (body.kind == "dont_know" and gap.importance == "critical"):
+        if not frozen and (
+            body.kind == "research" or (body.kind == "dont_know" and gap.importance == "critical")
+        ):
             proposals.append(
                 await propose_research(
                     db,
@@ -238,6 +293,12 @@ async def answer(
     }
 
 
+def _prompt(intake: ProductIntake, gap: KnowledgeGap, question: StakeholderQuestion | None) -> str:
+    """The question's words as they may travel into shared proposals (S6)."""
+    text = question.prompt if question is not None else gap.statement
+    return sharing.public_prompt(sharing.registry(intake), gap, text)
+
+
 async def _propose_baseline(
     db: AsyncSession,
     principal: Principal,
@@ -277,7 +338,7 @@ async def _propose_baseline(
             "type": type_,
             "key": f"{_slug(intake.title, 24)}-{gap.category.replace('_', '-')}-{str(row.id)[:6]}",
             "title": title,
-            "body": f"{question.prompt}\n\n{row.body}",
+            "body": f"{_prompt(intake, gap, question)}\n\n{row.body}",
             "attrs": attrs,
         },
     )
@@ -316,7 +377,7 @@ async def _propose_patch(
             "document": document.slug,
             "base_version": latest.number,
             "section_key": (gap.section_keys or [None])[0] or question.section_key,
-            "text": f"{question.prompt} {row.body}",
+            "text": f"{_prompt(intake, gap, question)} {row.body}",
         },
         created_by=principal.id,
     )
@@ -360,7 +421,7 @@ async def propose_research(
             "gap_ids": [str(gap.id)],
             "flow": "baseline_to_prd",
             "depth": "quick",
-            "question": question.prompt if question else gap.statement,
+            "question": _prompt(intake, gap, question),
             "why": "Agents look into the pinned sources and propose what they find; an "
             "approver estimates and starts the run, and its results arrive as proposals.",
         },
@@ -382,6 +443,10 @@ async def decide(
 ) -> AssumptionDecision:
     """An explicit, authorized decision on a gap (§5 step 8)."""
     if needs_owner(gap, body.decision) and not has_role(principal.role, "owner"):
+        if body.decision == "validate":
+            raise IntakeError(
+                403, "Validating an unanswered critical gap or a critical blocker needs an owner"
+            )
         raise IntakeError(403, "Accepting a critical gap's risk or assumption needs an owner")
     if not body.rationale.strip():
         raise IntakeError(422, "A decision needs a rationale")

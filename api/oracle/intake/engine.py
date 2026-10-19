@@ -13,9 +13,11 @@ registry up to date:
 5. rank open gaps by their expected effect (``categories.rank_score``);
 6. keep one question per open gap, drafted, then asked in short batches.
 
-It never rewrites a decided gap (answered, validated, accepted risk, deferred): later
-evidence only reaches open gaps, so in-progress decisions survive a repin (S4).
-Nothing here commits.
+It never rewrites a decided gap (answered, answered pending review, validated, accepted
+risk, deferred): later evidence only reaches open gaps, so in-progress decisions survive
+a repin (S4). What the author's sources say (conflicts, stale evidence, a gap's
+evidence) is registered as a finding with its sharing level (S6, ``oracle.intake.
+sharing``). Nothing here commits.
 """
 
 import uuid
@@ -27,12 +29,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.baseline.models import Edge, Entity
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
-from oracle.intake import extract
+from oracle.intake import extract, sharing
 from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
 
 OPEN = frozenset({"unknown", "under_investigation", "asked"})
 DECIDED = frozenset({"answered", "validated", "accepted_risk"})
-SETTLED = DECIDED | {"deferred"}
+# A critical gap answered below the owner role: not asked again, not cleared (B4).
+PENDING = "answered_pending_review"
+SETTLED = DECIDED | {"deferred", PENDING}
+# Decided by an explicit decision: later non-answers never rewrite it.
+FROZEN = frozenset({"validated", "accepted_risk"})
 LOWER = {"critical": "critical", "high": "medium", "medium": "low", "low": "low"}
 STATE_ORDER = ["unknown", "hypothesis", "ai_inference", "user_decision", "verified_fact"]
 # Brief fields that speak to a category (the author's claim, a hypothesis).
@@ -183,10 +189,12 @@ async def coverage_from_baseline(
                 "entity_ids": [str(c.id) for c in constraints],
             }
     for category, gap in (await _decided_elsewhere(db, intake)).items():
+        owner = await db.get(ProductIntake, gap.intake_id) if gap.intake_id else None
+        reg = sharing.registry(owner) if owner is not None else {}
         covered.setdefault(
             category,
             {
-                "reason": "Already decided for the same PRD: " + gap.statement,
+                "reason": "Already decided for the same PRD: " + sharing.public_statement(reg, gap),
                 "entity_ids": [str(i) for i in gap.entity_ids],
                 "knowledge_state": gap.knowledge_state,
             },
@@ -231,7 +239,7 @@ def score_of(gap: KnowledgeGap) -> float:
 def group_of(gap: KnowledgeGap) -> int:
     if gap.status in OPEN:
         return 0
-    return 1 if gap.status == "deferred" else 2
+    return 1 if gap.status in ("deferred", PENDING) else 2
 
 
 def ranked(gaps: list[KnowledgeGap]) -> list[KnowledgeGap]:
@@ -348,6 +356,8 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
             gap = rules_gap(gaps, row["category"])
             row["gap_id"] = str(gap.id) if gap else None
 
+    reg = register_findings(intake, gaps, sources, {i.id for i in items})
+
     hit_items = {
         cat: [str(i.id) for i in found] for cat, found in sources.by_category.items() if found
     }
@@ -364,6 +374,7 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
         **{
             k: v for k, v in previous.items() if k in ("source_ids", "extraction", "model_category")
         },
+        "findings": reg,
         "items": brief_items + model_items,
         "users": [{"text": u, "knowledge_state": "hypothesis"} for u in brief.users],
         "problem": {"text": brief.problem, "knowledge_state": "hypothesis"}
@@ -381,7 +392,14 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
         "signals": brief.signals,
         "source_signals": sources.signals,
         "conflicts": sources.conflicts,
-        "stale": [{"item_id": str(i.id), "freshness": i.freshness} for i in sources.stale],
+        "stale": [
+            {
+                "item_id": str(i.id),
+                "freshness": i.freshness,
+                "finding_id": sharing.stable_id(intake.id, "stale", str(i.id)),
+            }
+            for i in sources.stale
+        ],
         "coverage": coverage,
         "relevant_item_ids": [str(i.id) for i in hits],
     }
@@ -391,12 +409,68 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
     await db.flush()
 
 
+def conflict_category(conflict: dict[str, Any], sources: extract.SourceFacts) -> str:
+    """The question category a source conflict is about (for counts and summaries)."""
+    ids = {c["item_id"] for c in conflict["claims"]}
+    spoken = [
+        cat.key
+        for cat in cats.CATEGORIES
+        if any(str(i.id) in ids for i in sources.by_category.get(cat.key, []))
+    ]
+    return "success_metric" if "success_metric" in spoken or not spoken else spoken[0]
+
+
+def register_findings(
+    intake: ProductIntake,
+    gaps: list[KnowledgeGap],
+    sources: extract.SourceFacts,
+    pinned_ids: set[uuid.UUID],
+) -> dict[str, dict[str, Any]]:
+    """Register what the author's sources say as findings (S6), keeping every level the
+    author set. Conflicts and stale items no longer found are dropped; model-written
+    items and gaps stay (the job registered them)."""
+    old = sharing.registry(intake)
+    reg = {k: v for k, v in old.items() if v.get("kind") in ("item", "gap")}
+    for c in sources.conflicts:
+        ids = sorted({cl["item_id"] for cl in c["claims"]})
+        fid = sharing.stable_id(intake.id, "conflict", c["topic"], *ids)
+        c["finding_id"] = fid
+        category = conflict_category(c, sources)
+        reg[fid] = old.get(fid, {})
+        sharing.register(
+            reg, fid, kind="conflict", origin="rules", category=category, source_item_ids=ids,
+            summary=f"{len(ids)} of the author's sources disagree on a figure in "
+            f"{sharing.category_label(category)} evidence.",
+        )  # fmt: skip
+    for item in sources.stale:
+        fid = sharing.stable_id(intake.id, "stale", str(item.id))
+        reg[fid] = old.get(fid, {})
+        sharing.register(
+            reg, fid, kind="stale", origin="rules", category=None, source_item_ids=[item.id],
+            summary=f"An item of the author's {item.row.source_kind} source was old when "
+            "pinned.",
+        )  # fmt: skip
+    for gap in gaps:
+        if str(gap.id) in reg and reg[str(gap.id)].get("origin") == "model":
+            continue
+        private = [e for e in gap.evidence_ids if e in pinned_ids]
+        known = old.get(str(gap.id))
+        if known is not None:
+            private = list(dict.fromkeys([*known.get("source_item_ids", []), *map(str, private)]))
+        if not private:
+            continue
+        reg[str(gap.id)] = known or {}
+        sharing.register(
+            reg, str(gap.id), kind="gap", origin="rules", category=gap.category,
+            source_item_ids=private, gap_id=gap.id,
+            summary=f"Oracle found evidence about {sharing.category_label(gap.category)} in "
+            "the author's sources.",
+        )  # fmt: skip
+    return reg
+
+
 def question_prompt(gap: KnowledgeGap) -> str:
-    cat = cats.BY_KEY[gap.category]
-    if gap.statement != cat.statement:
-        # A gap a person or the model raised: ask about it directly.
-        return gap.statement if gap.statement.endswith("?") else f"{gap.statement} {cat.prompt}"
-    return cat.prompt
+    return sharing.question_prompt(gap)
 
 
 async def sync_questions(

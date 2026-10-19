@@ -21,6 +21,7 @@ GapStatus = Literal[
     "under_investigation",
     "asked",
     "answered",
+    "answered_pending_review",
     "validated",
     "deferred",
     "accepted_risk",

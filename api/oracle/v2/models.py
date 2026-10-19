@@ -54,6 +54,8 @@ GAP_STATUSES = (
     "under_investigation",
     "asked",
     "answered",
+    # A critical gap answered below the owner role, waiting for review (B4).
+    "answered_pending_review",
     "validated",
     "deferred",
     "accepted_risk",

@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.sources.base import ItemDelete, ItemUpsert
+from oracle.sources.items import current_xid
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 
 
@@ -42,6 +43,7 @@ async def upsert_item(
     item.occurred_at = event.occurred_at
     item.source_updated_at = event.source_updated_at
     item.deleted_at = None
+    item.deleted_xid = None
     # The item row must exist before a version can point at it.
     await db.flush()
 
@@ -78,5 +80,6 @@ async def delete_item(db: AsyncSession, source: Source, event: ItemDelete) -> bo
     if item is None or item.deleted_at is not None:
         return False
     item.deleted_at = func.clock_timestamp()
+    item.deleted_xid = current_xid()
     await db.flush()
     return True
