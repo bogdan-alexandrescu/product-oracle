@@ -580,7 +580,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                 {reviewedCount}/{version.sections.length}
               </b>
             </span>
-            <nav aria-label="Sections" className="flex min-w-0 flex-1 gap-1 overflow-x-auto max-[600px]:order-last max-[600px]:basis-full">
+            <nav aria-label="Sections" className="flex min-w-0 flex-1 gap-1 scroll-fade overflow-x-auto max-[600px]:order-last max-[600px]:basis-full">
               {stripSections.map((s) => {
                 const v = s.verdict?.verdict;
                 return (

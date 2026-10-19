@@ -121,7 +121,7 @@ export function TabBar<T extends string>({
       role="tablist"
       aria-label={label}
       onKeyDown={onKey}
-      className="flex max-w-full gap-1 overflow-x-auto border-b border-line"
+      className="flex max-w-full gap-1 scroll-fade overflow-x-auto border-b border-line"
     >
       {tabs.map((t) => {
         const on = t.id === value;

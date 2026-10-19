@@ -270,6 +270,13 @@ body {
 .tnum {
   font-variant-numeric: tabular-nums;
 }
+
+/* A strip that scrolls sideways: fades out at its right edge so a cut-off item reads as "more", not clipped.
+   The padding keeps the last item clear of the fade when nothing overflows. */
+@utility scroll-fade {
+  padding-right: 24px;
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
