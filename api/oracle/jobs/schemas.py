@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from oracle.docs.schemas import WordOp
 
 JobKind = Literal["review_comments", "reporting", "refinement"]
+# Every kind a job row may have: the document kinds and the intake's (oracle.intake.job).
+AnyJobKind = Literal["review_comments", "reporting", "refinement", "intake_analysis"]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 Classification = Literal["question", "change_request", "factual_correction", "approval", "other"]
 SuggestionKind = Literal["section_text", "answer", "none", "duplicate"]
@@ -19,8 +21,10 @@ class ORM(BaseModel):
 
 class LlmJobOut(ORM):
     id: uuid.UUID
-    kind: JobKind
-    document_id: uuid.UUID
+    kind: AnyJobKind
+    # Null for an intake job, which has intake_id instead.
+    document_id: uuid.UUID | None = None
+    intake_id: uuid.UUID | None = None
     version_number: int | None = None
     section_key: str | None = None
     status: JobStatus

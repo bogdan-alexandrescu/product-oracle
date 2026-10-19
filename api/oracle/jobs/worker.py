@@ -1,7 +1,8 @@
 """Runs queued built-in jobs: from ``oracle tick`` and the local background worker.
 
-One job at a time per document: a job is claimed under the document's row lock, and
-only when no other job of that document is running. Claiming commits (``running``,
+One job at a time per document (or per product intake, for intake jobs): a job is
+claimed under the document's (intake's) row lock, and only when no other job of it is
+running. Claiming commits (``running``,
 ``attempts + 1``) before the model call, so a long call holds no lock.
 
 Outcomes:
@@ -37,6 +38,7 @@ from oracle.jobs.schemas import LlmJobsTick
 from oracle.llm import gateway
 from oracle.llm.transports import LlmAuthError, LlmUnavailable, NoClaudeAccount
 from oracle.tenancy import tenant_session, unscoped_session
+from oracle.v2.models import ProductIntake
 
 log = logging.getLogger(__name__)
 
@@ -128,30 +130,32 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
         await reclaim_stale(s)
         candidates = (
             await s.execute(
-                select(LlmJob.id, LlmJob.document_id)
+                select(LlmJob.id, LlmJob.document_id, LlmJob.intake_id)
                 .where(LlmJob.status == "queued")
                 .order_by(LlmJob.created_at, LlmJob.id)
                 .limit(50)
             )
         ).all()
         busy: set[uuid.UUID] = set()
-        for job_id, document_id in candidates:
-            if document_id in busy:
+        for job_id, document_id, intake_id in candidates:
+            # A document's jobs run one at a time; so do an intake's (it has no document).
+            owner, model, column = (
+                (document_id, Document, LlmJob.document_id)
+                if document_id is not None
+                else (intake_id, ProductIntake, LlmJob.intake_id)
+            )
+            if owner in busy:
                 continue
-            # The document's row lock serialises claims of its jobs across workers.
+            # The owner's row lock serialises claims of its jobs across workers.
             locked = await s.scalar(
-                select(Document.id)
-                .where(Document.id == document_id)
-                .with_for_update(skip_locked=True)
+                select(model.id).where(model.id == owner).with_for_update(skip_locked=True)
             )
             if locked is None:
-                busy.add(document_id)
+                busy.add(owner)
                 await s.rollback()
                 continue
             running = await s.scalar(
-                select(
-                    exists().where(LlmJob.document_id == document_id, LlmJob.status == "running")
-                )
+                select(exists().where(column == owner, LlmJob.status == "running"))
             )
             job = None
             if not running:
@@ -161,7 +165,7 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
                     .with_for_update(skip_locked=True)
                 )
             if job is None:
-                busy.add(document_id)
+                busy.add(owner)
                 await s.rollback()
                 continue
             job.status = "running"

@@ -45,11 +45,14 @@ export type LlmContext = {
   ) => Version;
 };
 
-const KINDS: Job["kind"][] = ["review_comments", "reporting", "refinement"];
+/** Kinds of a document's jobs (intake jobs have no document; see ./intake.ts). */
+type DocumentJobKind = Exclude<Job["kind"], "intake_analysis">;
+const KINDS: DocumentJobKind[] = ["review_comments", "reporting", "refinement"];
 const LABEL: Record<Job["kind"], string> = {
   review_comments: "Review comments",
   reporting: "Reporting",
   refinement: "Refinement",
+  intake_analysis: "Intake analysis",
 };
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);

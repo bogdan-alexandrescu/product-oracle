@@ -169,11 +169,10 @@ async def test_another_companys_intake_is_invisible_on_every_route(client):
             ("POST", f"/v1/intake-proposals/{proposal_id}/accept", None),
             ("POST", f"/v1/intake-proposals/{proposal_id}/dismiss", {"reason": "x"}),
         ]:  # fmt: skip
-            if who == "token" and method != "GET":
-                # The owner API token has the owner role: same expectation.
-                pass
             resp = await client.request(method, url, json=body, headers=h)
-            assert resp.status_code == 404, (who, method, url, resp.status_code, resp.text)
+            # A viewer is refused any write before a lookup; nobody learns the id exists.
+            expected = {403, 404} if who == "viewer" and method != "GET" else {404}
+            assert resp.status_code in expected, (who, method, url, resp.status_code, resp.text)
     # Nothing of theirs is listed for A, and theirs is unchanged.
     assert (await client.get("/v1/intakes", headers=a.as_("owner"))).json() == []
     still = (await client.get(f"/v1/intakes/{intake_id}/proposals", headers=b.as_("viewer"))).json()

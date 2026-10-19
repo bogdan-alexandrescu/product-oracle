@@ -79,9 +79,11 @@ def scratch_db():
 
 
 def test_0013_is_the_single_head_after_0012():
+    """0013 follows 0012, and the lanes' 0014_* revisions chain on it to one head."""
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0013"]
+    [head] = script.get_heads()
     assert script.get_revision("0013").down_revision == "0012"
+    assert "0013" in {r.revision for r in script.walk_revisions("base", head)}
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):

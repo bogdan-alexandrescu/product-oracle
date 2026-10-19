@@ -33,7 +33,12 @@ HIGH_CONFIDENCE = confidence_rules.DEFAULTS["pushback"]
 MAX_GOALS = 30
 MAX_EVIDENCE = 40
 MAX_FEEDBACK = 60
-MAX_TOKENS = {"review_comments": 8000, "reporting": 4000, "refinement": 6000}
+MAX_TOKENS = {
+    "review_comments": 8000,
+    "reporting": 4000,
+    "refinement": 6000,
+    "intake_analysis": 4000,
+}
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
 Ask = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -581,10 +586,18 @@ async def refinement(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     }
 
 
+async def intake_analysis(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Light extraction for a product intake (oracle.intake.job)."""
+    from oracle.intake import job as intake_job
+
+    return await intake_job.run(s, job, ask)
+
+
 RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any]]]] = {
     "review_comments": review_comments,
     "reporting": reporting,
     "refinement": refinement,
+    "intake_analysis": intake_analysis,
 }
 
 

@@ -16,6 +16,7 @@ from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
+from oracle.intake.router import router as intake_router
 from oracle.jobs.router import router as llm_jobs_router
 from oracle.jobs.worker import get_worker_settings, run_worker
 from oracle.mcp.oauth.routes import router as oauth_router
@@ -101,6 +102,8 @@ def create_app() -> FastAPI:
     app.include_router(runs_router)
     # Product Oracle v2: thin read routes over the shared tables; lanes add writes.
     app.include_router(v2_router)
+    # v2 lanes: intake, gaps, questions and answers (CR-03).
+    app.include_router(intake_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Every REST operation above (and any added later) is also an MCP tool here.

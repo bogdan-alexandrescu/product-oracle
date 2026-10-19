@@ -1,0 +1,180 @@
+"""What an intake reads: its author's source items at the pinned snapshot (S4).
+
+Built on ``oracle.sources.items`` (pinned reads) and ``oracle.confidence`` (scores); no
+new connector or store. Source items stay visible to their owner only (S3 as built,
+AUD-9): anyone else sees that a piece of evidence exists, its kind and its confidence,
+never its title, link or text.
+
+Everything read from a source is **untrusted data**: it is returned under
+``data_excerpt`` with ``untrusted: true``, never placed in instructions, and every
+retrieval query is audited (``intake.evidence_query``).
+"""
+
+import re
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from oracle import confidence
+from oracle.auth.deps import Principal
+from oracle.intake.schemas import EvidenceRef
+from oracle.sources import items as source_items
+from oracle.sources.models import Snapshot, Source, SourceItem, SourceItemVersion
+from oracle.v2.models import ProductIntake
+
+EXCERPT_CHARS = 400
+# Freshness (0-1, oracle.confidence) at or below which pinned evidence counts as stale.
+STALE_FRESHNESS = 0.35
+# At most this many pinned items are read per analysis.
+MAX_ITEMS = 500
+
+
+@dataclass(frozen=True)
+class PinnedItem:
+    row: source_items.ItemRow
+    confidence: float
+    freshness: float
+
+    @property
+    def id(self) -> uuid.UUID:
+        return self.row.item.id
+
+    @property
+    def text(self) -> str:
+        return self.row.version.content if self.row.version is not None else ""
+
+    @property
+    def title(self) -> str | None:
+        version = self.row.version
+        return version.title if version is not None else self.row.item.title
+
+
+def source_ids_of(intake: ProductIntake) -> list[uuid.UUID]:
+    return [uuid.UUID(str(i)) for i in (intake.analysis or {}).get("source_ids") or []]
+
+
+async def pinned_snapshot(db: AsyncSession, intake: ProductIntake) -> Snapshot | None:
+    """The snapshot the intake reads now: the last one it pinned."""
+    if not intake.source_snapshot_ids:
+        return None
+    return await db.get(Snapshot, intake.source_snapshot_ids[-1])
+
+
+async def pinned_items(
+    db: AsyncSession, intake: ProductIntake
+) -> tuple[list[PinnedItem], Snapshot | None]:
+    """The author's items (of the chosen sources) as they were at the pinned snapshot."""
+    snapshot = await pinned_snapshot(db, intake)
+    if snapshot is None or intake.author_id is None:
+        return [], snapshot
+    rows = await source_items.items_as_of(db, intake.author_id, snapshot.as_of)
+    chosen = set(source_ids_of(intake))
+    if chosen:
+        rows = [r for r in rows if r.item.source_id in chosen]
+    settings = await source_items.confidence_settings(db)
+    out = []
+    for row in rows[:MAX_ITEMS]:
+        score = source_items.item_confidence(row, settings, now=snapshot.as_of)
+        freshness = float(score.breakdown.get("freshness", {}).get("value", 1.0))
+        out.append(PinnedItem(row, score.confidence, freshness))
+    return out, snapshot
+
+
+def excerpt(text: str | None, limit: int = EXCERPT_CHARS) -> str | None:
+    if text is None:
+        return None
+    text = re.sub(r"\s+", " ", text).strip()
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def caller_user(principal: Principal | None) -> uuid.UUID | None:
+    if principal is None or principal.kind != "user":
+        return None
+    return principal.user_id
+
+
+async def refs(
+    db: AsyncSession,
+    item_ids: list[uuid.UUID],
+    principal: Principal | None,
+    as_of: datetime | None,
+) -> dict[uuid.UUID, EvidenceRef]:
+    """Evidence refs for source items, as they were at ``as_of``, shown per visibility."""
+    if not item_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(SourceItem, Source)
+            .join(Source, Source.id == SourceItem.source_id)
+            .where(SourceItem.id.in_(set(item_ids)))
+        )
+    ).all()
+    versions: dict[uuid.UUID, SourceItemVersion] = {}
+    for item, _source in rows:
+        stmt = select(SourceItemVersion).where(SourceItemVersion.item_id == item.id)
+        if as_of is not None:
+            stmt = stmt.where(SourceItemVersion.fetched_at <= as_of)
+        version = await db.scalar(stmt.order_by(SourceItemVersion.fetched_at.desc()).limit(1))
+        if version is not None:
+            versions[item.id] = version
+    settings = await source_items.confidence_settings(db)
+    me = caller_user(principal)
+    out: dict[uuid.UUID, EvidenceRef] = {}
+    for item, source in rows:
+        version = versions.get(item.id)
+        row = source_items.ItemRow(item, version, source.kind)
+        score = source_items.item_confidence(row, settings, now=as_of)
+        visible = me is not None and source.owner_user_id == me
+        out[item.id] = EvidenceRef(
+            source_item_id=item.id,
+            visible=visible,
+            source_kind=source.kind,
+            item_kind=item.kind,
+            confidence=score.confidence,
+            fetched_at=version.fetched_at if version is not None else None,
+            title=(version.title if version is not None else item.title) if visible else None,
+            url=item.url if visible else None,
+            data_excerpt=excerpt(version.content if version else None) if visible else None,
+        )
+    return out
+
+
+def aggregate(confidences: list[float]) -> float | None:
+    """The combined confidence of independent items, kept below certainty."""
+    value = confidence.aggregate(confidences)
+    return None if value is None else min(0.95, value)
+
+
+async def new_since(
+    db: AsyncSession, intake: ProductIntake, snapshot: Snapshot | None
+) -> list[tuple[uuid.UUID, str]]:
+    """(item id, new | changed | deleted) of the author's items since the pinned snapshot."""
+    if snapshot is None or intake.author_id is None:
+        return []
+    owned = select(Source.id).where(Source.owner_user_id == intake.author_id)
+    chosen = source_ids_of(intake)
+    stmt = select(SourceItem).where(SourceItem.source_id.in_(owned))
+    if chosen:
+        stmt = stmt.where(SourceItem.source_id.in_(chosen))
+    newer = select(SourceItemVersion.item_id).where(SourceItemVersion.fetched_at > snapshot.as_of)
+    stmt = stmt.where(
+        or_(SourceItem.id.in_(newer), SourceItem.deleted_at > snapshot.as_of)
+    ).order_by(SourceItem.created_at, SourceItem.id)
+    out = []
+    for item in (await db.scalars(stmt)).all():
+        if item.deleted_at is not None and item.deleted_at > snapshot.as_of:
+            out.append((item.id, "deleted"))
+            continue
+        before = await db.scalar(
+            select(SourceItemVersion.id)
+            .where(
+                SourceItemVersion.item_id == item.id,
+                SourceItemVersion.fetched_at <= snapshot.as_of,
+            )
+            .limit(1)
+        )
+        out.append((item.id, "changed" if before is not None else "new"))
+    return out

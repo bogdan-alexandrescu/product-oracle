@@ -10,11 +10,11 @@ import uuid
 from datetime import timedelta
 
 import pytest
-from oracle.intake import checks as intake_checks
 from sqlalchemy import func, select
 
 from oracle import readiness
 from oracle.baseline.models import Proposal
+from oracle.intake import checks as intake_checks
 from oracle.runs.models import Run
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
@@ -327,12 +327,26 @@ async def test_dont_know_on_a_critical_blocker_offers_research_and_a_decision(cl
     assert decided["gap"]["status"] == "accepted_risk"
     assert decided["decision"]["decision"] == "accept_risk"
     assert decided["decision"]["decided_by"] == str(ctx.users["owner"].id)
-    async with tenant_session(ctx.tenant_id) as s:
-        report = await readiness.evaluate(
-            readiness.ReadinessContext(s, uuid.UUID(out["intake"]["document_id"])),
-            keys=[intake_checks.CRITICAL_BLOCKERS],
-        )
-    assert not report.blocked
+
+    async def gate():
+        async with tenant_session(ctx.tenant_id) as s:
+            return await readiness.evaluate(
+                readiness.ReadinessContext(s, uuid.UUID(out["intake"]["document_id"])),
+                keys=[intake_checks.CRITICAL_BLOCKERS],
+            )
+
+    # The partner API's policy gap is still open: the gate names it, not the blocker.
+    report = await gate()
+    assert report.blocked and q["gap_id"] not in report.blocking[0].rationale
+    policy = gaps_by_category(await summary(client, ctx, intake_id))["third_party_policy"]
+    assert policy["id"] in report.blocking[0].rationale
+    resp = await client.post(
+        f"/v1/gaps/{policy['id']}/decisions",
+        json={"decision": "accept_risk", "rationale": "Within the published quota."},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 201, resp.text
+    assert not (await gate()).blocked
 
 
 async def test_research_this_proposes_a_run_and_only_a_person_creates_it(client, runtime):

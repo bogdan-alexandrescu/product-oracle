@@ -6,9 +6,21 @@ segment after ``/v1`` names the area.
 
 READ_AREAS = {
     "read:sources": {"sources", "search", "snapshots"},
-    "read:baseline": {"baseline", "priorities"},
+    # Intakes, the gap registry and the question ledger (oracle.intake) are baseline
+    # knowledge; reading source text through an intake still needs read:sources.
+    "read:baseline": {
+        "baseline",
+        "priorities",
+        "intakes",
+        "gaps",
+        "questions",
+        "answers",
+        "assumption-decisions",
+    },
     "read:documents": {"documents", "feedback", "exports"},
 }
+# GET /v1/<area>/{id}/<leaf> that read source content: they need read:sources.
+SOURCE_READS = {("intakes", "evidence"), ("intakes", "new-evidence")}
 # Creating a proposal or a piece of evidence; deciding one stays with people.
 PROPOSAL_WRITES = {"proposals", "evidence"}
 
@@ -27,6 +39,8 @@ def required_scope(method: str, path: str) -> str | None:
         return None
     area = parts[0]
     if method == "GET":
+        if (area, parts[-1]) in SOURCE_READS and len(parts) == 3:
+            return "read:sources"
         for scope, areas in READ_AREAS.items():
             if area in areas:
                 return scope

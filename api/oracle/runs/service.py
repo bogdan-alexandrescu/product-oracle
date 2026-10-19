@@ -101,7 +101,18 @@ log = logging.getLogger(__name__)
 FINAL = ("succeeded", "failed", "cancelled")
 ACTIVE = ("running", "awaiting_checkpoint", "paused_overrun")
 # Run knobs Oracle sets (not the user's knobs): kept when a draft's knobs change.
-ORACLE_KNOBS = ("document_slug", "source_version_id", "template", "template_version", "theme")
+ORACLE_KNOBS = (
+    "document_slug",
+    "source_version_id",
+    "template",
+    "template_version",
+    "theme",
+    # A run started from a product intake (oracle.intake): the intake, the snapshot it
+    # pinned (the run reads that one, S4) and, for research, the gaps to look into.
+    "intake_id",
+    "intake_snapshot_id",
+    "intake_gap_ids",
+)
 ITEMS_FILE = "roadmap_items.yaml"
 
 
@@ -614,7 +625,16 @@ async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> No
     run.estimate_usd = None
 
 
-async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) -> uuid.UUID:
+async def create_run(
+    db: AsyncSession,
+    principal: Principal,
+    body: RunCreate,
+    *,
+    oracle_knobs: dict[str, Any] | None = None,
+    commit: bool = True,
+) -> uuid.UUID:
+    """A draft run. ``oracle_knobs``: knobs Oracle sets (``ORACLE_KNOBS``), e.g. the
+    intake a run starts from; ``commit=False`` leaves the commit to the caller."""
     flow = flows.FLOWS[body.flow]
     knobs = _resolve_knobs(flow, body.knobs)
     document_id, oracle = await _resolve_inputs(
@@ -622,10 +642,11 @@ async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) ->
         flow,
         _Inputs(body.document, body.source, body.source_version, body.template, body.theme),
     )
+    extra = {k: v for k, v in (oracle_knobs or {}).items() if k in ORACLE_KNOBS}
     run = Run(
         flow=flow.key,
         status="draft",
-        knobs={**knobs.as_json(), **oracle},
+        knobs={**knobs.as_json(), **oracle, **extra},
         document_id=document_id,
         created_by=principal.id,
     )
@@ -635,8 +656,11 @@ async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) ->
     details: dict[str, Any] = {"flow": flow.key}
     if oracle.get("source_version_id"):
         details["source_version_id"] = oracle["source_version_id"]
+    if extra.get("intake_id"):
+        details["intake_id"] = extra["intake_id"]
     await audit.record(db, principal, "run.created", "run", run.id, details)
-    await db.commit()
+    if commit:
+        await db.commit()
     return run.id
 
 
@@ -677,7 +701,9 @@ async def update_run(
         for k in ("document", "source_version", "template", "theme"):
             if getattr(body, k) is not None:
                 setattr(current, k, getattr(body, k))
+        intake = {k: v for k, v in oracle.items() if k.startswith("intake_")}
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
+        oracle.update(intake)
     run.knobs = {**stored, **oracle}
     await _reset_segments(db, run, flow)
     await audit.record(db, principal, "run.updated", "run", run.id, {})
@@ -737,14 +763,17 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
             f"the estimate (${run.estimate_usd:.2f}) is over the budget "
             f"(${knobs.budget_usd:.2f}): lower the depth or roles, or raise the budget"
         )
-    # The sources the run reads are pinned now, for the user who created it.
-    snapshot = Snapshot(
-        label=f"Run {str(run.id)[:8]} ({_flow(run).title})",
-        as_of=_now(),
-        created_by=run.created_by,
-    )
-    db.add(snapshot)
-    await db.flush()
+    # The sources the run reads are pinned now, for the user who created it; a run
+    # started from an intake reads the snapshot the intake pinned (S4).
+    snapshot = await _intake_snapshot(db, run)
+    if snapshot is None:
+        snapshot = Snapshot(
+            label=f"Run {str(run.id)[:8]} ({_flow(run).title})",
+            as_of=_now(),
+            created_by=run.created_by,
+        )
+        db.add(snapshot)
+        await db.flush()
     run.snapshot_id = snapshot.id
     if run.estimate_usd > flows.APPROVAL_THRESHOLD_USD:
         run.status = "awaiting_approval"
@@ -756,6 +785,16 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     await audit.record(db, principal, "run.started", "run", run.id, {})
     await _launch(db, run)
     await db.commit()
+
+
+async def _intake_snapshot(db: AsyncSession, run: Run) -> Snapshot | None:
+    raw = (run.knobs or {}).get("intake_snapshot_id")
+    if not raw:
+        return None
+    try:
+        return await db.get(Snapshot, uuid.UUID(str(raw)))
+    except ValueError:
+        return None
 
 
 async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
@@ -854,6 +893,8 @@ async def _prompt_context(
         kind=kind,
         source=source,
         roadmap=roadmap_ctx,
+        intake_id=run.knobs.get("intake_id"),
+        intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
     )
 
 

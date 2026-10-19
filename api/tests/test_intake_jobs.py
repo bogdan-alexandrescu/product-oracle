@@ -57,7 +57,8 @@ def _answer(payload):
     [source] = payload["untrusted_data"]["sources"]
     return {
         "items": [
-            {"field": "users", "text": "Returning buyers on mobile", "evidence_refs": [source["ref"]]},
+            {"field": "users", "text": "Returning buyers on mobile",
+             "evidence_refs": [source["ref"]]},
             {"field": "outcomes", "text": "Faster repeat checkout", "evidence_refs": ["src:99"]},
             {"field": "made_up", "text": "ignored"},
         ],
@@ -74,8 +75,8 @@ def _answer(payload):
 async def test_the_intake_queues_an_extraction_job_that_adds_inferences(client, fake):
     ctx = await company()
     await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
-    item = await make_item(ctx, "commenter", content=f"Buyers complain. {INJECTION}",
-                           title="#support thread")  # fmt: skip
+    content = f"Returning buyers complain about retyping the shipping address. {INJECTION}"
+    item = await make_item(ctx, "commenter", content=content, title="#support thread")
     claude = fake(_answer)
     out = await create_intake(client, ctx, ai_extraction=True)
     intake_id = out["intake"]["id"]

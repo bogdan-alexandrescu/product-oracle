@@ -16,6 +16,7 @@ import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { routeIntake } from "./intake";
 import { routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
@@ -330,6 +331,15 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       return v;
     },
   };
+}
+
+function ensureV2(db: Db): V2Db {
+  if (!db.v2) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
+    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
+  }
+  return db.v2;
 }
 
 function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
@@ -854,6 +864,18 @@ async function route(db: Db, req: Request): Promise<Response> {
   const llm = llmContext(db, me.id, me.role);
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
+  // Intake, gaps, questions and answers (CR-03) check roles themselves: commenters
+  // answer and propose, approvers decide, owners accept a critical risk.
+  if (["intakes", "gaps", "questions", "intake-proposals"].includes(p[1])) {
+    const v2db = ensureV2(db);
+    const createRun = (input: Schemas["RunCreate"]) => {
+      db.runs ??= seedRuns(runsContext(db));
+      const run = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(input) });
+      return routeRuns({ ...runsContext(db), db: db.runs }, run, ["v1", "runs"]).then((r) => r ?? notFound("Route"));
+    };
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun }, req, p, q);
+    if (intake) return intake;
+  }
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
@@ -902,12 +924,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
 
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
-  if (!db.v2) {
-    const prd = db.documents.find((d) => d.kind === "prd");
-    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
-    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
-  }
-  const v2 = routeV2(db.v2, req, p, q);
+  const v2 = routeV2(ensureV2(db), req, p, q);
   if (v2) return v2;
 
   const handled = await laneF(db, req, p, m);
