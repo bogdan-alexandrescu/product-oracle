@@ -11,6 +11,7 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import {
+  CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   RETRY_CONFIRM,
@@ -171,6 +172,27 @@ export function RunDetail({ id }: { id: string }) {
                   Retry lookup
                 </Button>
               )}
+              {mayManage &&
+                (run.cancel_again ?? []).map((wid, _, all) => (
+                  <Button
+                    key={wid}
+                    size="sm"
+                    variant="primary"
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(CANCEL_AGAIN_CONFIRM)) {
+                        void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path, body: { workflow_id: wid } })));
+                      }
+                    }}
+                  >
+                    {all.length > 1 ? `Cancel again ${wid}` : "Cancel again"}
+                  </Button>
+                ))}
+              {mayManage && run.can_dismiss_overrun && (
+                <Button size="sm" disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/dismiss-overrun", path)))}>
+                  Dismiss
+                </Button>
+              )}
             </div>
           )}
           {run.searching && (
@@ -180,7 +202,7 @@ export function RunDetail({ id }: { id: string }) {
           )}
           {run.token_read_only && (
             <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="run-token-read-only">
-              Waiting for approval: a SwarmCloud console answer that does not count (or that Oracle could not read, or has not read yet) waits, so the run&apos;s agents may read Oracle but their writes are refused until it is read and confirmed or decided.
+              Waiting for approval: a checkpoint wait is open in SwarmCloud (or its answer is not read or does not count yet, or a lost submission is unresolved), so the run&apos;s agents may read Oracle but their writes are refused.
             </p>
           )}
           {run.status === "awaiting_approval" && (

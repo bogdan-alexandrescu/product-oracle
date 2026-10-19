@@ -2472,9 +2472,55 @@ export interface paths {
          * Retry Lookup Run
          * @description Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status
          *     did not read past its search's end, or SwarmCloud answered it with 404s that prove
-         *     nothing. Read, its cost is counted on the run and it is followed until it ends.
+         *     nothing, or its confirmed cancel still reads CANCELLING. Read, its cost is counted
+         *     on the run and it is followed until it ends. That workflow only, at most once per
+         *     30 s per run (429 sooner).
          */
         post: operations["retry_lookup_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/cancel-again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Again Run
+         * @description Cancel again (Inbox: ``cancel_again``): a workflow an approver stopped cancelling,
+         *     whose spend took the ended run over its ceiling, has Oracle's cancel calls turned
+         *     back on; its status and cost are still read until it ends, and nothing restarts
+         *     (P3d). An owner or the approver who created the run; audited.
+         */
+        post: operations["cancel_again_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/dismiss-overrun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Overrun Run
+         * @description Clear an ended run's overrun from the Inbox (``can_dismiss_overrun``: nothing of
+         *     the run is left to read). The overrun stays recorded on the run; audited.
+         */
+        post: operations["dismiss_overrun_run"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2879,6 +2925,11 @@ export interface components {
              * @description .md, .txt or .pdf files
              */
             files: string[];
+        };
+        /** CancelAgain */
+        CancelAgain: {
+            /** Workflow Id */
+            workflow_id: string;
         };
         /** ChangedSection */
         ChangedSection: {
@@ -5671,6 +5722,16 @@ export interface components {
              * @default false
              */
             can_retry_lookup: boolean;
+            /**
+             * Cancel Again
+             * @default []
+             */
+            cancel_again: string[];
+            /**
+             * Can Dismiss Overrun
+             * @default false
+             */
+            can_dismiss_overrun: boolean;
             /** Searching */
             searching?: string | null;
             knobs: components["schemas"]["KnobsOut"];
@@ -5780,6 +5841,16 @@ export interface components {
              * @default false
              */
             can_retry_lookup: boolean;
+            /**
+             * Cancel Again
+             * @default []
+             */
+            cancel_again: string[];
+            /**
+             * Can Dismiss Overrun
+             * @default false
+             */
+            can_dismiss_overrun: boolean;
             /** Searching */
             searching?: string | null;
         };
@@ -12370,6 +12441,72 @@ export interface operations {
         };
     };
     retry_lookup_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_again_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelAgain"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_overrun_run: {
         parameters: {
             query?: never;
             header?: never;

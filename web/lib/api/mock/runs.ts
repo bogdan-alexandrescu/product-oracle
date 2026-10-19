@@ -142,6 +142,8 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     can_retry: r.can_retry,
     can_stop_cancelling: r.can_stop_cancelling,
     can_retry_lookup: r.can_retry_lookup,
+    cancel_again: r.cancel_again,
+    can_dismiss_overrun: r.can_dismiss_overrun,
   };
 }
 
@@ -424,6 +426,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       can_retry: false,
       can_stop_cancelling: false,
       can_retry_lookup: false,
+      cancel_again: [],
+      can_dismiss_overrun: false,
       knobs,
       snapshot_id: null,
       snapshot_as_of: null,
@@ -546,6 +550,19 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     Object.assign(r, { can_retry_lookup: false, stuck: null });
     return done();
   }
+  if (action === "cancel-again" && m === "POST") {
+    const { workflow_id } = await body<Schemas["CancelAgain"]>();
+    if (!(r.cancel_again ?? []).includes(workflow_id)) {
+      return fail(409, `nothing to cancel again: workflow ${workflow_id} is not one Oracle stopped cancelling for this run`);
+    }
+    r.cancel_again = (r.cancel_again ?? []).filter((w) => w !== workflow_id);
+    return done();
+  }
+  if (action === "dismiss-overrun" && m === "POST") {
+    if (!r.can_dismiss_overrun) return fail(409, "nothing to dismiss: no overrun of this run is shown, or a workflow of it is still read");
+    Object.assign(r, { can_dismiss_overrun: false, stuck: null });
+    return done();
+  }
   if (action === "checkpoints" && p[5] === "decide" && m === "POST") {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, "checkpoint not found");
@@ -599,6 +616,8 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
       can_retry: false,
       can_stop_cancelling: false,
       can_retry_lookup: false,
+      cancel_again: [],
+      can_dismiss_overrun: false,
       knobs: k,
       snapshot_id: ctx.uuid(),
       snapshot_as_of: created_at,

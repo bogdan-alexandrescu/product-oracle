@@ -8862,8 +8862,122 @@
           "runs"
         ],
         "summary": "Retry Lookup Run",
-        "description": "Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status\ndid not read past its search's end, or SwarmCloud answered it with 404s that prove\nnothing. Read, its cost is counted on the run and it is followed until it ends.",
+        "description": "Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status\ndid not read past its search's end, or SwarmCloud answered it with 404s that prove\nnothing, or its confirmed cancel still reads CANCELLING. Read, its cost is counted\non the run and it is followed until it ends. That workflow only, at most once per\n30 s per run (429 sooner).",
         "operationId": "retry_lookup_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/cancel-again": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Cancel Again Run",
+        "description": "Cancel again (Inbox: ``cancel_again``): a workflow an approver stopped cancelling,\nwhose spend took the ended run over its ceiling, has Oracle's cancel calls turned\nback on; its status and cost are still read until it ends, and nothing restarts\n(P3d). An owner or the approver who created the run; audited.",
+        "operationId": "cancel_again_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelAgain"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/dismiss-overrun": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Dismiss Overrun Run",
+        "description": "Clear an ended run's overrun from the Inbox (``can_dismiss_overrun``: nothing of\nthe run is left to read). The overrun stays recorded on the run; audited.",
+        "operationId": "dismiss_overrun_run",
         "security": [
           {
             "HTTPBearer": []
@@ -10087,6 +10201,21 @@
           "files"
         ],
         "title": "Body_upload_files"
+      },
+      "CancelAgain": {
+        "properties": {
+          "workflow_id": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Workflow Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_id"
+        ],
+        "title": "CancelAgain"
       },
       "ChangedSection": {
         "properties": {
@@ -18071,6 +18200,19 @@
             "title": "Can Retry Lookup",
             "default": false
           },
+          "cancel_again": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cancel Again",
+            "default": []
+          },
+          "can_dismiss_overrun": {
+            "type": "boolean",
+            "title": "Can Dismiss Overrun",
+            "default": false
+          },
           "searching": {
             "anyOf": [
               {
@@ -18491,6 +18633,19 @@
           "can_retry_lookup": {
             "type": "boolean",
             "title": "Can Retry Lookup",
+            "default": false
+          },
+          "cancel_again": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cancel Again",
+            "default": []
+          },
+          "can_dismiss_overrun": {
+            "type": "boolean",
+            "title": "Can Dismiss Overrun",
             "default": false
           },
           "searching": {

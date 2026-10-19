@@ -8,7 +8,7 @@ import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CHECKPOINT_LABEL, FINAL_STATUSES, RETRY_CONFIRM, STOP_CANCELLING_CONFIRM, usd, type RunSummary } from "../runs/_lib";
+import { CANCEL_AGAIN_CONFIRM, CHECKPOINT_LABEL, FINAL_STATUSES, RETRY_CONFIRM, STOP_CANCELLING_CONFIRM, usd, type RunSummary } from "../runs/_lib";
 
 function Section({ title, count, children, testId }: { title: string; count: number; children: ReactNode; testId: string }) {
   if (count === 0) return null;
@@ -189,6 +189,32 @@ export default function InboxPage() {
                     onClick={() => act(`lookup-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path(r.id))))}
                   >
                     Retry lookup
+                  </Button>
+                )}
+                {(r.cancel_again ?? []).map((wid, _, all) => (
+                  <Button
+                    key={wid}
+                    size="sm"
+                    variant="primary"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      if (window.confirm(CANCEL_AGAIN_CONFIRM)) {
+                        void act(`again-${r.id}-${wid}`, () =>
+                          unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path(r.id), body: { workflow_id: wid } })),
+                        );
+                      }
+                    }}
+                  >
+                    {all.length > 1 ? `Cancel again ${wid}` : "Cancel again"}
+                  </Button>
+                ))}
+                {r.can_dismiss_overrun && (
+                  <Button
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => act(`dismiss-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/dismiss-overrun", path(r.id))))}
+                  >
+                    Dismiss
                   </Button>
                 )}
                 {!FINAL_STATUSES.includes(r.status) && (

@@ -51,7 +51,10 @@ every tick. Stop cancelling (P3d) ends the cancel calls and clears the Inbox ite
 the workflow is never detached from the spend: it goes on ``searches`` with its id, its
 status and cost read on every tick until it ends. On a run that has not ended, Stop
 cancelling ends the run (owner, 2026-10-19): no second workflow starts for that segment,
-and a spend over the ceiling after the end shows in the Inbox. A submission given up
+and a spend over the ceiling after the end (seen on any read, the final one included)
+is audited and shows in the Inbox with the spend and the ceiling, with Cancel again for
+a stopped workflow that still runs (its cancel calls back on; nothing restarts), until
+dismissed once nothing is left to read. A submission given up
 on (Retry, or a cancel past the lookup cap) is looked for in the background
 (``searches``, the first look on the next tick) until found, then cancelled and its cost
 counted, or ruled out, within its credential's lifetime plus a step's timeout of slack;
@@ -67,9 +70,14 @@ follows an answer.
 
 W5 (owner, 2026-10-19, 'Open waits'): while any checkpoint wait of the run is open in
 SwarmCloud, from the moment the workflow reaches it, the run token is read-only; writes
-return once Oracle has read an answer that counts. A wait Oracle has not opened a
-checkpoint for yet is read from SwarmCloud when the token is checked (:func:`token_hold`);
-an answered one Oracle cannot read yet (SwarmCloud errors, a 404, a record that lags the
+return once Oracle has read an answer that counts. The hold is decided just before a
+run token's write runs (never for a read, initialize or tools/list): Oracle's records are
+read and released first, then a review step no checkpoint stands for yet is read from
+SwarmCloud (:func:`run_token_hold`; one read shared by concurrent writes, bounded by
+``HOLD_READ_SECONDS``; reached in any state, not listed or not read, it holds; a
+read-only answer is reused for up to 5 seconds, 'may write' never). A lost submission
+holds its token until it is resolved. Agents are told a fixed reason. An
+answered wait Oracle cannot read yet (SwarmCloud errors, a 404, a record that lags the
 step, or a 409 already_answered whose record does not read) is shown as ``needs: unread``
 until the answer is read; the approver rule applies then.
 

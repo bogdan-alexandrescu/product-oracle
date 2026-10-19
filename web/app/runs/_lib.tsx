@@ -70,6 +70,9 @@ export const RETRY_CONFIRM =
 /** Asked before Stop cancelling: the run ends, and Oracle still counts the workflow's spend until SwarmCloud stops it. */
 export const STOP_CANCELLING_CONFIRM = "Stop cancelling? The run ends; its spend still counts until SwarmCloud stops it.";
 
+/** Asked before Cancel again on a stopped workflow over the run's ceiling: Oracle's cancel calls resume; nothing restarts. */
+export const CANCEL_AGAIN_CONFIRM = "Cancel again? Oracle cancels this workflow again; nothing restarts.";
+
 const usdFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 export function usd(value: number | null | undefined): string {
