@@ -8,7 +8,7 @@
   threshold; a succeeded experiment is time-boxed to its gate date.
 - B4 (company settings): who may accept a critical hard blocker's risk or approve a
   feasibility scope (default owners), and the longest review horizon (default 90 days).
-- Archived (rejected) or deleted constraint entities no longer gate a publish.
+- Archiving or deleting a gating blocker: tests/test_blockers_gate_roles.py.
 - One audit event per risk acceptance or feasibility scope.
 """
 
@@ -512,27 +512,7 @@ async def test_a_risk_acceptance_must_be_reviewed_within_the_horizon(client):
     assert resp.status_code == 200, resp.text
 
 
-# --- archived or deleted constraints, and one audit per decision --------------------------
-
-
-async def test_an_archived_constraint_no_longer_gates(client):
-    ctx = await make_ctx()
-    doc_id, b = await _gated(client, ctx)
-    resp = await client.post(
-        f"/v1/baseline/entities/{b['id']}/reject",
-        json={"note": "The partner API is no longer used"},
-        headers=ctx.as_("approver"),
-    )
-    assert resp.status_code == 200, resp.text
-    assert (await _check(ctx, doc_id)).status == "not_applicable"
-
-
-async def test_a_deleted_constraint_no_longer_gates(client):
-    ctx = await make_ctx()
-    doc_id, b = await _gated(client, ctx)
-    resp = await client.delete(f"/v1/baseline/entities/{b['id']}", headers=ctx.as_("approver"))
-    assert resp.is_success, resp.text
-    assert (await _check(ctx, doc_id)).status == "not_applicable"
+# --- one audit per decision --------------------------
 
 
 async def _actions(ctx) -> dict[uuid.UUID, str]:

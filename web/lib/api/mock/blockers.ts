@@ -172,8 +172,32 @@ function ordered(rows: Schemas["BlockerStrategy"][]) {
   return rows.sort((a, b) => SEVERITY[a.blocker.severity] - SEVERITY[b.blocker.severity] || g[a.gate.status] - g[b.gate.status]);
 }
 
+const words = (v: unknown) => String(v).replace(/_/g, " ");
+
+/** The API's computed ``summary`` (oracle.v2.schemas.describe_blocker_event). */
+export function describeEvent(e: Pick<ResolutionEvent, "kind" | "from_status" | "to_status" | "data">): string {
+  const data = (e.data ?? {}) as Record<string, unknown>;
+  const gate = (data.gate ?? {}) as Record<string, unknown>;
+  if (data.change === "reclassified") {
+    const before = (data.before ?? {}) as Record<string, unknown>;
+    const stays = `status stays ${words(gate.status ?? "unknown")}`;
+    const was = `${before.type} ${before.severity}`;
+    const is = `${gate.type} ${gate.severity}`;
+    return was !== is ? `Reclassified from ${words(was)} to ${words(is)} (${stays})` : `Gated documents changed (${stays})`;
+  }
+  if (data.change === "legacy_snapshot") return `Gate snapshot recorded for an older blocker (${words(gate.status)})`;
+  if (e.kind === "experiment_started" || e.kind === "experiment_concluded") return `Experiment ${words(data.to ?? e.kind.replace("experiment_", ""))}`;
+  if (e.to_status && e.from_status && e.to_status !== e.from_status) return `Status changed from ${words(e.from_status)} to ${words(e.to_status)}`;
+  if (e.to_status && !e.from_status) return `Status set to ${words(e.to_status)}`;
+  const k = words(e.kind);
+  return k.charAt(0).toUpperCase() + k.slice(1);
+}
+
+const gating = (b: Pick<BlockerRow, "type" | "severity">) => b.type === "hard" && b.severity === "critical";
+const snapshot = (b: BlockerRow) => ({ type: b.type, severity: b.severity, status: b.status, document_ids: [...b.document_ids].sort() });
+
 function event(ctx: BlockersContext, b: BlockerRow, kind: ResolutionEvent["kind"], to: BlockerRow["status"] | null, extra: Partial<ResolutionEvent> = {}) {
-  ctx.v2.blocker_events.push({
+  const row = {
     id: crypto.randomUUID(),
     blocker_id: b.id,
     option_id: null,
@@ -186,7 +210,8 @@ function event(ctx: BlockersContext, b: BlockerRow, kind: ResolutionEvent["kind"
     data: {},
     created_at: now(),
     ...extra,
-  });
+  };
+  ctx.v2.blocker_events.push({ ...row, summary: describeEvent(row) });
   if (to) b.status = to;
   b.revision += 1;
   b.updated_at = now();
@@ -283,9 +308,19 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
     if (p.length === 3 && m === "PATCH") {
       const patch = await body<Schemas["BlockerPatch"]>();
       if (patch.revision !== b.revision) return json(409, { detail: "Someone else changed this blocker since you loaded it; reload" });
+      const before = snapshot(b);
       Object.assign(b, given(patch, ["revision", "reason"]));
       b.revision += 1;
       b.updated_at = now();
+      if (JSON.stringify(snapshot(b)) !== JSON.stringify(before)) {
+        event(ctx, b, "status_changed", null, { from_status: null, reason: patch.reason ?? null, data: { change: "reclassified", before, gate: snapshot(b) } });
+        b.revision -= 1;
+      }
+      // An approver's acceptance or scope on a blocker that now gates reopens (B4).
+      if (!gating(before) && gating(b) && ["accepted_risk", "feasibility_only"].includes(b.status) && !can("owner")) {
+        const what = b.status === "accepted_risk" ? "risk acceptance" : "feasibility scope";
+        event(ctx, b, "status_changed", "open", { reason: `Reclassified as critical and hard: its ${what} was not decided by an owner, so the blocker is open again until an owner decides` });
+      }
       return json(200, strategy(ctx, db, b));
     }
     if (p[3] === "status" && m === "POST") {
@@ -296,6 +331,10 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
         event(ctx, b, reopened ? "reopened" : "status_changed", input.status, { reason: input.reason ?? null });
       }
       return json(200, strategy(ctx, db, b));
+    }
+    if ((p[3] === "accept-risk" || p[3] === "feasibility-scope") && m === "POST" && gating(b) && !can("owner")) {
+      const what = p[3] === "accept-risk" ? "accept this risk" : "approve this feasibility scope";
+      return json(403, { detail: `Only an owner can ${what} (a critical hard blocker; company setting blocker_risk_acceptance_role)` });
     }
     if (p[3] === "accept-risk" && m === "POST") {
       const input = await body<Schemas["BlockerRiskAcceptanceIn"]>();
@@ -313,7 +352,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
       const input = await body<Schemas["FeasibilityScopeIn"]>();
       const x = ctx.v2.feasibility_experiments.find((e) => e.id === input.experiment_id && e.blocker_id === b.id);
       if (!x) return json(422, { detail: "No such feasibility experiment on this blocker" });
-      const missing = [!x.owner_id && "an owner", !x.success_threshold && "a success threshold", !x.decision_gate_at && "a decision gate date"].filter(Boolean);
+      const missing = [!x.owner_id && "an owner", !x.success_threshold?.trim() && "a success threshold", !x.decision_gate_at && "a decision gate date"].filter(Boolean);
       if (missing.length) return json(422, { detail: `A feasibility scope needs ${missing.join(", ")}` });
       event(ctx, b, "feasibility_scope_approved", "feasibility_only", { reason: input.reason, experiment_id: x.id });
       return json(200, strategy(ctx, db, b));

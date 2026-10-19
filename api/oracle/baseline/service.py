@@ -10,7 +10,9 @@ Some attrs keys belong to a module with its own rules (:data:`MANAGED_ATTRS`): o
 writer that names the key in ``manages`` may set, change or remove it. Every other
 path (PATCH, POST, proposals and their acceptance, agent writes, YAML imports,
 conflict resolution) is refused, so a blocker's strategy cannot be weakened around
-its recorded decisions.
+its recorded decisions. Likewise, archiving (rejecting) or deleting a constraint whose
+blocker still gates publishing takes the B4 role on every path
+(:func:`_check_archivable`).
 
 The caller commits.
 """
@@ -250,6 +252,21 @@ def _check_fields_managed_attrs(
         return
     current = dict(entity.attrs or {}) if entity is not None else {}
     check_managed_attrs(writer, current, merge_attrs(current, attrs))
+
+
+async def _check_archivable(
+    db: AsyncSession, principal: Principal | None, entity: Entity, verb: str
+) -> None:
+    """B4: a blocker that still gates publishing is archived or deleted by an owner (the
+    company's ``blocker_risk_acceptance_role``) only; the blocker module decides."""
+    if entity.type != "constraint":
+        return
+    from oracle.blockers import service as blockers  # imports this module
+
+    try:
+        await blockers.require_archiver(db, principal, entity, verb)
+    except blockers.ForbiddenError as e:
+        raise ForbiddenError(str(e)) from None
 
 
 def _check_status(status: str | None) -> None:
@@ -498,6 +515,8 @@ async def update_entity(
             db, writer, op="update", kind="entity", fields=fields, entity=entity
         )
         return WriteResult(entity=entity, proposal=proposal)
+    if diff.get("status") == "rejected":
+        await _check_archivable(db, writer.principal, entity, "archive")
     before = entity_snapshot(entity)
     for f, value in diff.items():
         setattr(entity, f, value)
@@ -516,6 +535,8 @@ async def set_entity_status(
     """Confirm or reject (approver+). A person's decision, so it locks the entity."""
     writer = Writer(principal, "user", reason=reason or f"{status} by {principal.actor}")
     if entity.status != status:
+        if status == "rejected":
+            await _check_archivable(db, principal, entity, "archive")
         before = entity_snapshot(entity)
         entity.status = status
         lock(entity, writer)
@@ -530,6 +551,7 @@ async def delete_entity(db: AsyncSession, writer: Writer, entity: Entity) -> Wri
     if entity.locked and not writer.locks:
         proposal = await propose(db, writer, op="delete", kind="entity", fields={}, entity=entity)
         return WriteResult(entity=entity, proposal=proposal)
+    await _check_archivable(db, writer.principal, entity, "delete")
     # Neighbours whose goal impact depends on this entity (a goal being removed).
     supporters = (await db.scalars(select(Edge.src_id).where(Edge.dst_id == entity.id))).all()
     await audit.record(

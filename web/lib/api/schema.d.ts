@@ -4699,6 +4699,12 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Summary
+             * @description One line for a history list. Events that record no status change (a
+             *     reclassification, a gate snapshot, an experiment) have no from/to status.
+             */
+            readonly summary: string;
         };
         /** BlockerRiskAcceptanceIn */
         BlockerRiskAcceptanceIn: {

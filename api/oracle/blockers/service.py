@@ -17,6 +17,14 @@ that changes what the gate reads (type, severity, status, gated documents) recor
 snapshot of it on a resolution event (``data["gate"]``), and :func:`assess` treats a
 strategy that disagrees with its last snapshot as ``critical``, so a strategy changed
 around these functions (straight in the database) never clears the readiness gate.
+A blocker recorded before snapshots existed gets one from its current strategy on its
+first assessment (:func:`_snapshot_legacy`).
+
+B4 (company settings, default owner): only ``blocker_risk_acceptance_role`` accepts a
+critical hard blocker's risk or approves its feasibility scope; a reclassification that
+makes an approver's earlier decision gate reopens it (:func:`_reopen_if_now_gating`); and
+archiving or deleting a blocker that still gates publishing takes that role too
+(:func:`require_archiver`, called from every baseline path).
 
 The caller commits.
 """
@@ -28,7 +36,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pydantic import ValidationError
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
@@ -255,17 +263,57 @@ def _gating(snapshot: dict[str, Any]) -> bool:
 # --- B4: who decides a critical hard blocker, and for how long ---------------------------
 
 
+async def decider_role(db: AsyncSession) -> str:
+    """B4: the company's ``blocker_risk_acceptance_role`` (default owner)."""
+    return await get_setting(db, "blocker_risk_acceptance_role")
+
+
+async def is_decider(db: AsyncSession, principal: Principal | None) -> bool:
+    return principal is not None and has_role(principal.role, await decider_role(db))
+
+
 async def _require_decider(db: AsyncSession, principal: Principal, spec: BlockerSpec, what: str):
     """B4: accepting a critical hard blocker's risk or approving its feasibility scope is
-    for the company's ``blocker_risk_acceptance_role`` (default owner) and above."""
+    for the company's ``blocker_risk_acceptance_role`` (default owner) and above. An
+    approver is refused and nothing is stored (no pending proposals)."""
     if not _gating(gate_snapshot(spec)):
         return
-    role = await get_setting(db, "blocker_risk_acceptance_role")
-    if not has_role(principal.role, role):
+    if not await is_decider(db, principal):
+        role = await decider_role(db)
         raise ForbiddenError(
-            f"Only an {role} may {what} of a critical hard blocker (company setting "
-            "blocker_risk_acceptance_role); propose it to one"
+            f"Only an {role} can {what} (a critical hard blocker; company setting "
+            "blocker_risk_acceptance_role)"
         )
+
+
+async def still_gates(db: AsyncSession, entity: Entity) -> bool:
+    """Whether this constraint's blocker still gates publishing: it is critical and hard
+    and not resolved (an accepted risk or a feasibility scope only lets a publish
+    through for a while), or the gate fails closed on it (a strategy that cannot be
+    read, or that disagrees with its last snapshot). A constraint that is no blocker,
+    or a resolved or lesser blocker, does not."""
+    if entity.type != "constraint":
+        return False
+    inputs = await gate_inputs(db, [entity.id])
+    spec = safe_spec(entity)
+    if spec is None and "blocker" not in (entity.attrs or {}):
+        if entity.id not in inputs.recorded_gate:
+            return False  # a plain constraint, never a blocker
+    if assess(entity, spec, inputs).status == "critical":
+        return True
+    return spec is not None and _gating(gate_snapshot(spec)) and spec.status != "resolved"
+
+
+async def require_archiver(
+    db: AsyncSession, principal: Principal | None, entity: Entity, verb: str
+) -> None:
+    """B4 (owner, 2026-10-19): archiving (rejecting) or deleting a constraint whose
+    blocker still gates publishing takes the B4 role (default owner); approvers may
+    archive resolved or non-gating ones. ``verb`` is ``archive`` or ``delete``."""
+    if await is_decider(db, principal) or not await still_gates(db, entity):
+        return
+    role = await decider_role(db)
+    raise ForbiddenError(f"This blocker still gates publishing. Only an {role} can {verb} it.")
 
 
 # --- affects edges for impacted requirements and features (§7) ---------------------------
@@ -346,12 +394,27 @@ async def _event(
         reason=reason,
         actor=principal.actor,
         data=data,
-        # Python's clock, not the transaction's: two events of one request stay ordered.
-        created_at=_now(),
+        created_at=await _event_time(db, entity.id),
     )
     db.add(event)
     await db.flush()
     return event
+
+
+async def _event_time(db: AsyncSession, blocker_id: uuid.UUID) -> datetime:
+    """A time after every recorded event of this blocker, so its events are strictly
+    ordered by ``created_at`` even when the clock repeats a value (two events of one
+    request, a coarse clock). Python's clock, not the transaction's. Writers hold the
+    blocker's row lock, so two of them do not race for the same instant."""
+    now = _now()
+    latest = await db.scalar(
+        select(func.max(BlockerResolutionEvent.created_at)).where(
+            BlockerResolutionEvent.blocker_id == blocker_id
+        )
+    )
+    if latest is not None and _aware(latest) >= now:
+        return _aware(latest) + timedelta(microseconds=1)
+    return now
 
 
 async def _record(
@@ -563,6 +626,7 @@ async def update_blocker(
                 "after": {"type": after["type"], "severity": after["severity"]},
             },
         )
+    await _reopen_if_now_gating(db, principal, entity, spec, snapshot_before)
     await audit.record(
         db,
         principal,
@@ -572,6 +636,38 @@ async def update_blocker(
         {"fields": sorted(given), "reason": body.reason},
     )
     return entity
+
+
+async def _reopen_if_now_gating(
+    db: AsyncSession,
+    principal: Principal,
+    entity: Entity,
+    spec: BlockerSpec,
+    snapshot_before: dict[str, Any],
+) -> None:
+    """A risk acceptance or feasibility scope decided while the blocker did not gate was
+    not B4's decision; once a reclassification makes it gate (critical and hard), it
+    stands only if the caller holds the B4 role. Otherwise the blocker reopens."""
+    if _gating(snapshot_before) or not _gating(gate_snapshot(spec)):
+        return
+    if spec.status not in ("accepted_risk", "feasibility_only"):
+        return
+    if await is_decider(db, principal):
+        return
+    role = await decider_role(db)
+    what = "risk acceptance" if spec.status == "accepted_risk" else "feasibility scope"
+    await _transition(
+        db,
+        principal,
+        entity,
+        spec,
+        "open",
+        kind="status_changed",
+        reason=f"Reclassified as critical and hard: its {what} was not decided by an "
+        f"{role}, so the blocker is open again until an {role} decides",
+        cause="blocker_reclassified",
+        data={"change": "reopened_by_reclassification", "withdrawn": spec.status},
+    )
 
 
 async def set_status(
@@ -607,7 +703,7 @@ async def accept_risk(
         )
     if spec.status == "resolved":
         raise ConflictError("The blocker is resolved; there is no risk left to accept")
-    await _require_decider(db, principal, spec, "accept the risk")
+    await _require_decider(db, principal, spec, "accept this risk")
     docs = await linked_document_ids(db, entity, spec)
     decision = AssumptionDecision(
         entity_id=entity.id,
@@ -651,11 +747,11 @@ async def approve_feasibility_scope(
         raise InvalidError("No such feasibility experiment on this blocker")
     if spec.status == "resolved":
         raise ConflictError("The blocker is resolved; it needs no feasibility scope")
-    await _require_decider(db, principal, spec, "approve the feasibility scope")
+    await _require_decider(db, principal, spec, "approve this feasibility scope")
     missing = []
     if exp.owner_id is None:
         missing.append("an owner")
-    if not exp.success_threshold:
+    if not (exp.success_threshold or "").strip():
         missing.append("a success threshold")
     if exp.decision_gate_at is None:
         missing.append("a decision gate date")
@@ -1074,7 +1170,7 @@ async def _last_status_events(
                 BlockerResolutionEvent.blocker_id.in_(blocker_ids),
                 BlockerResolutionEvent.to_status.is_not(None),
             )
-            .order_by(BlockerResolutionEvent.created_at.desc(), BlockerResolutionEvent.id)
+            .order_by(BlockerResolutionEvent.created_at.desc(), BlockerResolutionEvent.id.desc())
         )
     ).all()
     out: dict[uuid.UUID, BlockerResolutionEvent] = {}
@@ -1096,7 +1192,7 @@ async def _last_gate_snapshots(
                 BlockerResolutionEvent.blocker_id.in_(blocker_ids),
                 BlockerResolutionEvent.data.has_key("gate"),
             )
-            .order_by(BlockerResolutionEvent.created_at.desc(), BlockerResolutionEvent.id)
+            .order_by(BlockerResolutionEvent.created_at.desc(), BlockerResolutionEvent.id.desc())
         )
     ).all()
     out: dict[uuid.UUID, dict[str, Any]] = {}
@@ -1151,7 +1247,37 @@ async def gate_inputs(db: AsyncSession, blocker_ids: list[uuid.UUID]) -> GateInp
             ).all()
         }
     recorded_gate = await _last_gate_snapshots(db, blocker_ids)
+    if missing := [i for i in blocker_ids if i not in recorded_gate]:
+        recorded_gate.update(await _snapshot_legacy(db, missing))
     return GateInputs(last, decisions, experiments, recorded_gate)
+
+
+async def _snapshot_legacy(
+    db: AsyncSession, blocker_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, dict[str, Any]]:
+    """Blockers recorded before gate snapshots existed have none: take it from their
+    current, readable strategy on first assessment and record it as an event, so later
+    changes around the blocker routes fail closed as for any other blocker. A strategy
+    that cannot be read gets no snapshot (it stays critical)."""
+    out: dict[uuid.UUID, dict[str, Any]] = {}
+    entities = (await db.scalars(select(Entity).where(Entity.id.in_(blocker_ids)))).all()
+    for entity in entities:
+        spec = safe_spec(entity) if entity.type == "constraint" else None
+        if spec is None:
+            continue
+        event = BlockerResolutionEvent(
+            blocker_id=entity.id,
+            kind="status_changed",
+            reason="Gate snapshot taken from a blocker recorded before snapshots existed",
+            actor="system:legacy-snapshot",
+            data={"change": "legacy_snapshot", "gate": gate_snapshot(spec)},
+            created_at=await _event_time(db, entity.id),
+        )
+        db.add(event)
+        out[entity.id] = event.data["gate"]
+    if out:
+        await db.flush()
+    return out
 
 
 def _name(entity: Entity) -> str:
@@ -1321,7 +1447,8 @@ async def blockers_for_document(db: AsyncSession, document_id: uuid.UUID) -> lis
     ``document_ids``, linked from one of its sections, or listed in their last recorded
     gate snapshot (so a strategy edited or removed around the blocker routes still
     gates, and fails closed in :func:`assess`). An archived (rejected) or deleted
-    constraint no longer gates."""
+    constraint no longer gates; archiving one that still gates takes the B4 role
+    (:func:`require_archiver`)."""
     linked = set(
         (
             await db.scalars(

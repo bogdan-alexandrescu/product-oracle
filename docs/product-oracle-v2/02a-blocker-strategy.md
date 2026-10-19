@@ -49,6 +49,7 @@ Statuses: `open`, `mitigating`, `resolved`, `accepted_risk`, `feasibility_only`.
 | feasibility_only | `POST /v1/blockers/{id}/feasibility-scope` | the experiment belongs to the blocker, is planned or running, and has an owner, a success threshold and a decision gate date in the future; for a critical hard blocker only `blocker_risk_acceptance_role` and above (B4); one audit event, `blocker.feasibility_scope_approved` |
 | open → mitigating | selecting an option | `option_selected` event |
 | feasibility_only → open | the scope's experiment fails, is cancelled or is inconclusive | automatic, `status_changed` event |
+| accepted_risk or feasibility_only → open | `PATCH /v1/blockers/{id}` makes the blocker critical and hard, and the caller is below `blocker_risk_acceptance_role` | automatic, `status_changed` event saying why (`data.change = "reopened_by_reclassification"`): a decision taken while the blocker did not gate was not B4's; an owner reclassifying keeps it |
 
 Every status change appends a resolution event, writes the entity through
 `oracle.baseline.service` (revision and lock), audits, and calls
@@ -68,15 +69,38 @@ Every other baseline write path refuses (422, naming `/v1/blockers`): `POST` and
 `propose_change` tool, agent writes that would become proposals) and accepting one made
 before this rule, conflict resolution, and YAML imports. A YAML file that leaves
 `attrs.blocker` out keeps it (it is not dropped with the other missing keys); a file
-that changes it is rejected. Other attrs, the title and the body stay editable. Rejecting
-(archiving) or deleting the constraint entity stays possible through the baseline, and
-then it no longer gates (§3).
+that changes it is rejected. Other attrs, the title and the body stay editable.
+
+### Archiving or deleting a blocker that still gates (B4)
+
+Rejecting (archiving) or deleting the constraint entity removes it from the gate (§3), so
+for a blocker that **still gates publishing** it takes `blocker_risk_acceptance_role`
+(B4, default `owner`; owner decision 2026-10-19). Below it the request is refused with
+403 "This blocker still gates publishing. Only an owner can archive it." ("... delete
+it." for a delete) and nothing changes. A blocker still gates while it is critical and
+hard and not resolved (an accepted risk or a feasibility scope lets a publish through
+only for a while), or while the gate fails closed on it. Approvers may archive or delete
+resolved or lesser blockers, and plain constraints. The check sits in
+`oracle.baseline.service` (`_check_archivable`), so every path applies it: `POST
+.../reject`, `PATCH` with `status: rejected`, `DELETE`, accepting a proposal, conflict
+resolution, YAML imports (a locked blocker gets a proposal, checked on acceptance) and
+the MCP tools, which call these routes.
 
 Each write that changes what the gate reads (type, severity, status, gated documents)
 records it on a resolution event as `data.gate`. A status change does it on its own event.
 A type, severity or documents edit through `PATCH /v1/blockers/{id}` appends a
 `status_changed` event with no from or to status and `data.change = "reclassified"` (a
-new event kind would need a migration).
+new event kind would need a migration). Every event carries a computed `summary` for
+history lists ("Reclassified from hard critical to hard high (status stays open)",
+"Status changed from open to accepted risk"), so one without a status reads sensibly.
+Events of one blocker are strictly ordered by `created_at`: each is stamped after the
+blocker's latest one (writers hold the blocker's row lock), so a repeated clock value
+cannot tie them.
+
+A blocker recorded before gate snapshots existed has none. On its first assessment its
+snapshot is taken from its current, readable strategy and recorded as an event
+(`data.change = "legacy_snapshot"`, actor `system:legacy-snapshot`); from then on it
+fails closed like any other. An unreadable strategy gets no snapshot and stays critical.
 
 ## 3. The hard readiness check
 
@@ -85,9 +109,10 @@ new event kind would need a migration).
 
 - no blocker linked: `not_applicable`. A blocker gates a document listed in its
   `document_ids`, linked from one of its sections, or listed in its last recorded gate
-  snapshot. An archived (rejected) or deleted constraint no longer gates;
+  snapshot. An archived (rejected) or deleted constraint no longer gates (archiving one
+  that still gates takes the B4 role, §2);
 - **fails closed** first: a strategy whose type, severity, status or documents differ
-  from the last recorded `data.gate` snapshot (or that has none) is `critical`, whatever
+  from the last recorded `data.gate` snapshot is `critical`, whatever
   it says, so a strategy edited straight in the database never clears the gate;
 - a **critical, hard** blocker is `critical` while it is `open` or `mitigating`. It passes
   only when its status rests on a **recorded** decision:

@@ -6,7 +6,8 @@ an approved scoped feasibility experiment before its decision gate (with its own
 success threshold), or a risk an authorized person accepted (who and why are recorded,
 with an audit event) before its review date. A strategy that disagrees with its last
 recorded snapshot fails closed (``service.assess``). Archived (rejected) or deleted
-constraints no longer gate.
+constraints no longer gate; archiving one that still gates takes the B4 role
+(``service.require_archiver``).
 Lesser unresolved blockers (hard but not critical, critical but not hard) are a
 ``warning``. A document with no blockers is ``not_applicable``.
 """
