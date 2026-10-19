@@ -78,10 +78,12 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_0013_is_the_single_head_after_0012():
+def test_0013_follows_0012_and_lanes_chain_onto_it():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0013"]
     assert script.get_revision("0013").down_revision == "0012"
+    # One head; lanes add 0014_<lane> on 0013 and the integrator re-chains them.
+    (head,) = script.get_heads()
+    assert "0013" in {r.revision for r in script.iterate_revisions(head, "base")}
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):

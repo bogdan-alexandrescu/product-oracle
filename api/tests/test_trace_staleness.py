@@ -351,7 +351,7 @@ async def test_staleness_actions_are_company_scoped(client):
         resp = await client.post(ACTIONS, json=body, headers=a.as_("owner"))
         assert resp.status_code == 404, body
     listed = (await client.get("/v1/trace/staleness", headers=a.as_("owner"))).json()
-    assert listed == []
+    assert listed["items"] == [] and listed["total"] == 0
 
 
 async def test_a_roadmap_built_from_the_prd_goes_stale_when_a_linked_section_changes(client):
@@ -414,7 +414,7 @@ From [the metrics](/documents/{DOC}/v/1#metrics).
         assert (await s.get(DocumentVersion, roadmap_version)).markdown == markdown_before
     assert deps == {"requirements": "potentially_stale", "metrics": "fresh"}
 
-    listed = (await client.get("/v1/trace/staleness", headers=ctx.as_("viewer"))).json()
+    listed = (await client.get("/v1/trace/staleness", headers=ctx.as_("viewer"))).json()["items"]
     assert [d["document_version_id"] for d in listed] == [str(roadmap_version)]
     assert listed[0]["category"] == "roadmap"
     assert listed[0]["freshness"] == "potentially_stale"
