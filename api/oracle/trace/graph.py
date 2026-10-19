@@ -15,8 +15,9 @@ Edge directions as stored (``src -type-> dst``) and what they mean for the chain
 Rejected entities and edges are not part of the trace, except the walk's own roots: a
 root that was just rejected (or is about to be deleted) still reaches what was built on
 it. Nothing loads the whole graph: :func:`load_around` loads the neighbourhood of the
-roots, one query per level, and walks are bounded (``MAX_DEPTH`` levels, ``MAX_NODES``
-entities). A walk or load that stops at a bound sets ``Graph.truncated``.
+roots, one query per level, and walks are bounded (``MAX_ROOTS`` roots, ``MAX_DEPTH``
+levels, ``MAX_NODES`` entities). A walk or load that stops at a bound sets
+``Graph.truncated``.
 """
 
 import uuid
@@ -35,6 +36,8 @@ SRC_DOWNSTREAM = (*UPSTREAM_EDGES, "depends_on")
 DST_DOWNSTREAM = ("affects", "blocks", "mitigates")
 MAX_DEPTH = 8
 MAX_NODES = 2000
+# A large import's roots alone must not fill MAX_NODES and leave no room for neighbours.
+MAX_ROOTS = 500
 
 
 @dataclass(frozen=True)
@@ -187,12 +190,15 @@ async def load_around(
     """The neighbourhood of ``roots``: the roots (whatever their status), and the
     non-rejected entities and edges reachable downstream (``down``), upstream towards
     goals (``up``) and one hop away along any edge (``related``). One query per level
-    and direction, at most ``MAX_DEPTH`` levels and ``MAX_NODES`` entities; stopping at
-    a bound sets ``truncated``."""
+    and direction, at most ``MAX_ROOTS`` roots (the first ones), ``MAX_DEPTH`` levels
+    and ``MAX_NODES`` entities; stopping at a bound sets ``truncated``."""
     roots = list(dict.fromkeys(roots))
     g = Graph(entities={})
     if not roots:
         return g
+    if len(roots) > MAX_ROOTS:
+        g.truncated = True
+        roots = roots[:MAX_ROOTS]
     g.entities = {e.id: e for e in (await db.scalars(select(Entity).where(Entity.id.in_(roots))))}
     edges: dict[uuid.UUID, Edge] = {}
 
@@ -232,10 +238,16 @@ async def load_around(
             if g.truncated:
                 return
         if frontier and depth_limit == MAX_DEPTH:
-            more = await db.scalar(
-                select(Edge.id).where(Edge.status != "rejected", condition(frontier)).limit(1)
+            # More only if an edge leads to a live entity not reached yet; one back into
+            # what was reached (a cycle) is not.
+            fset = set(frontier)
+            rest = await db.scalars(
+                select(Edge).where(Edge.status != "rejected", condition(frontier))
             )
-            if more is not None:
+            beyond = {o for edge in rest for o in next_of(edge, fset) if o not in seen}
+            if beyond and await db.scalar(
+                select(Entity.id).where(Entity.id.in_(beyond), Entity.status != "rejected").limit(1)
+            ):
                 g.truncated = True
 
     if down:

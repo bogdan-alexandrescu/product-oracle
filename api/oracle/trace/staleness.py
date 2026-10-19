@@ -9,7 +9,8 @@ worst of its rows):
   ``caused_by_change_id`` and ``stale_since``);
 - ``under_review``: a person is checking it, or accepted its regeneration proposal;
 - ``reconciled``: a person confirmed it still holds against the current upstream (with
-  a reason); the dependency is re-anchored on that upstream.
+  a reason); the dependency is re-anchored on that upstream. One whose upstream entity
+  was deleted has nothing to re-anchor on: reconciled, it is settled for good.
 
 The handler only ever writes these freshness columns, the artifact's aggregate and a
 ``marked_stale`` review event. It never edits an artifact's content, status or
@@ -27,10 +28,18 @@ Which change reaches which dependency:
   (:mod:`oracle.trace.graph`, a scoped walk that flags truncation): dependencies on those
   entities, and on the document sections that link them. A root that was rejected or
   deleted also reaches the wholes it was part of or verified (``part_of``, ``verifies``),
-  and an edge change the wholes in ``data["wholes"]``. A deleted root's dependencies stay,
+  and what is downstream of those wholes (a sibling part and its criteria); an edge
+  change reaches the wholes in ``data["wholes"]``. A deleted root's dependencies stay,
   potentially stale, with a snapshot of what they pointed at;
-- ``source_permission``: the evidence that came from the source's items, the entities it
-  supports, and the sections that link either;
+- ``source_permission``: evidence and the sources behind it. With cause
+  ``source_permission`` (subject: a source or source item) or ``source_deleted``
+  (subject: a source, recorded before it is deleted), the evidence that came from its
+  items; with ``evidence_deleted`` (subject: the evidence, recorded before it is
+  deleted), that evidence. Then the entities the evidence supports (an edge's evidence:
+  the edge's downstream end) and everything downstream of them, and the sections whose
+  links cite the evidence or the items. Those links cascade away with a deleted evidence
+  or source item; ``data["trace"]["links"]`` keeps what they were. Dependencies never
+  point at evidence or source items, so no dependency row goes with them;
 - ``composition_revision``: dependencies on the sections of the modules that changed
   since the parent revision, and on the whole document.
 """
@@ -78,6 +87,12 @@ ENTITY_SUBJECTS = ("requirement", "decision", "entity", "blocker_status")
 REMOVALS = ("entity_rejected", "entity_deleted")
 WHOLE_EDGES = ("part_of", "verifies")
 EDGE_VERBS = {"edge_created": "gained", "edge_deleted": "lost", "edge_updated": "had a change to"}
+# source_permission causes, and why a section link citing the evidence (or item) is reached.
+EVIDENCE_CAUSES = {
+    "source_permission": "cites evidence whose source permission changed",
+    "evidence_deleted": "cites evidence that was deleted",
+    "source_deleted": "cites evidence or a source item whose source was deleted",
+}
 # Section links that make a section depend on what they point at ("mentions" does not).
 DEPENDING_LINKS = ("implements", "evidences", "claims", "tests")
 
@@ -131,6 +146,8 @@ class Root:
             "entity_rejected": "was rejected",
             "entity_confirmed": "was confirmed",
             "source_permission": "rests on evidence whose source permission changed",
+            "evidence_deleted": "lost evidence it rested on",
+            "source_deleted": "rests on evidence whose source was deleted",
             "blocker_status": "changed status",
         }.get(self.cause, "changed")
 
@@ -171,6 +188,9 @@ class Affected:
     entity_ids: list[uuid.UUID] = field(default_factory=list)
     # A graph walk stopped at a bound: more may be affected than listed.
     truncated: bool = False
+    # Section links that reached a dependency and are about to go (a deleted evidence or
+    # source item cascades them): what they were.
+    links: list[dict[str, Any]] = field(default_factory=list)
 
     def add(self, dep: ArtifactDependency, reason: str) -> None:
         self.deps[dep.id] = dep
@@ -302,11 +322,17 @@ async def _by_entities(db: AsyncSession, roots: list[Root], out: Affected) -> No
         return
     roots = await _removal_wholes(db, roots)
     root_ids = [r.id for r in roots]
-    g = await graph_mod.load_around(db, root_ids, down=True)
-    whole_ids = [w for r in roots for w in r.wholes if w not in g.entities]
+    # A removed part's wholes are walked too: what is downstream of them (the other parts
+    # and their criteria) may have rested on it.
+    removal_wholes = [w for r in roots if r.cause in REMOVALS for w in r.wholes]
+    g = await graph_mod.load_around(
+        db, list(dict.fromkeys([*root_ids, *removal_wholes])), down=True
+    )
+    # Roots past MAX_ROOTS and edge-change wholes: their own label, no walk.
+    missing = [i for i in [*root_ids, *(w for r in roots for w in r.wholes)] if i not in g.entities]
     extra = {}
-    if whole_ids:
-        extra = {e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(whole_ids)))}
+    if missing:
+        extra = {e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(missing)))}
 
     def entity(e_id: uuid.UUID) -> Entity | None:
         return g.entities.get(e_id) or extra.get(e_id)
@@ -329,6 +355,13 @@ async def _by_entities(db: AsyncSession, roots: list[Root], out: Affected) -> No
                 continue
             reason_of.setdefault(w.id, f"{_label(w)} contains {label}, which {root.text}")
             link_why.setdefault(w.id, f"links {_label(w)}, which contains {label} ({root.text})")
+            if root.cause not in REMOVALS or w.id not in g.entities:
+                continue
+            for step in g.downstream(w.id):
+                d = g.entities[step.entity_id]
+                via = f"downstream of {_label(w)}, which contains {label} ({root.text})"
+                reason_of.setdefault(d.id, f"{_label(d)} is {via}")
+                link_why.setdefault(d.id, f"links {_label(d)}, {via}")
     out.truncated = out.truncated or g.truncated
     for e_id in reason_of:
         if e_id not in out.entity_ids and e_id not in root_ids:
@@ -352,10 +385,41 @@ async def _by_entities(db: AsyncSession, roots: list[Root], out: Affected) -> No
     await _by_sections(db, list(links), why, out)
 
 
+def link_snapshot(link: DocumentSectionLink) -> dict[str, Any]:
+    """What a section link was, kept on the change when it is about to cascade away. The
+    source item stays out: it is private to its owner."""
+    return {
+        "id": str(link.id),
+        "document_id": str(link.document_id),
+        "version_id": str(link.version_id) if link.version_id else None,
+        "section_key": link.section_key,
+        "kind": link.kind,
+        "entity_id": str(link.entity_id) if link.entity_id else None,
+        "evidence_id": str(link.evidence_id) if link.evidence_id else None,
+        "claim": link.claim,
+    }
+
+
+async def _edge_ends(db: AsyncSession, edge_ids: set[uuid.UUID]) -> set[uuid.UUID]:
+    """The downstream end of each confirmed, traced edge (as an edge change is recorded)."""
+    if not edge_ids:
+        return set()
+    edges = await db.scalars(
+        select(Edge).where(
+            Edge.id.in_(edge_ids), Edge.status == "confirmed", Edge.type != "owned_by"
+        )
+    )
+    return {e.dst_id if e.type in graph_mod.DST_DOWNSTREAM else e.src_id for e in edges}
+
+
 async def _by_source_permission(db: AsyncSession, subject: Subject, out: Affected) -> None:
-    item_ids: set[uuid.UUID] = {uuid.UUID(str(i)) for i in subject.data.get("source_item_ids", [])}
+    cause = subject.cause if subject.cause in EVIDENCE_CAUSES else "source_permission"
+    item_ids = {_uuid(i) for i in subject.data.get("source_item_ids", [])}
+    evidence_ids = {_uuid(i) for i in subject.data.get("evidence_ids", [])}
     if subject.id is not None:
-        if await db.get(Source, subject.id) is not None:
+        if cause == "evidence_deleted":
+            evidence_ids.add(subject.id)
+        elif await db.get(Source, subject.id) is not None:
             item_ids |= set(
                 (
                     await db.scalars(
@@ -365,23 +429,31 @@ async def _by_source_permission(db: AsyncSession, subject: Subject, out: Affecte
             )
         else:
             item_ids.add(subject.id)
-    if not item_ids:
+    if not item_ids and not evidence_ids:
         return
+    found = [Evidence.id.in_(evidence_ids)] if evidence_ids else []
+    if item_ids:
+        found.append(Evidence.source_item_id.in_(item_ids))
     evidence = (
         await db.execute(
-            select(Evidence.id, Evidence.entity_id).where(Evidence.source_item_id.in_(item_ids))
+            select(Evidence.id, Evidence.entity_id, Evidence.edge_id).where(or_(*found))
         )
     ).all()
-    evidence_ids = {e_id for e_id, _ in evidence}
-    entity_ids = sorted({ent for _, ent in evidence if ent is not None})
+    evidence_ids |= {e_id for e_id, _, _ in evidence}
+    entity_ids = {ent for _, ent, _ in evidence if ent is not None}
+    entity_ids |= await _edge_ends(db, {edge for _, _, edge in evidence if edge is not None})
     if entity_ids:
-        await _by_entities(db, [Root(e, "source_permission") for e in entity_ids], out)
-    conditions = [DocumentSectionLink.source_item_id.in_(item_ids)]
+        await _by_entities(db, [Root(e, cause) for e in sorted(entity_ids)], out)
+    conditions = []
+    if item_ids:
+        conditions.append(DocumentSectionLink.source_item_id.in_(item_ids))
     if evidence_ids:
         conditions.append(DocumentSectionLink.evidence_id.in_(evidence_ids))
     links = (await db.scalars(select(DocumentSectionLink).where(or_(*conditions)))).all()
-    why = {link.id: "cites evidence whose source permission changed" for link in links}
+    why = {link.id: EVIDENCE_CAUSES[cause] for link in links}
     await _by_sections(db, list(links), why, out)
+    if cause != "source_permission":
+        out.links.extend(link_snapshot(link) for link in links)
 
 
 def _module_sections(modules: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -653,6 +725,7 @@ async def mark_stale(db: AsyncSession, event: ChangeEvent) -> None:
             "entity_ids": [str(e) for e in found.entity_ids],
             "outputs": [{"kind": k, "id": str(i)} for k, i in by_output],
             "truncated": found.truncated,
+            "links": found.links,
         },
     }
     if marked:
@@ -704,11 +777,18 @@ def _downstream_filter(artifact_version_id, document_version_id):
 
 
 async def _reanchor(db: AsyncSession, dep: ArtifactDependency) -> dict[str, Any]:
-    """Point a reconciled dependency at the upstream document's latest version."""
-    before = {
+    """Point a reconciled dependency at the upstream document's latest version.
+
+    A dependency whose upstream entity was deleted has nothing to point at: it is not
+    re-anchored (not on an entity made again with the same key either, which is another
+    entity). Reconciled, it is settled for good: no change can reach it again, it keeps
+    the snapshot of what it pointed at, and the action records it as retired."""
+    before: dict[str, Any] = {
         "upstream_version_id": str(dep.upstream_version_id) if dep.upstream_version_id else None,
         "upstream_section_hash": dep.upstream_section_hash,
     }
+    if dep.upstream_snapshot is not None and dep.upstream_entity_id is None:
+        before["upstream_snapshot"] = dep.upstream_snapshot
     if dep.upstream_version_id is None:
         return before
     up = await db.get(DocumentVersion, dep.upstream_version_id)
@@ -766,6 +846,8 @@ async def act(
         entry: dict[str, Any] = {"id": str(dep.id), "from": dep.freshness}
         if action == "reconcile":
             entry["anchor_before"] = await _reanchor(db, dep)
+            if "upstream_snapshot" in entry["anchor_before"]:
+                entry["retired"] = True
             dep.freshness = "reconciled"
             dep.reconciled_by = principal.id
             dep.reconciled_at = now
