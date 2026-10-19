@@ -91,6 +91,8 @@ class DocumentVersion(TenantScoped, Base):
     approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     # The API token the approval was given through, when a token acted (C2).
     approved_token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    # The MCP OAuth grant (oauth_tokens.family_id) the approval was given through (C2).
+    approved_grant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
     # A lapsed approval (approver demoted or disabled, token revoked) moves here and
     # approved_at / approved_by are cleared: it never counts again (C2).
     approval_lapsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

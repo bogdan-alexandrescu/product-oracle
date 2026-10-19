@@ -32,6 +32,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column("audit_events", sa.Column("actor_token_id", sa.Uuid(), nullable=True))
+    op.add_column("audit_events", sa.Column("actor_grant_id", sa.Uuid(), nullable=True))
     op.add_column("users", sa.Column("disabled_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("users", sa.Column("disabled_by", sa.Uuid(), nullable=True))
     op.add_column(
@@ -45,7 +46,18 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_section_reviews_token_id"), "section_reviews", ["token_id"], unique=False
     )
+    op.add_column("section_reviews", sa.Column("grant_id", sa.Uuid(), nullable=True))
+    op.create_index(
+        op.f("ix_section_reviews_grant_id"), "section_reviews", ["grant_id"], unique=False
+    )
     op.add_column("document_versions", sa.Column("approved_token_id", sa.Uuid(), nullable=True))
+    op.add_column("document_versions", sa.Column("approved_grant_id", sa.Uuid(), nullable=True))
+    op.create_index(
+        op.f("ix_document_versions_approved_grant_id"),
+        "document_versions",
+        ["approved_grant_id"],
+        unique=False,
+    )
     op.add_column(
         "document_versions",
         sa.Column("approval_lapsed_at", sa.DateTime(timezone=True), nullable=True),
@@ -197,11 +209,15 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_member_follow_ups_tenant_id"), table_name="member_follow_ups")
     op.drop_index(op.f("ix_member_follow_ups_member_id"), table_name="member_follow_ups")
     op.drop_table("member_follow_ups")
+    op.drop_index(op.f("ix_document_versions_approved_grant_id"), table_name="document_versions")
+    op.drop_column("document_versions", "approved_grant_id")
     op.drop_index(op.f("ix_document_versions_approved_token_id"), table_name="document_versions")
     op.drop_column("document_versions", "approval_lapse_reason")
     op.drop_column("document_versions", "approval_lapsed_by")
     op.drop_column("document_versions", "approval_lapsed_at")
     op.drop_column("document_versions", "approved_token_id")
+    op.drop_index(op.f("ix_section_reviews_grant_id"), table_name="section_reviews")
+    op.drop_column("section_reviews", "grant_id")
     op.drop_index(op.f("ix_section_reviews_token_id"), table_name="section_reviews")
     op.drop_column("section_reviews", "lapse_reason")
     op.drop_column("section_reviews", "lapsed_at")
@@ -209,4 +225,5 @@ def downgrade() -> None:
     op.drop_column("users", "sessions_valid_after")
     op.drop_column("users", "disabled_by")
     op.drop_column("users", "disabled_at")
+    op.drop_column("audit_events", "actor_grant_id")
     op.drop_column("audit_events", "actor_token_id")

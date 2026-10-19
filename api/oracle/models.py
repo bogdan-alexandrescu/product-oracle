@@ -27,6 +27,8 @@ class AuditEvent(TenantScoped, Base):
     actor: Mapped[str] = mapped_column(Text, nullable=False)
     # The API token the actor acted through (also a token acting for a user), C2.
     actor_token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # The MCP OAuth grant (oauth_tokens.family_id) the actor acted through, C2.
+    actor_grant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     action: Mapped[str] = mapped_column(Text, nullable=False)
     entity: Mapped[str] = mapped_column(Text, nullable=False)
     entity_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)

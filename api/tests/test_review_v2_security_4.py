@@ -329,3 +329,156 @@ async def test_a_failed_provider_revoke_is_retried_from_the_tick(client, monkeyp
     async with tenant_session(ctx.tenant_id) as s:
         [row] = (await s.scalars(select(MemberFollowUp))).all()
         assert row.status == "done" and row.outcome == "revoked" and row.ciphertext is None
+
+
+# --- OAUTH GRANTS: revoking an MCP OAuth grant voids the approvals made through it -----
+
+
+async def oauth_grant(ctx, user_id) -> tuple[str, str, str, uuid.UUID]:
+    """An MCP client's grant for ``user_id``: (client_id, access, refresh, grant id)."""
+    from oracle.mcp.oauth.models import OAuthClient
+    from oracle.mcp.oauth.service import _new_token_row
+
+    async with tenant_session(ctx.tenant_id) as s:
+        oc = OAuthClient(
+            client_id=uuid.uuid4().hex, name="Desk client", redirect_uris=["http://127.0.0.1/cb"]
+        )
+        s.add(oc)
+        await s.flush()
+        row, issued = _new_token_row(
+            client_id=oc.id, user_id=user_id, scope="oracle:read oracle:write", family_id=None
+        )
+        s.add(row)
+        await s.commit()
+        return oc.client_id, issued.access_token, issued.refresh_token, row.family_id
+
+
+async def test_approvals_through_an_oauth_grant_record_it(client):
+    from oracle.audit import AuditEvent
+    from oracle.docs.models import DocumentVersion
+    from oracle.review.models import SectionReview
+    from tests.review_v2_helpers import approve_all
+    from tests.test_review_v2_security_2 import approved, check, policy
+
+    ctx = await setup(client)
+    await policy(client, ctx, section_approval="all_sections")
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    _, access, _, grant_id = await oauth_grant(ctx, pm.user_id)
+    agent = {"Authorization": f"Bearer {access}"}
+    await approve_all(client, agent, 1)
+    await approved(client, ctx, headers=agent)
+    assert (await check(client, ctx))["can_publish"] is True
+    async with tenant_session(ctx.tenant_id) as s:
+        reviews = (await s.scalars(select(SectionReview))).all()
+        assert reviews and {r.grant_id for r in reviews} == {grant_id}
+        assert {r.reviewer_id for r in reviews} == {pm.user_id}
+        v1 = await s.scalar(select(DocumentVersion).where(DocumentVersion.number == 1))
+        assert v1.approved_grant_id == grant_id and v1.approved_by == pm.user_id
+        events = (
+            await s.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.action.in_(("version.approve", "section.review"))
+                )
+            )
+        ).all()
+        assert events and {e.actor_grant_id for e in events} == {grant_id}
+
+
+@pytest.mark.parametrize("how", ["revoke_access", "revoke_refresh", "refresh_reuse"])
+async def test_revoking_an_oauth_grant_voids_its_approvals(client, how):
+    from oracle.docs.models import DocumentVersion
+    from oracle.review.models import SectionReview
+    from tests.review_v2_helpers import approve_all, states, verdict
+    from tests.test_review_v2_security_2 import approved, check, codes, policy
+
+    ctx = await setup(client)
+    await policy(client, ctx, section_approval="all_sections")
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    client_id, access, refresh, grant_id = await oauth_grant(ctx, pm.user_id)
+    agent = {"Authorization": f"Bearer {access}"}
+    await approve_all(client, agent, 1)
+    await approved(client, ctx, headers=agent)
+    # One approval by the person directly stands.
+    async with tenant_session(ctx.tenant_id) as s:
+        own = await s.scalar(select(SectionReview.id).where(SectionReview.section_key == "risks"))
+    assert (await verdict(client, pm.headers, 1, "risks")).status_code == 200
+    assert (await check(client, ctx))["can_publish"] is True
+
+    if how == "refresh_reuse":
+        form = {"grant_type": "refresh_token", "client_id": client_id, "refresh_token": refresh}
+        assert (await client.post("/oauth/token", data=form)).status_code == 200
+        reused = await client.post("/oauth/token", data=form)
+        assert reused.status_code == 400 and "reused" in reused.text
+    else:
+        token = access if how == "revoke_access" else refresh
+        resp = await client.post("/oauth/revoke", data={"client_id": client_id, "token": token})
+        assert resp.status_code == 200
+    # Lapsed for good, in the revocation's own transaction.
+    async with tenant_session(ctx.tenant_id) as s:
+        reviews = (
+            await s.scalars(select(SectionReview).where(SectionReview.grant_id == grant_id))
+        ).all()
+        assert reviews and all(r.lapsed_at is not None for r in reviews)
+        assert all("OAuth grant" in r.lapse_reason for r in reviews)
+        assert own is not None
+        v1 = await s.scalar(select(DocumentVersion).where(DocumentVersion.number == 1))
+        assert v1.approved_at is None and v1.approval_lapsed_at is not None
+        assert v1.approved_grant_id == grant_id
+    body = await check(client, ctx)
+    assert {"version_approval_lapsed", "missing_approval"} <= set(codes(body))
+    s1 = await states(client, ctx.auth, 1)
+    assert s1["risks"]["status"] == "approved"
+    assert s1["problem"]["status"] == "unreviewed"
+    # The person still signs in; only the grant is gone.
+    assert (await client.get(f"/v1/documents/{DOC}", headers=pm.headers)).status_code == 200
+
+
+async def test_a_grant_revoked_outside_the_endpoint_still_voids_at_gate_time(client):
+    from datetime import UTC, datetime
+
+    from sqlalchemy import update
+
+    from oracle.mcp.oauth.models import OAuthToken
+    from tests.test_review_v2_security_2 import approved, check, codes
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    _, access, _, grant_id = await oauth_grant(ctx, pm.user_id)
+    await approved(client, ctx, headers={"Authorization": f"Bearer {access}"})
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(
+            update(OAuthToken)
+            .where(OAuthToken.family_id == grant_id)
+            .values(revoked_at=datetime.now(UTC))
+        )
+        await s.commit()
+    assert codes(await check(client, ctx)) == ["version_approval_lapsed"]
+
+
+async def test_a_verdict_through_a_grant_revoked_while_waiting_is_refused(client, monkeypatch):
+    from datetime import UTC, datetime
+
+    from sqlalchemy import update
+
+    from oracle.mcp.oauth.models import OAuthToken
+    from oracle.review import publish
+    from tests.review_v2_helpers import verdict
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    _, access, _, grant_id = await oauth_grant(ctx, pm.user_id)
+    real = publish.gate_lock
+
+    async def spy(db, *, shared):
+        async with tenant_session(ctx.tenant_id) as s:
+            await s.execute(
+                update(OAuthToken)
+                .where(OAuthToken.family_id == grant_id)
+                .values(revoked_at=datetime.now(UTC))
+            )
+            await s.commit()
+        await real(db, shared=shared)
+
+    monkeypatch.setattr(publish, "gate_lock", spy)
+    resp = await verdict(client, {"Authorization": f"Bearer {access}"}, 1, "problem")
+    assert resp.status_code == 403, resp.text

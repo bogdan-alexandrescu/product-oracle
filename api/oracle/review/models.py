@@ -68,8 +68,11 @@ class SectionReview(TenantScoped, Base):
     # The API token that gave the verdict when a token acted (for a user, or a user-less
     # one); revoking the token voids the approvals it gave (C2).
     token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    # The MCP OAuth grant (oauth_tokens.family_id) the verdict came through; revoking the
+    # grant voids the approvals made through it, as for API tokens (C2).
+    grant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
     # Set when the approval lapsed for good: its approver was demoted below approver or
-    # disabled, or its token revoked. A re-promotion or a restore never revives it.
+    # disabled, or its token or grant revoked. A re-promotion or a restore never revives it.
     lapsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lapse_reason: Mapped[str | None] = mapped_column(Text)
 

@@ -482,6 +482,8 @@ async def review_section(
         reviewer_id=principal.user_id or principal.id,
         # The token the verdict came through (C2: revoking it voids its approvals).
         token_id=principal.token_id,
+        # And the MCP OAuth grant (revoking the grant voids them too).
+        grant_id=principal.grant_id,
         # The review revision: the section's revision and its section links.
         section_hash=bound[section_key],
         created_at=_now(),
@@ -841,6 +843,7 @@ async def approve_version(
         version.approved_at = _now()
         version.approved_by = who
         version.approved_token_id = principal.token_id
+        version.approved_grant_id = principal.grant_id
         # A new approval; a lapsed one stays in the audit log, never counts again.
         version.approval_lapsed_at = None
         version.approval_lapsed_by = None

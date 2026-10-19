@@ -317,11 +317,26 @@ def _new_token_row(
     return row, issued
 
 
-async def _revoke_family(session: AsyncSession, family_id: uuid.UUID) -> None:
+async def _revoke_family(
+    session: AsyncSession, family_id: uuid.UUID, client: OAuthClient, why: str
+) -> None:
+    """End a grant (every token of the family) and, in the same transaction, lapse for
+    good the approvals made through it, as revoking an API token does (C2). Takes the
+    review gate exclusively, like every change to who approves."""
+    from oracle.review import publish
+    from oracle.review.state import lapse_approvals
+
+    await publish.gate_lock(session, shared=False)
     await session.execute(
         update(OAuthToken)
         .where(OAuthToken.family_id == family_id, OAuthToken.revoked_at.is_(None))
         .values(revoked_at=_now())
+    )
+    await lapse_approvals(
+        session,
+        None,
+        grant_id=family_id,
+        reason=f"MCP OAuth grant of {client.name!r} was revoked ({why})",
     )
 
 
@@ -352,8 +367,10 @@ async def exchange_code(
             families = (
                 await s.scalars(select(OAuthToken.family_id).where(OAuthToken.code_id == row.id))
             ).all()
+            # The gate comes before any row lock (a disable's order): release the code's.
+            await s.rollback()
             for family_id in set(families):
-                await _revoke_family(s, family_id)
+                await _revoke_family(s, family_id, client, "authorization code replayed")
             await s.commit()
             raise OAuthError("invalid_grant", "Authorization code already used")
         if row.expires_at <= _now():
@@ -401,8 +418,11 @@ async def refresh(
                 select(OAuthToken.id).where(OAuthToken.rotated_from == row.id).limit(1)
             )
             if rotated is not None:
-                # Already exchanged once: someone else holds a copy. End the grant.
-                await _revoke_family(s, row.family_id)
+                # Already exchanged once: someone else holds a copy. End the grant. The
+                # gate comes before any row lock (a disable's order): release the row's.
+                family_id = row.family_id
+                await s.rollback()
+                await _revoke_family(s, family_id, client, "refresh token reused")
                 await s.commit()
                 raise OAuthError("invalid_grant", "Refresh token reused; the grant is revoked")
             raise OAuthError("invalid_grant", "Refresh token revoked")
@@ -448,5 +468,5 @@ async def revoke(client_id: str | None, token: str | None) -> None:
         )
         if row is None or row.client_id != client.id:
             return
-        await _revoke_family(s, row.family_id)
+        await _revoke_family(s, row.family_id, client, "revoked by the client")
         await s.commit()

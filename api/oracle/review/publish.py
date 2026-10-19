@@ -73,6 +73,7 @@ from oracle.review.state import (
     current_composition,
     effective_policy,
     required_sections,
+    revoked_grants,
     section_states,
     standing,
     template_required_sections,
@@ -564,8 +565,13 @@ async def review_problems(
             *policy.mandatory_reviewer_ids,
         ],
     )
-    # The token an approval came through: revoked (even outside the API), it voids it.
+    # The token or grant an approval came through: revoked (even outside the API), it
+    # voids it.
     token_reason = why.get(version.approved_token_id) if version.approved_token_id else None
+    if token_reason is None and version.approved_grant_id is not None:
+        token_reason = (await revoked_grants(db, [version.approved_grant_id])).get(
+            version.approved_grant_id
+        )
     if policy.decider_id is not None and why.get(policy.decider_id):
         blockers.append(
             _problem(
