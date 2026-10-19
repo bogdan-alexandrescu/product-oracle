@@ -146,6 +146,7 @@ async def test_an_owner_reclassifying_and_confirming_keeps_the_decision(client, 
             "revision": await _revision(ctx, b["id"]),
             "severity": "critical",
             "confirm_decision": True,
+            "reason": "The pilot grew; the risk stands",
         },
         headers=ctx.as_("owner"),
     )
@@ -409,7 +410,11 @@ async def test_events_of_one_blocker_are_strictly_ordered(client, monkeypatch):
     assert (await _decide(client, ctx, b["id"], "accept-risk", "approver")).status_code == 200
     resp = await client.patch(
         f"/v1/blockers/{b['id']}",
-        json={"revision": await _revision(ctx, b["id"]), "severity": "critical"},
+        json={
+            "revision": await _revision(ctx, b["id"]),
+            "severity": "critical",
+            "reason": "The pilot grew",
+        },
         headers=ctx.as_("approver"),
     )
     assert resp.status_code == 200, resp.text

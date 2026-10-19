@@ -12989,7 +12989,7 @@
           "blockers"
         ],
         "summary": "Update Blocker",
-        "description": "Edit a blocker. ``revision`` is the one you loaded; a stale one is a 409. The\nstatus changes only through the status, risk and feasibility routes.",
+        "description": "Edit a blocker. ``revision`` is the one you loaded; a stale one is a 409. The\nstatus changes only through the status, risk and feasibility routes. B4: lowering a\nblocker that gates (or gated when it was resolved), or removing a document it gates,\ntakes ``blocker_risk_acceptance_role`` (403 below it).",
         "operationId": "update_blocker",
         "security": [
           {
@@ -13051,7 +13051,7 @@
           "blockers"
         ],
         "summary": "Set Blocker Status",
-        "description": "Open, mitigating or resolved (resolving needs a reason). Records a resolution\nevent and a ``blocker_status`` change event.",
+        "description": "Open, mitigating or resolved (resolving needs a reason). Records a resolution\nevent and a ``blocker_status`` change event. B4: reopening a resolved blocker lowered\nor narrowed since below the gate it had when resolved takes\n``blocker_risk_acceptance_role`` (403 below it).",
         "operationId": "set_blocker_status",
         "security": [
           {

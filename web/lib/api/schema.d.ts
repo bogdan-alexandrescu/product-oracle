@@ -3403,7 +3403,9 @@ export interface paths {
         /**
          * Update Blocker
          * @description Edit a blocker. ``revision`` is the one you loaded; a stale one is a 409. The
-         *     status changes only through the status, risk and feasibility routes.
+         *     status changes only through the status, risk and feasibility routes. B4: lowering a
+         *     blocker that gates (or gated when it was resolved), or removing a document it gates,
+         *     takes ``blocker_risk_acceptance_role`` (403 below it).
          */
         patch: operations["update_blocker"];
         trace?: never;
@@ -3420,7 +3422,9 @@ export interface paths {
         /**
          * Set Blocker Status
          * @description Open, mitigating or resolved (resolving needs a reason). Records a resolution
-         *     event and a ``blocker_status`` change event.
+         *     event and a ``blocker_status`` change event. B4: reopening a resolved blocker lowered
+         *     or narrowed since below the gate it had when resolved takes
+         *     ``blocker_risk_acceptance_role`` (403 below it).
          */
         post: operations["set_blocker_status"];
         delete?: never;

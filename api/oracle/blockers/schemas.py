@@ -107,7 +107,9 @@ class BlockerPatch(_BlockerFields):
     type: BlockerType | None = None
     reason: str | None = Field(None, max_length=2000)
     # B4: reclassifying into the gate (critical and hard) reopens a risk acceptance or
-    # feasibility scope the B4 role did not decide, unless that role confirms it here.
+    # feasibility scope the B4 role did not decide, unless that role confirms it here
+    # (for this reclassification only; 409 when there is nothing to confirm). A reason
+    # is required when it reopens or confirms one.
     confirm_decision: bool = False
 
 

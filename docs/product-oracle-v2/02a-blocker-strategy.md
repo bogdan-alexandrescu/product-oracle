@@ -44,12 +44,12 @@ Statuses: `open`, `mitigating`, `resolved`, `accepted_risk`, `feasibility_only`.
 
 | Transition | Route | Rule |
 |---|---|---|
-| open, mitigating, resolved | `POST /v1/blockers/{id}/status` | resolving needs a reason; back to `open` from a closed state is a `reopened` event |
+| open, mitigating, resolved | `POST /v1/blockers/{id}/status` | resolving needs a reason; back to `open` from a closed state is a `reopened` event; reopening a resolved blocker that has been lowered or narrowed since it was resolved, below the gate it had then, takes `blocker_risk_acceptance_role` (§2, "Lowering a blocker that gates") |
 | accepted_risk | `POST /v1/blockers/{id}/accept-risk` | reason and a review date required, in the future and within `blocker_risk_review_max_days` (B4, default 90); for a critical hard blocker only `blocker_risk_acceptance_role` and above (B4, default `owner`), otherwise approvers too; writes an `AssumptionDecision`, a `risk_accepted` event and one audit event, `blocker.risk_accepted` |
 | feasibility_only | `POST /v1/blockers/{id}/feasibility-scope` | the experiment belongs to the blocker, is planned or running, and has an owner, a success threshold and a decision gate date in the future; for a critical hard blocker only `blocker_risk_acceptance_role` and above (B4); one audit event, `blocker.feasibility_scope_approved` |
 | open → mitigating | selecting an option | `option_selected` event |
 | feasibility_only → open | the scope's experiment fails, is cancelled or is inconclusive | automatic, `status_changed` event |
-| accepted_risk or feasibility_only → open | `PATCH /v1/blockers/{id}` makes the blocker critical and hard, and the decision was not made by `blocker_risk_acceptance_role` | automatic, `status_changed` event saying why (`data.change = "reopened_by_reclassification"`, summary "Reopened by reclassification to hard critical (the risk acceptance needs an owner)"). The rule: a decision taken while the blocker did not gate stands only if the B4 role made it (`data.by_decider` on its event) or confirmed it since; whoever reclassifies, it reopens otherwise. The B4 role keeps it by sending `confirm_decision: true` with the PATCH (a `data.change = "confirmed"` event and a `blocker.decision_confirmed` audit event); below that role `confirm_decision` is a 403. On a reopen of a feasibility scope, its experiment, if planned or running, goes back to planned (`data.experiment`) |
+| accepted_risk or feasibility_only → open | `PATCH /v1/blockers/{id}` makes the blocker critical and hard, and the decision was not made by `blocker_risk_acceptance_role` | automatic, `status_changed` event saying why (`data.change = "reopened_by_reclassification"`, summary "Reopened by reclassification to hard critical (the risk acceptance needs an owner)"). The rule: a decision taken while the blocker did not gate stands only if the B4 role made it (`data.by_decider` on its event) or confirms it in that same PATCH; whoever reclassifies, it reopens otherwise. The B4 role keeps it by sending `confirm_decision: true` with the PATCH (a `data.change = "confirmed"` event whose `data.answers` is the id of the reclassification it answered, and a `blocker.decision_confirmed` audit event). A confirmation answers that one reclassification: lowered and raised again, the decision reopens unless it is confirmed again. Below that role `confirm_decision` is a 403; with nothing to confirm (the PATCH reopens no decision) it is a 409 and nothing is stored. A PATCH that reopens a decision, or keeps it by confirming, needs a `reason` (422 otherwise). On a reopen of a feasibility scope, its experiment, if planned or running, goes back to planned (`data.experiment`) |
 
 Every status change appends a resolution event, writes the entity through
 `oracle.baseline.service` (revision and lock), audits, and calls
@@ -81,7 +81,39 @@ Only an owner can lower it." and nothing is stored. "Before" is both the strateg
 the gate's last recorded snapshot, so a strategy lowered in the database is not
 laundered into a new snapshot by an approver's edit. Approvers may still resolve it
 (`POST .../status`, a reason required, audited as `blocker.status_changed`), and lower
-blockers that do not gate (lesser, or resolved).
+blockers that do not gate (lesser ones, or ones that did not gate when they were
+resolved).
+
+Resolving does not open a way around this (round 4). For a resolved blocker, "before"
+also holds the gate as it stood when it was resolved: the snapshot on its resolution
+event, or, if `blocker_risk_acceptance_role` reclassified it since, that reclassification
+(`data.by_decider` on the `reclassified` event). So an approver cannot resolve a critical
+hard blocker, lower it and reopen it as open and non-gating: the lowering is a 403
+"This blocker gates publishing. Only an owner can lower it." And reopening a resolved
+blocker (`POST .../status` to open or mitigating) whose strategy now gates less than
+that gate (no longer critical and hard, or listing fewer documents) is a 403 "This
+blocker gated publishing when it was resolved and was lowered or narrowed since. Only an
+owner can reopen it." below the B4 role; this covers lowerings stored before round 4 and
+documents removed while it was resolved. A blocker resolved before gate snapshots
+existed has no snapshot on its resolution, so it has no such floor.
+
+### Removing a document from a blocker that gates it (B4)
+
+Removing a document from a critical, unresolved blocker that still gates it takes
+`blocker_risk_acceptance_role` (B4, default `owner`; owner decision 2026-10-19): below
+it `PATCH /v1/blockers/{id}` (and the MCP `update_blocker` tool, which calls it) is a
+403 "This blocker gates this document. Only an owner can remove it." and nothing is
+stored. "Unresolved" includes an accepted risk or a feasibility scope, which only let a
+publish through for a while. The check compares the documents the blocker gates before
+the change (its listed `document_ids`, those of its last recorded snapshot, and those
+whose sections link to the constraint) with those it gates after, whichever field the
+PATCH names. A document a section links to the constraint stays gated when it is
+unlisted, so unlisting it removes nothing. `impacted_entity_ids` does not decide which
+documents a blocker gates (a section link gates through the constraint itself, not
+through what it impacts), so editing it alone never removes one; a PATCH that combines
+it with a removal is refused as a whole. Adding documents, and removing them from a
+resolved or lesser blocker, stays with approvers (a resolved one cannot then be
+reopened below its resolution gate by an approver, above).
 
 ### Archiving or deleting a blocker that still gates (B4)
 
@@ -117,7 +149,12 @@ Reads never write. A blocker with no snapshot after that (legacy-unrecorded) is 
 on its current strategy, failing closed only if it cannot be read; the first write that
 locks it (`get_blocker(for_update=True)`) records its snapshot from the strategy as it
 was (actor `system:legacy-snapshot`), under the row lock, and from then on it fails
-closed like any other.
+closed like any other. A consequence to know: a legacy blocker whose strategy was
+already lowered in the database (critical and hard before, lesser now) takes its first
+snapshot from that lowered strategy, migration 0014 included. Nothing recorded says what
+it was before, so the gate and the B4 lowering rule start from the lowered strategy; such
+a blocker is not raised back automatically. An owner who suspects one restores it
+through `PATCH /v1/blockers/{id}`.
 
 ## 3. The hard readiness check
 
@@ -221,8 +258,8 @@ All `/v1`, Pydantic in and out, company-scoped, MCP tools generated from OpenAPI
 | `GET /blockers` | viewer | Summaries; filters `document_id`, `status`, `type`, `severity`, `limit_kind` |
 | `POST /blockers` | approver | Make an existing constraint a blocker (`entity_id`) or create one (`key`, `statement`) |
 | `GET /blockers/{id}` | viewer | The strategy view: blocker, gate, evidence, options (flags, recommended), compliant paths, experiments, events, risk acceptance, documents |
-| `PATCH /blockers/{id}` | approver; owner to lower a gating blocker or to `confirm_decision` (B4 setting) | Edit; `revision` required (409 when stale); no status |
-| `POST /blockers/{id}/status` | approver | open, mitigating, resolved |
+| `PATCH /blockers/{id}` | approver; owner to lower a gating blocker (or one that gated when it was resolved), to remove a document it gates, or to `confirm_decision` (B4 setting) | Edit; `revision` required (409 when stale); no status; `confirm_decision` with nothing to confirm is a 409; a reason is required when it reopens or confirms a decision |
+| `POST /blockers/{id}/status` | approver; owner to reopen a resolved blocker lowered or narrowed below its resolution gate (B4 setting) | open, mitigating, resolved |
 | `POST /blockers/{id}/accept-risk` | approver; owner for a critical hard blocker (B4 setting) | Reason and review date (within the B4 horizon) |
 | `POST /blockers/{id}/feasibility-scope` | approver; owner for a critical hard blocker (B4 setting) | Experiment id and reason |
 | `POST /blockers/{id}/options` | commenter | Propose an option (screened) |
