@@ -353,6 +353,8 @@ async def dismiss_intake_proposal(
 
 
 def _finding_out(fid: str, entry: dict, v: sharing.Viewer) -> FindingOut | None:
+    if sharing.is_open(entry):
+        return None  # drawn from shared text only: nothing to share
     level = entry.get("sharing", sharing.DEFAULT)
     if not v.sees(level, "counts"):
         return None

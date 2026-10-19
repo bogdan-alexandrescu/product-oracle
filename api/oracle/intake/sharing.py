@@ -19,7 +19,10 @@ an intake's pinned items is.
 
 The levels live in the intake's analysis (``analysis["findings"]``, keyed by finding
 id: an item's id, a gap's id, or a stable id for a conflict or stale item), so a
-re-analysis keeps them. Viewers, commenters, approvers, owners and run tokens all see
+re-analysis keeps them. Model output written from shared text only is registered with
+``restricted: false``. Anything drawn from sources that is not registered (an intake
+analysed before S6) fails closed: others see it as ``private`` until the author
+re-runs the analysis. Viewers, commenters, approvers, owners and run tokens all see
 only what the level allows; the author (never as a run token) sees everything. Every
 change of level is audited, and the author can lower a level again at any time.
 """
@@ -88,15 +91,33 @@ def viewer(principal: Principal | None, intake: ProductIntake) -> Viewer:
 # --- the registry ---------------------------------------------------------------------
 
 
-def registry(intake: ProductIntake) -> dict[str, dict[str, Any]]:
-    return dict((intake.analysis or {}).get("findings") or {})
+class Registry(dict):
+    """An intake's findings by id. ``unregistered``: the intake was analysed before
+    findings were registered, so what its sources gave is not listed (fail closed)."""
+
+    unregistered: bool = False
+
+
+def registry(intake: ProductIntake) -> Registry:
+    analysis = intake.analysis or {}
+    reg = Registry(analysis.get("findings") or {})
+    reg.unregistered = "coverage" in analysis and "findings" not in analysis
+    return reg
+
+
+def is_open(entry: dict[str, Any] | None) -> bool:
+    """A registered finding drawn from shared text only: not restricted."""
+    return entry is not None and entry.get("restricted") is False
+
+
+def restricted_entry(reg: dict[str, dict[str, Any]], finding_id: Any) -> dict[str, Any] | None:
+    entry = reg.get(str(finding_id)) if finding_id is not None else None
+    return None if entry is None or is_open(entry) else entry
 
 
 def level_of(reg: dict[str, dict[str, Any]], finding_id: Any) -> str | None:
     """The finding's level, or None when the thing is not a restricted finding."""
-    if finding_id is None:
-        return None
-    entry = reg.get(str(finding_id))
+    entry = restricted_entry(reg, finding_id)
     return entry.get("sharing", DEFAULT) if entry else None
 
 
@@ -110,8 +131,10 @@ def register(
     source_item_ids: list[uuid.UUID] | list[str],
     summary: str,
     gap_id: uuid.UUID | None = None,
+    restricted: bool = True,
 ) -> dict[str, Any]:
-    """Add or refresh a finding; an existing finding keeps the level its author set."""
+    """Add or refresh a finding; an existing finding keeps the level its author set.
+    ``restricted=False``: drawn from shared text only (shown to everyone)."""
     previous = reg.get(finding_id) or {}
     entry = {
         "kind": kind,
@@ -123,6 +146,8 @@ def register(
     }
     if gap_id is not None:
         entry["gap_id"] = str(gap_id)
+    if not restricted:
+        entry["restricted"] = False
     reg[finding_id] = entry
     return entry
 
@@ -216,7 +241,7 @@ def counts(reg: dict[str, dict[str, Any]], v: Viewer) -> list[dict[str, Any]]:
     tally: Counter[tuple[str, str | None]] = Counter()
     for entry in reg.values():
         level = entry.get("sharing", DEFAULT)
-        if v.is_author or level != "counts":
+        if v.is_author or level != "counts" or is_open(entry):
             continue
         tally[(entry["kind"], entry.get("category"))] += 1
     return [
@@ -243,11 +268,31 @@ def _copy(row: Any, out: type, **changes: Any) -> SimpleNamespace:
     return SimpleNamespace(**data)
 
 
+def _unregistered_model_gap(gap: KnowledgeGap) -> bool:
+    """A gap the model wrote before findings were registered (fail closed)."""
+    return (
+        gap.created_by is None
+        and gap.intake_id is not None
+        and gap.statement != cats.BY_KEY[gap.category].statement
+    )
+
+
 def gap_view(gap: KnowledgeGap, reg: dict[str, dict[str, Any]], v: Viewer) -> Any | None:
     """The gap as ``v`` may see it, or None when it is hidden from them."""
     entry = reg.get(str(gap.id))
-    if entry is None or v.is_author:
+    if v.is_author or is_open(entry):
         return gap
+    if entry is None and not getattr(reg, "unregistered", False):
+        return gap
+    if entry is None:
+        if _unregistered_model_gap(gap):
+            return None
+        if gap.created_by is None and gap.knowledge_state == "ai_inference" and gap.evidence_ids:
+            # A rule-made gap whose source evidence was never registered.
+            entry = {"origin": "rules", "sharing": DEFAULT,
+                     "source_item_ids": [str(e) for e in gap.evidence_ids]}  # fmt: skip
+        else:
+            return gap
     level = entry.get("sharing", DEFAULT)
     if entry.get("origin") == "model":
         if RANK[level] < RANK["summary"]:
@@ -335,7 +380,9 @@ def item_view(
     if v.is_author:
         return item
     entry = reg.get(str(item.get("finding_id"))) if item.get("finding_id") else None
-    level = entry.get("sharing", DEFAULT) if entry else None
+    if item.get("origin") == "llm" and entry is None:
+        return None  # model output never registered: fail closed
+    level = None if entry is None or is_open(entry) else entry.get("sharing", DEFAULT)
     if level is not None and RANK[level] < RANK["summary"]:
         return None
     evidence = [e for e in item.get("evidence_ids") or [] if uuid.UUID(e) in shared]
@@ -345,9 +392,11 @@ def item_view(
 
 
 def conflict_view(c: dict[str, Any], reg: dict[str, dict[str, Any]], v: Viewer) -> dict | None:
-    entry = reg.get(str(c.get("finding_id"))) if c.get("finding_id") else None
-    if entry is None or v.is_author:
+    if v.is_author:
         return c
+    entry = reg.get(str(c.get("finding_id"))) if c.get("finding_id") else None
+    if entry is None:
+        return None  # a source conflict never registered: fail closed
     level = entry.get("sharing", DEFAULT)
     if RANK[level] < RANK["summary"]:
         return None
@@ -371,8 +420,10 @@ def conflict_view(c: dict[str, Any], reg: dict[str, dict[str, Any]], v: Viewer) 
 
 
 def stale_view(s: dict[str, Any], reg: dict[str, dict[str, Any]], v: Viewer) -> dict | None:
+    if v.is_author:
+        return s
     entry = reg.get(str(s.get("finding_id"))) if s.get("finding_id") else None
-    if entry is None or v.sees(entry.get("sharing", DEFAULT), "summary"):
+    if entry is not None and v.sees(entry.get("sharing", DEFAULT), "summary"):
         return s
     return None
 
@@ -380,10 +431,11 @@ def stale_view(s: dict[str, Any], reg: dict[str, dict[str, Any]], v: Viewer) -> 
 def coverage_view(row: dict[str, Any], reg: dict[str, dict[str, Any]], v: Viewer) -> dict[str, Any]:
     """A coverage row: what the author's sources say about a category is a finding."""
     entry = reg.get(str(row.get("gap_id"))) if row.get("gap_id") else None
-    if entry is None or v.sees(entry.get("sharing", DEFAULT), "summary"):
+    if v.is_author or (entry is not None and v.sees(entry.get("sharing", DEFAULT), "summary")):
         return row
     if row.get("state") != "partial" or row.get("knowledge_state") != "ai_inference":
         return row
+    # What the author's sources say about the category (registered or not: fail closed).
     return {**row, "state": "missing", "knowledge_state": "unknown", "reason": REDACTED_REASON}
 
 

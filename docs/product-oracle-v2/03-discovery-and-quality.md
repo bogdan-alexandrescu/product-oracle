@@ -105,7 +105,9 @@ Findings are the model-written items and gaps, source conflicts, stale evidence,
 evidence of a rule-made gap (the gap's fixed category text stays shared). They live in
 `product_intakes.analysis.findings`, keyed by finding id, so a re-analysis keeps every
 level. A finding drawn only from text everyone can read (the brief, the title) is not
-restricted. The author sees everything (never through a run token: a run token's calls
+restricted. Anything drawn from sources that was never registered (an intake analysed
+before S6) fails closed: others see it as `private` until the author re-runs the
+analysis. The author sees everything (never through a run token: a run token's calls
 carry `x-oracle-run-id`, which only narrows); viewers, commenters, approvers, owners and
 run tokens see each finding at its level in every read: the summary, the question batch,
 composition inputs, proposals, the foundation's list and get routes for intakes, gaps,

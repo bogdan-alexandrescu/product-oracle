@@ -479,3 +479,30 @@ async def test_findings_from_shared_text_only_are_not_restricted(client, fake):
     [item] = [i for i in theirs["extracted"] if i["origin"] == "llm"]
     assert item["text"] == "Buyers who order again" and item["sharing"] is None
     assert BRIEF in json.dumps(theirs)
+
+
+async def test_an_intake_analysed_before_s6_fails_closed(client, fake):
+    """Findings never registered (an intake analysed before sharing levels existed) show
+    nothing to anyone else until the author re-runs the analysis."""
+    ctx, intake_id, _ = await authored_intake(client, fake)
+    async with tenant_session(ctx.tenant_id) as s:
+        from oracle.v2.models import ProductIntake
+
+        intake = await s.get(ProductIntake, uuid.UUID(intake_id))
+        legacy = dict(intake.analysis)
+        legacy.pop("findings")
+        legacy["items"] = [{k: v for k, v in i.items() if k != "finding_id"}
+                           for i in legacy["items"]]  # fmt: skip
+        legacy["conflicts"] = [{k: v for k, v in c.items() if k != "finding_id"}
+                               for c in legacy["conflicts"]]  # fmt: skip
+        legacy["stale"] = [{k: v for k, v in x.items() if k != "finding_id"}
+                           for x in legacy["stale"]]  # fmt: skip
+        intake.analysis = legacy
+        await s.commit()
+    for who in ("viewer", "owner", "run"):
+        texts = await reader_texts(client, ctx, intake_id, who)
+        for name, text in texts.items():
+            for secret in [*SECRETS, MODEL_GAP]:
+                assert secret not in text, (who, name, secret)
+    mine = await read_summary(client, ctx, intake_id, "author")
+    assert any(g["statement"] == MODEL_GAP for g in mine["gaps"])

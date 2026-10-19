@@ -176,17 +176,16 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
             "origin": "llm",
             "evidence_ids": [str(i) for i in evidence],
         }
-        if restricted:
-            fid = str(uuid.uuid4())
-            item["finding_id"] = fid
-            label = sharing.category_label(raw["field"])
-            sharing.register(
-                reg, fid, kind="item", origin="model", category=raw["field"],
-                source_item_ids=evidence,
-                summary=sharing.oracle_summary(
-                    text, texts, f"Oracle inferred something about the {label} from the "
-                    "author's sources.", shared),
-            )  # fmt: skip
+        fid = str(uuid.uuid4())
+        item["finding_id"] = fid
+        label = sharing.category_label(raw["field"])
+        sharing.register(
+            reg, fid, kind="item", origin="model", category=raw["field"],
+            source_item_ids=evidence, restricted=restricted,
+            summary=sharing.oracle_summary(
+                text, texts, f"Oracle inferred something about the {label} from the "
+                "author's sources.", shared),
+        )  # fmt: skip
         items.append(item)
         added += 1
 
@@ -239,14 +238,13 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         s.add(gap)
         gaps.append(gap)
         gaps_added += 1
-        if restricted:
-            sharing.register(
-                reg, str(gap.id), kind="gap", origin="model", category=cat.key,
-                source_item_ids=evidence, gap_id=gap.id,
-                summary=sharing.oracle_summary(
-                    statement, texts, f"Oracle found an open question about "
-                    f"{sharing.category_label(cat.key)} in the author's sources.", shared),
-            )  # fmt: skip
+        sharing.register(
+            reg, str(gap.id), kind="gap", origin="model", category=cat.key,
+            source_item_ids=evidence, gap_id=gap.id, restricted=restricted,
+            summary=sharing.oracle_summary(
+                statement, texts, f"Oracle found an open question about "
+                f"{sharing.category_label(cat.key)} in the author's sources.", shared),
+        )  # fmt: skip
 
     analysis["items"] = items
     analysis["findings"] = reg
