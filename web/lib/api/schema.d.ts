@@ -3066,7 +3066,11 @@ export interface paths {
         get: operations["get_section_link"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Section Link
+         * @description Remove a section link. An approved version's links are pinned (409).
+         */
+        delete: operations["delete_section_link"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3802,6 +3806,225 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/versions/{n}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version Trace
+         * @description A version's trace: its anchors (template, composition revision, snapshots), each
+         *     section's links to the baseline and the goals they serve, and the outputs that
+         *     depend on each section (artifacts, roadmap items) with their freshness.
+         */
+        get: operations["get_version_trace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version Evidence
+         * @description The evidence inspector: each section's claim-to-source links (strongest source
+         *     first) and the draft's own per-claim citations. Rendered bodies carry none of these
+         *     (O1c); exports list them in the Sources and data points appendix.
+         */
+        get: operations["get_version_evidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version Impact
+         * @description What this version changes for outputs built on earlier versions, why, and a
+         *     targeted regeneration plan (proposals only), with the changes recorded for it.
+         */
+        get: operations["get_version_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/section-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Section Links
+         * @description Link sections of a version to baseline items, evidence or source items (the
+         *     internal per-claim links behind O1c). Pinned to the section's current hash. An
+         *     approved version's links are pinned with it (409).
+         */
+        post: operations["create_section_links"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entity Trace
+         * @description A baseline node's trace: up to the goals it serves, down to requirements and
+         *     acceptance criteria, the sections linking it and the outputs built on it; for a
+         *     requirement, its assumptions, blockers, alternatives, experiments, decisions, owners
+         *     and risks. A feature serving no confirmed goal is flagged, with its priority.
+         */
+        get: operations["get_entity_trace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{entity_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entity Impact
+         * @description What a change to this node would make potentially stale, why, and a targeted
+         *     regeneration plan. A preview: nothing is marked.
+         */
+        get: operations["get_entity_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/changes/{change_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Change Impact
+         * @description A recorded change: the outputs it marked potentially stale, why, and a targeted
+         *     regeneration plan (proposals only).
+         */
+        get: operations["get_change_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/staleness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Stale Outputs
+         * @description Outputs that are not fresh (potentially stale or under review by default), a page
+         *     at a time, stalest first, with the dependencies that make them so and why (from the
+         *     change that marked each); ``document_id`` filters by upstream document.
+         */
+        get: operations["list_stale_outputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/staleness/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Act On Staleness
+         * @description Settle a stale output: ``review`` (someone is checking it), ``accept_regeneration``
+         *     (its regeneration proposal is accepted) or ``reconcile`` (confirmed still valid
+         *     against the current upstream, with a reason). Recorded and audited; the output's
+         *     content and approval are never changed.
+         */
+        post: operations["act_on_staleness"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trace/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Artifact Dependencies
+         * @description Record what an artifact version (or a derived document version) was made from:
+         *     document sections, whole document versions or baseline items, anchored at their
+         *     current hash. Idempotent per anchor.
+         */
+        post: operations["create_artifact_dependencies"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -4087,6 +4310,12 @@ export interface components {
             upstream_section_hash?: string | null;
             /** Upstream Entity Id */
             upstream_entity_id?: string | null;
+            /** Upstream Snapshot */
+            upstream_snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /** Upstream Deleted At */
+            upstream_deleted_at?: string | null;
             /** Composition Revision */
             composition_revision?: number | null;
             /**
@@ -5588,6 +5817,15 @@ export interface components {
             /** Slides */
             slides: components["schemas"]["SlideOut"][];
         };
+        /** DependenciesCreate */
+        DependenciesCreate: {
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Upstream */
+            upstream: components["schemas"]["TraceUpstreamRef"][];
+        };
         /** DiffOut */
         DiffOut: {
             /**
@@ -6198,6 +6436,31 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** EntityTrace */
+        EntityTrace: {
+            entity: components["schemas"]["TraceEntityRef"];
+            /** Flags */
+            flags: string[];
+            /** Goals */
+            goals: components["schemas"]["TraceEntityRef"][];
+            /** Upstream */
+            upstream: components["schemas"]["TraceChainStep"][];
+            /** Downstream */
+            downstream: components["schemas"]["TraceChainStep"][];
+            related: components["schemas"]["TraceRelated"];
+            /** Evidence */
+            evidence: components["schemas"]["TraceEvidenceRef"][];
+            /** Sections */
+            sections: components["schemas"]["TraceSectionRef"][];
+            /** Outputs */
+            outputs: components["schemas"]["TraceOutput"][];
+            priority?: components["schemas"]["RankedFeature"] | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
         /**
          * EntityWriteOut
          * @description A write either applied (``entity``) or became a proposal (the item is locked).
@@ -6356,6 +6619,24 @@ export interface components {
             created_at: string;
         };
         /**
+         * EvidenceCitation
+         * @description A ``[c:id]`` marker the stored draft carries in this section (its per-claim link).
+         */
+        EvidenceCitation: {
+            /** Cite Key */
+            cite_key: string;
+            /** Source */
+            source: string;
+            /** Ref */
+            ref: string;
+            /** Title */
+            title?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Retrieved At */
+            retrieved_at?: string | null;
+        };
+        /**
          * EvidenceCreate
          * @description Evidence from one of your own source items (url, ref and an excerpt are copied
          *     from it unless given), or free-standing (url / ref / excerpt only).
@@ -6371,6 +6652,29 @@ export interface components {
             ref?: string | null;
             /** Retrieved At */
             retrieved_at?: string | null;
+        };
+        /** EvidenceInspector */
+        EvidenceInspector: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Number */
+            number: number;
+            /** Approved */
+            approved: boolean;
+            /** Snapshot */
+            snapshot?: string | null;
+            /** Sections */
+            sections: components["schemas"]["SectionEvidence"][];
         };
         /** EvidenceLinkCreate */
         EvidenceLinkCreate: {
@@ -6849,6 +7153,49 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ImpactReport */
+        ImpactReport: {
+            subject: components["schemas"]["ImpactSubject"];
+            change?: components["schemas"]["ChangeEventOut"] | null;
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["ChangeEventOut"][];
+            /** Preview */
+            preview: boolean;
+            /** Affected */
+            affected: components["schemas"]["TraceOutput"][];
+            /**
+             * Affected Entities
+             * @default []
+             */
+            affected_entities: components["schemas"]["TraceEntityRef"][];
+            /** Plan */
+            plan: components["schemas"]["RegenerationProposal"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /** ImpactSubject */
+        ImpactSubject: {
+            /** Kind */
+            kind: string;
+            /** Id */
+            id?: string | null;
+            /** Ref */
+            ref?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Document Id */
+            document_id?: string | null;
         };
         /**
          * ImportErrorResponse
@@ -8976,6 +9323,58 @@ export interface components {
             /** Readable */
             readable: boolean;
         };
+        /**
+         * RegenerationProposal
+         * @description A targeted regeneration proposal (§11.5). Nothing runs until a person accepts it,
+         *     and an approved output is never overwritten: regenerating makes a new version.
+         */
+        RegenerationProposal: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "artifact_version" | "document_version";
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "engineering_spec" | "wireframe" | "prototype" | "acceptance_tests" | "roadmap" | "document";
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "regenerate" | "review";
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /**
+             * Entity Ids
+             * @default []
+             */
+            entity_ids: string[];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+            /** Approved */
+            approved: boolean;
+            /**
+             * Keeps Approved Version
+             * @default true
+             */
+            keeps_approved_version: boolean;
+            /** How */
+            how: string;
+        };
         /** RegisterIn */
         RegisterIn: {
             /** Label */
@@ -9521,6 +9920,124 @@ export interface components {
             /** Words */
             words?: components["schemas"]["WordOp"][] | null;
         };
+        /** SectionEvidence */
+        SectionEvidence: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Level */
+            level: number;
+            /** Layer */
+            layer: string;
+            /** Section Hash */
+            section_hash: string;
+            /** Links */
+            links: components["schemas"]["SectionLinkView"][];
+            /** Citations */
+            citations: components["schemas"]["EvidenceCitation"][];
+        };
+        /** SectionLinkCreate */
+        SectionLinkCreate: {
+            /** Section Key */
+            section_key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "implements" | "evidences" | "claims" | "tests" | "mentions";
+            /**
+             * Precision
+             * @default section
+             * @enum {string}
+             */
+            precision: "section" | "paragraph" | "claim";
+            /** Claim */
+            claim?: string | null;
+            /** Module Key */
+            module_key?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Evidence Id */
+            evidence_id?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+        };
+        /** SectionLinkTarget */
+        SectionLinkTarget: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "entity" | "evidence" | "source_item";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title?: string | null;
+            /** Entity Type */
+            entity_type?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Locked */
+            locked?: boolean | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Url */
+            url?: string | null;
+            /** Ref */
+            ref?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Source Kind */
+            source_kind?: string | null;
+            /**
+             * Restricted
+             * @default false
+             */
+            restricted: boolean;
+        };
+        /** SectionLinkView */
+        SectionLinkView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "implements" | "evidences" | "claims" | "tests" | "mentions";
+            /**
+             * Precision
+             * @enum {string}
+             */
+            precision: "section" | "paragraph" | "claim";
+            /** Claim */
+            claim?: string | null;
+            /** Module Key */
+            module_key?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /** Current */
+            current: boolean;
+            target: components["schemas"]["SectionLinkTarget"];
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** SectionLinksCreate */
+        SectionLinksCreate: {
+            /** Links */
+            links: components["schemas"]["SectionLinkCreate"][];
+        };
         /** SectionOut */
         SectionOut: {
             /**
@@ -9599,6 +10116,27 @@ export interface components {
             feedback_item_id?: string | null;
             /** Layer */
             layer?: ("brief" | "detail") | null;
+        };
+        /** SectionTrace */
+        SectionTrace: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Level */
+            level: number;
+            /** Layer */
+            layer: string;
+            /** Section Hash */
+            section_hash: string;
+            /** Links */
+            links: components["schemas"]["SectionLinkView"][];
+            /** Entities */
+            entities: components["schemas"]["TraceEntityRef"][];
+            /** Goals */
+            goals: components["schemas"]["TraceEntityRef"][];
+            /** Downstream */
+            downstream: components["schemas"]["TraceOutput"][];
         };
         /**
          * SectionVerdict
@@ -9992,6 +10530,48 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * StaleOutputsPage
+         * @description A page of outputs that are not fresh, stalest first.
+         */
+        StaleOutputsPage: {
+            /** Items */
+            items: components["schemas"]["TraceOutput"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Next Offset */
+            next_offset?: number | null;
+        };
+        /**
+         * StalenessAction
+         * @description A person's decision on a downstream output's staleness.
+         *
+         *     ``review``: someone is checking it (under_review). ``accept_regeneration``: the
+         *     regeneration proposal is accepted (under_review until the new version arrives).
+         *     ``reconcile``: confirmed still valid against the current upstream, with a reason.
+         */
+        StalenessAction: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "review" | "accept_regeneration" | "reconcile";
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /**
+             * Dependency Ids
+             * @default []
+             */
+            dependency_ids: string[];
+            /** Reason */
+            reason?: string | null;
         };
         /** StartDraftIn */
         StartDraftIn: {
@@ -10668,6 +11248,156 @@ export interface components {
             /** Scope */
             scope: string;
         };
+        /** TraceAlternativeRef */
+        TraceAlternativeRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Title */
+            title: string;
+            /** Approach */
+            approach: string;
+            /** Status */
+            status: string;
+            /** Compliance */
+            compliance: string;
+        };
+        /** TraceAssumptionDecisionRef */
+        TraceAssumptionDecisionRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Statement */
+            statement: string;
+            /** Decision */
+            decision: string;
+            /** Rationale */
+            rationale: string;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+        };
+        /** TraceChainStep */
+        TraceChainStep: {
+            entity: components["schemas"]["TraceEntityRef"];
+            /**
+             * Edge Id
+             * Format: uuid
+             */
+            edge_id: string;
+            /** Edge Type */
+            edge_type: string;
+            /** Edge Status */
+            edge_status: string;
+            /**
+             * Via
+             * Format: uuid
+             */
+            via: string;
+            /** Depth */
+            depth: number;
+        };
+        /** TraceDependency */
+        TraceDependency: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            upstream: components["schemas"]["TraceUpstream"];
+            /** Caused By Change Id */
+            caused_by_change_id?: string | null;
+            /** Stale Since */
+            stale_since?: string | null;
+            /** Reconciled By */
+            reconciled_by?: string | null;
+            /** Reconciled At */
+            reconciled_at?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+        };
+        /** TraceEntityRef */
+        TraceEntityRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Locked */
+            locked: boolean;
+            /** Confidence */
+            confidence?: number | null;
+        };
+        /** TraceEvidenceRef */
+        TraceEvidenceRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ref */
+            ref?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Kind */
+            kind?: string | null;
+            /** Rank */
+            rank: number;
+        };
+        /** TraceExperimentRef */
+        TraceExperimentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Option Id */
+            option_id?: string | null;
+            /** Hypothesis */
+            hypothesis: string;
+            /** Status */
+            status: string;
+        };
         /** TraceFeature */
         TraceFeature: {
             /**
@@ -10746,6 +11476,110 @@ export interface components {
             /** Contribution */
             contribution: number;
         };
+        /**
+         * TraceOutput
+         * @description A derived output: an artifact version or a document version (a roadmap).
+         */
+        TraceOutput: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "artifact_version" | "document_version";
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "engineering_spec" | "wireframe" | "prototype" | "acceptance_tests" | "roadmap" | "document";
+            /** Artifact Kind */
+            artifact_kind?: ("tech_brief" | "engineering_spec" | "user_flow" | "wireframe" | "prototype" | "acceptance_tests" | "figma_design") | null;
+            /** Document Kind */
+            document_kind?: string | null;
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Approved */
+            approved: boolean;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            /**
+             * Dependencies
+             * @default []
+             */
+            dependencies: components["schemas"]["TraceDependency"][];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+        };
+        /**
+         * TraceRelated
+         * @description What §7 links to a requirement besides the chain itself.
+         */
+        TraceRelated: {
+            /**
+             * Assumptions
+             * @default []
+             */
+            assumptions: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Blockers
+             * @default []
+             */
+            blockers: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Alternatives
+             * @default []
+             */
+            alternatives: components["schemas"]["TraceAlternativeRef"][];
+            /**
+             * Experiments
+             * @default []
+             */
+            experiments: components["schemas"]["TraceExperimentRef"][];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Owners
+             * @default []
+             */
+            owners: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Risks
+             * @default []
+             */
+            risks: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: components["schemas"]["TraceEntityRef"][];
+            /**
+             * Assumption Decisions
+             * @default []
+             */
+            assumption_decisions: components["schemas"]["TraceAssumptionDecisionRef"][];
+        };
         /** TraceReport */
         TraceReport: {
             /** Low */
@@ -10757,6 +11591,33 @@ export interface components {
             /** Goals */
             goals: components["schemas"]["TraceGoal"][];
             summary: components["schemas"]["TraceSummary"];
+        };
+        /** TraceSectionRef */
+        TraceSectionRef: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Document Kind */
+            document_kind: string;
+            /** Version Id */
+            version_id?: string | null;
+            /** Version Number */
+            version_number?: number | null;
+            /** Section Key */
+            section_key: string;
+            /**
+             * Link Id
+             * Format: uuid
+             */
+            link_id: string;
+            /** Link Kind */
+            link_kind: string;
+            /** Entity Id */
+            entity_id?: string | null;
         };
         /** TraceSummary */
         TraceSummary: {
@@ -10774,6 +11635,49 @@ export interface components {
             confirmed_goals: number;
             /** Uncovered Goals */
             uncovered_goals: number;
+        };
+        /**
+         * TraceUpstream
+         * @description What a dependency points at (its version anchor).
+         */
+        TraceUpstream: {
+            /** Document Id */
+            document_id?: string | null;
+            /** Document Slug */
+            document_slug?: string | null;
+            /** Document Kind */
+            document_kind?: string | null;
+            /** Version Id */
+            version_id?: string | null;
+            /** Version Number */
+            version_number?: number | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Section Hash */
+            section_hash?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            entity?: components["schemas"]["TraceEntityRef"] | null;
+            /**
+             * Deleted
+             * @default false
+             */
+            deleted: boolean;
+            /** Deleted At */
+            deleted_at?: string | null;
+        };
+        /**
+         * TraceUpstreamRef
+         * @description A dependency's upstream: a document version (a section of it, or all of it), or a
+         *     baseline entity.
+         */
+        TraceUpstreamRef: {
+            /** Version Id */
+            version_id?: string | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
         };
         /** UploadResult */
         UploadResult: {
@@ -10794,6 +11698,51 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * VersionAnchors
+         * @description The version anchors of §7 for one document version.
+         */
+        VersionAnchors: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Document Kind */
+            document_kind: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Number */
+            number: number;
+            /** Content Hash */
+            content_hash: string;
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: string | null;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /** Composition Status */
+            composition_status?: string | null;
+            /** Baseline Snapshot Id */
+            baseline_snapshot_id?: string | null;
+            /**
+             * Source Snapshot Ids
+             * @default []
+             */
+            source_snapshot_ids: string[];
+            /** Snapshot */
+            snapshot?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Source Version Id */
+            source_version_id?: string | null;
         };
         /** VersionChange */
         VersionChange: {
@@ -10947,6 +11896,24 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** VersionTrace */
+        VersionTrace: {
+            anchors: components["schemas"]["VersionAnchors"];
+            /** Sections */
+            sections: components["schemas"]["SectionTrace"][];
+            /** Whole Version Downstream */
+            whole_version_downstream: components["schemas"]["TraceOutput"][];
+            /**
+             * Upstream
+             * @default []
+             */
+            upstream: components["schemas"]["TraceDependency"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /**
          * VersionWarning
@@ -17125,6 +18092,35 @@ export interface operations {
             };
         };
     };
+    delete_section_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_artifact_dependencies: {
         parameters: {
             query?: {
@@ -18415,6 +19411,333 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_trace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionTrace"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_evidence: {
+        parameters: {
+            query?: {
+                section?: string | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceInspector"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_section_links: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionLinksCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSectionLinkOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entity_trace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityTrace"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entity_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_change_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_stale_outputs: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                freshness?: ("fresh" | "potentially_stale" | "under_review" | "reconciled") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleOutputsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    act_on_staleness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StalenessAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceOutput"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_artifact_dependencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependenciesCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactDependencyOut"][];
+                };
             };
             /** @description Validation Error */
             422: {

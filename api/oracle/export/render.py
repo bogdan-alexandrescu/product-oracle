@@ -84,6 +84,9 @@ class ExportVersion:
     all_sections: list[Section] = field(default_factory=list)
     # Provenance (O4b): the document version this one was built from.
     source: VersionSource | None = None
+    # v2 (§7, §16.9): each section's internal claim-to-source links, for the appendix
+    # only ({"key", "links": [{"claim", "label", "kind", "confidence"}]}).
+    evidence_links: list[dict] = field(default_factory=list)
 
     @property
     def source_label(self) -> str | None:
@@ -290,6 +293,9 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
 
         sources = await version_sources(db, [version.source_version_id])
         ev.source = sources.get(version.source_version_id)
+    from oracle.trace.evidence import appendix_links
+
+    ev.evidence_links = await appendix_links(db, version)
     await _resolve_theme(db, ev)
     return ev
 
@@ -469,6 +475,7 @@ def build_context(ev: ExportVersion) -> dict:
                 backref=f"ref-{number}-1" if notes.ref_counts.get(key) else None,
             )
         )
+    headings = {r.key: r.heading for r in sections}
     v = ev.version
     return {
         "title": ev.document.title,
@@ -482,6 +489,11 @@ def build_context(ev: ExportVersion) -> dict:
         "has_title_section": any(s.level == 1 for s in ev.sections),
         "sections": sections,
         "footnotes": footnotes,
+        "evidence_links": [
+            {"key": e["key"], "heading": headings[e["key"]], "links": e["links"]}
+            for e in ev.evidence_links
+            if e["key"] in headings
+        ],
         "css": Markup(stylesheet()),
         "layer": ev.layer,
         "layer_label": ev.layer_label,
@@ -707,6 +719,12 @@ def build_themed_context(ev: ExportVersion) -> dict:
                     ],
                 }
             )
+    # Evidence links by section (O1c: listed here, never in the body).
+    evidence_links = [
+        {"key": e["key"], "heading": headings[e["key"]], "links": e["links"]}
+        for e in ev.evidence_links
+        if e["key"] in headings
+    ]
     source_list = [
         RenderedFootnote(
             number=number,
@@ -762,6 +780,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "sources_intro": sources_intro,
         "sources_parts": sources_parts,
         "by_section": by_section,
+        "evidence_links": evidence_links,
         "source_list": source_list,
         "css": Markup(themed_stylesheet()),
         "token_css": Markup(token_css(tokens)),
