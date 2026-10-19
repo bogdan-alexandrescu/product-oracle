@@ -1,0 +1,265 @@
+# Built-in semantic modules for the Hardware and IoT pack (hardware.iot, O1h). The pack
+# reuses the shared core of startup.standard and adds these modules: some REQUIRED for
+# every hardware PRD, some CONDITIONAL on the capability scope or signals, and some
+# OPTIONAL for an author to add.
+#
+# TEMPLATES ONLY: titles, instructions, typed fields, question prompts and evidence
+# expectations. No prewritten devices, components, suppliers, brands, test labs, places
+# or amounts.
+
+- id: hardware.physical-constraints
+  version: 1.0.0
+  title: Hardware constraints
+  description: Power, size, environment, bill of materials and other physical limits on the design.
+  applies_to: [hardware.iot]
+  policy: required
+  depends_on: [constraints.solutions]
+  display_order: 500
+  section_ids: [hardware-constraints]
+  brief_layer: false
+  fields:
+    - {key: physical_limits, label: "Size, weight and power limits", type: markdown, required: true}
+    - {key: environment, label: "Operating environment", type: markdown, required: true}
+    - {key: bom_target, label: "Bill of materials cost target", type: text}
+    - {key: lifetime, label: "Expected service life", type: text}
+    - {key: design_freeze, label: "Design freeze date", type: date}
+  question_prompts:
+    - key: physical_limits
+      prompt: What are the power, size and environment limits the device has to live within?
+      category: constraints
+      importance: critical
+      fills: [physical_limits, environment]
+    - key: cost_target
+      prompt: What may the bill of materials cost, and what is the expected service life?
+      category: effort_cost
+      importance: high
+      fills: [bom_target, lifetime]
+  instructions: >-
+    State the physical limits, operating environment, bill of materials target, service
+    life and design freeze, with the evidence or assumption behind each. Changes after
+    design freeze are expensive; say which decisions they lock. No invented components
+    or prices.
+  evidence_expectations: {min_sources: 1, fields: [environment]}
+  required_review_role: approver
+  outputs: [prd, engineering_spec, roadmap]
+  output_mappings:
+    engineering_spec: [physical_limits, environment]
+    roadmap: [design_freeze]
+
+- id: hardware.manufacturing-supply
+  version: 1.0.0
+  title: Manufacturing and supply chain
+  description: How the device is built, sourced, tested on the line and delivered at volume.
+  applies_to: [hardware.iot]
+  policy: required
+  depends_on: [economics.value, release.rollout]
+  display_order: 510
+  section_ids: [hardware-manufacturing]
+  brief_layer: false
+  fields:
+    - {key: build_stages, label: "Build stages and gates", type: markdown, required: true}
+    - {key: supply_risks, label: "Long-lead and single-source parts", type: markdown, required: true}
+    - {key: production_test, label: "Production line testing", type: markdown}
+    - {key: volume_plan, label: "Volume ramp plan", type: markdown}
+  question_prompts:
+    - key: supply_risk
+      prompt: Which parts have long lead times or a single source, and what is the fallback?
+      category: blockers
+      importance: critical
+      fills: [supply_risks]
+    - key: build_gates
+      prompt: Which build stages and exit criteria take the design from prototype to mass production?
+      category: release_rollout
+      importance: high
+      fills: [build_stages]
+  instructions: >-
+    Describe build stages and their exit criteria, long-lead and single-source parts with
+    fallbacks, production line testing, yield expectations and the volume ramp. No
+    supplier or factory names; supply facts carry sources.
+  evidence_expectations: {min_sources: 1, fields: [supply_risks]}
+  required_review_role: approver
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [build_stages, volume_plan]
+
+- id: hardware.certification
+  version: 1.0.0
+  title: Safety, radio and product certification
+  description: The certifications needed to sell the device in each target market and their plan.
+  applies_to: [hardware.iot]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: radio_hardware}
+      - {op: contains, path: scope.capabilities, value: safety_certification}
+      - {op: contains, path: scope.capabilities, value: mains_powered}
+      - {op: gte, path: signals.target_market_count, value: 1}
+  depends_on: [hardware.physical-constraints]
+  display_order: 520
+  section_ids: [hardware-certification]
+  brief_layer: false
+  fields:
+    - {key: certifications, label: "Certifications needed by market", type: markdown, required: true}
+    - {key: test_plan, label: "Pre-compliance and certification test plan", type: markdown, required: true}
+    - {key: certification_lead_time, label: "Certification lead time", type: text}
+    - {key: recertification_triggers, label: "Changes that trigger recertification", type: markdown}
+  validators:
+    - {kind: requires_evidence, field: certifications}
+  question_prompts:
+    - key: certifications
+      prompt: Which safety, radio or product certifications are needed in each market you will sell in?
+      category: constraints
+      importance: critical
+      fills: [certifications, certification_lead_time]
+    - key: recertification
+      prompt: Which later hardware or firmware changes would force a new certification?
+      category: release_rollout
+      importance: medium
+      fills: [recertification_triggers]
+  instructions: >-
+    List the certifications needed per target market, the pre-compliance and formal test
+    plan, lead times and which changes trigger recertification. Cite the requirement for
+    each market. No invented standards, labs or markets.
+  evidence_expectations: {min_sources: 1, fields: [certifications]}
+  required_review_role: owner
+  outputs: [prd, roadmap, acceptance_tests]
+  output_mappings:
+    roadmap: [certification_lead_time]
+    acceptance_tests: [test_plan]
+
+- id: hardware.firmware-ota
+  version: 1.0.0
+  title: Firmware and over-the-air updates
+  description: How firmware is built, signed, delivered over the air and rolled back safely.
+  applies_to: [hardware.iot]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: ota_updates}
+      - {op: contains, path: scope.capabilities, value: embedded_firmware}
+      - {op: gte, path: signals.deployed_device_count, value: 100}
+  depends_on: [hardware.physical-constraints, requirements.nonfunctional]
+  display_order: 530
+  section_ids: [hardware-firmware]
+  brief_layer: false
+  fields:
+    - {key: update_flow, label: "Update delivery and staging", type: markdown, required: true}
+    - {key: integrity, label: "Signing and secure boot", type: markdown, required: true}
+    - {key: failure_recovery, label: "Failed update recovery and rollback", type: markdown, required: true}
+    - {key: support_window, label: "Firmware support window", type: text}
+    - {key: update_tests, label: "Update acceptance checks", type: markdown}
+  question_prompts:
+    - key: bricking
+      prompt: What happens if power or connectivity drops in the middle of an update?
+      category: constraints
+      importance: critical
+      fills: [failure_recovery]
+    - key: staged_updates
+      prompt: How are updates staged across the fleet, and who can stop a bad one?
+      category: release_rollout
+      importance: high
+      fills: [update_flow]
+  instructions: >-
+    Define how firmware is built, signed and verified, how updates are staged across
+    devices, recovery from an interrupted or bad update, rollback and the support window.
+    Write the checks that prove a device cannot be left unusable. No invented versions.
+  required_review_role: approver
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [update_flow, integrity]
+    acceptance_tests: [update_tests]
+
+- id: hardware.companion-app
+  version: 1.0.0
+  title: Companion app and device pairing
+  description: How people set up, pair, control and recover a device through a companion app or service.
+  applies_to: [hardware.iot]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: companion_app}
+      - {op: contains, path: scope.capabilities, value: device_pairing}
+      - {op: contains, path: scope.capabilities, value: device_cloud}
+  depends_on: [requirements.functional]
+  display_order: 540
+  section_ids: [hardware-companion-app]
+  brief_layer: false
+  fields:
+    - {key: setup_flow, label: "Unboxing to first use", type: markdown, required: true}
+    - {key: pairing, label: "Pairing, ownership transfer and reset", type: markdown}
+    - {key: offline_behaviour, label: "Behaviour when the app or cloud is unavailable", type: markdown, required: true}
+    - {key: device_data, label: "Device data collected and who controls it", type: markdown}
+  question_prompts:
+    - key: setup
+      prompt: What does a person do between unboxing the device and first successful use?
+      category: customer_user
+      importance: high
+      fills: [setup_flow]
+    - key: offline
+      prompt: What must the device still do when the app or cloud service is unavailable?
+      category: constraints
+      importance: high
+      fills: [offline_behaviour]
+  instructions: >-
+    Describe setup from unboxing to first use, pairing, ownership transfer, reset, the
+    behaviour when the app or cloud is unavailable and the device data collected with user
+    controls. Store and platform rules for apps are sourced constraints. No invented
+    screens or app stores.
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [pairing, offline_behaviour]
+
+- id: hardware.field-service
+  version: 1.0.0
+  title: Field service, returns and warranty
+  description: How faulty devices are diagnosed, repaired, replaced or returned in the field.
+  applies_to: [hardware.iot]
+  policy: optional
+  depends_on: [hardware.physical-constraints]
+  display_order: 550
+  section_ids: [hardware-field-service]
+  brief_layer: false
+  fields:
+    - {key: diagnostics, label: "Remote and on-site diagnostics", type: markdown, required: true}
+    - {key: repair_policy, label: "Repair, replacement and warranty", type: markdown}
+    - {key: failure_rate_assumption, label: "Expected field failure rate", type: text}
+  question_prompts:
+    - key: field_failure
+      prompt: When a device fails in the field, how is it diagnosed and what does the customer get?
+      category: customer_user
+      importance: medium
+      fills: [diagnostics, repair_policy]
+  instructions: >-
+    Describe diagnostics, repair or replacement, warranty terms as slots, spare parts and
+    the expected failure rate as a sourced figure or an assumption. No invented terms.
+
+- id: hardware.end-of-life
+  version: 1.0.0
+  title: End of life and disposal
+  description: How long the device is supported and what happens when support or the device ends.
+  applies_to: [hardware.iot]
+  policy: optional
+  depends_on: [release.rollout]
+  display_order: 560
+  section_ids: [hardware-end-of-life]
+  brief_layer: false
+  fields:
+    - {key: support_commitment, label: "Support commitment", type: markdown, required: true}
+    - {key: end_of_support_behaviour, label: "Device behaviour after end of support", type: markdown}
+    - {key: take_back, label: "Take-back, recycling and data wipe", type: markdown}
+  question_prompts:
+    - key: end_of_support
+      prompt: How long will the device be supported, and what still works after support ends?
+      category: release_rollout
+      importance: medium
+      fills: [support_commitment, end_of_support_behaviour]
+  instructions: >-
+    State the support commitment, what keeps working after end of support, customer
+    notice, take-back, recycling and data wipe. Disposal rules are sourced constraints.
+    No invented dates.
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [support_commitment]

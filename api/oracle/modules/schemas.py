@@ -181,10 +181,12 @@ class CompositionRecommendIn(ComposeIn):
 
 
 class RevisionIn(ComposeIn):
-    # The revision number the person started from (null before the first): a stale
-    # number is a 409, never a silent overwrite.
+    # The newest revision's number, the one the person started from (null before the
+    # first): a stale number is a 409, never a silent overwrite.
     base_revision: int | None = None
     reason: str = Field(min_length=1, max_length=2000)
+    # "working" saves a draft: it supersedes nothing and records no change event; only
+    # "confirmed" puts a revision in force.
     status: Literal["confirmed", "working"] = "confirmed"
 
 
@@ -279,7 +281,12 @@ class InspectorOut(BaseModel):
     legacy: bool
     composition_id: uuid.UUID | None = None
     lock_version: int | None = None
+    # The newest revision's number: the base_revision of the next one.
+    head_revision: int | None = None
+    # The confirmed (or published) revision in force.
     current: RevisionDetail | None = None
+    # A working draft saved after it, if any: it changes nothing until confirmed.
+    working: RevisionDetail | None = None
     recommendation: RecommendationOut | None = None
     revisions: list[RevisionSummary]
     sections: DocumentSectionsOut

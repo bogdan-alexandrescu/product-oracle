@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response, status
@@ -22,6 +23,7 @@ from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
 from oracle.members.router import router as members_router
 from oracle.modules.router import router as modules_router
+from oracle.modules.service import seed_all_companies
 from oracle.preferences.router import router as preferences_router
 from oracle.priorities.router import router as priorities_router
 from oracle.review.router import router as review_router
@@ -31,9 +33,18 @@ from oracle.templates.router import router as templates_router
 from oracle.tenant_settings_api import router as settings_router
 from oracle.v2.router import router as v2_router
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Built-in templates, modules and manifests for every company, so a release's new
+    # or upgraded built-ins are there before anyone reads (reads never write). A
+    # failure is logged, not fatal: the write paths seed too.
+    try:
+        await seed_all_companies()
+    except Exception:
+        logger.exception("seeding built-in modules at startup failed")
     # The Claude account pool's local scheduler (SwarmCloud runs its sweep from Cloud
     # Scheduler); `oracle tick` sweeps too. ORACLE_CLAUDE_SWEEP_SECONDS=0 turns it off.
     interval = get_pool_settings().sweep_seconds

@@ -3358,7 +3358,7 @@ export interface paths {
         };
         /**
          * List Module Catalog
-         * @description Every module the company can compose with (built-ins seeded on first use).
+         * @description Every module the company can compose with.
          */
         get: operations["list_module_catalog"];
         put?: never;
@@ -3423,7 +3423,8 @@ export interface paths {
         };
         /**
          * List Module Packs
-         * @description The seeded packs: General Tech Startup and Multi-tenant AI Agent Platform.
+         * @description The built-in packs: General Tech Startup, the Multi-tenant AI Agent Platform and the
+         *     industry packs (O1h), each with its modules in order and their policy tier.
          */
         get: operations["list_module_packs"];
         put?: never;
@@ -3446,7 +3447,11 @@ export interface paths {
          * @description Which modules the company makes mandatory, optional or disabled.
          */
         get: operations["get_module_policy"];
-        /** Put Module Policy */
+        /**
+         * Put Module Policy
+         * @description Set the company module policy. Each document's composition in force gets a change
+         *     event saying what changed; a person re-confirms it to apply the policy.
+         */
         put: operations["put_module_policy"];
         post?: never;
         delete?: never;
@@ -3538,9 +3543,11 @@ export interface paths {
         put?: never;
         /**
          * Confirm Composition Revision
-         * @description Confirm a composition revision (or save it as working): who decided and why.
-         *     Mandatory modules and dependencies are never removed silently; a material change
-         *     records change events for the affected sections.
+         * @description Confirm a composition revision, or save it as a working draft: who decided and
+         *     why. It starts from the newest revision, so earlier decisions carry. Mandatory
+         *     modules and dependencies are never removed silently. Confirming puts it in force and
+         *     records change events for the affected sections; a working draft supersedes nothing
+         *     and records none.
          */
         post: operations["confirm_composition_revision"];
         delete?: never;
@@ -4826,6 +4833,11 @@ export interface components {
             condition_error?: string | null;
             /** User Reason */
             user_reason?: string | null;
+            /**
+             * Ordered By User
+             * @default false
+             */
+            ordered_by_user: boolean;
             /**
              * Required Review Role
              * @default approver
@@ -6754,6 +6766,11 @@ export interface components {
             /** User Reason */
             user_reason?: string | null;
             /**
+             * Ordered By User
+             * @default false
+             */
+            ordered_by_user: boolean;
+            /**
              * Required Review Role
              * @default approver
              */
@@ -6796,7 +6813,10 @@ export interface components {
             composition_id?: string | null;
             /** Lock Version */
             lock_version?: number | null;
+            /** Head Revision */
+            head_revision?: number | null;
             current?: components["schemas"]["RevisionDetail"] | null;
+            working?: components["schemas"]["RevisionDetail"] | null;
             recommendation?: components["schemas"]["RecommendationOut"] | null;
             /** Revisions */
             revisions: components["schemas"]["RevisionSummary"][];

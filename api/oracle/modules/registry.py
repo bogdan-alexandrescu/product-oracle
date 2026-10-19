@@ -21,11 +21,12 @@ The company module policy is the ``module_policy`` company setting: which module
 mandatory, relaxed to optional or disabled, and the default packs.
 """
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,7 +38,7 @@ from oracle.modules.catalog import (
     builtin_packs,
 )
 from oracle.templates.builtins import BUILTIN_TEMPLATES_BY_KEY, builtin_body
-from oracle.templates.models import Template
+from oracle.templates.models import Template, TemplateVersion
 from oracle.templates.validation import check_template
 from oracle.tenancy import current_tenant
 from oracle.tenant_settings import TenantSetting
@@ -280,8 +281,6 @@ def _version_row(
 
 
 def _contract(data: dict[str, Any], key: str | None = None) -> ModuleContract:
-    from pydantic import ValidationError
-
     try:
         contract = validate_contract(data)
     except ValidationError as e:
@@ -371,8 +370,6 @@ class ModulePolicySettings(BaseModel):
     @field_validator("required", "optional", "disabled", "default_packs")
     @classmethod
     def _keys(cls, value: list[str]) -> list[str]:
-        import re
-
         for key in value:
             if not re.match(MODULE_ID_PATTERN, key):
                 raise ValueError(f"{key!r} is not a module or pack id")
@@ -449,14 +446,31 @@ async def write_manifest(
     entries: list[dict[str, Any]],
     created_by: uuid.UUID | None,
 ) -> list[TemplateModuleAssignment]:
-    """Replace a template's manifest (a company edit: rows carry ``created_by``)."""
+    """Replace a template's manifest (a company edit: rows carry ``created_by``).
+
+    Refuses archived modules and sections the template's latest version does not have
+    (a manifest maps the template's own {#id} sections)."""
     catalog = await load_catalog(session)
+    latest = await session.scalar(
+        select(TemplateVersion)
+        .where(TemplateVersion.template_id == template.id)
+        .order_by(TemplateVersion.version.desc())
+        .limit(1)
+    )
+    sections = set(check_template(latest.body).section_keys) if latest is not None else set()
     seen_sections: dict[str, str] = {}
     keys: set[str] = set()
     for e in entries:
         key = e["module_key"]
         if key not in catalog.entries:
             raise RegistryError("unknown_module", f"unknown module {key}")
+        if catalog.entries[key].archived:
+            raise RegistryError("archived_module", f"{key} is archived")
+        if unknown := [s for s in e["section_ids"] if s not in sections]:
+            raise RegistryError(
+                "unknown_section",
+                f"template '{template.key}' has no section {', '.join(unknown)}",
+            )
         if key in keys:
             raise RegistryError("duplicate_module", f"{key} is listed twice")
         keys.add(key)

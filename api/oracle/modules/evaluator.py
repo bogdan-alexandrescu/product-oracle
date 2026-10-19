@@ -31,6 +31,8 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from oracle.v2.contract import (
+    MAX_CONDITION_DEPTH,
+    MAX_CONDITION_NODES,
     AllOf,
     Always,
     AtLeast,
@@ -40,6 +42,7 @@ from oracle.v2.contract import (
     Not,
     Ordering,
     Presence,
+    condition_stats,
     parse_condition,
 )
 
@@ -229,7 +232,8 @@ class _Walker:
         if isinstance(node, Membership):
             if actual is _MISSING or actual is None:
                 return self.leaf(node, node.values, _MISSING, False)
-            _typed(node.path, actual, node.values[0], node.op)
+            for value in node.values:
+                _typed(node.path, actual, value, node.op)
             return self.leaf(node, node.values, actual, actual in node.values)
         if isinstance(node, Contains):
             if actual is _MISSING or actual is None:
@@ -256,6 +260,13 @@ def evaluate(condition: Any, inputs: dict[str, Any] | BaseModel) -> Evaluation:
             raise ConditionInvalidError(_first_error(e)) from None
         except ValueError as e:
             raise ConditionInvalidError(str(e)) from None
+    else:
+        # A node built in code skipped parsing: bound it here too.
+        depth, count = condition_stats(condition)
+        if depth > MAX_CONDITION_DEPTH:
+            raise ConditionInvalidError(f"condition is nested deeper than {MAX_CONDITION_DEPTH}")
+        if count > MAX_CONDITION_NODES:
+            raise ConditionInvalidError(f"condition has more than {MAX_CONDITION_NODES} nodes")
     if isinstance(inputs, BaseModel):
         inputs = inputs.model_dump(mode="json")
     if not isinstance(inputs, dict):

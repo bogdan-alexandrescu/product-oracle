@@ -1,0 +1,272 @@
+# Built-in semantic modules for the Enterprise software pack (enterprise.software, O1h).
+# The pack reuses the shared core of startup.standard and adds these modules: some
+# REQUIRED for every enterprise PRD, some CONDITIONAL on the capability scope or signals,
+# and some OPTIONAL for an author to add.
+#
+# TEMPLATES ONLY: titles, instructions, typed fields, question prompts and evidence
+# expectations. No prewritten features, products, customers, vendors, standards bodies,
+# regions or contract terms.
+
+- id: enterprise.security-review
+  version: 1.0.0
+  title: Security review and compliance attestations
+  description: What an enterprise security review will ask about this work and the attestations it relies on.
+  applies_to: [enterprise.software]
+  policy: required
+  depends_on: [requirements.nonfunctional]
+  display_order: 800
+  section_ids: [enterprise-security-review]
+  brief_layer: false
+  fields:
+    - {key: data_handled, label: "Customer data handled and its classification", type: markdown, required: true}
+    - {key: controls, label: "Security controls", type: markdown, required: true}
+    - {key: attestations, label: "Attestations and certifications relied on", type: markdown}
+    - {key: review_gaps, label: "Known gaps a security review would raise", type: markdown}
+  validators:
+    - {kind: requires_evidence, field: attestations}
+  question_prompts:
+    - key: security_review
+      prompt: Which questions in a customer security review would this change, and can we answer them today?
+      category: security_privacy
+      importance: critical
+      fills: [data_handled, review_gaps]
+    - key: attestations
+      prompt: Which existing attestations cover this work, and does it fall outside their scope?
+      category: security_privacy
+      importance: high
+      fills: [attestations]
+  instructions: >-
+    Classify the customer data handled, list the security controls, the attestations
+    relied on with their scope and the gaps a security review would raise, each with an
+    owner. Claims about attestation scope carry sources. No invented certifications.
+  evidence_expectations: {min_sources: 1, fields: [attestations]}
+  required_review_role: owner
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [controls]
+
+- id: enterprise.procurement-contracts
+  version: 1.0.0
+  title: Procurement and contracts
+  description: How enterprise buyers evaluate, approve and contract for this work, and what contracts commit to.
+  applies_to: [enterprise.software]
+  policy: required
+  depends_on: [economics.value]
+  display_order: 810
+  section_ids: [enterprise-procurement]
+  brief_layer: false
+  fields:
+    - {key: buying_committee, label: "Buying committee and approvals", type: markdown, required: true}
+    - {key: contract_commitments, label: "Contract commitments affected", type: markdown, required: true}
+    - {key: sales_cycle_effect, label: "Effect on the sales cycle", type: markdown}
+  question_prompts:
+    - key: buying_committee
+      prompt: Who must approve the purchase, and which of their concerns does this answer or raise?
+      category: customer_user
+      importance: high
+      fills: [buying_committee, sales_cycle_effect]
+    - key: commitments
+      prompt: Which existing contract terms or commitments does this touch?
+      category: constraints
+      importance: high
+      fills: [contract_commitments]
+  instructions: >-
+    Describe the buying committee and its approvals, the contract commitments this work
+    creates or affects, and the expected effect on the sales cycle, with evidence. No
+    customer-specific terms or invented deals.
+  evidence_expectations: {min_sources: 1, fields: [sales_cycle_effect]}
+  required_review_role: approver
+
+- id: enterprise.identity-sso
+  version: 1.0.0
+  title: Single sign-on and user provisioning
+  description: SSO, SCIM provisioning and lifecycle management of enterprise identities.
+  applies_to: [enterprise.software]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: sso}
+      - {op: contains, path: scope.capabilities, value: scim_provisioning}
+      - {op: gte, path: signals.enterprise_seat_count, value: 100}
+  depends_on: [enterprise.security-review]
+  display_order: 820
+  section_ids: [enterprise-identity-sso]
+  brief_layer: false
+  fields:
+    - {key: sign_in, label: "Sign-in and SSO behaviour", type: markdown, required: true}
+    - {key: provisioning, label: "Provisioning and deprovisioning", type: markdown, required: true}
+    - {key: identity_tests, label: "Identity acceptance checks", type: markdown}
+  question_prompts:
+    - key: deprovisioning
+      prompt: When someone leaves the customer organisation, how fast must their access end?
+      category: security_privacy
+      importance: critical
+      fills: [provisioning]
+  instructions: >-
+    Define SSO behaviour, enforcement, fallbacks for administrators, SCIM provisioning,
+    group to role mapping and deprovisioning timing, with checks that prove access ends.
+    No identity provider names.
+  required_review_role: approver
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [sign_in, provisioning]
+    acceptance_tests: [identity_tests]
+
+- id: enterprise.data-residency
+  version: 1.0.0
+  title: Data residency and retention
+  description: Where customer data is stored and processed, how long it is kept and how it is deleted.
+  applies_to: [enterprise.software]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: data_residency}
+      - {op: contains, path: scope.capabilities, value: retention_controls}
+      - {op: gte, path: signals.hosting_region_count, value: 2}
+  depends_on: [enterprise.security-review]
+  display_order: 830
+  section_ids: [enterprise-data-residency]
+  brief_layer: false
+  fields:
+    - {key: residency, label: "Storage and processing locations", type: markdown, required: true}
+    - {key: retention, label: "Retention and deletion", type: markdown, required: true}
+    - {key: subprocessors, label: "Subprocessors and data transfers", type: markdown}
+  question_prompts:
+    - key: residency
+      prompt: Where must customer data stay, including backups, logs and subprocessors?
+      category: security_privacy
+      importance: critical
+      fills: [residency, subprocessors]
+    - key: retention
+      prompt: How long is customer data kept, and how is deletion proven?
+      category: security_privacy
+      importance: high
+      fills: [retention]
+  instructions: >-
+    State where data is stored and processed including backups, logs and subprocessors,
+    retention periods as slots, deletion and its proof. Residency rules carry sources. No
+    invented regions or vendors.
+  evidence_expectations: {min_sources: 1, fields: [residency]}
+  required_review_role: approver
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [residency, retention]
+
+- id: enterprise.deployment-model
+  version: 1.0.0
+  title: Deployment model
+  description: Shared cloud, dedicated, private or self-hosted deployment and what each changes.
+  applies_to: [enterprise.software]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: self_hosted}
+      - {op: contains, path: scope.capabilities, value: dedicated_deployment}
+      - {op: contains, path: scope.capabilities, value: air_gapped}
+  depends_on: [requirements.nonfunctional, release.rollout]
+  display_order: 840
+  section_ids: [enterprise-deployment-model]
+  brief_layer: false
+  fields:
+    - {key: models, label: "Deployment models in scope", type: list, item_type: text, required: true}
+    - {key: differences, label: "Behaviour and support differences by model", type: markdown, required: true}
+    - {key: upgrade_path, label: "Upgrade path for customer-run deployments", type: markdown}
+  question_prompts:
+    - key: deployment
+      prompt: Which deployment models must this work in, and what changes when the customer runs it?
+      category: constraints
+      importance: high
+      fills: [models, differences]
+  instructions: >-
+    List the deployment models in scope, what behaves or is supported differently in each,
+    the upgrade path and version skew for customer-run deployments. No vendor names.
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [differences, upgrade_path]
+
+- id: enterprise.audit-logging
+  version: 1.0.0
+  title: Audit logging
+  description: Which actions are recorded for customer administrators and auditors, and how they get them.
+  applies_to: [enterprise.software]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: audit_logging}
+      - {op: contains, path: scope.capabilities, value: siem_export}
+  depends_on: [enterprise.security-review]
+  display_order: 850
+  section_ids: [enterprise-audit-logging]
+  brief_layer: false
+  fields:
+    - {key: audited_events, label: "Audited events", type: list, item_type: text, required: true}
+    - {key: access_export, label: "Access, search and export", type: markdown}
+    - {key: log_retention, label: "Log retention and integrity", type: markdown}
+  question_prompts:
+    - key: audited_events
+      prompt: Which actions must a customer administrator be able to trace to a person and a time?
+      category: security_privacy
+      importance: high
+      fills: [audited_events]
+  instructions: >-
+    List the audited events with actor, time and target, how administrators access,
+    search and export logs, retention and tamper resistance. No customer-specific events.
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [audited_events]
+    acceptance_tests: [audited_events]
+
+- id: enterprise.service-levels
+  version: 1.0.0
+  title: Service levels and support
+  description: Availability, support response and incident communication commitments and what backs them.
+  applies_to: [enterprise.software]
+  policy: optional
+  depends_on: [requirements.nonfunctional]
+  display_order: 860
+  section_ids: [enterprise-service-levels]
+  brief_layer: false
+  fields:
+    - {key: sla_commitments, label: "SLA commitments affected", type: markdown, required: true}
+    - {key: support_tiers, label: "Support tiers and response targets", type: markdown}
+    - {key: incident_comms, label: "Incident communication", type: markdown}
+  question_prompts:
+    - key: sla
+      prompt: Which availability or support commitments does this work depend on or change?
+      category: constraints
+      importance: medium
+      fills: [sla_commitments]
+  instructions: >-
+    State the SLA and support commitments affected, the measurements behind them,
+    credits as contract slots and incident communication. No invented percentages.
+
+- id: enterprise.change-management
+  version: 1.0.0
+  title: Customer change management
+  description: How large customer organisations learn about, prepare for and adopt this change.
+  applies_to: [enterprise.software]
+  policy: optional
+  depends_on: [release.rollout]
+  display_order: 870
+  section_ids: [enterprise-change-management]
+  brief_layer: false
+  fields:
+    - {key: admin_notice, label: "Administrator notice and controls", type: markdown, required: true}
+    - {key: enablement, label: "Training and enablement", type: markdown}
+    - {key: opt_in_window, label: "Opt-in or preview window", type: text}
+  question_prompts:
+    - key: admin_control
+      prompt: How much notice and control do customer administrators need before this reaches their users?
+      category: release_rollout
+      importance: medium
+      fills: [admin_notice, opt_in_window]
+  instructions: >-
+    Define administrator notice, preview or opt-in controls, enablement material and the
+    adoption measures for large organisations. No customer-specific plans.
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [opt_in_window]

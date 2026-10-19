@@ -4,7 +4,12 @@ recommend, confirm a revision, publish, and the inspector's read model.
 The composer itself is pure (oracle.modules.composer); this module does the reading and
 the writing around it. A confirmed revision records who decided and why; a material
 change records change events for the affected sections through ``oracle.changes`` (the
-review and trace lanes react there). Callers audit and commit.
+review and trace lanes react there). A working revision is a saved draft: it supersedes
+nothing and records no change; only confirming does. A person's decisions are
+cumulative: each revision starts from the newest one's. Callers audit and commit.
+
+Reads never write: built-in templates, modules and manifests are seeded at startup, when
+a company is created, and on the write paths (:func:`ensure_seeded`).
 """
 
 import re
@@ -14,14 +19,15 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import changes as change_hook
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.models import Tenant
 from oracle.modules import registry
-from oracle.modules.catalog import builtin_packs, default_pack_for
+from oracle.modules.catalog import builtin_packs, default_pack_for, pack_members
 from oracle.modules.composer import (
     Advisory,
     Changes,
@@ -29,6 +35,7 @@ from oracle.modules.composer import (
     Composition,
     CompositionProblem,
     Context,
+    Decision,
     ManifestEntry,
     Provenance,
     TemplateSection,
@@ -50,6 +57,7 @@ from oracle.templates.builtins import DEFAULT_TEMPLATE_FOR_KIND, ensure_builtins
 from oracle.templates.models import Template, TemplateVersion
 from oracle.templates.service import company_draft_defaults
 from oracle.templates.validation import check_template
+from oracle.tenancy import tenant_session, unscoped_session
 from oracle.v2.concurrency import VersionConflict
 from oracle.v2.contract import CONDITION_ROOTS, validate_contract
 from oracle.v2.models import CompositionRevision, DocumentComposition, ProductIntake
@@ -75,9 +83,26 @@ class Conflict(RuntimeError):
 
 
 async def ensure_seeded(db: AsyncSession) -> None:
-    """Built-in templates first (manifests attach to them), then modules and manifests."""
+    """Built-in templates first (manifests attach to them), then modules and manifests.
+    Write paths only (and startup, and company creation); reads never call it."""
     await ensure_builtins(db)
     await registry.ensure_builtin_modules(db)
+
+
+async def seed_all_companies() -> int:
+    """Seed every company's built-ins (at startup, so a release's new or upgraded
+    built-in modules reach every company before anyone reads). Returns how many changed."""
+    async with unscoped_session() as s:
+        tenant_ids = list((await s.scalars(select(Tenant.id).order_by(Tenant.created_at))).all())
+    changed = 0
+    for tenant_id in tenant_ids:
+        async with tenant_session(tenant_id) as s:
+            templates = await ensure_builtins(s)
+            modules = await registry.ensure_builtin_modules(s)
+            if templates or modules:
+                await s.commit()
+                changed += 1
+    return changed
 
 
 # --- inputs from an intake ------------------------------------------------------------
@@ -103,6 +128,58 @@ CAPABILITY_HINTS: dict[str, tuple[str, ...]] = {
     "customer_branding": ("brand", "branding", "white-label", "white label"),
     "continuous_improvement": ("continuous improvement", "learn from feedback"),
     "portability": ("portable", "portability"),
+    # Industry packs (O1h).
+    "seller_payouts": ("seller payouts", "payout schedule", "pay out sellers"),
+    "split_payments": ("split payments", "split payment", "funds split between"),
+    "physical_fulfilment": ("order fulfilment", "order fulfillment", "pick and pack"),
+    "shipping_logistics": ("shipping labels", "last-mile delivery", "shipment tracking"),
+    "returns_handling": ("returns policy", "return shipping", "reverse logistics"),
+    "catalogue_listings": ("product catalogue", "product catalog", "product listings"),
+    "listing_moderation": ("listing moderation", "prohibited items", "counterfeit"),
+    "kyc_aml": ("kyc", "anti-money laundering", "know your customer", "aml screening"),
+    "identity_verification": ("identity verification", "id verification", "verify identity"),
+    "stored_value_accounts": ("e-wallet", "stored value", "wallet balance", "prepaid account"),
+    "card_data": ("card data", "cardholder data", "card numbers", "tokenisation", "tokenization"),
+    "card_issuing": ("card issuing", "issue cards", "virtual cards"),
+    "card_acceptance": ("card acceptance", "accept card payments", "card-present payments"),
+    "cross_border_payments": ("cross-border", "international payments", "remittance"),
+    "multi_currency": ("multi-currency", "multiple currencies", "currency conversion"),
+    "radio_hardware": ("bluetooth", "wi-fi module", "radio module", "cellular modem"),
+    "safety_certification": ("safety certification", "product certification"),
+    "mains_powered": ("mains powered", "mains power"),
+    "ota_updates": ("over-the-air", "ota update", "ota updates", "firmware update"),
+    "embedded_firmware": ("embedded firmware", "microcontroller", "embedded software"),
+    "companion_app": ("companion app", "companion mobile app"),
+    "device_pairing": ("device pairing", "pair the device", "pairing flow"),
+    "device_cloud": ("device cloud", "device telemetry", "connected device"),
+    "role_permissions": ("role-based access", "rbac", "user permissions", "permission levels"),
+    "admin_console": ("admin console", "admin panel", "admin dashboard"),
+    "saas_integrations": ("third-party integrations", "native integration", "crm integration"),
+    "public_api": ("public api", "rest api", "developer api"),
+    "webhooks": ("webhook", "webhooks"),
+    "plan_packaging": ("pricing tiers", "plan tiers", "pricing and packaging", "feature gating"),
+    "seat_pricing": ("per seat", "per-seat", "seat-based"),
+    "self_serve_billing": ("self-serve billing", "self-serve checkout", "in-app upgrade"),
+    "data_import": ("data import", "csv import"),
+    "data_migration": ("data migration", "migrate existing data"),
+    "local_regulation": ("local regulations", "local ordinance", "vertical regulations"),
+    "trade_licensing": ("trade licence", "trade license", "licensed trades"),
+    "tax_records": ("sales tax", "tax filing", "tax records"),
+    "offline_use": ("works offline", "offline mode", "offline-first"),
+    "shared_devices": ("shared device", "shared tablet", "front-desk tablet"),
+    "low_connectivity": ("low connectivity", "poor connectivity", "low bandwidth"),
+    "appointment_booking": ("appointment booking", "online booking", "book appointments"),
+    "customer_messaging": ("text reminders", "sms reminders", "message customers"),
+    "in_person_payments": ("in-person payments", "card reader", "countertop terminal"),
+    "sso": ("sso", "single sign-on", "saml"),
+    "scim_provisioning": ("scim", "directory sync", "automated deprovisioning"),
+    "data_residency": ("data residency", "data sovereignty", "in-region hosting"),
+    "retention_controls": ("retention policy", "data retention", "legal hold"),
+    "self_hosted": ("self-hosted", "on-premises", "on-prem"),
+    "dedicated_deployment": ("single-tenant deployment", "dedicated instance", "private cloud"),
+    "air_gapped": ("air-gapped", "air gapped", "disconnected environment"),
+    "audit_logging": ("audit log", "audit logs", "audit trail"),
+    "siem_export": ("siem", "log export", "log streaming"),
 }
 
 
@@ -202,6 +279,28 @@ def _template_sections(body: str) -> list[TemplateSection]:
     ]
 
 
+def prior_decisions(
+    previous: CompositionRevision | None,
+) -> tuple[tuple[Decision, ...], tuple[str, ...] | None]:
+    """A revision's person decisions and, if a person set it, its order."""
+    if previous is None:
+        return (), None
+    modules = _modules(previous.modules)
+    decisions = tuple(
+        Decision(
+            key=m.key,
+            included=m.included,
+            reason=m.user_reason,
+            actor_id=str(m.overridden_by) if m.overridden_by else None,
+        )
+        for m in modules
+        if m.decided_by == "user"
+    )
+    included = sorted((m for m in modules if m.included), key=lambda m: m.order)
+    order = tuple(m.key for m in included) if any(m.ordered_by_user for m in included) else None
+    return decisions, order
+
+
 async def build(
     db: AsyncSession,
     data: ComposeIn,
@@ -209,7 +308,7 @@ async def build(
     document: Document | None = None,
     previous: CompositionRevision | None = None,
 ) -> Built:
-    await ensure_seeded(db)
+    """The composer's context. Reads only: a write path seeds the built-ins first."""
     catalog = await registry.load_catalog(db)
     policy, _ = await registry.read_policy(db)
 
@@ -294,8 +393,17 @@ async def build(
                 contracts[mkey] = validate_contract(pinned.contract)
             manifest[mkey] = ManifestEntry(tuple(row.section_ids), row.policy, row.module_version)
 
-    # Packs: given, else company default, else by category.
-    pack_ids = data.packs or policy.default_packs or [default_pack_for(inputs.get("category"))]
+    # Packs: given, else the previous revision's (a decision too), else company default,
+    # else by category.
+    previous_packs = []
+    if previous is not None and not data.packs:
+        previous_packs = list(((previous.inputs or {}).get("policy") or {}).get("packs") or [])
+    pack_ids = (
+        data.packs
+        or previous_packs
+        or policy.default_packs
+        or [default_pack_for(inputs.get("category"))]
+    )
     known = builtin_packs()
     if unknown := sorted(p for p in pack_ids if p not in known):
         raise CompositionRefused(
@@ -305,13 +413,7 @@ async def build(
                 )
             ]
         )
-    packs: dict[str, tuple[str, ...]] = {}
-    for pid in pack_ids:
-        listed = [
-            k for k in known[pid].modules if k in contracts and pid in contracts[k].applies_to
-        ]
-        extra = sorted(k for k, c in contracts.items() if pid in c.applies_to and k not in listed)
-        packs[pid] = tuple(listed + extra)
+    packs = {pid: pack_members(known[pid], contracts) for pid in pack_ids}
     inputs["policy"] = {
         **(inputs.get("policy") or {}),
         "packs": list(pack_ids),
@@ -351,6 +453,7 @@ async def build(
         advisory={k: Advisory(a.score, a.rationale) for k, a in data.advisory.items()},
         field_values=data.field_values,
     )
+    ctx.prior_decisions, ctx.prior_order = prior_decisions(previous)
     return Built(ctx, typed, template, template_version, intake)
 
 
@@ -408,8 +511,8 @@ async def recommend(
     previous = None
     if document is not None:
         composition = await _composition(db, document.id)
-        if composition is not None and composition.current_revision is not None:
-            previous = await _revision(db, composition.id, composition.current_revision)
+        if composition is not None:
+            previous = await _head(db, composition.id)
     built = await build(db, data, document=document, previous=previous)
     comp = compose(built.ctx, changes_of(data, role, actor_id, None))
     return recommendation_out(built, comp, document)
@@ -432,6 +535,16 @@ async def _revision(
             CompositionRevision.composition_id == composition_id,
             CompositionRevision.number == number,
         )
+    )
+
+
+async def _head(db: AsyncSession, composition_id: uuid.UUID) -> CompositionRevision | None:
+    """The newest revision, whatever its status: the next one starts from it."""
+    return await db.scalar(
+        select(CompositionRevision)
+        .where(CompositionRevision.composition_id == composition_id)
+        .order_by(CompositionRevision.number.desc())
+        .limit(1)
     )
 
 
@@ -480,16 +593,29 @@ async def confirm(
     actor: Any,
     actor_id: uuid.UUID | None,
 ) -> tuple[CompositionRevision, RevisionDiff]:
-    """Confirm (or save as working) a composition revision. The caller audits and commits.
+    """Confirm a composition revision, or save it as a working draft. The caller audits
+    and commits.
+
+    Every revision starts from the newest one (``base_revision``), so a person's earlier
+    decisions carry. A working revision supersedes nothing and records no change event;
+    confirming supersedes the revision in force (and any drafts since), becomes the
+    revision in force, and records the change against the revision it replaces.
 
     Raises :class:`CompositionRefused` (422), :class:`VersionConflict` (409).
     """
+    await ensure_seeded(db)
     composition = await _composition(db, document.id)
-    current = composition.current_revision if composition else None
-    if data.base_revision != current:
-        raise VersionConflict(current)
-    previous = await _revision(db, composition.id, current) if composition and current else None
-    built = await build(db, data, document=document, previous=previous)
+    head = await _head(db, composition.id) if composition else None
+    head_number = head.number if head else None
+    if data.base_revision != head_number:
+        raise VersionConflict(head_number)
+    in_force_number = composition.current_revision if composition else None
+    in_force = (
+        await _revision(db, composition.id, in_force_number)
+        if composition and in_force_number
+        else None
+    )
+    built = await build(db, data, document=document, previous=head)
     reason = data.reason.strip()
     comp = compose(built.ctx, changes_of(data, role, actor_id, reason))
     if not comp.valid:
@@ -502,14 +628,8 @@ async def confirm(
             await db.flush()
         except IntegrityError as e:
             raise VersionConflict() from e
-    number = (
-        await db.scalar(
-            select(func.max(CompositionRevision.number)).where(
-                CompositionRevision.composition_id == composition.id
-            )
-        )
-        or 0
-    ) + 1
+    number = (head_number or 0) + 1
+    confirming = data.status == "confirmed"
     revision = CompositionRevision(
         composition_id=composition.id,
         number=number,
@@ -519,11 +639,32 @@ async def confirm(
         decided_by=actor_id,
         decided_at=datetime.now(UTC),
         reason=reason,
-        parent_number=current,
+        # A confirmed revision follows the one in force (its diff is what changed for
+        # readers); a draft follows the revision it was started from.
+        parent_number=in_force_number if confirming else head_number,
     )
     db.add(revision)
-    if previous is not None and previous.status in ("working", "confirmed"):
-        previous.status = "superseded"
+    change = diff(_modules(in_force.modules) if in_force else None, comp.modules)
+    if not confirming:
+        try:
+            await db.flush()
+        except IntegrityError as e:
+            raise VersionConflict() from e
+        return revision, change
+
+    if in_force is not None and in_force.status == "confirmed":
+        in_force.status = "superseded"
+    drafts = (
+        await db.scalars(
+            select(CompositionRevision).where(
+                CompositionRevision.composition_id == composition.id,
+                CompositionRevision.status == "working",
+                CompositionRevision.number > (in_force_number or 0),
+            )
+        )
+    ).all()
+    for draft in drafts:
+        draft.status = "superseded"
     composition.current_revision = number
     composition.template = comp.template
     composition.template_version = comp.template_version
@@ -532,18 +673,17 @@ async def confirm(
     except IntegrityError as e:
         raise VersionConflict() from e
 
-    change = diff(_modules(previous.modules) if previous else None, comp.modules)
     await change_hook.record_change(
         db,
         "composition_revision",
-        cause="composition_confirmed" if data.status == "confirmed" else "composition_saved",
+        cause="composition_confirmed",
         actor=actor,
         subject_id=revision.id,
         subject_ref=f"{document.slug}#composition@{number}",
         document_id=document.id,
         data={
             "number": number,
-            "parent_number": current,
+            "parent_number": in_force_number,
             "status": data.status,
             **change.model_dump(mode="json"),
         },
@@ -551,6 +691,49 @@ async def confirm(
     if change.material:
         await _record_section_changes(db, document, revision, change, actor)
     return revision, change
+
+
+async def record_policy_change(
+    db: AsyncSession, before: Any, after: Any, actor: Any
+) -> list[uuid.UUID]:
+    """A company module policy change, recorded once for each document's composition in
+    force: what may now be mandatory, optional or disabled there changed. Recording
+    only; a person re-confirms the composition to apply it. Returns the revision ids."""
+    changed = {
+        name: (sorted(set(getattr(after, name)) - set(getattr(before, name))),
+               sorted(set(getattr(before, name)) - set(getattr(after, name))))
+        for name in ("required", "optional", "disabled", "default_packs")
+    }  # fmt: skip
+    if not any(added or removed for added, removed in changed.values()):
+        return []
+    data: dict[str, Any] = {}
+    for name, (added, removed) in changed.items():
+        data[f"added_{name}"] = added
+        data[f"removed_{name}"] = removed
+    rows = (
+        await db.execute(
+            select(CompositionRevision, Document)
+            .join(
+                DocumentComposition,
+                (DocumentComposition.id == CompositionRevision.composition_id)
+                & (DocumentComposition.current_revision == CompositionRevision.number),
+            )
+            .join(Document, Document.id == DocumentComposition.document_id)
+            .order_by(Document.slug)
+        )
+    ).all()
+    for revision, document in rows:
+        await change_hook.record_change(
+            db,
+            "composition_revision",
+            cause="module_policy_changed",
+            actor=actor,
+            subject_id=revision.id,
+            subject_ref=f"{document.slug}#composition@{revision.number}",
+            document_id=document.id,
+            data={"number": revision.number, **data},
+        )
+    return [revision.id for revision, _ in rows]
 
 
 async def _record_section_changes(
@@ -691,6 +874,7 @@ def _summary_of(
 
 
 async def inspect(db: AsyncSession, document: Document, *, role: str) -> InspectorOut:
+    """The inspector's read model. Reads only."""
     composition = await _composition(db, document.id)
     number, present = await _latest_sections(db, document)
     revisions: list[CompositionRevision] = []
@@ -710,25 +894,61 @@ async def inspect(db: AsyncSession, document: Document, *, role: str) -> Inspect
         for r in reversed(revisions)
     ]
     current_row = by_number.get(composition.current_revision) if composition else None
+    head_row = revisions[-1] if revisions else None
+    working_row = head_row if head_row is not None and head_row.status == "working" else None
+    catalog = await registry.load_catalog(db)
+    working = (
+        _detail(working_row, by_number, catalog, composition, present, number)
+        if working_row is not None
+        else None
+    )
 
     if current_row is None:
-        rec = await recommend(db, ComposeIn(), document=document, role=role, actor_id=None)
-        claimed = {s for m in rec.modules if m.included for s in m.section_ids}
+        try:
+            rec = await recommend(db, ComposeIn(), document=document, role=role, actor_id=None)
+        except NotFound:
+            rec = None  # the template is gone (or not seeded yet): nothing to recommend
+        claimed = {s for m in rec.modules if m.included for s in m.section_ids} if rec else set()
         return InspectorOut(
             document_id=document.id,
             slug=document.slug,
             legacy=True,
             composition_id=composition.id if composition else None,
             lock_version=composition.lock_version if composition else None,
+            head_revision=head_row.number if head_row else None,
+            working=working,
             recommendation=rec,
             revisions=summaries,
             sections={"version": number, "unmapped": [s for s in present if s not in claimed]},
         )
 
-    catalog = await registry.load_catalog(db)
+    current = _detail(current_row, by_number, catalog, composition, present, number)
+    claimed = {s for m in current.modules if m.included for s in m.section_ids}
+    return InspectorOut(
+        document_id=document.id,
+        slug=document.slug,
+        legacy=False,
+        composition_id=composition.id,
+        lock_version=composition.lock_version,
+        head_revision=head_row.number if head_row else None,
+        current=current,
+        working=working,
+        revisions=summaries,
+        sections={"version": number, "unmapped": [s for s in present if s not in claimed]},
+    )
+
+
+def _detail(
+    row: CompositionRevision,
+    by_number: dict[int, CompositionRevision],
+    catalog: registry.Catalog,
+    composition: DocumentComposition,
+    present: list[str],
+    number: int | None,
+) -> RevisionDetail:
     modules: list[InspectedModule] = []
     present_set = set(present)
-    for m in _modules(current_row.modules):
+    for m in _modules(row.modules):
         entry = catalog.entries.get(m.key)
         inspected = InspectedModule(**m.model_dump())
         inspected.sections_present = [s for s in m.section_ids if s in present_set]
@@ -752,29 +972,19 @@ async def inspect(db: AsyncSession, document: Document, *, role: str) -> Inspect
                 entry.effective.version if newer else entry.upgrade_available
             )
         modules.append(inspected)
-    claimed = {s for m in modules if m.included for s in m.section_ids}
-    parent = by_number.get(current_row.parent_number) if current_row.parent_number else None
-    head = _summary_of(current_row, parent)
-    inputs = CompositionInputs.model_validate(current_row.inputs or {})
-    current = RevisionDetail(
+    parent = by_number.get(row.parent_number) if row.parent_number else None
+    head = _summary_of(row, parent)
+    inputs = CompositionInputs.model_validate(row.inputs or {})
+    template = inputs.template or {}
+    return RevisionDetail(
         **head.model_dump(),
-        lock_version=current_row.lock_version,
-        template=composition.template,
-        template_version=composition.template_version,
+        lock_version=row.lock_version,
+        template=template.get("key", composition.template),
+        template_version=template.get("version", composition.template_version),
         packs=list((inputs.policy or {}).get("packs") or []),
         inputs=inputs,
         modules=modules,
         summary=summary(modules),
-    )
-    return InspectorOut(
-        document_id=document.id,
-        slug=document.slug,
-        legacy=False,
-        composition_id=composition.id,
-        lock_version=composition.lock_version,
-        current=current,
-        revisions=summaries,
-        sections={"version": number, "unmapped": [s for s in present if s not in claimed]},
     )
 
 
@@ -790,6 +1000,9 @@ __all__ = [
     "infer_capabilities",
     "inspect",
     "on_document_version_change",
+    "prior_decisions",
     "publish",
     "recommend",
+    "record_policy_change",
+    "seed_all_companies",
 ]

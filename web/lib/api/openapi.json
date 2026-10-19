@@ -12585,7 +12585,7 @@
           "modules"
         ],
         "summary": "List Module Catalog",
-        "description": "Every module the company can compose with (built-ins seeded on first use).",
+        "description": "Every module the company can compose with.",
         "operationId": "list_module_catalog",
         "security": [
           {
@@ -12820,7 +12820,7 @@
           "modules"
         ],
         "summary": "List Module Packs",
-        "description": "The seeded packs: General Tech Startup and Multi-tenant AI Agent Platform.",
+        "description": "The built-in packs: General Tech Startup, the Multi-tenant AI Agent Platform and the\nindustry packs (O1h), each with its modules in order and their policy tier.",
         "operationId": "list_module_packs",
         "responses": {
           "200": {
@@ -12882,6 +12882,7 @@
           "modules"
         ],
         "summary": "Put Module Policy",
+        "description": "Set the company module policy. Each document's composition in force gets a change\nevent saying what changed; a person re-confirms it to apply the policy.",
         "operationId": "put_module_policy",
         "requestBody": {
           "content": {
@@ -13142,7 +13143,7 @@
           "modules"
         ],
         "summary": "Confirm Composition Revision",
-        "description": "Confirm a composition revision (or save it as working): who decided and why.\nMandatory modules and dependencies are never removed silently; a material change\nrecords change events for the affected sections.",
+        "description": "Confirm a composition revision, or save it as a working draft: who decided and\nwhy. It starts from the newest revision, so earlier decisions carry. Mandatory\nmodules and dependencies are never removed silently. Confirming puts it in force and\nrecords change events for the affected sections; a working draft supersedes nothing\nand records none.",
         "operationId": "confirm_composition_revision",
         "security": [
           {
@@ -16757,6 +16758,11 @@
               }
             ],
             "title": "User Reason"
+          },
+          "ordered_by_user": {
+            "type": "boolean",
+            "title": "Ordered By User",
+            "default": false
           },
           "required_review_role": {
             "type": "string",
@@ -21892,6 +21898,11 @@
             ],
             "title": "User Reason"
           },
+          "ordered_by_user": {
+            "type": "boolean",
+            "title": "Ordered By User",
+            "default": false
+          },
           "required_review_role": {
             "type": "string",
             "title": "Required Review Role",
@@ -21993,7 +22004,28 @@
             ],
             "title": "Lock Version"
           },
+          "head_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Revision"
+          },
           "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "working": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/RevisionDetail"

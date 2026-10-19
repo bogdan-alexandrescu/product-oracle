@@ -20,6 +20,7 @@ from oracle.auth.models import User
 from oracle.auth.service import create_api_token, create_user
 from oracle.db import dispose_engine
 from oracle.models import Tenant
+from oracle.modules.service import ensure_seeded
 from oracle.templates.defaults import ensure_default_template
 from oracle.tenancy import tenant_session, unscoped_session
 
@@ -63,6 +64,8 @@ async def seed(
         # The token acts as the admin, so per-user calls (`oracle sync`) work with it.
         _, raw = await create_api_token(s, token_name, user_id=user.id)
         await ensure_default_template(s)
+        # Built-in templates, modules and manifests: reads never seed them.
+        await ensure_seeded(s)
         await s.commit()
 
     return SeedResult(

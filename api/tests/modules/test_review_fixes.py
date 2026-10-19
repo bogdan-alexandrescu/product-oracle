@@ -91,10 +91,13 @@ async def test_decisions_are_cumulative_across_revisions(client):
     assert m["platform.brand-governance"]["included"]
     # The diff records only what this revision decided.
     diff = third["current"]["diff"]
-    assert diff["added"] == ["platform.brand-governance"] and diff["removed"] == []
+    # (brand governance brings its dependency, configuration precedence, along).
+    assert diff["added"] == ["platform.brand-governance", "platform.config-precedence"]
+    assert diff["removed"] == []
     assert seen == [
         ("composition_revision", f"{SLUG}#composition@3"),
         ("document_section", f"{SLUG}#brand-governance"),
+        ("document_section", f"{SLUG}#config-precedence"),
     ]
 
     # A custom order, then a later change: both the addition and the order survive.
@@ -116,7 +119,8 @@ async def test_decisions_are_cumulative_across_revisions(client):
     assert m["platform.brand-governance"]["user_reason"] == "Customers brand agents"
     assert not m["agents.knowledge-memory"]["included"]
     assert m["platform.cost-quotas"]["included"]
-    assert fifth["current"]["diff"]["added"] == ["platform.cost-quotas"]
+    # Quotas and its dependency (value and cost economics); nothing else.
+    assert fifth["current"]["diff"]["added"] == ["economics.value", "platform.cost-quotas"]
     assert fifth["current"]["diff"]["removed"] == []
 
     # Reading recommends from the same decisions.
