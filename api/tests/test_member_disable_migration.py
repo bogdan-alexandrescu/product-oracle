@@ -144,6 +144,11 @@ def test_upgrade_lapses_approvals_of_members_demoted_before_it(scratch_db):
     }
     for vid in ("a1", "b1"):
         assert versions[ids[vid]] == (True, None, True, ids["demoted"], REASON)
+    # Kept in the version's lapse history too (a new approval never clears it).
+    [(history,)] = _run("SELECT approval_lapses FROM document_versions WHERE id = :i", i=ids["a1"])
+    [entry] = history
+    assert entry["approved_by"] == str(ids["demoted"]) and entry["reason"] == REASON
+    assert entry["approved_at"] and entry["lapsed_at"]
     assert versions[ids["b2"]] == (False, ids["approver"], False, None, None)
 
     status = dict(_run("SELECT id, status FROM documents"))

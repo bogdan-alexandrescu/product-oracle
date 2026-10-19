@@ -4147,6 +4147,27 @@ export interface components {
             /** Revoked At */
             revoked_at?: string | null;
         };
+        /**
+         * ApprovalLapse
+         * @description A version approval that lapsed for good (C2), kept after a new approval.
+         */
+        ApprovalLapse: {
+            /** Approved At */
+            approved_at?: string | null;
+            /** Approved By */
+            approved_by?: string | null;
+            /** Approved Token Id */
+            approved_token_id?: string | null;
+            /** Approved Grant Id */
+            approved_grant_id?: string | null;
+            /**
+             * Lapsed At
+             * Format: date-time
+             */
+            lapsed_at: string;
+            /** Reason */
+            reason?: string | null;
+        };
         /** ApproveOut */
         ApproveOut: {
             /**
@@ -10395,6 +10416,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Approval Lapses
+             * @default []
+             */
+            approval_lapses: components["schemas"]["ApprovalLapse"][];
             /**
              * Front Matter
              * @default {}

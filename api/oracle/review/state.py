@@ -488,6 +488,22 @@ async def counting_history(
     return hist, lapsed
 
 
+def lapse_entry(version: DocumentVersion, at: datetime, reason: str) -> dict[str, str | None]:
+    """The record of a version approval that lapses (``approval_lapses``)."""
+
+    def text(value: object) -> str | None:
+        return None if value is None else str(value)
+
+    return {
+        "approved_at": version.approved_at.isoformat() if version.approved_at else None,
+        "approved_by": text(version.approved_by),
+        "approved_token_id": text(version.approved_token_id),
+        "approved_grant_id": text(version.approved_grant_id),
+        "lapsed_at": at.isoformat(),
+        "reason": reason,
+    }
+
+
 async def lapse_approvals(
     db: AsyncSession,
     principal: "Principal | None",
@@ -551,6 +567,7 @@ async def lapse_approvals(
         )
     )
     for v in versions:
+        v.approval_lapses = [*(v.approval_lapses or []), lapse_entry(v, at, reason)]
         v.approval_lapsed_at = at
         v.approval_lapsed_by = v.approved_by
         v.approval_lapse_reason = reason

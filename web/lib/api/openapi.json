@@ -15124,6 +15124,80 @@
         ],
         "title": "ApiTokenOut"
       },
+      "ApprovalLapse": {
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "approved_token_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Token Id"
+          },
+          "approved_grant_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Grant Id"
+          },
+          "lapsed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Lapsed At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lapsed_at"
+        ],
+        "title": "ApprovalLapse",
+        "description": "A version approval that lapsed for good (C2), kept after a new approval."
+      },
       "ApproveOut": {
         "properties": {
           "document_id": {
@@ -32694,6 +32768,14 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "approval_lapses": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalLapse"
+            },
+            "type": "array",
+            "title": "Approval Lapses",
+            "default": []
           },
           "front_matter": {
             "additionalProperties": true,

@@ -904,3 +904,26 @@ async def test_a_disabled_row_does_not_block_the_same_email_in_another_company(c
         (await s.get(User, ids[second])).disabled_at = datetime.now(UTC)
         await s.commit()
     assert await authenticate_user(email, "pw") is None
+
+
+async def test_a_new_approval_keeps_the_lapsed_history(client):
+    from tests.test_review_v2_security_2 import approved
+    from tests.test_review_v2_security_3 import member_token
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    token_id, agent = await member_token(ctx, pm.user_id, "pm-agent")
+    await approved(client, ctx, headers=agent)
+    assert (await client.delete(f"/v1/api-tokens/{token_id}", headers=ctx.auth)).status_code == 204
+    # Someone else approves again: the lapse is history, not gone.
+    await approved(client, ctx)
+    body = (await client.get(f"/v1/documents/{DOC}/versions/1", headers=ctx.auth)).json()
+    assert body["approved_at"] is not None
+    [lapse] = body["approval_lapses"]
+    assert lapse["approved_by"] == str(pm.user_id)
+    assert lapse["approved_token_id"] == str(token_id)
+    assert lapse["lapsed_at"] and lapse["approved_at"] and "revoked" in lapse["reason"]
+    # The owner still sees the token's version approval, lapsed.
+    rows = (await client.get(f"/v1/api-tokens/{token_id}/approvals", headers=ctx.auth)).json()
+    [version] = [r for r in rows if r["kind"] == "version"]
+    assert version["lapsed_at"] is not None and version["approver_id"] == str(pm.user_id)

@@ -1,16 +1,26 @@
 """Removing a member disables them; approvals lapse for good and name their token (C2)
 
-Additive only. ``users`` gains ``disabled_at`` and ``disabled_by``: a disabled member
-keeps their row (every ``*_by`` reference and the verdict history keep the name) but no
-sign-in path accepts them, and an owner can restore them. ``section_reviews`` gains
-``token_id`` (the API token that gave the verdict, when a token acted) and
-``lapsed_at`` / ``lapse_reason``: an approval that lapsed (its approver demoted below
-approver or disabled, its token revoked) is marked for good, so a re-promotion or a
+Additive, plus one backfill. ``users`` gains ``disabled_at`` and ``disabled_by``: a
+disabled member keeps their row (every ``*_by`` reference and the verdict history keep
+the name) but no sign-in path accepts them, and an owner can restore them; and
+``sessions_valid_after``: session cookies signed before it are refused (set by a
+disable and by a restore, so a disable ends every session and a restored member signs
+in fresh). ``section_reviews`` gains ``token_id`` (the API token that gave the verdict,
+when a token acted), ``grant_id`` (the MCP OAuth grant, when one did) and ``lapsed_at``
+/ ``lapse_reason``: an approval that lapsed (its approver demoted below approver or
+disabled, its token or grant revoked) is marked for good, so a re-promotion or a
 restore never revives it. ``document_versions`` gains the same for the version
-approval: ``approved_token_id``, and ``approval_lapsed_at`` / ``approval_lapsed_by`` /
-``approval_lapse_reason`` (the lapsed approval moves there; ``approved_at`` is cleared).
-``audit_events`` gains ``actor_token_id``: the API token an actor acted through, also
-when it acts for a user. See docs/product-oracle-v2/08-review-and-publish.md.
+approval: ``approved_token_id``, ``approved_grant_id``, and ``approval_lapsed_at`` /
+``approval_lapsed_by`` / ``approval_lapse_reason`` (the lapsed approval moves there;
+``approved_at`` is cleared) and ``approval_lapses``, the history a new approval keeps.
+``audit_events`` gains ``actor_token_id`` and ``actor_grant_id``: the API token or
+OAuth grant an actor acted through, also when it acts for a user.
+``member_follow_ups`` holds the provider revokes and runtime cancels a disable owes,
+made after it commits and retried by the tick.
+
+Backfill: approvals given by people already below approver lapse for good (reason
+"demoted before this change"), as a demotion now lapses them; before, a re-promotion
+would have revived them. See docs/product-oracle-v2/08-review-and-publish.md.
 
 The integrator re-chains this revision onto the head in merge order.
 
@@ -23,6 +33,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "0014_member_disable"
 down_revision: str | None = "0014_review"
@@ -64,6 +75,15 @@ def upgrade() -> None:
     )
     op.add_column("document_versions", sa.Column("approval_lapsed_by", sa.Uuid(), nullable=True))
     op.add_column("document_versions", sa.Column("approval_lapse_reason", sa.Text(), nullable=True))
+    op.add_column(
+        "document_versions",
+        sa.Column(
+            "approval_lapses",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default="[]",
+            nullable=False,
+        ),
+    )
     op.create_index(
         op.f("ix_document_versions_approved_token_id"),
         "document_versions",
@@ -142,6 +162,11 @@ def _lapse_approvals_of_demoted() -> None:
         sa.text(
             "UPDATE document_versions v SET approval_lapsed_at = now(), "
             "approval_lapsed_by = v.approved_by, approval_lapse_reason = :reason, "
+            "approval_lapses = v.approval_lapses || jsonb_build_array(jsonb_build_object("
+            "'approved_at', to_jsonb(v.approved_at), 'approved_by', CAST(v.approved_by AS text), "
+            "'approved_token_id', CAST(v.approved_token_id AS text), "
+            "'approved_grant_id', CAST(v.approved_grant_id AS text), "
+            "'lapsed_at', to_jsonb(now()), 'reason', CAST(:reason AS text))), "
             "approved_at = NULL, approved_by = NULL "
             "FROM users u WHERE u.id = v.approved_by AND u.tenant_id = v.tenant_id "
             f"AND v.approved_at IS NOT NULL AND {_NOT_AN_APPROVER} "
@@ -212,6 +237,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_document_versions_approved_grant_id"), table_name="document_versions")
     op.drop_column("document_versions", "approved_grant_id")
     op.drop_index(op.f("ix_document_versions_approved_token_id"), table_name="document_versions")
+    op.drop_column("document_versions", "approval_lapses")
     op.drop_column("document_versions", "approval_lapse_reason")
     op.drop_column("document_versions", "approval_lapsed_by")
     op.drop_column("document_versions", "approval_lapsed_at")

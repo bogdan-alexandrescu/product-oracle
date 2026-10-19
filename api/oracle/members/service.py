@@ -676,32 +676,68 @@ async def token_approvals(
     who = or_(
         DocumentVersion.approved_token_id == token_id, DocumentVersion.approved_by == token_id
     )
-    # A lapsed version approval keeps its token (approved_token_id), and a user-less
-    # token's lapsed approval names it as the approver it was.
+    # A lapsed version approval is kept in approval_lapses (a new approval clears
+    # approval_lapsed_*), naming its token, or a user-less token as the approver.
+    tid = str(token_id)
+    in_history = or_(
+        DocumentVersion.approval_lapses.contains([{"approved_token_id": tid}]),
+        DocumentVersion.approval_lapses.contains([{"approved_by": tid}]),
+    )
     lapsed_who = DocumentVersion.approval_lapsed_by == token_id
     for version, slug in (
         await session.execute(
             select(DocumentVersion, Document.slug)
             .join(Document, Document.id == DocumentVersion.document_id)
-            .where(or_(who, lapsed_who))
+            .where(or_(who, lapsed_who, in_history))
             .order_by(DocumentVersion.created_at)
         )
     ).all():
-        out.append(
-            {
-                "kind": "version",
-                "document": slug,
-                "version": version.number,
-                "section_key": None,
-                "review_id": None,
-                "approver_id": version.approved_by or version.approval_lapsed_by,
-                "approved_at": version.approved_at,
-                "lapsed_at": version.approval_lapsed_at if version.approved_at is None else None,
-                "lapse_reason": version.approval_lapse_reason
-                if version.approved_at is None
-                else None,
-            }
+        base = {
+            "kind": "version",
+            "document": slug,
+            "version": version.number,
+            "section_key": None,
+            "review_id": None,
+        }
+        lapses = [
+            e
+            for e in version.approval_lapses or []
+            if tid in (e.get("approved_token_id"), e.get("approved_by"))
+        ]
+        for e in lapses:
+            out.append(
+                {
+                    **base,
+                    "approver_id": e.get("approved_by"),
+                    "approved_at": e.get("approved_at"),
+                    "lapsed_at": e.get("lapsed_at"),
+                    "lapse_reason": e.get("reason"),
+                }
+            )
+        current = version.approved_at is not None and (
+            version.approved_token_id == token_id or version.approved_by == token_id
         )
+        if current:
+            out.append(
+                {
+                    **base,
+                    "approver_id": version.approved_by,
+                    "approved_at": version.approved_at,
+                    "lapsed_at": None,
+                    "lapse_reason": None,
+                }
+            )
+        elif not lapses and version.approved_at is None and version.approval_lapsed_at:
+            # Lapsed before the history was kept.
+            out.append(
+                {
+                    **base,
+                    "approver_id": version.approval_lapsed_by,
+                    "approved_at": None,
+                    "lapsed_at": version.approval_lapsed_at,
+                    "lapse_reason": version.approval_lapse_reason,
+                }
+            )
     return out
 
 

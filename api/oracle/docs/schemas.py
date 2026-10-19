@@ -138,7 +138,20 @@ class SectionOut(ORM):
     notes: str | None = None
 
 
+class ApprovalLapse(BaseModel):
+    """A version approval that lapsed for good (C2), kept after a new approval."""
+
+    approved_at: datetime | None = None
+    approved_by: uuid.UUID | None = None
+    approved_token_id: uuid.UUID | None = None
+    approved_grant_id: uuid.UUID | None = None
+    lapsed_at: datetime
+    reason: str | None = None
+
+
 class VersionOut(VersionSummary):
+    # Every approval of this version that lapsed, oldest first.
+    approval_lapses: list[ApprovalLapse] = []
     front_matter: dict[str, Any] = {}
     sections: list[SectionOut] = []
     citations: list[CitationOut] = []

@@ -297,6 +297,7 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
     return VersionOut(
         **VersionSummary.model_validate(version).model_dump(exclude={"source"}),
         source=source,
+        approval_lapses=version.approval_lapses or [],
         front_matter=version.front_matter,
         sections=[
             SectionOut.model_validate(s).model_copy(
