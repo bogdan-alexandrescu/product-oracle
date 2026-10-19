@@ -44,3 +44,27 @@ export async function selectText(page: Page, key: string, text: string) {
     { key, text },
   );
 }
+
+/** The version view's section strip (one section is open at a time). */
+export function sectionStrip(page: Page): Locator {
+  return page.getByRole("navigation", { name: "Sections" }).filter({ visible: true });
+}
+
+/** Opens a section of the current Brief / Full mode from the strip, and waits for its panel. */
+export async function openSection(page: Page, key: string): Promise<Locator> {
+  await sectionStrip(page).locator(`a[data-strip-key="${key}"]`).click();
+  const s = section(page, key);
+  await expect(s).toBeVisible();
+  return s;
+}
+
+/** The review panel's comments, feedback and resolutions for every section, not only the open one. */
+export async function showAll(page: Page) {
+  await page.getByTestId("inspector-scope").filter({ visible: true }).getByRole("button", { name: "All", exact: true }).click();
+}
+
+/** Picks an item from the open section's ⋯ menu. */
+export async function sectionAction(scope: Locator, heading: string, item: string | RegExp) {
+  await scope.getByRole("button", { name: `Actions for ${heading}` }).click();
+  await scope.getByRole("menuitem", { name: item }).click();
+}

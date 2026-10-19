@@ -149,17 +149,23 @@ export function TabBar<T extends string>({
   );
 }
 
-/** A secondary button that opens a small panel of actions; Escape or a click outside closes it. */
+/**
+ * A secondary button that opens a small panel of actions; Escape or a click outside closes
+ * it. `iconOnly` shows just the icon (the label becomes its accessible name); children may
+ * be a function that gets `close`, for items that act and then close the panel.
+ */
 export function Menu({
   label,
   icon,
   children,
   align = "end",
+  iconOnly = false,
 }: {
   label: string;
   icon?: Parameters<typeof Button>[0]["icon"];
-  children: ReactNode;
+  children: ReactNode | ((close: () => void) => ReactNode);
   align?: "start" | "end";
+  iconOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -178,8 +184,15 @@ export function Menu({
   }, [open]);
   return (
     <div ref={root} className="relative">
-      <Button icon={icon} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        {label}
+      <Button
+        icon={icon}
+        aria-expanded={open}
+        aria-label={iconOnly ? label : undefined}
+        title={iconOnly ? label : undefined}
+        className={iconOnly ? "w-8 px-0" : ""}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {!iconOnly && label}
       </Button>
       {open && (
         <div
@@ -187,7 +200,7 @@ export function Menu({
             align === "end" ? "right-0" : "left-0"
           }`}
         >
-          {children}
+          {typeof children === "function" ? children(() => setOpen(false)) : children}
         </div>
       )}
     </div>

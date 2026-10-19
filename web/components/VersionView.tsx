@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
@@ -12,6 +12,7 @@ import { DocCrumb } from "@/components/DocToolbar";
 import {
   Button,
   Chip,
+  Empty,
   Icon,
   InfoTip,
   Inspector,
@@ -57,11 +58,32 @@ function subtree(sections: SectionOut[], key: string): SectionOut[] {
   }
   return out;
 }
-type Tab = "comments" | "feedback" | "resolutions" | "reports" | "jobs";
+
+/** The section a URL hash names: #problem, or the older #s-problem (roadmap and feedback links). */
+function keyFromHash(hash: string | null, keys: ReadonlySet<string>): string | null {
+  if (!hash) return null;
+  let h = hash.replace(/^#/, "");
+  try {
+    h = decodeURIComponent(h);
+  } catch {
+    // A malformed escape: match it as written.
+  }
+  if (keys.has(h)) return h;
+  if (h.startsWith("s-") && keys.has(h.slice(2))) return h.slice(2);
+  return null;
+}
+
+type Tab = "comments" | "feedback" | "resolutions" | "sources" | "reports" | "jobs";
+type Scope = "section" | "all";
 
 function isTyping(target: EventTarget | null) {
   const el = target as HTMLElement | null;
   return !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+}
+
+/** A plain click on a link: the page handles it (a modified click opens a tab as usual). */
+function plainClick(e: MouseEvent) {
+  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 }
 
 /** Reads the current text selection when it lies inside a single section body. */
@@ -82,6 +104,11 @@ function readSelection(): Selection | null {
   };
 }
 
+/**
+ * A version under review, ONE SECTION AT A TIME (I3, 2026-10-19): the strip picks the open
+ * section (kept in the URL hash), the panel shows it with one review bar and its ⋯ tools,
+ * and the inspector shows the open section's comments and feedback first.
+ */
 export function VersionView({ doc, n }: { doc: string; n: number }) {
   const router = useRouter();
   const { me, role } = useMe();
@@ -104,31 +131,53 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const [composing, setComposing] = useState<Selection | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("comments");
+  const [scope, setScope] = useState<Scope>("section");
   const [refreshKey, setRefreshKey] = useState(0);
   // O1f: the brief or the whole version; the choice is remembered per user. A comment
   // on a section the brief does not show switches this page to the full document only.
   const [savedView, saveView] = useDocumentView();
   const [viewOverride, setViewOverride] = useState<DocumentView | null>(null);
-  // A #s-<key> link to a detail section (a roadmap's link to a PRD feature) opens this
-  // version on the full document, until the reader picks a view.
-  const [hashLink, setHashLink] = useState<{ n: number; key: string } | null>(null);
+  // The open section, as the URL hash names it (#problem). Null: the first unreviewed one.
+  const [hash, setHash] = useState<string | null>(null);
+  // A link to a detail section (a roadmap's link to a PRD feature) opens this version on
+  // the full document, until the reader picks a view.
+  const [hashLink, setHashLink] = useState<{ n: number; hash: string } | null>(null);
   // The link this arrival has scrolled to: once per arrival, not on every view change.
   const scrolledTo = useRef<string | null>(null);
   useEffect(() => {
-    const hash = window.location.hash;
+    const h = window.location.hash || null;
     scrolledTo.current = null;
     // Next writes an in-app navigation's URL, #hash included, only once the new page has
     // committed, so the hash cannot be read while rendering: read it here. This also runs
     // when Next shows a kept route again.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setHashLink(hash.startsWith("#s-") ? { n, key: hash.slice(3) } : null);
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setHash(h);
+    setHashLink(h ? { n, hash: h } : null);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [doc, n]);
+  // Back and forward between sections, and plain #links (a warning's section).
+  useEffect(() => {
+    const onNav = () => {
+      if (window.location.pathname !== `/documents/${doc}/v/${n}`) return;
+      const h = window.location.hash || null;
+      setHash(h);
+      setHashLink(h ? { n, hash: h } : null);
+    };
+    window.addEventListener("popstate", onNav);
+    window.addEventListener("hashchange", onNav);
+    return () => {
+      window.removeEventListener("popstate", onNav);
+      window.removeEventListener("hashchange", onNav);
+    };
   }, [doc, n]);
   // Open detail section -> the brief section showing it.
   const [opened, setOpened] = useState<Map<string, string>>(() => new Map());
   const [scrollTarget, setScrollTarget] = useState<{ id: string; key: string } | null>(null);
-  const focusIdx = useRef(-1);
   // Queries are scoped to this view: Next keeps recently visited routes mounted (hidden).
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const inspectorRef = useRef<HTMLDivElement>(null);
 
   const version = verQ.data;
   const document_ = docQ.data;
@@ -138,13 +187,22 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const refine = useMemo(() => ({ doc, n }), [doc, n]);
 
   const sections = useMemo(() => version?.sections ?? [], [version]);
+  const allKeys = useMemo(() => new Set(sections.map((s) => s.section_key)), [sections]);
   const briefSections = useMemo(() => sections.filter((s) => s.layer === "brief"), [sections]);
   const hasBrief = briefSections.length > 0;
-  const linkedDetail =
-    hashLink?.n === n &&
-    !briefSections.some((s) => s.section_key === hashLink.key) &&
-    sections.some((s) => s.section_key === hashLink.key);
+  const linkKey = hashLink?.n === n ? keyFromHash(hashLink.hash, allKeys) : null;
+  const linkedDetail = !!linkKey && !briefSections.some((s) => s.section_key === linkKey);
   const view: DocumentView = hasBrief ? (viewOverride ?? (linkedDetail ? "full" : savedView)) : "full";
+  // Brief / Full says which sections exist; the strip and the arrows step through these.
+  const shownSections = view === "brief" ? briefSections : sections;
+  const hashKey = keyFromHash(hash, allKeys);
+  const openSection =
+    shownSections.find((s) => s.section_key === hashKey) ?? shownSections.find((s) => !s.verdict) ?? shownSections[0];
+  const openKey = openSection?.section_key ?? null;
+  const openIdx = openSection ? shownSections.indexOf(openSection) : -1;
+  const prevSection = openIdx > 0 ? shownSections[openIdx - 1] : null;
+  const nextSection = openIdx >= 0 ? shownSections[openIdx + 1] ?? null : null;
+
   // Detail sections a brief section links to: each feature row and milestone expands.
   const expandable = useMemo(() => {
     const detail = new Set(sections.filter((s) => s.layer !== "brief").map((s) => s.section_key));
@@ -152,6 +210,22 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     for (const s of briefSections) for (const m of s.body_md.matchAll(SECTION_LINK)) if (detail.has(m[1])) keys.add(m[1]);
     return keys;
   }, [sections, briefSections]);
+
+  // The open section and the detail expanded inside it: what "This section" shows.
+  const scopeKeys = useMemo(() => {
+    if (!openKey) return null;
+    const keys = new Set([openKey]);
+    if (view === "brief") {
+      for (const [k, origin] of opened) if (origin === openKey) for (const d of subtree(sections, k)) keys.add(d.section_key);
+    }
+    return keys;
+  }, [openKey, view, opened, sections]);
+
+  /** Opens a section: a new history entry, so back and forward step through sections. */
+  const select = useCallback((key: string) => {
+    setHash(`#${key}`);
+    if (decodeURIComponent(window.location.hash.slice(1)) !== key) window.history.pushState(null, "", `#${key}`);
+  }, []);
 
   const switchView = useCallback(
     (v: DocumentView) => {
@@ -171,7 +245,35 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     });
   }, []);
 
-  // Scroll to a comment once the section it is on has rendered (after Expand or a switch).
+  const reviewInFull = useCallback(
+    (key: string) => {
+      setViewOverride("full");
+      select(key);
+    },
+    [select],
+  );
+
+  // A new open section: bring the panel's top into view when it is above the screen (the
+  // arrows at its foot), and the strip's item into the strip's view.
+  const shownKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openKey) return;
+    const before = shownKey.current;
+    shownKey.current = openKey;
+    const strip = stripRef.current;
+    const item = strip?.querySelector<HTMLElement>(`[data-strip-key="${CSS.escape(openKey)}"]`);
+    if (strip && item) {
+      const s = strip.getBoundingClientRect();
+      const r = item.getBoundingClientRect();
+      if (r.left < s.left || r.right > s.right) strip.scrollLeft += r.left - s.left - (s.width - r.width) / 2;
+    }
+    const panel = panelRef.current;
+    if (before && before !== openKey && panel && panel.getBoundingClientRect().top < 0) {
+      panel.scrollIntoView({ block: "start" });
+    }
+  }, [openKey]);
+
+  // Scroll to a comment once the section it is on has rendered (after a switch or Expand).
   useEffect(() => {
     if (!scrollTarget) return;
     const root = rootRef.current;
@@ -181,8 +283,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       setScrollTarget(null);
     }
-  }, [scrollTarget, view, opened, version]);
-
+  }, [scrollTarget, view, opened, version, openKey]);
 
   const parsed = useMemo(() => {
     const m = new Map<string, { blocks: ReturnType<typeof parseBlocks>; text: string }>();
@@ -256,26 +357,38 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     window.getSelection()?.removeAllRanges();
   }, []);
 
+  // A comment's quote opens its section (and the feature or milestone holding it in the
+  // brief, else the full document), then scrolls to the quote.
   const scrollToComment = useCallback(
     (c: PlacedComment) => {
       setActiveId(c.id);
       const root = rootRef.current;
+      const key = c.section_key;
       const mark = root?.querySelector(`[data-comment-ids~="${c.id}"]`);
-      const el = mark ?? root?.querySelector(`#s-${CSS.escape(c.section_key)}`);
-      if (el) {
-        el.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (mark) {
+        mark.scrollIntoView({ block: "center", behavior: "smooth" });
         return;
       }
-      // Not shown in the brief: expand the feature or milestone that holds it, else
-      // show the full document.
-      const all = version?.sections ?? [];
-      const holder = [...expandable].find((k) => subtree(all, k).some((s) => s.section_key === c.section_key));
-      const origin = holder && briefSections.find((s) => s.body_md.includes(`](#${holder})`));
-      if (holder && origin) setOpened((prev) => new Map(prev).set(holder, origin.section_key));
-      else setViewOverride("full");
-      setScrollTarget({ id: c.id, key: c.section_key });
+      if (scopeKeys?.has(key)) {
+        root?.querySelector(`#s-${CSS.escape(key)}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+        return;
+      }
+      if (shownSections.some((s) => s.section_key === key)) {
+        select(key);
+      } else {
+        const holder = view === "brief" ? [...expandable].find((k) => subtree(sections, k).some((s) => s.section_key === key)) : undefined;
+        const origin = holder && briefSections.find((s) => s.body_md.includes(`](#${holder})`));
+        if (holder && origin) {
+          setOpened((prev) => new Map(prev).set(holder, origin.section_key));
+          select(origin.section_key);
+        } else {
+          setViewOverride("full");
+          select(key);
+        }
+      }
+      setScrollTarget({ id: c.id, key });
     },
-    [version, expandable, briefSections],
+    [scopeKeys, shownSections, select, view, expandable, sections, briefSections],
   );
 
   const onHighlightClick = useCallback((id: string) => {
@@ -293,6 +406,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           body: { verdict, note: note || null },
         }),
       );
+      // Stay on the section just reviewed (without a hash, the first unreviewed one opens).
+      setHash(`#${key}`);
       await Promise.all([verQ.reload(), docQ.reload()]);
       bump();
     },
@@ -326,26 +441,31 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     await commentsQ.reload();
   }
 
-  // Keyboard: j/k move between sections, c comments on the selection, [ ] switch versions.
+  // Keyboard: [ ] (or j k, Shift + arrows) step sections, { } versions, c comments on the
+  // selection, v brief / full.
   useEffect(() => {
+    const step = (d: 1 | -1) => {
+      const target = shownSections[openIdx + d];
+      if (target) select(target.section_key);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
-      const sections = [...(rootRef.current?.querySelectorAll<HTMLElement>("section[data-section-key]") ?? [])];
-      if (e.key === "j" || e.key === "k") {
-        const current = sections.findIndex((s) => s.contains(document.activeElement));
-        const from = current >= 0 ? current : focusIdx.current;
-        const next = Math.max(0, Math.min(sections.length - 1, from + (e.key === "j" ? 1 : -1)));
-        focusIdx.current = next;
-        sections[next]?.focus({ preventScroll: true });
-        sections[next]?.scrollIntoView({ block: "start", behavior: "smooth" });
+      if (e.key === "[" || e.key === "]" || e.key === "j" || e.key === "k") {
+        step(e.key === "]" || e.key === "j" ? 1 : -1);
+      } else if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        // Not while extending a text selection, nor inside a control that uses the arrows.
+        if (window.getSelection()?.isCollapsed === false) return;
+        if ((e.target as HTMLElement | null)?.closest?.("[role=tablist], [role=group]")) return;
+        e.preventDefault();
+        step(e.key === "ArrowRight" ? 1 : -1);
       } else if (e.key === "v" && hasBrief) {
         switchView(view === "brief" ? "full" : "brief");
       } else if (e.key === "c" && selection) {
         e.preventDefault();
         openComposer();
-      } else if ((e.key === "[" || e.key === "]") && versions.length) {
+      } else if ((e.key === "{" || e.key === "}") && versions.length) {
         const i = versions.findIndex((v) => v.number === n);
-        const target = versions[i + (e.key === "]" ? 1 : -1)];
+        const target = versions[i + (e.key === "}" ? 1 : -1)];
         if (target) router.push(`/documents/${doc}/v/${target.number}`);
       } else if (e.key === "Escape") {
         setSelection(null);
@@ -354,18 +474,22 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selection, openComposer, versions, n, doc, router, hasBrief, view, switchView]);
+  }, [selection, openComposer, versions, n, doc, router, hasBrief, view, switchView, shownSections, openIdx, select]);
 
-  // Honour #s-<key> links once the section has rendered.
+  // A link to a section (#problem, #s-problem) brings its panel into view, once per arrival.
   useEffect(() => {
-    const hash = window.location.hash;
-    if (!version || !hash.startsWith("#s-") || scrolledTo.current === `${n}${hash}`) return;
-    const el = rootRef.current?.querySelector(`#${CSS.escape(hash.slice(1))}`);
-    if (!el) return;
-    scrolledTo.current = `${n}${hash}`;
-    el.scrollIntoView({ block: "start" });
-  }, [version, n, view, hashLink]);
+    if (!version || !hashLink || hashLink.n !== n || !openKey || openKey !== keyFromHash(hashLink.hash, allKeys)) return;
+    if (scrolledTo.current === `${n}${hashLink.hash}`) return;
+    scrolledTo.current = `${n}${hashLink.hash}`;
+    const panel = panelRef.current;
+    if (panel && (panel.getBoundingClientRect().top < 0 || panel.getBoundingClientRect().top > window.innerHeight * 0.6)) {
+      panel.scrollIntoView({ block: "start" });
+    }
+  }, [version, n, hashLink, openKey, allKeys]);
 
+  const changedLocks = new Set(
+    version?.warnings.filter((w) => w.code === "locked_section_changed").flatMap((w) => w.section_keys) ?? [],
+  );
   const sectionProps = (s: SectionOut) => ({
     section: s,
     blocks: parsed.get(s.section_key)!.blocks,
@@ -386,28 +510,69 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     origin,
     toggle: toggleOpen,
     render: (key) =>
-      subtree(sections, key).map((d) => <SectionView key={d.id} {...sectionProps(d)} nested />),
+      subtree(sections, key).map((d) => (
+        <SectionView key={d.id} {...sectionProps(d)} nested onReviewInFull={canDecide && !readOnly ? reviewInFull : undefined} />
+      )),
   });
 
-  const changedLocks = new Set(
-    version?.warnings.filter((w) => w.code === "locked_section_changed").flatMap((w) => w.section_keys) ?? [],
-  );
   const lockedCount = version?.sections.filter((s) => s.verdict?.verdict === "approved").length ?? 0;
   const reviewedCount = version?.sections.filter((s) => s.verdict).length ?? 0;
+  const reviewedShown = shownSections.filter((s) => s.verdict).length;
   const openComments = placed.filter((c) => !c.resolved_at).length;
+  const scoped = scope === "all" || !scopeKeys ? null : scopeKeys;
+  const scopedComments = scoped ? placed.filter((c) => scoped.has(c.section_key)) : placed;
+  const scopedOpen = scopedComments.filter((c) => !c.resolved_at).length;
+  const sectionOpen = scopeKeys ? placed.filter((c) => !c.resolved_at && scopeKeys.has(c.section_key)).length : 0;
   const error = docQ.error || verQ.error;
-
-  const shownSections = view === "brief" ? briefSections : sections;
-  const stripSections = shownSections.filter((s) => s.level <= 2);
   const warnings = version?.warnings ?? [];
 
   const tabs: { id: Tab; label: string; count?: number | null }[] = [
-    { id: "comments", label: "Comments", count: commentsQ.data ? openComments : null },
+    { id: "comments", label: "Comments", count: commentsQ.data ? scopedOpen : null },
     { id: "feedback", label: "Feedback" },
     { id: "resolutions", label: "Resolutions" },
+    ...(version && version.citations.length > 0 ? [{ id: "sources" as const, label: "Sources", count: version.citations.length }] : []),
     { id: "reports", label: "Reports" },
     { id: "jobs", label: "Jobs" },
   ];
+  const scoping = tab === "comments" || tab === "feedback" || tab === "resolutions";
+
+  const showComments = () => {
+    setTab("comments");
+    inspectorRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
+  const sectionLink = (s: SectionOut, dir: "prev" | "next", divided: boolean) => (
+    <a
+      href={`#${s.section_key}`}
+      rel={dir}
+      aria-label={`${dir === "prev" ? "Previous" : "Next"} section: ${s.heading}`}
+      onClick={(e) => {
+        if (!plainClick(e)) return;
+        e.preventDefault();
+        select(s.section_key);
+      }}
+      className={`flex min-h-14 min-w-0 flex-1 items-center gap-2 px-4 py-2 hover:bg-surface2 max-[600px]:px-3 ${
+        dir === "next" ? `justify-end text-right ${divided ? "border-l border-line" : ""}` : ""
+      }`}
+    >
+      {dir === "prev" && (
+        <span className="flex-none text-text2">
+          <Icon name="chevron-left" size={16} />
+        </span>
+      )}
+      <span className="flex min-w-0 flex-col">
+        <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          {dir === "prev" ? "Previous" : "Next"}
+        </span>
+        <span className="truncate text-sm leading-5 font-semibold text-text">{s.heading}</span>
+      </span>
+      {dir === "next" && (
+        <span className="flex-none text-text2">
+          <Icon name="chevron-right" size={16} />
+        </span>
+      )}
+    </a>
+  );
 
   const inspector = (
     <Inspector
@@ -417,8 +582,9 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
         <InfoTip label="keyboard shortcuts" hero side="bottom">
           <span className="flex flex-col gap-1.5">
             <span className="flex items-center gap-1.5">
-              <Kbd>j</Kbd>
-              <Kbd>k</Kbd> sections
+              <Kbd>[</Kbd>
+              <Kbd>]</Kbd> or <Kbd>⇧ ←</Kbd>
+              <Kbd>⇧ →</Kbd> sections
             </span>
             {canComment && (
               <span className="flex items-center gap-1.5">
@@ -426,8 +592,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
               </span>
             )}
             <span className="flex items-center gap-1.5">
-              <Kbd>[</Kbd>
-              <Kbd>]</Kbd> versions
+              <Kbd>{"{"}</Kbd>
+              <Kbd>{"}"}</Kbd> versions
             </span>
             {hasBrief && (
               <span className="flex items-center gap-1.5">
@@ -456,6 +622,68 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
         )
       }
     >
+      <div className="px-5 pt-1 max-[600px]:px-4">
+        <TabBar label="Review panel" size="sm" tabs={tabs} value={tab} onChange={setTab} />
+      </div>
+      <div role="tabpanel" className="px-5 py-3.5 max-[600px]:px-4 xl:max-h-[calc(100vh-330px)] xl:overflow-y-auto">
+        {scoping && openSection && (
+          <div className="mb-3 flex min-w-0" data-testid="inspector-scope">
+            <SegmentedControl<Scope>
+              label="Show"
+              size="sm"
+              value={scope}
+              onChange={setScope}
+              items={[
+                { value: "section", label: "This section" },
+                { value: "all", label: "All" },
+              ]}
+            />
+          </div>
+        )}
+        {tab === "comments" &&
+          (commentsQ.error ? (
+            <ErrorNote>{commentsQ.error}</ErrorNote>
+          ) : !commentsQ.data ? (
+            <Loading />
+          ) : (
+            <CommentsPanel
+              showLayer={hasBrief}
+              comments={scopedComments}
+              activeId={activeId}
+              readOnly={readOnly}
+              canComment={canComment}
+              canResolveAny={canDecide}
+              userId={me?.user_id ?? me?.token_id ?? null}
+              onSelect={scrollToComment}
+              onReply={reply}
+              onResolve={resolve}
+            />
+          ))}
+        {tab === "feedback" && (
+          <FeedbackPanel doc={doc} current={n} versions={versions} refreshKey={refreshKey} sectionKeys={scoped} />
+        )}
+        {tab === "resolutions" && <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} sectionKeys={scoped} />}
+        {tab === "sources" && version && (
+          <ol className="flex flex-col" aria-label="Sources" data-testid="sources-list">
+            {version.citations.map((c, i) => (
+              <li key={c.id} className="flex min-h-8 items-center gap-2.5 text-sm">
+                <span className="tnum w-5 flex-none text-right font-semibold text-text2">{i + 1}</span>
+                <span className="flex-none text-[13px] font-semibold text-text2">{SOURCE_LABEL[c.source]}</span>
+                <a
+                  href={c.ref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
+                >
+                  {c.title ?? c.ref}
+                </a>
+              </li>
+            ))}
+          </ol>
+        )}
+        {tab === "reports" && <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} />}
+        {tab === "jobs" && <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />}
+      </div>
       {version && (
         <InspectorSection label="Version">
           <InspectorRow value={<span className="text-sm font-medium">{formatDateTime(version.created_at)}</span>}>
@@ -484,34 +712,6 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           )}
         </InspectorSection>
       )}
-      <div className="px-5 pt-1 max-[600px]:px-4">
-        <TabBar label="Review panel" size="sm" tabs={tabs} value={tab} onChange={setTab} />
-      </div>
-      <div role="tabpanel" className="px-5 py-3.5 max-[600px]:px-4 xl:max-h-[calc(100vh-330px)] xl:overflow-y-auto">
-        {tab === "comments" &&
-          (commentsQ.error ? (
-            <ErrorNote>{commentsQ.error}</ErrorNote>
-          ) : !commentsQ.data ? (
-            <Loading />
-          ) : (
-            <CommentsPanel
-              showLayer={hasBrief}
-              comments={placed}
-              activeId={activeId}
-              readOnly={readOnly}
-              canComment={canComment}
-              canResolveAny={canDecide}
-              userId={me?.user_id ?? me?.token_id ?? null}
-              onSelect={scrollToComment}
-              onReply={reply}
-              onResolve={resolve}
-            />
-          ))}
-        {tab === "feedback" && <FeedbackPanel doc={doc} current={n} versions={versions} refreshKey={refreshKey} />}
-        {tab === "resolutions" && <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} />}
-        {tab === "reports" && <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} />}
-        {tab === "jobs" && <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />}
-      </div>
     </Inspector>
   );
 
@@ -586,37 +786,50 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
 
         {version && (
           // Three columns: the count, the strip (scrolls inside its own column), the view label.
-          <div className="mb-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-panel border border-line bg-surface py-2 pr-3 pl-4 shadow-panel max-[600px]:flex max-[600px]:flex-wrap">
-            <span className="flex-none text-[13px] font-semibold tracking-[0.02em] whitespace-nowrap text-text2">
+          <div className="mb-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-panel border border-line bg-surface py-2 pr-3 pl-4 shadow-panel max-[600px]:flex max-[600px]:flex-wrap max-[600px]:pl-3">
+            <span data-testid="sections-count" className="flex-none text-[13px] font-semibold tracking-[0.02em] whitespace-nowrap text-text2">
               Sections{" "}
               <b className="tnum font-bold text-text">
-                {reviewedCount}/{version.sections.length}
+                {reviewedShown}/{shownSections.length}
               </b>
             </span>
             <nav aria-label="Sections" className="min-w-0 max-[600px]:order-last max-[600px]:basis-full">
-              <ScrollStrip stripClassName="gap-1">
-              {stripSections.map((s) => {
-                const v = s.verdict?.verdict;
-                return (
-                  <a
-                    key={s.id}
-                    href={`#s-${s.section_key}`}
-                    className={`flex h-8 flex-none items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium whitespace-nowrap hover:bg-surface2 ${
-                      v ? "text-text" : "text-text2"
-                    }`}
-                  >
-                    {v === "approved" && (
-                      <span className="text-pass">
-                        <Icon name="check" size={16} />
-                      </span>
-                    )}
-                    {v === "changes_requested" && <span aria-hidden className="size-2 rounded-full bg-warn" />}
-                    {v === "rejected" && <span aria-hidden className="size-2 rounded-full bg-crit" />}
-                    {v && <span className="sr-only">{VERDICT_LABEL[v]}:</span>}
-                    {s.heading}
-                  </a>
-                );
-              })}
+              <ScrollStrip ref={stripRef} stripClassName="gap-1">
+                {shownSections.map((s) => {
+                  const v = s.verdict?.verdict;
+                  const on = s.section_key === openKey;
+                  return (
+                    <a
+                      key={s.id}
+                      href={`#${s.section_key}`}
+                      data-strip-key={s.section_key}
+                      data-reviewed={v ? "true" : undefined}
+                      aria-current={on ? "true" : undefined}
+                      title={v ? VERDICT_LABEL[v] : undefined}
+                      onClick={(e) => {
+                        if (!plainClick(e)) return;
+                        e.preventDefault();
+                        select(s.section_key);
+                      }}
+                      className={`flex h-8 flex-none items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium whitespace-nowrap ${
+                        on ? "bg-accent text-on-accent" : `hover:bg-surface2 ${v ? "text-text" : "text-text2"}`
+                      }`}
+                    >
+                      {v ? (
+                        <span
+                          data-testid="strip-tick"
+                          className={on ? "text-on-accent" : v === "approved" ? "text-pass" : v === "changes_requested" ? "text-warn" : "text-crit"}
+                        >
+                          <Icon name="check" size={16} />
+                        </span>
+                      ) : (
+                        on && <span aria-hidden className="size-2 rounded-full border-2 border-on-accent" />
+                      )}
+                      {v && <span className="sr-only">{VERDICT_LABEL[v]}:</span>}
+                      {s.heading}
+                    </a>
+                  );
+                })}
               </ScrollStrip>
             </nav>
             {hasBrief && (
@@ -669,7 +882,17 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                 <Icon name="alert" size={16} />
                 <p className="min-w-0 flex-1 font-medium">{w.message}</p>
                 {w.section_keys.map((k) => (
-                  <a key={k} href={`#s-${k}`} className="font-mono text-[13px] font-medium underline underline-offset-2">
+                  <a
+                    key={k}
+                    href={`#${k}`}
+                    onClick={(e) => {
+                      if (!plainClick(e)) return;
+                      e.preventDefault();
+                      if (!shownSections.some((s) => s.section_key === k)) setViewOverride("full");
+                      select(k);
+                    }}
+                    className="font-mono text-[13px] font-medium underline underline-offset-2"
+                  >
                     #{k}
                   </a>
                 ))}
@@ -683,8 +906,12 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           </div>
         )}
 
-        <Split inspector={inspector}>
-          <article aria-label="Document" className="min-w-0 rounded-panel border border-line bg-surface shadow-panel">
+        <Split inspector={<div ref={inspectorRef} className="scroll-mt-3">{inspector}</div>}>
+          <article
+            ref={panelRef}
+            aria-label="Document"
+            className="min-w-0 scroll-mt-3 rounded-panel border border-line bg-surface shadow-panel"
+          >
             {error && (
               <div className="p-4">
                 <ErrorNote>{error}</ErrorNote>
@@ -695,35 +922,31 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                 <Loading label="Loading version…" />
               </div>
             )}
-            {version && (
+            {version && !openSection && <Empty>No sections</Empty>}
+            {version && openSection && (
               <>
-                <div className="divide-y divide-line" data-testid="document-sections" data-view={view}>
-                  {shownSections.map((s) => (
-                    <SectionView key={s.id} {...sectionProps(s)} expand={view === "brief" ? expandFor(s.section_key) : undefined} />
-                  ))}
+                <div data-testid="document-sections" data-view={view} data-open={openKey}>
+                  <SectionView
+                    key={openSection.id}
+                    {...sectionProps(openSection)}
+                    expand={view === "brief" ? expandFor(openSection.section_key) : undefined}
+                    headTools={
+                      <Button
+                        icon="comment"
+                        className="min-[1101px]:hidden"
+                        onClick={showComments}
+                        aria-label={`Comments on this section: ${sectionOpen}`}
+                      >
+                        Comments <b className="tnum text-accent-ink">{sectionOpen}</b>
+                      </Button>
+                    }
+                  />
                 </div>
-                {version.citations.length > 0 && (
-                  <section className="border-t border-line px-6 py-4 max-[600px]:px-4" aria-labelledby="sources-heading">
-                    <h2 id="sources-heading" className="mb-2 font-display text-lg leading-6 font-bold">
-                      Sources <span className="tnum text-accent-ink">{version.citations.length}</span>
-                    </h2>
-                    <ol className="flex flex-col">
-                      {version.citations.map((c, i) => (
-                        <li key={c.id} className="flex min-h-8 items-center gap-2.5 text-sm">
-                          <span className="tnum w-5 flex-none text-right font-semibold text-text2">{i + 1}</span>
-                          <span className="flex-none text-[13px] font-semibold text-text2">{SOURCE_LABEL[c.source]}</span>
-                          <a
-                            href={c.ref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
-                          >
-                            {c.title ?? c.ref}
-                          </a>
-                        </li>
-                      ))}
-                    </ol>
-                  </section>
+                {(prevSection || nextSection) && (
+                  <nav aria-label="Previous and next section" className="flex items-stretch border-t border-line">
+                    {prevSection && sectionLink(prevSection, "prev", false)}
+                    {nextSection && sectionLink(nextSection, "next", !!prevSection)}
+                  </nav>
                 )}
               </>
             )}

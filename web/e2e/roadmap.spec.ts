@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
-import { login, section } from "./helpers";
+import { login, section, openSection } from "./helpers";
 
 // O4b: a roadmap built from an approved PRD. The usage-alerts PRD's v1 is approved, and
 // usage-alerts-roadmap v1 was built from it.
@@ -62,7 +62,7 @@ for (const role of ["viewer", "commenter"] as const) {
     await expect(page.getByText("Approvers and owners start these runs.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
     await page.goto("/documents/usage-alerts/v/1");
-    await expect(section(page, "behaviour")).toBeVisible();
+    await openSection(page, "behaviour");
     await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
   });
 }
@@ -135,7 +135,7 @@ test("build roadmap from the PRD view, into a new roadmap", async ({ page }) => 
   await login(page);
   // Not approved: no Build roadmap.
   await page.goto("/documents/checkout-redesign/v/2");
-  await expect(section(page, "problem")).toBeVisible();
+  await expect(page.getByTestId("document-sections").filter({ visible: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
 
   await page.goto("/documents/usage-alerts/v/1");
@@ -162,7 +162,7 @@ test("a roadmap version names its PRD, and its PRD links open the PRD view at th
   await expect(page.getByRole("group", { name: "Document view" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
 
-  const link = section(page, "brief-items").getByRole("link", { name: "1. Behaviour" });
+  const link = (await openSection(page, "brief-items")).getByRole("link", { name: "1. Behaviour" });
   await expect(link).toHaveAttribute("href", "/documents/usage-alerts/v/1#s-behaviour");
   await expect(link).not.toHaveAttribute("target", "_blank");
   await link.click();

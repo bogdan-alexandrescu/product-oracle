@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, section, selectText } from "./helpers";
+import { login, section, selectText, openSection, showAll } from "./helpers";
 
 const memberRow = (page: Page, email: string) => page.getByTestId("member-row").filter({ hasText: email });
 
@@ -64,6 +64,7 @@ test("roles: a viewer reads and exports but has no comment, verdict or approve c
   await login(page, "viewer@example.com");
   await page.goto("/documents/checkout-redesign/v/2");
   await expect(page.getByTestId("role-note")).toContainText("read-only access (viewer)");
+  await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
   await expect(section(page, "problem").getByTestId("verdict-state")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
@@ -71,6 +72,7 @@ test("roles: a viewer reads and exports but has no comment, verdict or approve c
   await expect(page.getByRole("button", { name: "Export MD" })).toBeEnabled();
 
   // Selecting text offers no comment button; existing threads have no reply or resolve.
+  await openSection(page, "s-5-3");
   await selectText(page, "s-5-3", "Choosing a card fills the form");
   await page.waitForTimeout(200);
   await expect(page.getByRole("button", { name: /^Comment/ })).toHaveCount(0);
@@ -84,15 +86,17 @@ test("roles: a commenter comments and resolves their own thread, not others'", a
   await login(page, "commenter@example.com");
   await page.goto("/documents/checkout-redesign/v/2");
   await expect(page.getByTestId("role-note")).toContainText("need the approver role");
+  await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
 
   // Someone else's thread: reply yes, resolve no.
+  await showAll(page);
   const theirs = page.getByTestId("comment").first();
   await expect(theirs.getByRole("button", { name: "Reply" })).toBeVisible();
   await expect(theirs.getByRole("button", { name: "Resolve" })).toHaveCount(0);
 
-  await expect(section(page, "scope")).toBeVisible();
+  await openSection(page, "scope");
   await selectText(page, "scope", "the order review page");
   await page.getByRole("button", { name: /^Comment/ }).click();
   const dialog = page.getByRole("dialog", { name: "New comment" });
@@ -108,8 +112,10 @@ test("roles: a commenter comments and resolves their own thread, not others'", a
 test("roles: an approver sets verdicts and approves, but cannot manage members", async ({ page }) => {
   await login(page, "approver@example.com");
   await page.goto("/documents/checkout-redesign/v/2");
+  await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toBeVisible();
   await expect(page.getByTestId("role-note")).toHaveCount(0);
+  await showAll(page);
   await expect(page.getByTestId("comment").first().getByRole("button", { name: "Resolve" })).toBeVisible();
   await page.getByRole("button", { name: "Approve version" }).click();
   await page.getByRole("button", { name: "Confirm" }).click();
@@ -127,5 +133,6 @@ test("roles: a role change shows up on the reviewer's next page load", async ({ 
 
   await login(page, "viewer@example.com");
   await page.goto("/documents/checkout-redesign/v/2");
+  await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toBeVisible();
 });

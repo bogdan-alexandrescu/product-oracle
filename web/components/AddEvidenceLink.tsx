@@ -45,6 +45,8 @@ export function AddEvidenceLink({
   context,
   low = DEFAULT_LOW,
   quiet = false,
+  defaultOpen = false,
+  onClose,
   onSaved,
 }: {
   target?: Target;
@@ -56,9 +58,16 @@ export function AddEvidenceLink({
   low?: number;
   /** A quieter button, for places that repeat it (every document section). */
   quiet?: boolean;
+  /** Start with the form open (the caller offers its own "Add evidence link"). */
+  defaultOpen?: boolean;
+  /**
+   * The caller owns the open control (a ⋯ menu): Cancel calls this, and once closed the
+   * component shows only the saved note, not its own button.
+   */
+  onClose?: () => void;
   onSaved?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
   const [picked, setPicked] = useState<string>(suggested ?? "");
@@ -142,7 +151,7 @@ export function AddEvidenceLink({
             {saved}
           </p>
         )}
-        <Button
+        {!onClose && <Button
           size="sm"
           variant={quiet ? "ghost" : "secondary"}
           onClick={() => {
@@ -152,7 +161,7 @@ export function AddEvidenceLink({
           aria-label={context ? `Add evidence link to ${context}` : "Add evidence link"}
         >
           Add evidence link
-        </Button>
+        </Button>}
       </div>
     );
   }
@@ -278,6 +287,7 @@ export function AddEvidenceLink({
           onClick={() => {
             reset();
             setOpen(false);
+            onClose?.();
           }}
           disabled={busy}
         >

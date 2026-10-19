@@ -16,9 +16,25 @@ import { useQuery } from "@/lib/use-query";
  * evidence in the body), shows a diff preview, and on accept imports it as the next
  * version with the feedback resolutions recorded.
  */
-export function RefineSection({ doc, n, sectionKey, heading }: { doc: string; n: number; sectionKey: string; heading: string }) {
+export function RefineSection({
+  doc,
+  n,
+  sectionKey,
+  heading,
+  defaultOpen = false,
+  onClose,
+}: {
+  doc: string;
+  n: number;
+  sectionKey: string;
+  heading: string;
+  /** Start open (the caller offers its own "Refine section", e.g. in a ⋯ menu). */
+  defaultOpen?: boolean;
+  /** The caller owns the open control: Close and Discard call this instead of showing the button again. */
+  onClose?: () => void;
+}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [instruction, setInstruction] = useState("");
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const [job, setJob] = useState<LlmJob | null>(null);
@@ -58,6 +74,7 @@ export function RefineSection({ doc, n, sectionKey, heading }: { doc: string; n:
     setPicked(null);
     setInstruction("");
     setError(null);
+    onClose?.();
   }
 
   async function refine() {
@@ -100,6 +117,7 @@ export function RefineSection({ doc, n, sectionKey, heading }: { doc: string; n:
   }
 
   if (!open) {
+    if (onClose) return null;
     return (
       <Button variant="ghost" icon="flag" onClick={() => setOpen(true)} aria-label={`Refine section ${heading}`}>
         Refine section
