@@ -1,0 +1,23 @@
+id: social-api-policy
+description: >
+  The PRD depends on an operation a (placeholder) social platform's policy does not permit:
+  posting on a member's behalf without their action. The only option offered evades the
+  policy. Unsupported third-party operation is a hard check, so this blocks a publish.
+covers: [social_api_policy, unsupported_third_party]
+extends: good-prd
+add:
+  blockers:
+    - ref: social-posting
+      key: social-auto-posting
+      title: Example social network forbids automated posting
+      blocker: {type: hard, limit_kind: policy, severity: critical, status: open}
+      third_party: {provider: Example social network, operation: automated posting on a member's behalf, limit_kind: policy, supported: false}
+      links: [scope]
+      options:
+        - {title: Post through a headless browser session, approach: direct_remedy, compliance: non_compliant, status: proposed}
+expected:
+  third_party_support: critical
+  blocker_feasibility: critical
+blocked: true
+rationale_contains:
+  third_party_support: [Example social network, automated posting, policy]

@@ -79,8 +79,10 @@ def scratch_db():
 
 
 def test_0013_is_the_single_head_after_0012():
+    # Lanes add 0014_<lane> on top of 0013 (waves.md); the chain stays linear, one head.
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0013"]
+    assert len(script.get_heads()) == 1
+    assert "0013" in {r.revision for r in script.walk_revisions()}
     assert script.get_revision("0013").down_revision == "0012"
 
 
