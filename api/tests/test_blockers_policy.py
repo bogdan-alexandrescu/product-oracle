@@ -223,3 +223,60 @@ async def test_the_recommendation_is_always_a_compliant_option(client):
     strategy = (await client.get(f"/v1/blockers/{b['id']}", headers=ctx.as_("viewer"))).json()
     assert strategy["recommended_option_id"] == medium["id"]
     assert strategy["recommended_option_id"] != unreviewed["id"]
+
+
+# --- negations and synonyms (PR #17 review) ------------------------------------------------
+
+# A negation earlier in the sentence must not hide a tactic that follows it.
+NEGATION_DOES_NOT_HIDE = [
+    ("Without delay, bypass the rate limit with a second key", "evasion"),
+    ("Without hesitation bypass the limit for large companies", "evasion"),
+    ("Without bypassing anything at first, then evade the rate limit at peak", "evasion"),
+    ("Do not wait for approval; rotate accounts when one is throttled", "identity_abuse"),
+    ("No consent screen needed, mass DM the followers", "unauthorized_messaging"),
+    ("Not only queue calls but also bypass the quota", "evasion"),
+    ("Instead of waiting, scrape the member directory", "evasion"),
+]
+SYNONYMS = [
+    ("Cycle accounts so each stays under the per-account limit", "identity_abuse"),
+    ("Rotate accounts when one is throttled", "identity_abuse"),
+    ("Rotating through several accounts keeps us under the cap", "identity_abuse"),
+    ("Mass DM the community about the launch", "unauthorized_messaging"),
+    ("Mass-DM new followers", "unauthorized_messaging"),
+    ("Scrape the network's member profiles", "evasion"),
+    ("Scraping public pages fills the gap", "evasion"),
+    ("Bypass the limit with a pool of keys", "evasion"),
+    ("Evade the cap by splitting traffic", "evasion"),
+    ("Skirt the threshold during the launch week", "evasion"),
+]
+STILL_COMPLIANT = [
+    "Never scrape member data; use the approved export API",
+    "Without bypassing the limit, queue calls within the permitted rate",
+    "Do not rotate accounts or create extra ones; ask for a higher quota",
+    "We will not mass DM anyone; members opt in first",
+]
+
+
+@pytest.mark.parametrize(("text", "category"), NEGATION_DOES_NOT_HIDE + SYNONYMS)
+def test_negations_and_synonyms_are_screened(text, category):
+    flags = policy.screen(text)
+    assert category in {f.category for f in flags}, (text, flags)
+
+
+@pytest.mark.parametrize("text", STILL_COMPLIANT)
+def test_a_tactic_named_only_to_rule_it_out_is_not_flagged(text):
+    assert policy.screen(text) == [], text
+
+
+async def test_an_unflagged_option_still_needs_a_human_compliance_review(client):
+    """The screen is a first filter; a person's compliance review stays the final gate."""
+    ctx = await make_ctx()
+    b = (await create_blocker(client, ctx))["blocker"]
+    opt = (await add_option(client, ctx, b["id"], title=STILL_COMPLIANT[0])).json()
+    assert opt["compliance"] == "needs_review"
+    resp = await client.post(
+        f"/v1/blocker-options/{opt['id']}/select",
+        json={"lock_version": opt["lock_version"], "reason": "Looks fine"},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 422

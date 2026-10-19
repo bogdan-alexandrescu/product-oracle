@@ -103,7 +103,7 @@ async def test_an_accepted_risk_passes_until_its_review_date(client):
     resp = await client.post(
         f"/v1/blockers/{b['id']}/accept-risk",
         json={"reason": "Pilot company volume stays under the limit", "review_at": LATER},
-        headers=ctx.as_("approver"),
+        headers=ctx.as_("owner"),
     )
     assert resp.status_code == 200, resp.text
     out = await _check(ctx, doc_id)
@@ -137,7 +137,7 @@ async def test_an_approved_feasibility_experiment_passes(client):
     resp = await client.post(
         f"/v1/blockers/{b['id']}/feasibility-scope",
         json={"experiment_id": exp["id"], "reason": "One pilot company only"},
-        headers=ctx.as_("approver"),
+        headers=ctx.as_("owner"),
     )
     assert resp.status_code == 200, resp.text
     out = await _check(ctx, doc_id)
@@ -152,9 +152,10 @@ async def test_an_approved_feasibility_experiment_passes(client):
     assert (await _check(ctx, doc_id)).status == "critical"
 
 
-async def test_a_status_written_around_the_strategy_does_not_count(client):
-    """Setting attrs.blocker.status through the generic baseline edit skips the recorded
-    decision (who and why), so the check still sees an unresolved blocker."""
+async def test_a_status_written_around_the_strategy_is_refused(client):
+    """Setting attrs.blocker.status through the generic baseline edit would skip the
+    recorded decision (who and why): the edit is refused and the check still sees an
+    unresolved blocker."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
@@ -167,10 +168,10 @@ async def test_a_status_written_around_the_strategy_does_not_count(client):
         },
         headers=ctx.as_("approver"),
     )
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 422, resp.text
     out = await _check(ctx, doc_id)
     assert out.status == "critical"
-    assert "outside" in out.rationale
+    assert "unresolved" in out.rationale
 
 
 async def test_a_blocker_linked_from_a_section_counts(client):

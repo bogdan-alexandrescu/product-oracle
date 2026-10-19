@@ -612,7 +612,7 @@ async def test_feasibility_scope_needs_a_scoped_experiment(client):
     resp = await client.post(
         f"/v1/blockers/{b['id']}/feasibility-scope",
         json={"experiment_id": loose["id"], "reason": "Prove it first"},
-        headers=ctx.as_("approver"),
+        headers=ctx.as_("owner"),
     )
     assert resp.status_code == 422
     assert "owner" in resp.text and "decision gate" in resp.text
@@ -620,7 +620,7 @@ async def test_feasibility_scope_needs_a_scoped_experiment(client):
     resp = await client.post(
         f"/v1/blockers/{b['id']}/feasibility-scope",
         json={"experiment_id": exp["id"], "reason": "Ship to one pilot company only"},
-        headers=ctx.as_("approver"),
+        headers=ctx.as_("owner"),
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["blocker"]["status"] == "feasibility_only"
@@ -648,7 +648,7 @@ async def test_risk_acceptance_records_who_and_why(client):
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
-    h = ctx.as_("approver")
+    h = ctx.as_("owner")
     past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     for body in (
         {"reason": "", "review_at": LATER},
@@ -669,13 +669,13 @@ async def test_risk_acceptance_records_who_and_why(client):
     out = resp.json()
     assert out["blocker"]["status"] == "accepted_risk"
     acc = out["risk_acceptance"]
-    assert acc["decided_by"] == str(ctx.users["approver"].id)
+    assert acc["decided_by"] == str(ctx.users["owner"].id)
     assert acc["rationale"].startswith("Launch to the pilot company")
     assert acc["decision"] == "accept_risk"
     assert out["gate"]["status"] == "pass"
     audits = await _audit(ctx, "blocker.risk_accepted")
     assert len(audits) == 1
-    assert audits[0].actor == f"user:{ctx.users['approver'].id}"
+    assert audits[0].actor == f"user:{ctx.users['owner'].id}"
     assert audits[0].data["reason"].startswith("Launch to the pilot company")
     events = await _events(ctx, b["id"])
     assert events[-1].kind == "risk_accepted"
