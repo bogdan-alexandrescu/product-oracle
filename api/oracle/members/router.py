@@ -3,6 +3,7 @@
 Logic lives in :mod:`oracle.members.service`; each handler commits once.
 """
 
+import logging
 import uuid
 from collections.abc import Awaitable
 from typing import Annotated, Literal
@@ -26,7 +27,13 @@ from oracle.members.schemas import (
 router = APIRouter(prefix="/v1", tags=["members"], dependencies=[Depends(require_role("owner"))])
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 
-_STATUS = {"not_found": status.HTTP_404_NOT_FOUND, "conflict": status.HTTP_409_CONFLICT}
+_STATUS = {
+    "not_found": status.HTTP_404_NOT_FOUND,
+    "conflict": status.HTTP_409_CONFLICT,
+    "forbidden": status.HTTP_403_FORBIDDEN,
+}
+log = logging.getLogger(__name__)
+_REFUSED = {403: {"description": "The caller is no longer an owner (re-read under the lock)"}}
 
 
 async def _call[T](op: Awaitable[T]) -> T:
@@ -46,7 +53,7 @@ async def list_members(db: TenantDB) -> list[MemberOut]:
 @router.patch(
     "/members/{user_id}",
     response_model=MemberOut,
-    responses={409: {"description": "Would demote the last owner"}},
+    responses={409: {"description": "Would demote the last owner"}, **_REFUSED},
 )
 async def update_member(
     user_id: uuid.UUID, body: MemberPatch, principal: Owner, db: TenantDB
@@ -59,7 +66,11 @@ async def update_member(
 @router.post(
     "/members/{user_id}/disable",
     response_model=MemberOut,
-    responses={404: {"description": "No such member"}, 409: {"description": "The last owner"}},
+    responses={
+        404: {"description": "No such member"},
+        409: {"description": "The last owner"},
+        **_REFUSED,
+    },
 )
 async def disable_member(
     user_id: uuid.UUID, principal: Owner, db: TenantDB, http: ProviderHttp
@@ -68,21 +79,39 @@ async def disable_member(
     connections are disconnected (revoked at the provider) and their sources recorded
     as revoked, so documents citing them cannot publish; their API tokens and OAuth
     grants are revoked, their runs cancelled, the open invite for their email revoked;
-    their approvals lapse for good. The member stays in the list (history keeps the
-    name); an owner can restore them. A no-op for a disabled member."""
-    user = await _call(service.disable_member(db, principal, user_id, http))
+    their approvals lapse for good; the invites they sent are revoked, their queued
+    model jobs cancelled and their spend approval of a run not yet started voided. Every
+    session ends: after a restore they sign in fresh. The member stays in the list
+    (history keeps the name); an owner can restore them. A no-op for a disabled member.
+
+    The revoke at the provider and the cancel at SwarmCloud are made after the disable
+    commits; a failed call is retried by ``POST /v1/internal/tick``."""
+    user = await _call(service.disable_member(db, principal, user_id))
     await db.commit()
-    return MemberOut.model_validate(user)
+    out = MemberOut.model_validate(user)
+    await _followups(db, http, principal, user.id)
+    return out
+
+
+async def _followups(db: TenantDB, http: ProviderHttp, principal: Principal, user_id) -> None:
+    """The provider and SwarmCloud calls the disable owes, after it committed (never
+    under the review gate). A failure is recorded and retried by the ticker."""
+    try:
+        await service.run_followups(db, http, principal, user_id=user_id)
+    except Exception:  # the disable stands; the ticker retries
+        log.exception("disable follow-ups for member %s failed", user_id)
+        await db.rollback()
 
 
 @router.post(
     "/members/{user_id}/restore",
     response_model=MemberOut,
-    responses={404: {"description": "No such member"}},
+    responses={404: {"description": "No such member"}, **_REFUSED},
 )
 async def restore_member(user_id: uuid.UUID, principal: Owner, db: TenantDB) -> MemberOut:
     """Let a disabled member sign in again, with their role. Their approvals stay
-    lapsed, their tokens revoked and their connections gone: nothing else comes back."""
+    lapsed, their tokens revoked and their connections gone: nothing else comes back,
+    and no session from before the disable works: they sign in fresh."""
     user = await _call(service.restore_member(db, principal, user_id))
     await db.commit()
     return MemberOut.model_validate(user)
@@ -92,15 +121,20 @@ async def restore_member(user_id: uuid.UUID, principal: Owner, db: TenantDB) -> 
     "/members/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     deprecated=True,
-    responses={404: {"description": "No such member"}, 409: {"description": "The last owner"}},
+    responses={
+        404: {"description": "No such member"},
+        409: {"description": "The last owner"},
+        **_REFUSED,
+    },
 )
 async def remove_member(
     user_id: uuid.UUID, principal: Owner, db: TenantDB, http: ProviderHttp
 ) -> None:
     """Remove a member: the same as ``POST /v1/members/{user_id}/disable`` (a member is
     never deleted; their row keeps the history's names)."""
-    await _call(service.disable_member(db, principal, user_id, http))
+    user = await _call(service.disable_member(db, principal, user_id))
     await db.commit()
+    await _followups(db, http, principal, user.id)
 
 
 @router.get("/api-tokens", response_model=list[ApiTokenOut])
@@ -112,7 +146,7 @@ async def list_api_tokens(db: TenantDB) -> list[ApiTokenOut]:
 @router.delete(
     "/api-tokens/{token_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={404: {"description": "No such token"}},
+    responses={404: {"description": "No such token"}, **_REFUSED},
 )
 async def revoke_api_token(token_id: uuid.UUID, principal: Owner, db: TenantDB) -> None:
     """Revoke an API token. The approvals given through it lapse for good (section
@@ -148,7 +182,7 @@ async def list_invites(
     "/invites",
     response_model=InviteOut,
     status_code=status.HTTP_201_CREATED,
-    responses={409: {"description": "Already a member, or an open invite exists"}},
+    responses={409: {"description": "Already a member, or an open invite exists"}, **_REFUSED},
 )
 async def create_invite(body: InviteCreate, principal: Owner, db: TenantDB) -> InviteOut:
     """Pre-assign a role to an email: its first Google sign-in lands with that role."""
@@ -158,7 +192,7 @@ async def create_invite(body: InviteCreate, principal: Owner, db: TenantDB) -> I
     return service.invite_out(invite)
 
 
-@router.delete("/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT, responses=_REFUSED)
 async def revoke_invite(invite_id: uuid.UUID, principal: Owner, db: TenantDB) -> None:
     """Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409."""
     await _call(service.revoke_invite(db, principal, invite_id))

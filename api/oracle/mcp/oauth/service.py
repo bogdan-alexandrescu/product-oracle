@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth import iap
 from oracle.auth.models import Role, User
-from oracle.auth.service import hash_token
+from oracle.auth.service import hash_token, issued_in_force, may_sign_in
 from oracle.config import get_settings
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken
 from oracle.tenancy import tenant_session, unscoped_session
@@ -317,12 +317,42 @@ def _new_token_row(
     return row, issued
 
 
-async def _revoke_family(session: AsyncSession, family_id: uuid.UUID) -> None:
+async def _revoke_family(session: AsyncSession, family_id: uuid.UUID, why: str) -> None:
+    """End a grant: every token of the family is revoked and the approvals made
+    through it lapse for good, in this transaction, as for an API token (C2). Under the
+    review gate, so an approval through the grant never lands after it."""
+    from oracle.review.publish import gate_lock
+    from oracle.review.state import lapse_approvals
+
+    await gate_lock(session, shared=False)
     await session.execute(
         update(OAuthToken)
         .where(OAuthToken.family_id == family_id, OAuthToken.revoked_at.is_(None))
         .values(revoked_at=_now())
     )
+    await lapse_approvals(
+        session, None, grant_id=family_id, reason=f"MCP OAuth grant was revoked ({why})"
+    )
+
+
+async def _signed_in_member(
+    session: AsyncSession, user_id: uuid.UUID, issued_at: datetime
+) -> User | None:
+    """The member a code or refresh token acts for, its row share-locked, or ``None``
+    when they are disabled or the credential predates their last disable or restore.
+
+    A disable holds the member's row until it commits: a token issued now either waits
+    for it (and sees the disable) or commits first (and the disable's bulk revoke sees
+    it). Lock the member before any token row: the disable locks in that order."""
+    user = await session.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .with_for_update(read=True)
+        .execution_options(populate_existing=True)
+    )
+    if not may_sign_in(user) or not issued_in_force(user, issued_at):
+        return None
+    return user
 
 
 async def _client_or_error(client_id: str | None) -> OAuthClient:
@@ -353,7 +383,7 @@ async def exchange_code(
                 await s.scalars(select(OAuthToken.family_id).where(OAuthToken.code_id == row.id))
             ).all()
             for family_id in set(families):
-                await _revoke_family(s, family_id)
+                await _revoke_family(s, family_id, "authorization code replayed")
             await s.commit()
             raise OAuthError("invalid_grant", "Authorization code already used")
         if row.expires_at <= _now():
@@ -362,8 +392,8 @@ async def exchange_code(
             raise OAuthError("invalid_grant", "redirect_uri does not match the authorization")
         if not secrets.compare_digest(s256(code_verifier), row.code_challenge):
             raise OAuthError("invalid_grant", "PKCE verification failed")
-        user = await s.get(User, row.user_id)
-        if user is None or user.disabled_at is not None:
+        # A code issued before a disable stays unusable after a restore.
+        if await _signed_in_member(s, row.user_id, row.created_at) is None:
             raise OAuthError("invalid_grant", "The user no longer exists or is disabled")
         row.used_at = _now()
         token, issued = _new_token_row(
@@ -386,10 +416,25 @@ async def refresh(
     if not refresh_token:
         raise OAuthError("invalid_request", "refresh_token is required")
     async with tenant_session(client.tenant_id) as s:
+        digest = hash_token(refresh_token)
+        user_id = await s.scalar(
+            select(OAuthToken.user_id).where(OAuthToken.refresh_hash == digest)
+        )
+        if user_id is None:
+            raise OAuthError("invalid_grant", "Unknown refresh token")
+        # The member first, then the token row: a disable racing this refresh either
+        # sees the new token or this refresh sees the disable.
+        user = await s.scalar(
+            select(User)
+            .where(User.id == user_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
         row = await s.scalar(
             select(OAuthToken)
-            .where(OAuthToken.refresh_hash == hash_token(refresh_token))
+            .where(OAuthToken.refresh_hash == digest)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if row is None or row.client_id != client.id:
             raise OAuthError("invalid_grant", "Unknown refresh token")
@@ -399,7 +444,7 @@ async def refresh(
             )
             if rotated is not None:
                 # Already exchanged once: someone else holds a copy. End the grant.
-                await _revoke_family(s, row.family_id)
+                await _revoke_family(s, row.family_id, "refresh token reused")
                 await s.commit()
                 raise OAuthError("invalid_grant", "Refresh token reused; the grant is revoked")
             raise OAuthError("invalid_grant", "Refresh token revoked")
@@ -411,8 +456,7 @@ async def refresh(
             if not set(asked) <= set(granted):
                 raise OAuthError("invalid_scope", "Cannot widen the scope on refresh")
             granted = asked
-        user = await s.get(User, row.user_id)
-        if user is None or user.disabled_at is not None:
+        if not may_sign_in(user) or not issued_in_force(user, row.created_at):
             raise OAuthError("invalid_grant", "The user no longer exists or is disabled")
         row.revoked_at = _now()
         token, issued = _new_token_row(
@@ -445,5 +489,5 @@ async def revoke(client_id: str | None, token: str | None) -> None:
         )
         if row is None or row.client_id != client.id:
             return
-        await _revoke_family(s, row.family_id)
+        await _revoke_family(s, row.family_id, "revoked by its client")
         await s.commit()

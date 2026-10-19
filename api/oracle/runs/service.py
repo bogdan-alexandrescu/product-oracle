@@ -1529,18 +1529,29 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
 
 
 async def stop_run(
-    db: AsyncSession, principal: Principal, run: Run, data: dict[str, Any] | None = None
+    db: AsyncSession,
+    principal: Principal,
+    run: Run,
+    data: dict[str, Any] | None = None,
+    *,
+    defer_runtime: list[RunSegment] | None = None,
 ) -> None:
     """Cancel a run that is not final (locked by the caller, who commits): its running
-    segments at the runtime, its pending checkpoints, its tokens."""
-    runtime = get_runtime()
+    segments at the runtime, its pending checkpoints, its tokens.
+
+    With ``defer_runtime`` the runtime is not called: the running segments are marked
+    cancelled and appended to it, for the caller to cancel at the runtime once it has
+    committed (a member's disable, which must not hold its lock over HTTP calls)."""
     segments = await _segments(db, run.id)
     for s in segments:
         if s.status == "running" and s.swarm_workflow_id:
-            try:
-                await runtime.cancel(s.swarm_workflow_id)
-            except RuntimeUnavailable as exc:
-                s.error = f"cancel not confirmed by the runtime: {exc}"
+            if defer_runtime is not None:
+                defer_runtime.append(s)
+            else:
+                try:
+                    await get_runtime().cancel(s.swarm_workflow_id)
+                except RuntimeUnavailable as exc:
+                    s.error = f"cancel not confirmed by the runtime: {exc}"
             s.status = "cancelled"
             s.finished_at = _now()
         elif s.status == "pending":

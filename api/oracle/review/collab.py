@@ -198,6 +198,8 @@ async def _members(db: AsyncSession, ids: list[uuid.UUID], what: str, min_role: 
         user = users.get(uid)
         if user is None:
             raise CollabError("invalid", f"{what}: user {uid} is not a member of this company")
+        if user.disabled_at is not None:
+            raise CollabError("invalid", f"{what}: user {uid} was removed (disabled)")
         if not has_role(user.role, min_role):  # type: ignore[arg-type]
             raise CollabError("invalid", f"{what}: user {uid} needs at least the {min_role} role")
 
@@ -387,7 +389,12 @@ async def campaign_out(db: AsyncSession, row: ReviewCampaign) -> CampaignOut:
         or 0
     )
     invited = (
-        await db.scalar(select(func.count(User.id)).where(User.role.in_(row.audience_roles))) or 0
+        await db.scalar(
+            select(func.count(User.id)).where(
+                User.role.in_(row.audience_roles), User.disabled_at.is_(None)
+            )
+        )
+        or 0
     )
     out = CampaignOut.model_validate(row)
     out.invited, out.comments, out.participants = invited, comments, participants
@@ -417,7 +424,10 @@ async def create_campaign(
     )
     db.add(row)
     await db.flush()
-    invitees = list(await db.scalars(select(User.id).where(User.role.in_(roles))))
+    # A removed (disabled) member is never invited.
+    invitees = list(
+        await db.scalars(select(User.id).where(User.role.in_(roles), User.disabled_at.is_(None)))
+    )
     sent = await notify(
         db,
         invitees,

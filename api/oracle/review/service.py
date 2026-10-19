@@ -424,6 +424,11 @@ async def _still_an_approver(session: AsyncSession, principal: "Principal") -> N
         )
         if revoked is not None:
             raise ReviewError("forbidden", "This API token was revoked")
+    if principal.grant_id is not None:
+        from oracle.review.state import revoked_grants
+
+        if await revoked_grants(session, [principal.grant_id]):
+            raise ReviewError("forbidden", "This MCP OAuth grant was revoked")
     if principal.user_id is not None:
         row = (
             await session.execute(
@@ -490,6 +495,8 @@ async def review_section(
         reviewer_id=principal.user_id or principal.id,
         # The token the verdict came through (C2: revoking it voids its approvals).
         token_id=principal.token_id,
+        # The MCP OAuth grant it came through (revoking the grant voids it too).
+        oauth_grant_id=principal.grant_id,
         # The review revision: the section's revision and its section links.
         section_hash=bound[section_key],
         created_at=_now(),
@@ -849,7 +856,9 @@ async def approve_version(
         version.approved_at = _now()
         version.approved_by = who
         version.approved_token_id = principal.token_id
-        # A new approval; a lapsed one stays in the audit log, never counts again.
+        version.approved_grant_id = principal.grant_id
+        # A new approval; a lapsed one stays in approval_lapses and the audit log, and
+        # never counts again.
         version.approval_lapsed_at = None
         version.approval_lapsed_by = None
         version.approval_lapse_reason = None

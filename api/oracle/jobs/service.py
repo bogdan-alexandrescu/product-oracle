@@ -575,8 +575,10 @@ def compose_markdown(
         if body:
             parts.append(f"{body}\n")
     out = "\n".join(parts)
-    lost = lost_sections([s.section_key for s in sections], out)
-    if lost:
+    expected = [s.section_key for s in sections]
+    lost = lost_sections(expected, out)
+    added = added_sections(expected, out)
+    if lost or added:
         raise parser.DraftError(
             [
                 ImportProblem(
@@ -585,6 +587,15 @@ def compose_markdown(
                     section_key=k,
                 )
                 for k in lost
+            ]
+            + [
+                ImportProblem(
+                    code="section_added",
+                    message=f"the rewrite would add section {k!r}; a rewrite changes one "
+                    "section and adds none, so nothing was imported",
+                    section_key=k,
+                )
+                for k in added
             ]
         )
     return out
@@ -600,6 +611,16 @@ def lost_sections(expected: list[str], markdown: str) -> list[str]:
     return [k for k in expected if k not in keys] or [
         k for k, got in zip(expected, keys, strict=False) if k != got
     ][:1]
+
+
+def added_sections(expected: list[str], markdown: str) -> list[str]:
+    """Keys ``markdown`` has as sections beyond ``expected``, in order: a rewritten
+    section that grew headings of its own (the last section's too)."""
+    from oracle.docs.parser import section_keys
+
+    keys = section_keys(markdown)
+    known = set(expected)
+    return [k for k in keys if k not in known]
 
 
 async def apply_refinement(
@@ -689,6 +710,12 @@ async def apply_refinement(
         raise JobError(
             422,
             f"the revised draft would lose section(s) {', '.join(lost)}; nothing was imported",
+        )
+    added = added_sections([s.section_key for s in sections], markdown)
+    if added:
+        raise JobError(
+            422,
+            f"the revised draft would add section(s) {', '.join(added)}; nothing was imported",
         )
     try:
         # An accepted AI patch: the change event invalidates the section's approval.

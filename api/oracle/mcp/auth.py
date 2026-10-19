@@ -109,8 +109,9 @@ async def verify_api_token(raw: str) -> McpCaller | None:
     if token.user_id is not None:
         # A token for a disabled member acts for no one.
         async with tenant_session(token.tenant_id) as s:
-            if not service.may_sign_in(await s.get(User, token.user_id)):
-                return None
+            user = await s.get(User, token.user_id)
+        if not service.may_sign_in(user) or not service.issued_in_force(user, token.created_at):
+            return None
     return McpCaller(
         tenant_id=token.tenant_id,
         kind="token",

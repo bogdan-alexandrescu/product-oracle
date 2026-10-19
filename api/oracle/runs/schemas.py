@@ -288,6 +288,8 @@ class TickOut(BaseModel):
     errors: list[str]
     claude_accounts: ClaudeSweepSummary | None = None
     llm_jobs: LlmJobsTick | None = None
+    # Outbound calls owed by members' disables made this tick (oracle.members.service).
+    disable_followups: int = 0
 
 
 class InboxCheckpoint(CheckpointOut):

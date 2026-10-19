@@ -71,6 +71,18 @@ class DocumentSummary(ORM):
     updated_at: datetime
 
 
+class ApprovalLapse(BaseModel):
+    """A version approval that lapsed for good (C2): who gave it, through which API
+    token or MCP OAuth grant, and why it stopped counting."""
+
+    approved_by: uuid.UUID | None = None
+    approved_at: datetime | None = None
+    token_id: uuid.UUID | None = None
+    grant_id: uuid.UUID | None = None
+    lapsed_at: datetime
+    reason: str
+
+
 class VersionSummary(ORM):
     id: uuid.UUID
     document_id: uuid.UUID
@@ -83,6 +95,8 @@ class VersionSummary(ORM):
     notes: list[VersionWarning] = []
     imported_by: uuid.UUID | None = None
     approved_at: datetime | None = None
+    # Earlier approvals of this version that lapsed for good, oldest first (C2).
+    approval_lapses: list[ApprovalLapse] = []
     # Where the brief layer came from; "none": no brief, the version opens on the full
     # document.
     brief_source: BriefSource = "none"
@@ -112,6 +126,10 @@ class SectionVerdict(ORM):
     note: str | None = None
     reviewer_id: uuid.UUID | None = None
     created_at: datetime
+    # Set on an approval that lapsed for good (its approver demoted or removed, its API
+    # token or MCP OAuth grant revoked): it no longer approves the section.
+    lapsed_at: datetime | None = None
+    lapse_reason: str | None = None
 
 
 class SectionOut(ORM):

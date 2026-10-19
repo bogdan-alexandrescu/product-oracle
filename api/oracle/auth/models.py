@@ -29,6 +29,9 @@ class User(TenantScoped, Base):
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # The owner (user or API token id) who disabled them; no FK, like the other *_by.
     disabled_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # Sessions and credentials issued before this moment are dead (C2): set on a disable
+    # and on a restore, so a restored member signs in fresh.
+    sessions_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ApiToken(TenantScoped, Base):

@@ -3,7 +3,8 @@
 import hashlib
 import secrets
 import uuid
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
@@ -61,16 +62,32 @@ def may_sign_in(user: User | None) -> bool:
     return user is not None and user.disabled_at is None
 
 
+def issued_in_force(user: User, issued_at: datetime | None) -> bool:
+    """Whether a session or credential of ``user`` issued at ``issued_at`` still holds:
+    a disable ends every session, and a restored member signs in fresh, so anything
+    issued before ``sessions_valid_after`` is dead (C2). Unknown issue time: dead once
+    there is a cut-off."""
+    return in_force(user.sessions_valid_after, issued_at)
+
+
+def in_force(cutoff: datetime | None, issued_at: datetime | None) -> bool:
+    """:func:`issued_in_force` for a cut-off read on its own."""
+    if cutoff is None:
+        return True
+    return issued_at is not None and issued_at >= cutoff
+
+
 async def authenticate_user(email: str, password: str) -> User | None:
     # Runs before a tenant is known, hence unscoped.
     async with unscoped_session() as s:
         users = (await s.scalars(select(User).where(User.email == email.strip().lower()))).all()
     for user in users:
-        if verify_password(user.password_hash, password):
-            # A disabled member's password no longer signs in.
-            return user if may_sign_in(user) else None
-    # Equalise timing when the email is unknown.
-    if not users:
+        # A disabled member's password no longer signs in; the same email in another
+        # company still does.
+        if may_sign_in(user) and verify_password(user.password_hash, password):
+            return user
+    # Equalise timing when the email is unknown, or only on disabled rows.
+    if not any(may_sign_in(u) for u in users):
         verify_password(_DUMMY_HASH, password)
     return None
 
@@ -91,15 +108,38 @@ def _serializer() -> URLSafeTimedSerializer:
 
 
 def make_session_cookie(user: User) -> str:
-    return _serializer().dumps({"u": str(user.id), "t": str(user.tenant_id)})
+    # "i": when it was signed, to the microsecond (the signer's own timestamp has whole
+    # seconds), so a sign-in just after a restore is not taken for one before it.
+    return _serializer().dumps(
+        {"u": str(user.id), "t": str(user.tenant_id), "i": datetime.now(UTC).timestamp()}
+    )
 
 
-def read_session_cookie(value: str) -> tuple[uuid.UUID, uuid.UUID] | None:
-    """Return (user_id, tenant_id) from a valid, unexpired cookie, else None."""
+@dataclass(frozen=True)
+class SessionCookie:
+    user_id: uuid.UUID
+    tenant_id: uuid.UUID
+    # When it was signed: checked against the user's sessions_valid_after.
+    signed_at: datetime
+
+
+def read_session_cookie(value: str) -> SessionCookie | None:
+    """The user, tenant and signing time of a valid, unexpired cookie, else None.
+
+    A cookie from before the precise ``i`` claim falls back to the signer's timestamp,
+    truncated to the second: it reads as signed earlier, never later."""
     try:
-        data = _serializer().loads(value, max_age=get_settings().session_max_age_seconds)
-        return uuid.UUID(data["u"]), uuid.UUID(data["t"])
-    except (BadSignature, KeyError, ValueError, TypeError):
+        data, stamped = _serializer().loads(
+            value, max_age=get_settings().session_max_age_seconds, return_timestamp=True
+        )
+        signed_at = stamped
+        if isinstance(data.get("i"), int | float):
+            precise = datetime.fromtimestamp(data["i"], UTC)
+            # Signed with the cookie, so trusted; never later than the signature itself.
+            if precise < stamped + timedelta(seconds=1):
+                signed_at = precise
+        return SessionCookie(uuid.UUID(data["u"]), uuid.UUID(data["t"]), signed_at)
+    except (BadSignature, KeyError, ValueError, TypeError, AttributeError, OverflowError):
         return None
 
 

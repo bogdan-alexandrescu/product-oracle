@@ -91,11 +91,19 @@ class DocumentVersion(TenantScoped, Base):
     approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     # The API token the approval was given through, when a token acted (C2).
     approved_token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    # The MCP OAuth grant (oauth_tokens.family_id) the approval came through (C2).
+    approved_grant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
     # A lapsed approval (approver demoted or disabled, token revoked) moves here and
     # approved_at / approved_by are cleared: it never counts again (C2).
     approval_lapsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     approval_lapsed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     approval_lapse_reason: Mapped[str | None] = mapped_column(Text)
+    # Every approval of this version that lapsed, oldest first: approved_by, approved_at,
+    # token_id, grant_id, lapsed_at, reason. A new approval clears approval_lapsed_*,
+    # never this list.
+    approval_lapses: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]", default=list
+    )
     # Optimistic concurrency: the version number an edit started from. An import whose
     # base is older than the latest version, and that changes a section changed since,
     # is a conflict (no silent last-write-wins). Null: not given (legacy imports).

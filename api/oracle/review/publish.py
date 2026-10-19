@@ -69,10 +69,12 @@ from oracle.review.schemas import (
     SectionStatesOut,
 )
 from oracle.review.state import (
+    GRANT_REVOKED,
     counting_history,
     current_composition,
     effective_policy,
     required_sections,
+    revoked_grants,
     section_states,
     standing,
     template_required_sections,
@@ -208,6 +210,23 @@ def normalize_url(url: str) -> str:
         )
     )
     return urlunsplit((scheme, host, path, query, ""))
+
+
+def same_external_id(a: str | None, b: str | None) -> bool:
+    """Whether two external ids name the same thing: equal strings, or the same UUID
+    in any of its forms (a Notion page id dashed or not, upper case, in braces, as a
+    ``urn:uuid:``)."""
+    if a is None or b is None:
+        return False
+    if a == b:
+        return True
+    x, y = _as_uuid(a), _as_uuid(b)
+    return x is not None and x == y
+
+
+# An external id with its UUID decorations dropped (dashes, braces, "urn:uuid:"),
+# lower case: what a UUID-shaped external id is looked up by.
+_UUID_DECORATIONS = r"^urn:uuid:|[{}-]"
 
 
 def _as_uuid(value: str | None) -> uuid.UUID | None:
@@ -348,13 +367,21 @@ async def _external_items(
         await db.execute(
             select(SourceItem, Source.kind)
             .join(Source, Source.id == SourceItem.source_id)
-            .where(SourceItem.external_id.in_({ref for _, ref in refs}))
+            .where(
+                SourceItem.external_id.in_({ref for _, ref in refs})
+                | func.regexp_replace(
+                    func.lower(SourceItem.external_id), _UUID_DECORATIONS, "", "g"
+                ).in_({u.hex for _, ref in refs if (u := _as_uuid(ref)) is not None})
+            )
         )
     ).all()
     return [
         (item, kind)
         for item, kind in rows
-        if any(ref == item.external_id and _same_kind(source, kind) for source, ref in refs)
+        if any(
+            same_external_id(ref, item.external_id) and _same_kind(source, kind)
+            for source, ref in refs
+        )
     ]
 
 
@@ -417,7 +444,7 @@ async def source_permission_problems(
             external_keys[(c.source, ref)] |= keys
     for item, _ in await _external_items(db, external_keys):
         for (_, ref), keys in external_keys.items():
-            if ref == item.external_id:
+            if same_external_id(ref, item.external_id):
                 item_keys[item.id] |= keys
     if evidence_keys or entity_keys:
         for e in await db.scalars(
@@ -483,7 +510,7 @@ async def source_permission_problems(
             hit |= url_keys.get(normalize_url(u), set())
         for x in data.get("external_ids") or []:
             for (source, ref), keys in external_keys.items():
-                if ref == x and _same_kind(source, data.get("source_kind")):
+                if same_external_id(ref, x) and _same_kind(source, data.get("source_kind")):
                     hit |= keys
         for i in data.get("evidence_ids") or []:
             hit |= evidence_keys.get(_as_uuid(i), set())
@@ -564,8 +591,12 @@ async def review_problems(
             *policy.mandatory_reviewer_ids,
         ],
     )
-    # The token an approval came through: revoked (even outside the API), it voids it.
+    # The token or MCP OAuth grant an approval came through: revoked (even outside the
+    # API), it voids it.
     token_reason = why.get(version.approved_token_id) if version.approved_token_id else None
+    if not token_reason and version.approved_grant_id is not None:
+        if await revoked_grants(db, [version.approved_grant_id]):
+            token_reason = GRANT_REVOKED
     if policy.decider_id is not None and why.get(policy.decider_id):
         blockers.append(
             _problem(

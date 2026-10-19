@@ -292,6 +292,8 @@ class Verdict:
     token_id: uuid.UUID | None = None
     # Why the approval lapsed for good (:func:`lapse_approvals`); None while it holds.
     lapsed: str | None = None
+    # The MCP OAuth grant the verdict was given through, if any.
+    grant_id: uuid.UUID | None = None
 
 
 @dataclass
@@ -341,6 +343,7 @@ async def history(
                 base,
                 review.token_id,
                 (review.lapse_reason or "lapsed") if review.lapsed_at is not None else None,
+                review.oauth_grant_id,
             )
         )
     return out
@@ -429,6 +432,28 @@ async def standing(
     return out
 
 
+async def revoked_grants(db: AsyncSession, ids: "Iterable[uuid.UUID | None]") -> set[uuid.UUID]:
+    """The MCP OAuth grants (``oauth_tokens.family_id``) among ``ids`` that are revoked:
+    no token of the family is left unrevoked. Read at gate time, like :func:`standing`,
+    so a grant revoked outside the OAuth endpoints still voids its approvals."""
+    from oracle.mcp.oauth.models import OAuthToken
+
+    wanted = {i for i in ids if i is not None}
+    if not wanted:
+        return set()
+    alive = set(
+        await db.scalars(
+            select(OAuthToken.family_id).where(
+                OAuthToken.family_id.in_(wanted), OAuthToken.revoked_at.is_(None)
+            )
+        )
+    )
+    return wanted - alive
+
+
+GRANT_REVOKED = "was given through an MCP OAuth grant that was revoked"
+
+
 async def counting_history(
     db: AsyncSession, document_id: uuid.UUID, upto: int | None = None, key: str | None = None
 ) -> tuple[History, dict[str, dict[uuid.UUID | None, str]]]:
@@ -441,6 +466,7 @@ async def counting_history(
     why = await standing(
         db, {v.reviewer_id for v in approvals} | {v.token_id for v in approvals if v.token_id}
     )
+    revoked = await revoked_grants(db, {v.grant_id for v in approvals})
     lapsed: dict[str, dict[uuid.UUID | None, str]] = {}
     for section_key, verdicts in hist.by_key.items():
         kept = []
@@ -449,6 +475,7 @@ async def counting_history(
                 v.lapsed
                 or (why.get(v.reviewer_id) if v.reviewer_id else "has no reviewer")
                 or (why.get(v.token_id) if v.token_id else None)
+                or (GRANT_REVOKED if v.grant_id in revoked else None)
             )
             if v.verdict == "approved" and reason:
                 lapsed.setdefault(section_key, {})[v.reviewer_id] = reason
@@ -465,10 +492,12 @@ async def lapse_approvals(
     reason: str,
     reviewer_id: uuid.UUID | None = None,
     token_id: uuid.UUID | None = None,
+    grant_id: uuid.UUID | None = None,
 ) -> dict[str, list[str]]:
     """Mark lapsed for good every approval ``reviewer_id`` gave (a member demoted below
-    approver, or disabled), or every approval given through ``token_id`` (a revoked
-    API token, user-less or acting for a user): section approvals get ``lapsed_at``,
+    approver, or disabled), every approval given through ``token_id`` (a revoked
+    API token, user-less or acting for a user), or through the MCP OAuth grant
+    ``grant_id`` (revoked): section approvals get ``lapsed_at``,
     version approvals move to ``approval_lapsed_*`` (``approved_at`` and ``approved_by``
     cleared, ``approved_token_id`` kept, so exports
     and the document's status stop saying approved). Nothing revives them: a
@@ -476,7 +505,7 @@ async def lapse_approvals(
     so, as an edit does. In the caller's transaction (it holds the review gate)."""
     from oracle.review import collab
 
-    if reviewer_id is None and token_id is None:
+    if reviewer_id is None and token_id is None and grant_id is None:
         return {"section_review_ids": [], "version_ids": []}
     at = now()
     review_who = []
@@ -490,6 +519,9 @@ async def lapse_approvals(
             DocumentVersion.approved_token_id == token_id,
             DocumentVersion.approved_by == token_id,
         ]
+    if grant_id is not None:
+        review_who.append(SectionReview.oauth_grant_id == grant_id)
+        version_who.append(DocumentVersion.approved_grant_id == grant_id)
     rows = (
         await db.execute(
             select(SectionReview, DocumentVersion.document_id, DocumentVersion.number)
@@ -516,12 +548,7 @@ async def lapse_approvals(
         )
     )
     for v in versions:
-        v.approval_lapsed_at = at
-        v.approval_lapsed_by = v.approved_by
-        v.approval_lapse_reason = reason
-        # approved_token_id stays: which token gave the lapsed approval.
-        v.approved_at = None
-        v.approved_by = None
+        record_lapse(v, at, reason)
     await db.flush()
     for document_id in {v.document_id for v in versions}:
         document = await db.get(Document, document_id, with_for_update=True)
@@ -560,15 +587,38 @@ async def lapse_approvals(
         "version_ids": [str(v.id) for v in versions],
     }
     if rows or versions:
+        entity = "api_token" if token_id else "oauth_grant" if grant_id else "user"
         await audit.record(
             db,
             principal,
             "approval.lapse",
-            "api_token" if token_id is not None else "user",
-            token_id or reviewer_id,
+            entity,
+            token_id or grant_id or reviewer_id,
             {"reason": reason, **out},
         )
     return out
+
+
+def record_lapse(version: DocumentVersion, at: datetime, reason: str) -> None:
+    """Move a version's approval to ``approval_lapsed_*`` and append it to
+    ``approval_lapses`` (kept when a new approval clears ``approval_lapsed_*``).
+    ``approved_token_id`` and ``approved_grant_id`` stay: what gave the lapsed approval."""
+    version.approval_lapsed_at = at
+    version.approval_lapsed_by = version.approved_by
+    version.approval_lapse_reason = reason
+    version.approval_lapses = [
+        *(version.approval_lapses or []),
+        {
+            "approved_by": str(version.approved_by) if version.approved_by else None,
+            "approved_at": version.approved_at.isoformat() if version.approved_at else None,
+            "token_id": str(version.approved_token_id) if version.approved_token_id else None,
+            "grant_id": str(version.approved_grant_id) if version.approved_grant_id else None,
+            "lapsed_at": at.isoformat(),
+            "reason": reason,
+        },
+    ]
+    version.approved_at = None
+    version.approved_by = None
 
 
 @dataclass

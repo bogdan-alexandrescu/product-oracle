@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
-from oracle.auth.service import hash_token
+from oracle.auth.service import hash_token, issued_in_force, may_sign_in
 from oracle.mcp.oauth.models import OAuthToken
 from oracle.mcp.oauth.service import ACCESS_PREFIX, effective_role, issuer
 from oracle.tenancy import unscoped_session
@@ -31,13 +31,19 @@ async def verify_access_token(raw: str) -> Principal | None:
         if token.expires_at <= datetime.now(UTC):
             return None
         user = await s.get(User, token.user_id)
-        if user is None or user.tenant_id != token.tenant_id or user.disabled_at is not None:
+        if user is None or user.tenant_id != token.tenant_id or not may_sign_in(user):
+            return None
+        # Issued before a disable (a refresh its bulk revoke did not see): dead (C2).
+        if not issued_in_force(user, token.created_at):
             return None
         return Principal(
             tenant_id=token.tenant_id,
             kind="user",
             role=effective_role(user.role, token.scope),
             user_id=user.id,
+            # The grant: approvals made through it record it (C2).
+            grant_id=token.family_id,
+            issued_at=token.created_at,
         )
 
 

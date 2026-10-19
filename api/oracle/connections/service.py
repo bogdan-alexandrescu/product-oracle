@@ -33,6 +33,33 @@ REFRESH_MARGIN = timedelta(minutes=5)
 HTTP_TIMEOUT = httpx.Timeout(20.0)
 
 
+class MemberRemoved(Exception):
+    """The user a credential would be saved for was removed (disabled), or their
+    session predates their last disable or restore: nothing is saved."""
+
+
+async def _lock_member(
+    session: AsyncSession, user_id: uuid.UUID, issued_at: datetime | None
+) -> None:
+    """Share-lock the member a credential is saved for and refuse a removed one.
+
+    A disable holds the member's row until it commits: a connection saved now either
+    waits for it (and is refused) or commits first (and the disable's revoke sees it)."""
+    from oracle.auth.models import User
+    from oracle.auth.service import in_force, may_sign_in
+
+    user = await session.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .with_for_update(read=True)
+        .execution_options(populate_existing=True)
+    )
+    if not may_sign_in(user):
+        raise MemberRemoved("You were removed from this company")
+    if issued_at is not None and not in_force(user.sessions_valid_after, issued_at):
+        raise MemberRemoved("This session ended; sign in again")
+
+
 class ConnectionUnavailable(Exception):
     """No usable credential: not found, not the caller's, expired, revoked or failing."""
 
@@ -98,8 +125,12 @@ async def save(
     expires_at: datetime | None = None,
     scopes: list[str] | None = None,
     label: str | None = None,
+    issued_at: datetime | None = None,
 ) -> Connection:
-    """Create the connection, or replace the credential of the same account (reconnect)."""
+    """Create the connection, or replace the credential of the same account (reconnect).
+    Refused (:class:`MemberRemoved`) for a removed member; ``issued_at`` is when the
+    caller's session was issued."""
+    await _lock_member(session, user_id, issued_at)
     conn = await session.scalar(
         select(Connection).where(
             Connection.user_id == user_id,
@@ -131,6 +162,7 @@ async def connect_token(
     provider: Provider,
     token: str,
     label: str | None = None,
+    issued_at: datetime | None = None,
 ) -> Connection:
     """Validate a pasted token with the provider, read the account, store it encrypted."""
     identity = await provider.identify(http, token)
@@ -142,6 +174,7 @@ async def connect_token(
         identity=identity,
         bundle={"access_token": token},
         label=label,
+        issued_at=issued_at,
     )
 
 
@@ -152,6 +185,7 @@ async def connect_oauth(
     user_id: uuid.UUID,
     provider: Provider,
     tokens: oauth.Tokens,
+    issued_at: datetime | None = None,
 ) -> Connection:
     identity = await provider.identify(http, tokens.access_token)
     return await save(
@@ -163,6 +197,7 @@ async def connect_oauth(
         bundle=tokens.bundle(),
         expires_at=tokens.expires_at,
         scopes=tokens.scopes or identity.scopes,
+        issued_at=issued_at,
     )
 
 

@@ -27,6 +27,8 @@ class AuditEvent(TenantScoped, Base):
     actor: Mapped[str] = mapped_column(Text, nullable=False)
     # The API token the actor acted through (also a token acting for a user), C2.
     actor_token_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # The MCP OAuth grant (oauth_tokens.family_id) the actor acted through, C2.
+    actor_grant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     action: Mapped[str] = mapped_column(Text, nullable=False)
     entity: Mapped[str] = mapped_column(Text, nullable=False)
     entity_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
@@ -54,7 +56,7 @@ from oracle.connections.models import Connection  # noqa: E402
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
 from oracle.jobs.models import LlmJob, LlmSuggestion  # noqa: E402
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
-from oracle.members.models import Invite  # noqa: E402
+from oracle.members.models import DisableFollowup, Invite  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
 from oracle.priorities.models import PrioritySnapshot  # noqa: E402
 from oracle.review.models import (  # noqa: E402
@@ -126,6 +128,7 @@ __all__ = [
     "CompositionRevision",
     "Conflict",
     "Connection",
+    "DisableFollowup",
     "Document",
     "DocumentComposition",
     "DocumentPublication",

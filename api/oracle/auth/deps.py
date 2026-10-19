@@ -7,6 +7,7 @@ Every authenticated endpoint takes ``principal: CurrentPrincipal`` and/or
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import Depends, HTTPException, Request, status
@@ -32,6 +33,13 @@ class Principal:
     role: Role
     user_id: uuid.UUID | None = None
     token_id: uuid.UUID | None = None
+    # The MCP OAuth grant (oauth_tokens.family_id) an OAuth access token belongs to:
+    # approvals made through it record it, and revoking the grant voids them (C2).
+    grant_id: uuid.UUID | None = None
+    # When the credential was issued (a session cookie's signing time, a token's
+    # creation): a request queued behind a disable and a restore is re-checked against
+    # the member's sessions_valid_after (oracle.members.service).
+    issued_at: datetime | None = None
     # Set when the call is made for a run (an MCP call with the run's token): what it
     # writes is an agent's work (oracle.docs.service.import_draft holds approved text).
     run_id: uuid.UUID | None = None
@@ -97,7 +105,8 @@ async def _bearer_principal(raw: str) -> Principal:
         # A token for a user acts as that user: the user's role and own data.
         async with tenant_session(token.tenant_id) as s:
             user = await s.get(User, token.user_id)
-        if not service.may_sign_in(user):
+        # A token issued before a disable (one its bulk revoke did not see) stays dead.
+        if not service.may_sign_in(user) or not service.issued_in_force(user, token.created_at):
             raise _unauthorized()
         return Principal(
             tenant_id=token.tenant_id,
@@ -105,8 +114,15 @@ async def _bearer_principal(raw: str) -> Principal:
             role=user.role,
             user_id=user.id,
             token_id=token.id,
+            issued_at=token.created_at,
         )
-    return Principal(tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id)
+    return Principal(
+        tenant_id=token.tenant_id,
+        kind="token",
+        role=token.role,
+        token_id=token.id,
+        issued_at=token.created_at,
+    )
 
 
 # The MCP server's in-process REST call for a run token carries the run creator's session
@@ -153,20 +169,29 @@ async def _get_principal(
     if bearer is not None:
         return await _bearer_principal(bearer.credentials)
     if iap_user is not None:
+        # Google signs every request: the credential is as new as the request.
         return Principal(
-            tenant_id=iap_user.tenant_id, kind="user", role=iap_user.role, user_id=iap_user.id
+            tenant_id=iap_user.tenant_id,
+            kind="user",
+            role=iap_user.role,
+            user_id=iap_user.id,
+            issued_at=datetime.now(UTC),
         )
     if cookie:
-        ids = service.read_session_cookie(cookie)
-        if ids is not None:
-            user_id, tenant_id = ids
-            async with tenant_session(tenant_id) as s:
-                user = await s.get(User, user_id)
-                # A session minted before the member was disabled no longer signs in.
-                if service.may_sign_in(user):
-                    return Principal(
-                        tenant_id=tenant_id, kind="user", role=user.role, user_id=user_id
-                    )
+        session = service.read_session_cookie(cookie)
+        if session is not None:
+            async with tenant_session(session.tenant_id) as s:
+                user = await s.get(User, session.user_id)
+            # A disabled member's session no longer signs in, and one signed before a
+            # disable stays dead after a restore: they sign in fresh (C2).
+            if service.may_sign_in(user) and service.issued_in_force(user, session.signed_at):
+                return Principal(
+                    tenant_id=session.tenant_id,
+                    kind="user",
+                    role=user.role,
+                    user_id=user.id,
+                    issued_at=session.signed_at,
+                )
     raise _unauthorized()
 
 

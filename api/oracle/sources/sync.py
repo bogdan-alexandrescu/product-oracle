@@ -12,7 +12,7 @@ source, logged, or echoed in ``last_error`` (connector messages are redacted).
 import logging
 from dataclasses import dataclass
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.sources import base, service, store
@@ -36,10 +36,18 @@ class SyncRefused(Exception):
     """The source cannot sync now (paused, an upload source)."""
 
 
+async def _still_paused(db: AsyncSession, source: Source) -> bool:
+    """Whether the source was paused while it synced (its owner was removed, or they
+    paused it): the end of a sync never resumes it. Locks the row to the commit."""
+    status = await db.scalar(select(Source.status).where(Source.id == source.id).with_for_update())
+    return status == "paused"
+
+
 async def _fail(db: AsyncSession, source: Source, stats: SyncStats, message: str) -> SyncStats:
     await db.rollback()
-    source.status = "error"
-    source.last_error = message
+    if not await _still_paused(db, source):
+        source.status = "error"
+        source.last_error = message
     await db.commit()
     stats.outcome = "error"
     stats.error = message
@@ -108,8 +116,9 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         log.error("sync of a %s source failed: %s", kind, type(e).__name__)
         return await _fail(db, source, stats, f"Sync failed unexpectedly ({type(e).__name__})")
 
-    source.status = "active"
-    source.last_error = None
+    if not await _still_paused(db, source):
+        source.status = "active"
+        source.last_error = None
     source.last_synced_at = func.now()
     await db.commit()
     return stats
