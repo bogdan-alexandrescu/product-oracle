@@ -13143,7 +13143,7 @@
           "modules"
         ],
         "summary": "Confirm Composition Revision",
-        "description": "Confirm a composition revision, or save it as a working draft: who decided and\nwhy. It starts from the newest revision, so earlier decisions carry. Mandatory\nmodules and dependencies are never removed silently. Confirming puts it in force and\nrecords change events for the affected sections; a working draft supersedes nothing\nand records none.",
+        "description": "Confirm a composition revision, or save it as a working draft: who decided and\nwhy. It starts from the newest revision, so earlier decisions carry. Mandatory\nmodules and dependencies are never removed silently. Confirming puts it in force and\nrecords change events for the affected sections; a working draft supersedes nothing\nand records none. An earlier decision set aside comes back in `problems`.",
         "operationId": "confirm_composition_revision",
         "security": [
           {
@@ -22054,6 +22054,14 @@
           },
           "sections": {
             "$ref": "#/components/schemas/DocumentSectionsOut"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/CompositionProblem"
+            },
+            "type": "array",
+            "title": "Problems",
+            "default": []
           }
         },
         "type": "object",

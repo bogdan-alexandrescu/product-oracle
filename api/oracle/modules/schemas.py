@@ -290,6 +290,9 @@ class InspectorOut(BaseModel):
     recommendation: RecommendationOut | None = None
     revisions: list[RevisionSummary]
     sections: DocumentSectionsOut
+    # On the response to confirming or saving a revision: its non-fatal problems, such
+    # as an earlier decision set aside (`decision_superseded`). Empty on reads.
+    problems: list[CompositionProblem] = []
 
 
 __all__ = [

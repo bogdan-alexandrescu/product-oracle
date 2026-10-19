@@ -16,6 +16,7 @@ from oracle.templates.builtins import BUILTIN_TEMPLATES, builtin_body, ensure_bu
 from oracle.templates.models import Template, TemplateVersion
 from oracle.templates.validation import check_template
 from oracle.tenancy import tenant_session
+from tests.conftest import seed_company
 from tests.test_priorities import _token
 
 requires_pdf = pytest.mark.skipif(
@@ -129,15 +130,10 @@ async def _import(client, h, md: str, doc: str = "checkout"):
     )
 
 
-async def _seeded(client, h) -> None:
-    # Built-ins (oracle-default v2 carries the brief markers) are seeded on first list.
-    assert (await client.get("/v1/templates", headers=h)).status_code == 200
-
-
 @pytest.fixture
 async def doc(client, tenant_id):
     h = await _token(tenant_id, "approver")
-    await _seeded(client, h)
+    await seed_company(tenant_id)
     resp = await _import(client, h, DRAFT)
     assert resp.status_code == 201, resp.text
     return h
@@ -272,7 +268,7 @@ async def test_seeding_leaves_an_edited_or_archived_default_template_alone(
     client, tenant_id, change
 ):
     h = await _token(tenant_id)
-    await client.get("/v1/templates", headers=h)
+    await seed_company(tenant_id)
     if change == "edited":
         versions = (await client.get("/v1/templates/oracle-default", headers=h)).json()["versions"]
         body = versions[-1]["body"]
@@ -291,7 +287,7 @@ async def test_seeding_leaves_an_edited_or_archived_default_template_alone(
 
 async def test_first_edit_of_a_stale_builtin_keeps_the_edit(client, tenant_id):
     h = await _token(tenant_id)
-    await client.get("/v1/templates", headers=h)
+    await seed_company(tenant_id)
     async with tenant_session(tenant_id) as s:
         await _make_pre_o1f(s, "pr-faq")
         old_body = (await _versions(s, "pr-faq"))[-1].body
@@ -367,7 +363,7 @@ async def test_draft_without_markers_uses_the_full_version_heading(client, tenan
 
 async def test_draft_front_matter_brief_wins_and_is_checked(client, tenant_id):
     h = await _token(tenant_id, "approver")
-    await _seeded(client, h)
+    await seed_company(tenant_id)
     own = DRAFT.replace('template_version: "2"\n', 'template_version: "2"\nbrief: [problem]\n')
     assert (await _import(client, h, own)).status_code == 201
     v = (await client.get("/v1/documents/checkout/versions/1", headers=h)).json()

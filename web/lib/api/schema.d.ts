@@ -3547,7 +3547,7 @@ export interface paths {
          *     why. It starts from the newest revision, so earlier decisions carry. Mandatory
          *     modules and dependencies are never removed silently. Confirming puts it in force and
          *     records change events for the affected sections; a working draft supersedes nothing
-         *     and records none.
+         *     and records none. An earlier decision set aside comes back in `problems`.
          */
         post: operations["confirm_composition_revision"];
         delete?: never;
@@ -6821,6 +6821,11 @@ export interface components {
             /** Revisions */
             revisions: components["schemas"]["RevisionSummary"][];
             sections: components["schemas"]["DocumentSectionsOut"];
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["CompositionProblem"][];
         };
         /**
          * IntakeAnalysis

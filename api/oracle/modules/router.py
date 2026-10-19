@@ -394,10 +394,10 @@ async def confirm_composition_revision(
     why. It starts from the newest revision, so earlier decisions carry. Mandatory
     modules and dependencies are never removed silently. Confirming puts it in force and
     records change events for the affected sections; a working draft supersedes nothing
-    and records none."""
+    and records none. An earlier decision set aside comes back in `problems`."""
     document = await _document(db, doc)
     try:
-        revision, change = await service.confirm(
+        revision, change, problems = await service.confirm(
             db, document, data, role=principal.role, actor=principal, actor_id=principal.id
         )
     except service.NotFound as e:
@@ -417,7 +417,9 @@ async def confirm_composition_revision(
         },
     )  # fmt: skip
     await db.commit()
-    return await service.inspect(db, document, role=principal.role)
+    out = await service.inspect(db, document, role=principal.role)
+    out.problems = problems
+    return out
 
 
 @router.post(

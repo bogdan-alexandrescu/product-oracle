@@ -39,8 +39,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Built-in templates, modules and manifests for every company, so a release's new
-    # or upgraded built-ins are there before anyone reads (reads never write). A
-    # failure is logged, not fatal: the write paths seed too.
+    # or upgraded built-ins are there before anyone reads (reads never write). Each
+    # company is seeded on its own: one failing is logged by id and the rest go on.
+    # Nothing here is fatal: the write paths seed too.
     try:
         await seed_all_companies()
     except Exception:
