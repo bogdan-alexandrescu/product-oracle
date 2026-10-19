@@ -651,3 +651,179 @@ async def test_a_connections_callback_racing_a_disable_connects_nothing(client, 
     assert back.status_code == 303 and "error=" in back.headers["location"], back.headers
     async with tenant_session(ctx.tenant_id) as s:
         assert (await s.scalars(select(Connection))).all() == []
+
+
+async def test_a_disable_revokes_the_invites_the_member_created(client):
+    from oracle.members.models import Invite
+
+    ctx = await setup(client)
+    rogue = await person(ctx.tenant_id, "owner", "rogue")
+    resp = await client.post(
+        "/v1/invites", json={"email": "friend@example.com", "role": "owner"}, headers=rogue.headers
+    )
+    assert resp.status_code == 201, resp.text
+    resp = await client.post(
+        "/v1/invites", json={"email": "kept@example.com", "role": "viewer"}, headers=ctx.auth
+    )
+    assert resp.status_code == 201, resp.text
+    assert (await disable(client, ctx, rogue.user_id)).status_code == 200
+    async with tenant_session(ctx.tenant_id) as s:
+        invites = {i.email: i for i in await s.scalars(select(Invite))}
+    assert invites["friend@example.com"].revoked_at is not None
+    assert invites["kept@example.com"].revoked_at is None
+
+
+async def test_a_disable_cancels_the_members_queued_llm_jobs(client):
+    from oracle.docs.models import Document
+    from oracle.jobs.models import LlmJob
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    async with tenant_session(ctx.tenant_id) as s:
+        doc_id = await s.scalar(select(Document.id).where(Document.slug == DOC))
+        mine = LlmJob(kind="reporting", document_id=doc_id, requested_by=pm.user_id)
+        running = LlmJob(
+            kind="reporting", document_id=doc_id, requested_by=pm.user_id, status="running"
+        )
+        other = LlmJob(kind="reporting", document_id=doc_id, requested_by=None)
+        s.add_all([mine, running, other])
+        await s.commit()
+        ids = mine.id, running.id, other.id
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    async with tenant_session(ctx.tenant_id) as s:
+        jobs = [await s.get(LlmJob, i) for i in ids]
+    assert [j.status for j in jobs] == ["cancelled", "running", "queued"]
+    assert "removed" in jobs[0].error
+
+
+@pytest.mark.parametrize("started", [False, True])
+async def test_a_spend_approval_by_a_disabled_approver_is_voided_on_an_unstarted_run(
+    client, started
+):
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
+    from oracle.runs.models import Run, RunSegment
+
+    ctx = await setup(client)
+    approver = await person(ctx.tenant_id, "owner", "approver")
+    author = await person(ctx.tenant_id, "approver", "author")
+    async with tenant_session(ctx.tenant_id) as s:
+        run = Run(
+            flow="baseline_to_prd",
+            created_by=author.user_id,
+            status="running",
+            estimate_usd=Decimal("40"),
+            approved_by=approver.user_id,
+            approved_at=datetime.now(UTC),
+        )
+        s.add(run)
+        await s.flush()
+        s.add(
+            RunSegment(
+                run_id=run.id,
+                seq=1,
+                name="baseline",
+                status="running" if started else "pending",
+                started_at=datetime.now(UTC) if started else None,
+            )
+        )
+        await s.commit()
+        run_id = run.id
+    assert (await disable(client, ctx, approver.user_id)).status_code == 200
+    async with tenant_session(ctx.tenant_id) as s:
+        run = await s.get(Run, run_id)
+    if started:
+        # A started run keeps its ceiling and its approval.
+        assert run.status == "running" and run.approved_by == approver.user_id
+    else:
+        assert run.status == "awaiting_approval"
+        assert run.approved_by is None and run.approved_at is None
+
+
+async def test_a_sync_in_flight_does_not_resume_a_disabled_members_source(client, monkeypatch):
+    from oracle import crypto
+    from oracle.connections.models import Connection
+    from oracle.sources import base
+    from oracle.sources import service as sources
+    from oracle.sources.base import CursorCheckpoint
+    from oracle.sources.models import Source
+    from tests.sources_helpers import message
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+
+    class Midway:
+        kind = "slack"
+
+        async def validate(self, config, credential):
+            return None
+
+        async def sync(self, config, credential, cursor):
+            yield message("m1", "first")
+            yield CursorCheckpoint({"page": 1})
+            # The owner is removed while the sync runs.
+            assert (await disable(client, ctx, pm.user_id)).status_code == 200
+            yield message("m2", "second")
+            yield CursorCheckpoint({"page": 2})
+
+    sources.load_connectors()
+    monkeypatch.setitem(base._registry, "slack", Midway())
+    async with tenant_session(ctx.tenant_id) as s:
+        conn = Connection(
+            user_id=pm.user_id,
+            provider="slack",
+            auth_mode="token",
+            account_id="T1",
+            account_label="Workspace",
+            ciphertext=crypto.encrypt(b'{"access_token": "placeholder"}'),
+            key_version=crypto.KEY_VERSION,
+        )
+        s.add(conn)
+        await s.flush()
+        source = Source(
+            owner_user_id=pm.user_id,
+            kind="slack",
+            name="Chat",
+            connection_id=conn.id,
+            config={"channels": ["C1"]},
+            # A source that failed before: a good sync puts it back to active.
+            status="error",
+            last_error="Rate limited",
+        )
+        s.add(source)
+        await s.commit()
+        source_id = source.id
+    resp = await client.post(f"/v1/sources/{source_id}/sync", headers=pm.headers)
+    assert resp.status_code in (200, 401, 403), resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(Source, source_id)).status == "paused"
+
+
+async def test_a_revoked_run_token_is_refused_under_the_gate(client):
+    from oracle.auth.deps import Principal
+    from oracle.auth.service import caller_refusal
+    from oracle.runs.models import Run
+    from oracle.runtokens import RunToken, mint_run_token, revoke_run_tokens
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    async with tenant_session(ctx.tenant_id) as s:
+        run = Run(flow="baseline_to_prd", created_by=pm.user_id, status="running")
+        s.add(run)
+        await s.flush()
+        await mint_run_token(s, run.id, ["read:documents"], 600)
+        await s.commit()
+        token_id = await s.scalar(select(RunToken.id).where(RunToken.run_id == run.id))
+        principal = Principal(
+            tenant_id=ctx.tenant_id,
+            kind="user",
+            role="approver",
+            user_id=pm.user_id,
+            run_id=run.id,
+            run_token_id=token_id,
+        )
+        assert await caller_refusal(s, principal, "approver") is None
+        await revoke_run_tokens(s, run.id)
+        await s.commit()
+        assert await caller_refusal(s, principal, "approver") == "This run's token was revoked"

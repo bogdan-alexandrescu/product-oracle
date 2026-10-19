@@ -139,7 +139,7 @@ async def caller_refusal(session: AsyncSession, principal: "Principal", role: Ro
 
     For a re-read under the review gate: a request authenticates before it waits on the
     gate, and a disable, a demotion or a revocation may commit while it waits. Its API
-    token or MCP OAuth grant must still be active, a user-less token still have the
+    token, MCP OAuth grant or run token must still be active, a user-less token still have the
     role, and the person behind it still be an active member with the role."""
     from oracle.authz import has_role
     from oracle.mcp.oauth.models import OAuthToken
@@ -154,6 +154,18 @@ async def caller_refusal(session: AsyncSession, principal: "Principal", role: Ro
             return "This API token was revoked"
         if principal.user_id is None and not has_role(row.role, role):
             return f"Requires the {role} role"
+    if principal.run_token_id is not None:
+        from oracle.runtokens import RunToken
+
+        row = (
+            await session.execute(
+                select(RunToken.revoked_at, RunToken.expires_at).where(
+                    RunToken.id == principal.run_token_id
+                )
+            )
+        ).first()
+        if row is None or row.revoked_at is not None or row.expires_at <= datetime.now(UTC):
+            return "This run's token was revoked"
     if principal.grant_id is not None:
         live = await session.scalar(
             select(OAuthToken.id)

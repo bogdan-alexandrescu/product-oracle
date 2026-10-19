@@ -35,6 +35,8 @@ class Principal:
     # The MCP OAuth grant (its refresh-token family) the call came through: approvals
     # record it, and revoking the grant voids them, as for API tokens (C2).
     grant_id: uuid.UUID | None = None
+    # The run token of a call made for a run (below): re-read under the review gate.
+    run_token_id: uuid.UUID | None = None
     # Set when the call is made for a run (an MCP call with the run's token): what it
     # writes is an agent's work (oracle.docs.service.import_draft holds approved text).
     run_id: uuid.UUID | None = None
@@ -132,7 +134,7 @@ async def _for_run(principal: Principal, raw: str) -> Principal:
     # A disabled creator's runs act for no one.
     if run is None or run.created_by != principal.user_id or not service.may_sign_in(creator):
         raise _unauthorized()
-    return replace(principal, run_id=run.id)
+    return replace(principal, run_id=run.id, run_token_id=claims.token_id)
 
 
 async def get_principal(

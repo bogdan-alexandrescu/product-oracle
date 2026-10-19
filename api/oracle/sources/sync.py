@@ -36,10 +36,18 @@ class SyncRefused(Exception):
     """The source cannot sync now (paused, an upload source)."""
 
 
+async def _paused_meanwhile(db: AsyncSession, source: Source) -> bool:
+    """Lock the source and read its status again: paused while the sync ran (its owner
+    paused it, or was removed from the company, C2). A sync never un-pauses it."""
+    await db.refresh(source, ["status"], with_for_update=True)
+    return source.status == "paused"
+
+
 async def _fail(db: AsyncSession, source: Source, stats: SyncStats, message: str) -> SyncStats:
     await db.rollback()
-    source.status = "error"
-    source.last_error = message
+    if not await _paused_meanwhile(db, source):
+        source.status = "error"
+        source.last_error = message
     await db.commit()
     stats.outcome = "error"
     stats.error = message
@@ -108,8 +116,9 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         log.error("sync of a %s source failed: %s", kind, type(e).__name__)
         return await _fail(db, source, stats, f"Sync failed unexpectedly ({type(e).__name__})")
 
-    source.status = "active"
-    source.last_error = None
+    if not await _paused_meanwhile(db, source):
+        source.status = "active"
+        source.last_error = None
     source.last_synced_at = func.now()
     await db.commit()
     return stats

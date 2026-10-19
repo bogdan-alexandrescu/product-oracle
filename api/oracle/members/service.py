@@ -192,6 +192,8 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     )
     for token in tokens:
         token.revoked_at = at
+    # Revoked earlier: they still name what they did for the member.
+    tokens_ever = set(await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user.id)))
     await session.execute(
         update(OAuthToken)
         .where(OAuthToken.user_id == user.id, OAuthToken.revoked_at.is_(None))
@@ -215,14 +217,23 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
                 workflow_id=segment.swarm_workflow_id,
             )
         )
+    # Their identities: the user, and the API tokens that acted for them.
+    acted_as = {user.id, *tokens_ever}
+    # The open invite for their email, and every open invite they created.
     invites = list(
-        await session.scalars(select(Invite).where(Invite.email == user.email, *_open()))
+        await session.scalars(
+            select(Invite).where(
+                or_(Invite.email == user.email, Invite.invited_by.in_(acted_as)), *_open()
+            )
+        )
     )
     for invite in invites:
         invite.revoked_at = at
         await audit.record(
             session, principal, "invite.revoke", "invite", invite.id, {"email": invite.email, **via}
         )
+    jobs = await _cancel_llm_jobs(session, acted_as, at)
+    voided = await _void_spend_approvals(session, principal, acted_as, user.id, via)
     lapsed = await lapse_approvals(
         session, principal, reviewer_id=user.id, reason="member was removed (disabled)"
     )
@@ -245,6 +256,9 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
             "connections": [str(c.id) for c in connections],
             "api_tokens": [str(t.id) for t in tokens],
             "runs": [str(r.id) for r in runs],
+            "invites": [str(i.id) for i in invites],
+            "llm_jobs": [str(j) for j in jobs],
+            "run_approvals_voided": [str(r) for r in voided],
             **lapsed,
         },
     )
@@ -258,6 +272,70 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
         data={"role": user.role},
     )
     return user
+
+
+async def _cancel_llm_jobs(
+    session: AsyncSession, requesters: set[uuid.UUID], at: datetime
+) -> list[uuid.UUID]:
+    """Cancel the queued built-in model jobs the removed member requested: nothing more
+    is spent for them. A job already running finishes (its call is under way)."""
+    from oracle.jobs.models import LlmJob
+
+    jobs = list(
+        await session.scalars(
+            select(LlmJob)
+            .where(LlmJob.status == "queued", LlmJob.requested_by.in_(requesters))
+            .with_for_update(skip_locked=True)
+        )
+    )
+    for job in jobs:
+        job.status = "cancelled"
+        job.error = "Its requester was removed from this company"
+        job.finished_at = at
+    return [j.id for j in jobs]
+
+
+async def _void_spend_approvals(
+    session: AsyncSession,
+    principal: "Principal",
+    approvers: set[uuid.UUID],
+    member_id: uuid.UUID,
+    via: dict[str, str],
+) -> list[uuid.UUID]:
+    """A spend approval the removed member gave on someone else's run that has not
+    started (no segment ever ran) is void: the run waits for an approval again. A run
+    that started keeps its approval and its ceiling. Their own runs are cancelled."""
+    from oracle.runs.models import Run, RunSegment
+    from oracle.runs.service import FINAL
+    from oracle.runtokens import revoke_run_tokens
+
+    started = select(RunSegment.id).where(
+        RunSegment.run_id == Run.id,
+        or_(RunSegment.started_at.is_not(None), RunSegment.swarm_workflow_id.is_not(None)),
+    )
+    runs = list(
+        await session.scalars(
+            select(Run)
+            .where(
+                Run.approved_by.in_(approvers),
+                Run.status.not_in(FINAL),
+                Run.created_by.is_distinct_from(member_id),
+                ~started.exists(),
+            )
+            .with_for_update()
+        )
+    )
+    for run in runs:
+        approved_by = run.approved_by
+        run.status = "awaiting_approval"
+        run.approved_by = None
+        run.approved_at = None
+        await revoke_run_tokens(session, run.id)
+        await audit.record(
+            session, principal, "run.approval_voided", "run", run.id,
+            {"approved_by": str(approved_by), **via},
+        )  # fmt: skip
+    return [r.id for r in runs]
 
 
 async def _disconnect_all(
