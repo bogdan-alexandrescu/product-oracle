@@ -18,6 +18,7 @@ Revision ID: 0014_member_disable
 Revises: 0014_review
 """
 
+import json
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -100,6 +101,80 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_member_follow_ups_tenant_id"), "member_follow_ups", ["tenant_id"], unique=False
     )
+    _lapse_approvals_of_demoted()
+
+
+# Who no longer approves: a member below approver (or disabled).
+_NOT_AN_APPROVER = "(u.role NOT IN ('approver', 'owner') OR u.disabled_at IS NOT NULL)"
+DEMOTED_REASON = "demoted before this change"
+
+
+def _lapse_approvals_of_demoted() -> None:
+    """Backfill (C2): approvals given by people demoted below approver before this
+    revision lapse for good, as a demotion now lapses them in its transaction; before,
+    they only stopped counting while the person stayed demoted, so a re-promotion
+    would have revived them. Section approvals get ``lapsed_at``; version approvals
+    move to ``approval_lapsed_*``; a document left without an approved version goes
+    back to in_review. One ``approval.lapse`` audit event per person."""
+    bind = op.get_bind()
+    reviews = bind.execute(
+        sa.text(
+            "UPDATE section_reviews r SET lapsed_at = now(), lapse_reason = :reason "
+            "FROM users u WHERE u.id = r.reviewer_id AND u.tenant_id = r.tenant_id "
+            f"AND r.verdict = 'approved' AND r.lapsed_at IS NULL AND {_NOT_AN_APPROVER} "
+            "RETURNING r.tenant_id, r.reviewer_id, r.id"
+        ),
+        {"reason": DEMOTED_REASON},
+    ).all()
+    versions = bind.execute(
+        sa.text(
+            "UPDATE document_versions v SET approval_lapsed_at = now(), "
+            "approval_lapsed_by = v.approved_by, approval_lapse_reason = :reason, "
+            "approved_at = NULL, approved_by = NULL "
+            "FROM users u WHERE u.id = v.approved_by AND u.tenant_id = v.tenant_id "
+            f"AND v.approved_at IS NOT NULL AND {_NOT_AN_APPROVER} "
+            "RETURNING v.tenant_id, v.approval_lapsed_by, v.id, v.document_id"
+        ),
+        {"reason": DEMOTED_REASON},
+    ).all()
+    documents = sorted({str(r.document_id) for r in versions})
+    if documents:
+        bind.execute(
+            sa.text(
+                "UPDATE documents d SET status = 'in_review' "
+                "WHERE d.status = 'approved' AND CAST(d.id AS text) = ANY(:ids) "
+                "AND NOT EXISTS (SELECT 1 FROM document_versions v "
+                "WHERE v.document_id = d.id AND v.approved_at IS NOT NULL)"
+            ),
+            {"ids": documents},
+        )
+    by_person: dict[tuple, dict[str, list[str]]] = {}
+    for tenant_id, person, review_id in reviews:
+        entry = by_person.setdefault((tenant_id, person), {"reviews": [], "versions": []})
+        entry["reviews"].append(str(review_id))
+    for tenant_id, person, version_id, _ in versions:
+        entry = by_person.setdefault((tenant_id, person), {"reviews": [], "versions": []})
+        entry["versions"].append(str(version_id))
+    for (tenant_id, person), entry in by_person.items():
+        bind.execute(
+            sa.text(
+                "INSERT INTO audit_events (id, tenant_id, actor, action, entity, entity_id, "
+                "data) VALUES (gen_random_uuid(), :t, 'system', 'approval.lapse', 'user', :p, "
+                "CAST(:data AS jsonb))"
+            ),
+            {
+                "t": tenant_id,
+                "p": person,
+                "data": json.dumps(
+                    {
+                        "reason": DEMOTED_REASON,
+                        "via": "migration 0014_member_disable",
+                        "section_review_ids": entry["reviews"],
+                        "version_ids": entry["versions"],
+                    }
+                ),
+            },
+        )
 
 
 def downgrade() -> None:
