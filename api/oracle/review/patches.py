@@ -28,6 +28,7 @@ from oracle.v2.concurrency import expect_version, flush_or_conflict
 
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
+    from oracle.docs.service import HeldSection
 
 
 class PatchError(Exception):
@@ -42,36 +43,43 @@ async def propose_held(
     principal: "Principal | None",
     document: Document,
     version: DocumentVersion,
-    held: dict[str, tuple[str, str]],
+    held: dict[str, "HeldSection"],
     *,
     origin: str,
     run_id: uuid.UUID | None = None,
 ) -> list[SectionPatch]:
-    """One open patch per approved section an agent draft rewrote (import_draft)."""
+    """One open patch per approved section an agent draft rewrote or dropped
+    (import_draft)."""
     from oracle.review import collab
 
     hashes = dict(
         (
             await db.execute(
-                select(Section.section_key, Section.content_hash).where(
+                select(Section.section_key, Section.revision).where(
                     Section.version_id == version.id, Section.section_key.in_(list(held))
                 )
             )
         ).all()
     )
     out = []
-    for key, (heading, body) in sorted(held.items()):
+    for key, change in sorted(held.items()):
         row = SectionPatch(
             document_id=document.id,
             section_key=key,
             base_version=version.number,
             base_hash=hashes[key],
-            heading=heading,
-            body_md=body,
+            heading=change.heading,
+            body_md=change.body_md,
+            action=change.action,
             origin=origin if origin in ("run", "llm_job", "agent", "person") else "agent",
             run_id=run_id,
-            rationale="An agent draft rewrote this approved section; the approved text was "
-            "kept. Review the rewrite as a diff.",
+            rationale=(
+                "An agent draft removed or renamed this approved section; the section was "
+                "kept. Accept to remove it."
+                if change.action == "remove"
+                else "An agent draft rewrote this approved section; the approved text was "
+                "kept. Review the rewrite as a diff."
+            ),
             status="open",
             created_by=principal.id if principal else None,
         )
@@ -95,14 +103,24 @@ async def propose_held(
             "section_patch.propose",
             "section_patch",
             row.id,
-            {"section_key": row.section_key, "version": version.number, "origin": row.origin},
+            {
+                "section_key": row.section_key,
+                "version": version.number,
+                "origin": row.origin,
+                "action": row.action,
+                **({"run_id": str(row.run_id)} if row.run_id else {}),
+            },
         )
         state = states.get(row.section_key)
         await collab.notify(
             db,
             [policy.decider_id, *([state.owner_id, *state.reviewer_ids] if state else [])],
             kind="patch_proposed",
-            title=f"Proposed change to approved section {row.section_key} in {document.title}",
+            title=(
+                f"Proposed removal of approved section {row.section_key} in {document.title}"
+                if row.action == "remove"
+                else f"Proposed change to approved section {row.section_key} in {document.title}"
+            ),
             actor=principal.actor if principal else "system",
             document_id=document.id,
             version_number=version.number,
@@ -150,14 +168,14 @@ async def _latest_section(
 async def patch_detail(db: AsyncSession, row: SectionPatch) -> SectionPatchDetail:
     latest, current = await _latest_section(db, row.document_id, row.section_key)
     before = f"{current.heading}\n{current.body_text}" if current else ""
-    after = f"{row.heading}\n{body_text(row.body_md)}"
+    after = "" if row.action == "remove" else f"{row.heading}\n{body_text(row.body_md)}"
     return SectionPatchDetail(
         **SectionPatchOut.model_validate(row).model_dump(),
         latest_version=latest.number,
-        current_revision=current.content_hash if current else None,
+        current_revision=current.revision if current else None,
         current_heading=current.heading if current else None,
         current_body_md=current.body_md if current else None,
-        rebase_needed=current is None or current.content_hash != row.base_hash,
+        rebase_needed=current is None or current.revision != row.base_hash,
         words=word_diff(before, after),
     )
 
@@ -173,16 +191,22 @@ async def accept_patch(
     body_md: str | None,
     note: str | None,
 ) -> ImportResult:
-    """Save the patch (or the reviewer's edit of it) as the section's next revision."""
+    """Save the patch (or the reviewer's edit of it) as the section's next revision; a
+    removal patch drops the section. Runs under the document's row lock (the publish
+    lock), so ``applied_version`` is the version this accept creates."""
     from oracle.docs.edit import edit_section
+    from oracle.docs.service import find_document
 
+    row = await get_patch(db, patch_id)
+    document = await find_document(db, str(row.document_id), for_update=True)
     row = await get_patch(db, patch_id, lock=True)
     expect_version(row, lock_version)
     if row.status != "open":
         raise PatchError("conflict", f"an {row.status} patch cannot be accepted")
-    document = await db.get(Document, row.document_id)
     latest, _ = await _latest_section(db, row.document_id, row.section_key)
     edited = heading is not None or body_md is not None
+    if row.action == "remove" and edited:
+        raise PatchError("invalid", "a removal is accepted as it is; edit the section instead")
     row.status = "accepted"
     row.decided_by = principal.id
     row.decided_at = now()
@@ -195,7 +219,7 @@ async def accept_patch(
         "section_patch.accept",
         "section_patch",
         row.id,
-        {"section_key": row.section_key, "edited": edited, "note": note},
+        {"section_key": row.section_key, "edited": edited, "note": note, "action": row.action},
     )
     others = await db.scalars(
         select(SectionPatch).where(
@@ -218,6 +242,7 @@ async def accept_patch(
         heading=heading or row.heading,
         body_md=body_md if body_md is not None else row.body_md,
         cause="patch_accepted",
+        remove=row.action == "remove",
     )
     if not result.created:
         # The section already had this text: nothing new was imported.

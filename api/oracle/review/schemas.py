@@ -313,6 +313,9 @@ class ConflictResponse(BaseModel):
     base_version: int | None = None
     latest_version: int | None = None
     sections: list[ConflictSection] = []
+    # The front matter (title, template, citations, brief...) changed between the base
+    # and the latest version, and the draft does not have the latest's.
+    front_matter_changed: bool = False
     current_lock_version: int | None = None
 
 
@@ -332,6 +335,7 @@ class SectionEditIn(BaseModel):
 
 PatchOrigin = Literal["run", "llm_job", "agent", "person"]
 PatchStatus = Literal["open", "accepted", "rejected", "superseded"]
+PatchAction = Literal["replace", "remove"]
 
 
 class SectionPatchOut(ORM):
@@ -343,6 +347,8 @@ class SectionPatchOut(ORM):
     heading: str
     body_md: str
     origin: PatchOrigin
+    # "remove": accepting it drops the section (an agent's draft removed or renamed it).
+    action: PatchAction = "replace"
     run_id: uuid.UUID | None = None
     rationale: str | None = None
     status: PatchStatus
@@ -468,6 +474,8 @@ PublishProblemCode = Literal[
     "readiness_critical",
     "source_permission_revoked",
     "already_published",
+    "superseded_version",
+    "template_unresolved",
     # Warnings only:
     "open_critical_change_request",
     "open_change_request",

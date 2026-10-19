@@ -7,7 +7,7 @@ sources they own (S3 revised). Another user's source reads as "not found".
 import importlib
 import pkgutil
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -17,6 +17,9 @@ from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.sources import base
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
+
+if TYPE_CHECKING:
+    from oracle.auth.deps import Principal
 
 # Source kind -> the connection provider it syncs with. Uploads need no connection.
 KIND_PROVIDER: dict[str, str | None] = {
@@ -291,7 +294,15 @@ async def set_paused(db: AsyncSession, source: Source, paused: bool) -> Source:
     return source
 
 
-async def delete_source(db: AsyncSession, source: Source) -> None:
+async def delete_source(
+    db: AsyncSession, source: Source, principal: "Principal | None" = None
+) -> None:
+    """Delete the source and its items. First a ``source_permission`` revocation is
+    recorded (a tombstone of its items, URLs, evidence and section links), so the
+    publish gate refuses documents that still cite it (oracle.review.publish)."""
+    from oracle.review.publish import record_source_revocation
+
+    await record_source_revocation(db, principal, [source], "source_revoked", drop_links=True)
     await db.delete(source)
     await db.commit()
 

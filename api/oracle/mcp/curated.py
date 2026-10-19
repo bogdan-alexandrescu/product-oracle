@@ -186,18 +186,36 @@ _PUSH_DRAFT_SCHEMA = {
             "type": "string",
             "description": "The full draft: YAML front matter, then the markdown body",
         },
+        "base_version": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The version the draft was written on (the one you read with "
+            "get_document_markdown); 0 when the draft creates the document. A newer "
+            "version that changed what the draft has is a conflict to merge, never "
+            "overwritten.",
+        },
     },
-    "required": ["doc", "markdown"],
+    "required": ["doc", "markdown", "base_version"],
 }
 
 
 async def _push_draft(app, caller, ops, args) -> types.CallToolResult:
     op = ops["op"]
     missing = [k for k in ("doc", "markdown") if not args.get(k)]
+    base = args.get("base_version")
+    if base is None:
+        missing.append("base_version")
     if missing:
         raise ToolError(f"Missing required argument(s): {', '.join(missing)}")
+    if isinstance(base, bool) or not isinstance(base, int) or base < 0:
+        raise ToolError("base_version must be a whole number, 0 for a new document")
     return to_result(
-        await call_operation(app, caller, op, {"doc": args["doc"], op.body_key: args["markdown"]})
+        await call_operation(
+            app,
+            caller,
+            op,
+            {"doc": args["doc"], "base_version": base, op.body_key: args["markdown"]},
+        )
     )
 
 
@@ -276,7 +294,9 @@ CURATED: tuple[Curated, ...] = (
         name="get_document_markdown",
         description=(
             "Read a document version as markdown (the latest version unless one is given). "
-            "Sections approved in review should not be changed in a new draft."
+            "Sections approved in review should not be changed in a new draft. Push the "
+            "draft with push_draft and base_version set to the version you read "
+            "(get_document lists latest_version)."
         ),
         needs={
             "document": _by("GET", ("get_document",)),
@@ -306,7 +326,8 @@ CURATED: tuple[Curated, ...] = (
         name="push_draft",
         description=(
             "Import a draft as the next version of a document (markdown with YAML front "
-            "matter); creates the document on first import. Keep the template's final "
+            "matter); creates the document on first import (base_version 0). Pass the "
+            "version you wrote it on as base_version. Keep the template's final "
             "Sources and data points section, with each data point's confidence, and flag "
             "claims that rest only on low-confidence evidence."
         ),

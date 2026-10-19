@@ -58,8 +58,12 @@ async def _through(path: str, client, tenant_id, slug: str) -> None:
             assert out.splitlines() == [f"Imported {slug} version {n}", "No warnings"]
         else:
             tool, arg = ("import_version", "body") if path == "mcp" else ("push_draft", "markdown")
+            args = {"doc": slug, arg: text}
+            if tool == "push_draft":
+                # v2-review: the curated push names the version it was written on.
+                args["base_version"] = n - 1
             async with mcp_session(owner) as c:
-                result = await c.call_tool(tool, {"doc": slug, arg: text})
+                result = await c.call_tool(tool, args)
             assert not result.is_error, result
             assert result.structured_content["number"] == n
 

@@ -8,6 +8,9 @@ The known keys and how each value is checked:
   designated decider, mandatory reviewers, required sections, which sections need an
   approval before a publish, re-review on change. A document's own policy replaces it.
 
+- ``publish_latest_only``: true (default) refuses publishing a version a newer one
+  superseded; false lets an approved older version be published.
+
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
@@ -38,7 +41,11 @@ DEFAULTS: dict[str, Any] = {
         "section_approval": "required_sections",
         "rereview_on_change": True,
     },
+    "publish_latest_only": True,
 }
+# Settings the publish gate reads: a change takes the review gate exclusively, so it
+# never lands while a publish renders (oracle.review.publish.gate_lock).
+GATE_KEYS = ("review_policy", "publish_latest_only")
 KNOWN_KEYS = tuple(DEFAULTS)
 
 
@@ -131,6 +138,10 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
             return await validate_policy(session, value)
         except PolicyError as e:
             raise InvalidSetting(str(e)) from None
+    if key == "publish_latest_only":
+        if not isinstance(value, bool):
+            raise InvalidSetting("publish_latest_only must be true or false")
+        return value
     raise KeyError(key)
 
 
@@ -189,6 +200,10 @@ async def get_setting_endpoint(key: str, principal: Owner, db: TenantDB) -> Sett
 async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB) -> SettingOut:
     if key not in DEFAULTS:
         raise _unknown(key)
+    if key in GATE_KEYS:
+        from oracle.review.publish import gate_lock
+
+        await gate_lock(db, shared=False)
     if body.value is None:
         await clear_setting(db, key)
         await audit.record(db, principal, "setting.reset", "tenant_setting", data={"key": key})

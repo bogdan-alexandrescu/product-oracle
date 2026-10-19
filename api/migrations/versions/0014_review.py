@@ -3,9 +3,13 @@
 Additive only. Per-section review state across versions (owner, reviewer assignees, due
 date, invalidated approvals), document review policies (designated decider, mandatory
 reviewers, required sections), organization-wide feedback campaigns, in-app
-notifications, section patches (an agent rewrite of an approved section, reviewed as a
-diff), and immutable document publications. ``feedback_items`` gains a nullable
-``severity``. A trigger refuses any UPDATE of a publication. See
+notifications, section patches (an agent rewrite or removal of an approved section,
+reviewed as a diff), and immutable document publications. ``feedback_items`` gains a
+nullable ``severity``; ``document_versions`` gains ``notes`` (e.g. imported without a base version);
+``sections`` gains ``revision`` (the text, the cited evidence and
+the brief membership; backfilled, and verdicts given on a content hash move to it). A
+trigger refuses any UPDATE of a publication and any DELETE that is not a cascade from
+its document or company. See
 docs/product-oracle-v2/08-review-and-publish.md.
 
 The integrator re-chains this revision onto the head in merge order.
@@ -14,6 +18,8 @@ Revision ID: 0014_review
 Revises: 0013
 """
 
+import hashlib
+import json
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -25,14 +31,66 @@ down_revision: str | None = "0013"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+# Refuses any UPDATE, and any DELETE that is not a cascade from deleting the document or
+# the company (a foreign-key cascade runs inside the referential trigger, so its depth
+# is above 1).
 IMMUTABLE_FUNCTION = """
 CREATE OR REPLACE FUNCTION oracle_refuse_publication_update() RETURNS trigger AS $$
 BEGIN
+    IF TG_OP = 'DELETE' AND pg_trigger_depth() > 1 THEN
+        RETURN OLD;
+    END IF;
     RAISE EXCEPTION 'document publications are immutable (publication %)', OLD.id
         USING ERRCODE = 'restrict_violation';
 END;
 $$ LANGUAGE plpgsql
 """
+
+
+def _revision(content_hash: str, layer: str, cited: list[list]) -> str:
+    """oracle.docs.parser.section_revision, frozen as of this migration."""
+    if layer != "brief" and not cited:
+        return content_hash
+    canonical = json.dumps([content_hash, layer, cited], ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _backfill_revisions() -> None:
+    """Every section's revision; verdicts given on a section's content hash move to its
+    revision, so existing approvals still hold."""
+    conn = op.get_bind()
+    rows = conn.execute(
+        sa.text(
+            "SELECT id, version_id, content_hash, layer, citation_keys FROM sections "
+            "WHERE layer = 'brief' OR cardinality(citation_keys) > 0"
+        )
+    ).all()
+    versions = list({r.version_id for r in rows})
+    citations: dict = {}
+    for i in range(0, len(versions), 500):
+        for c in conn.execute(
+            sa.text(
+                "SELECT version_id, cite_key, ref, title, excerpt FROM citations "
+                "WHERE version_id = ANY(:ids)"
+            ),
+            {"ids": versions[i : i + 500]},
+        ):
+            citations[(c.version_id, c.cite_key)] = [c.cite_key, c.ref, c.title, c.excerpt]
+    for r in rows:
+        cited = [
+            citations[(r.version_id, k)] for k in r.citation_keys if (r.version_id, k) in citations
+        ]
+        revision = _revision(r.content_hash, r.layer, cited)
+        if revision != r.content_hash:
+            conn.execute(
+                sa.text("UPDATE sections SET revision = :r WHERE id = :id"),
+                {"r": revision, "id": r.id},
+            )
+    op.execute(
+        "UPDATE section_reviews r SET section_hash = s.revision FROM sections s "
+        "WHERE s.version_id = r.version_id AND s.section_key = r.section_key "
+        "AND r.section_hash = s.content_hash AND s.revision <> s.content_hash"
+    )
 
 
 def upgrade() -> None:
@@ -188,7 +246,6 @@ def upgrade() -> None:
             ["version_id"],
             ["document_versions.id"],
             name=op.f("fk_document_publications_version_id_document_versions"),
-            ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_document_publications")),
         sa.UniqueConstraint(
@@ -221,6 +278,7 @@ def upgrade() -> None:
         sa.Column("heading", sa.Text(), nullable=False),
         sa.Column("body_md", sa.Text(), nullable=False),
         sa.Column("origin", sa.Text(), nullable=False),
+        sa.Column("action", sa.Text(), server_default="replace", nullable=False),
         sa.Column("run_id", sa.Uuid(), nullable=True),
         sa.Column("rationale", sa.Text(), nullable=True),
         sa.Column("status", sa.Text(), nullable=False),
@@ -427,10 +485,26 @@ def upgrade() -> None:
         "severity IS NULL OR severity IN ('critical', 'major', 'minor')",
     )
     # ### end Alembic commands ###
-    # A publication is immutable: later edits and source updates never change it.
+    op.create_check_constraint(
+        op.f("ck_section_patches_action"), "section_patches", "action IN ('replace', 'remove')"
+    )
+    # The review revision of a section: its text, cited evidence and brief membership.
+    op.add_column(
+        "document_versions",
+        sa.Column(
+            "notes", postgresql.JSONB(astext_type=sa.Text()), server_default="[]", nullable=False
+        ),
+    )
+    op.add_column("sections", sa.Column("revision", sa.Text(), nullable=True))
+    op.execute("UPDATE sections SET revision = content_hash")
+    _backfill_revisions()
+    op.alter_column("sections", "revision", nullable=False)
+    # A publication is immutable: later edits and source updates never change it, and
+    # only deleting its document or company removes it.
     op.execute(IMMUTABLE_FUNCTION)
     op.execute(
-        "CREATE TRIGGER document_publications_immutable BEFORE UPDATE ON document_publications "
+        "CREATE TRIGGER document_publications_immutable BEFORE UPDATE OR DELETE "
+        "ON document_publications "
         "FOR EACH ROW EXECUTE FUNCTION oracle_refuse_publication_update()"
     )
 
@@ -438,6 +512,13 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP TRIGGER IF EXISTS document_publications_immutable ON document_publications")
     op.execute("DROP FUNCTION IF EXISTS oracle_refuse_publication_update()")
+    op.execute(
+        "UPDATE section_reviews r SET section_hash = s.content_hash FROM sections s "
+        "WHERE s.version_id = r.version_id AND s.section_key = r.section_key "
+        "AND r.section_hash = s.revision"
+    )
+    op.drop_column("sections", "revision")
+    op.drop_column("document_versions", "notes")
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_constraint(op.f("ck_feedback_items_severity"), "feedback_items", type_="check")
     op.drop_column("feedback_items", "severity")

@@ -8,6 +8,7 @@ front matter), so the agent track can fix a draft in one pass.
 """
 
 import hashlib
+import json
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -87,6 +88,34 @@ class ParsedDraft:
 
 def sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# (cite key, ref, title, excerpt) of a citation a section cites.
+CitedEntry = tuple[str, str | None, str | None, str | None]
+
+
+def section_revision(content_hash: str, layer: str, cited: list[CitedEntry]) -> str:
+    """A section's revision: its text (``content_hash``), the citation entries it cites
+    (ref, title, excerpt, in citing order) and its brief-layer membership, so changing
+    the evidence behind a section, or moving it in or out of the brief, is a new
+    revision (CR-06). A detail section that cites nothing keeps its content hash."""
+    if layer != "brief" and not cited:
+        return content_hash
+    canonical = json.dumps(
+        [content_hash, layer, [list(c) for c in cited]], ensure_ascii=False, separators=(",", ":")
+    )
+    return sha256(canonical)
+
+
+def cited_entries(citation_keys: list[str], citations: dict[str, Any]) -> list[CitedEntry]:
+    """The entries a section cites, from ``citations`` by cite key (objects with
+    ``ref``, ``title`` and ``excerpt``); unknown keys are skipped."""
+    out: list[CitedEntry] = []
+    for key in citation_keys:
+        c = citations.get(key)
+        if c is not None:
+            out.append((key, c.ref, c.title, c.excerpt))
+    return out
 
 
 def normalize(markdown: str) -> str:

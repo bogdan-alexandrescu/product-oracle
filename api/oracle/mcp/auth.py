@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from oracle.auth import service
+from oracle.auth.deps import RUN_TOKEN_HEADER
 from oracle.auth.models import User
 from oracle.config import get_settings
 from oracle.runtokens import RUN_TOKEN_PREFIX, verify_run_token
@@ -79,13 +80,19 @@ def user_caller(
     scopes: frozenset[str] | None = None,
     token_id: uuid.UUID | None = None,
     run_id: uuid.UUID | None = None,
+    run_token: str | None = None,
 ) -> McpCaller:
-    """A caller acting for ``user``: the REST call carries a session for that user."""
+    """A caller acting for ``user``: the REST call carries a session for that user, and
+    for a run also the run's token (``RUN_TOKEN_HEADER``), so REST knows the call is the
+    run's (an agent's draft keeps approved text as patches)."""
     cookie = f"{get_settings().session_cookie_name}={service.make_session_cookie(user)}"
+    credentials = {"cookie": cookie}
+    if run_token is not None:
+        credentials[RUN_TOKEN_HEADER] = run_token
     return McpCaller(
         tenant_id=user.tenant_id,
         kind=kind,
-        credentials={"cookie": cookie},
+        credentials=credentials,
         scopes=scopes,
         user_id=user.id,
         token_id=token_id,
@@ -144,7 +151,12 @@ async def verify_run_token_caller(raw: str) -> McpCaller | None:
     if user is None:
         return None
     return user_caller(
-        user, kind="run", scopes=claims.scopes, token_id=claims.token_id, run_id=claims.run_id
+        user,
+        kind="run",
+        scopes=claims.scopes,
+        token_id=claims.token_id,
+        run_id=claims.run_id,
+        run_token=raw,
     )
 
 

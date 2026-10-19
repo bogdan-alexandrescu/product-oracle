@@ -443,7 +443,11 @@ async def review_section(
     version's is a ``conflict``: an approval is never given on stale text. A verdict
     clears a pending re-review request on the section.
     """
+    from oracle.review.publish import lock_document
+
     version = await get_version(session, doc, n)
+    # The publish lock: a verdict never commits while a publish renders.
+    await lock_document(session, version.document_id)
     section = await _get_section(session, version, section_key)
     if revision is not None:
         await _check_revision(session, version, section, revision)
@@ -452,8 +456,8 @@ async def review_section(
         section_key=section_key,
         verdict=verdict,
         note=note,
-        reviewer_id=principal.id,
-        section_hash=section.content_hash,
+        reviewer_id=principal.user_id or principal.id,
+        section_hash=section.revision,
         created_at=_now(),
     )
     session.add(review)
@@ -549,11 +553,7 @@ async def _check_revision(
             Section.version_id == latest.id, Section.section_key == section.section_key
         )
     )
-    if (
-        revision == section.content_hash
-        and current is not None
-        and (current.content_hash == revision)
-    ):
+    if revision == section.revision and current is not None and (current.revision == revision):
         return
     message = (
         f"section {section.section_key!r} changed: version {latest.number} has another "
@@ -571,7 +571,7 @@ async def _check_revision(
                 {
                     "section_key": section.section_key,
                     "base_revision": revision,
-                    "current_revision": current.content_hash if current else None,
+                    "current_revision": current.revision if current else None,
                     "current_heading": current.heading if current else None,
                     "current_body_md": current.body_md if current else None,
                 }
@@ -645,6 +645,8 @@ async def apply_resolutions(
     document_id: uuid.UUID,
     version_id: uuid.UUID,
     resolutions: Sequence[Resolution],
+    *,
+    principal: "Principal | None" = None,
 ) -> list[FeedbackItem]:
     """Apply a draft's front-matter ``resolutions`` to the document's feedback items.
 
@@ -652,6 +654,7 @@ async def apply_resolutions(
     ``resolution_note`` and ``addressed_in_version`` (the NUMBER of ``version_id``).
     Validates all ids first and raises :class:`UnknownFeedbackItemsError` without
     changing anything if any is unknown for ``document_id``. Returns the updated items.
+    The audit events name ``principal`` (whoever imported or saved the version).
     """
     if not resolutions:
         return []
@@ -680,7 +683,7 @@ async def apply_resolutions(
         item.addressed_in_version = version.number
         await audit.record(
             session,
-            None,
+            principal,
             "feedback.resolve",
             "feedback_item",
             item.id,
@@ -769,18 +772,24 @@ async def resolution_report(session: AsyncSession, doc: str, n: int) -> Resoluti
 async def approve_version(
     session: AsyncSession, principal: "Principal", doc: str, n: int
 ) -> tuple[Document, DocumentVersion]:
-    """Stamp the version's ``approved_at`` (kept if already set); document -> approved.
+    """Stamp the version's ``approved_at`` and ``approved_by`` (a re-approval by someone
+    else updates both; the same approver's keeps them); document -> approved.
 
     The final approval is the designated decider's when the review policy names one
     (others review and give section verdicts), and it is of the current version only:
     approving a version a newer one replaced is a ``conflict``.
     """
-    version = await get_version(session, doc, n)
-    document = await session.get(Document, version.document_id)
+    from oracle.review.publish import lock_document
     from oracle.review.state import effective_policy
 
+    version = await get_version(session, doc, n)
+    # The publish lock: an approval never commits while a publish renders.
+    document = await lock_document(session, version.document_id)
+    await session.refresh(version)
     policy = await effective_policy(session, document)
-    if policy.decider_id is not None and principal.id != policy.decider_id:
+    # The person behind the call: an API token acting for a user is that user.
+    who = principal.user_id or principal.id
+    if policy.decider_id is not None and who != policy.decider_id:
         raise ReviewError(
             "forbidden", "Only the designated decider approves this document's versions"
         )
@@ -797,9 +806,12 @@ async def approve_version(
             "approve the current version",
         )
     already = version.approved_at is not None
-    if not already:
+    previous_approver = version.approved_by
+    # A re-approval by someone else (the decider set after an earlier approval) is the
+    # approval that counts: it records them and when; the same approver's is a no-op.
+    if not already or previous_approver != who:
         version.approved_at = _now()
-        version.approved_by = principal.id
+        version.approved_by = who
     previous_status = document.status
     document.status = "approved"
     await session.flush()
@@ -814,6 +826,11 @@ async def approve_version(
             "version": version.number,
             "previous_status": previous_status,
             "already_approved": already,
+            **(
+                {"previous_approved_by": str(previous_approver)}
+                if already and previous_approver
+                else {}
+            ),
         },
     )
     return document, version

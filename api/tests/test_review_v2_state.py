@@ -34,8 +34,13 @@ async def test_states_start_unreviewed_with_revisions(client):
     assert {s["status"] for s in body["sections"]} == {"unreviewed"}
     assert body["counts"] == {"unreviewed": 6}
     version = (await client.get(ctx.v(1), headers=ctx.auth)).json()
+    revisions = {s["section_key"]: s["revision"] for s in version["sections"]}
+    assert all(by_key[k]["revision"] == r for k, r in revisions.items())
+    # A detail section that cites nothing: its revision is its content hash; one that
+    # cites evidence covers the citation entries too.
     hashes = {s["section_key"]: s["content_hash"] for s in version["sections"]}
-    assert all(by_key[k]["revision"] == h for k, h in hashes.items())
+    assert revisions["problem"] == hashes["problem"]
+    assert revisions["goal-trace"] != hashes["goal-trace"]
     assert by_key["problem"]["revision_since_version"] == 1
 
 

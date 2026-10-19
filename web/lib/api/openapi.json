@@ -309,7 +309,7 @@
           "documents"
         ],
         "summary": "Import Version",
-        "description": "Import a draft (markdown + YAML front matter). Creates the document on first import.\n\n``base_version``: the version the draft was written on. When a newer version\nchanged sections the draft does not have as the latest has them, the import is a\n409 naming both versions and those sections (never a silent overwrite).",
+        "description": "Import a draft (markdown + YAML front matter). Creates the document on first import.\n\n``base_version``: the version the draft was written on (0: the draft creates the\ndocument). When a newer version changed sections (or the front matter) the draft\ndoes not have as the latest has them, the import is a 409 naming both versions and\nthose sections (never a silent overwrite). Without it the import works as before,\nand the version carries a ``base_version_missing`` note.",
         "operationId": "import_version",
         "security": [
           {
@@ -337,7 +337,7 @@
               "anyOf": [
                 {
                   "type": "integer",
-                  "minimum": 1
+                  "minimum": 0
                 },
                 {
                   "type": "null"
@@ -1672,7 +1672,7 @@
           "review"
         ],
         "summary": "Edit Document Section",
-        "description": "Save one section as the next version. Send the version and section revision you\nloaded: another section changed since is fine (the edit applies on the latest\nversion); the same section changed since is a 409 with its current text. Approvers\nedit any section; a section's owner edits their own.",
+        "description": "Save one section as the next version. Send the version and section revision you\nloaded: another section changed since is fine (the edit applies on the latest\nversion); the same section changed since is a 409 with its current text. Approvers\nedit any section; a section's owner edits their own, and their ``resolutions`` close\nonly that section's feedback (403 otherwise). An edit that reaches outside its\nsection (adds, rewrites or swallows another section) is a 422.",
         "operationId": "edit_document_section",
         "security": [
           {
@@ -4456,7 +4456,7 @@
           "connections"
         ],
         "summary": "Delete Connection",
-        "description": "Disconnect: revoke the grant at the provider where it has an endpoint (GitHub,\nSlack, Google; best effort), then delete Oracle's copy of the credential.",
+        "description": "Disconnect: revoke the grant at the provider where it has an endpoint (GitHub,\nSlack, Google; best effort), record a ``source_permission`` revocation for each\nsource it synced, then delete Oracle's copy of the credential.",
         "operationId": "delete_connection",
         "security": [
           {
@@ -17772,6 +17772,11 @@
             "title": "Sections",
             "default": []
           },
+          "front_matter_changed": {
+            "type": "boolean",
+            "title": "Front Matter Changed",
+            "default": false
+          },
           "current_lock_version": {
             "anyOf": [
               {
@@ -25048,6 +25053,8 @@
               "readiness_critical",
               "source_permission_revoked",
               "already_published",
+              "superseded_version",
+              "template_unresolved",
               "open_critical_change_request",
               "open_change_request",
               "readiness_warning",
@@ -27687,6 +27694,17 @@
             "type": "string",
             "title": "Content Hash"
           },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
           "citation_keys": {
             "items": {
               "type": "string"
@@ -27834,6 +27852,15 @@
               "person"
             ],
             "title": "Origin"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "remove"
+            ],
+            "title": "Action",
+            "default": "replace"
           },
           "run_id": {
             "anyOf": [
@@ -28051,6 +28078,15 @@
               "person"
             ],
             "title": "Origin"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "remove"
+            ],
+            "title": "Action",
+            "default": "replace"
           },
           "run_id": {
             "anyOf": [
@@ -32061,6 +32097,14 @@
             "title": "Warnings",
             "default": []
           },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/VersionWarning"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          },
           "imported_by": {
             "anyOf": [
               {
@@ -32311,6 +32355,14 @@
             },
             "type": "array",
             "title": "Warnings",
+            "default": []
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/VersionWarning"
+            },
+            "type": "array",
+            "title": "Notes",
             "default": []
           },
           "imported_by": {

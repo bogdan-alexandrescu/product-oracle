@@ -329,7 +329,7 @@ async def review_queue(db: AsyncSession, principal: "Principal") -> list[ReviewQ
         hist = await history(db, document.id, key=row.section_key)
         st = section_status(
             hist.by_key.get(row.section_key, []),
-            section.content_hash,
+            section.revision,
             set(row.invalidated_review_ids),
         )
         out.append(

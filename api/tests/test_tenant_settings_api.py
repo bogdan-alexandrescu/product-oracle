@@ -38,6 +38,8 @@ async def test_defaults_and_unknown_keys(client, owner):
             "section_approval": "required_sections",
             "rereview_on_change": True,
         },
+        # v2-review: only the latest version of a document is published.
+        "publish_latest_only": True,
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404

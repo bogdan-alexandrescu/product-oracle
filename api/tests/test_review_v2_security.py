@@ -562,10 +562,11 @@ async def test_rest_imports_without_a_base_are_flagged(client):
     v2 = replace(DRAFT, "Owner: product.", "Owner: growth.")
     resp = await import_md(client, ctx.auth, v2)
     assert resp.status_code == 201
-    assert [w["code"] for w in resp.json()["warnings"]] == ["base_version_missing"]
+    assert resp.json()["warnings"] == []
+    assert [n["code"] for n in resp.json()["notes"]] == ["base_version_missing"]
     v3 = replace(v2, "Owner: growth.", "Owner: design.")
     resp = await import_md(client, ctx.auth, v3, base=2)
-    assert resp.status_code == 201 and resp.json()["warnings"] == []
+    assert resp.status_code == 201 and resp.json()["notes"] == []
 
 
 async def test_front_matter_changed_since_the_base_is_a_conflict(client):
@@ -707,3 +708,19 @@ def test_normalized_urls():
     assert normalize_url("https://example.com/") == "https://example.com"
     assert normalize_url("not a url") == "not a url"
     assert normalize_url(json.dumps(None)) == "null"
+
+
+async def test_an_agent_draft_changing_only_approved_sections_leaves_patches(client):
+    ctx = await setup(client)
+    assert (await verdict(client, ctx.auth, 1, "problem")).status_code == 200
+    result = await _agent_import(
+        ctx, replace(DRAFT, "Teams miss shared deadlines.", "Only the approved text changed.")
+    )
+    bodies = {sec.section_key: sec.body_md for sec in result.version.sections}
+    assert bodies["problem"] == "Teams miss shared deadlines."
+    patches = (
+        await client.get(f"/v1/documents/{DOC}/section-patches?status=open", headers=ctx.auth)
+    ).json()
+    assert [(p["section_key"], p["body_md"]) for p in patches] == [
+        ("problem", "Only the approved text changed.")
+    ]

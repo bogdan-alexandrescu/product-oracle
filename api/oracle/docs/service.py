@@ -17,7 +17,14 @@ from oracle.auth.deps import Principal
 from oracle.docs import layers
 from oracle.docs.diff import diff_sections
 from oracle.docs.models import DOCUMENT_KINDS, Citation, Document, DocumentVersion, Section
-from oracle.docs.parser import DraftError, ParsedDraft, is_uuid, parse_draft
+from oracle.docs.parser import (
+    DraftError,
+    ParsedDraft,
+    cited_entries,
+    is_uuid,
+    parse_draft,
+    section_revision,
+)
 from oracle.docs.schemas import (
     CitationOut,
     DiffOut,
@@ -62,11 +69,13 @@ class BaseVersionConflictError(ImportConflictError):
         *,
         code: str = "version_conflict",
         message: str | None = None,
+        front_matter_changed: bool = False,
     ):
         self.base = base
         self.latest = latest
         self.sections = sections
         self.code = code
+        self.front_matter_changed = front_matter_changed
         keys = ", ".join(s["section_key"] for s in sections)
         super().__init__(
             message
@@ -338,6 +347,54 @@ async def _draft_kind(db: AsyncSession, draft: ParsedDraft) -> str | None:
     return None
 
 
+@dataclass
+class HeldSection:
+    """An approved section an agent's draft changed or dropped: the agent's text waits
+    as a section patch (``action`` "replace"), or its removal does ("remove")."""
+
+    heading: str
+    body_md: str
+    action: str = "replace"
+
+
+def _without_resolutions(front_matter: dict | None) -> dict:
+    return {k: v for k, v in (front_matter or {}).items() if k != "resolutions"}
+
+
+async def _layers(
+    db: AsyncSession, document: Document, draft: ParsedDraft
+) -> tuple[list[str], str, dict[str, str]]:
+    """O1f: the brief layer, from the draft, else its template's markers, else a
+    "Full version" heading. Returns (brief keys, brief source, layer by key)."""
+    template_brief = None
+    if draft.brief is None:
+        named = (
+            (draft.template, draft.template_version)
+            if draft.template
+            else (document.template, document.template_version)
+        )
+        body = await template_body(db, *named)
+        template_brief = _template_meta(body).marked_brief if body else None
+    brief, brief_source = layers.resolve_brief(
+        [layers.SectionRef(s.section_key, s.level) for s in draft.sections],
+        draft_brief=draft.brief,
+        template_brief=template_brief,
+    )
+    return brief, brief_source, layers.layers((s.section_key for s in draft.sections), brief)
+
+
+def draft_revisions(draft: ParsedDraft, layer_of: dict[str, str]) -> dict[str, str]:
+    """Each section's review revision: its text, the citation entries it cites and its
+    layer (:func:`oracle.docs.parser.section_revision`)."""
+    cites = {c.id: c for c in draft.citations}
+    return {
+        s.section_key: section_revision(
+            s.content_hash, layer_of[s.section_key], cited_entries(s.citation_keys, cites)
+        )
+        for s in draft.sections
+    }
+
+
 async def import_draft(
     db: AsyncSession,
     doc: str,
@@ -362,24 +419,35 @@ async def import_draft(
     is the version's provenance (a roadmap's PRD version).
 
     ``base_version`` is the version the draft was written on (stored as
-    ``base_number``). When it is older than the latest version, every section changed
-    since must already be in the draft as the latest has it; otherwise the import is a
-    :class:`BaseVersionConflictError` naming both versions and the sections.
+    ``base_number``; 0 = the draft creates the document). When it is older than the
+    latest version, every section changed since must already be in the draft as the
+    latest has it, and so must the front matter if it changed; otherwise the import is
+    a :class:`BaseVersionConflictError` naming both versions and the sections. A
+    draft import without a base onto an existing document still works, and the version
+    carries a ``base_version_missing`` note.
 
     ``cause`` goes on the ``document_section`` change event of every section whose
     revision changed (``oracle.changes``; review invalidates their approvals, trace
-    marks what depends on them). ``origin="run"`` (an agent's draft) never replaces an
-    approved section: the section keeps its approved text and the agent's text waits
-    as a section patch, reviewed as a diff (§9).
+    marks what depends on them). ``origin="run"`` (an agent's draft) never replaces,
+    removes or re-cites an approved section: the section keeps its approved text, its
+    citation entries and its layer, and the agent's change waits as a section patch,
+    reviewed as a diff (§9). A principal acting for a run (``principal.run_id``, a run
+    token's call) always imports with ``origin="run"``.
 
     Raises :class:`DraftError` (422), :class:`NotFoundError` (404, ``doc`` is an
     unknown id) or :class:`ImportConflictError` (409, lost a concurrent import race,
     or a base version conflict).
     """
+    acting_for_run = getattr(principal, "run_id", None)
+    if acting_for_run is not None:
+        origin = "run"
+        run_id = run_id or acting_for_run
+        if cause == "draft_imported":
+            cause = "run_draft"
     draft = parse_draft(markdown)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template
-    held: dict[str, tuple[str, str]] = {}
+    held: dict[str, HeldSection] = {}
 
     document = await find_document(db, doc, for_update=True)
     if document is None:
@@ -387,6 +455,8 @@ async def import_draft(
             raise NotFoundError(f"document '{doc}' not found")
         if draft.document is not None and draft.document != doc:
             raise _document_mismatch(doc, draft)
+        if base_version:
+            raise _unknown_base(base_version, None)
         # The same kind the check on an existing document reads: the run's, else the
         # draft's front matter kind, else its template's.
         document = Document(
@@ -405,8 +475,6 @@ async def import_draft(
             await db.rollback()
             raise ImportConflictError(f"document '{doc}' was created concurrently") from exc
         previous = None
-        if base_version is not None:
-            raise _unknown_base(base_version, None)
     else:
         if draft.document is not None and draft.document != document.slug:
             raise _document_mismatch(document.slug, draft)
@@ -421,6 +489,15 @@ async def import_draft(
             .order_by(DocumentVersion.number.desc())
             .limit(1)
         )
+        if base_version == 0 and previous is not None:
+            raise BaseVersionConflictError(
+                0,
+                previous.number,
+                [],
+                message=f"document '{document.slug}' already exists and version "
+                f"{previous.number} is the latest; merge it and push with base_version "
+                f"{previous.number}",
+            )
         if origin == "run" and previous is not None:
             draft, held = await _hold_approved_sections(db, document, previous, draft)
         existing = await db.scalar(
@@ -430,9 +507,21 @@ async def import_draft(
             )
         )
         if existing is not None:
+            if held and existing.id == previous.id:
+                # The agent changed approved sections only: no new version, but its
+                # changes still wait as patches.
+                from oracle.review import patches
+
+                await patches.propose_held(
+                    db, principal, document, previous, held, origin=origin, run_id=run_id
+                )
+                await db.commit()
             return ImportResult(version=await read_version(db, existing), created=False)
-        if base_version is not None and previous is not None:
-            await _check_base(db, document, previous, base_version, draft)
+
+    brief, brief_source, layer_of = await _layers(db, document, draft)
+    revisions = draft_revisions(draft, layer_of)
+    if base_version and previous is not None:
+        await _check_base(db, document, previous, base_version, draft, revisions)
 
     warnings: list[VersionWarning] = []
     if held:
@@ -444,21 +533,29 @@ async def import_draft(
                 section_keys=sorted(held),
             )
         )
+    notes: list[VersionWarning] = []
+    if previous is not None and base_version is None and cause == "draft_imported":
+        notes.append(
+            VersionWarning(
+                code="base_version_missing",
+                message="imported without base_version: nothing checked that this draft "
+                "keeps the changes made since the version it was written on",
+            )
+        )
     if previous is not None:
         locked = await review_service.locked_section_keys(db, previous.id)
         if locked:
             before = dict(
                 (
                     await db.execute(
-                        select(Section.section_key, Section.content_hash).where(
+                        select(Section.section_key, Section.revision).where(
                             Section.version_id == previous.id,
                             Section.section_key.in_(locked),
                         )
                     )
                 ).all()
             )
-            now = {s.section_key: s.content_hash for s in draft.sections}
-            changed = sorted(k for k in locked if k in before and now.get(k) != before[k])
+            changed = sorted(k for k in locked if k in before and revisions.get(k) != before[k])
             if changed:
                 warnings.append(
                     VersionWarning(
@@ -469,24 +566,6 @@ async def import_draft(
                     )
                 )
 
-    # O1f: the brief layer, from the draft, else its template's markers, else a
-    # "Full version" heading.
-    template_brief = None
-    if draft.brief is None:
-        named = (
-            (draft.template, draft.template_version)
-            if draft.template
-            else (document.template, document.template_version)
-        )
-        body = await template_body(db, *named)
-        template_brief = _template_meta(body).marked_brief if body else None
-    brief, brief_source = layers.resolve_brief(
-        [layers.SectionRef(s.section_key, s.level) for s in draft.sections],
-        draft_brief=draft.brief,
-        template_brief=template_brief,
-    )
-    layer_of = layers.layers((s.section_key for s in draft.sections), brief)
-
     version = DocumentVersion(
         document_id=document.id,
         number=(previous.number + 1) if previous else 1,
@@ -495,10 +574,11 @@ async def import_draft(
         front_matter=draft.front_matter,
         snapshot=draft.snapshot,
         warnings=[w.model_dump() for w in warnings],
+        notes=[n.model_dump() for n in notes],
         imported_by=principal.id,
         brief_source=brief_source,
         source_version_id=source_version_id,
-        base_number=base_version,
+        base_number=base_version or None,
     )
     db.add(version)
     try:
@@ -517,6 +597,7 @@ async def import_draft(
             body_md=s.body_md,
             body_text=s.body_text,
             content_hash=s.content_hash,
+            revision=revisions[s.section_key],
             citation_keys=s.citation_keys,
             layer=layer_of[s.section_key],
         )
@@ -537,7 +618,9 @@ async def import_draft(
     await db.flush()
 
     try:
-        await review_service.apply_resolutions(db, document.id, version.id, draft.resolutions)
+        await review_service.apply_resolutions(
+            db, document.id, version.id, draft.resolutions, principal=principal
+        )
     except review_service.UnknownFeedbackItemsError as exc:
         await db.rollback()
         raise DraftError(
@@ -552,15 +635,7 @@ async def import_draft(
 
     from oracle.review import patches, state
 
-    await state.record_section_changes(
-        db,
-        principal,
-        document,
-        previous,
-        version,
-        {s.section_key: s.content_hash for s in draft.sections},
-        cause,
-    )
+    await state.record_section_changes(db, principal, document, previous, version, revisions, cause)
     if held:
         await patches.propose_held(
             db, principal, document, version, held, origin=origin, run_id=run_id
@@ -585,10 +660,12 @@ async def import_draft(
             "content_hash": version.content_hash,
             "resolutions": len(draft.resolutions),
             "warnings": [w.code for w in warnings],
+            **({"notes": [n.code for n in notes]} if notes else {}),
             "brief_source": brief_source,
             **({"source_version_id": str(source_version_id)} if source_version_id else {}),
             **({"base_version": base_version} if base_version is not None else {}),
             **({"cause": cause} if cause != "draft_imported" else {}),
+            **({"run_id": str(run_id)} if run_id else {}),
             **({"held_sections": sorted(held)} if held else {}),
         },
     )
@@ -609,7 +686,9 @@ def _unknown_base(base: int, latest: int | None) -> DraftError:
 
 
 async def _section_rows(db: AsyncSession, version_id: uuid.UUID) -> dict[str, Section]:
-    rows = await db.scalars(select(Section).where(Section.version_id == version_id))
+    rows = await db.scalars(
+        select(Section).where(Section.version_id == version_id).order_by(Section.ordinal)
+    )
     return {s.section_key: s for s in rows}
 
 
@@ -619,12 +698,14 @@ async def _check_base(
     latest: DocumentVersion,
     base_number: int,
     draft: ParsedDraft,
+    revisions: dict[str, str],
 ) -> None:
     """Refuse a draft on an older base that would overwrite what changed since.
 
-    A section conflicts when it changed between the base and the latest version and
-    the draft does not already have the latest text: either both sides changed it, or
-    the draft still has the base text and would silently revert the newer change.
+    A section conflicts when its revision changed between the base and the latest
+    version and the draft does not already have the latest revision: either both sides
+    changed it, or the draft still has the base text and would silently revert the
+    newer change. The front matter (outside ``resolutions``) conflicts the same way.
     """
     if base_number < 1 or base_number > latest.number:
         raise _unknown_base(base_number, latest.number)
@@ -633,36 +714,54 @@ async def _check_base(
     base = await get_version_row(db, document, base_number)
     base_sections = await _section_rows(db, base.id)
     current = await _section_rows(db, latest.id)
-    mine = {s.section_key: s.content_hash for s in draft.sections}
     conflicts = []
     for key in dict.fromkeys([*base_sections, *current]):
         before = base_sections.get(key)
         now = current.get(key)
-        before_hash = before.content_hash if before else None
-        now_hash = now.content_hash if now else None
-        if before_hash == now_hash or mine.get(key) == now_hash:
+        before_hash = before.revision if before else None
+        now_hash = now.revision if now else None
+        if before_hash == now_hash or revisions.get(key) == now_hash:
             continue
         conflicts.append(
             {
                 "section_key": key,
                 "base_revision": before_hash,
                 "current_revision": now_hash,
-                "your_revision": mine.get(key),
+                "your_revision": revisions.get(key),
                 "current_heading": now.heading if now else None,
                 "current_body_md": now.body_md if now else None,
             }
         )
-    if conflicts:
-        raise BaseVersionConflictError(base_number, latest.number, conflicts)
+    latest_fm = _without_resolutions(latest.front_matter)
+    front_matter_changed = _without_resolutions(
+        base.front_matter
+    ) != latest_fm and latest_fm != _without_resolutions(draft.front_matter)
+    if conflicts or front_matter_changed:
+        message = None
+        if front_matter_changed and not conflicts:
+            message = (
+                f"the draft is based on version {base_number}, but version {latest.number} "
+                f"is the latest and changed the front matter since; merge version "
+                f"{latest.number} and push again"
+            )
+        raise BaseVersionConflictError(
+            base_number,
+            latest.number,
+            conflicts,
+            message=message,
+            front_matter_changed=front_matter_changed,
+        )
 
 
 async def _hold_approved_sections(
     db: AsyncSession, document: Document, previous: DocumentVersion, draft: ParsedDraft
-) -> tuple[ParsedDraft, dict[str, tuple[str, str]]]:
-    """An agent's draft keeps every approved section's approved text (§9).
+) -> tuple[ParsedDraft, dict[str, HeldSection]]:
+    """An agent's draft keeps every approved section as approved (§9): its text and
+    level, its place when the draft dropped or renamed it, the citation entries it
+    cites (the draft's front matter cannot redefine them) and its brief membership.
 
-    Returns the draft to import and, per held section, the agent's (heading, body_md),
-    which becomes a section patch.
+    Returns the draft to import and, per held section, the agent's change, which
+    becomes a section patch.
     """
     from oracle.jobs.service import compose_markdown
     from oracle.review.state import approved_keys
@@ -671,27 +770,42 @@ async def _hold_approved_sections(
     if not approved:
         return draft, {}
     old = await _section_rows(db, previous.id)
-    held = {
-        s.section_key: (s.heading, s.body_md)
-        for s in draft.sections
-        if s.section_key in approved and s.content_hash != old[s.section_key].content_hash
-    }
-    if not held:
-        return draft, {}
-    sections = [old[s.section_key] if s.section_key in held else s for s in draft.sections]
-    front_matter = dict(draft.front_matter)
-    # The approved text may cite sources the agent's draft dropped: keep them.
-    cited = {k for key in held for k in old[key].citation_keys}
-    known = {c.get("id") for c in front_matter.get("citations") or [] if isinstance(c, dict)}
-    missing = cited - known
-    if missing:
-        rows = await db.scalars(
-            select(Citation).where(
-                Citation.version_id == previous.id, Citation.cite_key.in_(missing)
-            )
+    old_order = list(old.values())
+    mine = {s.section_key: s for s in draft.sections}
+    held: dict[str, HeldSection] = {}
+    for key in sorted(approved):
+        o, m = old[key], mine.get(key)
+        if m is None:
+            held[key] = HeldSection(o.heading, "", action="remove")
+        elif (m.level, m.heading, m.body_md) != (o.level, o.heading, o.body_md):
+            held[key] = HeldSection(m.heading, m.body_md)
+    sections: list = [
+        old[s.section_key] if s.section_key in approved else s for s in draft.sections
+    ]
+    # A dropped (or renamed) approved section stays, after the nearest section that
+    # preceded it in the approved version.
+    for i, o in enumerate(old_order):
+        if o.section_key not in approved or o.section_key in mine:
+            continue
+        keys = [s.section_key for s in sections]
+        at = next(
+            (
+                keys.index(p.section_key) + 1
+                for p in reversed(old_order[:i])
+                if p.section_key in keys
+            ),
+            0,
         )
-        extra = [
-            {
+        sections.insert(at, o)
+
+    front_matter = dict(draft.front_matter)
+    cited = {k for key in approved for k in old[key].citation_keys}
+    if cited:
+        rows = await db.scalars(
+            select(Citation).where(Citation.version_id == previous.id, Citation.cite_key.in_(cited))
+        )
+        entries = {
+            c.cite_key: {
                 "id": c.cite_key,
                 "source": c.source,
                 "ref": c.ref,
@@ -700,12 +814,30 @@ async def _hold_approved_sections(
                 **({"retrieved_at": c.retrieved_at.isoformat()} if c.retrieved_at else {}),
             }
             for c in rows
+        }
+        listed = [c for c in front_matter.get("citations") or [] if isinstance(c, dict)]
+        known = {str(c.get("id")) for c in listed}
+        merged = [entries.get(str(c.get("id")), c) for c in listed]
+        merged += [e for k, e in entries.items() if k not in known]
+        if merged != listed:
+            front_matter["citations"] = merged
+    resolutions = list(draft.front_matter.get("resolutions") or [])
+    if not held and front_matter == draft.front_matter:
+        out = draft
+    else:
+        out = parse_draft(compose_markdown(front_matter, sections, {}, resolutions))
+
+    # Approved sections keep their brief membership.
+    _, _, layer_of = await _layers(db, document, out)
+    if any(layer_of.get(k) != old[k].layer for k in approved):
+        front_matter["brief"] = [
+            s.section_key
+            for s in out.sections
+            if (old[s.section_key].layer if s.section_key in approved else layer_of[s.section_key])
+            == layers.BRIEF
         ]
-        front_matter["citations"] = [*(front_matter.get("citations") or []), *extra]
-    markdown = compose_markdown(
-        front_matter, sections, {}, list(draft.front_matter.get("resolutions") or [])
-    )
-    return parse_draft(markdown), held
+        out = parse_draft(compose_markdown(front_matter, sections, {}, resolutions))
+    return out, held
 
 
 async def diff(db: AsyncSession, doc: str, from_number: int, to_number: int) -> DiffOut:

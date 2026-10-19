@@ -6,7 +6,7 @@ Every authenticated endpoint takes ``principal: CurrentPrincipal`` and/or
 
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Annotated, Literal
 
 from fastapi import Depends, HTTPException, Request, status
@@ -32,6 +32,9 @@ class Principal:
     role: Role
     user_id: uuid.UUID | None = None
     token_id: uuid.UUID | None = None
+    # Set when the call is made for a run (an MCP call with the run's token): what it
+    # writes is an agent's work (oracle.docs.service.import_draft holds approved text).
+    run_id: uuid.UUID | None = None
 
     @property
     def id(self) -> uuid.UUID:
@@ -106,10 +109,43 @@ async def _bearer_principal(raw: str) -> Principal:
     return Principal(tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id)
 
 
+# The MCP server's in-process REST call for a run token carries the run creator's session
+# and this header with the run token, so the REST layer knows the call is the run's.
+RUN_TOKEN_HEADER = "x-oracle-run-token"
+
+
+async def _for_run(principal: Principal, raw: str) -> Principal:
+    """``principal`` acting for the run of the token ``raw``: the token must be active,
+    of the principal's company, and of a run the principal's user started."""
+    from oracle.runs.models import Run
+    from oracle.runtokens import verify_run_token
+
+    claims = await verify_run_token(raw)
+    if claims is None or claims.tenant_id != principal.tenant_id or principal.user_id is None:
+        raise _unauthorized()
+    async with tenant_session(claims.tenant_id) as s:
+        run = await s.get(Run, claims.run_id)
+    if run is None or run.created_by != principal.user_id:
+        raise _unauthorized()
+    return replace(principal, run_id=run.id)
+
+
 async def get_principal(
     request: Request,
     bearer: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     cookie: Annotated[str | None, Depends(_cookie)],
+) -> Principal:
+    principal = await _get_principal(request, bearer, cookie)
+    run_token = request.headers.get(RUN_TOKEN_HEADER)
+    if run_token is not None:
+        principal = await _for_run(principal, run_token)
+    return principal
+
+
+async def _get_principal(
+    request: Request,
+    bearer: HTTPAuthorizationCredentials | None,
+    cookie: str | None,
 ) -> Principal:
     iap_user = await _iap_user(request)
     if bearer is not None:

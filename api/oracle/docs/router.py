@@ -83,13 +83,15 @@ async def import_version(
     request: Request,
     principal: Approver,
     db: TenantDB,
-    base_version: Annotated[int | None, Query(ge=1)] = None,
+    base_version: Annotated[int | None, Query(ge=0)] = None,
 ) -> VersionOut | JSONResponse:
     """Import a draft (markdown + YAML front matter). Creates the document on first import.
 
-    ``base_version``: the version the draft was written on. When a newer version
-    changed sections the draft does not have as the latest has them, the import is a
-    409 naming both versions and those sections (never a silent overwrite)."""
+    ``base_version``: the version the draft was written on (0: the draft creates the
+    document). When a newer version changed sections (or the front matter) the draft
+    does not have as the latest has them, the import is a 409 naming both versions and
+    those sections (never a silent overwrite). Without it the import works as before,
+    and the version carries a ``base_version_missing`` note."""
     raw = await request.body()
     try:
         markdown = raw.decode("utf-8")
@@ -110,6 +112,7 @@ async def import_version(
             base_version=exc.base,
             latest_version=exc.latest,
             sections=exc.sections,  # type: ignore[arg-type]
+            front_matter_changed=exc.front_matter_changed,
         )
         return JSONResponse(body.model_dump(mode="json"), status.HTTP_409_CONFLICT)
     except service.ImportConflictError as exc:

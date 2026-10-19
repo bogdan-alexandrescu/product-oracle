@@ -1,7 +1,9 @@
 """Review state per stable section id and revision (CR-06, build prompt §9).
 
-A section's **revision** is its content hash (``sections.content_hash``). Versions are
-immutable, so a revision appears in one version and in every later version that kept
+A section's **revision** (``sections.revision``) covers its text, the citation entries
+it cites (ref, title, excerpt) and its brief-layer membership, so changing the evidence
+behind a section is a new revision too (``oracle.docs.parser.section_revision``).
+Versions are immutable, so a revision appears in one version and in every later version that kept
 the section unchanged. A verdict binds to the revision it was given on
 (``section_reviews.section_hash``; for verdicts older than 0013 the revision of the
 section in the verdict's version), so:
@@ -136,9 +138,12 @@ async def effective_policy(db: AsyncSession, document: Document) -> ReviewPolicy
 async def set_policy(
     db: AsyncSession, principal: "Principal", document: Document, body: ReviewPolicyIn
 ) -> ReviewPolicyOut:
+    from oracle.review.publish import lock_document
     from oracle.v2.concurrency import VersionConflict, expect_version, flush_or_conflict
 
     value = await validate_policy(db, body.model_dump(mode="json"))
+    # The publish lock: a policy change never commits while a publish renders.
+    await lock_document(db, document.id)
     row = await db.scalar(
         select(DocumentReviewPolicy)
         .where(DocumentReviewPolicy.document_id == document.id)
@@ -163,7 +168,7 @@ async def set_policy(
     row.required_section_keys = value["required_section_keys"]
     row.section_approval = value["section_approval"]
     row.rereview_on_change = value["rereview_on_change"]
-    row.updated_by = principal.id
+    row.updated_by = principal.user_id or principal.id
     await flush_or_conflict(db)
     await audit.record(
         db,
@@ -179,24 +184,54 @@ async def set_policy(
 # --- required sections ----------------------------------------------------------------
 
 
+async def template_required_sections(
+    db: AsyncSession, document: Document, version: DocumentVersion
+) -> tuple[list[str], str | None]:
+    """The required sections of the template version the version names, and why they
+    could not be read (an unknown template, a version that is not a number or does not
+    exist). Fails closed: the publish check blocks on the reason, never drops the
+    template's required sections. A version that names no template has none."""
+    from oracle.templates.builtins import ensure_builtins
+    from oracle.templates.models import Template, TemplateVersion
+
+    fm = version.front_matter or {}
+    key = fm.get("template") or document.template
+    if not key:
+        return [], None
+    raw = fm.get("template_version") if fm.get("template") else document.template_version
+    number = "" if raw is None else str(raw).strip()
+    if not number.isdigit():
+        return [], (
+            f"template {key!r} names version {number or '(none)'!r}, which is not a version "
+            "number; its required sections cannot be checked"
+        )
+
+    async def lookup() -> list[str] | None:
+        row = await db.scalar(
+            select(TemplateVersion)
+            .join(Template, Template.id == TemplateVersion.template_id)
+            .where(Template.key == str(key), TemplateVersion.version == int(number))
+        )
+        return None if row is None else list(row.required_sections or [])
+
+    required = await lookup()
+    if required is None and await ensure_builtins(db):
+        required = await lookup()
+    if required is None:
+        return [], (
+            f"template {key!r} version {number} does not exist; its required sections "
+            "cannot be checked"
+        )
+    return required, None
+
+
 async def required_sections(
     db: AsyncSession, document: Document, version: DocumentVersion, policy: ReviewPolicyOut
 ) -> list[str]:
     """The template version's required sections, the sections of the composition's
     included required modules, and the policy's own, in that order."""
-    from oracle.templates.models import Template, TemplateVersion
-
-    fm = version.front_matter or {}
-    key = fm.get("template") or document.template
-    number = str(fm.get("template_version") or document.template_version or "")
-    keys: list[str] = []
-    if key and number.isdigit():
-        required = await db.scalar(
-            select(TemplateVersion.required_sections)
-            .join(Template, Template.id == TemplateVersion.template_id)
-            .where(Template.key == key, TemplateVersion.version == int(number))
-        )
-        keys += list(required or [])
+    keys, _ = await template_required_sections(db, document, version)
+    keys = list(keys)
     revision = await current_composition(db, document.id)
     if revision is not None:
         for module in revision.modules or []:
@@ -253,7 +288,7 @@ async def history(
         select(
             SectionReview,
             DocumentVersion.number,
-            func.coalesce(SectionReview.section_hash, Section.content_hash),
+            func.coalesce(SectionReview.section_hash, Section.revision),
         )
         .join(DocumentVersion, DocumentVersion.id == SectionReview.version_id)
         .outerjoin(
@@ -326,7 +361,7 @@ async def _revision_since(db: AsyncSession, document_id: uuid.UUID, number: int)
     of versions, ending at ``number``, in which it has its current revision."""
     rows = (
         await db.execute(
-            select(DocumentVersion.number, Section.section_key, Section.content_hash)
+            select(DocumentVersion.number, Section.section_key, Section.revision)
             .join(Section, Section.version_id == DocumentVersion.id)
             .where(DocumentVersion.document_id == document_id, DocumentVersion.number <= number)
         )
@@ -395,7 +430,7 @@ async def section_states(
             for v in verdicts
             if row and v.id in set(row.invalidated_review_ids) and v.version < first
         }
-        st = section_status(verdicts, s.content_hash, invalidated)
+        st = section_status(verdicts, s.revision, invalidated)
         counts[st.status] += 1
         approval = (
             SectionApproval(
@@ -423,7 +458,7 @@ async def section_states(
                 heading=s.heading,
                 ordinal=s.ordinal,
                 layer=s.layer,  # type: ignore[arg-type]
-                revision=s.content_hash,
+                revision=s.revision,
                 revision_since_version=first,
                 status=st.status,  # type: ignore[arg-type]
                 approval=approval,
@@ -435,7 +470,7 @@ async def section_states(
                 mandatory_approvals=[
                     MandatoryApproval(
                         reviewer_id=r,
-                        approved=reviewer_approved(verdicts, s.content_hash, r, invalidated),
+                        approved=reviewer_approved(verdicts, s.revision, r, invalidated),
                     )
                     for r in policy.mandatory_reviewer_ids
                 ]
@@ -475,18 +510,31 @@ def approval_required_keys(
 async def get_or_create_state(
     db: AsyncSession, document_id: uuid.UUID, key: str
 ) -> SectionReviewState:
-    row = await db.scalar(
+    """The section's state row, locked; created first when it has none (insert ... on
+    conflict do nothing, so two writers never race on the unique key)."""
+    from sqlalchemy.dialects.postgresql import insert
+
+    from oracle.tenancy import current_tenant
+
+    await db.execute(
+        insert(SectionReviewState)
+        .values(
+            id=uuid.uuid4(),
+            tenant_id=current_tenant(db),
+            document_id=document_id,
+            section_key=key,
+            reviewer_ids=[],
+            invalidated_review_ids=[],
+            lock_version=1,
+        )
+        .on_conflict_do_nothing(index_elements=["document_id", "section_key"])
+    )
+    return await db.scalar(
         select(SectionReviewState)
         .where(SectionReviewState.document_id == document_id, SectionReviewState.section_key == key)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
-    if row is None:
-        row = SectionReviewState(
-            document_id=document_id, section_key=key, reviewer_ids=[], invalidated_review_ids=[]
-        )
-        db.add(row)
-        await db.flush()
-    return row
 
 
 async def invalidate_approvals(db: AsyncSession, event: ChangeEvent) -> None:
@@ -574,7 +622,7 @@ async def record_section_changes(
     old = dict(
         (
             await db.execute(
-                select(Section.section_key, Section.content_hash).where(
+                select(Section.section_key, Section.revision).where(
                     Section.version_id == previous.id
                 )
             )
@@ -613,7 +661,7 @@ async def approved_keys(
     hashes = dict(
         (
             await db.execute(
-                select(Section.section_key, Section.content_hash).where(
+                select(Section.section_key, Section.revision).where(
                     Section.version_id == version.id
                 )
             )

@@ -145,9 +145,11 @@ export interface paths {
          * Import Version
          * @description Import a draft (markdown + YAML front matter). Creates the document on first import.
          *
-         *     ``base_version``: the version the draft was written on. When a newer version
-         *     changed sections the draft does not have as the latest has them, the import is a
-         *     409 naming both versions and those sections (never a silent overwrite).
+         *     ``base_version``: the version the draft was written on (0: the draft creates the
+         *     document). When a newer version changed sections (or the front matter) the draft
+         *     does not have as the latest has them, the import is a 409 naming both versions and
+         *     those sections (never a silent overwrite). Without it the import works as before,
+         *     and the version carries a ``base_version_missing`` note.
          */
         post: operations["import_version"];
         delete?: never;
@@ -486,7 +488,9 @@ export interface paths {
          * @description Save one section as the next version. Send the version and section revision you
          *     loaded: another section changed since is fine (the edit applies on the latest
          *     version); the same section changed since is a 409 with its current text. Approvers
-         *     edit any section; a section's owner edits their own.
+         *     edit any section; a section's owner edits their own, and their ``resolutions`` close
+         *     only that section's feedback (403 otherwise). An edit that reaches outside its
+         *     section (adds, rewrites or swallows another section) is a 422.
          */
         put: operations["edit_document_section"];
         post?: never;
@@ -1264,7 +1268,8 @@ export interface paths {
         /**
          * Delete Connection
          * @description Disconnect: revoke the grant at the provider where it has an endpoint (GitHub,
-         *     Slack, Google; best effort), then delete Oracle's copy of the credential.
+         *     Slack, Google; best effort), record a ``source_permission`` revocation for each
+         *     source it synced, then delete Oracle's copy of the credential.
          */
         delete: operations["delete_connection"];
         options?: never;
@@ -5116,6 +5121,11 @@ export interface components {
              * @default []
              */
             sections: components["schemas"]["ConflictSection"][];
+            /**
+             * Front Matter Changed
+             * @default false
+             */
+            front_matter_changed: boolean;
             /** Current Lock Version */
             current_lock_version?: number | null;
         };
@@ -7776,7 +7786,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "version_not_approved" | "approval_not_by_decider" | "missing_required_section" | "stale_approval" | "missing_approval" | "mandatory_reviewer_pending" | "readiness_critical" | "source_permission_revoked" | "already_published" | "open_critical_change_request" | "open_change_request" | "readiness_warning" | "approval_stale_optional" | "review_overdue";
+            code: "version_not_approved" | "approval_not_by_decider" | "missing_required_section" | "stale_approval" | "missing_approval" | "mandatory_reviewer_pending" | "readiness_critical" | "source_permission_revoked" | "already_published" | "superseded_version" | "template_unresolved" | "open_critical_change_request" | "open_change_request" | "readiness_warning" | "approval_stale_optional" | "review_overdue";
             /** Message */
             message: string;
             /**
@@ -8624,6 +8634,8 @@ export interface components {
             body_text: string;
             /** Content Hash */
             content_hash: string;
+            /** Revision */
+            revision?: string | null;
             /**
              * Citation Keys
              * @default []
@@ -8682,6 +8694,12 @@ export interface components {
              * @enum {string}
              */
             origin: "run" | "llm_job" | "agent" | "person";
+            /**
+             * Action
+             * @default replace
+             * @enum {string}
+             */
+            action: "replace" | "remove";
             /** Run Id */
             run_id?: string | null;
             /** Rationale */
@@ -8759,6 +8777,12 @@ export interface components {
              * @enum {string}
              */
             origin: "run" | "llm_job" | "agent" | "person";
+            /**
+             * Action
+             * @default replace
+             * @enum {string}
+             */
+            action: "replace" | "remove";
             /** Run Id */
             run_id?: string | null;
             /** Rationale */
@@ -10159,6 +10183,11 @@ export interface components {
              * @default []
              */
             warnings: components["schemas"]["VersionWarning"][];
+            /**
+             * Notes
+             * @default []
+             */
+            notes: components["schemas"]["VersionWarning"][];
             /** Imported By */
             imported_by?: string | null;
             /** Approved At */
@@ -10263,6 +10292,11 @@ export interface components {
              * @default []
              */
             warnings: components["schemas"]["VersionWarning"][];
+            /**
+             * Notes
+             * @default []
+             */
+            notes: components["schemas"]["VersionWarning"][];
             /** Imported By */
             imported_by?: string | null;
             /** Approved At */

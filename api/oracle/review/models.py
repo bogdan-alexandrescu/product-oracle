@@ -115,6 +115,7 @@ NOTIFICATION_KINDS = (
 )
 PATCH_ORIGINS = ("run", "llm_job", "agent", "person")
 PATCH_STATUSES = ("open", "accepted", "rejected", "superseded")
+PATCH_ACTIONS = ("replace", "remove")
 
 
 def _lock_version() -> Mapped[int]:
@@ -274,6 +275,7 @@ class SectionPatch(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(_in("origin", PATCH_ORIGINS), name="origin"),
         CheckConstraint(_in("status", PATCH_STATUSES), name="status"),
+        CheckConstraint(_in("action", PATCH_ACTIONS), name="action"),
         Index("ix_section_patches_document_status", "document_id", "status"),
     )
 
@@ -287,6 +289,9 @@ class SectionPatch(TenantScoped, Base):
     heading: Mapped[str] = mapped_column(Text, nullable=False)
     body_md: Mapped[str] = mapped_column(Text, nullable=False)
     origin: Mapped[str] = mapped_column(Text, nullable=False)
+    # "replace": the section's next text; "remove": the agent's draft dropped (or
+    # renamed) the section.
+    action: Mapped[str] = mapped_column(Text, nullable=False, server_default="replace")
     run_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("runs.id", ondelete="SET NULL"), index=True
     )
@@ -322,7 +327,11 @@ class DocumentPublication(TenantScoped, Base):
     )
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     version_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("document_versions.id", ondelete="RESTRICT"), nullable=False
+        # NO ACTION: a published version is never deleted on its own; deleting the
+        # document (or the company) removes both in one statement.
+        Uuid,
+        ForeignKey("document_versions.id"),
+        nullable=False,
     )
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     content_hash: Mapped[str] = mapped_column(Text, nullable=False)

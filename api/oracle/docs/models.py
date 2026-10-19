@@ -80,6 +80,10 @@ class DocumentVersion(TenantScoped, Base):
     warnings: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
+    # Notes on how the version came in that are not about its content, e.g.
+    # {"code": "base_version_missing", ...}: imported without a base version, so nothing
+    # checked it keeps the changes made since the version it was written on.
+    notes: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default="[]")
     # User id or API token id; no FK because it can be either.
     imported_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -104,6 +108,10 @@ class DocumentVersion(TenantScoped, Base):
     citations: Mapped[list["Citation"]] = relationship(passive_deletes=True)
 
 
+def _content_hash(context: Any) -> str:
+    return context.get_current_parameters()["content_hash"]
+
+
 class Section(TenantScoped, Base):
     __tablename__ = "sections"
     __table_args__ = (
@@ -125,6 +133,11 @@ class Section(TenantScoped, Base):
         ARRAY(Text), nullable=False, server_default="{}"
     )
     layer: Mapped[str] = mapped_column(Text, nullable=False, server_default="detail")
+    # The review revision (CR-06): the text plus the citation entries it cites and its
+    # brief-layer membership (oracle.docs.parser.section_revision). Approvals, section
+    # edits and patches bind to it. Defaults to the content hash (a detail section that
+    # cites nothing).
+    revision: Mapped[str] = mapped_column(Text, nullable=False, default=_content_hash)
 
 
 class Citation(TenantScoped, Base):

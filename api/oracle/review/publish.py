@@ -16,10 +16,15 @@ A publish is refused for:
 - a hard readiness check that is critical (``oracle.readiness.evaluate``; a critical
   unresolved blocker, a failed security or policy check). Advisory results never block
   (T2);
-- invalidated source permissions: evidence of the version from a source item that was
-  deleted, whose connection was revoked, or that a ``source_permission`` change event
-  revoked;
-- a version already published.
+- invalidated source permissions: evidence of the version (section links to items,
+  baseline evidence and entities, and citations by normalized URL or item id) from a
+  source item that was deleted, whose connection was revoked or deleted, or that a
+  ``source_permission`` change event (a revocation tombstone) revoked;
+- a version already published;
+- a superseded version (a newer one exists), unless the company turned the
+  ``publish_latest_only`` setting off;
+- a template whose required sections cannot be read (unknown template or version):
+  it fails closed.
 
 A publication pins the version (its markdown and content hash), the template version,
 the composition revision, the last approval and the decider, every section's
@@ -32,13 +37,16 @@ and source updates never change it; its exports are served from the stored HTML.
 import hashlib
 import json
 import uuid
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit, urlunsplit
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, readiness
+from oracle import audit, changes, readiness
+from oracle.baseline.models import Evidence
 from oracle.connections.models import Connection
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.jobs.models import LlmSuggestion
@@ -59,6 +67,7 @@ from oracle.review.state import (
     effective_policy,
     required_sections,
     section_states,
+    template_required_sections,
 )
 from oracle.sources.models import Source, SourceItem
 from oracle.v2.models import ChangeEvent, DocumentSectionLink
@@ -73,10 +82,18 @@ REVIEW_CHECK_KEY = "review_approvals"
 # lane recording a permission change uses one of these, with ``subject_id`` the source
 # or source item id (or ``document_id`` the document it affects).
 REVOKING_CAUSES = frozenset(
-    {"revoked", "permission_revoked", "source_revoked", "connection_revoked", "acl_narrowed"}
+    {
+        "revoked",
+        "permission_revoked",
+        "source_revoked",
+        "source_deleted",
+        "connection_revoked",
+        "acl_narrowed",
+    }
 )
 RESTORING_CAUSES = frozenset({"restored", "permission_restored", "granted"})
 MANIFEST_FORMAT = 1
+PUBLISH_LATEST_ONLY = "publish_latest_only"
 
 
 class PublishRefusedError(Exception):
@@ -86,12 +103,185 @@ class PublishRefusedError(Exception):
         super().__init__(message or f"publish refused: {codes}")
 
 
+# --- the review gate lock ---------------------------------------------------------------
+
+
+async def gate_lock(db: AsyncSession, *, shared: bool) -> None:
+    """The company's review gate, a transaction-scoped advisory lock. A publish takes it
+    shared (with the document's row lock), company-wide changes the gate reads take it
+    exclusively: source revocations, the company review policy and publish settings. So
+    nothing those change commits while a publish renders."""
+    from oracle.tenancy import current_tenant
+
+    fn = "pg_advisory_xact_lock_shared" if shared else "pg_advisory_xact_lock"
+    await db.execute(
+        text(f"SELECT {fn}(hashtextextended(:k, 0))"),
+        {"k": f"oracle-review-gate:{current_tenant(db)}"},
+    )
+
+
+async def lock_document(db: AsyncSession, document_id: uuid.UUID) -> Document | None:
+    """The document's row lock: the publish lock section verdicts, approvals and policy
+    changes take too, so none of them commits while a publish renders."""
+    return await db.scalar(
+        select(Document)
+        .where(Document.id == document_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
 # --- source permissions -------------------------------------------------------------
+
+
+def normalize_url(url: str) -> str:
+    """A URL as citations and source items are matched: scheme and host lower-cased,
+    default port, fragment and trailing slash dropped. Anything else as given."""
+    raw = url.strip()
+    try:
+        parts = urlsplit(raw)
+    except ValueError:
+        return raw
+    if not parts.scheme or not parts.netloc:
+        return raw
+    scheme = parts.scheme.lower()
+    host = (parts.hostname or "").lower()
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    if port and (scheme, port) not in (("http", 80), ("https", 443)):
+        host = f"{host}:{port}"
+    if parts.username or parts.password:
+        auth = parts.username or ""
+        host = f"{auth}@{host}"
+    path = parts.path.rstrip("/")
+    return urlunsplit((scheme, host, path, parts.query, ""))
+
+
+def _as_uuid(value: str | None) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(value).strip()) if value else None
+    except ValueError:
+        return None
+
+
+async def revocation_record(db: AsyncSession, source_ids: list[uuid.UUID]) -> dict[str, Any]:
+    """What a revocation of these sources takes away, kept on its ``source_permission``
+    event (a tombstone): the items' ids and normalized URLs, the baseline evidence from
+    them, and the section links to them (which go with a hard delete)."""
+    items = (
+        await db.execute(
+            select(SourceItem.id, SourceItem.url).where(SourceItem.source_id.in_(source_ids))
+        )
+    ).all()
+    item_ids = [i for i, _ in items]
+    evidence_ids: list[uuid.UUID] = []
+    links: list[DocumentSectionLink] = []
+    if item_ids:
+        evidence_ids = list(
+            await db.scalars(select(Evidence.id).where(Evidence.source_item_id.in_(item_ids)))
+        )
+        links = list(
+            await db.scalars(
+                select(DocumentSectionLink).where(DocumentSectionLink.source_item_id.in_(item_ids))
+            )
+        )
+    return {
+        "source_ids": [str(i) for i in source_ids],
+        "item_ids": [str(i) for i in item_ids],
+        "urls": sorted({normalize_url(u) for _, u in items if u}),
+        "evidence_ids": [str(i) for i in evidence_ids],
+        "links": [
+            {
+                "id": str(link.id),
+                "document_id": str(link.document_id),
+                "version_id": str(link.version_id) if link.version_id else None,
+                "section_key": link.section_key,
+            }
+            for link in links
+        ],
+    }
+
+
+async def record_source_revocation(
+    db: AsyncSession,
+    principal: "Principal | None",
+    sources: list[Source],
+    cause: str,
+    *,
+    drop_links: bool,
+) -> list[ChangeEvent]:
+    """Record a ``source_permission`` revocation per source, before its items go (a
+    deleted source or connection). Takes the review gate exclusively, so it never lands
+    mid-publish. ``drop_links``: the items are about to be hard-deleted, so the section
+    links that point only at them are removed (the tombstone keeps them)."""
+    if not sources:
+        return []
+    await gate_lock(db, shared=False)
+    events = []
+    for source in sources:
+        record = await revocation_record(db, [source.id])
+        record.update({"source_kind": source.kind, "source_name": source.name})
+        events.append(
+            await changes.record_change(
+                db,
+                "source_permission",
+                cause=cause,
+                actor=principal,
+                subject_id=source.id,
+                subject_ref=f"source:{source.name}",
+                data=record,
+            )
+        )
+        if drop_links and record["item_ids"]:
+            # A link to the item alone would break its target check (the item's foreign
+            # key sets null); a link with an entity or evidence keeps those.
+            only_item = (
+                DocumentSectionLink.source_item_id.in_([uuid.UUID(i) for i in record["item_ids"]])
+                & DocumentSectionLink.entity_id.is_(None)
+                & DocumentSectionLink.evidence_id.is_(None)
+            )
+            await db.execute(delete(DocumentSectionLink).where(only_item))
+    return events
+
+
+async def _gate_on_revocation(db: AsyncSession, event: ChangeEvent) -> None:
+    """A revocation any lane records through ``oracle.changes`` takes the review gate
+    exclusively, so it commits before or after a publish, never during one."""
+    if event.cause in REVOKING_CAUSES:
+        await gate_lock(db, shared=False)
+
+
+changes.register_handler(
+    "review.source_permission_gate", _gate_on_revocation, subjects={"source_permission"}
+)
+
+
+async def _url_items(db: AsyncSession, urls: set[str]) -> list[SourceItem]:
+    """Source items whose normalized URL is one of ``urls``."""
+    hosts = {urlsplit(u).hostname for u in urls if "://" in u}
+    hosts.discard(None)
+    if not hosts:
+        return []
+    candidates = await db.scalars(
+        select(SourceItem).where(
+            SourceItem.url.is_not(None),
+            or_(*(func.lower(SourceItem.url).contains(f"://{h}") for h in hosts)),
+        )
+    )
+    return [i for i in candidates if normalize_url(i.url) in urls]
 
 
 async def source_permission_problems(
     db: AsyncSession, document: Document, version: DocumentVersion
 ) -> list[PublishProblem]:
+    """Evidence of the version from a revoked source. The version's evidence is followed
+    back to source items: section links (to an item, to baseline evidence, to an
+    entity and its evidence) and citations (by normalized URL or item id). An item is
+    revoked when it was deleted, its connection revoked, a ``source_permission`` event
+    revoked it or its source, or a revocation tombstone names it, its URL, the evidence
+    or the link."""
     links = list(
         await db.scalars(
             select(DocumentSectionLink).where(
@@ -101,22 +291,46 @@ async def source_permission_problems(
             )
         )
     )
-    item_keys: dict[uuid.UUID, set[str]] = {}
+    item_keys: dict[uuid.UUID, set[str]] = defaultdict(set)
+    url_keys: dict[str, set[str]] = defaultdict(set)
+    evidence_keys: dict[uuid.UUID, set[str]] = defaultdict(set)
+    link_keys: dict[uuid.UUID, set[str]] = defaultdict(set)
+    entity_keys: dict[uuid.UUID, set[str]] = defaultdict(set)
     for link in links:
+        link_keys[link.id].add(link.section_key)
         if link.source_item_id is not None:
-            item_keys.setdefault(link.source_item_id, set()).add(link.section_key)
-    # Citations name their source by URL: match them to ingested items.
-    citations = list(await db.scalars(select(Citation).where(Citation.version_id == version.id)))
-    refs = {c.ref for c in citations if c.ref}
-    cite_sections: dict[str, set[str]] = {}
+            item_keys[link.source_item_id].add(link.section_key)
+        if link.evidence_id is not None:
+            evidence_keys[link.evidence_id].add(link.section_key)
+        if link.entity_id is not None:
+            entity_keys[link.entity_id].add(link.section_key)
+    if evidence_keys or entity_keys:
+        for e in await db.scalars(
+            select(Evidence).where(
+                Evidence.id.in_(list(evidence_keys)) | Evidence.entity_id.in_(list(entity_keys))
+            )
+        ):
+            keys = evidence_keys[e.id] | entity_keys.get(e.entity_id, set())
+            evidence_keys[e.id] = keys
+            if e.source_item_id is not None:
+                item_keys[e.source_item_id] |= keys
+            if e.url:
+                url_keys[normalize_url(e.url)] |= keys
+    # Citations name their source by URL or item id.
+    cite_sections: dict[str, set[str]] = defaultdict(set)
     for s in await db.scalars(select(Section).where(Section.version_id == version.id)):
         for key in s.citation_keys:
-            cite_sections.setdefault(key, set()).add(s.section_key)
-    if refs:
-        for item in await db.scalars(select(SourceItem).where(SourceItem.url.in_(refs))):
-            for c in citations:
-                if c.ref == item.url:
-                    item_keys.setdefault(item.id, set()).update(cite_sections.get(c.cite_key, ()))
+            cite_sections[key].add(s.section_key)
+    for c in await db.scalars(select(Citation).where(Citation.version_id == version.id)):
+        keys = cite_sections.get(c.cite_key, set())
+        item_id = _as_uuid(c.ref)
+        if item_id is not None:
+            item_keys[item_id] |= keys
+        elif c.ref:
+            url_keys[normalize_url(c.ref)] |= keys
+    for item in await _url_items(db, set(url_keys)):
+        item_keys[item.id] |= url_keys[normalize_url(item.url)]
+
     items = list(await db.scalars(select(SourceItem).where(SourceItem.id.in_(list(item_keys)))))
     sources = {
         s.id: s
@@ -130,10 +344,10 @@ async def source_permission_problems(
             )
         )
     )
-    subjects = {*item_keys, *(i.source_id for i in items)}
-    events = await _revoking_events(db, subjects, document.id)
+    events = await _revoking_events(db, document.id)
     by_subject = {e.subject_id for e in events}
     revoked: set[uuid.UUID] = set()
+    keys: set[str] = set()
     for item in items:
         source = sources.get(item.source_id)
         if (
@@ -145,37 +359,65 @@ async def source_permission_problems(
         ):
             revoked.add(item.id)
     # Linked items that no longer exist at all.
-    revoked |= {i for i in item_keys if i not in {x.id for x in items}}
-    whole_document = [e for e in events if e.subject_id is None or e.subject_id == document.id]
-    if not revoked and not whole_document:
+    existing = {x.id for x in items}
+    revoked |= {
+        link.source_item_id
+        for link in links
+        if link.source_item_id is not None and link.source_item_id not in existing
+    }
+    for i in revoked:
+        keys |= item_keys.get(i, set())
+    matched: list[ChangeEvent] = []
+    for e in events:
+        data = e.data or {}
+        hit: set[str] = set()
+        for i in data.get("item_ids") or []:
+            item_id = _as_uuid(i)
+            if item_id in item_keys:
+                revoked.add(item_id)
+                hit |= item_keys[item_id]
+        for u in data.get("urls") or []:
+            hit |= url_keys.get(u, set())
+        for i in data.get("evidence_ids") or []:
+            hit |= evidence_keys.get(_as_uuid(i), set())
+        for link in data.get("links") or []:
+            if link.get("document_id") == str(document.id) and link.get("version_id") in (
+                None,
+                str(version.id),
+            ):
+                hit.add(link.get("section_key"))
+            hit |= link_keys.get(_as_uuid(link.get("id")), set())
+        if hit or e.subject_id in existing or e.subject_id in {i.source_id for i in items}:
+            matched.append(e)
+        keys |= hit
+    whole_document = [
+        e
+        for e in events
+        if e.subject_id == document.id or (e.subject_id is None and e.document_id == document.id)
+    ]
+    if not revoked and not keys and not whole_document:
         return []
-    keys = set().union(*(item_keys.get(i, set()) for i in revoked)) if revoked else set()
-    problem = _revoked(keys, events)
-    problem.ids = [*sorted(revoked, key=str), *problem.ids]
-    return [problem]
-
-
-def _revoked(keys: set[str], events: list[ChangeEvent]) -> PublishProblem:
-    return PublishProblem(
+    keys.discard(None)
+    problem = PublishProblem(
         code="source_permission_revoked",
         message="Evidence comes from a source whose permission was revoked; remove or "
         "replace it before publishing",
         section_keys=sorted(keys),
-        ids=[e.id for e in events],
+        ids=[*sorted(revoked, key=str), *(e.id for e in [*whole_document, *matched])],
     )
+    problem.ids = list(dict.fromkeys(problem.ids))
+    return [problem]
 
 
-async def _revoking_events(
-    db: AsyncSession, subjects: set[uuid.UUID], document_id: uuid.UUID
-) -> list[ChangeEvent]:
-    """``source_permission`` events whose latest word on their subject is a revoke."""
+async def _revoking_events(db: AsyncSession, document_id: uuid.UUID) -> list[ChangeEvent]:
+    """The company's ``source_permission`` events whose latest word on their subject is
+    a revoke (only this document's when they name a document)."""
     rows = list(
         await db.scalars(
             select(ChangeEvent)
             .where(
                 ChangeEvent.subject_kind == "source_permission",
-                ChangeEvent.subject_id.in_(list(subjects))
-                | (ChangeEvent.document_id == document_id),
+                ChangeEvent.document_id.is_(None) | (ChangeEvent.document_id == document_id),
             )
             .order_by(ChangeEvent.created_at, ChangeEvent.id)
         )
@@ -216,6 +458,10 @@ async def review_problems(
                 ids=[policy.decider_id],
             )
         )
+    _, unresolved = await template_required_sections(db, document, version)
+    if unresolved:
+        # Fails closed: the template's required sections are unknown, so they block.
+        blockers.append(_problem("template_unresolved", unresolved))
     by_key = {s.section_key: s for s in states.sections}
     # A required section must be present (a heading-only section, such as the title or
     # a parent of sub-sections, counts).
@@ -318,6 +564,17 @@ async def review_problems(
     return blockers, warnings, required, approval_scope
 
 
+async def publish_latest_only(db: AsyncSession) -> bool:
+    """The company setting ``publish_latest_only`` (default true): a superseded version
+    is never published."""
+    from oracle.tenant_settings import TenantSetting
+
+    value = await db.scalar(
+        select(TenantSetting.value).where(TenantSetting.key == PUBLISH_LATEST_ONLY)
+    )
+    return value is not False
+
+
 async def publish_check(
     db: AsyncSession, document: Document, version: DocumentVersion
 ) -> PublishCheckOut:
@@ -359,6 +616,17 @@ async def publish_check(
                 )
             )
     blockers += await source_permission_problems(db, document, version)
+    latest = await db.scalar(
+        select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == document.id)
+    )
+    if latest is not None and latest > version.number and await publish_latest_only(db):
+        blockers.append(
+            _problem(
+                "superseded_version",
+                f"Version {version.number} is not the latest (version {latest} is); only "
+                "the latest version is published (company setting publish_latest_only)",
+            )
+        )
     published = await db.scalar(
         select(DocumentPublication.number).where(DocumentPublication.version_id == version.id)
     )
@@ -532,7 +800,7 @@ async def _manifest(
                 "section_key": s.section_key,
                 "heading": s.heading,
                 "layer": s.layer,
-                "revision": s.content_hash,
+                "revision": s.revision,
                 "status": by_key[s.section_key].status,
                 "approval": by_key[s.section_key].approval.model_dump(mode="json")
                 if by_key[s.section_key].approval
@@ -657,8 +925,12 @@ async def publish(
     content_hash: str | None,
     note: str | None,
 ) -> DocumentPublication:
-    """Check and publish under the document's row lock. The caller commits."""
-    locked = await db.scalar(select(Document).where(Document.id == document.id).with_for_update())
+    """Check and publish under the publish lock (the document's row lock and the
+    company's review gate, shared), so no verdict, approval, policy change or source
+    revocation commits mid-render. The caller commits."""
+    await gate_lock(db, shared=True)
+    locked = await lock_document(db, document.id)
+    await db.refresh(version)
     check = await publish_check(db, locked, version)
     if content_hash is not None and content_hash != version.content_hash:
         raise PublishRefusedError(

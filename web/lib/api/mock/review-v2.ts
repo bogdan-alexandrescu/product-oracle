@@ -72,7 +72,7 @@ export function seedReviewV2(doc: DocumentLike | undefined, latest: VersionLike 
   db.patches.push({
     id: "p0000000-0000-4000-8000-000000000001", document_id: doc.id, section_key: target.section_key,
     base_version: latest.number, base_hash: target.content_hash, heading: target.heading,
-    body_md: `${target.body_md}\n\nAn agent proposed this added sentence.`, origin: "run", run_id: null,
+    body_md: `${target.body_md}\n\nAn agent proposed this added sentence.`, origin: "run", action: "replace", run_id: null,
     rationale: "An agent draft rewrote this approved section; the approved text was kept. Review the rewrite as a diff.",
     status: "open", created_by: userId, decided_by: null, decided_at: null, decision_note: null, applied_version: null,
     lock_version: 1, created_at: AT, updated_at: AT,

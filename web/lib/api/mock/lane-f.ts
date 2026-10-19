@@ -1355,6 +1355,7 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     content_hash: hash(sections.map((s) => s.content_hash).join("")),
     snapshot: null,
     warnings: [],
+    notes: [],
     imported_by: "draft-picker",
     approved_at: null,
     brief_source: briefKeys.size ? "draft" : "none",

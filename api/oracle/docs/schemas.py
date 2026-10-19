@@ -78,6 +78,9 @@ class VersionSummary(ORM):
     content_hash: str
     snapshot: str | None = None
     warnings: list[VersionWarning] = []
+    # How the version came in, e.g. base_version_missing: imported without a base
+    # version, so nothing checked that it keeps the changes made since.
+    notes: list[VersionWarning] = []
     imported_by: uuid.UUID | None = None
     approved_at: datetime | None = None
     # Where the brief layer came from; "none": no brief, the version opens on the full
@@ -120,6 +123,9 @@ class SectionOut(ORM):
     body_md: str
     body_text: str
     content_hash: str
+    # The review revision: the text, the citation entries it cites and its layer. Send
+    # it as ``base_revision`` when saving the section.
+    revision: str | None = None
     citation_keys: list[str] = []
     verdict: SectionVerdict | None = None
     layer: Layer = "detail"

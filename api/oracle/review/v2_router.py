@@ -21,7 +21,7 @@ from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, require_role
 from oracle.docs import service as docs_service
-from oracle.docs.edit import EditRefused, edit_section
+from oracle.docs.edit import EditForbidden, EditRefused, edit_section
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import ImportErrorResponse, VersionOut
 from oracle.jobs import service as jobs_service
@@ -92,6 +92,7 @@ def import_conflict(e: docs_service.BaseVersionConflictError) -> JSONResponse:
             base_version=e.base,
             latest_version=e.latest,
             sections=e.sections,  # type: ignore[arg-type]
+            front_matter_changed=e.front_matter_changed,
         )
     )
 
@@ -189,7 +190,9 @@ async def edit_document_section(
     """Save one section as the next version. Send the version and section revision you
     loaded: another section changed since is fine (the edit applies on the latest
     version); the same section changed since is a 409 with its current text. Approvers
-    edit any section; a section's owner edits their own."""
+    edit any section; a section's owner edits their own, and their ``resolutions`` close
+    only that section's feedback (403 otherwise). An edit that reaches outside its
+    section (adds, rewrites or swallows another section) is a 422."""
     document = await _call(get_document(db, doc))
     if not has_role(principal.role, "approver"):
         owner = await db.scalar(
@@ -213,6 +216,7 @@ async def edit_document_section(
             heading=body.heading,
             body_md=body.body_md,
             resolutions=[r.model_dump(mode="json") for r in body.resolutions],
+            resolve_any=has_role(principal.role, "approver"),
         )
     except docs_service.BaseVersionConflictError as e:
         return import_conflict(e)
@@ -220,6 +224,8 @@ async def edit_document_section(
         raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
     except EditRefused as e:
         raise HTTPException(422, str(e)) from e
+    except EditForbidden as e:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from e
     except DraftError as e:
         body_out = ImportErrorResponse(
             detail=f"edit rejected: {len(e.problems)} problem(s)", errors=e.problems
@@ -284,6 +290,8 @@ async def accept_section_patch(
         return lock_conflict(e)
     except docs_service.BaseVersionConflictError as e:
         return import_conflict(e)
+    except (EditRefused, DraftError) as e:
+        raise HTTPException(422, str(e)) from e
     if result.created:
         await jobs_service.on_version_imported(
             db, result.version.document_id, result.version.number, principal

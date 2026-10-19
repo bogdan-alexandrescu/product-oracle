@@ -15,6 +15,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
@@ -291,13 +292,21 @@ async def delete_connection(
     connection_id: uuid.UUID, principal: UserPrincipal, db: TenantDB, http: ProviderHttp
 ) -> None:
     """Disconnect: revoke the grant at the provider where it has an endpoint (GitHub,
-    Slack, Google; best effort), then delete Oracle's copy of the credential."""
+    Slack, Google; best effort), record a ``source_permission`` revocation for each
+    source it synced, then delete Oracle's copy of the credential."""
     conn = await _own(db, connection_id, principal)
     revoked = await service.revoke_at_provider(http, conn)
     await audit.record(
         db, principal, "connection.disconnect", "connection", conn.id,
         {"provider": conn.provider, "account": conn.account_label, "provider_revoke": revoked},
     )  # fmt: skip
+    # The sources it synced keep their items, but Oracle may no longer read them: record
+    # the revocation so the publish gate refuses documents built on them.
+    from oracle.review.publish import record_source_revocation
+    from oracle.sources.models import Source
+
+    sources = list(await db.scalars(select(Source).where(Source.connection_id == conn.id)))
+    await record_source_revocation(db, principal, sources, "connection_revoked", drop_links=False)
     await db.delete(conn)
     await db.commit()
 
