@@ -50,7 +50,8 @@ test("intake mock: new idea, summary, a batch, answers and research", async () =
 
   const answered = await call("POST", `/v1/questions/${first.id}/answers`, { kind: "answer", body: "Repeat checkout time" });
   expect(answered.status).toBe(201);
-  expect(answered.body.gap.status).toBe("answered");
+  // B4: a commenter's answer never clears a critical gap on its own.
+  expect(answered.body.gap.status).toBe(answered.body.gap.importance === "critical" ? "answered_pending_review" : "answered");
   expect((await call("POST", `/v1/questions/${first.id}/answers`, { kind: "answer", body: "Again" })).status).toBe(409);
 
   const second = batch.body.questions[1].question;
@@ -81,4 +82,33 @@ test("intake mock: roles, decisions and unknown ids", async () => {
   expect(decided.status).toBe(201);
   expect(decided.body.gap.status).toBe("accepted_risk");
   expect((await call("GET", "/v1/intakes/00000000-0000-4000-8000-000000000000/summary")).status).toBe(404);
+});
+
+test("intake mock: the author's rules (S6, B4)", async () => {
+  const { call, ctx } = setup();
+  const created = await call("POST", "/v1/intakes", { title: "x", brief: "A brief that is long enough to count." });
+  const id = created.body.intake.id;
+  expect(created.body.is_author).toBe(true);
+  expect(created.body.shared_counts).toEqual([]);
+  const other = { ...ctx, userId: "b2000000-0000-4000-8000-000000000002" };
+  const theirs = await call("GET", `/v1/intakes/${id}/summary`, undefined, other);
+  expect(theirs.body.is_author).toBe(false);
+  expect(theirs.body.new_evidence.count).toBeNull();
+  expect((await call("GET", `/v1/intakes/${id}/findings`, undefined, other)).body).toEqual([]);
+  // Only the author repins, re-analyses or shares; the author or an approver asks a batch.
+  for (const leaf of ["repin", "analyze"]) {
+    expect((await call("POST", `/v1/intakes/${id}/${leaf}`, undefined, { ...other, role: "owner" })).status).toBe(403);
+    expect((await call("POST", `/v1/intakes/${id}/${leaf}`)).status).toBe(200);
+  }
+  const share = { changes: [{ finding_id: "f1000000-0000-4000-8000-000000000001", sharing: "full" }] };
+  expect((await call("POST", `/v1/intakes/${id}/findings/sharing`, share, { ...other, role: "owner" })).status).toBe(403);
+  expect((await call("POST", `/v1/intakes/${id}/question-batches`, undefined, other)).status).toBe(403);
+  expect((await call("POST", `/v1/intakes/${id}/question-batches`, undefined, { ...other, role: "approver" })).status).toBe(200);
+  // Lowering a critical gap or validating it unanswered takes an owner.
+  const critical = created.body.gaps.find((g: { importance: string }) => g.importance === "critical");
+  const lower = { importance: "low", lock_version: critical.lock_version };
+  expect((await call("PATCH", `/v1/gaps/${critical.id}`, lower, { ...ctx, role: "approver" })).status).toBe(403);
+  const validate = { decision: "validate", rationale: "Checked" };
+  expect((await call("POST", `/v1/gaps/${critical.id}/decisions`, validate, { ...ctx, role: "approver" })).status).toBe(403);
+  expect((await call("POST", `/v1/gaps/${critical.id}/decisions`, validate, { ...ctx, role: "owner" })).status).toBe(201);
 });

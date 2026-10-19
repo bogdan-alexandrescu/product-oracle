@@ -217,7 +217,9 @@ async def test_an_answer_updates_its_gap_and_is_never_asked_again(client):
         client, ctx, q["id"], body="Median repeat checkout time; 95 s today, 45 s by Q3."
     )
     assert result["question"]["status"] == "answered"
-    assert result["gap"]["status"] == "answered"
+    # A critical gap answered below the owner role waits for review (B4).
+    assert result["gap"]["importance"] == "critical"
+    assert result["gap"]["status"] == "answered_pending_review"
     assert result["gap"]["knowledge_state"] == "user_decision"
     assert result["answer"]["kind"] == "answer"
     assert result["answer"]["answered_by"] == str(ctx.users["commenter"].id)
@@ -244,7 +246,7 @@ async def test_an_answer_updates_its_gap_and_is_never_asked_again(client):
     assert sum(q["category"] == "success_metric" for q in questions) == 1
     assert len({q["gap_id"] for q in questions}) == len(questions)
     after = gaps_by_category(await summary(client, ctx, intake_id))
-    assert after["success_metric"]["status"] == "answered"
+    assert after["success_metric"]["status"] == "answered_pending_review"
 
     # Answering it again is refused (an approver may revise, a commenter may not).
     await answer(client, ctx, q["id"], body="Something else", expect=409)
@@ -276,8 +278,10 @@ async def test_confirmed_and_locked_baseline_facts_are_not_asked(client):
 async def test_dont_know_on_a_critical_blocker_offers_research_and_a_decision(client, runtime):
     ctx = await company()
     doc = await _document(client, ctx)
+    # Linking an intake to a PRD takes an approver.
+    await create_intake(client, ctx, document=doc, expect=403)
     out = await create_intake(
-        client, ctx, document=doc,
+        client, ctx, who="approver", document=doc,
         brief="Pre-fill saved addresses from the partner shipping API; it has a rate limit.",
     )  # fmt: skip
     intake_id = out["intake"]["id"]
@@ -430,9 +434,12 @@ async def test_defer_and_delegate(client):
     await answer(client, ctx, second["id"], body="Me", who="commenter", expect=403)
     done = await answer(client, ctx, second["id"], body="The growth team owns it", who="approver")
     assert done["question"]["status"] == "answered"
-    # A deferred question can still be answered later.
+    # A deferred question can still be answered later; a critical one then waits for
+    # an owner's review (B4).
     later = await answer(client, ctx, first["id"], body="Decided now")
-    assert later["gap"]["status"] == "answered"
+    assert later["gap"]["status"] == (
+        "answered_pending_review" if later["gap"]["importance"] == "critical" else "answered"
+    )
 
 
 async def test_answers_validate_their_body_and_evidence(client):
@@ -455,7 +462,7 @@ async def test_answers_validate_their_body_and_evidence(client):
 async def test_an_answer_on_a_linked_prd_becomes_a_patch_proposal_not_an_edit(client):
     ctx = await company()
     doc = await _document(client, ctx)
-    out = await create_intake(client, ctx, document=doc)
+    out = await create_intake(client, ctx, who="approver", document=doc)
     q = question_for(await batch(client, ctx, out["intake"]["id"]), "success_metric")
     result = await answer(client, ctx, q["id"], body="Repeat checkout time, 95 s to 45 s.")
     [patch] = [p for p in result["proposals"] if p["kind"] == "prd_patch"]

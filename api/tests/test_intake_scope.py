@@ -44,6 +44,9 @@ ROUTES = [
     ("POST", "/v1/gaps/{gap_id}/decisions", "decide_knowledge_gap"),
     ("POST", "/v1/gaps/{gap_id}/research", "propose_gap_research"),
     ("POST", "/v1/questions/{question_id}/answers", "answer_question"),
+    ("GET", "/v1/intakes/{intake_id}/findings", "list_intake_findings"),
+    ("PATCH", "/v1/intakes/{intake_id}/findings/{finding_id}", "set_intake_finding_sharing"),
+    ("POST", "/v1/intakes/{intake_id}/findings/sharing", "set_intake_findings_sharing"),
 ]
 
 
@@ -59,14 +62,19 @@ def test_every_intake_route_is_in_openapi_and_an_mcp_tool():
 @pytest.mark.parametrize(
     ("method", "path", "scope"),
     [
-        ("GET", "/v1/intakes/{intake_id}/summary", "read:baseline"),
-        ("GET", "/v1/intakes/{intake_id}/question-batch", "read:baseline"),
+        ("GET", "/v1/intakes/{intake_id}", "read:baseline"),
+        # They can return source titles, links or excerpts: the sources scope.
+        ("GET", "/v1/intakes/{intake_id}/summary", "read:sources"),
+        ("GET", "/v1/intakes/{intake_id}/question-batch", "read:sources"),
         ("GET", "/v1/gaps", "read:baseline"),
         ("GET", "/v1/questions", "read:baseline"),
         ("GET", "/v1/answers", "read:baseline"),
         # Reading source content needs the sources scope, not the baseline one.
         ("GET", "/v1/intakes/{intake_id}/evidence", "read:sources"),
         ("GET", "/v1/intakes/{intake_id}/new-evidence", "read:sources"),
+        ("GET", "/v1/intakes/{intake_id}/findings", "read:baseline"),
+        ("PATCH", "/v1/intakes/{intake_id}/findings/{finding_id}", None),
+        ("POST", "/v1/intakes/{intake_id}/findings/sharing", None),
         ("POST", "/v1/intakes", None),
         ("POST", "/v1/questions/{question_id}/answers", None),
         ("POST", "/v1/gaps/{gap_id}/decisions", None),
@@ -83,7 +91,9 @@ async def test_run_tokens_read_the_intake_but_never_answer_or_decide(client):
     out = await create_intake(client, ctx)
     intake_id = out["intake"]["id"]
     q = (await batch(client, ctx, intake_id))["questions"][0]["question"]
-    token = await run_token(ctx.tenant_id, ["read:baseline"], ctx.users["commenter"].id)
+    token = await run_token(
+        ctx.tenant_id, ["read:baseline", "read:sources"], ctx.users["commenter"].id
+    )
     async with mcp_client(token) as c:
         names = {t.name for t in (await c.list_tools()).tools}
         assert {"get_intake", "get_intake_summary", "list_knowledge_gaps"} <= names
@@ -94,8 +104,14 @@ async def test_run_tokens_read_the_intake_but_never_answer_or_decide(client):
             "answer_question", {"question_id": q["id"], "body": {"kind": "dont_know"}}
         )
         assert refused.is_error
-        refused = await c.call_tool("search_intake_evidence", {"intake_id": intake_id, "q": "x"})
-        assert refused.is_error and "read:sources" in text_of(refused)
+    baseline_only = await run_token(ctx.tenant_id, ["read:baseline"], ctx.users["commenter"].id)
+    async with mcp_client(baseline_only) as c:
+        ok = await c.call_tool("get_intake", {"item_id": intake_id})
+        assert not ok.is_error
+        for tool in ("get_intake_summary", "get_question_batch", "search_intake_evidence"):
+            args = {"intake_id": intake_id, **({"q": "x"} if "search" in tool else {})}
+            refused = await c.call_tool(tool, args)
+            assert refused.is_error and "read:sources" in text_of(refused), tool
 
 
 async def test_roles_guard_every_write(client):
@@ -194,20 +210,25 @@ async def test_snapshots_and_sources_of_another_user_cannot_be_pinned(client):
     await create_intake(client, ctx, source_ids=[str(source_id)], expect=404)
 
 
-async def test_other_users_see_that_evidence_exists_but_not_its_content(client):
-    """S3 as built (AUD-9): source items stay visible to their owner only."""
+async def test_other_users_see_nothing_of_the_authors_evidence_by_default(client):
+    """S6: what the author's own sources say is private until the author shares it;
+    the gap itself (a fixed category text) stays shared."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
+    mine = gaps_by_category(out)["pain_evidence"]
+    assert mine["knowledge_state"] == "ai_inference" and mine["evidence"]
     other = await client.get(f"/v1/intakes/{out['intake']['id']}/summary",
                              headers=ctx.as_("viewer"))  # fmt: skip
-    [ref] = gaps_by_category(other.json())["pain_evidence"]["evidence"]
-    assert ref["visible"] is False
-    assert ref["title"] is None and ref["data_excerpt"] is None and ref["url"] is None
+    theirs = gaps_by_category(other.json())["pain_evidence"]
+    assert theirs["statement"] == mine["statement"]
+    assert theirs["evidence"] == [] and theirs["evidence_ids"] == []
+    assert theirs["knowledge_state"] == "unknown" and theirs["confidence"] is None
     resp = await client.get(
         f"/v1/intakes/{out['intake']['id']}/new-evidence", headers=ctx.as_("viewer")
     )
     assert resp.status_code == 200
     assert resp.json()["items"] == [] and resp.json()["visible"] is False
+    assert resp.json()["count"] is None
 
 
 INJECTION = (
