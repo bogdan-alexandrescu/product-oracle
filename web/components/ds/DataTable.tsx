@@ -178,7 +178,7 @@ export function DataTable<T>({
                       role="rowheader"
                       colSpan={visibleCols}
                       scope="colgroup"
-                      className="h-9 px-4 max-[600px]:flex max-[600px]:items-center max-[600px]:px-3 text-left font-display text-[15px] font-bold"
+                      className="h-9 px-4 max-[600px]:flex max-[600px]:items-center max-[600px]:px-3 text-left font-display tracking-heading text-[15px] font-bold"
                     >
                       {g}
                     </th>

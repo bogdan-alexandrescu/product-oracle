@@ -119,7 +119,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
         className="w-full max-w-2xl min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip"
       >
         <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
-          <h2 id="new-run-title" className="font-display text-xl font-bold tracking-[-0.01em]">
+          <h2 id="new-run-title" className="font-display text-xl font-bold tracking-heading">
             New run
           </h2>
           {catalog.data && (

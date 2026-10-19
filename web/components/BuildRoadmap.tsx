@@ -160,7 +160,7 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
               <Icon name="x" size={20} />
             </button>
           </div>
-          <h2 id={`${id}-title`} className="mt-1 font-display text-[22px] leading-[27px] font-bold tracking-[-0.01em]">
+          <h2 id={`${id}-title`} className="mt-1 font-display text-[22px] leading-[27px] font-bold tracking-heading">
             Build roadmap
           </h2>
           <p className="mt-2 flex flex-wrap items-center gap-2">
@@ -170,7 +170,7 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
             >
               {prd.title} v{prd.approved_version}
             </Link>
-            <span className="inline-flex h-[26px] items-center rounded-full bg-lime px-2.5 text-[13px] font-semibold text-on-lime">
+            <span className="inline-flex h-[26px] items-center rounded-full bg-accent-soft px-2.5 text-[13px] font-semibold text-accent-ink">
               Approved
             </span>
             <InfoTip label="Build roadmap" align="start" side="bottom" hero>

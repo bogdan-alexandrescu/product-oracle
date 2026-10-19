@@ -12,9 +12,9 @@ import type { CitationOut, EntityOut, SectionOut, Verdict } from "@/lib/api/clie
 import type { Block } from "@/lib/markdown";
 
 const HEADING_CLASS: Record<number, string> = {
-  1: "font-display text-[26px] leading-8 font-bold tracking-[-0.02em] max-[600px]:text-[22px] max-[600px]:leading-7",
-  2: "font-display text-xl leading-7 font-bold tracking-[-0.01em]",
-  3: "font-display text-lg leading-6 font-bold",
+  1: "font-display text-[26px] leading-8 font-bold tracking-heading max-[600px]:text-[22px] max-[600px]:leading-7",
+  2: "font-display text-xl leading-7 font-bold tracking-heading",
+  3: "font-display tracking-heading text-lg leading-6 font-bold",
 };
 
 export const SectionView = memo(function SectionView({

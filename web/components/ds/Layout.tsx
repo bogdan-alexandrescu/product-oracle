@@ -40,7 +40,7 @@ export function PageHeader({
   return (
     <header data-testid={testId} data-page-header className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 py-3 max-[600px]:py-3.5">
       {back && <div className="basis-full text-sm text-text2">{back}</div>}
-      <h1 className="min-w-0 font-display text-[28px] leading-8 font-bold tracking-[-0.02em] max-[600px]:flex-[1_1_7.5rem] max-[600px]:text-2xl max-[600px]:leading-7">
+      <h1 className="min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading max-[600px]:flex-[1_1_7.5rem] max-[600px]:text-2xl max-[600px]:leading-7">
         {title}
         {suffix && <span className="ml-1.5 align-baseline font-display text-lg font-semibold tracking-normal text-text2">{suffix}</span>}
       </h1>
@@ -95,8 +95,8 @@ export function Panel({
     >
       {(title || tools) && (
         <div className="flex min-h-12 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2">
-          {title && <h2 className="font-display text-lg leading-6 font-bold tracking-[-0.01em]">{title}</h2>}
-          {count != null && <span className="tnum font-display text-lg leading-6 font-bold text-accent-ink">{count}</span>}
+          {title && <h2 className="font-display text-lg leading-6 font-bold tracking-heading">{title}</h2>}
+          {count != null && <span className="tnum font-display tracking-heading text-lg leading-6 font-bold text-accent-ink">{count}</span>}
           <span className="flex-1" />
           {tools && <div className="flex flex-wrap items-center gap-2">{tools}</div>}
         </div>

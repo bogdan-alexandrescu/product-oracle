@@ -501,7 +501,7 @@ function StatFig({ children, note, dim, title }: { children: ReactNode; note?: R
   return (
     <span className="block min-w-0" title={title}>
       <span
-        className={`tnum block truncate font-display text-[22px] leading-7 font-bold tracking-[-0.02em] ${dim ? "text-text2" : ""}`}
+        className={`tnum block truncate font-display text-[22px] leading-7 font-bold tracking-heading ${dim ? "text-text2" : ""}`}
       >
         {children}
       </span>

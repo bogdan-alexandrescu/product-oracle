@@ -265,7 +265,7 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
     <>
       <section aria-labelledby={`${id}-template`}>
         <div className="mb-2.5 flex min-h-8 flex-wrap items-center gap-2.5">
-          <h2 id={`${id}-template`} className="font-display text-lg leading-6 font-bold tracking-[-0.01em]">
+          <h2 id={`${id}-template`} className="font-display text-lg leading-6 font-bold tracking-heading">
             Template
           </h2>
           {templateSource === "last" && <Chip kind="acc">Your last choice</Chip>}
@@ -324,7 +324,7 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
 
       <section aria-labelledby={`${id}-theme`}>
         <div className="mb-2.5 flex min-h-8 items-center gap-2.5">
-          <h2 id={`${id}-theme`} className="font-display text-lg leading-6 font-bold tracking-[-0.01em]">
+          <h2 id={`${id}-theme`} className="font-display text-lg leading-6 font-bold tracking-heading">
             Theme
           </h2>
           {rec && themeKey === rec.theme?.key && rec.theme_reason && (
@@ -570,7 +570,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
 
           <Panel as="div" bodyClassName="p-4">
             <section aria-labelledby="questions-heading">
-              <h2 id="questions-heading" className="mb-3 font-display text-lg leading-6 font-bold tracking-[-0.01em]">
+              <h2 id="questions-heading" className="mb-3 font-display text-lg leading-6 font-bold tracking-heading">
                 About this {label}
               </h2>
               <div className="flex flex-col gap-4">

@@ -159,7 +159,18 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS;
 
-export function Icon({ name, size = 20, className = "" }: { name: IconName; size?: 16 | 20 | 24; className?: string }) {
+export function Icon({
+  name,
+  size = 20,
+  stroke = 1.8,
+  className = "",
+}: {
+  name: IconName;
+  size?: 16 | 20 | 24;
+  /** Stroke width; the rail draws its icons at 1.7. */
+  stroke?: number;
+  className?: string;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -169,7 +180,7 @@ export function Icon({ name, size = 20, className = "" }: { name: IconName; size
       className={`flex-none ${className}`}
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.8}
+      strokeWidth={stroke}
       strokeLinecap="round"
       strokeLinejoin="round"
     >

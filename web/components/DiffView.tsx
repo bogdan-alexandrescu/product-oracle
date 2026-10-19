@@ -225,7 +225,7 @@ function DiffSection({ d, doc, to, showLayer }: { d: SectionDiff; doc: string; t
     >
       <div className="flex min-h-12 flex-wrap items-center gap-2 px-4 py-2">
         <h2
-          className={`min-w-0 truncate font-display text-lg leading-6 font-bold tracking-[-0.01em] ${
+          className={`min-w-0 truncate font-display text-lg leading-6 font-bold tracking-heading ${
             d.status === "removed" ? "text-text2 line-through" : quiet ? "text-text2" : ""
           }`}
         >

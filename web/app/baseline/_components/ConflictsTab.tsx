@@ -63,12 +63,12 @@ export function ConflictsTab({
                 <button
                   type="button"
                   onClick={() => onOpen(c.entity_id!)}
-                  className="min-w-0 truncate font-display text-lg font-bold hover:underline"
+                  className="min-w-0 truncate font-display tracking-heading text-lg font-bold hover:underline"
                 >
                   {title}
                 </button>
               ) : (
-                <span className="min-w-0 truncate font-display text-lg font-bold">{title}</span>
+                <span className="min-w-0 truncate font-display tracking-heading text-lg font-bold">{title}</span>
               )}
               <span className="rounded-goal bg-surface2 px-1.5 font-mono text-sm" data-testid="conflict-field">
                 {fieldLabel(c.field)}
