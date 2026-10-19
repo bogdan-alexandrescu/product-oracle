@@ -76,7 +76,14 @@ body.orientation-landscape { max-width: 76rem; }
 /* WeasyPrint runs no string-set inside a running element, so a page footer that shows
    the title, version and status reads them from this carrier instead. It takes no space
    on the page and is never shown on screen. */
-.doc-strings { height: 0; overflow: hidden; margin: 0; }
+.doc-strings { height: 0; overflow: hidden; margin: 0; visibility: hidden; }
+/* A long title or source label: the full text on screen, the capped one in the
+   repeated PDF header. */
+.doc-header .header-line .banner-short { display: none; }
+@media print {
+  .doc-header--running .header-line .banner-full { display: none; }
+  .doc-header--running .header-line .banner-short { display: inline-block; }
+}
 .doc-strings > span { display: inline; }
 .doc-strings-title { string-set: doc-title content(text); }
 .doc-strings-version { string-set: doc-version content(text); }

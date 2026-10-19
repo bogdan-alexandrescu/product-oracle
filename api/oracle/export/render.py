@@ -157,26 +157,75 @@ def apply_layer(ev: ExportVersion, layer: str) -> ExportVersion:
 
 
 _SECTION_LINK = re.compile(r'<a href="#([^"]+)">(.*?)</a>', re.S)
-# A link to another document's version in rendered HTML, with its optional section.
 # A theme that makes the version header a running element repeats it on every PDF page.
-_RUNNING_HEADER = re.compile(
-    r"\.doc-header\b[^{}]*\{[^{}]*position\s*:\s*running\s*\(", re.IGNORECASE
-)
+_POSITION_RUNNING = re.compile(r"position\s*:\s*running\s*\(", re.IGNORECASE)
+_BRACE_OR_END = re.compile(r"[{};]")
 # The repeated header sits in the page's top margin, so its title and source are capped.
 HEADER_TEXT_MAX = 90
 
 
+def _without_comments(css: str) -> str:
+    out, i = [], 0
+    while (start := css.find("/*", i)) != -1:
+        out.append(css[i:start])
+        end = css.find("*/", start + 2)
+        if end == -1:
+            return "".join(out)
+        i = end + 2
+    out.append(css[i:])
+    return "".join(out)
+
+
 def running_header(css: str | None) -> bool:
-    """True when the theme's CSS makes ``.doc-header`` a running element."""
-    return bool(_RUNNING_HEADER.search(css or ""))
+    """True when a ``.doc-header`` rule of the theme's CSS sets ``position: running(...)``.
+
+    One pass over the braces, so any CSS a caller sends is read in linear time: only the
+    declarations of rules with no nested block are searched, and those never overlap.
+    """
+    css = _without_comments(css or "")
+    frames: list[list] = []  # [selector, body start, has a nested block]
+    selector_start = 0
+    for m in _BRACE_OR_END.finditer(css):
+        ch = m.group()
+        if ch == "{":
+            if frames:
+                frames[-1][2] = True
+            frames.append([css[selector_start : m.start()], m.end(), False])
+            selector_start = m.end()
+        elif ch == "}":
+            if frames:
+                selector, body_start, nested = frames.pop()
+                if (
+                    not nested
+                    and any(part.strip() == ".doc-header" for part in selector.split(","))
+                    and _POSITION_RUNNING.search(css, body_start, m.start())
+                ):
+                    return True
+            selector_start = m.end()
+        elif not frames:
+            selector_start = m.end()
+    return False
 
 
-def _header_text(text: str | None, running: bool) -> str | None:
-    if not running or text is None or len(text) <= HEADER_TEXT_MAX:
+def _cap(text: str, limit: int) -> str:
+    """``text`` cut at a word boundary to at most ``limit`` characters, with an ellipsis."""
+    if len(text) <= limit:
         return text
-    return text[: HEADER_TEXT_MAX - 1].rstrip() + "…"
+    cut = text[: max(1, limit - 1)]
+    if " " in cut[limit // 2 :]:
+        cut = cut[: cut.rindex(" ")]
+    return cut.rstrip(" ,;:-") + "…"
 
 
+def _header_source(source: VersionSource | None) -> str | None:
+    """The "From <PRD title> v<n>" label with only the title capped, so v<n> survives."""
+    if source is None:
+        return None
+    suffix = f" v{source.version}"
+    return f"From {_cap(source.title, HEADER_TEXT_MAX - len('From ') - len(suffix))}{suffix}"
+
+
+# A link to another document's version in rendered HTML, with its optional section.
 _DOC_LINK = re.compile(r'href="(/documents/[A-Za-z0-9][A-Za-z0-9_.-]*/v/\d+)(?:#([^"]*))?"')
 
 
@@ -723,8 +772,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
         # The theme repeats the header on every PDF page: themed.css keeps it short enough
         # for the page's top margin (stored theme copies included, so it lives here).
         "running_header": running,
-        "header_title": _header_text(ev.document.title, running),
-        "header_source_label": _header_text(ev.source_label, running),
+        "header_title": _cap(ev.document.title, HEADER_TEXT_MAX) if running else None,
+        "header_source_label": _header_source(ev.source) if running else None,
         "layer": ev.layer,
         "layer_label": ev.layer_label,
         "source_label": ev.source_label,

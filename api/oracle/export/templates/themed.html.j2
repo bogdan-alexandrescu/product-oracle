@@ -28,7 +28,7 @@
 <body class="{{ body_class }}">
 {% if running_header %}
 <div class="doc-strings" aria-hidden="true">
-  <span class="doc-strings-title">{{ header_title }}</span>
+  <span class="doc-strings-title">{{ header_title or title }}</span>
   <span class="doc-strings-version">Version {{ number }}{% if number < latest_number %} of {{ latest_number }}{% endif %}</span>
   <span class="doc-strings-status">{{ status | replace("_", " ") | capitalize }}</span>
   <span class="doc-strings-asof">As of {{ as_of }}</span>
@@ -36,12 +36,14 @@
 {% endif %}
 <header class="doc-header status-{{ status }}{% if running_header %} doc-header--running{% endif %}" role="note" aria-label="Version">
   <div class="header-line">
-    <span class="banner-doc">{{ header_title }}</span>
+    {% if header_title and header_title != title -%}
+    <span class="banner-doc banner-full">{{ title }}</span><span class="banner-doc banner-short">{{ header_title }}</span>
+    {%- else %}<span class="banner-doc">{{ title }}</span>{% endif %}
     <span class="banner-asof">As of {{ as_of }}</span>
     <span class="banner-version">Version {{ number }}{% if number < latest_number %} of {{ latest_number }}{% endif %}</span>
     {% if layer != "full" %}<span class="banner-layer">{{ layer_label }}: the full document has the detail</span>{% endif %}
     <span class="banner-status">{{ status | replace("_", " ") | capitalize }}</span>
-    {% if source_label %}<span class="banner-source"><a href="{{ source_url }}">{{ header_source_label }}</a></span>{% endif %}
+    {% if source_label %}<span class="banner-source"><a href="{{ source_url }}">{% if header_source_label and header_source_label != source_label %}<span class="banner-full">{{ source_label }}</span><span class="banner-short">{{ header_source_label }}</span>{% else %}{{ source_label }}{% endif %}</a></span>{% endif %}
     <span class="banner-date">
       {%- if approved_at %}Approved {{ approved_at }}{% else %}Not approved · imported {{ imported_at }}{% endif -%}
     </span>

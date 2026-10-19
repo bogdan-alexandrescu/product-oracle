@@ -2,6 +2,7 @@
 
 import io
 import os
+import uuid
 
 import pytest
 from pypdf import PdfReader
@@ -490,6 +491,10 @@ def test_pdf_loads_nothing_external(tmp_path):
         (".doc-header.x, .doc-header { position:running(h) }", True),
         (".legend { position: running(legend); }", False),
         ("/* running( */ .doc-header { color: red; }", False),
+        ("/* .doc-header { position: running(h) } */ .legend { color: red; }", False),
+        (".doc-header .banner-doc { position: running(t); }", False),
+        (".doc-header-note { position: running(n); }", False),
+        ("@media print { .x { color: red; } .doc-header { position: running(h); } }", True),
         ("", False),
         (None, False),
     ],
@@ -498,6 +503,46 @@ def test_running_header_detection(css, running):
     from oracle.export.render import running_header
 
     assert running_header(css) is running
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        ".doc-header " * 8_000,
+        ".doc-header " * 4_000 + "{" + "position " * 4_000,
+        ".doc-header{" * 8_000,
+        "/*" * 40_000,
+    ],
+)
+def test_running_header_detection_is_linear(hostile):
+    import time
+
+    from oracle.export.render import running_header
+
+    started = time.perf_counter()
+    running_header(hostile)
+    assert time.perf_counter() - started < 0.1
+
+
+def test_header_caps_keep_the_version_and_whole_words():
+    from oracle.docs.schemas import VersionSource
+    from oracle.export.render import _cap, _header_source
+
+    title = "Checkout redesign for every regional storefront and its data residency rules " * 2
+    capped = _cap(title, 90)
+    assert len(capped) <= 90 and capped.endswith("…") and not capped[:-1].endswith(" ")
+    assert title.startswith(capped[:-1])
+    source = VersionSource(
+        document_id=uuid.uuid4(),
+        slug="checkout",
+        title=title,
+        kind="prd",
+        version=7,
+        version_id=uuid.uuid4(),
+    )
+    label = _header_source(source)
+    assert label.startswith("From Checkout redesign") and label.endswith("… v7")
+    assert len(label) <= 90
 
 
 def _text_positions(page) -> list[tuple[float, str]]:
@@ -541,3 +586,8 @@ async def test_board_header_fits_the_margin_and_the_footer_is_filled(client, ten
         # The footer carries the (capped) title, the version and the status.
         footer = " ".join(t for y, t in runs if y > float(page.mediabox.height) - margin_pt)
         assert "Version 1" in footer and "Draft" in footer and "…" in footer, footer
+    # On screen the header keeps the full title; only the repeated PDF header is capped.
+    html = (await client.get(f"/v1/documents/{out['slug']}/versions/1/export", headers=h)).text
+    assert f'<span class="banner-doc banner-full">{long_title.strip()}</span>' in html
+    # The carrier's text is hidden, so it does not show up in the PDF's text.
+    assert "As of" not in " ".join(t for _, t in _text_positions(reader.pages[0]) if _ > margin_pt)
