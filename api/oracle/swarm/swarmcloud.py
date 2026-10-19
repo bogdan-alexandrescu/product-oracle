@@ -42,6 +42,8 @@ import json
 import logging
 import re
 import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -330,6 +332,8 @@ class SwarmCloudRuntime:
         # ORACLE_SWARMCLOUD_PRINCIPAL, else resolved from the token (an ID token's or JWT
         # bearer's email claim, an access token's service account).
         self._principal = principal
+        self._http: httpx.AsyncClient | None = None
+        self._http_loop: asyncio.AbstractEventLoop | None = None
 
     @classmethod
     def from_settings(cls, settings: RuntimeSettings) -> "SwarmCloudRuntime":
@@ -558,13 +562,25 @@ class SwarmCloudRuntime:
 
     # ------------------------------------------------------------------ calls
 
-    def _client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
-            base_url=self._base_url,
-            timeout=self._timeout,
-            transport=self._transport,
-            headers={"User-Agent": "product-oracle"},
-        )
+    @asynccontextmanager
+    async def _client(self) -> AsyncIterator[httpx.AsyncClient]:
+        """The one HTTP client calls share (its connection pool), made on first use in
+        the running event loop; leaving the block does not close it (:meth:`aclose`)."""
+        loop = asyncio.get_running_loop()
+        if self._http is None or self._http.is_closed or self._http_loop is not loop:
+            self._http = httpx.AsyncClient(
+                base_url=self._base_url,
+                timeout=self._timeout,
+                transport=self._transport,
+                headers={"User-Agent": "product-oracle"},
+            )
+            self._http_loop = loop
+        yield self._http
+
+    async def aclose(self) -> None:
+        if self._http is not None:
+            await self._http.aclose()
+            self._http = None
 
     async def _call(
         self, client: httpx.AsyncClient, method: str, path: str, **kwargs: Any

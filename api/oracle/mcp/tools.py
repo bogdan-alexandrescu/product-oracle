@@ -296,6 +296,11 @@ def _build_request(op: Operation, args: dict[str, Any]) -> tuple[str, dict, Any,
     return path, query, body, op.body_media_type
 
 
+def _writes(method: str, needed: str | None) -> bool:
+    """Whether a call writes: any method but GET, or any scope but a read scope."""
+    return method.upper() != "GET" or (needed is not None and not needed.startswith("read:"))
+
+
 async def call_operation(
     app: FastAPI,
     caller: McpCaller,
@@ -307,13 +312,18 @@ async def call_operation(
     """Run ``op`` as ``caller`` through the app; raise ToolError when it may not run.
     ``check_scopes=False`` only for a curated tool that pins the call to the caller's own
     run (the REST role checks still apply)."""
-    if caller.held and scopes.required_scope(op.method, op.path) in caller.withheld:
-        # W5: the run's token is read-only while a console answer waits for an approver.
-        raise ToolError(f"Refused (HTTP 403): {op.method} {op.path}: {caller.held}.")
+    needed = scopes.required_scope(op.method, op.path)
     if check_scopes and not scopes.allowed(caller.scopes, op.method, op.path):
-        needed = scopes.required_scope(op.method, op.path)
         reason = f"needs the {needed} scope" if needed else "is not available to run tokens"
         raise ToolError(f"Refused: {op.method} {op.path} {reason}.")
+    if caller.kind == "run" and caller.run_id is not None and _writes(op.method, needed):
+        # W5: decided now, just before the write, not when the request started: the
+        # run's token is read-only while a checkpoint wait is open in SwarmCloud.
+        from oracle.runs.service import run_token_hold
+
+        held = await run_token_hold(caller.tenant_id, caller.run_id)
+        if held:
+            raise ToolError(f"Refused (HTTP 403): {op.method} {op.path}: {held}.")
     path, query, body, media = _build_request(op, args)
     headers = {"accept": "application/json, text/*;q=0.9, */*;q=0.5", **caller.credentials}
     content = None

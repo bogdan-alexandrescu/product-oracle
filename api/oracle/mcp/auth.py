@@ -41,12 +41,9 @@ class McpCaller:
     scopes: frozenset[str] | None = None
     user_id: uuid.UUID | None = None
     token_id: uuid.UUID | None = None
+    # A run token's run. Whether its writes are held back for now (W5) is decided when a
+    # write is about to run (oracle.mcp.tools.call_operation), never here.
     run_id: uuid.UUID | None = None
-    # A run token narrowed to its read scopes for now (W5: a console answer that did not
-    # count waits for an approver): the write scopes it holds back, and why. Its write
-    # tools stay listed, and calling them is refused with ``held``.
-    withheld: frozenset[str] = frozenset()
-    held: str | None = None
 
 
 Verifier = Callable[[str], Awaitable[McpCaller | None]]
@@ -84,8 +81,6 @@ def user_caller(
     scopes: frozenset[str] | None = None,
     token_id: uuid.UUID | None = None,
     run_id: uuid.UUID | None = None,
-    withheld: frozenset[str] = frozenset(),
-    held: str | None = None,
 ) -> McpCaller:
     """A caller acting for ``user``: the REST call carries a session for that user."""
     cookie = f"{get_settings().session_cookie_name}={service.make_session_cookie(user)}"
@@ -97,8 +92,6 @@ def user_caller(
         user_id=user.id,
         token_id=token_id,
         run_id=run_id,
-        withheld=withheld,
-        held=held,
     )
 
 
@@ -145,28 +138,21 @@ async def verify_run_token_caller(raw: str) -> McpCaller | None:
     if claims is None:
         return None
     from oracle.runs.models import Run
-    from oracle.runs.service import token_hold
 
+    # Records only, and nothing slow: no call to the agent runtime is made here (a read,
+    # initialize or tools/list never waits on it).
     async with tenant_session(claims.tenant_id) as s:
         run = await s.get(Run, claims.run_id)
         user = await s.get(User, run.created_by) if run and run.created_by else None
-        held = await token_hold(s, run.id) if run is not None else None
     # A run nobody started (or whose creator is gone) has no one to act for.
     if user is None:
         return None
-    scopes, withheld = claims.scopes, frozenset[str]()
-    if held is not None:
-        # Read-only until an approver confirms (W5): the token's writes are held back.
-        withheld = frozenset(s for s in scopes if not s.startswith("read:"))
-        scopes = scopes - withheld
     return user_caller(
         user,
         kind="run",
-        scopes=scopes,
+        scopes=claims.scopes,
         token_id=claims.token_id,
         run_id=claims.run_id,
-        withheld=withheld,
-        held=held,
     )
 
 

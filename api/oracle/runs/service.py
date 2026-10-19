@@ -86,8 +86,10 @@ lookup cap, for Retry), ``searches`` (submissions given up on, still looked for)
 ``post_404`` (404s that prove nothing on an answer post, counted).
 """
 
+import asyncio
 import copy
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -601,51 +603,163 @@ def _held(why: str) -> str:
     )
 
 
-async def token_hold(db: AsyncSession, run_id: uuid.UUID, *, live: bool = True) -> str | None:
-    """Why the run's token is read-only now (W5), or None: its agents may read Oracle,
-    and their writes (drafts, proposals) are refused while any checkpoint wait of the
-    run is open in SwarmCloud, until Oracle has read an answer that counts.
+# What the run's agents are told when their write is held back (W5): a fixed reason,
+# never what Oracle recorded of the checkpoint or what SwarmCloud said (that is logged).
+HOLD_DECISION = "waiting for a checkpoint decision"
+HOLD_UNKNOWN = "status unknown"
+# The live read a write waits on: one deadline for all of it (past it, or on an error,
+# the token is read-only), and how long a read-only answer is reused (W5, owner
+# 2026-10-19: a 'read-only' answer may be cached for up to 5 seconds; 'may write' is
+# never cached).
+HOLD_READ_SECONDS = 3.0
+HOLD_CACHE_SECONDS = 5.0
+_hold_clock = time.monotonic
+# A review step SwarmCloud has not reached (or never will: gated off). Any other state,
+# or no row for the step, is reached: read-only (deny by default).
+_NOT_REACHED = ("PENDING", "SKIPPED")
 
-    From the moment the wait opens, not from Oracle's next look at it: a wait of the
-    live workflow that no checkpoint stands for yet (Oracle has not opened it, or is
-    opening it) is read from SwarmCloud here, and an unreadable workflow holds too.
-    ``live`` False: from what Oracle recorded only (the run's page; the token's check
-    reads SwarmCloud)."""
+_HoldKey = tuple[uuid.UUID, str, tuple[str, ...]]
+_hold_cache: dict[_HoldKey, tuple[float, str]] = {}
+_hold_reads: dict[_HoldKey, "asyncio.Task[str | None]"] = {}
+
+
+@dataclass(frozen=True)
+class _HoldPlan:
+    """What Oracle's records say of a run token's hold: held (``reason``, and the
+    ``detail`` logged for it), or decided by a live read of workflow ``workflow_id``:
+    its review steps no checkpoint stands for yet (``reviews``)."""
+
+    reason: str | None = None
+    detail: str | None = None
+    workflow_id: str | None = None
+    reviews: tuple[str, ...] = ()
+
+
+async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
     checkpoints = await _checkpoints(db, [run_id])
     held = next((c for c in checkpoints if _holds_token(c)), None)
     if held is not None:
-        return _held(_hold_reason(held))
+        return _HoldPlan(HOLD_DECISION, _hold_reason(held))
     run = await db.get(Run, run_id)
     if run is None:
-        return None
+        return _HoldPlan()
+    for s in await _segments(db, run_id):
+        lost = _art(s).get("lost")
+        if s.status == "pending" and isinstance(lost, dict):
+            # Its answer was lost and its token kept alive: it may run, and a wait in it
+            # may be open, until the lookup resolves it.
+            return _HoldPlan(HOLD_UNKNOWN, f"submission {lost.get('label')} was lost")
     wf = _drivable(run)
     if wf is None:
-        return None
+        return _HoldPlan()
     opening = (run.knobs or {}).get("opening_wait")
     if isinstance(opening, dict) and opening.get("workflow_id") == wf.get("id"):
         # _advance is opening a checkpoint on this wait (its import commits first).
-        return _held(f"{opening.get('kind') or 'a checkpoint'} waits for a decision in SwarmCloud")
+        return _HoldPlan(HOLD_DECISION, f"{opening.get('kind') or 'a checkpoint'} is opening")
     known = {
         ((c.payload or {}).get("wait") or {}).get("step_id")
         for c in checkpoints
         if ((c.payload or {}).get("wait") or {}).get("workflow_id") == wf.get("id")
     }
     reviews = [r for e in wf.get("segments") or [] for r in e.get("reviews") or []]
-    unknown = [r for r in reviews if r not in known]
-    if not live or not unknown or not wf.get("id"):
-        return None
+    unknown = tuple(r for r in reviews if r not in known)
+    if not unknown or not wf.get("id"):
+        return _HoldPlan()
+    return _HoldPlan(workflow_id=wf["id"], reviews=unknown)
+
+
+async def _read_hold(key: _HoldKey) -> str | None:
+    """One live read of a workflow's status: whether it reached a review step no
+    checkpoint stands for yet. Bounded by :data:`HOLD_READ_SECONDS`; a read-only answer
+    is kept for :data:`HOLD_CACHE_SECONDS`."""
+    run_id, workflow_id, reviews = key
+    held: str | None = None
     try:
-        status = await get_runtime().status(wf["id"])
-    except RuntimeUnavailable as exc:
-        return _held(
-            f"Oracle could not read whether a checkpoint of this run waits in SwarmCloud "
-            f"({_shown(exc)})"
+        async with asyncio.timeout(HOLD_READ_SECONDS):
+            status = await get_runtime().status(workflow_id)
+    except (RuntimeUnavailable, TimeoutError) as exc:
+        log.warning(
+            "run %s: token read-only, status of %s not read: %s",
+            run_id,
+            workflow_id,
+            exc or f"no answer in {HOLD_READ_SECONDS:g} s",
         )
-    for review in unknown:
-        step = status.step(review)
-        if step is not None and step.state in ("PARKED", "SUCCEEDED"):
-            return _held(f"checkpoint step {review} waits for a decision in SwarmCloud")
-    return None
+        held = HOLD_UNKNOWN
+    else:
+        for review in reviews:
+            step = status.step(review)
+            if step is None or step.state not in _NOT_REACHED:
+                log.info(
+                    "run %s: token read-only, step %s of %s is %s",
+                    run_id,
+                    review,
+                    workflow_id,
+                    step.state if step else "not listed",
+                )
+                held = HOLD_DECISION
+                break
+    if held is not None:
+        now = _hold_clock()
+        for k in [k for k, (at, _) in _hold_cache.items() if now - at >= HOLD_CACHE_SECONDS]:
+            del _hold_cache[k]
+        _hold_cache[key] = (now, held)
+    return held
+
+
+async def _live_hold(run_id: uuid.UUID, workflow_id: str, reviews: tuple[str, ...]) -> str | None:
+    """The live read's answer: a read-only one from the last 5 seconds, else one read
+    shared by every request asking meanwhile (single-flight per run and workflow)."""
+    key = (run_id, workflow_id, reviews)
+    cached = _hold_cache.get(key)
+    if cached is not None and _hold_clock() - cached[0] < HOLD_CACHE_SECONDS:
+        return cached[1]
+    loop = asyncio.get_running_loop()
+    task = _hold_reads.get(key)
+    if task is None or task.get_loop() is not loop:
+        task = loop.create_task(_read_hold(key))
+        _hold_reads[key] = task
+
+        def done(t: "asyncio.Task[str | None]") -> None:
+            if _hold_reads.get(key) is t:
+                del _hold_reads[key]
+
+        task.add_done_callback(done)
+    # Shielded: one request going away does not cancel the read the others wait on.
+    return await asyncio.shield(task)
+
+
+async def token_hold(db: AsyncSession, run_id: uuid.UUID, *, live: bool = True) -> str | None:
+    """Why the run's token is read-only now (W5), or None: its agents may read Oracle,
+    and their writes (drafts, proposals) are refused while any checkpoint wait of the
+    run is open in SwarmCloud, until Oracle has read an answer that counts, and while a
+    lost submission (whose token is alive) is unresolved.
+
+    From the moment the workflow reaches the wait, not from Oracle's next look at it: a
+    review step of the live workflow that no checkpoint stands for yet is read from
+    SwarmCloud, and reached in any state (or not listed, or not read) it holds.
+    ``live`` False: from what Oracle recorded only (the run's page). A write checks it
+    with :func:`run_token_hold`, which releases the database before SwarmCloud is read."""
+    plan = await _hold_plan(db, run_id)
+    if plan.reason is not None:
+        return _held(plan.reason)
+    if not live or plan.workflow_id is None:
+        return None
+    why = await _live_hold(run_id, plan.workflow_id, plan.reviews)
+    return _held(why) if why else None
+
+
+async def run_token_hold(tenant_id: uuid.UUID, run_id: uuid.UUID) -> str | None:
+    """:func:`token_hold` for a write a run token is about to make: Oracle's records are
+    read in a session of their own, closed before SwarmCloud is called."""
+    async with tenant_session(tenant_id) as s:
+        plan = await _hold_plan(s, run_id)
+    if plan.reason is not None:
+        log.info("run %s: token read-only: %s", run_id, plan.detail)
+        return _held(plan.reason)
+    if plan.workflow_id is None:
+        return None
+    why = await _live_hold(run_id, plan.workflow_id, plan.reviews)
+    return _held(why) if why else None
 
 
 def _console_findings(console: dict[str, Any]) -> list[str]:

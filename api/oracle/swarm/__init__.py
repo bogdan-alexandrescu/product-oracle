@@ -42,6 +42,7 @@ __all__ = [
     "WorkflowStatus",
     "get_runtime",
     "redact",
+    "close_runtime",
     "set_runtime",
 ]
 
@@ -66,3 +67,10 @@ def set_runtime(runtime: AgentRuntime | None) -> None:
     """Replace the process-wide runtime (``None``: rebuild from settings on next use)."""
     global _runtime
     _runtime = runtime
+
+
+async def close_runtime() -> None:
+    """Close the runtime's shared HTTP client, if it made one (on shutdown)."""
+    close = getattr(_runtime, "aclose", None)
+    if close is not None:
+        await close()
