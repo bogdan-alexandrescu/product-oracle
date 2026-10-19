@@ -262,7 +262,14 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
 }
 
 function tick(ctx: RunsContext): Schemas["TickOut"] {
-  const out = { runs_checked: 0, segments_finished: 0, runs_advanced: 0, runs_paused: 0, errors: [] as string[] };
+  const out = {
+    runs_checked: 0,
+    segments_finished: 0,
+    runs_advanced: 0,
+    runs_paused: 0,
+    errors: [] as string[],
+    member_follow_ups: 0,
+  };
   for (const r of ctx.db.runs) {
     if (r.status !== "running") continue;
     out.runs_checked += 1;

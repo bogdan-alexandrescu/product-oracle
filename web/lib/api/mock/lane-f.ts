@@ -1358,6 +1358,7 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     notes: [],
     imported_by: "draft-picker",
     approved_at: null,
+    approval_lapses: [],
     brief_source: briefKeys.size ? "draft" : "none",
     created_at: created,
     front_matter: { document: slug, title, template: t.key },
