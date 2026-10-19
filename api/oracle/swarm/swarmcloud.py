@@ -317,11 +317,17 @@ def _detail(resp: httpx.Response) -> str:
     detail = body.get("detail") if isinstance(body, dict) else None
     if isinstance(detail, dict):
         detail = detail.get("message") or detail.get("code")
-    return _TOKEN_SHAPED.sub("<withheld>", str(detail))[:200] if detail else ""
+    if not detail:
+        return ""
+    # Bound the scan before redacting: an upstream may send a body of any size. A token cut
+    # at the scan limit lies far past the 200 characters kept, so it is never shown.
+    return _TOKEN_SHAPED.sub("<withheld>", str(detail)[:_DETAIL_SCAN_CHARS])[:200]
 
 
-# A bearer value or a JWT that an upstream might echo back in an error message.
-_TOKEN_SHAPED = re.compile(r"(?i)bearer\s+\S+|eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}")
+_DETAIL_SCAN_CHARS = 4096
+# A bearer value (however it is joined to the word) or a JWT that an upstream might echo
+# back in an error message.
+_TOKEN_SHAPED = re.compile(r"(?i)bearer[\s:=]+\S+|eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}")
 
 
 class UnconfiguredSwarmCloud:

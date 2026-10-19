@@ -413,3 +413,29 @@ async def test_whoami_has_one_deadline_and_never_echoes_a_token():
         else:
             with pytest.raises(RuntimeUnavailable, match="unexpected body"):
                 await runtime.whoami()
+
+
+@pytest.mark.parametrize(
+    "echo",
+    [
+        "Bearer sc-secret",
+        "Bearer:sc-secret",
+        "bearer=sc-secret",
+        "Authorization: Bearer:  sc-secret",
+    ],
+)
+def test_error_detail_withholds_bearer_values_however_written(echo):
+    from oracle.swarm.swarmcloud import _detail
+
+    detail = _detail(httpx.Response(403, json={"detail": f"refused {echo} for u-or"}))
+    assert "sc-secret" not in detail
+    assert "<withheld>" in detail
+
+
+def test_error_detail_is_bounded_before_redaction():
+    from oracle.swarm.swarmcloud import _DETAIL_SCAN_CHARS, _detail
+
+    huge = "Bearer sc-secret " + "x" * 2_000_000
+    detail = _detail(httpx.Response(500, json={"detail": huge}))
+    assert len(detail) <= 200 and "sc-secret" not in detail
+    assert _DETAIL_SCAN_CHARS < len(huge)
