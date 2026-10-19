@@ -8810,8 +8810,60 @@
           "runs"
         ],
         "summary": "Stop Cancelling Run",
-        "description": "Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that\nproves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox\nitem clears, but Oracle keeps reading the workflow's status and cost in the\nbackground until it ends, and counts its spend against the run's ceiling (P3d).",
+        "description": "Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that\nproves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox\nitem clears. A run that has not ended ends (cancelled, the reason recorded) and no\nsecond workflow starts for that segment; Oracle keeps reading the stopped workflow's\nstatus and cost on every tick until it ends, and counts its spend on the run (P3d).",
         "operationId": "stop_cancelling_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/retry-lookup": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Lookup Run",
+        "description": "Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status\ndid not read past its search's end, or SwarmCloud answered it with 404s that prove\nnothing. Read, its cost is counted on the run and it is followed until it ends.",
+        "operationId": "retry_lookup_run",
         "security": [
           {
             "HTTPBearer": []
@@ -18014,6 +18066,11 @@
             "title": "Can Stop Cancelling",
             "default": false
           },
+          "can_retry_lookup": {
+            "type": "boolean",
+            "title": "Can Retry Lookup",
+            "default": false
+          },
           "searching": {
             "anyOf": [
               {
@@ -18429,6 +18486,11 @@
           "can_stop_cancelling": {
             "type": "boolean",
             "title": "Can Stop Cancelling",
+            "default": false
+          },
+          "can_retry_lookup": {
+            "type": "boolean",
+            "title": "Can Retry Lookup",
             "default": false
           },
           "searching": {

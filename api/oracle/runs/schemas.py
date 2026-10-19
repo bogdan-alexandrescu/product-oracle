@@ -282,13 +282,17 @@ class RunSummary(BaseModel):
     # Oracle could neither find nor rule out past the lookup cap (Retry and Cancel;
     # ``can_retry``), a cancel SwarmCloud keeps answering with a 404 that proves nothing
     # (Stop cancelling: ``can_stop_cancelling``; Cancel on a run not ended), an answer
-    # post answered so (Cancel), or a workflow given up on that SwarmCloud answers so
-    # about (shown).
+    # post answered so (Cancel), a workflow whose cost is unknown because its status does
+    # not read (Retry lookup: ``can_retry_lookup``), or an ended run's spend over its
+    # ceiling while a workflow it stopped cancelling still runs (shown).
     stuck: str | None = None
     can_retry: bool = False
     # Stop cancelling: Oracle stops the cancel calls, and keeps reading the workflow's
-    # status and cost until it ends, counted against the run's ceiling (P3d).
+    # status and cost until it ends, counted on the run; a run that has not ended ends
+    # (P3d).
     can_stop_cancelling: bool = False
+    # Retry lookup: read a workflow whose cost is unknown now, not at its next rest.
+    can_retry_lookup: bool = False
     # Work given up on that Oracle still checks: submissions it looks for (Retry, or
     # Cancel past the lookup cap), to cancel them and count their cost if they landed,
     # and workflows it stopped cancelling, whose cost it reads until they end.

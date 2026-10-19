@@ -55,11 +55,15 @@ and a spend over the ceiling after the end shows in the Inbox. A submission give
 on (Retry, or a cancel past the lookup cap) is looked for in the background
 (``searches``, the first look on the next tick) until found, then cancelled and its cost
 counted, or ruled out, within its credential's lifetime plus a step's timeout of slack;
-a found workflow whose status reads is followed until SwarmCloud says it ended. Search
-results are committed on their own, before the rest of the tick. A confirmed cancel
-reads the workflow's final cost (a recorded cost is never lowered), and the spend is
-checked against the ceiling before every submission and before anything follows an
-answer.
+a found workflow whose status reads is followed (on every tick) until SwarmCloud says it
+ended, a confirmed cancel still winding down included. One whose status does not read
+past that (or past ``NOT_FOUND_TRIES`` bare 404s) shows in the Inbox as "Cost unknown"
+(Retry lookup reads it now), read again now and then until ``COST_UNKNOWN_SECONDS``
+later, then dropped (noted). A workflow's cost counts once, on the first attempt that
+carries it. Search results are committed on their own, before the rest of the tick. A
+confirmed cancel reads the workflow's final cost (a recorded cost is never lowered), and
+the spend is checked against the ceiling before every submission and before anything
+follows an answer.
 
 W5 (owner, 2026-10-19, 'Open waits'): while any checkpoint wait of the run is open in
 SwarmCloud, from the moment the workflow reaches it, the run token is read-only; writes
@@ -370,6 +374,7 @@ def _summary(run: Run, refs: _Refs, waiting: Checkpoint | None) -> RunSummary:
         stuck=_stuck(run),
         can_retry=_can_retry(run),
         can_stop_cancelling=_cancel_stuck(run) is not None,
+        can_retry_lookup=_cost_unknown(run) is not None,
         searching=_searching(run),
     )
 
@@ -406,16 +411,21 @@ def _stuck(run: Run) -> str | None:
             "SwarmCloud, and Oracle counts its spend on the run until it ends. Cancel it in "
             "SwarmCloud's console."
         )
-    lost = next((e for e in knobs.get("searches") or [] if e.get("stuck")), None)
-    if lost is not None:
+    unknown = _cost_unknown(run)
+    if unknown is not None:
+        n = unknown.get("not_found")
+        why = (
+            f"SwarmCloud answered HTTP 404 {n} times without saying it does not exist"
+            if n
+            else "SwarmCloud has not served its status"
+        )
         return (
-            f"SwarmCloud answered HTTP 404 {lost.get('not_found')} times about workflow "
-            f"{lost.get('id')} (submission {lost.get('label')}), given up on earlier, "
-            f"without saying it does not exist ({lost.get('error')}): Oracle can neither "
-            "cancel it nor read its cost. It reads it again every "
-            f"{_duration(STUCK_LOOKUP_SECONDS)} until it ends or "
-            f"{_search_end(lost).isoformat(timespec='minutes')}; cancel it in SwarmCloud's "
-            "console."
+            f"Cost unknown for workflow {unknown.get('id')} (submission {unknown.get('label')}): "
+            f"{why} ({unknown.get('error')}) since {str(unknown.get('cost_unknown'))[:16]}. "
+            f"Oracle reads it again every {_duration(STUCK_LOOKUP_SECONDS)} until "
+            f"{_cost_cap(unknown).isoformat(timespec='minutes')}, and Retry lookup reads it "
+            "now; the run's spend has what Oracle last read. If it still runs, cancel it in "
+            "SwarmCloud's console."
         )
     post = knobs.get("post_404")
     if (
@@ -429,6 +439,18 @@ def _stuck(run: Run) -> str | None:
             "was recorded. Decide again later, or in the Inbox, Cancel ends the run."
         )
     return None
+
+
+def _cost_unknown(run: Run) -> dict[str, Any] | None:
+    """The first searched workflow whose cost is unknown (in the Inbox: Retry lookup)."""
+    return next(
+        (
+            e
+            for e in (run.knobs or {}).get("searches") or []
+            if e.get("id") and e.get("cost_unknown")
+        ),
+        None,
+    )
 
 
 def _checkpoint_out(cp: Checkpoint, principal: Principal | None) -> CheckpointOut:
@@ -1403,6 +1425,10 @@ NOT_FOUND_TRIES = 5
 # background until found or ruled out, at most this long after it was sent when its
 # credential's end is not recorded (a credential never outlives 86400 s).
 SEARCH_SECONDS = 86400
+# A searched workflow known by its id whose status does not read past its search's end
+# (or past NOT_FOUND_TRIES bare 404s) has an unknown cost: it shows in the Inbox (Retry
+# lookup) and is read again now and then for this much longer, then dropped (noted).
+COST_UNKNOWN_SECONDS = 3 * 86400
 
 
 # How often a lost submission past the lookup cap is looked up again (it waits in the
@@ -1525,8 +1551,26 @@ async def _apply_cancel(
         _set_knob(run, "workflow", {**wf, "cancel_pending": marker})
         await revoke_run_tokens(db, run.id)
         return False
+    if out.error is None and out.final is not None and not out.final.terminal:
+        _read_on(run, wf)
     await _end_workflow(db, run, wf, state)
     return True
+
+
+def _read_on(run: Run, wf: dict[str, Any]) -> None:
+    """A workflow whose cancel SwarmCloud confirmed and that has not ended yet (winding
+    down), or whose last cost was not read: detached, and read on ``searches`` until its
+    status reads terminal, so that what it spends meanwhile is counted on the run."""
+    _search_for(
+        run,
+        label=wf.get("label") or wf["id"],
+        seq=wf.get("start_seq"),
+        submitted_at=wf.get("submitted_at"),
+        until=_credential_end(wf),
+        why="cancel",
+        workflow_id=wf["id"],
+        cancelled=True,
+    )
 
 
 def _count_not_found(marker: dict[str, Any], pending: dict[str, Any], hit: bool) -> None:
@@ -2297,10 +2341,27 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
 
     status = await runtime.status(running.swarm_workflow_id)  # type: ignore[arg-type]
     art = _art(running)
+    # A workflow's cost counts once, on the first attempt that carries it: a later
+    # segment of a multi-segment workflow left running on it counts nothing again.
+    earlier = next(
+        (
+            s
+            for s in segments
+            if s.seq < running.seq
+            and any(a.get("workflow_id") == running.swarm_workflow_id for a in _art(s)["attempts"])
+        ),
+        None,
+    )
+    if earlier is not None:
+        _cost_on(
+            run, segments, {"seq": earlier.seq, "id": running.swarm_workflow_id}, status.cost_usd
+        )
     if art["attempts"]:
         # The running workflow's attempt (one found later may sit after it).
         current = _current_attempt(art, running)
-        current["cost_usd"] = _higher(status.cost_usd, current.get("cost_usd"))
+        current["cost_usd"] = (
+            0 if earlier is not None else _higher(status.cost_usd, current.get("cost_usd"))
+        )
         current["state"] = status.state
     running.cost_usd = sum(
         (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
@@ -2454,13 +2515,16 @@ async def _cancel_again(
             log.warning("run %s: %s not read (resting): %s", run.id, wf["id"], exc)
             return False
         if pending.get("confirmed"):
-            # Its cancel was confirmed and this was the one more read of its last cost.
+            # Its cancel was confirmed and this was the one more read of its last cost:
+            # read on in the background, so that nothing waits on it here.
             note = (
                 f"SwarmCloud confirmed cancelling workflow {wf['id']}, but its last cost could "
-                f"not be read ({_shown(exc)}); the run's spend is what Oracle last read."
+                f"not be read ({_shown(exc)}); Oracle reads it in the background until it "
+                "ends and counts it on the run."
             )
             target = next((s for s in segments if s.seq == wf.get("start_seq")), None)
             _note(target or segments[0], note)
+            _read_on(run, wf)
             await _end_workflow(db, run, wf, state)
             return True
         if _not_found(exc):
@@ -2473,6 +2537,11 @@ async def _cancel_again(
         raise
     _take_cost(run, wf, status, segments)
     if status.terminal:
+        await _end_workflow(db, run, wf, state)
+        return True
+    if pending.get("confirmed"):
+        # Confirmed and winding down: read on in the background until it ends.
+        _read_on(run, wf)
         await _end_workflow(db, run, wf, state)
         return True
     if not rested and await _detach(db, run, cancel=True, state=state):
@@ -2582,6 +2651,13 @@ def _search_end(entry: dict[str, Any]) -> datetime:
     return end + timedelta(seconds=get_runtime_settings().step_seconds)
 
 
+def _cost_cap(entry: dict[str, Any]) -> datetime:
+    """A searched workflow whose cost is unknown (its status does not read) is read again
+    now and then until this, shown in the Inbox with it: :func:`_search_end` plus
+    :data:`COST_UNKNOWN_SECONDS`."""
+    return _search_end(entry) + timedelta(seconds=COST_UNKNOWN_SECONDS)
+
+
 def _search_for(
     run: Run,
     *,
@@ -2592,21 +2668,37 @@ def _search_for(
     why: str,
     workflow_id: str | None = None,
     cancel: bool = True,
+    cancelled: bool = False,
 ) -> None:
     """Keep checking work the run gave up on: the run's ``searches``. A submission whose
     answer was lost (Retry submitted the segment again, or a cancelled run stopped looking
     for it on every tick) is looked for by its label; a workflow known by its id (found,
-    or one an approver stopped cancelling: ``cancel`` False) has its status and cost read.
-    The first look is on the next tick."""
-    entries = list((run.knobs or {}).get("searches") or [])
+    or one an approver stopped cancelling: ``cancel`` False; ``cancelled``: its cancel was
+    confirmed and only its status and cost are left to read) has its status and cost read
+    until it ends. The first look is on the next tick. One entry per submission (its id,
+    or its label and when it was sent, compared as times): a second call merges into it."""
+    entries = copy.deepcopy(list((run.knobs or {}).get("searches") or []))
     if not label:
         return
+    at = _parse_at(submitted_at)
     for e in entries:
-        if workflow_id and e.get("id") == workflow_id:
+        same_id = bool(workflow_id) and e.get("id") == workflow_id
+        same_sent = (
+            e.get("label") == label
+            and at is not None
+            and _parse_at(e.get("submitted_at")) == at
+            and (not workflow_id or not e.get("id") or e.get("id") == workflow_id)
+        )
+        if same_id or same_sent:
+            if workflow_id and not e.get("id"):
+                e["id"] = workflow_id
+            if not cancel:
+                e["cancel"] = False
+            if cancelled:
+                e["cancelled"] = True
+            _set_knob(run, "searches", entries)
             return
-        if e.get("label") == label and e.get("submitted_at") == submitted_at:
-            return
-    sent = _parse_at(submitted_at) or _now()
+    sent = at or _now()
     end = _parse_at(until) or sent + timedelta(seconds=SEARCH_SECONDS)
     entry: dict[str, Any] = {
         "label": label,
@@ -2621,6 +2713,8 @@ def _search_for(
         entry["id"] = workflow_id
     if not cancel:
         entry["cancel"] = False
+    if cancelled:
+        entry["cancelled"] = True
     entries.append(entry)
     _set_knob(run, "searches", entries)
 
@@ -2650,8 +2744,9 @@ def _searching(run: Run) -> str | None:
             )
         else:
             says.append(
-                f"Oracle found earlier submission {e.get('label')} (workflow {e['id']}) and "
-                f"cancels it, reading its cost every {every} until it is counted."
+                f"Oracle cancels workflow {e['id']} ({e.get('label')}), given up on earlier, "
+                "and reads its status and cost on every tick until it ends, counting its "
+                "spend on the run."
             )
     return " ".join(says)
 
@@ -2797,24 +2892,23 @@ async def _read_found(
 ) -> bool:
     """One look at a searched workflow known by its id: cancel it (until SwarmCloud
     confirms; not one an approver stopped cancelling) and read its status and cost, the
-    cost counted in the run's spend. Returns True to keep it: until it ended (its cost
-    read), or SwarmCloud says it does not exist. When nothing could be read, 404s that
-    prove nothing are counted (past :data:`NOT_FOUND_TRIES` the run shows in the Inbox),
-    and it is given up past :func:`_search_end` (noted); a confirmed cancel whose cost
-    is not read yet is kept for that read, up to the same caps."""
+    cost counted in the run's spend. Returns True to keep it: until its status reads
+    terminal (a confirmed cancel still winding down is read on, its cost counted), or
+    SwarmCloud says it does not exist. When nothing could be read, 404s that prove
+    nothing are counted; past :data:`NOT_FOUND_TRIES` of them, or past
+    :func:`_search_end`, its cost is unknown: shown in the Inbox (Retry lookup) and read
+    again now and then until :func:`_cost_cap`, then dropped (noted)."""
     label, wid = e.get("label"), e["id"]
     cancelling = e.get("cancel", True) and not e.get("cancelled")
     out = await (_cancel_call({"id": wid}) if cancelling else _read_call(wid))
     if cancelling and out.error is None and not out.gone:
-        e["cancelled"] = True  # confirmed: only its last cost is left to read
+        e["cancelled"] = True  # confirmed: its status and cost are left to read
     final = out.final
     if final is not None:
         _cost_on(run, segments, e, final.cost_usd)
-        e.pop("unread", None)
-        e.pop("not_found", None)
-        e.pop("stuck", None)
-        e.pop("error", None)
-        if final.terminal or e.get("cancelled"):
+        for key in ("unread", "not_found", "stuck", "error", "cost_unknown"):
+            e.pop(key, None)
+        if final.terminal:
             if segment is not None:
                 if e.get("cancel") is False:
                     said = (
@@ -2824,13 +2918,13 @@ async def _read_found(
                     )
                 else:
                     said = (
-                        f"Oracle found submission {label} (workflow {wid}), given up on "
-                        f"earlier, and cancelled it (${final.cost_usd} counted in the run's "
-                        "spend)."
+                        f"Oracle cancelled workflow {wid} (submission {label}), given up on "
+                        f"earlier; it ended {final.state} (${final.cost_usd} counted in the "
+                        "run's spend)."
                     )
                 _note(segment, said)
             return False
-        return True  # still running: read again (its cost counts meanwhile)
+        return True  # still running, or winding down: read again (its cost counts)
     if out.gone and not e.get("cancelled"):
         if segment is not None:
             _note(
@@ -2840,26 +2934,23 @@ async def _read_found(
             )
         return False
     # Nothing read this time.
-    e["error"] = _shown(out.error or out.unread) or "its cost was not read"
+    e["error"] = _shown(out.error or out.unread) or "its status was not read"
     e["unread"] = int(e.get("unread") or 0) + 1
     if _not_found(out.error) or _not_found(out.unread):
         e["not_found"] = int(e.get("not_found") or 0) + 1
         if e["not_found"] >= NOT_FOUND_TRIES:
             e["stuck"] = True
-    capped = e.get("cancelled") and e["unread"] >= NOT_FOUND_TRIES
-    if capped or _now() >= _search_end(e):
+    if e.get("stuck") or _now() >= _search_end(e):
+        e.setdefault("cost_unknown", _now().isoformat())
+    if e.get("cost_unknown") and _now() >= _cost_cap(e):
         if segment is not None:
-            what = (
-                f"SwarmCloud confirmed cancelling workflow {wid} (submission {label}), but its "
-                f"last cost could not be read ({e['error']})"
-                if e.get("cancelled")
-                else f"SwarmCloud did not answer about workflow {wid} (submission {label}) "
-                f"before its credential would have ended ({e['error']})"
-            )
             _note(
                 segment,
-                f"{what}: Oracle stopped checking it, and the run's spend has what Oracle "
-                "last read. If it still runs, cancel it in SwarmCloud's console.",
+                f"Cost unknown for workflow {wid} (submission {label}): SwarmCloud has not "
+                f"served its status since {e['cost_unknown'][:16]} ({e['error']}). Oracle "
+                f"stopped reading it at its cap ({_cost_cap(e).isoformat(timespec='minutes')}),"
+                " and the run's spend has what Oracle last read. If it still runs, cancel it "
+                "in SwarmCloud's console.",
             )
         return False
     return True
@@ -3028,10 +3119,18 @@ async def _pause_workflow(
         wait = (cp.payload or {}).get("wait") or {}
         if cp.status == "pending" and wait.get("workflow_id") == wf["id"]:
             # Its wait goes with the workflow: the checkpoint stays open in the Inbox.
-            cp.payload = {
-                **(cp.payload or {}),
-                "wait": {**wait, "ended": "paused", "ended_at": _now().isoformat()},
-            }
+            wait = {**wait, "ended": "paused", "ended_at": _now().isoformat()}
+            console = wait.get("console") or {}
+            if console.get("needs") == "unread":
+                # Never read now (the workflow is cancelled): an approver decides.
+                wait["console"] = {
+                    **console,
+                    "needs": "unreadable",
+                    "reason": "the run was paused on overrun before Oracle could read the "
+                    "recorded answer (its workflow was cancelled), so an Oracle approver "
+                    "decides",
+                }
+            cp.payload = {**(cp.payload or {}), "wait": wait}
     _note(
         current or segments[0],
         "Paused on overrun: Oracle cancelled the run's SwarmCloud workflow so that nothing "
@@ -4144,9 +4243,12 @@ def _attach_for_cancel(
     find it by while its id is unknown, and ``lookup_since`` when it was submitted (the
     search ends at an older task, and moves to the background past the lookup cap, until
     ``lookup_until``, its credential's end)."""
+    last = (_art(segment)["attempts"] or [{}])[-1]
     wf = {
         "id": workflow_id,
-        "label": lookup or (_art(segment)["attempts"] or [{}])[-1].get("label"),
+        "label": lookup or last.get("label"),
+        # When it was sent: a search for it is bounded from then (_credential_end).
+        "submitted_at": lookup_since or (last.get("submitted_at") if workflow_id else None),
         "lookup": lookup,
         "lookup_since": lookup_since,
         "lookup_until": lookup_until,
@@ -4261,6 +4363,24 @@ async def stop_cancelling(db: AsyncSession, principal: Principal, run_id: uuid.U
     await db.commit()
 
 
+async def retry_lookup(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
+    """Retry lookup from the Inbox: a searched workflow whose cost is unknown (its status
+    does not read) is read now, not at its next rest; read, it is followed as before."""
+    run = await _get_run(db, run_id, lock=True)
+    if not _may_manage(principal, run):
+        raise Forbidden("Only an owner or the approver who created the run can retry this")
+    if _cost_unknown(run) is None:
+        raise RunError("nothing to look up: no workflow of this run has an unknown cost")
+    entries = copy.deepcopy((run.knobs or {}).get("searches") or [])
+    for e in entries:
+        if e.get("id") and e.get("cost_unknown"):
+            e.pop("read_at", None)
+    _set_knob(run, "searches", entries)
+    await _search_earlier(db, run, await _segments(db, run.id), _TickStats())
+    await audit.record(db, principal, "run.lookup_retried", "run", run.id, {})
+    await db.commit()
+
+
 async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
     """Cancel the run: its workflows are cancelled (a lost submission looked up first, and
     cancelled if it landed), its checkpoints skipped. SwarmCloud is called without the
@@ -4327,19 +4447,33 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                     _cost_on(
                         run, segments, {"seq": s.seq, "id": s.swarm_workflow_id}, out.final.cost_usd
                     )
+                attempt = _current_attempt(_art(s), s)
+                label = attempt.get("label") or s.swarm_workflow_id
                 if out.error is not None and not out.ended and not out.gone:
                     s.error = f"cancel not confirmed by the runtime: {_shown(out.error)}"
                     # Not attached (one workflow is): cancelled and costed in the
                     # background until SwarmCloud confirms.
-                    label = (_current_attempt(_art(s), s).get("label")) or s.swarm_workflow_id
                     _search_for(
                         run,
                         label=label,
                         seq=s.seq,
-                        submitted_at=None,
+                        submitted_at=attempt.get("submitted_at"),
                         until=None,
                         why="cancel",
                         workflow_id=s.swarm_workflow_id,
+                    )
+                elif not out.gone and (out.final is None or not out.final.terminal):
+                    # Confirmed, its status not read or not terminal yet (winding down):
+                    # read in the background until it ends, its last cost counted.
+                    _search_for(
+                        run,
+                        label=label,
+                        seq=s.seq,
+                        submitted_at=attempt.get("submitted_at"),
+                        until=None,
+                        why="cancel",
+                        workflow_id=s.swarm_workflow_id,
+                        cancelled=True,
                     )
             s.status = "cancelled"
             s.finished_at = _now()

@@ -2448,10 +2448,33 @@ export interface paths {
          * Stop Cancelling Run
          * @description Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that
          *     proves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox
-         *     item clears, but Oracle keeps reading the workflow's status and cost in the
-         *     background until it ends, and counts its spend against the run's ceiling (P3d).
+         *     item clears. A run that has not ended ends (cancelled, the reason recorded) and no
+         *     second workflow starts for that segment; Oracle keeps reading the stopped workflow's
+         *     status and cost on every tick until it ends, and counts its spend on the run (P3d).
          */
         post: operations["stop_cancelling_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/retry-lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Lookup Run
+         * @description Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status
+         *     did not read past its search's end, or SwarmCloud answered it with 404s that prove
+         *     nothing. Read, its cost is counted on the run and it is followed until it ends.
+         */
+        post: operations["retry_lookup_run"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5643,6 +5666,11 @@ export interface components {
              * @default false
              */
             can_stop_cancelling: boolean;
+            /**
+             * Can Retry Lookup
+             * @default false
+             */
+            can_retry_lookup: boolean;
             /** Searching */
             searching?: string | null;
             knobs: components["schemas"]["KnobsOut"];
@@ -5747,6 +5775,11 @@ export interface components {
              * @default false
              */
             can_stop_cancelling: boolean;
+            /**
+             * Can Retry Lookup
+             * @default false
+             */
+            can_retry_lookup: boolean;
             /** Searching */
             searching?: string | null;
         };
@@ -12306,6 +12339,37 @@ export interface operations {
         };
     };
     stop_cancelling_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_lookup_run: {
         parameters: {
             query?: never;
             header?: never;

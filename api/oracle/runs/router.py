@@ -186,6 +186,15 @@ async def stop_cancelling_run(run_id: uuid.UUID, principal: Approver, db: Tenant
     return await service.read_run(db, run_id, principal)
 
 
+@router.post("/runs/{run_id}/retry-lookup", response_model=RunOut)
+async def retry_lookup_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+    """Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status
+    did not read past its search's end, or SwarmCloud answered it with 404s that prove
+    nothing. Read, its cost is counted on the run and it is followed until it ends."""
+    await _call(service.retry_lookup(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
 @router.post("/runs/{run_id}/checkpoints/{checkpoint_id}/decide", response_model=RunOut)
 async def decide_checkpoint(
     run_id: uuid.UUID,

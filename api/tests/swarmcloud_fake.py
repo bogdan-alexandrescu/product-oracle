@@ -173,6 +173,10 @@ class FakeSwarmCloud:
         self.form_status: int | None = None
         # Serve the record of an answered wait as still waiting (a lagging record).
         self.lag_records = False
+        # Round 7. A confirmed cancel winds down: the workflow reads CANCELLING (not yet
+        # terminal) for this many reads, then CANCELLED.
+        self.wind_down_reads = 0
+        self._winding: dict[str, int] = {}
         self.step_failure: dict[str, tuple[str, str]] = {}  # step_id -> (code, message)
         self._n = 0
 
@@ -260,6 +264,11 @@ class FakeSwarmCloud:
             if m[3]:
                 return self._input(wf, m[3], method, body)
             if method == "GET":
+                if wf.workflow_id in self._winding:
+                    self._winding[wf.workflow_id] -= 1
+                    if self._winding[wf.workflow_id] < 0:
+                        del self._winding[wf.workflow_id]
+                        wf.state = "CANCELLED"
                 self._advance(wf)
                 return httpx.Response(200, json=self._view(wf))
         m = re.fullmatch(r"/v1/tasks/([^/]+)/artifacts(/raw)?", path)
@@ -510,9 +519,12 @@ class FakeSwarmCloud:
         if self.fail_cancels > 0:
             self.fail_cancels -= 1
             return _err(503, "unavailable", "try again later")
-        if wf.state in ("SUCCEEDED", "FAILED", "CANCELLED"):
+        if wf.state in ("SUCCEEDED", "FAILED", "CANCELLED", "CANCELLING"):
             return _err(409, "not_cancellable", f"workflow is {wf.state}")
         wf.state = "CANCELLED"
+        if self.wind_down_reads > 0:
+            wf.state = "CANCELLING"
+            self._winding[wf.workflow_id] = self.wind_down_reads
         self._failing_reads = self.fail_reads_after_cancel
         self._gone_reads = self.gone_reads_after_cancel
         for s in wf.steps:

@@ -3,9 +3,14 @@ moment it opens (W5, owner 2026-10-19), 'Stop cancelling' on a run that has not 
 ends it while its workflow's spend still counts (P3d, owner 2026-10-19), and the minors
 of the round-6 review."""
 
+import uuid
+
 import pytest
 
 from oracle.runs import service
+from oracle.runs.models import Run, RunSegment
+from oracle.swarm import RuntimeUnavailable
+from oracle.swarm.settings import get_runtime_settings
 from oracle.tenancy import tenant_session
 from tests.fixtures import seed_auth
 from tests.swarmcloud_fake import FakeSwarmCloud
@@ -17,6 +22,7 @@ from tests.test_adapter_v2 import (
     _inbox,
     _knobs_of,
     _member,
+    _retried,
     _tick_errors,
     _writes,
     on,
@@ -207,3 +213,284 @@ async def test_stop_cancelling_a_run_that_has_not_ended_ends_it_and_keeps_counti
     assert run["searching"] is None
     assert (await _inbox(client, auth))["lookups"] == []
     assert len(swarm.submissions()) == 1
+
+
+# --------------------------------------------------------------------------- minors
+
+
+async def _stopped(client, auth, tenant_id, swarm, clock) -> dict:
+    """A cancelled run whose workflow's cancel is stuck on bare 404s, then stopped (Cancel
+    on the ended run): wf_1 still runs, on ``searches`` with ``cancel`` False."""
+    run = await _at_baseline(client, auth, swarm)
+    swarm.html_404_cancel = True
+    resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
+    assert resp.status_code == 200, resp.text
+    for _ in range(service.NOT_FOUND_TRIES):
+        clock.forward(service.STUCK_LOOKUP_SECONDS + 1)
+        await _tick_errors(client, auth)
+    resp = await client.post(f"/v1/runs/{run['id']}/stop-cancelling", headers=auth)
+    assert resp.status_code == 200, resp.text
+    [entry] = (await _knobs_of(tenant_id, run["id"]))["searches"]
+    assert entry["id"] == "wf_1" and entry["cancel"] is False
+    return resp.json()
+
+
+async def test_a_stopped_workflow_is_read_on_every_tick(client, owner, monkeypatch):
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _stopped(client, auth, tenant_id, swarm, clock)
+    for _ in range(2):
+        swarm.workflows["wf_1"].steps[0].cost += 2.0
+        await _tick_errors(client, auth)  # no clock forward: no rest between reads
+        run = await get(client, auth, run["id"])
+        assert run["spent_usd"] == _wf_cost(swarm, "wf_1")
+
+
+async def test_a_stopped_workflow_whose_status_never_reads_shows_as_cost_unknown(
+    client, owner, monkeypatch
+):
+    """Past the credential's end plus a step's timeout it is kept, shown in the Inbox as
+    'Cost unknown for workflow ...' with the cap; only past that cap is it dropped
+    (noted)."""
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _stopped(client, auth, tenant_id, swarm, clock)
+    runtime = use(swarm)
+    real = runtime.status
+
+    async def status(workflow_id):
+        if workflow_id == "wf_1":
+            raise RuntimeUnavailable("SwarmCloud is unavailable", status=503)
+        return await real(workflow_id)
+
+    monkeypatch.setattr(runtime, "status", status)
+    clock.forward(86400 + get_runtime_settings().step_seconds + 60)
+    await _tick_errors(client, auth)
+    assert (await _knobs_of(tenant_id, run["id"])).get("searches"), "kept"
+    [item] = (await _inbox(client, auth))["lookups"]
+    assert item["id"] == run["id"] and item["can_retry_lookup"] is True
+    assert "Cost unknown for workflow wf_1" in item["stuck"] and "until" in item["stuck"]
+    clock.forward(service.COST_UNKNOWN_SECONDS + 60)
+    await _tick_errors(client, auth)
+    assert not (await _knobs_of(tenant_id, run["id"])).get("searches")
+    assert (await _inbox(client, auth))["lookups"] == []
+    run = await get(client, auth, run["id"])
+    assert any("wf_1" in n and "unknown" in n for n in run["notes"]), run["notes"]
+
+
+async def test_bare_404s_on_a_stopped_workflow_offer_retry_lookup(client, owner, monkeypatch):
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _stopped(client, auth, tenant_id, swarm, clock)
+    swarm.html_404_ids = {"wf_1"}
+    for _ in range(service.NOT_FOUND_TRIES):
+        clock.forward(service.STUCK_LOOKUP_SECONDS + 1)
+        await _tick_errors(client, auth)
+    [item] = (await _inbox(client, auth))["lookups"]
+    assert "Cost unknown for workflow wf_1" in item["stuck"] and "404" in item["stuck"]
+    assert item["can_retry_lookup"] is True
+    # SwarmCloud serves it again: Retry lookup reads it now.
+    swarm.html_404_ids = set()
+    swarm.workflows["wf_1"].steps[0].cost += 3.0
+    resp = await client.post(f"/v1/runs/{run['id']}/retry-lookup", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["spent_usd"] == _wf_cost(swarm, "wf_1")
+    assert (await _inbox(client, auth))["lookups"] == []
+    assert (await _knobs_of(tenant_id, run["id"]))["searches"][0]["id"] == "wf_1"
+
+
+async def test_retry_lookup_needs_a_cost_unknown_workflow(client, owner):
+    _, auth = owner
+    use(on())
+    run = await started(client, auth)
+    resp = await client.post(f"/v1/runs/{run['id']}/retry-lookup", headers=auth)
+    assert resp.status_code == 409, resp.text
+
+
+def _label_search(at: str) -> dict:
+    return {
+        "label": "oracle-r-baseline-1",
+        "seq": 1,
+        "submitted_at": at,
+        "until": "2026-10-20T10:00:00+00:00",
+        "why": "cancel",
+        "looked_at": None,
+        "lookups": 0,
+    }
+
+
+def test_search_for_merges_a_stop_into_the_label_search_of_the_same_submission():
+    run = Run(knobs={"searches": [_label_search("2026-10-19T10:00:00+00:00")]})
+    service._search_for(
+        run,
+        label="oracle-r-baseline-1",
+        seq=1,
+        submitted_at="2026-10-19T10:00:00Z",
+        until=None,
+        why="stopped",
+        workflow_id="wf_9",
+        cancel=False,
+    )
+    [entry] = run.knobs["searches"]
+    assert entry["id"] == "wf_9" and entry["cancel"] is False
+    # And a stop on an entry known by its id.
+    run = Run(knobs={"searches": [{**_label_search("2026-10-19T10:00:00+00:00"), "id": "wf_9"}]})
+    service._search_for(
+        run,
+        label="x",
+        seq=1,
+        submitted_at=None,
+        until=None,
+        why="stopped",
+        workflow_id="wf_9",
+        cancel=False,
+    )
+    [entry] = run.knobs["searches"]
+    assert entry["cancel"] is False
+
+
+def test_search_for_compares_normalised_submission_times():
+    run = Run(knobs={})
+    for at in ("2026-10-19T10:00:00", "2026-10-19T10:00:00", "2026-10-19T10:00:00+00:00"):
+        service._search_for(
+            run, label="oracle-r-baseline-1", seq=1, submitted_at=at, until=None, why="retry"
+        )
+    assert len(run.knobs["searches"]) == 1
+
+
+async def test_cancel_keeps_a_confirmed_cancel_whose_status_is_unread_on_searches(
+    client, owner, monkeypatch
+):
+    """A running segment not on the run's live workflow: its cancel is confirmed, its
+    status not read; it goes on searches, so its last cost is read and counted."""
+    tenant_id, auth = owner
+    swarm = FakeSwarmCloud(mcp=True)  # one workflow per segment
+    use(swarm)
+    swarm.steps_per_poll = 1
+    run = await started(client, auth)
+    await tick(client, auth)
+    assert (await get(client, auth, run["id"]))["segments"][0]["status"] == "running"
+    async with tenant_session(tenant_id) as s:
+        r = await s.get(Run, uuid.UUID(run["id"]))
+        r.knobs = {
+            **r.knobs,
+            # Another workflow attached as the run's (one SwarmCloud no longer knows).
+            "workflow": {"id": "wf_gone", "state": "live", "start_seq": 1, "segments": []},
+        }
+        await s.commit()
+    swarm.workflows["wf_1"].steps[0].cost += 2.0
+    swarm.fail_reads_after_cancel = 1
+    resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert swarm.workflows["wf_1"].state == "CANCELLED"
+    entries = (await _knobs_of(tenant_id, run["id"])).get("searches") or []
+    assert [e["id"] for e in entries] == ["wf_1"], entries
+    await _tick_errors(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["spent_usd"] == _wf_cost(swarm, "wf_1") and run["searching"] is None
+
+
+async def test_a_found_searchs_confirmed_cancel_is_read_until_it_is_terminal(
+    client, owner, monkeypatch
+):
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _retried(client, auth, swarm, clock)
+    swarm._advance(swarm.workflows["wf_1"])
+    swarm.other_tasks = 0
+    clock.forward(service.STUCK_LOOKUP_SECONDS + 1)  # due for a lookup
+    swarm.wind_down_reads = 2
+    await _tick_errors(client, auth)
+    wf = swarm.workflows["wf_1"]
+    assert wf.state == "CANCELLING"
+    assert (await _knobs_of(tenant_id, run["id"])).get("searches"), "kept: still winding down"
+    wf.steps[0].cost += 1.0  # spent while winding down
+    for _ in range(3):
+        await _tick_errors(client, auth)
+    run = await get(client, auth, run["id"])
+    found = [a for a in run["segments"][0]["attempts"] if a["workflow_id"] == "wf_1"]
+    assert found[0]["cost_usd"] == _wf_cost(swarm, "wf_1")
+    assert run["searching"] is None
+
+
+async def test_a_confirmed_cancel_on_the_main_path_is_read_until_it_is_terminal(
+    client, owner, monkeypatch
+):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _at_baseline(client, auth, swarm)
+    swarm.wind_down_reads = 1
+    resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert swarm.workflows["wf_1"].state == "CANCELLING"
+    swarm.workflows["wf_1"].steps[0].cost += 1.0  # spent while winding down
+    for _ in range(2):
+        await _tick_errors(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "cancelled"
+    assert run["spent_usd"] == _wf_cost(swarm, "wf_1") and run["searching"] is None
+
+
+async def test_a_later_segment_left_running_on_a_detached_workflow_is_not_counted_twice(
+    client, owner
+):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _at_baseline(client, auth, swarm)
+    swarm.steps_per_poll = 0
+    run = await decide(client, auth, run, "approved")
+    assert run["segments"][1]["status"] == "running"
+    assert run["segments"][1]["workflow_id"] == "wf_1"
+    async with tenant_session(tenant_id) as s:
+        r = await s.get(Run, uuid.UUID(run["id"]))
+        r.knobs = {**r.knobs, "workflow": {**r.knobs["workflow"], "state": "ended"}}
+        await s.commit()
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["spent_usd"] == _wf_cost(swarm, "wf_1")
+
+
+async def test_a_pause_over_an_unread_answer_leaves_it_for_an_approver(client, owner, monkeypatch):
+    """Paused on overrun while an answer waits to be read: the workflow is cancelled, so
+    the answer is never read; the Inbox asks an approver to decide instead of showing
+    the run waiting forever to read it."""
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    await _member(tenant_id, "commenter@example.com", "commenter")
+    run = await _at_baseline(client, auth, swarm)
+    swarm.form_status = 502
+    swarm.console_answer("wf_1", "baseline-review1", "MERGE", by="commenter@example.com")
+    clock.forward(service.WATCH_SECONDS + 1)
+    await _tick_errors(client, auth)
+    run = await get(client, auth, run["id"])
+    assert _console(run, pending(run)["id"])["needs"] == "unread"
+    await _ceiling(tenant_id, run["id"], str(run["spent_usd"]))
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    await _tick_errors(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "paused_overrun"
+    console = _console(run, pending(run)["id"])
+    assert console["needs"] == "unreadable" and "paused" in console["reason"]
+
+
+def test_a_per_segment_attach_carries_its_submission_time():
+    seg = RunSegment(
+        seq=1,
+        name="baseline",
+        artifacts={
+            "files": {},
+            "notes": [],
+            "attempts": [
+                {"workflow_id": "wf_1", "label": "L", "submitted_at": "2026-10-19T10:00:00+00:00"}
+            ],
+        },
+    )
+    run = Run(knobs={})
+    wf = service._attach_for_cancel(run, seg, "wf_1")
+    assert wf["submitted_at"] == "2026-10-19T10:00:00+00:00"

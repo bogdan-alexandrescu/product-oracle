@@ -166,6 +166,11 @@ export function RunDetail({ id }: { id: string }) {
                   Stop cancelling
                 </Button>
               )}
+              {mayManage && run.can_retry_lookup && (
+                <Button size="sm" disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path)))}>
+                  Retry lookup
+                </Button>
+              )}
             </div>
           )}
           {run.searching && (

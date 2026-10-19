@@ -182,6 +182,15 @@ export default function InboxPage() {
                     Stop cancelling
                   </Button>
                 )}
+                {r.can_retry_lookup && (
+                  <Button
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => act(`lookup-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path(r.id))))}
+                  >
+                    Retry lookup
+                  </Button>
+                )}
                 {!FINAL_STATUSES.includes(r.status) && (
                   <Button
                     size="sm"
