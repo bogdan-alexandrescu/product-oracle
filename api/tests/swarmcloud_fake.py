@@ -62,6 +62,14 @@ def _err(status: int, reason: str, message: str = "", **detail: Any) -> httpx.Re
     )
 
 
+def _no_route() -> httpx.Response:
+    """A path SwarmCloud has no route for. SwarmCloud has not confirmed this body (its
+    envelope is confirmed for its handlers' errors); the framework's default is a bare
+    ``{"detail": "Not Found"}``, so the fake answers that, never an enveloped not_found
+    (which Oracle takes for "the thing does not exist")."""
+    return httpx.Response(404, json={"detail": "Not Found"})
+
+
 @dataclass
 class Step:
     step_id: str
@@ -125,6 +133,8 @@ class FakeSwarmCloud:
         self.lose_next_submit = False  # create the workflow, then lose the answer
         self.fail_next_submit: httpx.Response | None = None  # refuse without creating
         self.lose_next_lookup = False
+        # Refuse this many task listings (503, nothing listed).
+        self.fail_lookups = 0
         # Record the next answer, then lose the response (a timeout).
         self.lose_next_answer = False
         self.fail_next_answer: httpx.Response | None = None  # refuse without recording
@@ -187,7 +197,7 @@ class FakeSwarmCloud:
             return httpx.Response(200, json={"tenant": {"tenant_id": "u-or-9a0792"}})
         if path == "/v1/capacity":
             if not self.report_capacity:
-                return _err(404, "not_found", "no route")
+                return _no_route()
             return httpx.Response(
                 200,
                 json={
@@ -212,6 +222,9 @@ class FakeSwarmCloud:
             if self.lose_next_lookup:
                 self.lose_next_lookup = False
                 raise httpx.ReadTimeout("lost", request=request)
+            if self.fail_lookups > 0:
+                self.fail_lookups -= 1
+                return _err(503, "unavailable", "the task listing is unavailable")
             return self._tasks(request.url.params)
         m = re.fullmatch(r"/v1/workflows/([^/]+)(/cancel|/steps/([^/]+)/input)?", path)
         if m and self.html_404:
@@ -243,7 +256,7 @@ class FakeSwarmCloud:
             rows = [{"name": n, "role": None} for n in step.files]
             rows.append({"name": "agent.log", "role": "agent_stdout"})
             return httpx.Response(200, json={"artifacts": rows, "complete": True})
-        return _err(404, "not_found", "no route")
+        return _no_route()
 
     def _servers(self, method: str, path: str, body: Any) -> httpx.Response:
         # Reads are served while caller MCP is switched off; writes are not.

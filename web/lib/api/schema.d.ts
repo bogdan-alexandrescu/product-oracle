@@ -4454,6 +4454,11 @@ export interface components {
              * @default []
              */
             lookups: components["schemas"]["RunSummary"][];
+            /**
+             * Searches
+             * @default []
+             */
+            searches: components["schemas"]["RunSummary"][];
             /** Feedback */
             feedback: components["schemas"]["InboxDocument"][];
             /** Total */
@@ -5604,6 +5609,13 @@ export interface components {
             error?: string | null;
             /** Stuck */
             stuck?: string | null;
+            /**
+             * Can Retry
+             * @default false
+             */
+            can_retry: boolean;
+            /** Searching */
+            searching?: string | null;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
             snapshot_id?: string | null;
@@ -5696,6 +5708,13 @@ export interface components {
             error?: string | null;
             /** Stuck */
             stuck?: string | null;
+            /**
+             * Can Retry
+             * @default false
+             */
+            can_retry: boolean;
+            /** Searching */
+            searching?: string | null;
         };
         /**
          * RuntimeFeatures

@@ -139,6 +139,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     finished_at: r.finished_at,
     waiting_on: r.waiting_on,
     error: r.error,
+    can_retry: r.can_retry,
   };
 }
 
@@ -338,6 +339,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     approvals,
     overruns,
     lookups: [],
+    searches: [],
     feedback,
     total: checkpoints.length + approvals.length + overruns.length + feedback.length,
   };
@@ -417,6 +419,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       finished_at: null,
       waiting_on: null,
       error: null,
+      can_retry: false,
       knobs,
       snapshot_id: null,
       snapshot_as_of: null,
@@ -570,6 +573,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
       finished_at: null,
       waiting_on: null,
       error: null,
+      can_retry: false,
       knobs: k,
       snapshot_id: ctx.uuid(),
       snapshot_as_of: created_at,

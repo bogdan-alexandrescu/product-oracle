@@ -14531,6 +14531,14 @@
             "title": "Lookups",
             "default": []
           },
+          "searches": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "type": "array",
+            "title": "Searches",
+            "default": []
+          },
           "feedback": {
             "items": {
               "$ref": "#/components/schemas/InboxDocument"
@@ -17943,6 +17951,22 @@
             ],
             "title": "Stuck"
           },
+          "can_retry": {
+            "type": "boolean",
+            "title": "Can Retry",
+            "default": false
+          },
+          "searching": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searching"
+          },
           "knobs": {
             "$ref": "#/components/schemas/KnobsOut"
           },
@@ -18338,6 +18362,22 @@
               }
             ],
             "title": "Stuck"
+          },
+          "can_retry": {
+            "type": "boolean",
+            "title": "Can Retry",
+            "default": false
+          },
+          "searching": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searching"
           }
         },
         "type": "object",

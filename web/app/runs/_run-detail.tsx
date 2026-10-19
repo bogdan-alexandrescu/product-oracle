@@ -13,6 +13,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import {
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
+  RETRY_CONFIRM,
   RunStatusBadge,
   RunsWhere,
   SEGMENT_STATUS_TONE,
@@ -137,16 +138,35 @@ export function RunDetail({ id }: { id: string }) {
           {run.stuck && (
             <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="run-stuck">
               <span className="min-w-0 flex-1">{run.stuck}</span>
-              {mayManage && (
-                <Button size="sm" variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)))}>
+              {mayManage && run.can_retry && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={busy}
+                  onClick={() => {
+                    if (window.confirm(RETRY_CONFIRM)) {
+                      void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)));
+                    }
+                  }}
+                >
                   Retry
+                </Button>
+              )}
+              {mayManage && FINAL_STATUSES.includes(run.status) && (
+                <Button size="sm" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel", path)))}>
+                  Stop cancelling
                 </Button>
               )}
             </div>
           )}
+          {run.searching && (
+            <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="run-searching">
+              {run.searching}
+            </p>
+          )}
           {run.token_read_only && (
             <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="run-token-read-only">
-              Waiting for approval: a SwarmCloud console answer that does not count waits for an approver, so the run&apos;s agents may read Oracle but their writes are refused until it is confirmed or decided.
+              Waiting for approval: a SwarmCloud console answer that does not count (or that Oracle could not read) waits for an approver, so the run&apos;s agents may read Oracle but their writes are refused until it is confirmed or decided.
             </p>
           )}
           {run.status === "awaiting_approval" && (

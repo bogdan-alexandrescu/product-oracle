@@ -178,18 +178,41 @@ not. SwarmCloud's team confirmed the real contract, and it overrides anything ab
   filter is added: combined filters are applied after the cursor and pages come back
   short. The search is conclusive by time (adapter v2 review fixes, round 4): it stops,
   "not found", at the first task whose `created_at` is older than when Oracle sent the
-  submission less 10 minutes of clock skew, since the listing is newest first. Rows
-  without `created_at` (not confirmed by SwarmCloud yet) prove nothing, and past 20
-  pages with no older row the search is inconclusive. An inconclusive lookup holds the
-  submission; after 30 minutes or 30 lookups the run shows in the Inbox ("Lost
-  submissions") with **Retry** (looked up once more, else the segment is submitted again
-  under a new key, the lost one's token revoked: if it landed it runs on without
-  Oracle's data and its cost is not counted) and **Cancel**; meanwhile it is looked up
-  every 10 minutes. Cancelling looks for it the same way and, past the cap, stops
-  looking (noted).
+  submission less a skew margin, since the listing is newest first. The margin is 10
+  minutes plus how far Oracle's clock is ahead of SwarmCloud's `Date` header (round 5),
+  so a task stamped by a clock behind Oracle's is never taken for an older one. Oracle
+  checks the order as it reads: a row newer than one before it means the listing is not
+  newest first, and then no time concludes anything (the search runs to the listing's
+  end or 20 pages, and the attempt cap below applies). Rows without `created_at` (not
+  confirmed by SwarmCloud yet) prove nothing, and past 20 pages with no older row the
+  search is inconclusive. An inconclusive lookup holds the submission; after 30 minutes
+  or 30 lookups the run shows in the Inbox with **Retry** (looked up once more, else,
+  after the web asks "This can start a paid duplicate run", the segment is submitted
+  again under a new key, the lost one's token revoked) and **Cancel**; meanwhile it is
+  looked up every 10 minutes. Cancelling looks for it the same way, also past the cap.
+- **A submission given up on is still looked for** (round 5: spend never escapes the
+  ceiling). Retry, or a cancelled run whose lost submission is past the cap, puts its
+  key and send time on the run's background search: looked up every 10 minutes, whatever
+  the run's state, until found (then cancelled, its cost read and counted on its own
+  attempt of the segment, and noted; a cancel SwarmCloud does not confirm is tried again
+  on every tick, its cost read meanwhile) or ruled out by the time-based search, and at
+  most until the lost submission's credential would have expired (at most 24 h; then
+  noted). The run's spend, and its ceiling, include it. Meanwhile the Inbox ("Looking
+  for earlier submissions") and the run show "Oracle is looking for an earlier
+  submission".
 - **A 404 is "gone" only in SwarmCloud's envelope** (`detail.reason` or `code`
-  `not_found`): a bare 404 (a proxy's page, a changed URL or principal) proves nothing
-  and is retried like a 503, so Oracle never stops cancelling on one.
+  `not_found`): a bare 404 (a proxy's page, a changed URL or principal), or one with
+  another reason, proves nothing and is retried like a 503, so Oracle never stops
+  cancelling on one by itself. It is counted, though (round 5): after 5 such 404s on a
+  cancel (the tick then tries every 10 minutes) or on posting a checkpoint's answer, the
+  run shows in the Inbox ("Stuck runs") with Cancel, which ends the run, or, for a run
+  already cancelled, stops cancelling (noted: cancel it in SwarmCloud's console).
+- **What SwarmCloud returns for a route it does not have is not confirmed.** Its
+  envelope is confirmed for its handlers' errors (an unknown workflow is an enveloped
+  `not_found`). A missing route is most likely the web framework's default, a bare
+  `{"detail": "Not Found"}`, which Oracle reads as a bare 404. The fake answers a missing
+  route that way, never with an enveloped `not_found` (which would make a mistyped path
+  look like "the workflow does not exist"); to confirm with SwarmCloud.
 - **Caller MCP reads** (`GET /v1/mcp-servers`) are served while the switch is off, so
   Oracle counts MCP as on only once SwarmCloud accepted its registration or a run's token.
   A registration that is already current is PATCHed with the same URL to confirm it, and
@@ -208,11 +231,11 @@ What Oracle does with an answer (adapter v2 review fixes, 2026-10-19):
 | answered in SwarmCloud's console while the run waits, by an Oracle member whose role meets the checkpoint's approver role (matched by `answered_by`, never `on_behalf_of`; W5) | the tick reads the wait at most once a minute, records the answer (who, via, when, verdict, findings) as the checkpoint's decision and follows it |
 | answered there by anyone else (not a member, or a member below the approver role; an `answered_by` that redaction altered; an address matching two members by case, neither exactly) | recorded ("answered in SwarmCloud by ..."); the checkpoint stays open in the Inbox showing it, for an approver to Confirm it, approve or request changes. Meanwhile the run's token is **read-only** (owner, 2026-10-19): its agents may read Oracle, and their writes (drafts, proposals) are refused "HTTP 403 ... waiting for approval"; confirming or deciding restores it (`RunOut.token_read_only`) |
 | a counted console NOT_YET where the workflow has no revise step (an earlier checkpoint) | never re-run on its own: the checkpoint stays open with the findings, and an approver chooses Redo from the segment (cancel, re-run as a new workflow with the findings: one more segment, its estimate shown) or Continue (follow the workflow, the note recorded). Redo needs findings or a note (`ConsoleAnswer.can_redo`; the button is disabled without either) |
-| answered, and the verdict cannot be read (form missing or over 256 KB, the record refused) | shown in the Inbox and read again each minute; an approval is followed (it needs nothing the workflow did not do), a change request says "decide again", and Redo runs the segment again as a new workflow |
+| answered, and the verdict cannot be read (form missing, over 256 KB, not valid gzip or JSON, a verdict other than MERGE or NOT_YET, the record refused after the step SUCCEEDED) | shown in the Inbox and read again each minute; the run's token is **read-only** meanwhile, as for an answer that does not count (round 5); an approval is followed (it needs nothing the workflow did not do), a change request says "decide again", and Redo runs the segment again as a new workflow |
 | 409 `not_open`, `expired`, `cancelled` | the wait is closed: cancel, continue as a new workflow with the decision |
 | 403 `person_required` | service answers recorded as off until SwarmCloud reports them on (or Oracle's API restarts); cancel, continue as a new workflow (today's flow); later runs keep checkpoints in the Inbox |
 | other refusals (403, 404 `not_found` in SwarmCloud's envelope, 422) | not posted: cancel, continue as a new workflow, with a note |
-| 503, 429, timeout, a bare (non-envelope) 404 | nothing recorded: "decide again" (the same answer replays) |
+| 503, 429, timeout, a bare (non-envelope) 404 or a 404 with another reason | nothing recorded: "decide again" (the same answer replays); after 5 such 404s for the checkpoint, the run also shows in the Inbox with Cancel |
 
 No case runs a segment in two workflows unless an approver chose Redo: a workflow is
 cancelled before its successor is submitted, and a cancel SwarmCloud does not confirm

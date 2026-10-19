@@ -45,6 +45,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from email.utils import parsedate_to_datetime
 from typing import Any, Protocol
 
 import httpx
@@ -657,17 +658,27 @@ class SwarmCloudRuntime:
         workflow_id) is applied after the cursor and pages come back short.
 
         None when the listing ended without it, or, given ``since`` (when Oracle sent the
-        submission), at the first task created before ``since`` less :data:`CLOCK_SKEW`:
-        the listing is newest first, so the submission, had it landed, came before that.
-        A search that could not finish (a repeated cursor, an odd body, more pages than
-        Oracle reads without reaching an older task) raises, so that the caller holds the
-        submission and looks again instead of submitting a duplicate."""
+        submission), at the first task created before ``since`` less the skew margin: the
+        listing is newest first, so the submission, had it landed, came before that. The
+        margin is :data:`CLOCK_SKEW` plus how far Oracle's clock is ahead of SwarmCloud's
+        (its ``Date`` header), so a task stamped by a clock behind Oracle's is never taken
+        for an older one. The order is checked as the rows come: a row newer than one
+        before it means the listing is not newest first, and then no row's time concludes
+        anything (the search runs to its end or its page limit, and the caller's attempt
+        cap applies). A search that could not finish (a repeated cursor, an odd body, more
+        pages than Oracle reads without reaching an older task) raises, so that the caller
+        holds the submission and looks again instead of submitting a duplicate."""
         params: dict[str, str | int] = {"submitted_by": "me", "limit": TASK_PAGE}
         seen: set[str] = set()
-        cutoff = since - CLOCK_SKEW if since is not None else None
+        cutoff: datetime | None = None
+        previous: datetime | None = None
+        ordered = True
         async with self._client() as client:
             for _ in range(MAX_TASK_PAGES):
-                body = _json(await self._call(client, "GET", "/v1/tasks", params=params))
+                resp = await self._call(client, "GET", "/v1/tasks", params=params)
+                if since is not None and cutoff is None:
+                    cutoff = since - CLOCK_SKEW - _ahead(resp)
+                body = _json(resp)
                 rows = body.get("tasks", body.get("items"))
                 if not isinstance(rows, list):
                     raise _inconclusive(label, "SwarmCloud's task listing had no rows")
@@ -679,9 +690,14 @@ class SwarmCloudRuntime:
                     if meta.get("oracle_key") == label and row.get("workflow_id"):
                         return str(row["workflow_id"])
                     created = _parse_time(row.get("created_at"))
-                    if cutoff is not None and created is not None and created < cutoff:
+                    if created is None:
+                        continue
+                    if previous is not None and created > previous:
+                        ordered = False
+                    previous = created
+                    if cutoff is not None and created < cutoff:
                         older = True
-                if older:
+                if older and ordered:
                     # Past where the submission would be: it was never created.
                     return None
                 token = body.get("next_page_token") or body.get("page_token")
@@ -695,10 +711,15 @@ class SwarmCloudRuntime:
         log.warning(
             "submission %s not among Oracle's last %d tasks", label, TASK_PAGE * MAX_TASK_PAGES
         )
+        why = (
+            "and the listing is not newest first, so no task's time rules it out"
+            if not ordered
+            else "and none of them is older than the submission"
+        )
         raise _inconclusive(
             label,
-            f"not among Oracle's last {TASK_PAGE * MAX_TASK_PAGES} tasks, and none of them is "
-            "older than the submission; not looked further",
+            f"not among Oracle's last {TASK_PAGE * MAX_TASK_PAGES} tasks, {why}; not looked "
+            "further",
         )
 
     async def answer(
@@ -801,8 +822,10 @@ class SwarmCloudRuntime:
         """A GET body of at most ``limit`` bytes, streamed: None, without reading on,
         when its Content-Length or the bytes received pass the limit. A refusal is read
         first, whatever its size (at most :data:`MAX_ERROR_BYTES` of it), and raised: an
-        error is never "too large to read". A body that cannot be decoded (a broken gzip)
-        is RuntimeUnavailable, like any other read that failed."""
+        error is never "too large to read", whatever ``limit`` is. A successful body that
+        cannot be decoded (a broken gzip) is None too: SwarmCloud served it, and what it
+        served cannot be read (never "lost", which would be read again forever); a
+        connection lost while reading is RuntimeUnavailable."""
         headers = {"Authorization": await self._auth.header(client)}
         request = client.build_request("GET", path, params=params, headers=headers)
         try:
@@ -823,8 +846,13 @@ class SwarmCloudRuntime:
                 if failed and len(body) >= MAX_ERROR_BYTES:
                     del body[MAX_ERROR_BYTES:]
                     break
-                if len(body) > limit:
+                if not failed and len(body) > limit:
                     return None
+        except httpx.DecodingError:
+            if not failed:
+                log.warning("SwarmCloud served GET %s in an encoding that does not decode", path)
+                return None
+            body = bytearray()  # a refusal whose body did not decode: its status says enough
         except httpx.HTTPError as exc:
             if not failed:
                 raise RuntimeUnavailable(
@@ -1126,6 +1154,20 @@ def _enveloped(resp: httpx.Response, code: str | None) -> bool:
     return code in (detail.get("reason"), body.get("code"), body.get("error"))
 
 
+def _ahead(resp: httpx.Response) -> timedelta:
+    """How far Oracle's clock is ahead of SwarmCloud's, from the response's ``Date``
+    header (zero when it is behind, or the header is missing or odd)."""
+    try:
+        theirs = parsedate_to_datetime(resp.headers.get("date", ""))
+    except (TypeError, ValueError, IndexError):
+        return timedelta(0)
+    if theirs is None:
+        return timedelta(0)
+    if theirs.tzinfo is None:
+        theirs = theirs.replace(tzinfo=UTC)
+    return max(timedelta(0), datetime.now(UTC) - theirs)
+
+
 def _inconclusive(label: str, why: str) -> RuntimeUnavailable:
     # Retryable (no HTTP status): the caller holds the submission and looks again.
     return RuntimeUnavailable(f"looking up submission {label} was inconclusive: {why}")
@@ -1181,18 +1223,25 @@ _DETAIL_SCAN_CHARS = 4096
 # the word, a JWT, a Google access token, a GitHub token, a token in a git URL, or one of
 # Oracle's own tokens (run, API and OAuth).
 _TOKEN_SHAPED = re.compile(
-    # A bearer value: a word with a digit or an inner symbol (sc-secret, abc123), or a
-    # long one; never an ordinary word after "bearer" (bearer token handling).
-    r"(?i)bearer(?:[\s:=]|%20)+"
-    r"(?:(?=[a-z]*(?:[0-9]|[-_.~+/=%][a-z0-9]))\S+|[a-z]{16,}\S*)"
+    # A bearer value, after a space, ":", "=", "%20" or a form-encoded "+": a word with a
+    # digit or an inner symbol (sc-secret, abc123), or a long one; never an ordinary word
+    # or a hyphenated phrase of them after "bearer" (bearer token handling, bearer
+    # token-based auth).
+    r"(?i:bearer)(?:[\s:=+]|%20)+"
+    r"(?!(?i:token|tokens|auth|authentication|authorization|scheme|header|credentials?)"
+    r"(?:-[A-Za-z]+)*(?![A-Za-z0-9_.~+/=%-]))"
+    r"(?:(?=[A-Za-z]*(?:[0-9]|[-_.~+/=%][A-Za-z0-9]))\S+|[A-Za-z]{16,}\S*)"
     r"|eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}"
     r"|ya29\.[A-Za-z0-9_.-]+"
     r"|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
-    r"|x-access-token:[^@\s]+"
+    r"|(?i:x-access-token):[^@\s]+"
     # Oracle's prefixes, also when joined to a word by an underscore (credential_ort_...),
     # to digits (123ort_..., Bearer%20ort_...) or to an escaped or encoded line break
-    # (\nort_..., %0Aort_...); never inside a word (support_ticket).
-    r"|(?:(?<![A-Za-z])|(?<=\\[nrt])|(?<=%0[AaDd]))(?:ort|po|poa)_[A-Za-z0-9_-]{8,}"
+    # (\nort_..., \u000aort_..., %0Aort_...); never inside a word (support_ticket). Its
+    # tokens are random URL-safe text, so the value has a digit or a capital: an
+    # identifier made of words (max_po_lines_per_page, alice_po_reviewer@...) is not one.
+    r"|(?:(?<![A-Za-z])|(?<=\\[nrt])|(?<=\\u000[AaDd])|(?<=%0[AaDd]))"
+    r"(?:ort|po|poa)_(?=[a-z_-]*[A-Z0-9])[A-Za-z0-9_-]{8,}"
 )
 
 

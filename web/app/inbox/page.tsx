@@ -8,7 +8,7 @@ import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CHECKPOINT_LABEL, usd, type RunSummary } from "../runs/_lib";
+import { CHECKPOINT_LABEL, FINAL_STATUSES, RETRY_CONFIRM, usd, type RunSummary } from "../runs/_lib";
 
 function Section({ title, count, children, testId }: { title: string; count: number; children: ReactNode; testId: string }) {
   if (count === 0) return null;
@@ -146,28 +146,43 @@ export default function InboxPage() {
             ))}
           </Section>
 
-          <Section title="Lost submissions" count={inbox.lookups.length} testId="inbox-lookups">
+          <Section title="Stuck runs" count={inbox.lookups.length} testId="inbox-lookups">
             {inbox.lookups.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
                 <div className="min-w-0 flex-1">
                   <RunLink run={r} />
                   <div className="text-xs text-neutral-500">{r.stuck}</div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  disabled={busy !== null}
-                  onClick={() => act(`retry-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry", path(r.id))))}
-                >
-                  Retry
-                </Button>
+                {r.can_retry && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      if (window.confirm(RETRY_CONFIRM)) {
+                        void act(`retry-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry", path(r.id))));
+                      }
+                    }}
+                  >
+                    Retry
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   disabled={busy !== null}
                   onClick={() => act(`cancel-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/cancel", path(r.id))))}
                 >
-                  Cancel run
+                  {FINAL_STATUSES.includes(r.status) ? "Stop cancelling" : "Cancel run"}
                 </Button>
+              </li>
+            ))}
+          </Section>
+
+          <Section title="Looking for earlier submissions" count={inbox.searches?.length ?? 0} testId="inbox-searches">
+            {(inbox.searches ?? []).map((r) => (
+              <li key={r.id} className="px-4 py-3 text-sm">
+                <RunLink run={r} />
+                <div className="text-xs text-neutral-500">{r.searching}</div>
               </li>
             ))}
           </Section>

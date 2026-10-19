@@ -276,9 +276,15 @@ class RunSummary(BaseModel):
     # The kind of the checkpoint the run waits on, if any.
     waiting_on: CheckpointKind | None = None
     error: str | None = None
-    # A lost submission Oracle could neither find nor rule out past the lookup cap: what
-    # the Inbox says, with Retry and Cancel.
+    # What the Inbox says of a run waiting for its owner or creator: a lost submission
+    # Oracle could neither find nor rule out past the lookup cap (Retry and Cancel;
+    # ``can_retry``), or a cancel or an answer post SwarmCloud keeps answering with a 404
+    # that proves nothing (Cancel only).
     stuck: str | None = None
+    can_retry: bool = False
+    # Submissions given up on (Retry, or Cancel past the lookup cap) that Oracle still
+    # looks for, to cancel them and count their cost if they landed.
+    searching: str | None = None
 
 
 class RunOut(RunSummary):
@@ -368,6 +374,9 @@ class InboxOut(BaseModel):
     # Owners and the run's creator: runs whose lost submission is past the lookup cap
     # (RunSummary.stuck), to Retry or Cancel.
     lookups: list[RunSummary] = []
+    # Owners and the run's creator: runs looking for an earlier submission given up on
+    # (RunSummary.searching); shown only, nothing to decide, not in ``total``.
+    searches: list[RunSummary] = []
     # Approvers and owners: open feedback on documents they can approve.
     feedback: list[InboxDocument]
     total: int

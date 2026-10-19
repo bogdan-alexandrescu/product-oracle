@@ -63,6 +63,10 @@ export const SEGMENT_STATUS_TONE: Record<SegmentOut["status"], "neutral" | "gree
 
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
 
+/** Asked before Retry on a lost submission: if the lost one landed, both run (and are paid for) until Oracle finds and cancels it. */
+export const RETRY_CONFIRM =
+  "This can start a paid duplicate run: if the lost submission landed, it runs too until Oracle finds it, cancels it and counts its cost. Retry?";
+
 const usdFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 export function usd(value: number | null | undefined): string {
