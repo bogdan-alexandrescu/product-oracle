@@ -37,8 +37,9 @@ Which change reaches which dependency:
   items; with ``evidence_deleted`` (subject: the evidence, recorded before it is
   deleted), that evidence. Then the entities the evidence supports (an edge's evidence:
   the edge's downstream end) and everything downstream of them, and the sections whose
-  links cite the evidence or the items. Those links cascade away with a deleted evidence
-  or source item; ``data["trace"]["links"]`` keeps what they were. Dependencies never
+  links cite the evidence or the items. A link that keeps another target (an entity, or
+  the evidence an item backed) only drops the deleted one; a link left with no target
+  is deleted, and ``data["trace"]["links"]`` keeps what it was. Dependencies never
   point at evidence or source items, so no dependency row goes with them;
 - ``composition_revision``: dependencies on the sections of the modules that changed
   since the parent revision, and on the whole document.
@@ -61,6 +62,7 @@ from oracle.models import AuditEvent
 from oracle.sources.models import Source, SourceItem
 from oracle.trace import graph as graph_mod
 from oracle.trace.outputs import downstream_key, refresh_aggregates
+from oracle.v2.links import left_without_target
 from oracle.v2.models import (
     ArtifactDependency,
     ArtifactReviewEvent,
@@ -189,7 +191,7 @@ class Affected:
     # A graph walk stopped at a bound: more may be affected than listed.
     truncated: bool = False
     # Section links that reached a dependency and are about to go (a deleted evidence or
-    # source item cascades them): what they were.
+    # source item leaves them with no target): what they were.
     links: list[dict[str, Any]] = field(default_factory=list)
 
     def add(self, dep: ArtifactDependency, reason: str) -> None:
@@ -386,8 +388,8 @@ async def _by_entities(db: AsyncSession, roots: list[Root], out: Affected) -> No
 
 
 def link_snapshot(link: DocumentSectionLink) -> dict[str, Any]:
-    """What a section link was, kept on the change when it is about to cascade away. The
-    source item stays out: it is private to its owner."""
+    """What a section link was, kept on the change when it is about to go with its last
+    target. The source item stays out: it is private to its owner."""
     return {
         "id": str(link.id),
         "document_id": str(link.document_id),
@@ -452,8 +454,16 @@ async def _by_source_permission(db: AsyncSession, subject: Subject, out: Affecte
     links = (await db.scalars(select(DocumentSectionLink).where(or_(*conditions)))).all()
     why = {link.id: EVIDENCE_CAUSES[cause] for link in links}
     await _by_sections(db, list(links), why, out)
-    if cause != "source_permission":
-        out.links.extend(link_snapshot(link) for link in links)
+    # The links that go with the deleted evidence or items (oracle.v2.links): the rest
+    # keep their other target and stay.
+    if cause == "evidence_deleted":
+        out.links.extend(
+            link_snapshot(link) for link in links if left_without_target(link, evidence_ids)
+        )
+    elif cause == "source_deleted":
+        out.links.extend(
+            link_snapshot(link) for link in links if left_without_target(link, (), item_ids)
+        )
 
 
 def _module_sections(modules: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

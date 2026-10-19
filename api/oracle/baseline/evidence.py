@@ -34,6 +34,7 @@ from oracle.baseline.schemas import (
 )
 from oracle.baseline.service import ConflictError, ForbiddenError, InvalidError, NotFoundError
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
+from oracle.v2 import links
 
 EXCERPT_CHARS = 500
 
@@ -146,8 +147,9 @@ async def detach(db: AsyncSession, principal: Principal, evidence_id: uuid.UUID)
         ev.id,
         {"url": ev.url, "ref": ev.ref, "excerpt": ev.excerpt},
     )
-    # v2 hook, before the delete: what rests on it, and the section links citing it
-    # (which cascade away with it), are found while it exists (oracle.trace).
+    # v2 hook, before the delete: what rests on it, and the section links citing it, are
+    # found while it exists (oracle.trace). Then a link citing it keeps its other target
+    # (an entity or a source item) and only drops the evidence; one left with none goes.
     await changes.record_change(
         db,
         "source_permission",
@@ -157,6 +159,7 @@ async def detach(db: AsyncSession, principal: Principal, evidence_id: uuid.UUID)
         subject_ref=ev.ref or ev.url,
         data={"evidence": [evidence_snapshot(ev)]},
     )
+    await links.release(db, evidence_ids={ev.id})
     await db.delete(ev)
     await db.flush()
     await rescore_target(db, entity_id, edge_id)

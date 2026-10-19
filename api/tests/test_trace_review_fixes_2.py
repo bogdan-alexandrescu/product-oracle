@@ -80,7 +80,7 @@ async def _evidence_setup(client, ctx):
 
 async def _assert_evidence_removal(ctx, evidence_id, link, wire, spec):
     (wire_id, on_section), (spec_id, on_feature) = wire, spec
-    # The section link cascaded away with the evidence; the dependencies stay, stale.
+    # The section link (its only target the evidence) went with it; the dependencies stay.
     assert await _link(ctx.tenant_id, link) is None
     for dep_id in (on_section, on_feature):
         dep = await dependency(ctx.tenant_id, dep_id)
