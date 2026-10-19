@@ -581,7 +581,8 @@ def compose_markdown(
             [
                 ImportProblem(
                     code="section_lost",
-                    message=f"composing the draft would lose section {k!r}; nothing was imported",
+                    message=f"composing the draft would lose or add section {k!r}; "
+                    "nothing was imported",
                     section_key=k,
                 )
                 for k in lost
@@ -591,15 +592,19 @@ def compose_markdown(
 
 
 def lost_sections(expected: list[str], markdown: str) -> list[str]:
-    """Keys of ``expected`` that ``markdown`` does not have, in order, as its sections."""
+    """Where ``markdown``'s sections differ from ``expected``: the keys it does not have,
+    else the first out of order, else the keys it adds (a heading inside the last
+    section's body adds a section after it). Empty when they are exactly ``expected``."""
     from oracle.docs.parser import section_keys
 
     keys = section_keys(markdown)
     if keys == expected:
         return []
-    return [k for k in expected if k not in keys] or [
-        k for k, got in zip(expected, keys, strict=False) if k != got
-    ][:1]
+    return (
+        [k for k in expected if k not in keys]
+        or [k for k, got in zip(expected, keys, strict=False) if k != got][:1]
+        or keys[len(expected) :]
+    )
 
 
 async def apply_refinement(
@@ -688,7 +693,8 @@ async def apply_refinement(
     if lost:
         raise JobError(
             422,
-            f"the revised draft would lose section(s) {', '.join(lost)}; nothing was imported",
+            f"the revised draft would lose or add section(s) {', '.join(lost)}; "
+            "nothing was imported",
         )
     try:
         # An accepted AI patch: the change event invalidates the section's approval.
