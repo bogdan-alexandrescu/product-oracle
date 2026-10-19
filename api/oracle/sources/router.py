@@ -4,7 +4,7 @@ Sources are owned (S3 revised): every route acts for the signed-in user, who see
 syncs only their own sources and items. Another user's source or item is a 404. A run
 token acting for its user never reads raw an item behind one of the user's intake
 findings not shared in full (S6, ``oracle.intake.evidence.run_withheld``): the item is
-left out of every list and search, and is a 404.
+left out of every list, count and search, and is a 404.
 """
 
 import uuid
@@ -77,10 +77,10 @@ def _source_out(source: Source, count: int = 0) -> SourceOut:
     )
 
 
-async def _one_out(db: TenantDB, source: Source) -> SourceOut:
+async def _one_out(db: TenantDB, source: Source, principal: Principal) -> SourceOut:
     # Reload server-set columns (updated_at) the last flush expired.
     await db.refresh(source)
-    counts = await service.item_counts(db, [source.id])
+    counts = await service.item_counts(db, [source.id], await _withheld(db, principal))
     return _source_out(source, counts.get(source.id, 0))
 
 
@@ -97,7 +97,8 @@ async def _owned(db: TenantDB, principal: Principal, source_id: uuid.UUID) -> So
 @router.get("/sources", response_model=list[SourceOut])
 async def list_sources(principal: CurrentPrincipal, db: TenantDB) -> list[SourceOut]:
     sources = await service.list_sources(db, _user(principal))
-    counts = await service.item_counts(db, [s.id for s in sources])
+    # A run counts only what it may list (S6).
+    counts = await service.item_counts(db, [s.id for s in sources], await _withheld(db, principal))
     return [_source_out(s, counts.get(s.id, 0)) for s in sources]
 
 
@@ -142,7 +143,7 @@ async def create_source(body: SourceCreate, principal: CurrentPrincipal, db: Ten
 
 @router.get("/sources/{source_id}", response_model=SourceOut)
 async def get_source(source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB) -> SourceOut:
-    return await _one_out(db, await _owned(db, principal, source_id))
+    return await _one_out(db, await _owned(db, principal, source_id), principal)
 
 
 @router.patch("/sources/{source_id}", response_model=SourceOut)
@@ -154,7 +155,7 @@ async def update_source(
         source = await service.update_source(db, source, body.model_dump(exclude_unset=True))
     except _ERRORS as e:
         raise _http(e) from e
-    return await _one_out(db, source)
+    return await _one_out(db, source, principal)
 
 
 @router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -170,7 +171,7 @@ async def pause_source(
     source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> SourceOut:
     source = await service.set_paused(db, await _owned(db, principal, source_id), True)
-    return await _one_out(db, source)
+    return await _one_out(db, source, principal)
 
 
 @router.post("/sources/{source_id}/resume", response_model=SourceOut)
@@ -178,7 +179,7 @@ async def resume_source(
     source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> SourceOut:
     source = await service.set_paused(db, await _owned(db, principal, source_id), False)
-    return await _one_out(db, source)
+    return await _one_out(db, source, principal)
 
 
 @router.post(
@@ -208,7 +209,7 @@ async def sync_source(
         checkpoints=stats.checkpoints,
         retry_after=stats.retry_after,
         error=stats.error,
-        source=await _one_out(db, source),
+        source=await _one_out(db, source, principal),
     )
 
 
@@ -250,9 +251,14 @@ async def upload_files(
 
     settings = await items.confidence_settings(db)
     ids = list(dict.fromkeys(item_ids))
-    rows = {r.item.id: r for r in await items.source_items(db, source, ids=ids, limit=len(ids))}
+    withheld = await _withheld(db, principal)
+    rows = {
+        r.item.id: r
+        for r in await items.source_items(db, source, ids=ids, limit=len(ids), exclude=withheld)
+    }
     return UploadResult(
-        items=[ItemOut(**items.item_out(rows[i], settings)) for i in ids],
+        # A run never reads back an item it may not read, even one it just rewrote.
+        items=[ItemOut(**items.item_out(rows[i], settings)) for i in ids if i in rows],
         unchanged=unchanged,
     )
 

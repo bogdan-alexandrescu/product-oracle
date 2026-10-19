@@ -597,7 +597,9 @@ async def build(
         stale=[
             StaleEvidence(
                 evidence=refs[uuid.UUID(s["item_id"])],
-                reason=f"Old when pinned: freshness {s['freshness']:.2f} of 1.",
+                reason=s["summary"]
+                if s.get("summary_only")
+                else f"Old when pinned: freshness {s['freshness']:.2f} of 1.",
                 finding_id=s.get("finding_id"),
                 sharing=sharing.level_of(view.reg, s.get("finding_id")),  # type: ignore[arg-type]
             )

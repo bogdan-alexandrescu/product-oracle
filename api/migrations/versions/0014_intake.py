@@ -26,7 +26,13 @@ Security review fixes (same lane, same revision):
   It is recorded on the gap whatever private findings the intake holds, so setting
   importance changes the same rows either way (S6). Existing rows keep NULL: their
   importance may have been moved by private sources, so reads still derive what others
-  see from the brief for them.
+  see from the brief for them. A partial index finds those rows
+  (``ix_knowledge_gaps_legacy_importance``); the next analysis records their basis.
+- ``intake_withheld_items`` (round 5, owner 2026-10-19): while any finding of an intake
+  is below "shared in full", every source item its analysis and jobs read is withheld
+  from its author's runs. Precomputed per intake, so a run's read is one indexed query.
+  Existing intakes are backfilled fail closed: everything their stored analysis names
+  is withheld until the intake is next analysed or shared.
 
 The integrator re-chains this revision in merge order (waves.md).
 
@@ -78,6 +84,27 @@ RULE_STATEMENTS = {
     "configurability_scaling": "Expected scale and what must be configurable are not known.",
 }
 XID = "(pg_current_xact_id()::text)::bigint"
+# Every item id an intake's stored analysis names: what it read, the findings' citations,
+# stale items and conflict claims.
+WITHHELD_BACKFILL = """
+INSERT INTO intake_withheld_items (id, tenant_id, intake_id, user_id, item_id)
+SELECT gen_random_uuid(), i.tenant_id, i.id, i.author_id, x.item_id::uuid
+FROM product_intakes i
+CROSS JOIN LATERAL (
+    SELECT jsonb_array_elements_text(COALESCE(i.analysis->'read_item_ids', '[]'))
+    UNION SELECT jsonb_array_elements_text(COALESCE(i.analysis->'relevant_item_ids', '[]'))
+    UNION SELECT s->>'item_id' FROM jsonb_array_elements(COALESCE(i.analysis->'stale', '[]')) s
+    UNION SELECT cl->>'item_id'
+        FROM jsonb_array_elements(COALESCE(i.analysis->'conflicts', '[]')) c,
+             jsonb_array_elements(COALESCE(c->'claims', '[]')) cl
+    UNION SELECT jsonb_array_elements_text(COALESCE(f.value->'source_item_ids', '[]'))
+        FROM jsonb_each(COALESCE(i.analysis->'findings', '{}')) f
+    UNION SELECT jsonb_array_elements_text(COALESCE(f.value->'evidence_ids', '[]'))
+        FROM jsonb_each(COALESCE(i.analysis->'findings', '{}')) f
+) AS x(item_id)
+WHERE i.author_id IS NOT NULL AND x.item_id IS NOT NULL
+ON CONFLICT DO NOTHING
+"""
 TXN_SNAPSHOT = "pg_current_snapshot()::text"
 
 
@@ -203,9 +230,64 @@ def upgrade() -> None:
         "knowledge_gaps",
         "importance_basis IS NULL OR importance_basis IN ('brief', 'person')",
     )
+    op.create_index(
+        "ix_knowledge_gaps_legacy_importance",
+        "knowledge_gaps",
+        ["intake_id"],
+        unique=False,
+        postgresql_where=sa.text("rule_key IS NOT NULL AND importance_basis IS NULL"),
+    )
+
+    op.create_table(
+        "intake_withheld_items",
+        sa.Column("intake_id", sa.Uuid(), nullable=False),
+        sa.Column("user_id", sa.Uuid(), nullable=False),
+        sa.Column("item_id", sa.Uuid(), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["intake_id"],
+            ["product_intakes.id"],
+            name=op.f("fk_intake_withheld_items_intake_id_product_intakes"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f("fk_intake_withheld_items_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_intake_withheld_items")),
+        sa.UniqueConstraint(
+            "intake_id", "item_id", name=op.f("uq_intake_withheld_items_intake_id_item_id")
+        ),
+    )
+    for column in ("intake_id", "tenant_id"):
+        op.create_index(
+            op.f(f"ix_intake_withheld_items_{column}"),
+            "intake_withheld_items",
+            [column],
+            unique=False,
+        )
+    op.create_index(
+        "ix_intake_withheld_items_user_id_item_id",
+        "intake_withheld_items",
+        ["user_id", "item_id"],
+        unique=False,
+    )
+    # Fail closed: every item an existing intake's analysis names is withheld.
+    op.execute(WITHHELD_BACKFILL)
 
 
 def downgrade() -> None:
+    op.drop_table("intake_withheld_items")
+    op.drop_index("ix_knowledge_gaps_legacy_importance", table_name="knowledge_gaps")
     op.drop_constraint(op.f("ck_knowledge_gaps_importance_basis"), "knowledge_gaps", type_="check")
     op.drop_column("knowledge_gaps", "importance_basis")
     op.drop_column("knowledge_gaps", "rule_key")

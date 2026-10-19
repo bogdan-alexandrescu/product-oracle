@@ -64,14 +64,26 @@ limits, configurability and scaling (`categories.CATEGORIES`).
   pinned to); what it reads there is the run creator's own items, never the author's, and
   the intake itself only as its findings are shared (S6).
 - Agent runs, including runs the author starts, read each finding only at its sharing
-  level (S6 follow-up 3, owner 2026-10-19): a run token is never the author for reads. It
-  reads no item raw that a finding of its user's intakes cites unless that finding is
-  shared in full: such items are left out of `/v1/search`, `/v1/sources/{id}/items`,
-  `/v1/snapshots/{id}/items` and are 404 at `/v1/source-items/{id}`
-  (`oracle.intake.evidence.run_withheld`; an intake analysed before findings were
-  registered withholds everything it read). `/intakes/{id}/evidence` searches, for a run,
-  only the items of the intake's findings shared in full; a hit's snippet shows only
-  where the item itself is shown. To give agents a private source, its author shares it.
+  level (S6 follow-up 3, owner 2026-10-19): a run token is never the author for reads.
+  While any finding of an intake is below "shared in full", its author's runs read no
+  item that intake's analysis or model jobs read, cited or not (owner, 2026-10-19, after
+  review found the model can cite nothing); sharing every finding in full makes them
+  readable again. Each intake records what it read (`analysis.read_item_ids`: the
+  relevant hits and what each model job was given; reads only accumulate) and the
+  withheld set is precomputed in `intake_withheld_items`
+  (`oracle.intake.evidence.record_reads`, rewritten on every analysis and level change),
+  so `run_withheld` is one indexed query. An intake analysed before findings or reads
+  were recorded withholds everything its analysis names until it is analysed again
+  (fail closed; the migration backfills existing intakes the same way). Withheld items
+  are left out of `/v1/search`, `/v1/sources/{id}/items`, `/v1/snapshots/{id}/items`,
+  upload results and a run's `item_count`, and are 404 at `/v1/source-items/{id}`; a run
+  cannot attach one as baseline evidence (404), cite it in an answer (422), link it from
+  a baseline YAML, nor read its title and link on baseline evidence.
+  `/intakes/{id}/evidence` searches, for a run, only the items of the intake's findings
+  shared in full within the intake's chosen sources, filtered in SQL before ranking and
+  the limit (so hidden items that match never change the answer); a hit's snippet shows
+  only where the item itself is shown. To give agents a private source, its author
+  shares it.
 
 ## 3. Untrusted content
 
@@ -149,11 +161,16 @@ Three more follow-ups (owner, 2026-10-19):
   at `counts` or above; it is then named in the gate by its id and category alone. While
   it is private, publish passes, and the author alone is warned: the readiness check
   adds "Only you see this: ..." (status `warning`) when the report is read by the author
-  (`ReadinessContext.viewer`), and the summary's `readiness.private_blocking_gap_ids`
-  lists them for the author.
+  (`ReadinessContext.viewer`, ignored for `purpose="publish"`, whose report is stored
+  with the gate), and the summary's `readiness.private_blocking_gap_ids` lists them for
+  the author.
 - Answering a question about a private finding makes no baseline proposal (nothing in
   the baseline names the gap or the intake). When the author shares the finding at
-  `counts` or above, each answer is proposed as usual, once.
+  `counts`, each answer is proposed once with its category's question only; from
+  `summary` up the answer and severity appear (§ Blockers below).
+- Setting a level or summary on a finding drawn from shared text only (not restricted)
+  is a 409. The audit of a summary line set on a private finding records the finding id
+  only.
 - Agent runs read each finding at its level (§2 above).
 
 ## 4. Routes (all `/v1`, all MCP tools)
@@ -207,8 +224,13 @@ sources, the analysis and the findings' sharing levels live in `product_intakes.
   `security.privacy`, `integrations.third_party`, `quality.evaluation`, …); the composer
   decides and may map them to its pack's keys.
 - **Blockers:** answers on blockers and third-party policy propose `constraint` entities
-  with `attrs.blocker` (`type: unknown`, `limit_kind: other | policy`, severity from the
-  gap), which the blockers lane's checks pick up once accepted.
+  with `attrs.blocker` (`type: unknown`, `limit_kind: other | policy`, severity: the
+  gap's public importance), which the blockers lane's checks pick up once accepted. An
+  answer to a finding shared at counts proposes only its category's fixed question
+  (`attrs`: the gap's id and category; no answer text, no severity); from summary up the
+  same open proposal carries the answer and severity, and lowering the level strips them
+  again (owner, 2026-10-19). A PRD patch quotes the answer, so it is proposed, and
+  accepted, only while everyone may read the gap.
 - **Review and quality:** two readiness checks are registered (`intake.critical_blockers`
   hard, `intake.open_decisions` advisory); a PRD's gaps are its own and those of the
   intakes linked to it.

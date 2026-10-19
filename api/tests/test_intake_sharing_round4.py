@@ -277,7 +277,8 @@ async def test_answering_a_private_finding_proposes_nothing_until_it_is_shared(c
     assert resp.status_code == 200, resp.text
     [proposal] = await _baseline_proposals(ctx)
     attrs = proposal.payload["fields"]["attrs"]
-    assert attrs["gap_id"] == str(q.gap_id) and attrs["intake_id"] == intake_id
+    # At counts, the gap's id and category only (owner, 2026-10-19; round 5).
+    assert attrs == {"gap_id": str(q.gap_id), "category": "security_privacy"}
     assert MODEL_GAP not in json.dumps(proposal.payload)
     # Lowering and sharing again proposes nothing new.
     await share(client, ctx, intake_id, str(q.gap_id), "private")
@@ -297,10 +298,15 @@ def _critical_blocker(payload):
 
 
 async def _gate(ctx, document_id: str, principal: Principal | None = None):
+    """The publish gate, or (``principal``) the advisory report that reader sees: a
+    publish report never carries a reader's private findings (round 5)."""
     async with tenant_session(ctx.tenant_id) as s:
         return await readiness.evaluate(
             readiness.ReadinessContext(
-                s, uuid.UUID(document_id), purpose="publish", viewer=principal
+                s,
+                uuid.UUID(document_id),
+                purpose="advisory" if principal is not None else "publish",
+                viewer=principal,
             ),
             keys=[intake_checks.CRITICAL_BLOCKERS],
         )

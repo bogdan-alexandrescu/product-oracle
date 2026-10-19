@@ -287,7 +287,9 @@ def _events_kept(hidden: set[uuid.UUID]) -> Any:
 async def gaps_by_importance(db: AsyncSession, principal: Principal, value: Any) -> Any:
     """``/v1/gaps?importance=``: what readers see (S6). A rule-made row from before its
     importance basis was recorded reads its importance from the brief, so it matches on
-    that; every other row on its column (its stored value is the public one)."""
+    that; every other row on its column (its stored value is the public one). Such rows
+    are found through a partial index (``ix_knowledge_gaps_legacy_importance``) and the
+    next analysis of their intake records their basis, so they do not stay."""
     legacy = (
         await db.scalars(
             select(KnowledgeGap).where(

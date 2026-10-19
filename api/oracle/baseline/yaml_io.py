@@ -54,6 +54,9 @@ def _ref(e: Entity) -> str:
 
 
 async def _own_item_ids(db: AsyncSession, principal: Principal) -> set[uuid.UUID]:
+    """The caller's own items, less those a run may not read (S6)."""
+    from oracle.baseline.evidence import withheld_from
+
     if principal.user_id is None:
         return set()
     rows = await db.scalars(
@@ -61,7 +64,7 @@ async def _own_item_ids(db: AsyncSession, principal: Principal) -> set[uuid.UUID
         .join(Source, Source.id == SourceItem.source_id)
         .where(Source.owner_user_id == principal.user_id)
     )
-    return set(rows.all())
+    return set(rows.all()) - await withheld_from(db, principal)
 
 
 def _evidence_out(ev: Evidence, own: set[uuid.UUID]) -> dict[str, Any]:

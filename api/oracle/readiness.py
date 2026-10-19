@@ -44,6 +44,7 @@ class ReadinessContext:
     purpose: Literal["advisory", "publish"] = "advisory"
     # Who reads the report, when known: a check may add what only they may see (S6: an
     # intake's author is warned of their private findings), never change what blocks.
+    # Ignored for "publish": that report is stored with the gate.
     viewer: Any = None
 
 

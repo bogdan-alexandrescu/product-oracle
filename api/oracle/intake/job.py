@@ -263,8 +263,11 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         "llm_job_id": str(job.id),
         "snapshot_id": str(intake.source_snapshot_ids[-1]) if intake.source_snapshot_ids else None,
     }
+    # The job read what it was given, cited or not (S6, owner 2026-10-19).
+    ev.note_reads(intake, analysis, conf)
     intake.analysis = analysis
     await s.flush()
+    await ev.record_reads(s, intake)
     await engine.sync_questions(s, intake, gaps)
     engine.refresh_status(intake, gaps)
     return {

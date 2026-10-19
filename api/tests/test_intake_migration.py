@@ -155,3 +155,41 @@ def test_rule_made_gaps_are_keyed_by_category_not_by_text(scratch_db):
         "SELECT column_name FROM information_schema.columns WHERE table_name = 'knowledge_gaps'"
     )
     assert ("rule_key",) not in columns
+
+
+def test_existing_intakes_withhold_everything_their_analysis_names(scratch_db):
+    """Round 5 (S6, owner 2026-10-19): an intake analysed before reads were recorded
+    withholds, fail closed, every item its stored analysis names from its author's
+    runs; the legacy importance rows get their index."""
+    import json
+
+    cfg = _cfg()
+    command.upgrade(cfg, "0013")
+    t, intake, author = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    ids = [str(uuid.uuid4()) for _ in range(6)]
+    _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
+    analysis = {
+        "relevant_item_ids": [ids[0]],
+        "stale": [{"item_id": ids[1], "freshness": 0.1}],
+        "conflicts": [{"claims": [{"item_id": ids[2]}, {"item_id": ids[0]}]}],
+        "findings": {
+            "f1": {"kind": "gap", "source_item_ids": [ids[3]], "sharing": "full"},
+            "f2": {"kind": "gap", "evidence_ids": [ids[4]]},
+        },
+    }
+    _run(
+        "INSERT INTO product_intakes (id, tenant_id, title, brief, author_id, analysis) "
+        "VALUES (:i, :t, 'Saved addresses', 'Returning buyers.', :a, CAST(:an AS jsonb))",
+        i=intake,
+        t=t,
+        a=author,
+        an=json.dumps(analysis),
+    )
+    command.upgrade(cfg, "0014_intake")
+    rows = _run("SELECT intake_id, user_id, item_id FROM intake_withheld_items")
+    assert {(r[0], r[1]) for r in rows} == {(intake, author)}
+    assert sorted(str(r[2]) for r in rows) == sorted(ids[:5])
+    names = [r[0] for r in _run("SELECT indexname FROM pg_indexes")]
+    assert "ix_knowledge_gaps_legacy_importance" in names
+    command.downgrade(cfg, "0013")
+    command.upgrade(cfg, "0014_intake")

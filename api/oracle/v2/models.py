@@ -33,6 +33,7 @@ from sqlalchemy import (
     Uuid,
     false,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -372,6 +373,13 @@ class KnowledgeGap(TenantScoped, Base):
         CheckConstraint(
             "importance_basis IS NULL OR importance_basis IN ('brief', 'person')",
             name="importance_basis",
+        ),
+        # Rule-made rows from before their importance basis was recorded: read by
+        # /v1/gaps?importance= (oracle.intake.views); the next analysis records it.
+        Index(
+            "ix_knowledge_gaps_legacy_importance",
+            "intake_id",
+            postgresql_where=text("rule_key IS NOT NULL AND importance_basis IS NULL"),
         ),
     )
 

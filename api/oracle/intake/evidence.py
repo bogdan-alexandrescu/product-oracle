@@ -5,8 +5,9 @@ new connector or store. Source items stay visible to their owner only (S3 as bui
 AUD-9): anyone else sees that a piece of evidence exists, its kind and its confidence,
 never its title, link or text, unless the intake's author shared a finding citing it in
 full (S6, ``oracle.intake.sharing``). A run token never sees an item's content as its
-owner, even when it acts for the owner, and never reads raw an item behind a finding
-that is not shared in full (:func:`run_withheld`).
+owner, even when it acts for the owner, and never reads raw any item an intake of its
+user read while a finding of that intake is below "shared in full" (:func:`run_withheld`,
+precomputed by :func:`record_reads`).
 
 Everything read from a source is **untrusted data**: it is returned under
 ``data_excerpt`` with ``untrusted: true``, never placed in instructions, and every
@@ -18,7 +19,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import Select, and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import confidence
@@ -104,39 +105,84 @@ def caller_user(principal: Principal | None) -> uuid.UUID | None:
     return principal.user_id
 
 
-def _cited(intake: ProductIntake) -> set[uuid.UUID]:
-    """Items an intake's analysis draws on that no finding shares in full."""
-    from oracle.intake import sharing
-
-    reg = sharing.registry(intake)
-    analysis = intake.analysis or {}
-    out: set[uuid.UUID] = set()
-    for entry in reg.values():
-        if not sharing.is_open(entry) and entry.get("sharing", sharing.DEFAULT) != "full":
-            out |= {uuid.UUID(i) for i in entry.get("source_item_ids") or []}
-            out |= {uuid.UUID(i) for i in entry.get("evidence_ids") or []}
-    if reg.unregistered:
-        # Analysed before findings were registered: everything it read (fail closed).
-        out |= {uuid.UUID(i) for i in analysis.get("relevant_item_ids") or []}
-        out |= {uuid.UUID(s["item_id"]) for s in analysis.get("stale") or []}
-        out |= {uuid.UUID(cl["item_id"]) for c in analysis.get("conflicts") or []
-                for cl in c.get("claims") or []}  # fmt: skip
+def _legacy_reads(analysis: dict) -> set[uuid.UUID]:
+    """Every item an analysis stored before reads were recorded names (fail closed)."""
+    out = {uuid.UUID(i) for i in analysis.get("relevant_item_ids") or []}
+    out |= {uuid.UUID(s["item_id"]) for s in analysis.get("stale") or []}
+    out |= {uuid.UUID(cl["item_id"]) for c in analysis.get("conflicts") or []
+            for cl in c.get("claims") or []}  # fmt: skip
     return out
 
 
+def read_item_ids(intake: ProductIntake) -> set[uuid.UUID]:
+    """Every source item the intake's analysis and jobs read (``read_item_ids``: the
+    relevant hits and what each model job was given), and whatever its findings cite.
+    An intake analysed before reads were recorded: everything its analysis names."""
+    analysis = intake.analysis or {}
+    if "read_item_ids" in analysis:
+        out = {uuid.UUID(i) for i in analysis["read_item_ids"]}
+    else:
+        out = _legacy_reads(analysis)
+    for entry in (analysis.get("findings") or {}).values():
+        out |= {uuid.UUID(i) for i in entry.get("source_item_ids") or []}
+        out |= {uuid.UUID(i) for i in entry.get("evidence_ids") or []}
+    return out
+
+
+def note_reads(intake: ProductIntake, analysis: dict, item_ids) -> None:
+    """Add ``item_ids`` to what the intake read, in ``analysis`` (the dict about to be
+    stored): reads only accumulate, so a repin never makes earlier reads readable."""
+    known = read_item_ids(intake)
+    analysis["read_item_ids"] = sorted(str(i) for i in known | set(item_ids))
+
+
+def withholds(intake: ProductIntake) -> bool:
+    """Whether the intake withholds what it read from its author's runs (S6, owner
+    2026-10-19): while any finding of it is below "shared in full", or (fail closed)
+    it was analysed before findings or reads were recorded."""
+    from oracle.intake import sharing
+
+    reg = sharing.registry(intake)
+    if reg.unregistered or (reg.analysed and "read_item_ids" not in (intake.analysis or {})):
+        # Analysed before findings, or before reads, were recorded: what it read is not
+        # known for sure, so all it names stays withheld until it is analysed again.
+        return True
+    return any(
+        not sharing.is_open(e) and e.get("sharing", sharing.DEFAULT) != "full" for e in reg.values()
+    )
+
+
+async def record_reads(db: AsyncSession, intake: ProductIntake) -> None:
+    """Rewrite the intake's rows of ``intake_withheld_items``: everything it read while
+    it withholds, nothing once every finding is shared in full. Called wherever the
+    analysis or a level changes."""
+    from oracle.intake.models import IntakeWithheldItem
+
+    await db.execute(delete(IntakeWithheldItem).where(IntakeWithheldItem.intake_id == intake.id))
+    if intake.author_id is not None and withholds(intake):
+        db.add_all(
+            IntakeWithheldItem(intake_id=intake.id, user_id=intake.author_id, item_id=i)
+            for i in sorted(read_item_ids(intake))
+        )
+    await db.flush()
+
+
+def withheld_ids(user_id: uuid.UUID) -> Select:
+    """SQL: the items ``user_id``'s runs may not read."""
+    from oracle.intake.models import IntakeWithheldItem
+
+    return select(IntakeWithheldItem.item_id).where(IntakeWithheldItem.user_id == user_id)
+
+
 async def run_withheld(db: AsyncSession, principal: Principal | None) -> set[uuid.UUID] | None:
-    """Source items a run token may not read raw (S6, owner 2026-10-19): those behind a
-    finding of its user's intakes that is not shared in full. None: not a run."""
+    """Source items a run token may not read raw (S6, owner 2026-10-19): everything an
+    intake of its user read while any finding of that intake is below "shared in full"
+    (precomputed, one indexed query). None: not a run."""
     if principal is None or not principal.is_run:
         return None
     if principal.user_id is None:
         return set()
-    out: set[uuid.UUID] = set()
-    for intake in (
-        await db.scalars(select(ProductIntake).where(ProductIntake.author_id == principal.user_id))
-    ).all():
-        out |= _cited(intake)
-    return out
+    return set((await db.scalars(withheld_ids(principal.user_id).distinct())).all())
 
 
 async def refs(

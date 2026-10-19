@@ -188,7 +188,7 @@ def register(
         entry["match"] = match
     if public_state is not None:
         entry["public_state"] = public_state
-    for kept in ("public_importance", "published", "draft"):
+    for kept in ("public_importance", "published", "draft", "baseline_proposals"):
         # public_importance: a person's importance edit recorded before the gap row
         # carried its basis (read for old rows only).
         if previous.get(kept):
@@ -603,9 +603,18 @@ def stale_view(s: dict[str, Any], reg: dict[str, dict[str, Any]], v: Viewer) -> 
     if v.is_author:
         return s
     entry = reg.get(str(s.get("finding_id"))) if s.get("finding_id") else None
-    if entry is not None and v.sees(entry.get("sharing", DEFAULT), "summary"):
-        return s
-    return None
+    if entry is None or not v.sees(entry.get("sharing", DEFAULT), "summary"):
+        return None
+    if entry.get("sharing", DEFAULT) == "summary":
+        # The summary line, never the row: how old the item is stays with the author
+        # (as a conflict at summary keeps its items, not their values).
+        return {
+            "finding_id": s.get("finding_id"),
+            "item_id": s["item_id"],
+            "summary": shared_summary(entry),
+            "summary_only": True,
+        }
+    return s
 
 
 def coverage_view(

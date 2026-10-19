@@ -33,8 +33,14 @@ async def search(
     txn_snapshot: str | None = None,
     limit: int = 20,
     exclude: set[uuid.UUID] | None = None,
+    include: set[uuid.UUID] | None = None,
+    source_ids: list[uuid.UUID] | None = None,
 ) -> list[dict[str, Any]]:
-    """``exclude``: items the caller may not read (left out before ranking)."""
+    """``exclude``: items the caller may not read; ``include``: the only items the
+    caller may be shown; ``source_ids``: the only sources searched. All applied in SQL,
+    before ranking and the limit, so what is left out never changes what is returned."""
+    if include is not None and not include:
+        return []
     query = func.websearch_to_tsquery("english", q)
     visible = items.version_ids(user_id, as_of, txn_snapshot).subquery()
     rank = func.ts_rank(SourceItemVersion.search, query)
@@ -55,6 +61,10 @@ async def search(
         stmt = stmt.where(SourceItem.source_id == source_id)
     if exclude:
         stmt = stmt.where(SourceItem.id.not_in(exclude))
+    if include is not None:
+        stmt = stmt.where(SourceItem.id.in_(include))
+    if source_ids:
+        stmt = stmt.where(SourceItem.source_id.in_(source_ids))
     rows = (await session.execute(stmt)).all()
     if not rows:
         return []

@@ -208,10 +208,15 @@ async def search_intake_evidence(
     intake = await _intake(db, intake_id)
     me = ev.caller_user(principal)
     reveal: set[uuid.UUID] = set()
+    include: set[uuid.UUID] | None = None
     if principal.is_run:
         reveal = sharing.shared_item_ids(
             sharing.registry(intake), sharing.viewer(principal, intake), "full"
         )
+        # Only the items it may be shown are searched, ranked and counted: what else the
+        # author's sources hold never changes the answer (left out in SQL, before the
+        # limit).
+        include = reveal
         me = intake.author_id if reveal else None
     elif me is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Searching sources needs a user")
@@ -226,12 +231,9 @@ async def search_intake_evidence(
             as_of=snapshot.as_of if snapshot else None,
             txn_snapshot=snapshot.txn_snapshot if snapshot else None,
             limit=limit,
+            include=include,
+            source_ids=ev.source_ids_of(intake) or None,
         )
-    chosen = set(ev.source_ids_of(intake))
-    if chosen:
-        hits = [h for h in hits if h["item"]["source_id"] in chosen]
-    if principal.is_run:
-        hits = [h for h in hits if h["item"]["id"] in reveal]
     refs = await ev.refs(
         db,
         [h["item"]["id"] for h in hits],

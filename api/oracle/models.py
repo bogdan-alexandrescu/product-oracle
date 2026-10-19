@@ -50,7 +50,7 @@ from oracle.claude_accounts.models import (  # noqa: E402
 )
 from oracle.connections.models import Connection  # noqa: E402
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
-from oracle.intake.models import IntakeProposal  # noqa: E402
+from oracle.intake.models import IntakeProposal, IntakeWithheldItem  # noqa: E402
 from oracle.jobs.models import LlmJob, LlmSuggestion  # noqa: E402
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
 from oracle.members.models import Invite  # noqa: E402
@@ -129,6 +129,7 @@ __all__ = [
     "FeasibilityExperiment",
     "FeedbackItem",
     "IntakeProposal",
+    "IntakeWithheldItem",
     "Invite",
     "KnowledgeGap",
     "LlmJob",

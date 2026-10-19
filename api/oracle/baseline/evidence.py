@@ -3,7 +3,8 @@
 Source items are private to their owner (S3, revised 2026-10-17). Evidence copies the
 excerpt, url and ref out of the item, so everyone can read the claim's support; the
 item itself (its id, title, source) is shown only to its owner. Everyone else gets
-``source_item_private``.
+``source_item_private``. A run token never cites or reads an item its user's intakes
+withhold from runs (S6): such an item is missing to it.
 
 Public-link evidence (the owner, 2026-10-17) is different: a commenter or anyone above
 cites a public page by its URL, Oracle fetches it without any credential
@@ -37,6 +38,14 @@ from oracle.sources.models import Source, SourceItem, SourceItemVersion
 EXCERPT_CHARS = 500
 
 
+async def withheld_from(db: AsyncSession, principal: Principal) -> set[uuid.UUID]:
+    """Items a run token may not read, copy or quote (S6, ``run_withheld``): to it they
+    are missing, like another user's."""
+    from oracle.intake.evidence import run_withheld
+
+    return await run_withheld(db, principal) or set()
+
+
 async def _own_item(
     db: AsyncSession, principal: Principal, item_id: uuid.UUID
 ) -> tuple[SourceItem, Source, SourceItemVersion | None]:
@@ -48,7 +57,12 @@ async def _own_item(
             .where(SourceItem.id == item_id)
         )
     ).first()
-    if row is None or principal.user_id is None or row[1].owner_user_id != principal.user_id:
+    if (
+        row is None
+        or principal.user_id is None
+        or row[1].owner_user_id != principal.user_id
+        or item_id in await withheld_from(db, principal)
+    ):
         raise NotFoundError("Source item not found among your sources")
     item, source = row
     version = (
@@ -318,10 +332,15 @@ async def present(
         items = {item.id: (item, source) for item, source in res.all()}
     # Public links were fetched anonymously: their snapshot is shown to everyone.
     snapshots = await scoring.latest_snapshots(db, [r.id for r in rows if r.kind])
+    withheld = await withheld_from(db, principal) if item_ids else set()
     out = []
     for r in rows:
         item, source = items.get(r.source_item_id, (None, None))
-        mine = source is not None and principal.user_id == source.owner_user_id
+        mine = (
+            source is not None
+            and principal.user_id == source.owner_user_id
+            and item.id not in withheld
+        )
         snap = snapshots.get(r.id)
         out.append(
             EvidenceOut(

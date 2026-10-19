@@ -26,6 +26,7 @@ from oracle.authz import has_role
 from oracle.docs import service as docs_service
 from oracle.intake import categories as cats
 from oracle.intake import engine, sharing
+from oracle.intake import evidence as ev
 from oracle.intake.schemas import IntakeCreate, IntakePatch, IntakeRunIn
 from oracle.jobs.models import LlmJob
 from oracle.runs import service as runs_service
@@ -317,16 +318,16 @@ async def set_sharing(
     missing = [fid for fid, _ in changes if fid not in reg]
     if missing:
         raise not_found(f"Finding {missing[0]}")
+    _restricted(reg, [fid for fid, _ in changes])
     done: list[str] = []
-    raised: list[str] = []
+    moved: list[str] = []
     for fid, level in changes:
         entry = dict(reg[fid])
         before = entry.get("sharing", sharing.DEFAULT)
         done.append(fid)
         if before == level:
             continue
-        if sharing.RANK[before] < sharing.RANK["counts"] <= sharing.RANK[level]:
-            raised.append(fid)
+        moved.append(fid)
         entry["sharing"] = level
         reg[fid] = entry
         await audit.record(
@@ -335,18 +336,27 @@ async def set_sharing(
              "from": before, "to": level},
         )  # fmt: skip
     intake.analysis = {**(intake.analysis or {}), "findings": reg}
+    # What runs may read changed with the levels (S6, owner 2026-10-19).
+    await ev.record_reads(db, intake)
     # What others see changed: so may the order of their questions and the status.
     gaps = await engine.intake_gaps(db, intake.id)
     await engine.sync_questions(db, intake, gaps)
     engine.refresh_status(intake, gaps)
-    if raised:
-        # Answers to a gap that was private are proposed to the baseline now (S6).
+    if moved:
+        # Answers to these gaps are proposed to the baseline as the new level allows:
+        # the question alone at counts, the answer and severity from summary up (S6).
         from oracle.intake import answers
 
-        shared = [g for g in gaps if str(g.id) in raised]
-        await answers.propose_shared(db, principal, intake, shared)
+        await answers.propose_shared(db, principal, intake, [g for g in gaps if str(g.id) in moved])
     await flush_or_conflict(db)
     return done
+
+
+def _restricted(reg: dict[str, dict[str, Any]], fids: list[str]) -> None:
+    """A finding drawn from shared text only has no level and no summary to set."""
+    for fid in fids:
+        if sharing.is_open(reg.get(fid)):
+            raise IntakeError(409, f"Finding {fid} is drawn from shared text only: not restricted")
 
 
 async def set_summary(
@@ -359,14 +369,15 @@ async def set_summary(
     entry = reg.get(fid)
     if entry is None:
         raise not_found(f"Finding {fid}")
+    _restricted(reg, [fid])
     edited = text is not None and bool(text.strip())
     reg[fid] = sharing.set_summary(entry, text)
     intake.analysis = {**(intake.analysis or {}), "findings": dict(reg)}
-    await audit.record(
-        db, principal, "intake.finding_summary_set", "intake", intake.id,
-        {"finding_id": fid, "kind": entry["kind"], "category": entry.get("category"),
-         "edited": edited},
-    )  # fmt: skip
+    data: dict[str, Any] = {"finding_id": fid}
+    if entry.get("sharing", sharing.DEFAULT) != "private":
+        # Others already read its kind and category; a private finding's stay unsaid.
+        data |= {"kind": entry["kind"], "category": entry.get("category"), "edited": edited}
+    await audit.record(db, principal, "intake.finding_summary_set", "intake", intake.id, data)
     await flush_or_conflict(db)
 
 

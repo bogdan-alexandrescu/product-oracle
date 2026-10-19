@@ -1,4 +1,5 @@
-"""What an intake proposes: research runs and PRD patches (migration 0014_intake).
+"""What an intake proposes: research runs and PRD patches, and which source items its
+runs may not read (migration 0014_intake).
 
 The gap registry, the question ledger and the intake itself live on the foundation's
 tables (``oracle.v2.models``). An intake proposal is the one thing those tables cannot
@@ -11,13 +12,18 @@ Nothing here runs or edits anything by itself (§5 step 7):
 - ``prd_patch``: an answer that belongs in the linked PRD. Accepting it opens a feedback
   item on the PRD's latest version, so the change reaches the document only through
   the existing review and refinement flow (approved sections stay locked).
+
+``intake_withheld_items`` is precomputed from each intake (S6, owner 2026-10-19): while
+any finding of an intake is below "shared in full", every item its analysis and jobs
+read is withheld from its author's runs. Run reads query it in SQL
+(``oracle.intake.evidence.run_withheld``) instead of parsing every intake per request.
 """
 
 import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, DateTime, Text, Uuid
+from sqlalchemy import CheckConstraint, DateTime, Index, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
@@ -54,3 +60,20 @@ class IntakeProposal(TenantScoped, Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     decision_note: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = _updated_at()
+
+
+class IntakeWithheldItem(TenantScoped, Base):
+    """A source item its intake's author's runs may not read, while any finding of the
+    intake is below "shared in full" (rewritten by ``evidence.record_reads``)."""
+
+    __tablename__ = "intake_withheld_items"
+    __table_args__ = (
+        UniqueConstraint("intake_id", "item_id"),
+        Index("ix_intake_withheld_items_user_id_item_id", "user_id", "item_id"),
+    )
+
+    intake_id: Mapped[uuid.UUID] = _fk("product_intakes", nullable=False)
+    # The intake's author (no FK, as elsewhere): whose runs may not read the item.
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    # No FK: a deleted item withheld stays withheld until the intake is recomputed.
+    item_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)

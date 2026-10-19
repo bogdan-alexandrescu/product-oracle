@@ -22,9 +22,10 @@ decided by an explicit decision (validated, accepted risk) is never rewritten by
 "don't know", defer, research or delegate answer. Nothing here commits.
 """
 
+import hashlib
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -58,6 +59,8 @@ from oracle.v2.models import (
     StakeholderQuestion,
 )
 
+# B4: the longest an accepted critical gap goes before its review.
+MAX_REVIEW_DAYS = 90
 ANSWERABLE = frozenset({"draft", "asked", "delegated", "deferred", "researching"})
 # Answer kind -> (question status, gap status or None to keep).
 EFFECTS: dict[str, tuple[str, str | None]] = {
@@ -160,9 +163,17 @@ def next_actions(gap: Any, importance: str | None = None) -> list[NextAction]:
 async def _check_evidence(
     db: AsyncSession, principal: Principal, ids: list[uuid.UUID]
 ) -> list[uuid.UUID]:
+    from oracle.intake.evidence import run_withheld
+
     me = actor_user(principal)
+    # A run never cites an item it may not read (S6): to it, the item is not its own.
+    withheld = (await run_withheld(db, principal) or set()) if ids else set()
     for item_id in ids:
-        if me is None or await source_items.owned_item(db, me, item_id) is None:
+        if (
+            me is None
+            or item_id in withheld
+            or await source_items.owned_item(db, me, item_id) is None
+        ):
             raise IntakeError(422, f"Evidence {item_id} is not one of your source items")
     return list(dict.fromkeys(ids))
 
@@ -239,15 +250,18 @@ async def answer(
     baseline_ids: list[uuid.UUID] = []
     if gap is not None and intake is not None:
         # A private finding proposes nothing to the baseline (which everyone reads)
-        # until its author shares it (S6, owner 2026-10-19; :func:`propose_shared`).
-        withheld = sharing.withheld(gap, sharing.registry(intake))
-        if body.kind == "answer" and not withheld:
-            proposal = await _propose_baseline(db, principal, intake, gap, question, row)
+        # until its author shares it; at counts only its category's question (S6,
+        # owner 2026-10-19; :func:`propose_shared`).
+        mode = proposal_mode(intake, gap)
+        if body.kind == "answer" and mode is not None:
+            proposal = await _propose_baseline(db, principal, intake, gap, question, row, mode)
             if proposal is not None:
                 baseline_ids.append(proposal)
-            patch = await _propose_patch(db, principal, intake, gap, question, row)
-            if patch is not None:
-                proposals.append(patch)
+            if mode == "full":
+                # A PRD patch quotes the answer: only once others may read it.
+                patch = await _propose_patch(db, principal, intake, gap, question, row)
+                if patch is not None:
+                    proposals.append(patch)
         if not frozen and (
             body.kind == "research" or (body.kind == "dont_know" and importance == "critical")
         ):
@@ -306,17 +320,32 @@ async def answer(
     }
 
 
+def proposal_mode(intake: ProductIntake, gap: KnowledgeGap) -> str | None:
+    """What an answer to the gap may propose to the baseline (S6, owner 2026-10-19):
+    nothing while it is private; at counts (others see it by id and category only) the
+    category's question alone (``question``); the answer and its severity once others
+    read the gap (``full``: summary and up, or not a private finding at all)."""
+    reg = sharing.registry(intake)
+    if sharing.withheld(gap, reg):
+        return None
+    if sharing.gap_changes(gap, reg, sharing.EVERYONE) is None:
+        return "question"
+    return "full"
+
+
 async def propose_shared(
     db: AsyncSession, principal: Principal, intake: ProductIntake, gaps: list[KnowledgeGap]
 ) -> list[uuid.UUID]:
-    """Propose to the baseline what answers to these gaps imply, now that their author
-    shared them at counts or above (S6): once per answer, whatever became of an earlier
-    proposal of it."""
+    """Bring the baseline proposals of answers to these gaps to their new level (S6):
+    proposed once per answer when first shared at counts or above, whatever became of
+    an earlier proposal of it; an open proposal is rewritten in place as the level
+    allows (the question alone at counts or below, the answer and severity from
+    summary up). A decided proposal is left as it was decided."""
     out: list[uuid.UUID] = []
-    reg = sharing.registry(intake)
     for gap in gaps:
-        if gap.category not in BASELINE_TYPES or sharing.withheld(gap, reg):
+        if gap.category not in BASELINE_TYPES:
             continue
+        mode = proposal_mode(intake, gap)
         rows = (
             await db.execute(
                 select(StakeholderAnswer, StakeholderQuestion)
@@ -329,18 +358,68 @@ async def propose_shared(
                 .order_by(StakeholderAnswer.created_at)
             )
         ).all()
+        # A PRD patch held back while the gap was hidden from others is proposed once
+        # they may read it (only a model-written gap is ever hidden that way).
+        held_back = (sharing.registry(intake).get(str(gap.id)) or {}).get("origin") == "model"
         for row, question in rows:
-            done = await db.scalar(
-                select(Proposal.id)
-                .where(Proposal.payload["fields"]["attrs"]["answer_id"].astext == str(row.id))
-                .limit(1)
-            )
-            if done is not None:
+            if (
+                mode == "full"
+                and held_back
+                and not await db.scalar(
+                    select(IntakeProposal.id).where(
+                        IntakeProposal.answer_id == row.id, IntakeProposal.kind == "prd_patch"
+                    )
+                )
+            ):
+                await _propose_patch(db, principal, intake, gap, question, row)
+            existing = await _proposal_of(db, intake, gap, row)
+            if existing is not None:
+                if existing.status == "open":
+                    fields, reason = _baseline_fields(
+                        intake, gap, question, row, mode or "question"
+                    )
+                    existing.payload = {**existing.payload, "fields": fields, "reason": reason}
                 continue
-            proposal = await _propose_baseline(db, principal, intake, gap, question, row)
+            if mode is None:
+                continue
+            proposal = await _propose_baseline(db, principal, intake, gap, question, row, mode)
             if proposal is not None:
                 out.append(proposal)
+    await db.flush()
     return out
+
+
+async def _proposal_of(
+    db: AsyncSession, intake: ProductIntake, gap: KnowledgeGap, row: StakeholderAnswer
+) -> Proposal | None:
+    """The baseline proposal made of an answer: recorded in the gap's finding (a
+    question-only proposal names no answer), or by the answer id it carries."""
+    entry = sharing.registry(intake).get(str(gap.id)) or {}
+    known = (entry.get("baseline_proposals") or {}).get(str(row.id))
+    if known is not None:
+        proposal = await db.get(Proposal, uuid.UUID(known))
+        if proposal is not None:
+            return proposal
+    return await db.scalar(
+        select(Proposal)
+        .where(Proposal.payload["fields"]["attrs"]["answer_id"].astext == str(row.id))
+        .order_by(Proposal.created_at)
+        .limit(1)
+    )
+
+
+def _remember(
+    intake: ProductIntake, gap: KnowledgeGap, row: StakeholderAnswer, proposal_id: uuid.UUID
+) -> None:
+    """Record in the gap's finding (the author's eyes only) which proposal an answer
+    made, so a later level change rewrites that same proposal."""
+    reg = sharing.registry(intake)
+    entry = reg.get(str(gap.id))
+    if entry is None:
+        return
+    made = {**(entry.get("baseline_proposals") or {}), str(row.id): str(proposal_id)}
+    reg[str(gap.id)] = {**entry, "baseline_proposals": made}
+    intake.analysis = {**(intake.analysis or {}), "findings": dict(reg)}
 
 
 def _prompt(intake: ProductIntake, gap: KnowledgeGap, question: StakeholderQuestion | None) -> str:
@@ -349,19 +428,33 @@ def _prompt(intake: ProductIntake, gap: KnowledgeGap, question: StakeholderQuest
     return sharing.public_prompt(sharing.registry(intake), gap, text)
 
 
-async def _propose_baseline(
-    db: AsyncSession,
-    principal: Principal,
+def _baseline_fields(
     intake: ProductIntake,
     gap: KnowledgeGap,
     question: StakeholderQuestion,
     row: StakeholderAnswer,
-) -> uuid.UUID | None:
-    type_ = BASELINE_TYPES.get(gap.category)
-    if type_ is None or not row.body:
-        return None
-    label = cats.BY_KEY[gap.category].label
-    title = row.body if len(row.body) <= 120 else row.body[:119].rstrip() + "…"
+    mode: str,
+) -> tuple[dict[str, Any], str]:
+    """(the proposed entity's fields, the proposal's reason) for ``mode``: ``question``
+    carries the category's fixed question and the gap's id and category only; ``full``
+    the answer and, for a blocker, its public severity (``importance_of``)."""
+    type_ = BASELINE_TYPES[gap.category]
+    cat = cats.BY_KEY[gap.category]
+    slug = gap.category.replace("_", "-")
+    if mode == "question":
+        digest = hashlib.sha256(str(row.id).encode()).hexdigest()[:8]
+        return (
+            {
+                "type": type_,
+                "key": f"{slug}-{digest}",
+                "title": cat.prompt,
+                "body": cat.prompt,
+                "attrs": {"gap_id": str(gap.id), "category": gap.category},
+            },
+            f"{cat.label} question answered (shared as counts)",
+        )
+    body = row.body or ""
+    title = body if len(body) <= 120 else body[:119].rstrip() + "…"
     if type_ == "decision" and gap.category == "non_goals":
         title = f"Non-goal: {title}"
     attrs: dict[str, Any] = {
@@ -373,25 +466,37 @@ async def _propose_baseline(
         attrs["blocker"] = {
             "type": "unknown",
             "limit_kind": "policy" if gap.category == "third_party_policy" else "other",
-            "severity": gap.importance,
+            # The severity everyone reads (S6), never one the author's sources set.
+            "severity": importance_of(intake, gap),
             "status": "open",
         }
-    writer = baseline_service.Writer(
-        principal, "agent", reason=f"{label} answered in intake '{intake.title}'"
-    )
-    proposal = await baseline_service.propose(
-        db,
-        writer,
-        op="create",
-        kind="entity",
-        fields={
+    return (
+        {
             "type": type_,
-            "key": f"{_slug(intake.title, 24)}-{gap.category.replace('_', '-')}-{str(row.id)[:6]}",
+            "key": f"{_slug(intake.title, 24)}-{slug}-{str(row.id)[:6]}",
             "title": title,
-            "body": f"{_prompt(intake, gap, question)}\n\n{row.body}",
+            "body": f"{_prompt(intake, gap, question)}\n\n{body}",
             "attrs": attrs,
         },
+        f"{cat.label} answered in intake '{intake.title}'",
     )
+
+
+async def _propose_baseline(
+    db: AsyncSession,
+    principal: Principal,
+    intake: ProductIntake,
+    gap: KnowledgeGap,
+    question: StakeholderQuestion,
+    row: StakeholderAnswer,
+    mode: str = "full",
+) -> uuid.UUID | None:
+    if gap.category not in BASELINE_TYPES or not row.body:
+        return None
+    fields, reason = _baseline_fields(intake, gap, question, row, mode)
+    writer = baseline_service.Writer(principal, "agent", reason=reason)
+    proposal = await baseline_service.propose(db, writer, op="create", kind="entity", fields=fields)
+    _remember(intake, gap, row, proposal.id)
     return proposal.id
 
 
@@ -494,16 +599,30 @@ async def decide(
 ) -> AssumptionDecision:
     """An explicit, authorized decision on a gap (§5 step 8)."""
     intake = await get_intake(db, gap.intake_id) if gap.intake_id is not None else None
-    if needs_owner(gap, body.decision, importance_of(intake, gap)) and not has_role(
-        principal.role, "owner"
-    ):
+    importance = importance_of(intake, gap)
+    if needs_owner(gap, body.decision, importance) and not has_role(principal.role, "owner"):
         if body.decision == "validate":
             raise IntakeError(
                 403, "Validating an unanswered critical gap or a critical blocker needs an owner"
             )
+        if body.decision == "accept_risk" and hard_blocker(gap, importance):
+            # B4 follow-up (owner, 2026-10-19): refused, nothing stored.
+            raise IntakeError(403, "Only an owner can accept this risk")
         raise IntakeError(403, "Accepting a critical gap's risk or assumption needs an owner")
     if not body.rationale.strip():
         raise IntakeError(422, "A decision needs a rationale")
+    review_at = body.review_at
+    if review_at is not None and review_at.tzinfo is None:
+        review_at = review_at.replace(tzinfo=UTC)
+    if importance == "critical" and body.decision in ("accept_risk", "accept_assumption"):
+        # B4: an acceptance of a critical gap is reviewed within at most 90 days.
+        latest = _now() + timedelta(days=MAX_REVIEW_DAYS)
+        if review_at is None:
+            review_at = latest
+        elif review_at > latest:
+            raise IntakeError(
+                422, f"Accepting a critical gap is reviewed within {MAX_REVIEW_DAYS} days"
+            )
     decision = AssumptionDecision(
         gap_id=gap.id,
         document_id=gap.document_id,
@@ -511,7 +630,7 @@ async def decide(
         decision=body.decision,
         rationale=body.rationale.strip(),
         decided_by=principal.id,
-        review_at=body.review_at,
+        review_at=review_at,
     )
     db.add(decision)
     before = gap.status
@@ -565,10 +684,19 @@ async def decide(
             "related_modules": list(gap.related_modules),
         },
     )
+    # B4: who decided, when, and with what answer (the latest one to the gap).
+    answer_id = await db.scalar(
+        select(StakeholderAnswer.id)
+        .join(StakeholderQuestion, StakeholderQuestion.id == StakeholderAnswer.question_id)
+        .where(StakeholderQuestion.gap_id == gap.id, StakeholderAnswer.kind == "answer")
+        .order_by(StakeholderAnswer.created_at.desc())
+        .limit(1)
+    )
     await audit.record(
         db, principal, "intake.gap_decided", "knowledge_gap", gap.id,
         {"decision": body.decision, "from": before, "to": gap.status,
-         "assumption_decision_id": str(decision.id)},
+         "assumption_decision_id": str(decision.id),
+         "answer_id": str(answer_id) if answer_id else None},
     )  # fmt: skip
     if gap.intake_id is not None:
         intake = await get_intake(db, gap.intake_id)
@@ -582,6 +710,17 @@ async def accept(
     if proposal.status != "proposed":
         raise IntakeError(409, f"This proposal is already {proposal.status}")
     intake = await get_intake(db, proposal.intake_id)
+    gap = await db.get(KnowledgeGap, proposal.gap_id) if proposal.gap_id else None
+    if (
+        proposal.kind == "prd_patch"
+        and gap is not None
+        and sharing.gap_changes(gap, sharing.registry(intake), sharing.EVERYONE) is None
+    ):
+        # Feedback is read by every approver (the Inbox): it may quote an answer only
+        # while everyone may read the gap (S6).
+        raise IntakeError(
+            409, "Share this finding at summary or above before adding its answer to the PRD"
+        )
     if proposal.kind == "research_run":
         gap_ids = [uuid.UUID(g) for g in proposal.detail.get("gap_ids") or []]
         run_id = await create_run(

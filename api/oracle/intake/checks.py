@@ -12,9 +12,10 @@ rule-made gap of the same category does), a gap shared as a summary is named by 
 summary line, and evidence the author has not shared is not listed. A critical gap
 from the author's private sources blocks publishing only once its author shares it at
 counts or above (owner, 2026-10-19), named then by its id and category alone; while it
-is private, publish passes and the author alone, reading the report
-(``ReadinessContext.viewer``), is warned. A critical gap answered below the owner role
-(``answered_pending_review``) stays unresolved (B4).
+is private, publish passes and the author alone, reading an advisory report
+(``ReadinessContext.viewer``; never a publish report, which is stored), is warned. A
+critical gap answered below the owner role (``answered_pending_review``) stays
+unresolved (B4).
 """
 
 from sqlalchemy import or_, select
@@ -46,6 +47,9 @@ async def document_gaps(ctx: ReadinessContext) -> tuple[list, list]:
     ).all()
     owners: dict = {}
     public, private = [], []
+    # A publish report is stored with the gate: it never carries one reader's private
+    # findings, whoever asks (S6).
+    reader = None if ctx.purpose == "publish" else ctx.viewer
     for gap in rows:
         if gap.intake_id is not None and gap.intake_id not in owners:
             intake = await ctx.db.get(ProductIntake, gap.intake_id)
@@ -54,7 +58,7 @@ async def document_gaps(ctx: ReadinessContext) -> tuple[list, list]:
         view = sharing.gating_view(gap, reg)
         if view is not None:
             public.append(view)
-        elif intake is not None and sharing.is_author(ctx.viewer, intake):
+        elif intake is not None and sharing.is_author(reader, intake):
             private.append(gap)
     return public, private
 

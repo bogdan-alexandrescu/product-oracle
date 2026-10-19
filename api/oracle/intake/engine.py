@@ -335,6 +335,7 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
     baseline = await read_baseline(db, intake.brief)
     covered = await coverage_from_baseline(db, intake, baseline)
     gaps = await intake_gaps(db, intake.id)
+    _record_importance_basis(intake, gaps)
 
     previous = intake.analysis or {}
     model_items = [i for i in previous.get("items") or [] if i.get("origin") == "llm"]
@@ -510,7 +511,7 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
             evidence = hit_items.get("pain_evidence", [])[:3]
         item["evidence_ids"] = evidence
 
-    intake.analysis = {
+    analysis = {
         **{
             k: v for k, v in previous.items() if k in ("source_ids", "extraction", "model_category")
         },
@@ -540,9 +541,27 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
         "public_coverage": public_coverage,
         "relevant_item_ids": [str(i.id) for i in hits],
     }
+    # What this analysis read, kept with what earlier ones read (S6): withheld from the
+    # author's runs while any finding is below "shared in full".
+    ev.note_reads(intake, analysis, [i.id for i in hits])
+    intake.analysis = analysis
+    await ev.record_reads(db, intake)
     await sync_questions(db, intake, gaps)
     refresh_status(intake, gaps, ("draft", "analyzing", "awaiting_answers", "ready"))
     await db.flush()
+
+
+def _record_importance_basis(intake: ProductIntake, gaps: list[KnowledgeGap]) -> None:
+    """A rule-made row from before its importance basis was recorded takes the
+    importance everyone reads (S6) and its basis, so it never needs reading from the
+    brief again (``/v1/gaps?importance=`` reads such rows one by one)."""
+    reg = sharing.registry(intake)
+    for gap in gaps:
+        if not sharing.rule_made(gap) or gap.importance_basis is not None:
+            continue
+        entry = reg.get(str(gap.id)) or {}
+        gap.importance = sharing.public_importance(gap, reg, entry)
+        gap.importance_basis = "person" if entry.get("public_importance") else "brief"
 
 
 def refresh_status(
