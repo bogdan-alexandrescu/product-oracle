@@ -1,33 +1,47 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Bricolage_Grotesque, Inter, JetBrains_Mono } from "next/font/google";
 import { Suspense } from "react";
 
-import { AppHeader, HeaderShell } from "@/components/AppHeader";
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/ds/AppShell";
 import { MeProvider, MeSync } from "@/lib/me";
+import { THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
+
+// B1 type (tokens.json), self-hosted by next/font: no runtime request to Google Fonts.
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-bricolage",
+  display: "swap",
+});
+const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["500"], variable: "--font-jetbrains", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Product Oracle",
   description: "PRD review loop",
 };
 
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="flex min-h-full flex-col">
+    <html
+      lang="en"
+      className={`${inter.variable} ${bricolage.variable} ${mono.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
+      <body className="min-h-full">
         <MeProvider>
           <Suspense fallback={null}>
             <MeSync />
           </Suspense>
-          <Suspense fallback={<HeaderShell />}>
-            <AppHeader />
-          </Suspense>
-          <div className="flex w-full flex-1">
-            <Suspense fallback={null}>
-              <AppNav />
-            </Suspense>
-            <main className="min-w-0 flex-1">{children}</main>
-          </div>
+          <AppShell>{children}</AppShell>
         </MeProvider>
       </body>
     </html>

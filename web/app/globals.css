@@ -1,26 +1,283 @@
 @import "tailwindcss";
 
+/*
+ * Product Oracle v2 design system (I3: B1 Split). The colour tokens below are the one
+ * source of truth: components use them through Tailwind (bg-surface, text-text2,
+ * border-line, ...) or var(--token), never a hard-coded colour.
+ *
+ * Theme: light by default, dark when the system asks for it, unless the user picked
+ * one in the user menu (data-theme on <html>, set before paint by the layout).
+ */
+/* Generated from docs/product-oracle-v2/design/chosen/B1/tokens.json (B1 Split, I3). */
 :root {
-  --background: #fafafa;
-  --foreground: #171717;
+  --bg: #f5f4fb;
+  --surface: #ffffff;
+  --surface2: #efedf8;
+  --line: #dedaee;
+  --line-strong: #b9b3d6;
+  --text: #16132c;
+  --text2: #3f3a63;
+  --accent: #5a3cf0;
+  --on-accent: #ffffff;
+  --accent-ink: #3d23b8;
+  --accent-soft: #ebe6ff;
+  --accent-mid: #c9bfff;
+  --hero: #1c1838;
+  --hero-2: #2a2550;
+  --hero-text: #f3f1ff;
+  --hero-text2: #d4cff5;
+  --hero-line: #3b3566;
+  --lime: #c8f169;
+  --on-lime: #16132c;
+  --pass: #0d6a4c;
+  --pass-bg: #d9f4e8;
+  --warn: #7a3f00;
+  --warn-bg: #ffecd0;
+  --crit: #a3122f;
+  --crit-bg: #ffe1e8;
+  --na: #46416b;
+  --na-bg: #ebe9f3;
+  --nav: #16132c;
+  --nav-text: #d4cff5;
+  --nav-active: #c8f169;
+  --nav-active-text: #16132c;
+  --tip: #16132c;
+  --tip-text: #f3f1ff;
+  --spark-fill: rgba(90, 60, 240, 0.1);
+  --shadow: 0 1px 2px rgba(22, 19, 44, 0.06);
+  --tip-shadow: 0 12px 32px rgba(22, 19, 44, 0.28);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e0d1a;
+    --surface: #17152b;
+    --surface2: #1f1c38;
+    --line: #2d2950;
+    --line-strong: #4a4478;
+    --text: #f1efff;
+    --text2: #c9c4ec;
+    --accent: #a796ff;
+    --on-accent: #120f26;
+    --accent-ink: #c3b8ff;
+    --accent-soft: #2a2357;
+    --accent-mid: #4a4185;
+    --hero: #241f4a;
+    --hero-2: #2e2860;
+    --hero-text: #f3f1ff;
+    --hero-text2: #d4cff5;
+    --hero-line: #40397a;
+    --lime: #c8f169;
+    --on-lime: #16132c;
+    --pass: #5fe0a9;
+    --pass-bg: #0f2b22;
+    --warn: #ffc46e;
+    --warn-bg: #2f2413;
+    --crit: #ff8ca6;
+    --crit-bg: #3a1426;
+    --na: #c9c4ec;
+    --na-bg: #221f3a;
+    --nav: #07060f;
+    --nav-text: #c9c4ec;
+    --nav-active: #c8f169;
+    --nav-active-text: #16132c;
+    --tip: #f1efff;
+    --tip-text: #16132c;
+    --spark-fill: rgba(167, 150, 255, 0.14);
+    --shadow: none;
+    --tip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e0d1a;
+  --surface: #17152b;
+  --surface2: #1f1c38;
+  --line: #2d2950;
+  --line-strong: #4a4478;
+  --text: #f1efff;
+  --text2: #c9c4ec;
+  --accent: #a796ff;
+  --on-accent: #120f26;
+  --accent-ink: #c3b8ff;
+  --accent-soft: #2a2357;
+  --accent-mid: #4a4185;
+  --hero: #241f4a;
+  --hero-2: #2e2860;
+  --hero-text: #f3f1ff;
+  --hero-text2: #d4cff5;
+  --hero-line: #40397a;
+  --lime: #c8f169;
+  --on-lime: #16132c;
+  --pass: #5fe0a9;
+  --pass-bg: #0f2b22;
+  --warn: #ffc46e;
+  --warn-bg: #2f2413;
+  --crit: #ff8ca6;
+  --crit-bg: #3a1426;
+  --na: #c9c4ec;
+  --na-bg: #221f3a;
+  --nav: #07060f;
+  --nav-text: #c9c4ec;
+  --nav-active: #c8f169;
+  --nav-active-text: #16132c;
+  --tip: #f1efff;
+  --tip-text: #16132c;
+  --spark-fill: rgba(167, 150, 255, 0.14);
+  --shadow: none;
+  --tip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-text: var(--text);
+  --color-text2: var(--text2);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-mid: var(--accent-mid);
+  --color-hero: var(--hero);
+  --color-hero-2: var(--hero-2);
+  --color-hero-text: var(--hero-text);
+  --color-hero-text2: var(--hero-text2);
+  --color-hero-line: var(--hero-line);
+  --color-lime: var(--lime);
+  --color-on-lime: var(--on-lime);
+  --color-pass: var(--pass);
+  --color-pass-bg: var(--pass-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-crit: var(--crit);
+  --color-crit-bg: var(--crit-bg);
+  --color-na: var(--na);
+  --color-na-bg: var(--na-bg);
+  --color-nav: var(--nav);
+  --color-nav-text: var(--nav-text);
+  --color-nav-active: var(--nav-active);
+  --color-nav-active-text: var(--nav-active-text);
+  --color-tip: var(--tip);
+  --color-tip-text: var(--tip-text);
+
+  --color-white: var(--surface);
+  --color-black: var(--text);
+
+  /* Today's screens still use Tailwind's palette names; they map onto the tokens so
+     every screen follows the theme. New code uses the token names above. */
+  --color-neutral-50: var(--surface2);
+  --color-neutral-100: var(--surface2);
+  --color-neutral-200: var(--line);
+  --color-neutral-300: var(--line-strong);
+  --color-neutral-400: var(--text2);
+  --color-neutral-500: var(--text2);
+  --color-neutral-600: var(--text2);
+  --color-neutral-700: var(--text);
+  --color-neutral-800: var(--text);
+  --color-neutral-900: var(--text);
+  --color-neutral-950: var(--text);
+  --color-rose-50: var(--crit-bg);
+  --color-rose-100: var(--crit-bg);
+  --color-rose-200: var(--crit-bg);
+  --color-rose-300: var(--crit);
+  --color-rose-400: var(--crit);
+  --color-rose-500: var(--crit);
+  --color-rose-600: var(--crit);
+  --color-rose-700: var(--crit);
+  --color-rose-800: var(--crit);
+  --color-rose-900: var(--crit);
+  --color-amber-50: var(--warn-bg);
+  --color-amber-100: var(--warn-bg);
+  --color-amber-200: var(--warn-bg);
+  --color-amber-300: var(--warn);
+  --color-amber-400: var(--warn);
+  --color-amber-500: var(--warn);
+  --color-amber-600: var(--warn);
+  --color-amber-700: var(--warn);
+  --color-amber-800: var(--warn);
+  --color-amber-900: var(--warn);
+  --color-emerald-50: var(--pass-bg);
+  --color-emerald-100: var(--pass-bg);
+  --color-emerald-200: var(--pass-bg);
+  --color-emerald-300: var(--pass);
+  --color-emerald-400: var(--pass);
+  --color-emerald-500: var(--pass);
+  --color-emerald-600: var(--pass);
+  --color-emerald-700: var(--pass);
+  --color-emerald-800: var(--pass);
+  --color-emerald-900: var(--pass);
+  --color-sky-50: var(--accent-soft);
+  --color-sky-100: var(--accent-soft);
+  --color-sky-200: var(--accent-mid);
+  --color-sky-300: var(--accent-mid);
+  --color-sky-400: var(--accent);
+  --color-sky-500: var(--accent);
+  --color-sky-600: var(--accent-ink);
+  --color-sky-700: var(--accent-ink);
+  --color-sky-800: var(--accent-ink);
+  --color-sky-900: var(--accent-ink);
+  --color-violet-50: var(--accent-soft);
+  --color-violet-100: var(--accent-soft);
+  --color-violet-200: var(--accent-mid);
+  --color-violet-500: var(--accent);
+  --color-violet-600: var(--accent);
+  --color-violet-700: var(--accent-ink);
+  --color-violet-800: var(--accent-ink);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  /* Type scale (tokens.json): nothing under 13 px; body 15/22. */
+  --text-xs: 13px;
+  --text-xs--line-height: 18px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 15px;
+  --text-base--line-height: 22px;
+  --text-lg: 18px;
+  --text-lg--line-height: 24px;
+  --text-xl: 22px;
+  --text-xl--line-height: 27px;
+  --text-2xl: 28px;
+  --text-2xl--line-height: 32px;
+
+  --radius-panel: 12px;
+  --radius-inspector: 16px;
+  --radius-button: 10px;
+  --radius-goal: 6px;
+  --shadow-panel: var(--shadow);
+  --shadow-tip: var(--tip-shadow);
+
+  --spacing-rail: 88px;
+  --spacing-inspector: 380px;
 }
 
+html {
+  background: var(--bg);
+}
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  font: 400 15px/22px var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+/* Tabular figures on numbers only (round 2: not on the whole body). */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Document prose: section bodies rendered by MarkdownBody. */
 .doc-body {
-  font-size: 15.5px;
+  font-size: 15px;
   line-height: 1.75;
   color: var(--color-neutral-800);
 }
@@ -100,8 +357,8 @@ body {
   padding: 0 0.4em;
   border: 1px solid var(--color-neutral-300);
   border-radius: 4px;
-  background: white;
-  font-size: 11.5px;
+  background: var(--surface);
+  font-size: 13px;
   line-height: 1.6;
   font-weight: 500;
   color: var(--color-neutral-600);
@@ -160,11 +417,11 @@ mark.hl-pending {
   border: 1px solid var(--color-neutral-300);
   border-radius: 4px;
   padding: 0 0.35em;
-  font-size: 11.5px;
+  font-size: 13px;
   line-height: 1.6;
   font-weight: 500;
   color: var(--color-neutral-600);
-  background: white;
+  background: var(--surface);
   vertical-align: 1px;
   cursor: pointer;
 }
@@ -183,7 +440,7 @@ mark.hl-pending {
   background: var(--color-neutral-50);
   border-radius: 0 6px 6px 0;
   padding: 0 0.9em;
-  font-size: 14.5px;
+  font-size: 15px;
   white-space: normal;
 }
 .doc-body tr.detail-row > td {

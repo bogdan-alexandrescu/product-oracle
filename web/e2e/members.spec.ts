@@ -120,6 +120,7 @@ test("roles: a role change shows up on the reviewer's next page load", async ({ 
   await page.goto("/settings/members");
   await page.getByLabel("Role for viewer@example.com").selectOption("approver");
   await expect(page.getByLabel("Role for viewer@example.com")).toHaveValue("approver");
+  await page.getByTestId("user-menu").click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
 

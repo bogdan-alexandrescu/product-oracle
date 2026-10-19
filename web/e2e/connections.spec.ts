@@ -4,7 +4,8 @@ import { login } from "./helpers";
 
 async function openConnections(page: Page) {
   await login(page);
-  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-connections").click();
+  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
+  await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-connections").click();
   await expect(page).toHaveURL(/\/settings\/connections$/);
   await expect(page.getByRole("heading", { level: 1, name: "Connections" })).toBeVisible();
 }

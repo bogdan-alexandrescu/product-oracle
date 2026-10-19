@@ -2,7 +2,19 @@ import { expect, test } from "@playwright/test";
 
 import { login } from "./helpers";
 
-test("app nav: hidden when signed out, lists every area once signed in", async ({ page }) => {
+const DESTINATIONS = [
+  ["nav-home", "Home", "/home"],
+  ["nav-requests", "Requests", "/requests"],
+  ["nav-baseline", "Baseline", "/baseline"],
+  ["nav-prds", "PRDs", "/documents"],
+  ["nav-priorities", "Priorities", "/priorities"],
+  ["nav-roadmap", "Roadmap", "/roadmap"],
+  ["nav-runs", "Runs", "/runs"],
+  ["nav-inbox", "Inbox", "/inbox"],
+  ["nav-settings", "Settings", "/settings/members"],
+] as const;
+
+test("app shell: hidden when signed out, the rail lists the nine destinations once signed in", async ({ page }) => {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Oracle" })).toHaveCount(0);
@@ -10,48 +22,32 @@ test("app nav: hidden when signed out, lists every area once signed in", async (
   await login(page);
   const nav = page.getByRole("navigation", { name: "Oracle" });
   await expect(nav).toBeVisible();
-  for (const [id, label] of [
-    ["nav-baseline", "Baseline"],
-    ["nav-runs", "Runs"],
-    ["nav-prds", "PRDs"],
-    ["nav-priorities", "Priorities"],
-    ["nav-roadmap", "Roadmap"],
-    ["nav-inbox", "Inbox"],
-    ["nav-members", "Members"],
-    ["nav-connections", "Connections"],
-    ["nav-claude-accounts", "Claude accounts"],
-    ["nav-sources", "Sources"],
-    ["nav-templates", "Templates"],
-    ["nav-themes", "Themes"],
-  ]) {
+  for (const [id, label] of DESTINATIONS) {
     await expect(nav.getByTestId(id)).toContainText(label);
   }
-  await expect(nav.getByText("Settings")).toBeVisible();
 
   // On /documents the PRDs entry is the active one.
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
-
+  // Inbox carries its count as a badge.
+  await expect(nav.getByTestId("nav-inbox-badge")).toHaveText(/^\d+$/);
   // Roadmap (O4b) is a link to its own screen.
   await expect(nav.getByRole("link", { name: "Roadmap" })).toHaveAttribute("href", "/roadmap");
 });
 
-test("app nav: each entry routes to its page", async ({ page }) => {
+test("app shell: each destination routes to its page", async ({ page }) => {
   await login(page);
   const nav = page.getByRole("navigation", { name: "Oracle" });
 
-  for (const [id, path, heading] of [
-    ["nav-baseline", "/baseline", "Baseline"],
-    ["nav-runs", "/runs", "Runs"],
-    ["nav-priorities", "/priorities", "Priorities"],
-    ["nav-roadmap", "/roadmap", "Roadmap"],
-    ["nav-inbox", "/inbox", "Inbox"],
-    ["nav-members", "/settings/members", "Members"],
-    ["nav-connections", "/settings/connections", "Connections"],
-    ["nav-claude-accounts", "/settings/claude-accounts", "Claude accounts"],
-    ["nav-sources", "/settings/sources", "Sources"],
-    ["nav-templates", "/settings/templates", "Templates"],
-    ["nav-themes", "/settings/themes", "Themes"],
-    ["nav-prds", "/documents", "Documents"],
+  for (const [id, heading, path] of [
+    ["nav-home", "Home", "/home"],
+    ["nav-requests", "Requests", "/requests"],
+    ["nav-baseline", "Baseline", "/baseline"],
+    ["nav-runs", "Runs", "/runs"],
+    ["nav-priorities", "Priorities", "/priorities"],
+    ["nav-roadmap", "Roadmap", "/roadmap"],
+    ["nav-inbox", "Inbox", "/inbox"],
+    ["nav-settings", "Members", "/settings/members"],
+    ["nav-prds", "Documents", "/documents"],
   ]) {
     await nav.getByTestId(id).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
@@ -65,9 +61,77 @@ test("app nav: each entry routes to its page", async ({ page }) => {
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
 });
 
+test("settings: its own strip routes to each section, Settings stays active", async ({ page }) => {
+  await login(page);
+  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
+  const strip = page.getByRole("navigation", { name: "Settings" });
+  for (const [id, path, heading] of [
+    ["nav-members", "/settings/members", "Members"],
+    ["nav-connections", "/settings/connections", "Connections"],
+    ["nav-claude-accounts", "/settings/claude-accounts", "Claude accounts"],
+    ["nav-sources", "/settings/sources", "Sources"],
+    ["nav-templates", "/settings/templates", "Templates"],
+    ["nav-themes", "/settings/themes", "Themes"],
+  ]) {
+    await strip.getByTestId(id).click();
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeVisible();
+    await expect(strip.getByTestId(id)).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  }
+});
+
 test("/settings redirects to members", async ({ page }) => {
   await login(page);
   await page.goto("/settings");
   await expect(page).toHaveURL(/\/settings\/members$/);
   await expect(page.getByRole("heading", { level: 1, name: "Members" })).toBeVisible();
+});
+
+test("user menu: the theme switch overrides the system setting and is remembered", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await login(page);
+  const html = page.locator("html");
+  await expect(html).not.toHaveAttribute("data-theme");
+
+  await page.getByTestId("user-menu").click();
+  const theme = page.getByRole("radiogroup", { name: "Theme" });
+  await expect(theme.getByRole("radio", { name: "System" })).toHaveAttribute("aria-checked", "true");
+  await theme.getByRole("radio", { name: "Dark" }).click();
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(await bg()).toBe("rgb(14, 13, 26)");
+
+  // Survives a full reload (applied before paint) while the system stays light.
+  await page.reload();
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  expect(await bg()).toBe("rgb(14, 13, 26)");
+
+  // Back to System: follows the system setting again.
+  await page.getByTestId("user-menu").click();
+  await page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: "System" }).click();
+  await expect(html).not.toHaveAttribute("data-theme");
+  expect(await bg()).toBe("rgb(245, 244, 251)");
+  await page.emulateMedia({ colorScheme: "dark" });
+  expect(await bg()).toBe("rgb(14, 13, 26)");
+});
+
+test("phone: a tab bar with Home, PRDs, Roadmap, Inbox and More, no sideways scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  const tabs = page.getByRole("navigation", { name: "Oracle" });
+  await expect(tabs).toHaveAttribute("data-testid", "tab-bar");
+  for (const label of ["Home", "PRDs", "Roadmap", "Inbox", "More"]) {
+    await expect(tabs.getByText(label, { exact: true })).toBeVisible();
+  }
+  await tabs.getByTestId("tab-more").click();
+  const more = page.getByRole("dialog", { name: "More" });
+  await more.getByRole("link", { name: "Baseline" }).click();
+  await expect(page).toHaveURL(/\/baseline$/);
+  await expect(more).toHaveCount(0);
+  const [sw, cw] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+  expect(sw).toBeLessThanOrEqual(cw);
 });

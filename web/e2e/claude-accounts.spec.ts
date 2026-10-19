@@ -7,7 +7,8 @@ import { login } from "./helpers";
 
 async function openAccounts(page: Page) {
   await login(page);
-  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-claude-accounts").click();
+  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
+  await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-claude-accounts").click();
   await expect(page).toHaveURL(/\/settings\/claude-accounts$/);
   await expect(page.getByRole("heading", { level: 1, name: "Claude accounts" })).toBeVisible();
 }
