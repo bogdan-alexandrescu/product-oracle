@@ -59,3 +59,17 @@ async def import_md(client, headers, slug: str, text: str):
     return await client.post(
         f"/v1/documents/{slug}/versions", content=text.encode(), headers={**headers, **MARKDOWN}
     )
+
+
+async def seeded_ctx(name: str = "Example Co"):
+    """A company with its built-in templates, modules and manifests seeded, as startup
+    and company creation leave it (reads never seed)."""
+    from oracle.modules.service import ensure_seeded
+    from oracle.tenancy import tenant_session
+    from tests.baseline_helpers import make_ctx
+
+    ctx = await make_ctx(name)
+    async with tenant_session(ctx.tenant_id) as s:
+        await ensure_seeded(s)
+        await s.commit()
+    return ctx

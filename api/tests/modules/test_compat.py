@@ -11,8 +11,7 @@ from sqlalchemy import func, select
 from oracle.docs.parser import parse_draft
 from oracle.tenancy import tenant_session
 from oracle.v2.models import DocumentComposition
-from tests.baseline_helpers import make_ctx
-from tests.modules.helpers import draft, import_md
+from tests.modules.helpers import draft, import_md, seeded_ctx
 
 PLATFORM = {
     "category": "ai_agent_platform",
@@ -34,7 +33,7 @@ def _rename_and_reorder(md: str) -> str:
 
 
 async def test_section_ids_hold_under_rename_reorder_and_reimport(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     approver = ctx.as_("approver")
     slug = "placeholder-one-pager"
     v1 = draft("one-pager", slug)
@@ -74,7 +73,7 @@ async def test_section_ids_hold_under_rename_reorder_and_reimport(client):
 
 
 async def test_front_matter_resolutions_and_brief_keep_working_with_a_composition(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     approver = ctx.as_("approver")
     slug = "placeholder-memo"
     v1 = draft("narrative-memo", slug)
@@ -95,7 +94,7 @@ async def test_front_matter_resolutions_and_brief_keep_working_with_a_compositio
 
 
 async def test_legacy_documents_are_not_given_a_composition_by_reading_them(client):
-    ctx = await make_ctx()
+    ctx = await seeded_ctx()
     approver = ctx.as_("approver")
     slug = "placeholder-legacy"
     v1 = draft("pr-faq", slug)

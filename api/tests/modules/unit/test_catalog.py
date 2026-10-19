@@ -57,7 +57,8 @@ PACK_B_SPECIALISED = [
 
 def test_every_packaged_contract_validates_and_is_unique():
     contracts = builtin_contracts()
-    assert len(contracts) == len(PACK_A) + len(PACK_B_SPECIALISED)
+    industry = [k for p in builtin_packs().values() if p.core for k in p.own]
+    assert len(contracts) == len(PACK_A) + len(PACK_B_SPECIALISED) + len(industry)
     sections = [s for c in contracts.values() for s in c.effective_section_ids()]
     assert len(sections) == len(set(sections))
 
@@ -97,7 +98,8 @@ def test_dependencies_resolve_inside_each_pack():
 
 def test_category_selects_a_pack():
     assert default_pack_for("ai_agent_platform") == "ai-agent.platform"
-    assert default_pack_for("b2b_saas") == "startup.standard"
+    assert default_pack_for("b2b_saas") == "saas.b2b"  # O1h
+    assert default_pack_for("unknown_category") == "startup.standard"
     assert default_pack_for(None) == "startup.standard"
 
 
