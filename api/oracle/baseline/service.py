@@ -17,7 +17,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, changes
 from oracle.auth.deps import Principal
 from oracle.baseline import scoring
 from oracle.baseline.models import (
@@ -389,6 +389,38 @@ async def submit_proposal(
     return await propose(db, writer, op=op, kind=kind, fields=fields, entity=entity, edge=edge)
 
 
+def _change_subject(entity: Entity, before: dict[str, Any] | None) -> str:
+    """The oracle.changes subject a change to ``entity`` is recorded under."""
+    if entity.type == "requirement":
+        return "requirement"
+    if entity.type == "decision":
+        return "decision"
+    if entity.type == "constraint":
+        old = ((before or {}).get("attrs") or {}).get("blocker") or {}
+        new = (entity.attrs or {}).get("blocker") or {}
+        if old.get("status") != new.get("status"):
+            return "blocker_status"
+    return "entity"
+
+
+async def _record_change(
+    db: AsyncSession, actor: str, entity: Entity, before: dict[str, Any] | None, cause: str
+) -> None:
+    """v2 hook: what is built on this entity may now be stale (oracle.trace)."""
+    after = entity_snapshot(entity)
+    await changes.record_change(
+        db,
+        _change_subject(entity, before),
+        cause=cause,
+        actor=actor,
+        subject_id=entity.id,
+        subject_ref=f"{entity.type}:{entity.key}",
+        data={
+            "fields": sorted(k for k in after if (before or {}).get(k) != after.get(k)),
+        },
+    )
+
+
 # --- entities ------------------------------------------------------------------------------
 
 
@@ -467,6 +499,7 @@ async def update_entity(
     if "status" in diff:
         await scoring.rescore_around(db, [entity.id], include_supporters=True)
     await db.flush()
+    await _record_change(db, writer.actor, entity, before, "entity_updated")
     return WriteResult(entity=entity)
 
 
@@ -483,6 +516,7 @@ async def set_entity_status(
         _revision(db, writer, before, entity_snapshot(entity), entity=entity)
         await scoring.rescore_around(db, [entity.id], include_supporters=True)
         await db.flush()
+        await _record_change(db, writer.actor, entity, before, f"entity_{status}")
     return entity
 
 
@@ -500,6 +534,8 @@ async def delete_entity(db: AsyncSession, writer: Writer, entity: Entity) -> Wri
         entity.id,
         {"before": entity_snapshot(entity), "origin": writer.origin, "reason": writer.reason},
     )
+    # Before the delete: what was built on it is found through its links.
+    await _record_change(db, writer.actor, entity, entity_snapshot(entity), "entity_deleted")
     await db.delete(entity)
     await db.flush()
     if supporters:
