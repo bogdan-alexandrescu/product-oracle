@@ -160,6 +160,41 @@ async def test_diff_v1_to_v2(client):
     assert statuses["rollout"] == "removed" and statuses["open-questions"] == "added"
 
 
+TABLE_DRAFT = """---
+document: checkout-redesign
+title: Checkout redesign
+---
+# Checkout redesign {#title}
+
+## Success metrics {#metrics}
+
+| Metric | Baseline | Target |
+|--------|----------|--------|
+| Checkout completion | 52% | TARGET |
+| Cart abandonment | 48% | 40% |
+"""
+
+
+async def test_diff_of_a_changed_table_cell_keeps_rows(client):
+    _, auth = await seed_auth()
+    for target in ("60%", "65%"):
+        resp = await import_draft(client, auth, TABLE_DRAFT.replace("TARGET", target))
+        assert resp.status_code == 201, resp.text
+
+    body = (await client.get(f"{DOC}/diff", params={"from": 1, "to": 2}, headers=auth)).json()
+    metrics = next(d for d in body["sections"] if d["section_key"] == "metrics")
+    assert metrics["status"] == "changed"
+    words = metrics["words"]
+    rows = (
+        "Metric | Baseline | Target\nCheckout completion | 52% | {}\nCart abandonment | 48% | 40%"
+    )
+    assert _side_json(words, "from") == "Success metrics\n" + rows.format("60%")
+    assert _side_json(words, "to") == "Success metrics\n" + rows.format("65%")
+    # Only the changed cell's value is marked; the row structure stays equal.
+    assert [w["text"] for w in words if w["op"] == "delete"] == ["60"]
+    assert [w["text"] for w in words if w["op"] == "insert"] == ["65"]
+
+
 async def test_diff_same_version_and_missing_versions(client):
     _, auth = await seed_auth()
     await import_draft(client, auth, draft("prd_v1.md"))

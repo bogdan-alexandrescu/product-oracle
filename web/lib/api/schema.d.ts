@@ -10055,7 +10055,10 @@ export interface components {
             heading: string;
             /** Body Md */
             body_md: string;
-            /** Body Text */
+            /**
+             * Body Text
+             * @description Plain text of the body, citation markers removed. A table is one line per row (header first, no separator row), cells joined by ' | '; a literal '|' in a cell is '\|'.
+             */
             body_text: string;
             /** Content Hash */
             content_hash: string;
