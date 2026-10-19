@@ -176,6 +176,7 @@ body.appendix-break .sources-appendix { break-before: page; border-top: none; }
 .sources-appendix h3 { font-size: 9.5pt; margin-top: 0.9rem; }
 .sources-appendix .by-section > li { margin-bottom: 0.35rem; break-inside: avoid; }
 .sources-appendix .section-link { font-weight: bold; }
+.sources-appendix .evidence-link { white-space: normal; }
 .source-list { padding-left: 1.6rem; }
 .source-list li { margin-bottom: 0.45rem; break-inside: avoid; }
 .src-title { font-weight: bold; }

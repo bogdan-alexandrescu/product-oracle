@@ -11426,6 +11426,49 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "Delete Section Link",
+        "description": "Remove a section link. An approved version's links are pinned (409).",
+        "operationId": "delete_section_link",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/artifact-dependencies": {
@@ -12577,6 +12620,622 @@
             }
           }
         }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/trace": {
+      "get": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "Get Version Trace",
+        "description": "A version's trace: its anchors (template, composition revision, snapshots), each\nsection's links to the baseline and the goals they serve, and the outputs that\ndepend on each section (artifacts, roadmap items) with their freshness.",
+        "operationId": "get_version_trace",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionTrace"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/evidence": {
+      "get": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "Get Version Evidence",
+        "description": "The evidence inspector: each section's claim-to-source links (strongest source\nfirst) and the draft's own per-claim citations. Rendered bodies carry none of these\n(O1c); exports list them in the Sources and data points appendix.",
+        "operationId": "get_version_evidence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          },
+          {
+            "name": "section",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Section"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceInspector"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/impact": {
+      "get": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "Get Version Impact",
+        "description": "What this version changes for outputs built on earlier versions, why, and a\ntargeted regeneration plan (proposals only), with the changes recorded for it.",
+        "operationId": "get_version_impact",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/section-links": {
+      "post": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "Create Section Links",
+        "description": "Link sections of a version to baseline items, evidence or source items (the\ninternal per-claim links behind O1c). Pinned to the section's current hash. An\napproved version's links are pinned with it (409).",
+        "operationId": "create_section_links",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionLinksCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSectionLinkOut"
+                  },
+                  "title": "Response Create Section Links"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/baseline/entities/{entity_id}/trace": {
+      "get": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "Get Entity Trace",
+        "description": "A baseline node's trace: up to the goals it serves, down to requirements and\nacceptance criteria, the sections linking it and the outputs built on it; for a\nrequirement, its assumptions, blockers, alternatives, experiments, decisions, owners\nand risks. A feature serving no confirmed goal is flagged, with its priority.",
+        "operationId": "get_entity_trace",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityTrace"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/baseline/entities/{entity_id}/impact": {
+      "get": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "Get Entity Impact",
+        "description": "What a change to this node would make potentially stale, why, and a targeted\nregeneration plan. A preview: nothing is marked.",
+        "operationId": "get_entity_impact",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trace/changes/{change_id}/impact": {
+      "get": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "Get Change Impact",
+        "description": "A recorded change: the outputs it marked potentially stale, why, and a targeted\nregeneration plan (proposals only).",
+        "operationId": "get_change_impact",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trace/staleness": {
+      "get": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "List Stale Outputs",
+        "description": "Outputs that are not fresh (potentially stale or under review by default), with\nthe dependencies that make them so; ``document_id`` filters by upstream document.",
+        "operationId": "list_stale_outputs",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "freshness",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "fresh",
+                    "potentially_stale",
+                    "under_review",
+                    "reconciled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Freshness"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TraceOutput"
+                  },
+                  "title": "Response List Stale Outputs"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trace/staleness/actions": {
+      "post": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "Act On Staleness",
+        "description": "Settle a stale output: ``review`` (someone is checking it), ``accept_regeneration``\n(its regeneration proposal is accepted) or ``reconcile`` (confirmed still valid\nagainst the current upstream, with a reason). Recorded and audited; the output's\ncontent and approval are never changed.",
+        "operationId": "act_on_staleness",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StalenessAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceOutput"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/trace/dependencies": {
+      "post": {
+        "tags": [
+          "trace"
+        ],
+        "summary": "Create Artifact Dependencies",
+        "description": "Record what an artifact version (or a derived document version) was made from:\ndocument sections, whole document versions or baseline items, anchored at their\ncurrent hash. Idempotent per anchor.",
+        "operationId": "create_artifact_dependencies",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependenciesCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ArtifactDependencyOut"
+                  },
+                  "type": "array",
+                  "title": "Response Create Artifact Dependencies"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
       }
     },
     "/.well-known/oauth-protected-resource": {
@@ -16343,6 +17002,48 @@
         "title": "DeckOut",
         "description": "The brief layer as slides, for Present mode: one slide per brief section after a\ntitle slide, Sources and data points slides last when the version has sources."
       },
+      "DependenciesCreate": {
+        "properties": {
+          "artifact_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Version Id"
+          },
+          "document_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Version Id"
+          },
+          "upstream": {
+            "items": {
+              "$ref": "#/components/schemas/TraceUpstreamRef"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Upstream"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upstream"
+        ],
+        "title": "DependenciesCreate"
+      },
       "DiffOut": {
         "properties": {
           "document_id": {
@@ -17972,6 +18673,88 @@
         "type": "object",
         "title": "EntityPatch"
       },
+      "EntityTrace": {
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/TraceEntityRef"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEntityRef"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "upstream": {
+            "items": {
+              "$ref": "#/components/schemas/TraceChainStep"
+            },
+            "type": "array",
+            "title": "Upstream"
+          },
+          "downstream": {
+            "items": {
+              "$ref": "#/components/schemas/TraceChainStep"
+            },
+            "type": "array",
+            "title": "Downstream"
+          },
+          "related": {
+            "$ref": "#/components/schemas/TraceRelated"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSectionRef"
+            },
+            "type": "array",
+            "title": "Sections"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/TraceOutput"
+            },
+            "type": "array",
+            "title": "Outputs"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RankedFeature"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity",
+          "flags",
+          "goals",
+          "upstream",
+          "downstream",
+          "related",
+          "evidence",
+          "sections",
+          "outputs"
+        ],
+        "title": "EntityTrace"
+      },
       "EntityWriteOut": {
         "properties": {
           "applied": {
@@ -18355,6 +19138,64 @@
         ],
         "title": "EvaluationReportOut"
       },
+      "EvidenceCitation": {
+        "properties": {
+          "cite_key": {
+            "type": "string",
+            "title": "Cite Key"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cite_key",
+          "source",
+          "ref"
+        ],
+        "title": "EvidenceCitation",
+        "description": "A ``[c:id]`` marker the stored draft carries in this section (its per-claim link)."
+      },
       "EvidenceCreate": {
         "properties": {
           "source_item_id": {
@@ -18418,6 +19259,60 @@
         "type": "object",
         "title": "EvidenceCreate",
         "description": "Evidence from one of your own source items (url, ref and an excerpt are copied\nfrom it unless given), or free-standing (url / ref / excerpt only)."
+      },
+      "EvidenceInspector": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "document_slug": {
+            "type": "string",
+            "title": "Document Slug"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/SectionEvidence"
+            },
+            "type": "array",
+            "title": "Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "document_slug",
+          "version_id",
+          "number",
+          "approved",
+          "sections"
+        ],
+        "title": "EvidenceInspector"
       },
       "EvidenceLinkCreate": {
         "properties": {
@@ -19707,6 +20602,132 @@
           "holders"
         ],
         "title": "HoldersOut"
+      },
+      "ImpactReport": {
+        "properties": {
+          "subject": {
+            "$ref": "#/components/schemas/ImpactSubject"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChangeEventOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeEventOut"
+            },
+            "type": "array",
+            "title": "Changes",
+            "default": []
+          },
+          "preview": {
+            "type": "boolean",
+            "title": "Preview"
+          },
+          "affected": {
+            "items": {
+              "$ref": "#/components/schemas/TraceOutput"
+            },
+            "type": "array",
+            "title": "Affected"
+          },
+          "affected_entities": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEntityRef"
+            },
+            "type": "array",
+            "title": "Affected Entities",
+            "default": []
+          },
+          "plan": {
+            "items": {
+              "$ref": "#/components/schemas/RegenerationProposal"
+            },
+            "type": "array",
+            "title": "Plan"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "subject",
+          "preview",
+          "affected",
+          "plan",
+          "counts"
+        ],
+        "title": "ImpactReport"
+      },
+      "ImpactSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ImpactSubject"
       },
       "ImportErrorResponse": {
         "properties": {
@@ -23289,6 +24310,115 @@
         ],
         "title": "RefreshSweepOut"
       },
+      "RegenerationProposal": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "artifact_version",
+              "document_version"
+            ],
+            "title": "Kind"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "engineering_spec",
+              "wireframe",
+              "prototype",
+              "acceptance_tests",
+              "roadmap",
+              "document"
+            ],
+            "title": "Category"
+          },
+          "artifact_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Version Id"
+          },
+          "document_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Version Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "regenerate",
+              "review"
+            ],
+            "title": "Action"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys",
+            "default": []
+          },
+          "entity_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Entity Ids",
+            "default": []
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          },
+          "keeps_approved_version": {
+            "type": "boolean",
+            "title": "Keeps Approved Version",
+            "default": true
+          },
+          "how": {
+            "type": "string",
+            "title": "How"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "category",
+          "title",
+          "action",
+          "approved",
+          "how"
+        ],
+        "title": "RegenerationProposal",
+        "description": "A targeted regeneration proposal (\u00a711.5). Nothing runs until a person accepts it,\nand an approved output is never overwritten: regenerating makes a new version."
+      },
       "RegisterIn": {
         "properties": {
           "label": {
@@ -24655,6 +25785,394 @@
         ],
         "title": "SectionDiff"
       },
+      "SectionEvidence": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "level": {
+            "type": "integer",
+            "title": "Level"
+          },
+          "layer": {
+            "type": "string",
+            "title": "Layer"
+          },
+          "section_hash": {
+            "type": "string",
+            "title": "Section Hash"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/SectionLinkView"
+            },
+            "type": "array",
+            "title": "Links"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceCitation"
+            },
+            "type": "array",
+            "title": "Citations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_key",
+          "heading",
+          "level",
+          "layer",
+          "section_hash",
+          "links",
+          "citations"
+        ],
+        "title": "SectionEvidence"
+      },
+      "SectionLinkCreate": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Section Key"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "implements",
+              "evidences",
+              "claims",
+              "tests",
+              "mentions"
+            ],
+            "title": "Kind"
+          },
+          "precision": {
+            "type": "string",
+            "enum": [
+              "section",
+              "paragraph",
+              "claim"
+            ],
+            "title": "Precision",
+            "default": "section"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
+          "module_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Key"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "evidence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Id"
+          },
+          "source_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Item Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_key",
+          "kind"
+        ],
+        "title": "SectionLinkCreate"
+      },
+      "SectionLinkTarget": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "entity",
+              "evidence",
+              "source_item"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "entity_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Type"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "locked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "source_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Kind"
+          },
+          "restricted": {
+            "type": "boolean",
+            "title": "Restricted",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "title": "SectionLinkTarget"
+      },
+      "SectionLinkView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "implements",
+              "evidences",
+              "claims",
+              "tests",
+              "mentions"
+            ],
+            "title": "Kind"
+          },
+          "precision": {
+            "type": "string",
+            "enum": [
+              "section",
+              "paragraph",
+              "claim"
+            ],
+            "title": "Precision"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
+          "module_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Key"
+          },
+          "composition_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composition Revision"
+          },
+          "current": {
+            "type": "boolean",
+            "title": "Current"
+          },
+          "target": {
+            "$ref": "#/components/schemas/SectionLinkTarget"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "precision",
+          "current",
+          "target",
+          "created_at"
+        ],
+        "title": "SectionLinkView"
+      },
+      "SectionLinksCreate": {
+        "properties": {
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/SectionLinkCreate"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "links"
+        ],
+        "title": "SectionLinksCreate"
+      },
       "SectionOut": {
         "properties": {
           "id": {
@@ -24861,6 +26379,71 @@
           "created_at"
         ],
         "title": "SectionReviewOut"
+      },
+      "SectionTrace": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "level": {
+            "type": "integer",
+            "title": "Level"
+          },
+          "layer": {
+            "type": "string",
+            "title": "Layer"
+          },
+          "section_hash": {
+            "type": "string",
+            "title": "Section Hash"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/SectionLinkView"
+            },
+            "type": "array",
+            "title": "Links"
+          },
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEntityRef"
+            },
+            "type": "array",
+            "title": "Entities"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEntityRef"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "downstream": {
+            "items": {
+              "$ref": "#/components/schemas/TraceOutput"
+            },
+            "type": "array",
+            "title": "Downstream"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_key",
+          "heading",
+          "level",
+          "layer",
+          "section_hash",
+          "links",
+          "entities",
+          "goals",
+          "downstream"
+        ],
+        "title": "SectionTrace"
       },
       "SectionVerdict": {
         "properties": {
@@ -26071,6 +27654,71 @@
           "updated_at"
         ],
         "title": "StakeholderQuestionOut"
+      },
+      "StalenessAction": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "review",
+              "accept_regeneration",
+              "reconcile"
+            ],
+            "title": "Action"
+          },
+          "artifact_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Version Id"
+          },
+          "document_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Version Id"
+          },
+          "dependency_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Dependency Ids",
+            "default": []
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "StalenessAction",
+        "description": "A person's decision on a downstream output's staleness.\n\n``review``: someone is checking it (under_review). ``accept_regeneration``: the\nregeneration proposal is accepted (under_review until the new version arrives).\n``reconcile``: confirmed still valid against the current upstream, with a reason."
       },
       "StartDraftIn": {
         "properties": {
@@ -27975,6 +29623,394 @@
         ],
         "title": "TokenOut"
       },
+      "TraceAlternativeRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "blocker_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Blocker Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "approach": {
+            "type": "string",
+            "title": "Approach"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "compliance": {
+            "type": "string",
+            "title": "Compliance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "blocker_id",
+          "title",
+          "approach",
+          "status",
+          "compliance"
+        ],
+        "title": "TraceAlternativeRef"
+      },
+      "TraceAssumptionDecisionRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "statement": {
+            "type": "string",
+            "title": "Statement"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          },
+          "decided_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Decided At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "statement",
+          "decision",
+          "rationale",
+          "decided_at"
+        ],
+        "title": "TraceAssumptionDecisionRef"
+      },
+      "TraceChainStep": {
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/TraceEntityRef"
+          },
+          "edge_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Edge Id"
+          },
+          "edge_type": {
+            "type": "string",
+            "title": "Edge Type"
+          },
+          "edge_status": {
+            "type": "string",
+            "title": "Edge Status"
+          },
+          "via": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Via"
+          },
+          "depth": {
+            "type": "integer",
+            "title": "Depth"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity",
+          "edge_id",
+          "edge_type",
+          "edge_status",
+          "via",
+          "depth"
+        ],
+        "title": "TraceChainStep"
+      },
+      "TraceDependency": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "freshness": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "potentially_stale",
+              "under_review",
+              "reconciled"
+            ],
+            "title": "Freshness"
+          },
+          "upstream": {
+            "$ref": "#/components/schemas/TraceUpstream"
+          },
+          "caused_by_change_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caused By Change Id"
+          },
+          "stale_since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale Since"
+          },
+          "reconciled_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciled By"
+          },
+          "reconciled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciled At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "freshness",
+          "upstream"
+        ],
+        "title": "TraceDependency"
+      },
+      "TraceEntityRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "key",
+          "title",
+          "status",
+          "locked"
+        ],
+        "title": "TraceEntityRef"
+      },
+      "TraceEvidenceRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "rank"
+        ],
+        "title": "TraceEvidenceRef"
+      },
+      "TraceExperimentRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "blocker_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Blocker Id"
+          },
+          "option_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Option Id"
+          },
+          "hypothesis": {
+            "type": "string",
+            "title": "Hypothesis"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "blocker_id",
+          "hypothesis",
+          "status"
+        ],
+        "title": "TraceExperimentRef"
+      },
       "TraceFeature": {
         "properties": {
           "id": {
@@ -28168,6 +30204,253 @@
         ],
         "title": "TraceGoalLink"
       },
+      "TraceOutput": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "artifact_version",
+              "document_version"
+            ],
+            "title": "Kind"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "engineering_spec",
+              "wireframe",
+              "prototype",
+              "acceptance_tests",
+              "roadmap",
+              "document"
+            ],
+            "title": "Category"
+          },
+          "artifact_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "tech_brief",
+                  "engineering_spec",
+                  "user_flow",
+                  "wireframe",
+                  "prototype",
+                  "acceptance_tests",
+                  "figma_design"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Kind"
+          },
+          "document_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Kind"
+          },
+          "artifact_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Version Id"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "document_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Version Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "document_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Slug"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          },
+          "freshness": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "potentially_stale",
+              "under_review",
+              "reconciled"
+            ],
+            "title": "Freshness"
+          },
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/TraceDependency"
+            },
+            "type": "array",
+            "title": "Dependencies",
+            "default": []
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "category",
+          "number",
+          "title",
+          "status",
+          "approved",
+          "freshness"
+        ],
+        "title": "TraceOutput",
+        "description": "A derived output: an artifact version or a document version (a roadmap)."
+      },
+      "TraceRelated": {
+        "properties": {
+          "assumptions": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEntityRef"
+            },
+            "type": "array",
+            "title": "Assumptions",
+            "default": []
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEntityRef"
+            },
+            "type": "array",
+            "title": "Blockers",
+            "default": []
+          },
+          "alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/TraceAlternativeRef"
+            },
+            "type": "array",
+            "title": "Alternatives",
+            "default": []
+          },
+          "experiments": {
+            "items": {
+              "$ref": "#/components/schemas/TraceExperimentRef"
+            },
+            "type": "array",
+            "title": "Experiments",
+            "default": []
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEntityRef"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
+          },
+          "owners": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEntityRef"
+            },
+            "type": "array",
+            "title": "Owners",
+            "default": []
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEntityRef"
+            },
+            "type": "array",
+            "title": "Risks",
+            "default": []
+          },
+          "depends_on": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEntityRef"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "assumption_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/TraceAssumptionDecisionRef"
+            },
+            "type": "array",
+            "title": "Assumption Decisions",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "TraceRelated",
+        "description": "What \u00a77 links to a requirement besides the chain itself."
+      },
       "TraceReport": {
         "properties": {
           "low": {
@@ -28208,6 +30491,81 @@
           "summary"
         ],
         "title": "TraceReport"
+      },
+      "TraceSectionRef": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "document_slug": {
+            "type": "string",
+            "title": "Document Slug"
+          },
+          "document_kind": {
+            "type": "string",
+            "title": "Document Kind"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "version_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Number"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Link Id"
+          },
+          "link_kind": {
+            "type": "string",
+            "title": "Link Kind"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "document_slug",
+          "document_kind",
+          "section_key",
+          "link_id",
+          "link_kind"
+        ],
+        "title": "TraceSectionRef"
       },
       "TraceSummary": {
         "properties": {
@@ -28251,6 +30609,156 @@
           "uncovered_goals"
         ],
         "title": "TraceSummary"
+      },
+      "TraceUpstream": {
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "document_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Slug"
+          },
+          "document_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Kind"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "version_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Number"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "section_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Hash"
+          },
+          "composition_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composition Revision"
+          },
+          "entity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceEntityRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "TraceUpstream",
+        "description": "What a dependency points at (its version anchor)."
+      },
+      "TraceUpstreamRef": {
+        "properties": {
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          }
+        },
+        "type": "object",
+        "title": "TraceUpstreamRef",
+        "description": "A dependency's upstream: a document version (a section of it, or all of it), or a\nbaseline entity."
       },
       "UploadResult": {
         "properties": {
@@ -28315,6 +30823,147 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VersionAnchors": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "document_slug": {
+            "type": "string",
+            "title": "Document Slug"
+          },
+          "document_kind": {
+            "type": "string",
+            "title": "Document Kind"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "template_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Version"
+          },
+          "composition_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composition Revision"
+          },
+          "composition_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composition Status"
+          },
+          "baseline_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Snapshot Id"
+          },
+          "source_snapshot_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Source Snapshot Ids",
+            "default": []
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "source_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Version Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "document_slug",
+          "document_kind",
+          "version_id",
+          "number",
+          "content_hash"
+        ],
+        "title": "VersionAnchors",
+        "description": "The version anchors of \u00a77 for one document version."
       },
       "VersionOut": {
         "properties": {
@@ -28667,6 +31316,42 @@
           "created_at"
         ],
         "title": "VersionSummary"
+      },
+      "VersionTrace": {
+        "properties": {
+          "anchors": {
+            "$ref": "#/components/schemas/VersionAnchors"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/SectionTrace"
+            },
+            "type": "array",
+            "title": "Sections"
+          },
+          "whole_version_downstream": {
+            "items": {
+              "$ref": "#/components/schemas/TraceOutput"
+            },
+            "type": "array",
+            "title": "Whole Version Downstream"
+          },
+          "upstream": {
+            "items": {
+              "$ref": "#/components/schemas/TraceDependency"
+            },
+            "type": "array",
+            "title": "Upstream",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "anchors",
+          "sections",
+          "whole_version_downstream"
+        ],
+        "title": "VersionTrace"
       },
       "VersionWarning": {
         "properties": {

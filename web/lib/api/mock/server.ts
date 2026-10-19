@@ -16,6 +16,7 @@ import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { routeTrace } from "./trace";
 import { routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
@@ -800,6 +801,16 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   return notFound("Route");
 }
 
+/** The v2 rows, seeded on first use against the first mock PRD. */
+function ensureV2(db: Db): V2Db {
+  if (!db.v2) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
+    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
+  }
+  return db.v2;
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -838,6 +849,25 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
+  // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
+  if (["documents", "section-links", "baseline", "trace"].includes(p[1])) {
+    const traced = await routeTrace(
+      {
+        v2: ensureV2(db),
+        documents: db.documents,
+        versions: db.versions,
+        entities: db.baseline.entities,
+        userId: me.id,
+        role: me.role,
+        now,
+        uuid,
+      },
+      req,
+      p,
+      q,
+    );
+    if (traced) return traced;
+  }
   // The baseline mock checks roles itself (commenters propose, approvers decide).
   if (p[1] === "baseline") {
     return routeBaseline(db.baseline, { userId: me.id, role: me.role }, req, p.slice(2), q);
@@ -902,12 +932,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
 
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
-  if (!db.v2) {
-    const prd = db.documents.find((d) => d.kind === "prd");
-    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
-    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
-  }
-  const v2 = routeV2(db.v2, req, p, q);
+  const v2 = routeV2(ensureV2(db), req, p, q);
   if (v2) return v2;
 
   const handled = await laneF(db, req, p, m);
