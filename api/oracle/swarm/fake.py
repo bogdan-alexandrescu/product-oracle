@@ -17,6 +17,7 @@ SwarmCloud API instead (``tests/swarmcloud_fake.py``).
 import re
 import secrets
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -198,7 +199,7 @@ class FakeRuntime:
     async def egress_addresses(self) -> frozenset[str] | None:
         return self.egress
 
-    async def find_by_label(self, label: str) -> str | None:
+    async def find_by_label(self, label: str, since: datetime | None = None) -> str | None:
         for workflow_id, record in self._records.items():
             if record.spec is not None and record.spec.label == label:
                 return workflow_id

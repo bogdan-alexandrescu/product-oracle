@@ -43,7 +43,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Protocol
 
@@ -85,6 +85,11 @@ MAX_FINDINGS = 50
 # Finding a lost submission among Oracle's own tasks: page size and how far back to look.
 TASK_PAGE = 50
 MAX_TASK_PAGES = 20
+# A task listed this much before Oracle sent a submission is older than it, whatever the
+# two clocks say: the newest-first listing has passed where the submission would be.
+CLOCK_SKEW = timedelta(minutes=10)
+# What Oracle reads of an error body (its envelope is small).
+MAX_ERROR_BYTES = 64 * 1024
 METADATA_IDENTITY_URL = (
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity"
 )
@@ -645,29 +650,40 @@ class SwarmCloudRuntime:
             self.learn("await_input", "on")
         return str(workflow_id)
 
-    async def find_by_label(self, label: str) -> str | None:
+    async def find_by_label(self, label: str, since: datetime | None = None) -> str | None:
         """The workflow whose steps carry ``oracle_key`` = ``label``, from Oracle's own
         tasks, newest first. Only ``submitted_by`` is sent: SwarmCloud applies it in the
         query, so pages are exact, while any other filter (state, runner_profile,
         workflow_id) is applied after the cursor and pages come back short.
 
-        None only when the listing ended without it; a search that could not finish (a
-        repeated cursor, an odd body, more pages than Oracle reads) raises, so that the
-        caller holds the submission and looks again instead of submitting a duplicate."""
+        None when the listing ended without it, or, given ``since`` (when Oracle sent the
+        submission), at the first task created before ``since`` less :data:`CLOCK_SKEW`:
+        the listing is newest first, so the submission, had it landed, came before that.
+        A search that could not finish (a repeated cursor, an odd body, more pages than
+        Oracle reads without reaching an older task) raises, so that the caller holds the
+        submission and looks again instead of submitting a duplicate."""
         params: dict[str, str | int] = {"submitted_by": "me", "limit": TASK_PAGE}
         seen: set[str] = set()
+        cutoff = since - CLOCK_SKEW if since is not None else None
         async with self._client() as client:
             for _ in range(MAX_TASK_PAGES):
                 body = _json(await self._call(client, "GET", "/v1/tasks", params=params))
                 rows = body.get("tasks", body.get("items"))
                 if not isinstance(rows, list):
                     raise _inconclusive(label, "SwarmCloud's task listing had no rows")
+                older = False
                 for row in rows:
                     if not isinstance(row, dict):
                         continue
                     meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
                     if meta.get("oracle_key") == label and row.get("workflow_id"):
                         return str(row["workflow_id"])
+                    created = _parse_time(row.get("created_at"))
+                    if cutoff is not None and created is not None and created < cutoff:
+                        older = True
+                if older:
+                    # Past where the submission would be: it was never created.
+                    return None
                 token = body.get("next_page_token") or body.get("page_token")
                 if not isinstance(token, str) or not token:
                     return None
@@ -680,7 +696,9 @@ class SwarmCloudRuntime:
             "submission %s not among Oracle's last %d tasks", label, TASK_PAGE * MAX_TASK_PAGES
         )
         raise _inconclusive(
-            label, f"not among Oracle's last {TASK_PAGE * MAX_TASK_PAGES} tasks, not looked further"
+            label,
+            f"not among Oracle's last {TASK_PAGE * MAX_TASK_PAGES} tasks, and none of them is "
+            "older than the submission; not looked further",
         )
 
     async def answer(
@@ -761,6 +779,7 @@ class SwarmCloudRuntime:
             return _redact(str(value)) if isinstance(value, str | int) and value != "" else None
 
         answered_by, via = text("answered_by"), text("via")
+        raw_by = record.get("answered_by")
         return RecordedAnswer(
             answer_id=text("answer_id"),
             answered_by=answered_by,
@@ -773,13 +792,17 @@ class SwarmCloudRuntime:
             state=_redact(state) if state else ("answered" if record else None),
             # Posted by Oracle: its own principal, through the channel it posts with.
             by_oracle=bool(principal) and answered_by == principal and via == "mcp",
+            answered_by_altered=answered_by is not None and answered_by != str(raw_by),
         )
 
     async def _read_limited(
         self, client: httpx.AsyncClient, path: str, params: dict[str, str], limit: int
     ) -> bytes | None:
         """A GET body of at most ``limit`` bytes, streamed: None, without reading on,
-        when its Content-Length or the bytes received pass the limit."""
+        when its Content-Length or the bytes received pass the limit. A refusal is read
+        first, whatever its size (at most :data:`MAX_ERROR_BYTES` of it), and raised: an
+        error is never "too large to read". A body that cannot be decoded (a broken gzip)
+        is RuntimeUnavailable, like any other read that failed."""
         headers = {"Authorization": await self._auth.header(client)}
         request = client.build_request("GET", path, params=params, headers=headers)
         try:
@@ -789,27 +812,38 @@ class SwarmCloudRuntime:
             raise RuntimeUnavailable(
                 f"cannot reach SwarmCloud (GET {path}): {type(exc).__name__}", lost=sent
             ) from None
+        failed = resp.status_code >= 400
         body = bytearray()
         try:
             declared = resp.headers.get("content-length", "")
-            if declared.isdigit() and int(declared) > limit:
+            if not failed and declared.isdigit() and int(declared) > limit:
                 return None
             async for chunk in resp.aiter_bytes():
                 body += chunk
+                if failed and len(body) >= MAX_ERROR_BYTES:
+                    del body[MAX_ERROR_BYTES:]
+                    break
                 if len(body) > limit:
                     return None
         except httpx.HTTPError as exc:
-            raise RuntimeUnavailable(
-                f"cannot read SwarmCloud's answer (GET {path}): {type(exc).__name__}", lost=True
-            ) from None
+            if not failed:
+                raise RuntimeUnavailable(
+                    f"cannot read SwarmCloud's answer (GET {path}): {type(exc).__name__}",
+                    lost=True,
+                ) from None
+            body = bytearray()  # a refusal whose body did not read: its status says enough
         finally:
             await resp.aclose()
-        if resp.status_code >= 400:
-            # A refusal: read as any other call's, from the bytes received.
+        if failed:
+            # A refusal: read as any other call's, from the bytes received (decoded
+            # already, so no Content-Encoding header goes with them).
+            kept = {
+                k: v
+                for k, v in resp.headers.items()
+                if k.lower() not in ("content-encoding", "content-length", "transfer-encoding")
+            }
             raise _refusal(
-                httpx.Response(resp.status_code, headers=resp.headers, content=bytes(body)),
-                "GET",
-                path,
+                httpx.Response(resp.status_code, headers=kept, content=bytes(body)), "GET", path
             )
         return bytes(body)
 
@@ -959,6 +993,9 @@ def _refusal(resp: httpx.Response, method: str, path: str) -> RuntimeUnavailable
         lost=resp.status_code >= 500
         and not (code in DEFINITE_REFUSALS and _enveloped(resp, raw_code)),
         detail=redact(envelope) if isinstance(envelope, dict) else None,
+        # Only SwarmCloud's own envelope says a thing does not exist; a bare 404 (a
+        # proxy's page, a changed URL or principal) proves nothing and is retryable.
+        gone=resp.status_code == 404 and raw_code == "not_found" and _enveloped(resp, raw_code),
     )
 
 
@@ -1144,13 +1181,18 @@ _DETAIL_SCAN_CHARS = 4096
 # the word, a JWT, a Google access token, a GitHub token, a token in a git URL, or one of
 # Oracle's own tokens (run, API and OAuth).
 _TOKEN_SHAPED = re.compile(
-    r"(?i)bearer[\s:=]+\S+"
+    # A bearer value: a word with a digit or an inner symbol (sc-secret, abc123), or a
+    # long one; never an ordinary word after "bearer" (bearer token handling).
+    r"(?i)bearer(?:[\s:=]|%20)+"
+    r"(?:(?=[a-z]*(?:[0-9]|[-_.~+/=%][a-z0-9]))\S+|[a-z]{16,}\S*)"
     r"|eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}"
     r"|ya29\.[A-Za-z0-9_.-]+"
     r"|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|x-access-token:[^@\s]+"
-    # Oracle's prefixes, also when joined to a word by an underscore (credential_ort_...).
-    r"|(?<![A-Za-z0-9])(?:ort|po|poa)_[A-Za-z0-9_-]{8,}"
+    # Oracle's prefixes, also when joined to a word by an underscore (credential_ort_...),
+    # to digits (123ort_..., Bearer%20ort_...) or to an escaped or encoded line break
+    # (\nort_..., %0Aort_...); never inside a word (support_ticket).
+    r"|(?:(?<![A-Za-z])|(?<=\\[nrt])|(?<=%0[AaDd]))(?:ort|po|poa)_[A-Za-z0-9_-]{8,}"
 )
 
 
@@ -1202,7 +1244,7 @@ class UnconfiguredSwarmCloud:
     async def egress_addresses(self) -> frozenset[str] | None:
         return frozenset()
 
-    async def find_by_label(self, label: str) -> str | None:
+    async def find_by_label(self, label: str, since: datetime | None = None) -> str | None:
         raise self._refuse()
 
     async def answer(

@@ -2397,6 +2397,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Run
+         * @description Retry a run whose lost submission Oracle could neither find nor rule out (Inbox:
+         *     lookups): looked up once more, else the segment is submitted again.
+         */
+        post: operations["retry_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/cancel": {
         parameters: {
             query?: never;
@@ -3299,6 +3320,11 @@ export interface components {
             redo_segment?: string | null;
             /** Redo Cost Usd */
             redo_cost_usd?: number | null;
+            /**
+             * Can Redo
+             * @default false
+             */
+            can_redo: boolean;
         };
         /**
          * DeckOut
@@ -4423,6 +4449,11 @@ export interface components {
             approvals: components["schemas"]["RunSummary"][];
             /** Overruns */
             overruns: components["schemas"]["RunSummary"][];
+            /**
+             * Lookups
+             * @default []
+             */
+            lookups: components["schemas"]["RunSummary"][];
             /** Feedback */
             feedback: components["schemas"]["InboxDocument"][];
             /** Total */
@@ -5571,6 +5602,8 @@ export interface components {
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
             /** Error */
             error?: string | null;
+            /** Stuck */
+            stuck?: string | null;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
             snapshot_id?: string | null;
@@ -5592,6 +5625,11 @@ export interface components {
             segments: components["schemas"]["SegmentOut"][];
             /** Checkpoints */
             checkpoints: components["schemas"]["CheckpointOut"][];
+            /**
+             * Token Read Only
+             * @default false
+             */
+            token_read_only: boolean;
         };
         /** RunPatch */
         RunPatch: {
@@ -5656,6 +5694,8 @@ export interface components {
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
             /** Error */
             error?: string | null;
+            /** Stuck */
+            stuck?: string | null;
         };
         /**
          * RuntimeFeatures
@@ -12120,6 +12160,37 @@ export interface operations {
         };
     };
     resume_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_run: {
         parameters: {
             query?: never;
             header?: never;

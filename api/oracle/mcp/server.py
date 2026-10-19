@@ -94,7 +94,9 @@ class Catalog:
                 self.curated[c.name] = (c, found)
 
     def _allowed(self, op: Operation) -> bool:
-        return scopes.allowed(self.caller.scopes, op.method, op.path)
+        # Write scopes held back for now (W5) still list their tools: calls say why not.
+        held = self.caller.scopes | self.caller.withheld if self.caller.scopes is not None else None
+        return scopes.allowed(held, op.method, op.path)
 
     def tools(self) -> list[types.Tool]:
         out: list[types.Tool] = []

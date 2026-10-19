@@ -134,6 +134,21 @@ export function RunDetail({ id }: { id: string }) {
 
           {error && <div className="mt-4"><ErrorNote>{error}</ErrorNote></div>}
           {run.error && <div className="mt-4"><ErrorNote>{run.error}</ErrorNote></div>}
+          {run.stuck && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="run-stuck">
+              <span className="min-w-0 flex-1">{run.stuck}</span>
+              {mayManage && (
+                <Button size="sm" variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)))}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
+          {run.token_read_only && (
+            <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="run-token-read-only">
+              Waiting for approval: a SwarmCloud console answer that does not count waits for an approver, so the run&apos;s agents may read Oracle but their writes are refused until it is confirmed or decided.
+            </p>
+          )}
           {run.status === "awaiting_approval" && (
             <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               The estimate is over $50, so an owner approves the cost before any agent starts.
@@ -351,6 +366,8 @@ function CheckpointRow({
   const answer = cp.console;
   // A counted console change request the workflow went on past: Redo or Continue only.
   const redoOrContinue = answer?.needs === "redo_or_continue";
+  // Redo carries the console's findings, else the note: the API refuses it without either.
+  const redoBlocked = !answer?.can_redo && !note.trim();
   return (
     <li className="text-sm" data-testid={`checkpoint-${cp.kind}`}>
       <div className="flex flex-wrap items-center gap-2">
@@ -377,7 +394,12 @@ function CheckpointRow({
                 <Button variant="primary" size="sm" disabled={busy} onClick={() => onDecide(cp, "continue", note)}>
                   Continue
                 </Button>
-                <Button size="sm" disabled={busy} onClick={() => onDecide(cp, "redo", note)}>
+                <Button
+                  size="sm"
+                  disabled={busy || redoBlocked}
+                  title={redoBlocked ? "No findings were recorded: write a note to redo" : undefined}
+                  onClick={() => onDecide(cp, "redo", note)}
+                >
                   Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)}, one more segment)
                 </Button>
               </>
@@ -400,7 +422,7 @@ function CheckpointRow({
                   Request changes
                 </Button>
                 {answer?.needs === "unreadable" && (
-                  <Button size="sm" disabled={busy || !note.trim()} onClick={() => onDecide(cp, "redo", note)}>
+                  <Button size="sm" disabled={busy || redoBlocked} onClick={() => onDecide(cp, "redo", note)}>
                     Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)})
                   </Button>
                 )}
@@ -414,7 +436,8 @@ function CheckpointRow({
 }
 
 const CONSOLE_NEEDS: Record<ConsoleAnswer["needs"], string> = {
-  confirm: "It does not count on its own: an approver confirms it or decides otherwise.",
+  confirm:
+    "It does not count on its own: an approver confirms it or decides otherwise. Until then the run's agents may read Oracle but not write to it.",
   redo_or_continue:
     "The workflow had no revision step here and went on regardless. Redo runs this segment again as a new workflow with the findings; Continue keeps what ran.",
   unreadable: "Oracle could not read the recorded verdict. Approving follows the workflow; Redo runs the segment again.",

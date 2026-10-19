@@ -307,6 +307,9 @@ async def call_operation(
     """Run ``op`` as ``caller`` through the app; raise ToolError when it may not run.
     ``check_scopes=False`` only for a curated tool that pins the call to the caller's own
     run (the REST role checks still apply)."""
+    if caller.held and scopes.required_scope(op.method, op.path) in caller.withheld:
+        # W5: the run's token is read-only while a console answer waits for an approver.
+        raise ToolError(f"Refused (HTTP 403): {op.method} {op.path}: {caller.held}.")
     if check_scopes and not scopes.allowed(caller.scopes, op.method, op.path):
         needed = scopes.required_scope(op.method, op.path)
         reason = f"needs the {needed} scope" if needed else "is not available to run tokens"

@@ -176,7 +176,20 @@ not. SwarmCloud's team confirmed the real contract, and it overrides anything ab
   in the query, so pages are exact), matches `metadata.oracle_key` and takes the row's
   `workflow_id`, paging with `page_token`. No `state`, `runner_profile` or `workflow_id`
   filter is added: combined filters are applied after the cursor and pages come back
-  short.
+  short. The search is conclusive by time (adapter v2 review fixes, round 4): it stops,
+  "not found", at the first task whose `created_at` is older than when Oracle sent the
+  submission less 10 minutes of clock skew, since the listing is newest first. Rows
+  without `created_at` (not confirmed by SwarmCloud yet) prove nothing, and past 20
+  pages with no older row the search is inconclusive. An inconclusive lookup holds the
+  submission; after 30 minutes or 30 lookups the run shows in the Inbox ("Lost
+  submissions") with **Retry** (looked up once more, else the segment is submitted again
+  under a new key, the lost one's token revoked: if it landed it runs on without
+  Oracle's data and its cost is not counted) and **Cancel**; meanwhile it is looked up
+  every 10 minutes. Cancelling looks for it the same way and, past the cap, stops
+  looking (noted).
+- **A 404 is "gone" only in SwarmCloud's envelope** (`detail.reason` or `code`
+  `not_found`): a bare 404 (a proxy's page, a changed URL or principal) proves nothing
+  and is retried like a 503, so Oracle never stops cancelling on one.
 - **Caller MCP reads** (`GET /v1/mcp-servers`) are served while the switch is off, so
   Oracle counts MCP as on only once SwarmCloud accepted its registration or a run's token.
   A registration that is already current is PATCHed with the same URL to confirm it, and
@@ -193,20 +206,23 @@ What Oracle does with an answer (adapter v2 review fixes, 2026-10-19):
 | 409 `already_answered`, the recorded verdict cannot be read | read again; still unreadable: "decide again", never a correction |
 | either, `answer_id` not Oracle's, or not recorded as Oracle's principal via `mcp` | also noted: who answered, via what, and that it was decided outside Oracle |
 | answered in SwarmCloud's console while the run waits, by an Oracle member whose role meets the checkpoint's approver role (matched by `answered_by`, never `on_behalf_of`; W5) | the tick reads the wait at most once a minute, records the answer (who, via, when, verdict, findings) as the checkpoint's decision and follows it |
-| answered there by anyone else (not a member, or a member below the approver role) | recorded ("answered in SwarmCloud by ..."); the checkpoint stays open in the Inbox showing it, for an approver to Confirm it, approve or request changes |
-| a counted console NOT_YET where the workflow has no revise step (an earlier checkpoint) | never re-run on its own: the checkpoint stays open with the findings, and an approver chooses Redo from the segment (cancel, re-run as a new workflow with the findings: one more segment, its estimate shown) or Continue (follow the workflow, the note recorded) |
+| answered there by anyone else (not a member, or a member below the approver role; an `answered_by` that redaction altered; an address matching two members by case, neither exactly) | recorded ("answered in SwarmCloud by ..."); the checkpoint stays open in the Inbox showing it, for an approver to Confirm it, approve or request changes. Meanwhile the run's token is **read-only** (owner, 2026-10-19): its agents may read Oracle, and their writes (drafts, proposals) are refused "HTTP 403 ... waiting for approval"; confirming or deciding restores it (`RunOut.token_read_only`) |
+| a counted console NOT_YET where the workflow has no revise step (an earlier checkpoint) | never re-run on its own: the checkpoint stays open with the findings, and an approver chooses Redo from the segment (cancel, re-run as a new workflow with the findings: one more segment, its estimate shown) or Continue (follow the workflow, the note recorded). Redo needs findings or a note (`ConsoleAnswer.can_redo`; the button is disabled without either) |
 | answered, and the verdict cannot be read (form missing or over 256 KB, the record refused) | shown in the Inbox and read again each minute; an approval is followed (it needs nothing the workflow did not do), a change request says "decide again", and Redo runs the segment again as a new workflow |
 | 409 `not_open`, `expired`, `cancelled` | the wait is closed: cancel, continue as a new workflow with the decision |
 | 403 `person_required` | service answers recorded as off until SwarmCloud reports them on (or Oracle's API restarts); cancel, continue as a new workflow (today's flow); later runs keep checkpoints in the Inbox |
-| other refusals (403, 404, 422) | not posted: cancel, continue as a new workflow, with a note |
-| 503, 429, timeout | nothing recorded: "decide again" (the same answer replays) |
+| other refusals (403, 404 `not_found` in SwarmCloud's envelope, 422) | not posted: cancel, continue as a new workflow, with a note |
+| 503, 429, timeout, a bare (non-envelope) 404 | nothing recorded: "decide again" (the same answer replays) |
 
 No case runs a segment in two workflows unless an approver chose Redo: a workflow is
 cancelled before its successor is submitted, and a cancel SwarmCloud does not confirm
 holds the successor back. The workflow stays attached (`cancel_pending`), its run token
-revoked, its cost counted in the run's spend, and every tick cancels it again (a 404 ends
-that, recorded); an Inbox decision that needs the cancel says "decide again". A confirmed
-cancel reads the workflow's final cost. The spend ceiling is checked on every tick before
+revoked, its cost counted in the run's spend, and every tick cancels it again (SwarmCloud's
+enveloped 404 ends that, recorded); an Inbox decision that needs the cancel says "decide
+again". A confirmed cancel reads the workflow's final cost; when that read fails, the
+workflow stays attached for one more read by the tick (still unread, it is detached and
+noted). A workflow's cost is counted once, on its first attempt at the segment it was
+submitted for: a revision inside it adds an attempt that counts nothing again. The spend ceiling is checked on every tick before
 anything that follows an answer or submits (a wait SwarmCloud does not serve is read
 again next tick, the cost reading kept), and before every submission. A submission whose
 answer was lost is looked up before anything is resubmitted; a lookup that cannot finish

@@ -8701,6 +8701,58 @@
         }
       }
     },
+    "/v1/runs/{run_id}/retry": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Run",
+        "description": "Retry a run whose lost submission Oracle could neither find nor rule out (Inbox:\nlookups): looked up once more, else the segment is submitted again.",
+        "operationId": "retry_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runs/{run_id}/cancel": {
       "post": {
         "tags": [
@@ -11268,6 +11320,11 @@
               }
             ],
             "title": "Redo Cost Usd"
+          },
+          "can_redo": {
+            "type": "boolean",
+            "title": "Can Redo",
+            "default": false
           }
         },
         "type": "object",
@@ -14465,6 +14522,14 @@
             },
             "type": "array",
             "title": "Overruns"
+          },
+          "lookups": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "type": "array",
+            "title": "Lookups",
+            "default": []
           },
           "feedback": {
             "items": {
@@ -17867,6 +17932,17 @@
             ],
             "title": "Error"
           },
+          "stuck": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stuck"
+          },
           "knobs": {
             "$ref": "#/components/schemas/KnobsOut"
           },
@@ -17957,6 +18033,11 @@
             },
             "type": "array",
             "title": "Checkpoints"
+          },
+          "token_read_only": {
+            "type": "boolean",
+            "title": "Token Read Only",
+            "default": false
           }
         },
         "type": "object",
@@ -18246,6 +18327,17 @@
               }
             ],
             "title": "Error"
+          },
+          "stuck": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stuck"
           }
         },
         "type": "object",

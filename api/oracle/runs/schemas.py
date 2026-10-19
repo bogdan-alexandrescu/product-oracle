@@ -230,6 +230,9 @@ class ConsoleAnswer(BaseModel):
     # Redo: the segment that runs again as a new workflow, and its estimate (one more).
     redo_segment: str | None = None
     redo_cost_usd: float | None = None
+    # Redo carries the console's findings; without any, it needs a note (the API refuses
+    # a Redo without either, and the web disables the button).
+    can_redo: bool = False
 
 
 class CheckpointOut(BaseModel):
@@ -273,6 +276,9 @@ class RunSummary(BaseModel):
     # The kind of the checkpoint the run waits on, if any.
     waiting_on: CheckpointKind | None = None
     error: str | None = None
+    # A lost submission Oracle could neither find nor rule out past the lookup cap: what
+    # the Inbox says, with Retry and Cancel.
+    stuck: str | None = None
 
 
 class RunOut(RunSummary):
@@ -288,6 +294,9 @@ class RunOut(RunSummary):
     notes: list[str]
     segments: list[SegmentOut]
     checkpoints: list[CheckpointOut]
+    # W5: while a console answer that did not count waits for an approver, the run's
+    # token is read-only (its agents' writes are refused "waiting for approval").
+    token_read_only: bool = False
 
 
 class CheckpointDecision(BaseModel):
@@ -356,6 +365,9 @@ class InboxOut(BaseModel):
     # Owners only: runs waiting for cost approval, and runs paused on overrun.
     approvals: list[RunSummary]
     overruns: list[RunSummary]
+    # Owners and the run's creator: runs whose lost submission is past the lookup cap
+    # (RunSummary.stuck), to Retry or Cancel.
+    lookups: list[RunSummary] = []
     # Approvers and owners: open feedback on documents they can approve.
     feedback: list[InboxDocument]
     total: int

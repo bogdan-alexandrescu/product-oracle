@@ -337,6 +337,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     checkpoints,
     approvals,
     overruns,
+    lookups: [],
     feedback,
     total: checkpoints.length + approvals.length + overruns.length + feedback.length,
   };
@@ -427,6 +428,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       notes: FLOW_CATALOG.runtime_notes,
       segments: segmentsFor(input.flow, knobs, ctx.uuid),
       checkpoints: [],
+      token_read_only: false,
     };
     ctx.db.runs.push(run);
     return json(201, run);
@@ -579,6 +581,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
       notes: FLOW_CATALOG.runtime_notes,
       segments,
       checkpoints: [],
+      token_read_only: false,
     };
     db.runs.push(run);
     return run;

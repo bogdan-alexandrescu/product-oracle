@@ -142,6 +142,14 @@ class FakeSwarmCloud:
         self.steps_per_poll: int | None = None
         # Other tasks of Oracle's, newer than any workflow here (for paging).
         self.other_tasks = 0
+        # Other tasks of Oracle's, a day older than any workflow here (listed after them).
+        self.older_tasks = 0
+        # Answer every call about a workflow with a bare HTML 404 (a proxy's page, or a
+        # changed URL or principal): not SwarmCloud's envelope.
+        self.html_404 = False
+        # Refuse this many reads of a workflow (503) once a cancel was confirmed.
+        self.fail_reads_after_cancel = 0
+        self._failing_reads = 0
         self.step_failure: dict[str, tuple[str, str]] = {}  # step_id -> (code, message)
         self._n = 0
 
@@ -206,6 +214,11 @@ class FakeSwarmCloud:
                 raise httpx.ReadTimeout("lost", request=request)
             return self._tasks(request.url.params)
         m = re.fullmatch(r"/v1/workflows/([^/]+)(/cancel|/steps/([^/]+)/input)?", path)
+        if m and self.html_404:
+            return httpx.Response(404, text="<html><body>Not Found</body></html>")
+        if m and not m[2] and method == "GET" and self._failing_reads > 0:
+            self._failing_reads -= 1
+            return _err(503, "unavailable", "try again later")
         if m:
             wf = self.workflows.get(m[1])
             if wf is None:
@@ -359,6 +372,7 @@ class FakeSwarmCloud:
                 "state": "SUCCEEDED",
                 "runner_profile": "claude-code",
                 "metadata": {"oracle_key": f"oracle-other-{i}"},
+                "created_at": self.now.isoformat(),
             }
             for i in range(self.other_tasks)
         ]
@@ -371,8 +385,21 @@ class FakeSwarmCloud:
                         "state": st.state,
                         "runner_profile": st.profile,
                         "metadata": dict(st.metadata),
+                        "created_at": wf.submitted_at.isoformat(),
                     },
                 )
+        older = self.now - timedelta(days=1)
+        rows += [
+            {
+                "id": f"older_t{i}",
+                "workflow_id": f"older_wf{i}",
+                "state": "SUCCEEDED",
+                "runner_profile": "claude-code",
+                "metadata": {"oracle_key": f"oracle-older-{i}"},
+                "created_at": (older - timedelta(seconds=i)).isoformat(),
+            }
+            for i in range(self.older_tasks)
+        ]
         limit = int(params.get("limit", "50"))
         start = int(params.get("page_token") or 0)
         page = rows[start : start + limit]
@@ -452,6 +479,7 @@ class FakeSwarmCloud:
         if wf.state in ("SUCCEEDED", "FAILED", "CANCELLED"):
             return _err(409, "not_cancellable", f"workflow is {wf.state}")
         wf.state = "CANCELLED"
+        self._failing_reads = self.fail_reads_after_cancel
         for s in wf.steps:
             if s.state in ("PENDING", "RUNNING", "PARKED"):
                 if s.state == "PARKED" and s.await_input:

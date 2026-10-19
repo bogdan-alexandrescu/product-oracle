@@ -146,6 +146,32 @@ export default function InboxPage() {
             ))}
           </Section>
 
+          <Section title="Lost submissions" count={inbox.lookups.length} testId="inbox-lookups">
+            {inbox.lookups.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+                <div className="min-w-0 flex-1">
+                  <RunLink run={r} />
+                  <div className="text-xs text-neutral-500">{r.stuck}</div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={busy !== null}
+                  onClick={() => act(`retry-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry", path(r.id))))}
+                >
+                  Retry
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={() => act(`cancel-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/cancel", path(r.id))))}
+                >
+                  Cancel run
+                </Button>
+              </li>
+            ))}
+          </Section>
+
           <Section title="Open feedback" count={inbox.feedback.length} testId="inbox-feedback">
             {inbox.feedback.map((d) => (
               <li key={d.document_id} className="px-4 py-3 text-sm">

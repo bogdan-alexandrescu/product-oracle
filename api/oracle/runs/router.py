@@ -161,6 +161,14 @@ async def resume_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) -> RunOu
     return await service.read_run(db, run_id, principal)
 
 
+@router.post("/runs/{run_id}/retry", response_model=RunOut)
+async def retry_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+    """Retry a run whose lost submission Oracle could neither find nor rule out (Inbox:
+    lookups): looked up once more, else the segment is submitted again."""
+    await _call(service.retry(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
 @router.post("/runs/{run_id}/cancel", response_model=RunOut)
 async def cancel_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
     await _call(service.cancel(db, principal, run_id))

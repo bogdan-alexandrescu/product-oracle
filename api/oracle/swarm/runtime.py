@@ -168,6 +168,9 @@ class RecordedAnswer:
     state: str | None = None
     # Recorded as posted by Oracle's own principal through its channel (not the console).
     by_oracle: bool = False
+    # ``answered_by`` is not what SwarmCloud recorded (redaction withheld or clipped part
+    # of it): never matched to a member.
+    answered_by_altered: bool = False
 
     @property
     def answered(self) -> bool:
@@ -181,7 +184,10 @@ class RuntimeUnavailable(RuntimeError):
     error envelope, e.g. ``already_answered``, else its top-level code such as
     ``mcp_unavailable``); ``status`` its HTTP status; ``detail`` the envelope's
     ``detail`` object; ``lost`` is True when the answer never arrived (a timeout, a
-    dropped connection or a 5xx), so the call may have happened."""
+    dropped connection or a 5xx), so the call may have happened; ``gone`` is True only
+    when the runtime's own error envelope says the thing asked about does not exist (a
+    404 ``not_found``): a bare 404 (a proxy's page, a changed URL or principal) proves
+    nothing and is retryable."""
 
     def __init__(
         self,
@@ -191,18 +197,26 @@ class RuntimeUnavailable(RuntimeError):
         status: int | None = None,
         lost: bool = False,
         detail: dict[str, Any] | None = None,
+        gone: bool = False,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.status = status
         self.lost = lost
         self.detail = detail or {}
+        self.gone = gone
 
     @property
     def retryable(self) -> bool:
         """Nothing was recorded and the same call may succeed later: the answer was lost,
         or the runtime was unavailable (a 5xx or 429)."""
-        return self.lost or self.status is None or self.status >= 500 or self.status == 429
+        return (
+            self.lost
+            or self.status is None
+            or self.status >= 500
+            or self.status == 429
+            or (self.status == 404 and not self.gone)
+        )
 
 
 @runtime_checkable
@@ -255,9 +269,10 @@ class AgentRuntime(Protocol):
         runtime places no limit (a local runtime)."""
         ...
 
-    async def find_by_label(self, label: str) -> str | None:
+    async def find_by_label(self, label: str, since: datetime | None = None) -> str | None:
         """The workflow submitted with ``label`` (its ``oracle_key``), if any: submits are
-        not idempotent."""
+        not idempotent. ``since``: when the submission was sent; the search ends, "not
+        found", at the first task older than that (less a clock-skew margin)."""
         ...
 
     async def answer(
