@@ -4,8 +4,10 @@
 the time its ``retry-after`` ends. No usage poll of that company's accounts starts
 before it, across sweeps and API instances.
 
-Revision ID: 0014
-Revises: 0013
+Re-chained on 0014_quality at the wave 1 integration (waves.md: 0014_* in merge order).
+
+Revision ID: 0014_usage_retry_at
+Revises: 0014_quality
 """
 
 from collections.abc import Sequence
@@ -13,8 +15,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0014"
-down_revision: str | None = "0013"
+revision: str = "0014_usage_retry_at"
+down_revision: str | None = "0014_quality"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
