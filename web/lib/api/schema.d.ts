@@ -3574,6 +3574,234 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/module-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Module Catalog
+         * @description Every module the company can compose with.
+         */
+        get: operations["list_module_catalog"];
+        put?: never;
+        /**
+         * Create Company Module
+         * @description Add a company module (not a built-in).
+         */
+        post: operations["create_company_module"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-catalog/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Module Catalog Entry
+         * @description One module with its effective contract and its release history.
+         */
+        get: operations["get_module_catalog_entry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-catalog/{key}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Module Override
+         * @description A company release of a module (an override of a built-in, or a new release of a
+         *     company module). Built-in upgrades never overwrite it.
+         */
+        post: operations["create_module_override"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Module Packs
+         * @description The built-in packs: General Tech Startup, the Multi-tenant AI Agent Platform and the
+         *     industry packs (O1h), each with its modules in order and their policy tier.
+         */
+        get: operations["list_module_packs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/module-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Module Policy
+         * @description Which modules the company makes mandatory, optional or disabled.
+         */
+        get: operations["get_module_policy"];
+        /**
+         * Put Module Policy
+         * @description Set the company module policy. Each document's composition in force gets a change
+         *     event saying what changed; a person re-confirms it to apply the policy.
+         */
+        put: operations["put_module_policy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/template-manifests/{template}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Template Manifest
+         * @description A template's module manifest: which module renders which of its sections, and the
+         *     sections no module claims (template-owned, preserved as-is). Empty for a template
+         *     without a manifest, which composes exactly as before.
+         */
+        get: operations["get_template_manifest"];
+        /**
+         * Put Template Manifest
+         * @description Replace a template's manifest. The template and its versions are not touched; a
+         *     company-edited manifest is never replaced by a packaged one.
+         */
+        put: operations["put_template_manifest"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compositions/recommend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recommend Composition
+         * @description Recommend a module composition for a document, an intake or a template, with the
+         *     reason, source and missing information behind each module. Changes nothing; pass
+         *     `changes` to preview adding, removing or reordering modules.
+         */
+        post: operations["recommend_composition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/composition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Document Composition
+         * @description The composition inspector: for each module, mandatory, suggested or optional; the
+         *     reason and the source or assumption behind it; missing information; brief/full
+         *     impact; dependencies and conflicts; version history; and the revision history. A
+         *     document without a composition is legacy and gets a recommendation instead.
+         */
+        get: operations["get_document_composition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/composition/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Composition Revision
+         * @description Confirm a composition revision, or save it as a working draft: who decided and
+         *     why. It starts from the newest revision, so earlier decisions carry. Mandatory
+         *     modules and dependencies are never removed silently. Confirming puts it in force and
+         *     records change events for the affected sections; a working draft supersedes nothing
+         *     and records none. An earlier decision set aside comes back in `problems`.
+         */
+        post: operations["confirm_composition_revision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/composition/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Composition
+         * @description Pin the confirmed composition to an approved document version: template version,
+         *     module ids and versions, company overrides and inputs. Never changed afterwards.
+         */
+        post: operations["publish_composition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -3797,6 +4025,16 @@ export interface components {
             unreadable_document_count: number;
             refresh_sweep: components["schemas"]["RefreshSweepOut"];
             fallback: components["schemas"]["FallbackOut"] | null;
+        };
+        /**
+         * AdvisoryIn
+         * @description An advisory signal for a conditional module (AI analysis or a priority score).
+         */
+        AdvisoryIn: {
+            /** Score */
+            score: number;
+            /** Rationale */
+            rationale: string;
         };
         /** AgentRoleOut */
         AgentRoleOut: {
@@ -4159,6 +4397,36 @@ export interface components {
             label: string;
         };
         /**
+         * Basis
+         * @description One input that drove a decision: what was read, what it held, and how we know.
+         */
+        Basis: {
+            /** Path */
+            path: string;
+            /** Op */
+            op: string;
+            /** Expected */
+            expected?: unknown;
+            /** Actual */
+            actual?: unknown;
+            /** Holds */
+            holds: boolean;
+            /** Missing */
+            missing: boolean;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Source */
+            source?: string | null;
+        };
+        /**
          * BlockerOptionDetails
          * @description ``blocker_options.details``.
          */
@@ -4322,6 +4590,100 @@ export interface components {
              */
             files: string[];
         };
+        /** CatalogModuleDetail */
+        CatalogModuleDetail: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Builtin */
+            builtin: boolean;
+            /** Archived */
+            archived: boolean;
+            /** Version */
+            version: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "builtin" | "company";
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Company Policy */
+            company_policy?: ("required" | "optional" | "disabled") | null;
+            /** Applies To */
+            applies_to: string[];
+            /** Depends On */
+            depends_on: string[];
+            /** Conflicts With */
+            conflicts_with: string[];
+            /** Section Ids */
+            section_ids: string[];
+            /** Brief Layer */
+            brief_layer: boolean;
+            /** Full Layer */
+            full_layer: boolean;
+            /** Required Review Role */
+            required_review_role: string;
+            /** Upgrade Available */
+            upgrade_available?: string | null;
+            /** Versions */
+            versions: components["schemas"]["ModuleVersionSummary"][];
+            /** Contract */
+            contract: {
+                [key: string]: unknown;
+            };
+        };
+        /** CatalogModuleOut */
+        CatalogModuleOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Builtin */
+            builtin: boolean;
+            /** Archived */
+            archived: boolean;
+            /** Version */
+            version: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "builtin" | "company";
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Company Policy */
+            company_policy?: ("required" | "optional" | "disabled") | null;
+            /** Applies To */
+            applies_to: string[];
+            /** Depends On */
+            depends_on: string[];
+            /** Conflicts With */
+            conflicts_with: string[];
+            /** Section Ids */
+            section_ids: string[];
+            /** Brief Layer */
+            brief_layer: boolean;
+            /** Full Layer */
+            full_layer: boolean;
+            /** Required Review Role */
+            required_review_role: string;
+            /** Upgrade Available */
+            upgrade_available?: string | null;
+            /** Versions */
+            versions: components["schemas"]["ModuleVersionSummary"][];
+        };
         /** ChangeEventOut */
         ChangeEventOut: {
             /**
@@ -4372,6 +4734,21 @@ export interface components {
              * @default
              */
             summary: string;
+        };
+        /** ChangesIn */
+        ChangesIn: {
+            /**
+             * Add
+             * @default []
+             */
+            add: string[];
+            /**
+             * Remove
+             * @default []
+             */
+            remove: string[];
+            /** Order */
+            order?: string[] | null;
         };
         /** ChangesReport */
         ChangesReport: {
@@ -4620,6 +4997,133 @@ export interface components {
             body?: string | null;
         };
         /**
+         * ComposedModule
+         * @description A module in a composition, with everything the inspector explains (§4.5).
+         */
+        ComposedModule: {
+            /** Key */
+            key: string;
+            /** Version */
+            version: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Included */
+            included: boolean;
+            /** Reason */
+            reason: string;
+            /** Order */
+            order: number;
+            /**
+             * Section Ids
+             * @default []
+             */
+            section_ids: string[];
+            /**
+             * Driven By
+             * @default []
+             */
+            driven_by: string[];
+            /** Score */
+            score?: number | null;
+            /** Overridden By */
+            overridden_by?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Origin
+             * @default builtin
+             */
+            origin: string;
+            /**
+             * Selection
+             * @default optional
+             * @enum {string}
+             */
+            selection: "mandatory" | "suggested" | "optional";
+            /**
+             * Decided By
+             * @default none
+             * @enum {string}
+             */
+            decided_by: "policy" | "template" | "condition" | "dependency" | "user" | "conflict" | "none";
+            /**
+             * Policy Source
+             * @default catalog
+             * @enum {string}
+             */
+            policy_source: "company" | "pack" | "template" | "catalog";
+            /**
+             * Explanation
+             * @default []
+             */
+            explanation: string[];
+            /**
+             * Basis
+             * @default []
+             */
+            basis: components["schemas"]["Basis"][];
+            /**
+             * Missing Information
+             * @default []
+             */
+            missing_information: string[];
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["QuestionRef"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Required By
+             * @default []
+             */
+            required_by: string[];
+            /**
+             * Conflicts With
+             * @default []
+             */
+            conflicts_with: string[];
+            /**
+             * @default {
+             *       "brief_sections": [],
+             *       "full_sections": [],
+             *       "new_sections": [],
+             *       "template_sections": [],
+             *       "absent_template_sections": []
+             *     }
+             */
+            layer_impact: components["schemas"]["LayerImpact"];
+            /**
+             * Field Problems
+             * @default []
+             */
+            field_problems: components["schemas"]["FieldProblem"][];
+            /** Condition Error */
+            condition_error?: string | null;
+            /** User Reason */
+            user_reason?: string | null;
+            /**
+             * Ordered By User
+             * @default false
+             */
+            ordered_by_user: boolean;
+            /**
+             * Required Review Role
+             * @default approver
+             */
+            required_review_role: string;
+        };
+        /**
          * CompositionInputs
          * @description What a composition was computed from (§4.3 step 1). Conditions read these roots.
          */
@@ -4739,6 +5243,67 @@ export interface components {
             /** Overridden By */
             overridden_by?: string | null;
         };
+        /** CompositionProblem */
+        CompositionProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Module */
+            module?: string | null;
+            /**
+             * Fatal
+             * @default true
+             */
+            fatal: boolean;
+        };
+        /**
+         * CompositionRecommendIn
+         * @description Recommend for a document (id or slug), an intake, or neither (a template alone).
+         */
+        CompositionRecommendIn: {
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: number | null;
+            /** Packs */
+            packs?: string[] | null;
+            /** Intake Id */
+            intake_id?: string | null;
+            /**
+             * Inputs
+             * @default {}
+             */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Provenance
+             * @default {}
+             */
+            provenance: {
+                [key: string]: components["schemas"]["ProvenanceIn"];
+            };
+            /**
+             * Advisory
+             * @default {}
+             */
+            advisory: {
+                [key: string]: components["schemas"]["AdvisoryIn"];
+            };
+            /**
+             * Field Values
+             * @default {}
+             */
+            field_values: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            changes?: components["schemas"]["ChangesIn"] | null;
+            /** Document */
+            document?: string | null;
+        };
         /** CompositionRevisionOut */
         CompositionRevisionOut: {
             /**
@@ -4778,6 +5343,19 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** CompositionSummary */
+        CompositionSummary: {
+            /** Mandatory */
+            mandatory: number;
+            /** Suggested */
+            suggested: number;
+            /** Optional */
+            optional: number;
+            /** Included */
+            included: number;
+            /** Excluded */
+            excluded: number;
         };
         /** ConfidenceOut */
         ConfidenceOut: {
@@ -5151,6 +5729,16 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** DocumentSectionsOut */
+        DocumentSectionsOut: {
+            /** Version */
+            version?: number | null;
+            /**
+             * Unmapped
+             * @default []
+             */
+            unmapped: string[];
         };
         /** DocumentSummary */
         DocumentSummary: {
@@ -6056,6 +6644,15 @@ export interface components {
             /** Addressed In Version */
             addressed_in_version?: number | null;
         };
+        /** FieldProblem */
+        FieldProblem: {
+            /** Field */
+            field: string;
+            /** Kind */
+            kind: string;
+            /** Message */
+            message: string;
+        };
         /** FlowCatalog */
         FlowCatalog: {
             /** Flows */
@@ -6395,6 +6992,181 @@ export interface components {
             feedback: components["schemas"]["InboxDocument"][];
             /** Total */
             total: number;
+        };
+        /** InspectedModule */
+        InspectedModule: {
+            /** Key */
+            key: string;
+            /** Version */
+            version: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Included */
+            included: boolean;
+            /** Reason */
+            reason: string;
+            /** Order */
+            order: number;
+            /**
+             * Section Ids
+             * @default []
+             */
+            section_ids: string[];
+            /**
+             * Driven By
+             * @default []
+             */
+            driven_by: string[];
+            /** Score */
+            score?: number | null;
+            /** Overridden By */
+            overridden_by?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Origin
+             * @default builtin
+             */
+            origin: string;
+            /**
+             * Selection
+             * @default optional
+             * @enum {string}
+             */
+            selection: "mandatory" | "suggested" | "optional";
+            /**
+             * Decided By
+             * @default none
+             * @enum {string}
+             */
+            decided_by: "policy" | "template" | "condition" | "dependency" | "user" | "conflict" | "none";
+            /**
+             * Policy Source
+             * @default catalog
+             * @enum {string}
+             */
+            policy_source: "company" | "pack" | "template" | "catalog";
+            /**
+             * Explanation
+             * @default []
+             */
+            explanation: string[];
+            /**
+             * Basis
+             * @default []
+             */
+            basis: components["schemas"]["Basis"][];
+            /**
+             * Missing Information
+             * @default []
+             */
+            missing_information: string[];
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["QuestionRef"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Required By
+             * @default []
+             */
+            required_by: string[];
+            /**
+             * Conflicts With
+             * @default []
+             */
+            conflicts_with: string[];
+            /**
+             * @default {
+             *       "brief_sections": [],
+             *       "full_sections": [],
+             *       "new_sections": [],
+             *       "template_sections": [],
+             *       "absent_template_sections": []
+             *     }
+             */
+            layer_impact: components["schemas"]["LayerImpact"];
+            /**
+             * Field Problems
+             * @default []
+             */
+            field_problems: components["schemas"]["FieldProblem"][];
+            /** Condition Error */
+            condition_error?: string | null;
+            /** User Reason */
+            user_reason?: string | null;
+            /**
+             * Ordered By User
+             * @default false
+             */
+            ordered_by_user: boolean;
+            /**
+             * Required Review Role
+             * @default approver
+             */
+            required_review_role: string;
+            /**
+             * Sections Present
+             * @default []
+             */
+            sections_present: string[];
+            /**
+             * Sections Missing
+             * @default []
+             */
+            sections_missing: string[];
+            /**
+             * Versions
+             * @default []
+             */
+            versions: components["schemas"]["ModuleVersionSummary"][];
+            /** Latest Version */
+            latest_version?: string | null;
+            /** Upgrade Available */
+            upgrade_available?: string | null;
+        };
+        /**
+         * InspectorOut
+         * @description Everything the composition inspector shows for one document (§4.5).
+         */
+        InspectorOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Legacy */
+            legacy: boolean;
+            /** Composition Id */
+            composition_id?: string | null;
+            /** Lock Version */
+            lock_version?: number | null;
+            /** Head Revision */
+            head_revision?: number | null;
+            current?: components["schemas"]["RevisionDetail"] | null;
+            working?: components["schemas"]["RevisionDetail"] | null;
+            recommendation?: components["schemas"]["RecommendationOut"] | null;
+            /** Revisions */
+            revisions: components["schemas"]["RevisionSummary"][];
+            sections: components["schemas"]["DocumentSectionsOut"];
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["CompositionProblem"][];
         };
         /**
          * IntakeAnalysis
@@ -6758,6 +7530,37 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * LayerImpact
+         * @description Where the module shows up in the document (O1f brief and full layers).
+         */
+        LayerImpact: {
+            /**
+             * Brief Sections
+             * @default []
+             */
+            brief_sections: string[];
+            /**
+             * Full Sections
+             * @default []
+             */
+            full_sections: string[];
+            /**
+             * New Sections
+             * @default []
+             */
+            new_sections: string[];
+            /**
+             * Template Sections
+             * @default []
+             */
+            template_sections: string[];
+            /**
+             * Absent Template Sections
+             * @default []
+             */
+            absent_template_sections: string[];
+        };
         /** LearningCreate */
         LearningCreate: {
             /** Outcome Id */
@@ -7064,6 +7867,78 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** ManifestIn */
+        ManifestIn: {
+            /** Modules */
+            modules: components["schemas"]["ManifestModuleIn"][];
+        };
+        /** ManifestModuleIn */
+        ManifestModuleIn: {
+            /** Module Key */
+            module_key: string;
+            /**
+             * Section Ids
+             * @default []
+             */
+            section_ids: string[];
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Module Version */
+            module_version?: string | null;
+            /** Display Order */
+            display_order?: number | null;
+        };
+        /** ManifestModuleOut */
+        ManifestModuleOut: {
+            /** Module Key */
+            module_key: string;
+            /** Module Version */
+            module_version?: string | null;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+            /** Display Order */
+            display_order: number;
+            /** Section Ids */
+            section_ids: string[];
+            /**
+             * Sections Present
+             * @default []
+             */
+            sections_present: string[];
+            /**
+             * Sections Absent
+             * @default []
+             */
+            sections_absent: string[];
+            /** Created By */
+            created_by?: string | null;
+        };
+        /** ManifestOut */
+        ManifestOut: {
+            /** Template */
+            template: string;
+            /**
+             * Template Id
+             * Format: uuid
+             */
+            template_id: string;
+            /** Template Version */
+            template_version: number;
+            /** Edited */
+            edited: boolean;
+            /** Manifest Format */
+            manifest_format: number;
+            /** Modules */
+            modules: components["schemas"]["ManifestModuleOut"][];
+            /** Unmapped Sections */
+            unmapped_sections: string[];
+        };
         /** Me */
         Me: {
             /**
@@ -7166,6 +8041,16 @@ export interface components {
              */
             report_id: string;
         };
+        /**
+         * ModuleContractIn
+         * @description A module contract (oracle.v2.contract.ModuleContract) as JSON.
+         */
+        ModuleContractIn: {
+            /** Contract */
+            contract: {
+                [key: string]: unknown;
+            };
+        };
         /** ModuleDefinitionOut */
         ModuleDefinitionOut: {
             /**
@@ -7190,6 +8075,59 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ModulePolicyOut */
+        ModulePolicyOut: {
+            /**
+             * Required
+             * @default []
+             */
+            required: string[];
+            /**
+             * Optional
+             * @default []
+             */
+            optional: string[];
+            /**
+             * Disabled
+             * @default []
+             */
+            disabled: string[];
+            /**
+             * Default Packs
+             * @default []
+             */
+            default_packs: string[];
+            /** Is Default */
+            is_default: boolean;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * ModulePolicySettings
+         * @description The ``module_policy`` company setting (owner writes).
+         */
+        ModulePolicySettings: {
+            /**
+             * Required
+             * @default []
+             */
+            required: string[];
+            /**
+             * Optional
+             * @default []
+             */
+            optional: string[];
+            /**
+             * Disabled
+             * @default []
+             */
+            disabled: string[];
+            /**
+             * Default Packs
+             * @default []
+             */
+            default_packs: string[];
         };
         /** ModuleVersionOut */
         ModuleVersionOut: {
@@ -7216,6 +8154,25 @@ export interface components {
              * @enum {string}
              */
             origin: "builtin" | "company";
+            /** Created By */
+            created_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ModuleVersionSummary */
+        ModuleVersionSummary: {
+            /** Version */
+            version: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "builtin" | "company";
+            /** Contract Hash */
+            contract_hash: string;
             /** Created By */
             created_by?: string | null;
             /**
@@ -7338,6 +8295,54 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** OutlineEntry */
+        OutlineEntry: {
+            /** Section Id */
+            section_id: string;
+            /** Heading */
+            heading: string;
+            /** Level */
+            level: number;
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "brief" | "full";
+            /** Module */
+            module?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "template" | "module";
+        };
+        /** PackModuleOut */
+        PackModuleOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional" | "optional";
+        };
+        /** PackOut */
+        PackOut: {
+            /** Id */
+            id: string;
+            /** Version */
+            version: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Categories */
+            categories: string[];
+            /** Modules */
+            modules: components["schemas"]["PackModuleOut"][];
         };
         /**
          * PrdAnswers
@@ -7504,6 +8509,16 @@ export interface components {
             section_key?: string | null;
         };
         /**
+         * ProblemsOut
+         * @description A refused request: every problem found, each with a stable code.
+         */
+        ProblemsOut: {
+            /** Detail */
+            detail: string;
+            /** Problems */
+            problems: components["schemas"]["CompositionProblem"][];
+        };
+        /**
          * ProblemsResponse
          * @description 422 body when a template or theme fails validation: every problem at once.
          */
@@ -7632,6 +8647,21 @@ export interface components {
             /** Resource Name */
             resource_name: string;
         };
+        /** ProvenanceIn */
+        ProvenanceIn: {
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Source */
+            source?: string | null;
+        };
         /** ProviderOut */
         ProviderOut: {
             /** Key */
@@ -7646,6 +8676,11 @@ export interface components {
             oauth_scopes: string[];
             /** Token Help */
             token_help: string;
+        };
+        /** PublishIn */
+        PublishIn: {
+            /** Version */
+            version: number;
         };
         /** Pushback */
         Pushback: {
@@ -7671,6 +8706,22 @@ export interface components {
             excerpt?: string | null;
             /** Confidence */
             confidence?: number | null;
+        };
+        /** QuestionRef */
+        QuestionRef: {
+            /** Key */
+            key: string;
+            /** Prompt */
+            prompt: string;
+            /** Category */
+            category: string;
+            /** Importance */
+            importance: string;
+            /**
+             * Fills
+             * @default []
+             */
+            fills: string[];
         };
         /** RankedFeature */
         RankedFeature: {
@@ -7834,6 +8885,29 @@ export interface components {
             templates: components["schemas"]["TemplateOption"][];
             /** Themes */
             themes: components["schemas"]["ThemeOption"][];
+        };
+        /** RecommendationOut */
+        RecommendationOut: {
+            /** Document Id */
+            document_id?: string | null;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: string | null;
+            /** Packs */
+            packs: string[];
+            /** Valid */
+            valid: boolean;
+            summary: components["schemas"]["CompositionSummary"];
+            /** Modules */
+            modules: components["schemas"]["ComposedModule"][];
+            /** Problems */
+            problems: components["schemas"]["CompositionProblem"][];
+            /** Outline */
+            outline: components["schemas"]["OutlineEntry"][];
+            inputs: components["schemas"]["CompositionInputs"];
         };
         /** ReconnectIn */
         ReconnectIn: {
@@ -8003,6 +9077,132 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** RevisionDetail */
+        RevisionDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "confirmed" | "published" | "superseded";
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Parent Number */
+            parent_number?: number | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            diff: components["schemas"]["RevisionDiff"];
+            /** Lock Version */
+            lock_version: number;
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: string | null;
+            /**
+             * Packs
+             * @default []
+             */
+            packs: string[];
+            inputs: components["schemas"]["CompositionInputs"];
+            /** Modules */
+            modules: components["schemas"]["InspectedModule"][];
+            summary: components["schemas"]["CompositionSummary"];
+        };
+        /** RevisionDiff */
+        RevisionDiff: {
+            /**
+             * Added
+             * @default []
+             */
+            added: string[];
+            /**
+             * Removed
+             * @default []
+             */
+            removed: string[];
+            /**
+             * Version Changed
+             * @default []
+             */
+            version_changed: components["schemas"]["VersionChange"][];
+            /**
+             * Reordered
+             * @default false
+             */
+            reordered: boolean;
+            /**
+             * Material
+             * @default false
+             */
+            material: boolean;
+            /**
+             * Affected Sections
+             * @default []
+             */
+            affected_sections: string[];
+        };
+        /** RevisionIn */
+        RevisionIn: {
+            /** Template */
+            template?: string | null;
+            /** Template Version */
+            template_version?: number | null;
+            /** Packs */
+            packs?: string[] | null;
+            /** Intake Id */
+            intake_id?: string | null;
+            /**
+             * Inputs
+             * @default {}
+             */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Provenance
+             * @default {}
+             */
+            provenance: {
+                [key: string]: components["schemas"]["ProvenanceIn"];
+            };
+            /**
+             * Advisory
+             * @default {}
+             */
+            advisory: {
+                [key: string]: components["schemas"]["AdvisoryIn"];
+            };
+            /**
+             * Field Values
+             * @default {}
+             */
+            field_values: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            changes?: components["schemas"]["ChangesIn"] | null;
+            /** Base Revision */
+            base_revision?: number | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Status
+             * @default confirmed
+             * @enum {string}
+             */
+            status: "confirmed" | "working";
+        };
         /** RevisionOut */
         RevisionOut: {
             /**
@@ -8031,6 +9231,32 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** RevisionSummary */
+        RevisionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "confirmed" | "published" | "superseded";
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Parent Number */
+            parent_number?: number | null;
+            /** Document Version Id */
+            document_version_id?: string | null;
+            diff: components["schemas"]["RevisionDiff"];
         };
         /**
          * RoadmapAnswers
@@ -9568,6 +10794,15 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VersionChange */
+        VersionChange: {
+            /** Key */
+            key: string;
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
         };
         /** VersionOut */
         VersionOut: {
@@ -16755,6 +17990,431 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LearningOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_module_catalog: {
+        parameters: {
+            query?: {
+                pack?: string | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_company_module: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModuleContractIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleDetail"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    get_module_catalog_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_module_override: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModuleContractIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModuleDetail"];
+                };
+            };
+            /** @description No such module */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    list_module_packs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOut"][];
+                };
+            };
+        };
+    };
+    get_module_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModulePolicyOut"];
+                };
+            };
+        };
+    };
+    put_module_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModulePolicySettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModulePolicyOut"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    get_template_manifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_template_manifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManifestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestOut"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    recommend_composition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompositionRecommendIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationOut"];
+                };
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    get_document_composition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_composition_revision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectorOut"];
+                };
+            };
+            /** @description Changed since loaded, or not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refused: the problems say why */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsOut"];
+                };
+            };
+        };
+    };
+    publish_composition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompositionRevisionOut"];
+                };
+            };
+            /** @description Changed since loaded, or not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -27,6 +27,8 @@ from oracle.jobs.worker import (
 from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
 from oracle.members.router import router as members_router
+from oracle.modules.router import router as modules_router
+from oracle.modules.service import seed_all_companies
 from oracle.preferences.router import router as preferences_router
 from oracle.priorities.router import router as priorities_router
 from oracle.quality.router import router as quality_router
@@ -55,6 +57,14 @@ async def lifespan(app: FastAPI):
             HARD_LIMIT_SECONDS,
             HARD_LIMIT_SECONDS - JOB_OVERHEAD_SECONDS,
         )
+    # Built-in templates, modules and manifests for every company, so a release's new
+    # or upgraded built-ins are there before anyone reads (reads never write). Each
+    # company is seeded on its own: one failing is logged by id and the rest go on.
+    # Nothing here is fatal: the write paths seed too.
+    try:
+        await seed_all_companies()
+    except Exception:
+        log.exception("seeding built-in modules at startup failed")
     # The Claude account pool's local scheduler (SwarmCloud runs its sweep from Cloud
     # Scheduler): it sweeps the companies due, never one within five minutes of its last
     # sweep. Not started while the run ticker is configured: the ticker sweeps then, once
@@ -127,6 +137,8 @@ def create_app() -> FastAPI:
     app.include_router(v2_router)
     # CR-08: PRD quality and readiness, outcome tracking and learnings.
     app.include_router(quality_router)
+    # Modules and compositions (CR-01/02): catalogue, packs, manifests, revisions.
+    app.include_router(modules_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).
