@@ -82,9 +82,12 @@ carries one credential map:
 **The answer:** `POST /v1/workflows/{id}/steps/{step_id}/input` with
 `{"answer_id": "<stable id>", "payload": {...}, "via": "mcp"}`. The same `answer_id` with
 the same body replays (200, `replayed: true`); any other second answer is 409
-`already_answered`. **[CHANGING]** As built, only a person may answer; SwarmCloud is
-adding "a service tenant's own principal may answer its own workflow's steps, optionally
-naming the person it answers for". The field for that name comes when it lands.
+`already_answered`. **Who answers:** Oracle's own principal, in its own tenant only
+(SwarmCloud PR 1577, security-reviewed; merging 2026-10-19). An optional
+`"on_behalf_of": "<email>"` (at most 254 characters, checked for shape only) records the
+person Oracle answers for. It is a recorded label, not a verified identity. The step then
+shows `answered_by` = the service principal, `answered_as: "service"` and `source:
+"person"` (an answer, not the expiry default). Oracle passes the Inbox user who decided.
 
 **Rounds are unrolled, not looped:** a later step stages the answer
 (`input_from: {"review1": "review1.json"}`), and a gated step runs only on a verdict
