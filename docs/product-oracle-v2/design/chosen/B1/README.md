@@ -1,0 +1,13 @@
+# B1 Split · round 2
+- **Idea:** master and detail on every screen
+- **Left:** Ledger table · hairlines · one-line rows · 15 px body · tabular numbers
+- **Right:** Atlas inspector · dark head · big numerals · rings · selected row open
+- **Home:** goal strip (distance to go) · requests flow · Needs you + In flight · PRD inspector
+- **PRD review:** claim above the requirements · FR rows one line · evidence in the inspector
+- **Roadmap:** Now / Next / Later groups · In flight joins after publish
+- **Type:** Bricolage Grotesque · Inter · JetBrains Mono
+- **Colour:** violet accent · lime only for "now" · status colours only for status
+- **Themes:** light · dark (own indigo tokens)
+- **Frames:** 9 screens × light, dark at 1440×900 · phone for home, idea-interview, prd-review, roadmap
+- **HTML:** [html/](html/) · **Tokens:** [tokens.json](tokens.json) · **Checks:** [report.md](report.md)
+- **Source:** `src/make.mjs` builds from `src/quillfield.json` · `src/render.mjs` renders and checks
