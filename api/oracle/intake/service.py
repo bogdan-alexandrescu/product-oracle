@@ -330,11 +330,11 @@ async def set_sharing(
         moved.append(fid)
         entry["sharing"] = level
         reg[fid] = entry
-        await audit.record(
-            db, principal, "intake.finding_shared", "intake", intake.id,
-            {"finding_id": fid, "kind": entry["kind"], "category": entry.get("category"),
-             "from": before, "to": level},
-        )  # fmt: skip
+        data: dict[str, Any] = {"finding_id": fid, "from": before, "to": level}
+        if level != "private":
+            # A private finding's kind and category stay unsaid (as its summary audit).
+            data |= {"kind": entry["kind"], "category": entry.get("category")}
+        await audit.record(db, principal, "intake.finding_shared", "intake", intake.id, data)
     intake.analysis = {**(intake.analysis or {}), "findings": reg}
     # What runs may read changed with the levels (S6, owner 2026-10-19).
     await ev.record_reads(db, intake)

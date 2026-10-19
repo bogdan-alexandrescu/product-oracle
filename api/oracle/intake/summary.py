@@ -546,6 +546,12 @@ async def build(
     stale_rows = analysis.get("stale") or []
     item_ids |= {uuid.UUID(s["item_id"]) for s in stale_rows}
     refs = await view.refs(db, item_ids, pin)
+    for s in stale_rows:
+        item_id = uuid.UUID(s["item_id"])
+        if s.get("summary_only") and item_id in refs and not refs[item_id].visible:
+            # A stale finding at summary shows its line, never how old the item is: its
+            # confidence counts freshness, so it is left out below "shared in full".
+            refs[item_id] = refs[item_id].model_copy(update={"confidence": None})
 
     ranked = ranked_gaps(gaps, refs, view.reg, view.v)
     open_ranked = [g for g in ranked if g.status in engine.OPEN]

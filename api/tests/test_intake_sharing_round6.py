@@ -224,6 +224,23 @@ async def test_decided_proposals_stay_and_the_answer_follows_a_decided_question(
         assert len(await _baseline_proposals(ctx)) == 2, level
 
 
+# --- item 3: what a job, the summary and the lists give away -------------------------------
+
+
+async def test_an_intake_jobs_input_holds_no_source_text(client, fake):
+    """job.input keeps the prompt's name and the snapshot id only, never the rendered
+    prompt with the author's excerpts."""
+    ctx, intake_id, _ = await world(client, fake, hidden=False)
+    async with tenant_session(ctx.tenant_id) as s:
+        job = await s.scalar(select(LlmJob).where(LlmJob.intake_id == uuid.UUID(intake_id)))
+    assert set(job.input) <= {"snapshot_id", "prompt"}
+    for headers in [ctx.as_(w) for w in OTHERS] + [as_run_of(ctx, w) for w in RUNS]:
+        resp = await client.get(f"/v1/llm-jobs/{job.id}", headers=headers)
+        assert resp.status_code == 200, resp.text
+        for secret in (CODENAME, EXCERPT_A[:40], EXCERPT_OLD[:40], TITLE_A):
+            assert secret not in resp.text
+
+
 # --- minors ----------------------------------------------------------------------------------
 
 
@@ -262,3 +279,38 @@ async def test_two_writers_recording_the_same_intakes_reads_never_conflict(clien
         count = await s.scalar(select(func.count()).select_from(IntakeWithheldItem))
         expected = len(ev.read_item_ids(await s.get(ProductIntake, iid)))
     assert count == expected > 0
+
+
+async def test_lowering_to_private_audits_the_finding_id_only(client, fake):
+    ctx, intake_id, _ = await world(client, fake, hidden=False)
+    conflict = await finding_of(client, ctx, intake_id, "conflict")
+    await share(client, ctx, intake_id, conflict["id"], "counts")
+    await share(client, ctx, intake_id, conflict["id"], "private")
+    async with tenant_session(ctx.tenant_id) as s:
+        events = (
+            await s.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.action == "intake.finding_shared")
+                .order_by(AuditEvent.created_at)
+            )
+        ).all()
+    shared, lowered = events
+    assert shared.data["kind"] == "conflict"
+    assert lowered.data["finding_id"] == conflict["id"]
+    assert "kind" not in lowered.data and "category" not in lowered.data
+
+
+async def test_a_stale_finding_at_summary_shows_no_confidence(client, fake):
+    """The confidence counts freshness, which the summary level hides."""
+    ctx, intake_id, _ = await world(client, fake, hidden=False)
+    stale = await finding_of(client, ctx, intake_id, "stale")
+    await share(client, ctx, intake_id, stale["id"], "summary")
+    for who in OTHERS:
+        [row] = (await read_summary(client, ctx, intake_id, who))["stale"]
+        assert row["evidence"]["confidence"] is None, who
+    await share(client, ctx, intake_id, stale["id"], "full")
+    [row] = (await read_summary(client, ctx, intake_id, "viewer"))["stale"]
+    assert row["evidence"]["confidence"] is not None
+    mine = (await read_summary(client, ctx, intake_id, "author"))["stale"]
+    assert mine[0]["evidence"]["confidence"] is not None
+    assert [f for f in await findings(client, ctx, intake_id) if f["kind"] == "stale"]
