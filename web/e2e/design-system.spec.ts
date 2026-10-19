@@ -20,6 +20,17 @@ test("/design: an owner sees the kit, and it is not in the navigation", async ({
   await expect(page.getByRole("navigation", { name: "Oracle" }).locator('a[href="/design"]')).toHaveCount(0);
 });
 
+test("/design: the Brand card draws the mark, compact cut, tab icon and wordmark on light, dark and navy", async ({ page }) => {
+  await openKit(page);
+  for (const ground of ["light", "dark", "navy"]) {
+    const g = page.getByTestId(`design-brand-${ground}`);
+    await expect(g.getByRole("img", { name: "Full mark, 44 px" }).locator("line")).toHaveCount(4);
+    // Under 24 px the compact cut: no ticks.
+    await expect(g.getByRole("img", { name: "Compact mark, 16 px" }).locator("line")).toHaveCount(0);
+    await expect(g).toContainText("Product Oracle");
+  }
+});
+
 test("/design: a viewer sees only its title", async ({ page }) => {
   await login(page, "viewer@example.com");
   await page.goto("/design");

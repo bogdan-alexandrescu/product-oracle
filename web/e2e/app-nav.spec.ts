@@ -166,3 +166,28 @@ test("phone: a tab bar with Home, PRDs, Roadmap, Inbox and More, no sideways scr
   const [sw, cw] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
   expect(sw).toBeLessThanOrEqual(cw);
 });
+
+test("brand (I3 logo): the Compass mark tops the rail and links Home; sign-in shows mark and wordmark; tab icons", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/login");
+  const brand = page.getByTestId("auth-brand");
+  await expect(brand).toHaveText("Product Oracle");
+  await expect(brand.locator("svg")).toHaveAttribute("width", "40");
+  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveCount(1);
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("sizes", "180x180");
+  const icon = await page.locator('link[rel="icon"][type="image/svg+xml"]').getAttribute("href");
+  expect((await request.get(icon!)).ok()).toBe(true);
+
+  await login(page);
+  const nav = page.getByRole("navigation", { name: "Oracle" });
+  const home = nav.getByRole("link", { name: "Product Oracle" });
+  await expect(nav.getByRole("link").first()).toHaveAccessibleName("Product Oracle");
+  await expect(home.locator("svg")).toHaveAttribute("width", "44");
+  // The full cut: ring, four ticks, needle; no tile behind it.
+  await expect(home.locator("svg line")).toHaveCount(4);
+  await expect(home).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await home.click();
+  await expect(page).toHaveURL(/\/home$/);
+});

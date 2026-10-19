@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { Mark, Wordmark } from "@/components/ds/Brand";
+
 /**
  * The page outside the app shell (sign-in, OAuth consent): one surface card centred on
  * the page background, the brand mark and the title on top.
@@ -11,14 +13,9 @@ export function AuthCard({ title, children, testId }: { title: string; children:
         data-testid={testId}
         className="w-full max-w-[420px] rounded-inspector border border-line bg-surface p-7 shadow-panel max-[600px]:rounded-[14px] max-[600px]:p-5"
       >
-        <div className="mb-5 flex items-center gap-3">
-          <span
-            aria-hidden
-            className="grid size-10 flex-none place-items-center rounded-xl bg-brand font-display tracking-heading text-[19px] font-bold text-on-brand"
-          >
-            Q
-          </span>
-          <span className="font-display tracking-heading text-[15px] font-semibold text-text2">Product Oracle</span>
+        <div className="mb-5 flex items-center gap-3 text-[var(--brand-mark)]" data-testid="auth-brand">
+          <Mark size={40} className="flex-none" />
+          <Wordmark className="text-xl" />
         </div>
         <h1 className="mb-5 font-display text-[28px] leading-8 font-bold tracking-heading max-[600px]:text-2xl max-[600px]:leading-7">
           {title}
