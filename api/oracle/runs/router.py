@@ -179,8 +179,9 @@ async def cancel_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> Ru
 async def stop_cancelling_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
     """Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that
     proves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox
-    item clears, but Oracle keeps reading the workflow's status and cost in the
-    background until it ends, and counts its spend against the run's ceiling (P3d)."""
+    item clears. A run that has not ended ends (cancelled, the reason recorded) and no
+    second workflow starts for that segment; Oracle keeps reading the stopped workflow's
+    status and cost on every tick until it ends, and counts its spend on the run (P3d)."""
     await _call(service.stop_cancelling(db, principal, run_id))
     return await service.read_run(db, run_id, principal)
 

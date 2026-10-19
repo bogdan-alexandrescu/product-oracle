@@ -528,6 +528,15 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "stop-cancelling" && m === "POST") {
     if (!r.can_stop_cancelling) return fail(409, "nothing to stop: no cancel of this run waits on SwarmCloud's 404s");
     Object.assign(r, { can_stop_cancelling: false, stuck: null });
+    if (!FINAL.includes(r.status)) {
+      // P3d: Stop cancelling on a run that has not ended ends it.
+      for (const s of r.segments) if (s.status === "running" || s.status === "pending") s.status = "cancelled";
+      for (const c of r.checkpoints) {
+        if (c.status === "pending") Object.assign(c, { status: "skipped", note: "Run ended: an approver stopped cancelling its workflow.", decided_at: ctx.now() });
+      }
+      finish(ctx, r, "cancelled");
+      r.error = "Stop cancelling ended the run: its spend still counts on the run until SwarmCloud stops it.";
+    }
     return done();
   }
   if (action === "checkpoints" && p[5] === "decide" && m === "POST") {

@@ -194,17 +194,16 @@ async def test_stop_cancelling_keeps_counting_the_spend_and_the_ceiling_still_tr
     assert "wf_1" in (resp.json()["searching"] or "")
     entry = (await _knobs_of(tenant_id, run["id"]))["searches"][0]
     assert entry["id"] == "wf_1"
-    # Resumed with a ceiling just over the spend: the stopped workflow's spend trips it.
-    resp = await client.post(f"/v1/runs/{run['id']}/resume", headers=auth)
-    assert resp.status_code == 200, resp.text
-    run = resp.json()
+    # Round 7 (P3d, owner 2026-10-19): the run had not ended, so Stop cancelling ended it.
+    assert resp.json()["status"] == "cancelled"
+    # A ceiling just over the spend: the stopped workflow's spend trips it (Inbox).
     await _ceiling(tenant_id, run["id"], str(run["spent_usd"] + 0.5))
     wf.steps[0].cost += 1.0
     clock.forward(service.STUCK_LOOKUP_SECONDS + 1)
     await _tick_errors(client, auth)
     run = await get(client, auth, run["id"])
     assert run["spent_usd"] == _wf_cost(swarm, "wf_1")
-    assert run["status"] == "paused_overrun"
+    assert "ceiling" in ((await _inbox(client, auth))["lookups"][0]["stuck"] or "")
     assert len(swarm.cancels) == cancels and len(swarm.submissions()) == 1
     # Once SwarmCloud says it ended, its last cost lands and the search ends.
     wf.steps[0].cost += 1.0
