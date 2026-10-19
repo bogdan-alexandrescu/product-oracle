@@ -31,6 +31,8 @@ from oracle.trace.schemas import (
 from oracle.v2.models import DocumentSectionLink
 
 SOURCES_KEY = "sources"
+# Baseline items that no longer hold: exports do not list them by title.
+INACTIVE = ("rejected", "superseded")
 
 
 def _float(value) -> float | None:
@@ -111,6 +113,21 @@ async def targets(
     return out
 
 
+def section_key_of(link: DocumentSectionLink, keys: set[str] | dict[str, str]) -> str:
+    """The section ``link`` belongs to in a version with sections ``keys``. A link made
+    on a version names its section exactly. A document-wide link (no version) may name
+    it by stable reference (``<slug>#<key>``, ``<slug>@<n>#<key>``, ``#<key>``), in
+    another case, or through the module that renders it."""
+    key = link.section_key
+    if link.version_id is not None or key in keys:
+        return key
+    tail = key.rsplit("#", 1)[-1].strip()
+    for candidate in (tail, tail.lower(), link.module_key):
+        if candidate and candidate in keys:
+            return candidate
+    return key
+
+
 def _rank_key(view: SectionLinkView):
     c = view.target.confidence
     return (c is None, -(c or 0.0), view.created_at, str(view.id))
@@ -128,7 +145,8 @@ async def link_views(
     for lk in links:
         if lk.id not in resolved:
             continue
-        by_section.setdefault(lk.section_key, []).append(
+        key = section_key_of(lk, hashes)
+        by_section.setdefault(key, []).append(
             SectionLinkView(
                 id=lk.id,
                 kind=lk.kind,  # type: ignore[arg-type]
@@ -136,7 +154,7 @@ async def link_views(
                 claim=lk.claim,
                 module_key=lk.module_key,
                 composition_revision=lk.composition_revision,
-                current=lk.section_hash is None or lk.section_hash == hashes.get(lk.section_key),
+                current=lk.section_hash is None or lk.section_hash == hashes.get(key),
                 target=resolved[lk.id],
                 created_by=lk.created_by,
                 created_at=lk.created_at,
@@ -217,7 +235,9 @@ def _label(target: SectionLinkTarget) -> str:
 async def appendix_links(db: AsyncSession, version: DocumentVersion) -> list[dict[str, Any]]:
     """For the Sources and data points appendix: per body section (in order), its links
     as {claim, label, kind, confidence}. Source items show their kind only (an export
-    is not addressed to a source's owner)."""
+    is not addressed to a source's owner); rejected or superseded baseline items are
+    left out (their titles no longer hold). Document-wide links go under the section
+    they name (:func:`section_key_of`)."""
     links = await version_links(db, version)
     if not links:
         return []
@@ -228,18 +248,16 @@ async def appendix_links(db: AsyncSession, version: DocumentVersion) -> list[dic
     for s in sections:
         if s.section_key == SOURCES_KEY or s.section_key not in views:
             continue
-        out.append(
+        listed = [
             {
-                "key": s.section_key,
-                "links": [
-                    {
-                        "claim": v.claim,
-                        "label": _label(v.target),
-                        "kind": v.kind,
-                        "confidence": v.target.confidence,
-                    }
-                    for v in views[s.section_key]
-                ],
+                "claim": v.claim,
+                "label": _label(v.target),
+                "kind": v.kind,
+                "confidence": v.target.confidence,
             }
-        )
+            for v in views[s.section_key]
+            if not (v.target.type == "entity" and v.target.status in INACTIVE)
+        ]
+        if listed:
+            out.append({"key": s.section_key, "links": listed})
     return out

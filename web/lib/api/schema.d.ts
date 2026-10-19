@@ -3514,8 +3514,9 @@ export interface paths {
         };
         /**
          * List Stale Outputs
-         * @description Outputs that are not fresh (potentially stale or under review by default), with
-         *     the dependencies that make them so; ``document_id`` filters by upstream document.
+         * @description Outputs that are not fresh (potentially stale or under review by default), a page
+         *     at a time, stalest first, with the dependencies that make them so and why (from the
+         *     change that marked each); ``document_id`` filters by upstream document.
          */
         get: operations["list_stale_outputs"];
         put?: never;
@@ -3839,6 +3840,12 @@ export interface components {
             upstream_section_hash?: string | null;
             /** Upstream Entity Id */
             upstream_entity_id?: string | null;
+            /** Upstream Snapshot */
+            upstream_snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /** Upstream Deleted At */
+            upstream_deleted_at?: string | null;
             /** Composition Revision */
             composition_revision?: number | null;
             /**
@@ -5568,6 +5575,11 @@ export interface components {
             /** Outputs */
             outputs: components["schemas"]["TraceOutput"][];
             priority?: components["schemas"]["RankedFeature"] | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /**
          * EntityWriteOut
@@ -6228,6 +6240,11 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /** ImpactSubject */
         ImpactSubject: {
@@ -8559,6 +8576,22 @@ export interface components {
             updated_at: string;
         };
         /**
+         * StaleOutputsPage
+         * @description A page of outputs that are not fresh, stalest first.
+         */
+        StaleOutputsPage: {
+            /** Items */
+            items: components["schemas"]["TraceOutput"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Next Offset */
+            next_offset?: number | null;
+        };
+        /**
          * StalenessAction
          * @description A person's decision on a downstream output's staleness.
          *
@@ -9669,6 +9702,13 @@ export interface components {
             /** Composition Revision */
             composition_revision?: number | null;
             entity?: components["schemas"]["TraceEntityRef"] | null;
+            /**
+             * Deleted
+             * @default false
+             */
+            deleted: boolean;
+            /** Deleted At */
+            deleted_at?: string | null;
         };
         /**
          * TraceUpstreamRef
@@ -9904,6 +9944,11 @@ export interface components {
              * @default []
              */
             upstream: components["schemas"]["TraceDependency"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /**
          * VersionWarning
@@ -16800,6 +16845,8 @@ export interface operations {
             query?: {
                 document_id?: string | null;
                 freshness?: ("fresh" | "potentially_stale" | "under_review" | "reconciled") | null;
+                limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -16813,7 +16860,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TraceOutput"][];
+                    "application/json": components["schemas"]["StaleOutputsPage"];
                 };
             };
             /** @description Validation Error */

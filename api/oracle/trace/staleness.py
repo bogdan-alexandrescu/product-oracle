@@ -22,9 +22,13 @@ Which change reaches which dependency:
   content hash differs in the new version (or whose section is gone), and dependencies
   on a whole earlier version;
 - ``document_section``: dependencies on that section, and on the whole document;
-- ``requirement``, ``decision``, ``entity``, ``blocker_status``: the entity and
-  everything downstream of it in the graph (:mod:`oracle.trace.graph`): dependencies on
-  those entities, and on the document sections that link them;
+- ``requirement``, ``decision``, ``entity``, ``blocker_status``: the entity (or, for a
+  batch, each of ``data["roots"]``) and everything downstream of it in the graph
+  (:mod:`oracle.trace.graph`, a scoped walk that flags truncation): dependencies on those
+  entities, and on the document sections that link them. A root that was rejected or
+  deleted also reaches the wholes it was part of or verified (``part_of``, ``verifies``),
+  and an edge change the wholes in ``data["wholes"]``. A deleted root's dependencies stay,
+  potentially stale, with a snapshot of what they pointed at;
 - ``source_permission``: the evidence that came from the source's items, the entities it
   supports, and the sections that link either;
 - ``composition_revision``: dependencies on the sections of the modules that changed
@@ -42,7 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
-from oracle.baseline.models import Entity, Evidence
+from oracle.baseline.models import Edge, Entity, Evidence
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.models import AuditEvent
 from oracle.sources.models import Source, SourceItem
@@ -70,6 +74,10 @@ SUBJECTS = (
     "composition_revision",
 )
 ENTITY_SUBJECTS = ("requirement", "decision", "entity", "blocker_status")
+# A root that leaves the graph changes the wholes it was part of or verified.
+REMOVALS = ("entity_rejected", "entity_deleted")
+WHOLE_EDGES = ("part_of", "verifies")
+EDGE_VERBS = {"edge_created": "gained", "edge_deleted": "lost", "edge_updated": "had a change to"}
 # Section links that make a section depend on what they point at ("mentions" does not).
 DEPENDING_LINKS = ("implements", "evidences", "claims", "tests")
 
@@ -95,11 +103,62 @@ class Subject:
     ref: str | None = None
     document_id: uuid.UUID | None = None
     data: dict[str, Any] = field(default_factory=dict)
+    cause: str | None = None
 
     @classmethod
     def of(cls, event: ChangeEvent) -> "Subject":
         return cls(event.subject_kind, event.subject_id, event.subject_ref, event.document_id,
-                   dict(event.data or {}))  # fmt: skip
+                   dict(event.data or {}), event.cause)  # fmt: skip
+
+
+@dataclass(frozen=True)
+class Root:
+    """One baseline entity a change starts from, and why."""
+
+    id: uuid.UUID
+    cause: str
+    edge: dict[str, Any] | None = None
+    wholes: tuple[uuid.UUID, ...] = ()
+
+    @property
+    def text(self) -> str:
+        """``<label> <text>``: what happened to it, in words."""
+        if self.cause in EDGE_VERBS:
+            kind = str((self.edge or {}).get("type") or "graph").replace("_", " ")
+            return f"{EDGE_VERBS[self.cause]} a {kind} link"
+        return {
+            "entity_deleted": "was deleted",
+            "entity_rejected": "was rejected",
+            "entity_confirmed": "was confirmed",
+            "source_permission": "rests on evidence whose source permission changed",
+            "blocker_status": "changed status",
+        }.get(self.cause, "changed")
+
+
+def _uuid(value: Any) -> uuid.UUID:
+    return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+
+
+def roots_of(subject: Subject) -> list[Root]:
+    """The entities an entity-kind change starts from: its subject, or a batch's roots
+    (``data["roots"]``, recorded once per subject kind by a bulk write)."""
+    if subject.kind not in ENTITY_SUBJECTS:
+        return []
+    if subject.kind == "blocker_status" and subject.cause == "entity_updated":
+        subject = Subject(**{**subject.__dict__, "cause": "blocker_status"})
+    out = []
+    for r in subject.data.get("roots") or []:
+        out.append(
+            Root(_uuid(r["id"]), r.get("cause") or subject.cause or "", r.get("edge"),
+                 tuple(_uuid(w) for w in r.get("wholes") or []))
+        )  # fmt: skip
+    if subject.id is not None and all(r.id != subject.id for r in out):
+        out.insert(
+            0,
+            Root(subject.id, subject.cause or "", subject.data.get("edge"),
+                 tuple(_uuid(w) for w in subject.data.get("wholes") or [])),
+        )  # fmt: skip
+    return out
 
 
 @dataclass
@@ -110,6 +169,8 @@ class Affected:
     deps: dict[uuid.UUID, ArtifactDependency] = field(default_factory=dict)
     reasons: dict[uuid.UUID, list[str]] = field(default_factory=lambda: defaultdict(list))
     entity_ids: list[uuid.UUID] = field(default_factory=list)
+    # A graph walk stopped at a bound: more may be affected than listed.
+    truncated: bool = False
 
     def add(self, dep: ArtifactDependency, reason: str) -> None:
         self.deps[dep.id] = dep
@@ -193,30 +254,16 @@ async def _by_sections(
 ) -> None:
     """Dependencies on the sections ``links`` belong to; ``why[link.id]`` says why.
 
-    A link made on a version holds for that version and later ones (a dependency
-    re-anchored on a newer version keeps what the section was linked to): when in
-    doubt, mark (potentially stale is the safe side)."""
+    A link holds for the section whatever version it was made on: one made on a later
+    version than a dependency's anchor still says what that section is about (when in
+    doubt, mark: potentially stale is the safe side)."""
     by_doc: dict[uuid.UUID, list[DocumentSectionLink]] = defaultdict(list)
     for link in links:
         by_doc[link.document_id].append(link)
-    version_ids = {link.version_id for link in links if link.version_id}
-    numbers = {}
-    if version_ids:
-        numbers = dict(
-            (
-                await db.execute(
-                    select(DocumentVersion.id, DocumentVersion.number).where(
-                        DocumentVersion.id.in_(version_ids)
-                    )
-                )
-            ).all()
-        )
     for document_id, doc_links in by_doc.items():
         doc = await db.get(Document, document_id)
-        for dep, up in await _deps_on_document(db, document_id):
+        for dep, _ in await _deps_on_document(db, document_id):
             for link in doc_links:
-                if link.version_id is not None and numbers.get(link.version_id, 0) > up.number:
-                    continue
                 if dep.upstream_section_key == link.section_key:
                     out.add(dep, f"section {link.section_key} of {doc.slug} {why[link.id]}")
                 elif dep.upstream_section_key is None:
@@ -227,20 +274,64 @@ async def _by_sections(
                     )
 
 
-async def _by_entities(db: AsyncSession, roots: list[uuid.UUID], cause: str, out: Affected) -> None:
-    g = await graph_mod.load(db)
-    reason_of: dict[uuid.UUID, str] = {}
-    for root in roots:
-        entity = g.entities.get(root) or await db.get(Entity, root)
-        label = _label(entity) if entity is not None else "a baseline item"
-        reason_of.setdefault(root, f"{label} {cause}")
-        for step in g.downstream(root):
-            e = g.entities[step.entity_id]
-            reason_of.setdefault(e.id, f"{_label(e)} is downstream of {label}, which {cause}")
-    if not reason_of:
+async def _removal_wholes(db: AsyncSession, roots: list[Root]) -> list[Root]:
+    """A rejected or deleted root also changes what it was part of or verified."""
+    removed = [r.id for r in roots if r.cause in REMOVALS]
+    if not removed:
+        return roots
+    rows = (
+        await db.execute(
+            select(Edge.src_id, Edge.dst_id).where(
+                Edge.src_id.in_(removed), Edge.type.in_(WHOLE_EDGES), Edge.status != "rejected"
+            )
+        )
+    ).all()
+    wholes: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
+    for src, dst in rows:
+        wholes[src].append(dst)
+    return [
+        Root(r.id, r.cause, r.edge, tuple(dict.fromkeys([*r.wholes, *wholes.get(r.id, [])])))
+        for r in roots
+    ]
+
+
+async def _by_entities(db: AsyncSession, roots: list[Root], out: Affected) -> None:
+    """Dependencies on ``roots``, on everything downstream of them and on their wholes,
+    and on the sections that link any of those. One scoped graph load for all roots."""
+    if not roots:
         return
+    roots = await _removal_wholes(db, roots)
+    root_ids = [r.id for r in roots]
+    g = await graph_mod.load_around(db, root_ids, down=True)
+    whole_ids = [w for r in roots for w in r.wholes if w not in g.entities]
+    extra = {}
+    if whole_ids:
+        extra = {e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(whole_ids)))}
+
+    def entity(e_id: uuid.UUID) -> Entity | None:
+        return g.entities.get(e_id) or extra.get(e_id)
+
+    reason_of: dict[uuid.UUID, str] = {}
+    link_why: dict[uuid.UUID, str] = {}
+    for root in roots:
+        e = entity(root.id)
+        label = _label(e) if e is not None else "a baseline item"
+        reason_of.setdefault(root.id, f"{label} {root.text}")
+        link_why.setdefault(root.id, f"links {label}, which {root.text}")
+        for step in g.downstream(root.id):
+            d = g.entities[step.entity_id]
+            via = f"downstream of {label}, which {root.text}"
+            reason_of.setdefault(d.id, f"{_label(d)} is {via}")
+            link_why.setdefault(d.id, f"links {_label(d)}, {via}")
+        for whole_id in root.wholes:
+            w = entity(whole_id)
+            if w is None:
+                continue
+            reason_of.setdefault(w.id, f"{_label(w)} contains {label}, which {root.text}")
+            link_why.setdefault(w.id, f"links {_label(w)}, which contains {label} ({root.text})")
+    out.truncated = out.truncated or g.truncated
     for e_id in reason_of:
-        if e_id not in out.entity_ids and e_id not in roots:
+        if e_id not in out.entity_ids and e_id not in root_ids:
             out.entity_ids.append(e_id)
     deps = (
         await db.scalars(
@@ -257,13 +348,7 @@ async def _by_entities(db: AsyncSession, roots: list[uuid.UUID], cause: str, out
             )
         )
     ).all()
-    why = {}
-    for link in links:
-        e = g.entities.get(link.entity_id)  # type: ignore[arg-type]
-        name = _label(e) if e is not None else "a baseline item"
-        why[link.id] = f"links {name}, which {cause}" if link.entity_id in roots else (
-            f"links {name}, downstream of a change"
-        )  # fmt: skip
+    why = {link.id: link_why[link.entity_id] for link in links}  # type: ignore[index]
     await _by_sections(db, list(links), why, out)
 
 
@@ -290,7 +375,7 @@ async def _by_source_permission(db: AsyncSession, subject: Subject, out: Affecte
     evidence_ids = {e_id for e_id, _ in evidence}
     entity_ids = sorted({ent for _, ent in evidence if ent is not None})
     if entity_ids:
-        await _by_entities(db, entity_ids, "rests on evidence whose source permission changed", out)
+        await _by_entities(db, [Root(e, "source_permission") for e in entity_ids], out)
     conditions = [DocumentSectionLink.source_item_id.in_(item_ids)]
     if evidence_ids:
         conditions.append(DocumentSectionLink.evidence_id.in_(evidence_ids))
@@ -350,13 +435,8 @@ async def affected(db: AsyncSession, subject: Subject) -> Affected:
         await _by_document_version(db, subject, out)
     elif subject.kind == "document_section":
         await _by_document_section(db, subject, out)
-    elif subject.kind in ENTITY_SUBJECTS and subject.id is not None:
-        cause = {
-            "blocker_status": "changed status",
-            "decision": "changed",
-            "requirement": "changed",
-        }.get(subject.kind, "changed")
-        await _by_entities(db, [subject.id], cause, out)
+    elif subject.kind in ENTITY_SUBJECTS:
+        await _by_entities(db, roots_of(subject), out)
     elif subject.kind == "source_permission":
         await _by_source_permission(db, subject, out)
     elif subject.kind == "composition_revision":
@@ -498,14 +578,44 @@ async def carry_links_forward(db: AsyncSession, version: DocumentVersion) -> int
     return copied
 
 
+def upstream_snapshot(entity: Entity) -> dict[str, Any]:
+    return {
+        "id": str(entity.id),
+        "type": entity.type,
+        "key": entity.key,
+        "title": entity.title,
+        "status": entity.status,
+    }
+
+
+async def _keep_deleted_upstream(
+    db: AsyncSession, subject: Subject, found: Affected, now: datetime
+) -> None:
+    """An entity about to be deleted: its dependencies stay, pointing at a snapshot of
+    it instead (the foreign key would null the reference anyway, 0014_trace)."""
+    deleted = [r.id for r in roots_of(subject) if r.cause == "entity_deleted"]
+    for root_id in deleted:
+        entity = await db.get(Entity, root_id)
+        if entity is None:
+            continue
+        snapshot = upstream_snapshot(entity)
+        for dep in found.deps.values():
+            if dep.upstream_entity_id == root_id:
+                dep.upstream_snapshot = snapshot
+                dep.upstream_deleted_at = now
+                dep.upstream_entity_id = None
+
+
 async def mark_stale(db: AsyncSession, event: ChangeEvent) -> None:
     """The ``trace.mark_stale`` handler: mark what the change reaches potentially_stale,
     with the change as its cause, and record exactly what was marked and why in
     ``event.data["trace"]``. On a version import it also carries unchanged sections'
     links forward and derives a roadmap version's dependencies on its PRD."""
     await _derive_for(db, event)
-    found = await affected(db, Subject.of(event))
+    subject = Subject.of(event)
+    found = await affected(db, subject)
     now = datetime.now(UTC)
+    await _keep_deleted_upstream(db, subject, found, now)
     marked = []
     by_output: dict[tuple[str, uuid.UUID], list[uuid.UUID]] = defaultdict(list)
     for dep_id, dep in found.deps.items():
@@ -542,6 +652,7 @@ async def mark_stale(db: AsyncSession, event: ChangeEvent) -> None:
             "marked": marked,
             "entity_ids": [str(e) for e in found.entity_ids],
             "outputs": [{"kind": k, "id": str(i)} for k, i in by_output],
+            "truncated": found.truncated,
         },
     }
     if marked:
@@ -556,6 +667,7 @@ async def mark_stale(db: AsyncSession, event: ChangeEvent) -> None:
                     "subject_kind": event.subject_kind,
                     "dependencies": len(marked),
                     "outputs": len(by_output),
+                    "truncated": found.truncated,
                 },
             )
         )

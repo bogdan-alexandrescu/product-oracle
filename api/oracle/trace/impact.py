@@ -106,6 +106,7 @@ async def _report(
     change: ChangeEvent | None,
     preview: bool,
     changes: list[ChangeEvent] | None = None,
+    truncated: bool = False,
 ) -> ImpactReport:
     views = await describe(db, deps, reasons)
     plan = [p for v in views if (p := _proposal(v, subject_kind)) is not None]
@@ -126,6 +127,7 @@ async def _report(
         affected_entities=entities,
         plan=plan,
         counts=dict(counts),
+        truncated=truncated,
     )
 
 
@@ -134,12 +136,15 @@ async def _subject_of_event(db: AsyncSession, event: ChangeEvent) -> ImpactSubje
     if event.subject_id is not None:
         if event.subject_kind in staleness.ENTITY_SUBJECTS:
             e = await db.get(Entity, event.subject_id)
-            title = e.title if e else None
+            # A deleted entity: the title it had, as the change recorded it.
+            title = e.title if e else ((event.data or {}).get("entity") or {}).get("title")
         elif event.subject_kind == "document_version":
             v = await db.get(DocumentVersion, event.subject_id)
             if v is not None:
                 d = await db.get(Document, v.document_id)
                 title = f"{d.title} v{v.number}"
+    elif (event.data or {}).get("roots"):
+        title = f"{len(event.data['roots'])} baseline items"
     return ImpactSubject(
         kind=event.subject_kind,
         id=event.subject_id,
@@ -169,12 +174,12 @@ async def for_change(db: AsyncSession, event: ChangeEvent) -> ImpactReport:
         entity_ids = [uuid.UUID(e) for e in recorded.get("entity_ids", [])]
         return await _report(
             db, subject, event.subject_kind, deps, reasons, entity_ids, change=event,
-            preview=False,
+            preview=False, truncated=bool(recorded.get("truncated")),
         )  # fmt: skip
     found = await staleness.affected(db, staleness.Subject.of(event))
     return await _report(
         db, subject, event.subject_kind, list(found.deps.values()), found.reasons,
-        found.entity_ids, change=event, preview=True,
+        found.entity_ids, change=event, preview=True, truncated=found.truncated,
     )  # fmt: skip
 
 
@@ -186,7 +191,7 @@ async def for_entity(db: AsyncSession, entity: Entity) -> ImpactReport:
                             title=entity.title)  # fmt: skip
     return await _report(
         db, subject, kind, list(found.deps.values()), found.reasons, found.entity_ids,
-        change=None, preview=True,
+        change=None, preview=True, truncated=found.truncated,
     )  # fmt: skip
 
 
@@ -216,4 +221,5 @@ async def for_version(
     return await _report(
         db, subject, "document_version", list(found.deps.values()), found.reasons,
         found.entity_ids, change=None, preview=True, changes=list(changes),
+        truncated=found.truncated,
     )  # fmt: skip

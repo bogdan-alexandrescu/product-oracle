@@ -286,6 +286,14 @@ async def import_yaml(
     if problems:
         raise YamlInvalid(problems)
     writer = service.Writer(principal, origin, run_id=run_id, reason=reason)
+    # One change event per subject kind for the whole file, not one per item.
+    async with service.batched_changes(db):
+        return await _merge(db, data, writer, principal)
+
+
+async def _merge(
+    db: AsyncSession, data: dict, writer: service.Writer, principal: Principal
+) -> YamlImportResult:
     own = await _own_item_ids(db, principal)
     result = YamlImportResult()
     by_ref: dict[str, Entity] = {_ref(e): e for e in (await db.scalars(select(Entity))).all()}

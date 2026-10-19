@@ -13055,7 +13055,7 @@
           "trace"
         ],
         "summary": "List Stale Outputs",
-        "description": "Outputs that are not fresh (potentially stale or under review by default), with\nthe dependencies that make them so; ``document_id`` filters by upstream document.",
+        "description": "Outputs that are not fresh (potentially stale or under review by default), a page\nat a time, stalest first, with the dependencies that make them so and why (from the\nchange that marked each); ``document_id`` filters by upstream document.",
         "operationId": "list_stale_outputs",
         "security": [
           {
@@ -13104,6 +13104,29 @@
               ],
               "title": "Freshness"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
           }
         ],
         "responses": {
@@ -13112,11 +13135,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TraceOutput"
-                  },
-                  "title": "Response List Stale Outputs"
+                  "$ref": "#/components/schemas/StaleOutputsPage"
                 }
               }
             }
@@ -14032,6 +14051,30 @@
               }
             ],
             "title": "Upstream Entity Id"
+          },
+          "upstream_snapshot": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Snapshot"
+          },
+          "upstream_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Deleted At"
           },
           "composition_revision": {
             "anyOf": [
@@ -18739,6 +18782,11 @@
                 "type": "null"
               }
             ]
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
           }
         },
         "type": "object",
@@ -20658,6 +20706,11 @@
             },
             "type": "object",
             "title": "Counts"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
           }
         },
         "type": "object",
@@ -27655,6 +27708,49 @@
         ],
         "title": "StakeholderQuestionOut"
       },
+      "StaleOutputsPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TraceOutput"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "StaleOutputsPage",
+        "description": "A page of outputs that are not fresh, stalest first."
+      },
       "StalenessAction": {
         "properties": {
           "action": {
@@ -30711,6 +30807,23 @@
                 "type": "null"
               }
             ]
+          },
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted",
+            "default": false
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
           }
         },
         "type": "object",
@@ -31343,6 +31456,11 @@
             "type": "array",
             "title": "Upstream",
             "default": []
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
           }
         },
         "type": "object",

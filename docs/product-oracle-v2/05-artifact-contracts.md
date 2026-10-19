@@ -42,8 +42,12 @@ source snapshot / evidence -> goal -> outcome -> feature -> requirement -> accep
 | section → entity, evidence or source item | `document_section_links` | the section depends on what it links |
 | output → section at a hash, a whole version, or an entity | `artifact_dependencies` | the output depends on its upstream |
 
-Walks skip rejected entities and edges and stop at depth 8 or 2000 nodes
-(`oracle/trace/graph.py`). Trace views only read: they never unlock, confirm or rewrite a
+Walks skip rejected entities and edges, except their own roots (an entity just rejected,
+or about to be deleted, still reaches what was built on it), and stop at depth 8 or 2000
+nodes (`oracle/trace/graph.py`). Nothing loads the whole graph: `load_around` loads the
+roots' neighbourhood one query per level and direction. A load or walk that stops at a bound
+sets `truncated`, which the change event (`data.trace.truncated`), the impact report and
+both trace views carry. Trace views only read: they never unlock, confirm or rewrite a
 graph item, and a write to a locked item still becomes a proposal, as before.
 
 ### Version anchors (§7)
@@ -106,15 +110,32 @@ caller's transaction. If it raises, the change rolls back.
 |---|---|---|
 | `document_version` | `docs.service.import_draft` (this lane), on every new version | dependencies on the document whose section hash differs in the new version (or whose section is gone), and dependencies on a whole earlier version |
 | `document_section` | `v2-review` and others (`data.section_key`, optional `after_hash`) | dependencies on that section, and on the whole document |
-| `requirement`, `decision`, `entity` | `baseline.service` (this lane): an applied update, confirm, reject or delete (not a proposal) | the entity and everything downstream of it in the graph: dependencies on those entities and on the sections that link them |
+| `requirement`, `decision`, `entity` | `baseline.service` (this lane): an applied update, confirm, reject or delete (not a proposal), and an edge created, removed or changed (recorded against its downstream end; `owned_by` records nothing) | the entity and everything downstream of it in the graph: dependencies on those entities and on the sections that link them. A rejected or deleted entity also reaches the wholes it was `part_of` or `verifies`, and an edge change the whole it joins or leaves (`data.wholes`) |
 | `blocker_status` | `baseline.service` when `attrs.blocker.status` changes; `v2-blockers` on its own transitions | the same, from the blocker |
 | `source_permission` | `v2-sources` (wave 2): `subject_id` is a source or source item, `data.source_item_ids` optional | the evidence from those items, the entities it supports, and the sections that link either |
 | `composition_revision` | `v2-modules` | dependencies on sections of modules whose inclusion, version, sections or policy changed since the parent revision (`data.section_keys` adds more), and on the whole document. With no parent revision, everything |
 
+**Bulk writes.** A YAML import (a person's file or a run's `baseline.yaml`) runs inside
+`baseline.service.batched_changes`: changes are collected per entity and recorded when the
+import ends, one change event per subject kind. A single entity's change is recorded as
+usual. Several go in one event with `subject_id` null, `subject_ref` "<n> baseline items",
+`data.entity_ids` and `data.roots` (each with its id, ref, cause, fields, edge and wholes).
+The handler walks the graph once per event. Other lanes' handlers for these subjects must
+read `data.roots` when `subject_id` is null. Deletions are never batched: they are recorded
+while the entity and its edges still exist.
+
+**Deleted upstream.** `artifact_dependencies.upstream_entity_id` is `ON DELETE SET NULL`
+(migration `0014_trace`). When an entity is deleted, the handler marks its dependants
+potentially stale with an "… was deleted" reason, then nulls the reference and keeps
+`upstream_snapshot` (id, type, key, title, status) and `upstream_deleted_at`. The output
+stays potentially stale, lists the deleted entity (`upstream.deleted: true`), and can be
+reviewed or reconciled like any other. Section links to the deleted entity go with it. The
+dependencies on those sections are marked first and stay.
+
 What the handler writes, and nothing else:
 
 - the dependency's `freshness`, `caused_by_change_id` and `stale_since` (kept from the first
-  time it went stale);
+  time it went stale), and for a deleted upstream entity its snapshot (above);
 - the artifact version's aggregate `freshness`;
 - one `artifact_review_events` row of kind `marked_stale` per artifact version, with actor
   `system`, the reasons, the change id and the change's actor;
@@ -134,7 +155,10 @@ approves the new one (§11.5, CR-09 to CR-11 build the generators).
 | `reconcile`, exactly one of `artifact_version_id` or `document_version_id`, optional
 `dependency_ids` and a `reason` (required to reconcile). It returns 409 when nothing is in a
 state the action applies to, 404 for another company's output, and 422 for a dependency id
-that is not the output's. Each action records an audit event `trace.staleness.<action>` (from
+that is not the output's. `GET /v1/trace/staleness` lists outputs that are not fresh, a page
+at a time (`limit` 1-200, default 50, and `offset`; it returns `items`, `total` and
+`next_offset`), stalest first, each with its dependencies and the reasons recorded by the
+change that marked them. Each action records an audit event `trace.staleness.<action>` (from
 and to states, the anchor before re-anchoring, the reason) and, for artifacts, an
 `artifact_review_events` row (`comment` for review and acceptance, `reconciled` for
 reconciliation).
@@ -172,7 +196,10 @@ it was made on this exact section revision (`current`), and its target:
 
 Exports: themed and unthemed HTML (and the PDF from it) gain an **Evidence links by section**
 list inside the Sources and data points appendix: the claim, the source and its confidence.
-Source items appear as "<kind> source item", since an export has no single reader. The
+Source items appear as "<kind> source item", since an export has no single reader.
+Rejected or superseded baseline items are left out. A document-wide link (no version) goes
+under the section it names, also when it names it by stable reference (`<slug>#<key>`), in
+another case, or through its module. The
 narrative body is unchanged: no citations, chips or claims (O1c). A version without links
 exports byte-for-byte as before. The markdown export stays the stored draft, as today (AUD-2).
 
