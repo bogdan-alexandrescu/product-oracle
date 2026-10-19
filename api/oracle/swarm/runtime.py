@@ -149,13 +149,31 @@ class Answer:
     replayed: bool = False
 
 
+@dataclass(frozen=True)
+class RecordedAnswer:
+    """The answer a waiting step holds, as the runtime recorded it: who answered and when
+    (``GET .../steps/{step}/input``), and the verdict from the step's form artifact. The
+    runtime never serves the payload back, and its hash is over its own re-serialised
+    form, so the verdict is the only thing to compare."""
+
+    answer_id: str | None = None
+    answered_by: str | None = None
+    on_behalf_of: str | None = None
+    answered_at: datetime | None = None
+    via: str | None = None
+    # MERGE | NOT_YET, or None when the form artifact could not be read.
+    verdict: str | None = None
+    findings: tuple[str, ...] = ()
+
+
 class RuntimeUnavailable(RuntimeError):
     """The runtime refused a call or could not be reached.
 
-    ``code`` is the runtime's refusal code when it gave one (``mcp_unavailable``,
-    ``already_answered``, ...); ``status`` its HTTP status; ``lost`` is True when the
-    answer never arrived (a timeout, a dropped connection or a 5xx), so the call may
-    have happened."""
+    ``code`` is the runtime's refusal reason when it gave one (``detail.reason`` of its
+    error envelope, e.g. ``already_answered``, else its top-level code such as
+    ``mcp_unavailable``); ``status`` its HTTP status; ``detail`` the envelope's
+    ``detail`` object; ``lost`` is True when the answer never arrived (a timeout, a
+    dropped connection or a 5xx), so the call may have happened."""
 
     def __init__(
         self,
@@ -164,11 +182,19 @@ class RuntimeUnavailable(RuntimeError):
         code: str | None = None,
         status: int | None = None,
         lost: bool = False,
+        detail: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.status = status
         self.lost = lost
+        self.detail = detail or {}
+
+    @property
+    def retryable(self) -> bool:
+        """Nothing was recorded and the same call may succeed later: the answer was lost,
+        or the runtime was unavailable (a 5xx or 429)."""
+        return self.lost or self.status is None or self.status >= 500 or self.status == 429
 
 
 @runtime_checkable
@@ -222,7 +248,8 @@ class AgentRuntime(Protocol):
         ...
 
     async def find_by_label(self, label: str) -> str | None:
-        """The workflow submitted with ``label``, if any (submits are not idempotent)."""
+        """The workflow submitted with ``label`` (its ``oracle_key``), if any: submits are
+        not idempotent."""
         ...
 
     async def answer(
@@ -235,4 +262,9 @@ class AgentRuntime(Protocol):
         on_behalf_of: str | None = None,
     ) -> Answer:
         """Answer a waiting step as Oracle's principal."""
+        ...
+
+    async def answer_record(self, workflow_id: str, step_id: str, artifact: str) -> RecordedAnswer:
+        """The answer a waiting step holds (after a 409 ``already_answered``): the
+        runtime's record and the verdict from the step's form ``artifact``."""
         ...

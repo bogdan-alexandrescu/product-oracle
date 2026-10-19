@@ -1,16 +1,23 @@
 """A fake SwarmCloud API for adapter v2 tests, served through ``httpx.MockTransport``.
 
-It follows docs/swarmcloud-interface.md: the two switches (caller MCP, await-input) and
-service answers, the MCP server registry with its egress addresses, workflow submission
-with its refusals, a small step engine (agent steps finish when polled, ``await-input``
-steps park until answered or expired, ``when`` gates, skipped dependants), answers with
-replay and 409, artifacts by task, cancel and labels. What it cannot know about the real
-service is listed in the adapter v2 report.
+It follows docs/swarmcloud-interface.md and the contract SwarmCloud confirmed on
+2026-10-19: the two switches (caller MCP, await-input) and service answers, the MCP server
+registry with its egress addresses (reads served while caller MCP is off, writes refused),
+workflow submission with its refusals, a small step engine (agent steps finish when
+polled, ``await-input`` steps park until answered or expired, ``when`` gates on the
+recorded verdict, skipped dependants), answers (a replay only when answer_id, payload,
+on_behalf_of and files all match; any other second answer 409 already_answered, and the
+workflow goes on with the first), the answer record without its payload, the verdict in
+the step's form artifact, artifacts by task, cancel, and Oracle's tasks listed newest
+first with each step's metadata. Errors use SwarmCloud's envelope
+``{"code", "message", "detail": {"reason", ...}}``; a workflow has no metadata. What it
+cannot know about the real service is listed in the adapter v2 report.
 
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)
     runtime = swarm.runtime()
 """
 
+import hashlib
 import json
 import re
 import string
@@ -26,13 +33,32 @@ from oracle.swarm.swarmcloud import StaticBearer
 
 EGRESS = ("203.0.113.7", "203.0.113.8")
 AGENT_COST = 1.5
+# Oracle's principal, as SwarmCloud records it on a service answer.
+SERVICE_PRINCIPAL = "oracle-api@saga-agents-staging.iam.gserviceaccount.com"
+_CODES = {
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    405: "method_not_allowed",
+    409: "conflict",
+    422: "validation_error",
+    503: "unavailable",
+}
 _WRITE = re.compile(r"Write these files as artifacts: ([^\n]+?)\.\n")
 _NOTES = re.compile(r"Write your working notes to (\S+?\.md)")
 _PRINTABLE = set(string.printable) - set("\t\n\r\x0b\x0c")
 
 
-def _err(status: int, code: str, message: str = "") -> httpx.Response:
-    return httpx.Response(status, json={"detail": {"code": code, "message": message or code}})
+def _err(status: int, reason: str, message: str = "", **detail: Any) -> httpx.Response:
+    """SwarmCloud's error envelope: a generic code, the reason in ``detail``."""
+    return httpx.Response(
+        status,
+        json={
+            "code": _CODES.get(status, "error"),
+            "message": message or reason,
+            "detail": {"reason": reason, **detail},
+        },
+    )
 
 
 @dataclass
@@ -45,11 +71,14 @@ class Step:
     await_input: dict[str, Any] | None
     when: dict[str, Any] | None
     task_id: str
+    metadata: dict[str, Any] = field(default_factory=dict)
     state: str = "PENDING"
     park_reason: str | None = None
     opened_at: datetime | None = None
     expires_at: datetime | None = None
+    # The answer record (what GET .../input serves) and the body that was posted.
     answer: dict[str, Any] | None = None
+    answered_with: dict[str, Any] | None = None
     answer_state: str = "not_open"
     files: dict[str, str] = field(default_factory=dict)
     staged: dict[str, str] = field(default_factory=dict)
@@ -95,7 +124,13 @@ class FakeSwarmCloud:
         self.lose_next_submit = False  # create the workflow, then lose the answer
         self.fail_next_submit: httpx.Response | None = None  # refuse without creating
         self.lose_next_lookup = False
-        self.replay_as_409 = False  # answer a same-body replay with 409, not 200
+        # Record the next answer, then lose the response (a timeout).
+        self.lose_next_answer = False
+        self.fail_next_answer: httpx.Response | None = None  # refuse without recording
+        # Agent steps run per poll (None: all that can).
+        self.steps_per_poll: int | None = None
+        # Other tasks of Oracle's, newer than any workflow here (for paging).
+        self.other_tasks = 0
         self.step_failure: dict[str, tuple[str, str]] = {}  # step_id -> (code, message)
         self._n = 0
 
@@ -132,7 +167,7 @@ class FakeSwarmCloud:
             return httpx.Response(200, json={"tenant": {"tenant_id": "u-or-9a0792"}})
         if path == "/v1/capacity":
             if not self.report_capacity:
-                return httpx.Response(404, json={"detail": "no route"})
+                return _err(404, "not_found", "no route")
             return httpx.Response(
                 200,
                 json={
@@ -148,21 +183,21 @@ class FakeSwarmCloud:
         if path == "/v1/workflows" and method == "POST":
             return self._submit(body)
         if path == "/v1/workflows" and method == "GET":
+            # No label filter, and a workflow has no metadata.
+            rows = [
+                {"workflow_id": w.workflow_id, "state": w.state} for w in self.workflows.values()
+            ]
+            return httpx.Response(200, json={"workflows": rows})
+        if path == "/v1/tasks" and method == "GET":
             if self.lose_next_lookup:
                 self.lose_next_lookup = False
                 raise httpx.ReadTimeout("lost", request=request)
-            label = request.url.params.get("label")
-            rows = [
-                {"workflow_id": w.workflow_id, "metadata": w.body.get("metadata") or {}}
-                for w in self.workflows.values()
-                if (w.body.get("metadata") or {}).get("label") == label
-            ]
-            return httpx.Response(200, json={"workflows": rows})
+            return self._tasks(request.url.params)
         m = re.fullmatch(r"/v1/workflows/([^/]+)(/cancel|/steps/([^/]+)/input)?", path)
         if m:
             wf = self.workflows.get(m[1])
             if wf is None:
-                return httpx.Response(404, json={"detail": "no such workflow"})
+                return _err(404, "not_found", "no such workflow")
             if m[2] == "/cancel" and method == "POST":
                 return self._cancel(wf)
             if m[3]:
@@ -174,19 +209,20 @@ class FakeSwarmCloud:
         if m:
             step = self._task(m[1])
             if step is None:
-                return httpx.Response(404, json={"detail": "no such task"})
+                return _err(404, "not_found", "no such task")
             if m[2]:
                 name = request.url.params["name"]
                 if name not in step.files:
-                    return httpx.Response(404, json={"detail": "no such artifact"})
+                    return _err(404, "not_found", "no such artifact")
                 return httpx.Response(200, text=step.files[name])
             rows = [{"name": n, "role": None} for n in step.files]
             rows.append({"name": "agent.log", "role": "agent_stdout"})
             return httpx.Response(200, json={"artifacts": rows, "complete": True})
-        return httpx.Response(404, json={"detail": "no route"})
+        return _err(404, "not_found", "no route")
 
     def _servers(self, method: str, path: str, body: Any) -> httpx.Response:
-        if not self.mcp:
+        # Reads are served while caller MCP is switched off; writes are not.
+        if not self.mcp and method != "GET":
             return _err(503, "mcp_unavailable", "caller MCP is switched off")
         if path == "/v1/mcp-servers" and method == "GET":
             return httpx.Response(
@@ -206,7 +242,7 @@ class FakeSwarmCloud:
         if method == "PATCH":
             server.update(body)
             return httpx.Response(200, json={"server": server})
-        return httpx.Response(405)
+        return _err(405, "method_not_allowed")
 
     def _submit(self, body: dict[str, Any]) -> httpx.Response:
         if self.fail_next_submit is not None:
@@ -279,6 +315,7 @@ class FakeSwarmCloud:
                     await_input=s.get("await_input"),
                     when=s.get("when"),
                     task_id=f"{wid}_t{i + 1}",
+                    metadata=dict(s.get("metadata") or {}),
                 )
                 for i, s in enumerate(steps)
             ],
@@ -290,6 +327,94 @@ class FakeSwarmCloud:
             self.lose_next_submit = False
             raise httpx.ReadTimeout("the answer was lost")
         return httpx.Response(201, json={"workflow": {"workflow_id": wid}, "dispatch": {}})
+
+    def _tasks(self, params: httpx.QueryParams) -> httpx.Response:
+        """Oracle's tasks, newest first. ``submitted_by`` is applied in the query, so its
+        pages are exact; any other filter is applied to the page after the cursor, so
+        pages come back short (as SwarmCloud does)."""
+        if params.get("submitted_by") != "me":
+            return _err(422, "validation_error", "submitted_by=me is required here")
+        rows: list[dict[str, Any]] = [
+            {
+                "id": f"other_t{i}",
+                "workflow_id": f"other_wf{i}",
+                "state": "SUCCEEDED",
+                "runner_profile": "claude-code",
+                "metadata": {"oracle_key": f"oracle-other-{i}"},
+            }
+            for i in range(self.other_tasks)
+        ]
+        for wf in reversed(list(self.workflows.values())):
+            for st in reversed(wf.steps):
+                rows.append(
+                    {
+                        "id": st.task_id,
+                        "workflow_id": wf.workflow_id,
+                        "state": st.state,
+                        "runner_profile": st.profile,
+                        "metadata": dict(st.metadata),
+                    },
+                )
+        limit = int(params.get("limit", "50"))
+        start = int(params.get("page_token") or 0)
+        page = rows[start : start + limit]
+        for key in ("state", "runner_profile", "workflow_id"):
+            if key in params:
+                page = [r for r in page if r[key] == params[key]]
+        more = start + limit < len(rows)
+        return httpx.Response(
+            200, json={"tasks": page, "next_page_token": str(start + limit) if more else None}
+        )
+
+    def console_answer(
+        self,
+        workflow_id: str,
+        step_id: str,
+        verdict: str,
+        findings: list[str] | None = None,
+        *,
+        by: str = "reviewer@example.com",
+    ) -> None:
+        """A person answers in SwarmCloud's console."""
+        wf = self.workflows[workflow_id]
+        self._advance(wf)
+        step = wf.step(step_id)
+        assert step.answer_state == "waiting", step.answer_state
+        self._record(
+            wf,
+            step,
+            {
+                "answer_id": f"console-{step.task_id}",
+                "payload": {"verdict": verdict, "findings": findings or []},
+                "via": "console",
+            },
+            by=by,
+        )
+
+    def _record(self, wf: Workflow, step: Step, body: dict[str, Any], *, by: str) -> None:
+        payload = body["payload"]
+        # Validated, redacted and re-serialised: never the bytes that were posted.
+        form = json.dumps(
+            {"verdict": payload["verdict"], "findings": [str(f) for f in payload["findings"]]},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        step.answered_with = body
+        step.answer = {
+            "answer_id": body["answer_id"],
+            "answered_by": by,
+            "on_behalf_of": body.get("on_behalf_of"),
+            "answered_at": self.now.isoformat(),
+            "via": body.get("via"),
+            "sha256": hashlib.sha256(form.encode()).hexdigest(),
+            "bytes": len(form.encode()),
+            "files": list(body.get("files") or []),
+        }
+        step.answer_state = "answered"
+        step.files = {step.await_input["artifact"]: form}  # type: ignore[index]
+        step.state = "SUCCEEDED"
+        step.park_reason = None
+        self._advance(wf)
 
     def _task(self, task_id: str) -> Step | None:
         for wf in self.workflows.values():
@@ -313,41 +438,50 @@ class FakeSwarmCloud:
         self._advance(wf)
         step = next((s for s in wf.steps if s.step_id == step_id), None)
         if step is None or step.await_input is None:
-            return httpx.Response(404, json={"detail": "no such waiting step"})
+            return _err(404, "not_found", "no such waiting step")
         if method == "GET":
-            return httpx.Response(
-                200,
-                json={"state": step.answer_state, "answer": step.answer},
-            )
+            # The record only: who, when, via, the form's hash and size, never the payload.
+            return httpx.Response(200, json={"state": step.answer_state, "answer": step.answer})
+        if self.fail_next_answer is not None:
+            resp, self.fail_next_answer = self.fail_next_answer, None
+            return resp
         if not self.service_answer:
             return _err(403, "person_required", "only a person may answer this step")
+        payload = body.get("payload")
+        if not isinstance(payload, dict) or payload.get("verdict") not in ("MERGE", "NOT_YET"):
+            return _err(422, "invalid_form", "the verdict form needs MERGE or NOT_YET")
         if step.answer is not None:
-            if (
-                step.answer["answer_id"] == body["answer_id"]
-                and step.answer["payload"] == (body["payload"])
-            ):
-                if self.replay_as_409:
-                    return _err(409, "already_answered")
+            sent = step.answered_with or {}
+            same = all(
+                sent.get(k) == body.get(k) for k in ("answer_id", "payload", "on_behalf_of")
+            ) and list(sent.get("files") or []) == list(body.get("files") or [])
+            if same:
                 return httpx.Response(200, json={"replayed": True, "state": "answered"})
-            return _err(409, "already_answered")
-        if step.answer_state == "expired":
-            return _err(409, "expired")
+            return _err(
+                409,
+                "already_answered",
+                "the step was already answered",
+                answered_by=step.answer["answered_by"],
+                answered_at=step.answer["answered_at"],
+                via=step.answer["via"],
+            )
         if step.answer_state != "waiting":
-            return _err(409, "not_open", f"step is {step.answer_state}")
+            reason = (
+                step.answer_state if step.answer_state in ("expired", "cancelled") else "not_open"
+            )
+            return _err(409, reason, f"the step is {step.answer_state}", state=step.answer_state)
         self.answers.append({"workflow_id": wf.workflow_id, "step_id": step_id, **body})
-        step.answer = {
-            "answer_id": body["answer_id"],
-            "payload": body["payload"],
-            "answered_as": "service",
-            "source": "person",
-            "on_behalf_of": body.get("on_behalf_of"),
-        }
-        step.answer_state = "answered"
-        step.files = {step.await_input["artifact"]: json.dumps(body["payload"])}
-        step.state = "SUCCEEDED"
-        step.park_reason = None
-        self._advance(wf)
+        self._record(wf, step, body, by=SERVICE_PRINCIPAL)
+        if self.lose_next_answer:
+            self.lose_next_answer = False
+            raise httpx.ReadTimeout("the answer's response was lost")
         return httpx.Response(200, json={"replayed": False, "state": "answered"})
+
+    def verdict(self, workflow_id: str, step_id: str) -> str | None:
+        """The verdict recorded in a waiting step's form artifact."""
+        step = self.workflows[workflow_id].step(step_id)
+        form = step.files.get((step.await_input or {}).get("artifact", ""))
+        return json.loads(form)["verdict"] if form else None
 
     # ------------------------------------------------------------------ engine
 
@@ -359,6 +493,7 @@ class FakeSwarmCloud:
     def _advance(self, wf: Workflow) -> None:
         if wf.state != "RUNNING":
             return
+        ran = 0
         changed = True
         while changed:
             changed = False
@@ -379,11 +514,15 @@ class FakeSwarmCloud:
                     s.state = "SKIPPED"
                     continue
                 if s.when:
-                    gate = wf.step(s.when["step"])
-                    verdict = ((gate.answer or {}).get("payload") or {}).get("verdict")
+                    # The recorded verdict: the first answer's, from the form artifact.
+                    verdict = self.verdict(wf.workflow_id, s.when["step"])
                     if verdict not in s.when["verdict_in"]:
                         s.state = "SKIPPED"
                         continue
+                if not s.await_input and self.steps_per_poll is not None:
+                    if ran >= self.steps_per_poll:
+                        changed = False
+                        break
                 s.staged = {
                     name: wf.step(up).files.get(name, "") for up, name in s.input_from.items()
                 }
@@ -396,6 +535,7 @@ class FakeSwarmCloud:
                         seconds=s.await_input["expires_after_seconds"]
                     )
                     continue
+                ran += 1
                 self._run_agent(wf, s)
             if any(s.state in ("FAILED", "DEAD_LETTERED") for s in wf.steps):
                 wf.state = "FAILED"
@@ -446,19 +586,17 @@ class FakeSwarmCloud:
                 task["error_code"] = s.error_code
             if s.park_reason:
                 task["park_reason"] = s.park_reason
+            task["metadata"] = dict(s.metadata)
             if s.await_input and s.opened_at:
-                task["metadata"] = {
-                    "await_input": {
-                        "opened_at": s.opened_at.isoformat(),
-                        "expires_at": s.expires_at.isoformat() if s.expires_at else None,
-                    }
+                task["metadata"]["await_input"] = {
+                    "opened_at": s.opened_at.isoformat(),
+                    "expires_at": s.expires_at.isoformat() if s.expires_at else None,
                 }
             tasks.append(task)
         return {
             "workflow": {
                 "workflow_id": wf.workflow_id,
                 "state": wf.state,
-                "metadata": wf.body.get("metadata") or {},
                 "steps": [
                     {"step_id": s.step_id, "task_id": s.task_id, "state": s.state} for s in wf.steps
                 ],

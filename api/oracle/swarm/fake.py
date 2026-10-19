@@ -23,6 +23,7 @@ from typing import Any
 from oracle.swarm.runtime import (
     Answer,
     Features,
+    RecordedAnswer,
     WorkflowSpec,
     WorkflowState,
     WorkflowStatus,
@@ -212,6 +213,9 @@ class FakeRuntime:
         payload: dict[str, Any],
         on_behalf_of: str | None = None,
     ) -> Answer:
+        raise LookupError("the local agent runtime has no steps that wait for a person")
+
+    async def answer_record(self, workflow_id: str, step_id: str, artifact: str) -> RecordedAnswer:
         raise LookupError("the local agent runtime has no steps that wait for a person")
 
     async def submit(self, spec: WorkflowSpec) -> str:

@@ -18,11 +18,13 @@ Adapter v2 (docs/swarmcloud-interface.md):
 ORACLE_CHECKPOINT_WAIT_SECONDS  how long a checkpoint waits for a person inside a workflow
                                 (W2b; default 72000, 20 h, so draft, wait and revise fit one
                                 24 h credential; held to 300-86400)
-ORACLE_CHECKPOINT_TAIL_SECONDS  a decision arriving with less than this left of the run's
-                                credential is not posted: the run continues as a new
-                                workflow (default 7200)
+ORACLE_CHECKPOINT_TAIL_SECONDS  the least of the run's credential a decision must leave
+                                when agent steps follow its wait (default 7200). The tail is
+                                the budget of those steps, ORACLE_STEP_SECONDS x their
+                                count, when larger; a decision leaving less is not posted
+                                and the run continues as a new workflow
 ORACLE_STEP_SECONDS             the time budgeted per agent step in a workflow's credential
-                                (default 7200, claude-code's timeout)
+                                and in the tail (default 7200, claude-code's timeout)
 ORACLE_SWARMCLOUD_FEATURES_TTL_SECONDS  how long a feature reading is cached (default 60)
 ORACLE_EGRESS_REFRESH_SECONDS   how often SwarmCloud's egress addresses are re-read
                                 (default 300)

@@ -15,15 +15,20 @@ into the baseline (through its YAML import: locked items get proposals), checks
 document's kind) as the document's next version, and opens the segment's checkpoint (or
 skips a disabled one).
 
-Adapter v2 (oracle.runs.workflow, docs/swarmcloud-interface.md): while SwarmCloud's
-caller MCP is on, the run token reaches the agents through the workflow's credential map;
-while await-input is on too, a run is one workflow whose checkpoints wait for a person in
-SwarmCloud, and the Inbox decision is posted as the answer. Either off (or refused at
-submit): today's one workflow per segment, and the run's notes say why.
+Adapter v2 (oracle.runs.workflow, docs/swarmcloud-interface.md): whenever SwarmCloud's
+caller MCP is on, the run token reaches the agents through the workflow's credential map,
+in either mode, so agents read Oracle's data; while await-input is on too, a run is one
+workflow whose checkpoints wait for a person in SwarmCloud, and the Inbox decision is
+posted as the answer. Await-input off (or refused at submit): today's one workflow per
+segment, the token still attached while MCP is on; MCP off: nothing attached. The run's
+notes say which.
 
     running --wait opens--> awaiting_checkpoint (the workflow parked on its step)
             --approved / changes posted--> running (the same workflow goes on)
-            --expired, tail rule, refused--> today's flow: a new workflow
+            --already answered, same verdict--> running (the workflow goes on)
+            --already answered, other verdict (a correction), expired, closed, tail rule,
+              refused--> the workflow cancelled; today's flow: a new workflow
+    running --spend > ceiling--> paused_overrun, the live workflow cancelled
 
 Segment ``artifacts`` (jsonb) hold ``files`` (name -> text), ``attempts`` (one entry
 per submission or in-workflow round: workflow id, label, cost, the reviewer's note),
@@ -92,6 +97,7 @@ from oracle.sources.models import Snapshot
 from oracle.swarm import (
     AgentRuntime,
     McpAccess,
+    RecordedAnswer,
     RuntimeUnavailable,
     StepSpec,
     WorkflowSpec,
@@ -1043,7 +1049,9 @@ async def _mode(runtime: AgentRuntime, url: str) -> _Mode:
     Oracle's MCP server registered once before the first credential is sent."""
     feats = await runtime.features()
     notes: list[str] = []
-    attach = feats.mcp == "on"
+    # Not known to be off: registered, and tried at submit (a 503 there drops it). Reads
+    # are served while the switch is off, so "unknown" is the usual first reading.
+    attach = feats.mcp != "off"
     if not attach and feats.reasons.get("mcp"):
         notes.append(f"Agents run without Oracle's MCP server: {feats.reasons['mcp']}.")
     if attach:
@@ -1051,10 +1059,14 @@ async def _mode(runtime: AgentRuntime, url: str) -> _Mode:
             await runtime.ensure_mcp_server(url)
         except RuntimeUnavailable as exc:
             attach = False
-            notes.append(
-                f"Oracle's MCP server could not be registered in SwarmCloud ({exc}): agents "
-                "run without it. An owner can retry with POST /v1/runtime/mcp-server."
-            )
+            if exc.code == "mcp_unavailable":
+                notes.append(workflow.advice(exc.code, str(exc)))
+            else:
+                notes.append(
+                    f"Oracle's MCP server could not be registered in SwarmCloud ({exc}): "
+                    "agents run without it. An owner can retry with POST "
+                    "/v1/runtime/mcp-server."
+                )
     waits = attach and feats.await_input != "off" and feats.service_answer != "off"
     if not waits:
         why = None
@@ -1066,6 +1078,8 @@ async def _mode(runtime: AgentRuntime, url: str) -> _Mode:
             why = "a run is one workflow only while agents can read Oracle's MCP server"
         if why:
             notes.append(f"Checkpoints wait in Oracle's Inbox, one workflow per segment: {why}.")
+        if attach:
+            notes.append(workflow.SEGMENT_MODE_WITH_MCP)
     return _Mode(attach, waits, notes)
 
 
@@ -1798,6 +1812,7 @@ async def _tick_workflow(
         if parked.reason == "CREDENTIAL_MISSING":
             _note(current or start or segments[0], workflow.ADVICE["CREDENTIAL_MISSING"])
     if run.status == "paused_overrun":
+        await _pause_workflow(db, run, wf, status, segments)
         return
     if run.status == "awaiting_checkpoint":
         if status.terminal:
@@ -1816,6 +1831,7 @@ async def _tick_workflow(
             run.id,
             {"spent_usd": str(run.spent_usd), "ceiling_usd": str(ceiling)},
         )
+        await _pause_workflow(db, run, wf, status, segments)
         return
 
     while run.status == "running":
@@ -1841,7 +1857,12 @@ async def _tick_workflow(
             ):
                 break
             await _harvest(run, current, wf["id"], producers)
-            wait: dict[str, Any] = {"workflow_id": wf["id"], "step_id": review, "round": round_}
+            wait: dict[str, Any] = {
+                "workflow_id": wf["id"],
+                "step_id": review,
+                "round": round_,
+                "artifact": workflow.review_artifact(round_),
+            }
             if parked is not None:
                 wait["task_id"] = parked.task_id
                 wait["opened_at"] = parked.opened_at.isoformat() if parked.opened_at else None
@@ -1882,6 +1903,43 @@ async def _tick_workflow(
             current.finished_at = _now()
         await _finish(db, run, "failed", f"{current.name if current else 'workflow'}: {error}")
         await audit.record(db, None, "run.failed", "run", run.id, {"workflow": wf["id"]})
+
+
+async def _pause_workflow(
+    db: AsyncSession,
+    run: Run,
+    wf: dict[str, Any],
+    status: WorkflowStatus,
+    segments: list[RunSegment],
+) -> None:
+    """Paused on overrun: cancel the live workflow, so that nothing more is spent (its
+    checkpoint-off segments would run on, one after another). The segment it was on keeps
+    its files when they are written (resuming opens its checkpoint in the Inbox), else it
+    is submitted again as a new workflow once the run is resumed."""
+    current = next((s for s in segments if s.status == "running"), None)
+    entry = _plan_entry(wf, current.seq) if current is not None else None
+    if current is not None and entry is not None:
+        round_ = int(entry.get("round") or 1)
+        producers = tuple(entry["work"]) if round_ == 1 else (entry["revises"][round_ - 2],)
+        done = status.step(producers[-1])
+        if done is not None and done.state == "SUCCEEDED":
+            await _harvest(run, current, wf["id"], producers)
+        else:
+            art = _art(current)
+            if art["attempts"]:
+                art["attempts"][-1]["state"] = "cancelled"
+            _set_art(current, art)
+            current.status = "pending"
+            current.error = (
+                "Paused on overrun before this segment finished: Oracle cancelled its "
+                "workflow, and resuming submits the segment again."
+            )
+    _note(
+        current or segments[0],
+        "Paused on overrun: Oracle cancelled the run's SwarmCloud workflow so that nothing "
+        "more is spent; resuming continues as a new workflow.",
+    )
+    await _detach(db, run, cancel=True, state="paused")
 
 
 async def _wait_ended(
@@ -2056,10 +2114,14 @@ async def _decide_in_workflow(
     wf: dict[str, Any],
     principal: Principal,
 ) -> bool:
-    """Post an Inbox decision to the wait in the live workflow. Returns False when it is
-    not posted and the run continues as a new workflow instead (the caller does that):
-    the workflow has no step for the decision, too little of the credential is left
-    (the tail rule), or SwarmCloud refuses the answer."""
+    """Post an Inbox decision to the wait in the live workflow. Returns False when the
+    run continues as a new workflow instead (the caller does that, carrying the decision):
+    the workflow has no step for the decision, too little of the credential is left for
+    the agent steps after the wait (the tail rule), the wait is closed, SwarmCloud refuses
+    the answer, or it holds a different verdict (Oracle's decision is then a correction).
+    In every such case the live workflow is cancelled first, so a segment never runs in
+    two workflows. Raises Unavailable only when nothing was recorded and the same decision
+    may simply be sent again."""
     settings = get_runtime_settings()
     wait = dict((cp.payload or {}).get("wait") or {})
     entry = _plan_entry(wf, segment.seq) or {}
@@ -2075,13 +2137,15 @@ async def _decide_in_workflow(
         await _detach(db, run, cancel=True, state="cancelled")
         return False
     left = _left(wf)
-    if left < settings.checkpoint_tail_seconds:
+    steps = workflow.agent_steps_after(wf.get("segments") or [], segment.seq, approved, round_)
+    tail = workflow.tail_seconds(steps, settings)
+    if left < tail:
         _note(
             segment,
-            f"Decided at {cp.kind} with {_duration(left)} of the run's credential left (under "
-            f"the {_duration(settings.checkpoint_tail_seconds)} tail): Oracle did not post the "
-            "decision to SwarmCloud, cancelled the waiting workflow and continued as a new "
-            "workflow with a fresh run token.",
+            f"Decided at {cp.kind} with {_duration(left)} of the run's credential left, under "
+            f"the {_duration(tail)} tail that the {steps} agent step(s) after the wait need: "
+            "Oracle did not post the decision to SwarmCloud, cancelled the waiting workflow "
+            "and continued as a new workflow with a fresh run token.",
         )
         await _detach(db, run, cancel=True, state="tail")
         return False
@@ -2090,29 +2154,149 @@ async def _decide_in_workflow(
         if approved
         else {"verdict": NOT_YET, "findings": [cp.note] if cp.note else []}
     )
+    on_behalf_of = await _email(db, principal)
+    runtime = get_runtime()
     try:
-        answer = await get_runtime().answer(
+        answer = await runtime.answer(
             wf["id"],
             wait["step_id"],
             answer_id=str(cp.id),
             payload=payload,
-            on_behalf_of=await _email(db, principal),
+            on_behalf_of=on_behalf_of,
         )
     except RuntimeUnavailable as exc:
-        if exc.code in ("already_answered", "not_open", "expired", "person_required"):
-            _note(segment, workflow.ADVICE[exc.code])
-            await _detach(db, run, cancel=exc.code != "expired", state=exc.code)
-            return False
-        # Not recorded: the same decision is safe to send again (same answer_id).
-        raise Unavailable(
-            f"SwarmCloud did not confirm the decision ({exc}); decide again, it is safe to repeat"
-        ) from None
+        if exc.code == "already_answered":
+            return await _already_answered(
+                db, run, cp, segment, segments, wf, wait, payload["verdict"], exc
+            )
+        if exc.retryable:
+            # Nothing was recorded: the same decision is safe to send again (same
+            # answer_id, same body).
+            raise Unavailable(
+                f"SwarmCloud did not confirm the decision ({exc}); decide again, it is safe "
+                "to repeat"
+            ) from None
+        # Refused (the wait is closed, a person is required, or another refusal): not
+        # posted, so the run continues as a new workflow with the decision.
+        fallback = (
+            f"SwarmCloud refused Oracle's answer to {cp.kind} ({exc}), so the decision was not "
+            "posted: Oracle cancelled the workflow and continued the run as a new workflow "
+            "from the Inbox decision."
+        )
+        _note(segment, workflow.advice(exc.code, fallback))
+        await _detach(db, run, cancel=True, state=exc.code or "refused")
+        return False
     wait["answered"] = {
         "verdict": payload["verdict"],
         "at": _now().isoformat(),
         "replayed": answer.replayed,
+        "answer_id": str(cp.id),
+        "on_behalf_of": on_behalf_of,
+        "via": "mcp",
     }
     cp.payload = {**(cp.payload or {}), "wait": wait}
+    await _follow(db, run, cp, segment, segments, wf, entry, round_, approved)
+    return True
+
+
+async def _already_answered(
+    db: AsyncSession,
+    run: Run,
+    cp: Checkpoint,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    wf: dict[str, Any],
+    wait: dict[str, Any],
+    verdict: str,
+    exc: RuntimeUnavailable,
+) -> bool:
+    """409 already_answered: Oracle's post was not recorded, but the wait was answered
+    (someone in SwarmCloud's console, or an earlier, different post of Oracle's whose
+    response was lost), and the workflow already goes on with that first answer. Same
+    verdict as Oracle's decision: follow the workflow. Different: Oracle's latest Inbox
+    decision is a correction, so the workflow is cancelled and the run continues as a new
+    workflow carrying it."""
+    round_ = int(wait.get("round") or 1)
+    artifact = wait.get("artifact") or workflow.review_artifact(round_)
+    try:
+        record = await get_runtime().answer_record(wf["id"], wait["step_id"], artifact)
+    except RuntimeUnavailable as read:
+        if read.retryable:
+            raise Unavailable(
+                f"SwarmCloud says {cp.kind} was already answered but did not show the answer "
+                f"({read}); decide again, it is safe to repeat"
+            ) from None
+        record = RecordedAnswer()
+    by = record.answered_by or exc.detail.get("answered_by")
+    at = record.answered_at.isoformat() if record.answered_at else exc.detail.get("answered_at")
+    via = record.via or exc.detail.get("via")
+    ours = record.answer_id == str(cp.id)
+    wait["recorded"] = {
+        "answer_id": record.answer_id,
+        "answered_by": by,
+        "on_behalf_of": record.on_behalf_of,
+        "answered_at": at,
+        "via": via,
+        "verdict": record.verdict,
+        "outside_oracle": not ours,
+    }
+    if not ours:
+        who = by or "someone"
+        if record.on_behalf_of:
+            who += f" for {record.on_behalf_of}"
+        _note(
+            segment,
+            f"{cp.kind} (round {round_}) was decided outside Oracle: {who} answered "
+            f"{record.verdict or 'it'} in SwarmCloud"
+            f"{f' via {via}' if via else ''}{f' at {at}' if at else ''}.",
+        )
+    if record.verdict == verdict:
+        _note(
+            segment,
+            f"SwarmCloud already held a {verdict} answer for {cp.kind} (round {round_}), the "
+            "same verdict as the Inbox decision, so the run follows the workflow on it. "
+            "SwarmCloud kept the earlier wording: its findings, notes and on_behalf_of stand, "
+            "not this decision's.",
+        )
+        wait["answered"] = {
+            "verdict": verdict,
+            "at": at or _now().isoformat(),
+            "replayed": False,
+            "answer_id": record.answer_id,
+            "answered_by": by,
+            "on_behalf_of": record.on_behalf_of,
+            "via": via,
+            "kept_earlier": True,
+        }
+        cp.payload = {**(cp.payload or {}), "wait": wait}
+        entry = _plan_entry(wf, segment.seq) or {}
+        await _follow(db, run, cp, segment, segments, wf, entry, round_, verdict == MERGE)
+        return True
+    held = record.verdict or "an answer Oracle could not read"
+    _note(
+        segment,
+        f"SwarmCloud held {held} for {cp.kind} (round {round_}), but the latest Inbox decision "
+        f"is {verdict}: Oracle takes its decision as a correction, cancelled the workflow "
+        "(which had gone on with the recorded answer) and continued as a new workflow "
+        "carrying the decision.",
+    )
+    cp.payload = {**(cp.payload or {}), "wait": wait}
+    await _detach(db, run, cancel=True, state="corrected")
+    return False
+
+
+async def _follow(
+    db: AsyncSession,
+    run: Run,
+    cp: Checkpoint,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    wf: dict[str, Any],
+    entry: dict[str, Any],
+    round_: int,
+    approved: bool,
+) -> None:
+    """The wait is answered with the run's verdict: keep following the workflow."""
     run.status = "running"
     last = wf["segments"][-1].get("seq") == segment.seq if wf.get("segments") else True
     if approved:
@@ -2121,7 +2305,7 @@ async def _decide_in_workflow(
             more = round_ < len(entry.get("reviews") or [])
             await _detach(db, run, cancel=more, state="ended")
         await _next(db, run, segment, segments)
-        return True
+        return
     # NOT_YET: the revision step runs in the workflow, then the next round's wait.
     entry["round"] = round_ + 1
     _set_knob(
@@ -2148,7 +2332,6 @@ async def _decide_in_workflow(
     _set_art(segment, art)
     segment.status = "running"
     segment.finished_at = None
-    return True
 
 
 def _may_manage(principal: Principal, run: Run) -> bool:

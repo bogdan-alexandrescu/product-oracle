@@ -20,8 +20,8 @@ switched on yet.
   `GET /v1/runtime/status` proves them (reachable, tenant `u-or-9a0792`, 2026-10-19).
 - **No tenant header:** the service tenant is the default; naming it is a 403.
 - **No idempotency keys:** a retried `POST /v1/workflows` creates a duplicate. Oracle
-  labels each submission `oracle-<run id>-<segment>-<attempt>` and checks for that label
-  before resubmitting.
+  keys each submission `oracle-<run id>-<segment>-<attempt>` and looks for that key
+  before resubmitting (how: section 4).
 
 ## 1. Oracle's MCP server for agents (#1433) [OFF]
 
@@ -82,7 +82,7 @@ carries one credential map:
 **The answer:** `POST /v1/workflows/{id}/steps/{step_id}/input` with
 `{"answer_id": "<stable id>", "payload": {...}, "via": "mcp"}`. The same `answer_id` with
 the same body replays (200, `replayed: true`); any other second answer is 409
-`already_answered`. **Who answers:** Oracle's own principal, in its own tenant only
+`already_answered` (the exact rules, confirmed on 2026-10-19, are in section 4). **Who answers:** Oracle's own principal, in its own tenant only
 (SwarmCloud PR 1577, security-reviewed; merging 2026-10-19). An optional
 `"on_behalf_of": "<email>"` (at most 254 characters, checked for shape only) records the
 person Oracle answers for. It is a recorded label, not a verified identity. The step then
@@ -142,3 +142,58 @@ to build only after the switches; it moved once all three were merged.)
 4. Answer NOT_YET.
 5. Confirm revise runs with `review1.json` staged.
 6. Confirm Oracle's `/mcp` saw only the run token, and that it is gone after the run.
+
+## 4. Confirmed by SwarmCloud (main, 2026-10-19)
+
+A security review found that Oracle's fake SwarmCloud returned shapes the real one does
+not. SwarmCloud's team confirmed the real contract, and it overrides anything above:
+
+- **Errors:** `{"code": ..., "message": ..., "detail": {"reason": ..., ...}}`. What a
+  refusal means is `detail.reason`, not the top-level `code`.
+- **Answering a wait** (`POST .../steps/{step}/input`):
+  - 403 `forbidden`, reason `person_required`, `not_a_member` or `role_member_required`;
+  - 409 `conflict`, reason `already_answered` (detail also has `answered_by`,
+    `answered_at`, `via`), or `not_open`, `expired`, `cancelled` (with `detail.state`);
+  - 503 `membership_unavailable`, `role_unavailable` or store unavailable: nothing was
+    written, retry.
+  - A replay is a 200 with `replayed: true` only when `answer_id`, the form body,
+    `on_behalf_of` and `files` all match. The same `answer_id` with any difference is 409
+    `already_answered`.
+  - 409 `already_answered` means this post was not recorded but the step was answered
+    (by someone else, or by an earlier, different post whose response was lost). The
+    workflow is not stuck: it goes on with the recorded answer, and its `when` gates
+    follow that answer's verdict. The first answer is final.
+- **What was answered:** `GET .../steps/{step}/input` serves an `answer` record:
+  `answer_id`, `answered_by`, `on_behalf_of`, `answered_at`, `via`, `sha256`, `bytes`,
+  `files`. Never the payload, and its `sha256` is over SwarmCloud's validated, redacted,
+  re-serialised form, so it never matches Oracle's bytes: hashes are not compared. The
+  recorded verdict is in the waiting step's form artifact (the step task's artifact named
+  by `await_input.artifact`, e.g. `review1.json`).
+- **Finding a submission whose answer was lost:** there is no label filter, and a
+  workflow has no metadata. Oracle puts its key in every step's own `metadata` as
+  `{"oracle_key": "oracle-<run id>-<segment>-<attempt>"}` (plain), then reads
+  `GET /v1/tasks?submitted_by=me&limit=50` (newest first; `submitted_by` alone is applied
+  in the query, so pages are exact), matches `metadata.oracle_key` and takes the row's
+  `workflow_id`, paging with `page_token`. No `state`, `runner_profile` or `workflow_id`
+  filter is added: combined filters are applied after the cursor and pages come back
+  short.
+- **Caller MCP reads** (`GET /v1/mcp-servers`) are served while the switch is off, so
+  Oracle counts MCP as on only once SwarmCloud accepted its registration or a run's token.
+
+What Oracle does with an answer (adapter v2 review fixes, 2026-10-19):
+
+| SwarmCloud answers | Oracle |
+| --- | --- |
+| 200 (or 200 `replayed: true`) | posted; the run follows the workflow |
+| 409 `already_answered`, recorded verdict = the Inbox decision | treated as posted (who and when recorded on the checkpoint); the run follows the workflow; a note says SwarmCloud kept the earlier wording |
+| 409 `already_answered`, recorded verdict differs | the Inbox decision is a correction: the workflow is cancelled and the run continues as a new workflow carrying it; noted |
+| either, `answer_id` not Oracle's | also noted: who answered, via what, and that it was decided outside Oracle |
+| 409 `not_open`, `expired`, `cancelled` | the wait is closed: cancel, continue as a new workflow with the decision |
+| 403 `person_required` | service answers recorded as off (cached like the other features); cancel, continue as a new workflow (today's flow); later runs keep checkpoints in the Inbox |
+| other refusals (403, 404, 422) | not posted: cancel, continue as a new workflow, with a note |
+| 503, 429, timeout | nothing recorded: "decide again" (the same answer replays) |
+
+No case runs a segment in two workflows: a workflow is cancelled before its successor is
+submitted. **Tail rule:** a decision is posted only when the credential left covers the
+agent steps that follow the wait (`ORACLE_STEP_SECONDS` x their count, at least
+`ORACLE_CHECKPOINT_TAIL_SECONDS`); otherwise the run continues as a new workflow.

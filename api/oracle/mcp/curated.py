@@ -230,8 +230,27 @@ async def _run_output(app, caller, ops, args) -> types.CallToolResult:
     missing = [k for k in ("seq", "name") if args.get(k) in (None, "")]
     if missing:
         raise ToolError(f"Missing required argument(s): {', '.join(missing)}")
-    call = {"run_id": str(caller.run_id), "seq": args["seq"], "name": args["name"]}
+    seq, name = args["seq"], args["name"]
+    if isinstance(seq, str) and seq.isascii() and seq.isdigit():
+        seq = int(seq)
+    if isinstance(seq, bool) or not isinstance(seq, int) or seq < 1:
+        raise ToolError("seq must be a whole number from 1 (the segment's number in this run).")
+    if not _plain_file_name(name):
+        raise ToolError("name must be a plain file name such as baseline.yaml (no '/', no '..').")
+    call = {"run_id": str(caller.run_id), "seq": seq, "name": name}
     return to_result(await call_operation(app, caller, ops["op"], call, check_scopes=False))
+
+
+def _plain_file_name(name: object) -> bool:
+    """A file name, not a path: no separators, no '..', no control characters."""
+    return (
+        isinstance(name, str)
+        and 0 < len(name) <= 255
+        and "/" not in name
+        and "\\" not in name
+        and ".." not in name
+        and name.isprintable()
+    )
 
 
 def _is_baseline(path: str) -> bool:
