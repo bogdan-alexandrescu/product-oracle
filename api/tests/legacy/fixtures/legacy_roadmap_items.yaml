@@ -1,0 +1,21 @@
+version: 1
+prd: {document: legacy-onboarding, version: 1}
+items:
+  - id: checklist-panel
+    title: Checklist panel
+    outcome: New teams see what is left to set up
+    horizon: now
+    milestone: Checklist beta
+    depends_on: []
+    priority: {score: 3.0, rank: 1, explanation: "activation weight 3 x contribution 1"}
+    confidence: medium
+    prd_section: req-checklist
+  - id: invite-step
+    title: Invite step
+    outcome: More teams invite a colleague in week one
+    horizon: next
+    milestone: Invite defaults
+    depends_on: [checklist-panel]
+    priority: {score: 2.0, rank: 2, explanation: "activation weight 2 x contribution 1"}
+    confidence: medium
+    prd_section: req-invite
