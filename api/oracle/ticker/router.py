@@ -6,14 +6,24 @@ SwarmCloud never calls Oracle back, so runs only advance when something ticks
 pool and run its queued built-in model jobs. One company's failure stops none of the
 others, and the answer carries counts only (no ids, no error text).
 
+The account sweep runs only when the company's last one completed more than
+``ORACLE_CLAUDE_SWEEP_SECONDS`` ago: Anthropic's usage endpoint allows about five calls
+per five minutes per account, which a sweep every minute would spend.
+
 Auth is a Google ID token from ORACLE_TICKER_SERVICE_ACCOUNT for ORACLE_TICKER_AUDIENCE
 (``oracle.ticker.idtoken``), nothing else; with either setting empty the endpoint is a
 404. Outside /v1 and out of the OpenAPI document, so it is no MCP tool.
 
 Ticks never overlap: a Postgres advisory lock is held for the whole tick, and a tick
-that finds it taken answers ``{"skipped": "running"}``. No company is started after
-``BUDGET_SECONDS``, and the whole tick is cut off at ``HARD_LIMIT_SECONDS``. Companies
-go in a random order, so a slow one cannot starve those after it.
+that finds it taken answers ``{"skipped": "running"}``. The lock is session-level, so the
+database connection must be a session-mode one (not a transaction-mode pooler).
+
+First every company's runs and sweep, in a random order, none started after
+``BUDGET_SECONDS``; then the built-in jobs of the companies ticked, one job per company
+in turn, so a company's backlog neither delays another's runs nor takes all the job
+time. A job is claimed only when a whole model call still fits before
+``HARD_LIMIT_SECONDS``, where the whole tick is cut off (a job cut off anyway goes back
+to the queue, ``oracle.jobs.worker``).
 """
 
 import asyncio
@@ -21,6 +31,7 @@ import logging
 import random
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -65,6 +76,8 @@ class _ClaudeAccounts(BaseModel):
     polled: int = 0
     # Companies whose sweep lease another sweep held.
     lease_skipped: int = 0
+    # Companies not swept: their last sweep completed within ORACLE_CLAUDE_SWEEP_SECONDS.
+    not_due: int = 0
     errors: int = 0
 
 
@@ -108,7 +121,7 @@ async def _authenticate(request: Request) -> None:
     try:
         await idtoken.verify_id_token(token.strip(), audience=audience.strip(), email=account)
     except idtoken.InvalidIdToken as e:
-        log.info("run ticker refused a token: %s", e)
+        log.debug("run ticker refused a token: %s", e)
         raise _REFUSED from None
     except KeysUnavailable:
         raise HTTPException(
@@ -116,9 +129,37 @@ async def _authenticate(request: Request) -> None:
         ) from None
 
 
-async def _tick_company(tenant_id: uuid.UUID, out: TickerOut) -> None:
-    """One company's runs, account sweep and built-in jobs, each kind on its own."""
-    failed = False
+class _Failures:
+    """Companies with at least one kind of work that raised, each counted once."""
+
+    def __init__(self, out: TickerOut) -> None:
+        self.out = out
+        self.seen: set[uuid.UUID] = set()
+
+    def add(self, tenant_id: uuid.UUID) -> None:
+        if tenant_id not in self.seen:
+            self.seen.add(tenant_id)
+            self.out.companies.failed += 1
+
+
+async def _sweep_if_due(tenant_id: uuid.UUID, out: TickerOut) -> None:
+    interval = timedelta(seconds=claude_sweep.get_pool_settings().sweep_seconds)
+    acc = out.claude_accounts
+    if not await claude_sweep.is_due(tenant_id, interval, datetime.now(UTC)):
+        acc.not_due += 1
+        return
+    swept = claude_sweep.summarise_sweep(await claude_sweep.sweep(tenant_id))
+    acc.reclaimed += swept.reclaimed
+    acc.examined += swept.examined
+    acc.refreshed += swept.refreshed
+    acc.reauth_required += len(swept.reauth_required)
+    acc.polled += swept.polled
+    acc.lease_skipped += swept.lease == "skipped"
+    acc.errors += len(swept.errors)
+
+
+async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failures) -> None:
+    """One company's runs and account sweep, each on its own."""
     try:
         async with tenant_session(tenant_id) as db:
             runs = await runs_service.tick(db)
@@ -129,43 +170,61 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut) -> None:
         out.runs.errors += len(runs.errors)
     except Exception:
         log.exception("run ticker: runs failed for company %s", tenant_id)
-        failed = True
+        failures.add(tenant_id)
     try:
-        swept = claude_sweep.summarise_sweep(await claude_sweep.sweep(tenant_id))
-        acc = out.claude_accounts
-        acc.reclaimed += swept.reclaimed
-        acc.examined += swept.examined
-        acc.refreshed += swept.refreshed
-        acc.reauth_required += len(swept.reauth_required)
-        acc.polled += swept.polled
-        acc.lease_skipped += swept.lease == "skipped"
-        acc.errors += len(swept.errors)
+        await _sweep_if_due(tenant_id, out)
     except Exception:
         log.exception("run ticker: the Claude account sweep failed for company %s", tenant_id)
-        failed = True
-    try:
-        jobs = await llm_jobs.run_pending(tenant_id)
-        out.llm_jobs.ran += jobs.ran
-        out.llm_jobs.succeeded += jobs.succeeded
-        out.llm_jobs.failed += jobs.failed
-        out.llm_jobs.retried += jobs.retried
-    except Exception:
-        log.exception("run ticker: built-in jobs failed for company %s", tenant_id)
-        failed = True
-    out.companies.failed += failed
+        failures.add(tenant_id)
+
+
+async def _run_jobs(
+    tenant_ids: list[uuid.UUID], out: TickerOut, failures: _Failures, started: float
+) -> None:
+    """The companies' queued built-in jobs, one per company in turn, inside the tick.
+
+    A company leaves the turn when it has nothing runnable, has run its
+    ``max_per_tick`` or failed; the turn ends once no job fits in the time left.
+    """
+    limit = llm_jobs.get_worker_settings().max_per_tick
+    ran = dict.fromkeys(tenant_ids, 0)
+    waiting = list(tenant_ids)
+    while waiting:
+        for tenant_id in list(waiting):
+            budget = HARD_LIMIT_SECONDS - (time.monotonic() - started)
+            if budget < llm_jobs.job_seconds():
+                return
+            try:
+                jobs = await llm_jobs.run_pending(tenant_id, limit=1, budget_seconds=budget)
+            except Exception:
+                log.exception("run ticker: built-in jobs failed for company %s", tenant_id)
+                failures.add(tenant_id)
+                waiting.remove(tenant_id)
+                continue
+            out.llm_jobs.ran += jobs.ran
+            out.llm_jobs.succeeded += jobs.succeeded
+            out.llm_jobs.failed += jobs.failed
+            out.llm_jobs.retried += jobs.retried
+            ran[tenant_id] += jobs.ran
+            if jobs.ran == 0 or ran[tenant_id] >= limit:
+                waiting.remove(tenant_id)
 
 
 async def _tick_every_company(out: TickerOut, started: float) -> None:
     async with unscoped_session() as s:
         tenant_ids = list(await s.scalars(select(Tenant.id)))
     random.shuffle(tenant_ids)
+    failures = _Failures(out)
     out.companies.deferred = len(tenant_ids)
+    ticked: list[uuid.UUID] = []
     for tenant_id in tenant_ids:
         if time.monotonic() - started >= BUDGET_SECONDS:
             break
         out.companies.deferred -= 1
         out.companies.ticked += 1
-        await _tick_company(tenant_id, out)
+        ticked.append(tenant_id)
+        await _tick_company(tenant_id, out, failures)
+    await _run_jobs(ticked, out, failures, started)
 
 
 @router.post("/internal/scheduler/tick", include_in_schema=False)
@@ -177,9 +236,9 @@ async def scheduler_tick(request: Request) -> dict[str, Any]:
         if not await conn.scalar(lock, {"k": ADVISORY_LOCK_KEY}):
             await conn.rollback()
             return {"skipped": "running"}
-        # A session-level lock: it outlives this transaction, so none stays open.
-        await conn.commit()
         try:
+            # A session-level lock: it outlives this transaction, so none stays open.
+            await conn.commit()
             out = TickerOut()
             try:
                 async with asyncio.timeout(HARD_LIMIT_SECONDS):

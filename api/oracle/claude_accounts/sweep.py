@@ -10,7 +10,8 @@ The hold backstop runs outside the lease (it is idempotent). The credential phas
 every exchange and every usage poll -- runs under the company's sweep lease, renewed
 before each step (``LeaseFence``), so two sweeps never present the same refresh token
 at once. It FAILS CLOSED: no lease, no exchange. The lease also records when the sweep
-last completed and how, which the accounts screen shows.
+last completed and how, which the accounts screen shows, and until when a 429 from the
+usage endpoint asked to wait (``usage_retry_at``): no usage poll starts before that.
 
 Before an account is marked REAUTH_REQUIRED the exchange is CONFIRMED with a second
 attempt against the credential as it stands now: a false mark costs a person a sign-in
@@ -52,6 +53,9 @@ LEASE_TTL = timedelta(seconds=120)
 
 SWEEP_OK = "ok"
 SWEEP_ERROR = "error"
+
+#: A 429's retry-after is kept for at most this long (a bogus header stops no poll for days).
+MAX_USAGE_RETRY_AFTER = timedelta(hours=1)
 
 #: Refresh outcomes that mean only a person can fix the credential.
 CREDENTIAL_NEEDS_A_HUMAN = ("reauth_required", "unreadable")
@@ -183,6 +187,25 @@ async def liveness(session: Any) -> dict[str, Any]:
         "last_outcome": row.last_outcome if row else None,
         "readable": True,
     }
+
+
+async def is_due(tenant_id: uuid.UUID, interval: timedelta, now: datetime) -> bool:
+    """Whether the company's sweep last completed more than ``interval`` ago (or never)."""
+    async with tenant_session(tenant_id) as s:
+        last = await s.scalar(select(ClaudeSweepLease.last_completed_at))
+    return last is None or now - last > interval
+
+
+async def usage_retry_at(tenant_id: uuid.UUID) -> datetime | None:
+    async with tenant_session(tenant_id) as s:
+        return await s.scalar(select(ClaudeSweepLease.usage_retry_at))
+
+
+async def set_usage_retry_at(tenant_id: uuid.UUID, at: datetime) -> None:
+    async with tenant_session(tenant_id) as s:
+        row = await _lease_row(s, tenant_id)
+        row.usage_retry_at = at
+        await s.commit()
 
 
 class LeaseFence:
@@ -332,6 +355,14 @@ async def sweep_account_pool(
 async def poll_usage(
     tenant_id: uuid.UUID, *, keep_going: Any = None, max_polls: int | None = None
 ) -> dict[str, Any]:
+    """One usage round, unless a 429's retry-after has not passed; a new 429's is kept."""
+    try:
+        retry_at = await usage_retry_at(tenant_id)
+    except Exception as exc:
+        log.error("account usage poll failed", extra={"error": type(exc).__name__})
+        return {"error": type(exc).__name__}
+    if retry_at is not None and retry_at > datetime.now(UTC):
+        return {"examined": 0, "polled": 0, "skipped": [], "backoff_until": retry_at.isoformat()}
     secrets = store.DbSecretStore(tenant_id)
     fetch = get_usage_fetch()
 
@@ -352,6 +383,12 @@ async def poll_usage(
             max_polls=get_pool_settings().max_polls_per_sweep if max_polls is None else max_polls,
             keep_going=keep_going,
         )
+        limited = [o for o in outcomes if o.reason == "rate_limited"]
+        if limited:
+            wait = timedelta(seconds=max(0, limited[0].retry_after_seconds or 0))
+            await set_usage_retry_at(
+                tenant_id, datetime.now(UTC) + min(wait, MAX_USAGE_RETRY_AFTER)
+            )
     except Exception as exc:
         log.error("account usage poll failed", extra={"error": type(exc).__name__})
         return {"error": type(exc).__name__}

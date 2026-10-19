@@ -78,12 +78,11 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_0013_is_the_single_head_after_0012():
-    # Lanes add 0014_<lane> on top of 0013 (waves.md); the chain stays linear, one head.
+def test_0013_follows_0012_and_0014_follows_it():
     script = ScriptDirectory.from_config(_cfg())
-    assert len(script.get_heads()) == 1
-    assert "0013" in {r.revision for r in script.walk_revisions()}
+    assert script.get_heads() == ["0014"]
     assert script.get_revision("0013").down_revision == "0012"
+    assert script.get_revision("0014").down_revision == "0013"
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):
