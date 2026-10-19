@@ -91,6 +91,8 @@ Lanes never call another lane's code. They meet at two small registries:
    blocker strategy, impact explorer, evidence inspector, section review status, the
    publish check and the readiness dashboard.
 
+In every screen, cost is a secondary detail (P3d): one small line on a run, and prominent only in the Inbox's approval and overrun items.
+
 Deploys (V2a): one per wave, after the merged wave passes the full suite and a smoke check.
 
 ## Wave 2: linked artifacts and proactive work (after wave 1 merges)
