@@ -65,7 +65,7 @@ def load_case(name: str | Path) -> dict[str, Any]:
             for ref, fields in changes.items():
                 items[ref].update(copy.deepcopy(fields))
         removed = set(raw.get("remove") or [])
-        for kind, path in LISTS.items():
+        for path in LISTS.values():
             items = _get(case, path)
             items[:] = [
                 i
@@ -112,9 +112,7 @@ def markdown_of(case: dict[str, Any]) -> str:
 
 def _replace_section(lines: list[str], key: str, body: str | None) -> list[str]:
     start = next(i for i, line in enumerate(lines) if f"{{#{key}}}" in line)
-    end = next(
-        (i for i in range(start + 1, len(lines)) if _HEADING.match(lines[i])), len(lines)
-    )
+    end = next((i for i in range(start + 1, len(lines)) if _HEADING.match(lines[i])), len(lines))
     if body is None:
         return lines[:start] + lines[end:]
     return lines[: start + 1] + ["", *body.rstrip("\n").splitlines(), ""] + lines[end:]

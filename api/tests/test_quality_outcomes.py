@@ -83,7 +83,9 @@ def outcome_body(world, **extra) -> dict:
 async def test_an_approver_links_launched_work_to_a_goal_and_assesses_it(client, world):
     ctx = world["ctx"]
     body = outcome_body(world)
-    assert (await client.post("/v1/outcomes", json=body, headers=ctx.as_("commenter"))).status_code == 403
+    assert (
+        await client.post("/v1/outcomes", json=body, headers=ctx.as_("commenter"))
+    ).status_code == 403
     resp = await client.post("/v1/outcomes", json=body, headers=ctx.as_("approver"))
     assert resp.status_code == 201, resp.text
     outcome = resp.json()
@@ -248,9 +250,7 @@ async def test_learnings_become_recommendation_signals(client, world):
     assert resp.status_code == 200 and resp.json()["status"] == "retired"
     signals = {
         s["target"]: s
-        for s in (
-            await client.get("/v1/learnings/signals", headers=ctx.as_("viewer"))
-        ).json()
+        for s in (await client.get("/v1/learnings/signals", headers=ctx.as_("viewer"))).json()
     }
     assert signals["success_metric"]["score"] == 1
     assert signals["economics.unit"]["score"] == 0

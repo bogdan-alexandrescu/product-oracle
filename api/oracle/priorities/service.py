@@ -42,10 +42,11 @@ def _contribution(value: Any) -> int | None:
     return None if number is None else int(min(3, max(0, round(number))))
 
 
-async def load_features(db: AsyncSession) -> list[FeatureInput]:
+async def load_features(db: AsyncSession, *, rescore: bool = True) -> list[FeatureInput]:
     """Features (not rejected) with their confirmed-goal links, evidence and dependencies.
 
-    Scores unscored evidence in the session (flushed, not committed).
+    Scores unscored evidence in the session (flushed, not committed); ``rescore=False``
+    reads only (readiness checks never write), leaving unscored evidence unscored.
     """
     entities = list(
         await db.scalars(
@@ -93,7 +94,7 @@ async def load_features(db: AsyncSession) -> list[FeatureInput]:
     # scoring (source, freshness, mentions, goal impact), so every feature's confidence
     # comes from the same numbers the Baseline screen shows.
     unscored = {ev.entity_id for ev in evidence if ev.confidence is None}
-    if unscored:
+    if unscored and rescore:
         await baseline_scoring.rescore_targets(db, entity_ids=unscored)
     for ev in evidence:
         inputs[ev.entity_id].evidence.append(  # type: ignore[index]

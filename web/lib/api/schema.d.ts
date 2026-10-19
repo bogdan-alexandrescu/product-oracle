@@ -3349,6 +3349,228 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/quality/criteria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Quality Criteria
+         * @description The ten advisory quality criteria, then the hard checks this lane registers.
+         */
+        get: operations["list_quality_criteria"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Document Readiness
+         * @description The soft readiness dashboard of a version, criterion by criterion (stores nothing).
+         *
+         *     Every registered readiness check runs live. Advisory criteria never block (T2);
+         *     ``blocked`` is true only when a hard check is critical. The latest model review and
+         *     the human ratings of the version are shown beside each criterion, with agreement.
+         */
+        get: operations["get_document_readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/evaluations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Evaluation Report
+         * @description Store a snapshot of the rules' evaluation of a version (evaluator ``rules``).
+         */
+        post: operations["create_evaluation_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/evaluations/human": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Human Rating
+         * @description A person's rating of some or all of the ten criteria, compared with the rules.
+         */
+        post: operations["create_human_rating"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/quality-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue Quality Review
+         * @description Queue the built-in model's quality review of a version.
+         *
+         *     Its answer is stored as an evaluation report labelled model output: shown beside the
+         *     rules, never ground truth, never a block.
+         */
+        post: operations["queue_quality_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Outcomes */
+        get: operations["list_outcomes"];
+        put?: never;
+        /**
+         * Create Outcome
+         * @description Track a launched PRD version, roadmap item or experiment against its goal.
+         */
+        post: operations["create_outcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/outcomes/{outcome_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Outcome */
+        get: operations["get_outcome"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/outcomes/{outcome_id}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assess Outcome
+         * @description Record whether the prediction held; returns drafted learnings to keep or drop.
+         */
+        post: operations["assess_outcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/learnings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Learnings */
+        get: operations["list_learnings"];
+        put?: never;
+        /** Create Learning */
+        post: operations["create_learning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/learnings/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Learning Signals
+         * @description Net signal of active learnings per module, question category or criterion.
+         *
+         *     Advisory input for module and question recommendations; it changes no document.
+         */
+        get: operations["get_learning_signals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/learnings/{learning_id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire Learning */
+        post: operations["retire_learning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -3584,6 +3806,13 @@ export interface components {
             /** Base Usd */
             base_usd: number;
         };
+        /** Agreement */
+        Agreement: {
+            /** Model */
+            model?: boolean | null;
+            /** Human */
+            human?: number | null;
+        };
         /** ApproveOut */
         ApproveOut: {
             /**
@@ -3807,6 +4036,53 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** Assessment */
+        Assessment: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Observed */
+            observed: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Assessed By */
+            assessed_by?: string | null;
+            /**
+             * Assessed At
+             * Format: date-time
+             */
+            assessed_at: string;
+        };
+        /** AssessmentIn */
+        AssessmentIn: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Observed */
+            observed: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+        };
+        /** AssessmentResult */
+        AssessmentResult: {
+            outcome: components["schemas"]["OutcomeOut"];
+            /** Suggested Learnings */
+            suggested_learnings: components["schemas"]["LearningDraft"][];
         };
         /** AssumptionDecisionOut */
         AssumptionDecisionOut: {
@@ -4680,6 +4956,19 @@ export interface components {
              * @enum {string}
              */
             effective_role: "viewer" | "commenter" | "approver" | "owner";
+        };
+        /** CriterionInfo */
+        CriterionInfo: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Question */
+            question: string;
+            /** Hard */
+            hard: boolean;
+            /** Reads */
+            reads: string[];
         };
         /**
          * DeckOut
@@ -5913,6 +6202,55 @@ export interface components {
             holders: components["schemas"]["HolderOut"][];
         };
         /**
+         * HumanRatingIn
+         * @description A person's rating of the ten criteria (all or some), for comparison with the rules.
+         */
+        HumanRatingIn: {
+            /** Ratings */
+            ratings: components["schemas"]["HumanRatingItem"][];
+            /** Note */
+            note?: string | null;
+        };
+        /** HumanRatingItem */
+        HumanRatingItem: {
+            /** Criterion */
+            criterion: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+        };
+        /** HumanView */
+        HumanView: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+            /** Rater Id */
+            rater_id?: string | null;
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
          * ImportErrorResponse
          * @description 422 body when a draft cannot be imported. Lists every problem, not just the first.
          */
@@ -6304,6 +6642,11 @@ export interface components {
              * @default true
              */
             refinement: boolean;
+            /**
+             * Quality Review
+             * @default true
+             */
+            quality_review: boolean;
         };
         /** KnobsIn */
         KnobsIn: {
@@ -6412,6 +6755,134 @@ export interface components {
              */
             updated_at: string;
         };
+        /** LearningCreate */
+        LearningCreate: {
+            /** Outcome Id */
+            outcome_id?: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "recommend_more" | "recommend_less" | "note";
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+        };
+        /**
+         * LearningDraft
+         * @description A learning Oracle suggests from an assessment; a person decides to keep it.
+         */
+        LearningDraft: {
+            /** Outcome Id */
+            outcome_id?: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "recommend_more" | "recommend_less" | "note";
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+        };
+        /** LearningOut */
+        LearningOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Outcome Id */
+            outcome_id?: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "recommend_more" | "recommend_less" | "note";
+            /** Weight */
+            weight: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "retired";
+            /** Retired Reason */
+            retired_reason?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /** Retired By */
+            retired_by?: string | null;
+            /** Retired At */
+            retired_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** LearningRetire */
+        LearningRetire: {
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * LearningSignal
+         * @description The net recommendation signal for one module, question category or criterion.
+         *
+         *     ``score``: sum of weights, + for recommend_more, - for recommend_less, 0 for notes.
+         *     Advisory input for future module and question recommendations; it never changes a
+         *     published document.
+         */
+        LearningSignal: {
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /** Score */
+            score: number;
+            /** Learning Ids */
+            learning_ids: string[];
+            /** Statements */
+            statements: string[];
+        };
         /**
          * LinkErrorOut
          * @description A link that cannot be used: ``not_public``, ``blocked_address``, ``not_https``...
@@ -6512,7 +6983,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review";
             /**
              * Document Id
              * Format: uuid
@@ -6644,6 +7115,54 @@ export interface components {
              */
             role: "viewer" | "commenter" | "approver" | "owner";
         };
+        /** ModelReviewInfo */
+        ModelReviewInfo: {
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Label
+             * @default model_output
+             * @constant
+             */
+            label: "model_output";
+            /** Disclaimer */
+            disclaimer: string;
+        };
+        /**
+         * ModelView
+         * @description The built-in quality review job's view of one criterion. Model output, not fact.
+         */
+        ModelView: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+        };
         /** ModuleDefinitionOut */
         ModuleDefinitionOut: {
             /**
@@ -6725,6 +7244,98 @@ export interface components {
             /** Error Description */
             error_description?: string | null;
         };
+        /** OutcomeCreate */
+        OutcomeCreate: {
+            /** Title */
+            title: string;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Outcome Entity Id */
+            outcome_entity_id?: string | null;
+            /** Prd Version Id */
+            prd_version_id?: string | null;
+            /** Roadmap Version Id */
+            roadmap_version_id?: string | null;
+            /** Roadmap Item Key */
+            roadmap_item_key?: string | null;
+            /** Experiment Id */
+            experiment_id?: string | null;
+            prediction: components["schemas"]["Prediction"];
+            /**
+             * Module Keys
+             * @default []
+             */
+            module_keys: string[];
+            /**
+             * Gap Categories
+             * @default []
+             */
+            gap_categories: ("customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling")[];
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** OutcomeOut */
+        OutcomeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Outcome Entity Id */
+            outcome_entity_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /** Prd Version Id */
+            prd_version_id?: string | null;
+            /** Roadmap Version Id */
+            roadmap_version_id?: string | null;
+            /** Roadmap Item Key */
+            roadmap_item_key?: string | null;
+            /** Experiment Id */
+            experiment_id?: string | null;
+            prediction: components["schemas"]["Prediction"];
+            /** Module Keys */
+            module_keys: string[];
+            /** Gap Categories */
+            gap_categories: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "tracking" | "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Observed */
+            observed?: string | null;
+            /** Assessments */
+            assessments: components["schemas"]["Assessment"][];
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /** Assessed At */
+            assessed_at?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /**
          * PrdAnswers
          * @description At most four questions (docs/research/prd-formats.md, template picker).
@@ -6754,6 +7365,22 @@ export interface components {
              * @default []
              */
             unresolved: string[];
+        };
+        /**
+         * Prediction
+         * @description What the PRD predicted for the goal, in its own words and numbers.
+         */
+        Prediction: {
+            /** Metric */
+            metric: string;
+            /** Baseline */
+            baseline?: string | null;
+            /** Predicted */
+            predicted: string;
+            /** Threshold */
+            threshold?: string | null;
+            /** By */
+            by?: string | null;
         };
         /**
          * Preferences
@@ -7079,6 +7706,93 @@ export interface components {
             /** In Cycles */
             in_cycles: number;
         };
+        /**
+         * ReadinessDashboard
+         * @description The soft readiness dashboard of one document version, criterion by criterion.
+         */
+        ReadinessDashboard: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Version */
+            version: number;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Composition Revision */
+            composition_revision?: number | null;
+            /**
+             * Policy
+             * @default advisory
+             * @constant
+             */
+            policy: "advisory";
+            /** Policy Note */
+            policy_note: string;
+            /**
+             * Evaluated At
+             * Format: date-time
+             */
+            evaluated_at: string;
+            /** Blocked */
+            blocked: boolean;
+            /** Blocking */
+            blocking: string[];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Items */
+            items: components["schemas"]["ReadinessItem"][];
+            model_review?: components["schemas"]["ModelReviewInfo"] | null;
+            latest_report?: components["schemas"]["ReportRef"] | null;
+        };
+        /** ReadinessItem */
+        ReadinessItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Question */
+            question: string;
+            /** Hard */
+            hard: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /** Error */
+            error?: string | null;
+            model?: components["schemas"]["ModelView"] | null;
+            /**
+             * Human
+             * @default []
+             */
+            human: components["schemas"]["HumanView"][];
+            /** @default {} */
+            agreement: components["schemas"]["Agreement"];
+        };
         /** RecommendIn */
         RecommendIn: {
             /**
@@ -7233,6 +7947,19 @@ export interface components {
              * @default
              */
             explanation: string;
+        };
+        /** ReportRef */
+        ReportRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** RescoreResult */
         RescoreResult: {
@@ -15604,6 +16331,426 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArtifactReviewEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_quality_criteria: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CriterionInfo"][];
+                };
+            };
+        };
+    };
+    get_document_readiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessDashboard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_evaluation_report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_human_rating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HumanRatingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_quality_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_outcomes: {
+        parameters: {
+            query?: {
+                goal_id?: string | null;
+                document_id?: string | null;
+                status?: ("tracking" | "held" | "partially_held" | "not_held" | "inconclusive") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutcomeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assess_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_learnings: {
+        parameters: {
+            query?: {
+                applies_to?: ("module" | "question_category" | "criterion") | null;
+                target?: string | null;
+                status?: ("active" | "retired") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_learning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_learning_signals: {
+        parameters: {
+            query?: {
+                applies_to?: ("module" | "question_category" | "criterion") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningSignal"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retire_learning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                learning_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningRetire"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningOut"];
                 };
             };
             /** @description Validation Error */

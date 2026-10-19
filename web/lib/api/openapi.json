@@ -12579,6 +12579,876 @@
         }
       }
     },
+    "/v1/quality/criteria": {
+      "get": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "List Quality Criteria",
+        "description": "The ten advisory quality criteria, then the hard checks this lane registers.",
+        "operationId": "list_quality_criteria",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CriterionInfo"
+                  },
+                  "type": "array",
+                  "title": "Response List Quality Criteria"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/readiness": {
+      "get": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Get Document Readiness",
+        "description": "The soft readiness dashboard of a version, criterion by criterion (stores nothing).\n\nEvery registered readiness check runs live. Advisory criteria never block (T2);\n``blocked`` is true only when a hard check is critical. The latest model review and\nthe human ratings of the version are shown beside each criterion, with agreement.",
+        "operationId": "get_document_readiness",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessDashboard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/evaluations": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Create Evaluation Report",
+        "description": "Store a snapshot of the rules' evaluation of a version (evaluator ``rules``).",
+        "operationId": "create_evaluation_report",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationReportDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/evaluations/human": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Create Human Rating",
+        "description": "A person's rating of some or all of the ten criteria, compared with the rules.",
+        "operationId": "create_human_rating",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HumanRatingIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationReportDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/versions/{n}/quality-review": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Queue Quality Review",
+        "description": "Queue the built-in model's quality review of a version.\n\nIts answer is stored as an evaluation report labelled model output: shown beside the\nrules, never ground truth, never a block.",
+        "operationId": "queue_quality_review",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/outcomes": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Create Outcome",
+        "description": "Track a launched PRD version, roadmap item or experiment against its goal.",
+        "operationId": "create_outcome",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutcomeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutcomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "List Outcomes",
+        "operationId": "list_outcomes",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "tracking",
+                    "held",
+                    "partially_held",
+                    "not_held",
+                    "inconclusive"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OutcomeOut"
+                  },
+                  "title": "Response List Outcomes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/outcomes/{outcome_id}": {
+      "get": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Get Outcome",
+        "operationId": "get_outcome",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutcomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/outcomes/{outcome_id}/assessments": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Assess Outcome",
+        "description": "Record whether the prediction held; returns drafted learnings to keep or drop.",
+        "operationId": "assess_outcome",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/learnings": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Create Learning",
+        "operationId": "create_learning",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearningCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearningOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "List Learnings",
+        "operationId": "list_learnings",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "applies_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "module",
+                    "question_category",
+                    "criterion"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Applies To"
+            }
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "active",
+                    "retired"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LearningOut"
+                  },
+                  "title": "Response List Learnings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/learnings/signals": {
+      "get": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Get Learning Signals",
+        "description": "Net signal of active learnings per module, question category or criterion.\n\nAdvisory input for module and question recommendations; it changes no document.",
+        "operationId": "get_learning_signals",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "applies_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "module",
+                    "question_category",
+                    "criterion"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Applies To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LearningSignal"
+                  },
+                  "title": "Response Get Learning Signals"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/learnings/{learning_id}/retire": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Retire Learning",
+        "operationId": "retire_learning",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learning_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Learning Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearningRetire"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearningOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/.well-known/oauth-protected-resource": {
       "get": {
         "tags": [
@@ -13269,6 +14139,34 @@
         ],
         "title": "AgentRoleOut"
       },
+      "Agreement": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "human": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Human"
+          }
+        },
+        "type": "object",
+        "title": "Agreement"
+      },
       "ApproveOut": {
         "properties": {
           "document_id": {
@@ -13858,6 +14756,136 @@
           "created_at"
         ],
         "title": "ArtifactVersionOut"
+      },
+      "Assessment": {
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "held",
+              "partially_held",
+              "not_held",
+              "inconclusive"
+            ],
+            "title": "Verdict"
+          },
+          "observed": {
+            "type": "string",
+            "title": "Observed"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence Ids",
+            "default": []
+          },
+          "assessed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessed By"
+          },
+          "assessed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Assessed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "verdict",
+          "observed",
+          "assessed_at"
+        ],
+        "title": "Assessment"
+      },
+      "AssessmentIn": {
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "held",
+              "partially_held",
+              "not_held",
+              "inconclusive"
+            ],
+            "title": "Verdict"
+          },
+          "observed": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Observed"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Evidence Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "verdict",
+          "observed"
+        ],
+        "title": "AssessmentIn"
+      },
+      "AssessmentResult": {
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/OutcomeOut"
+          },
+          "suggested_learnings": {
+            "items": {
+              "$ref": "#/components/schemas/LearningDraft"
+            },
+            "type": "array",
+            "title": "Suggested Learnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "outcome",
+          "suggested_learnings"
+        ],
+        "title": "AssessmentResult"
       },
       "AssumptionDecisionOut": {
         "properties": {
@@ -16240,6 +17268,42 @@
         ],
         "title": "ConsentRequestOut",
         "description": "What the consent screen shows for a pending authorization request."
+      },
+      "CriterionInfo": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "hard": {
+            "type": "boolean",
+            "title": "Hard"
+          },
+          "reads": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reads"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "question",
+          "hard",
+          "reads"
+        ],
+        "title": "CriterionInfo"
       },
       "DeckOut": {
         "properties": {
@@ -19708,6 +20772,127 @@
         ],
         "title": "HoldersOut"
       },
+      "HumanRatingIn": {
+        "properties": {
+          "ratings": {
+            "items": {
+              "$ref": "#/components/schemas/HumanRatingItem"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Ratings"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ratings"
+        ],
+        "title": "HumanRatingIn",
+        "description": "A person's rating of the ten criteria (all or some), for comparison with the rules."
+      },
+      "HumanRatingItem": {
+        "properties": {
+          "criterion": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Criterion"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warning",
+              "critical",
+              "not_applicable"
+            ],
+            "title": "Status"
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Rationale"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Section Keys",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "criterion",
+          "status",
+          "rationale"
+        ],
+        "title": "HumanRatingItem"
+      },
+      "HumanView": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warning",
+              "critical",
+              "not_applicable"
+            ],
+            "title": "Status"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          },
+          "rater_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rater Id"
+          },
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "rationale",
+          "report_id",
+          "created_at"
+        ],
+        "title": "HumanView"
+      },
       "ImportErrorResponse": {
         "properties": {
           "detail": {
@@ -20761,6 +21946,11 @@
             "type": "boolean",
             "title": "Refinement",
             "default": true
+          },
+          "quality_review": {
+            "type": "boolean",
+            "title": "Quality Review",
+            "default": true
           }
         },
         "type": "object",
@@ -21079,6 +22269,322 @@
         ],
         "title": "KnowledgeGapOut"
       },
+      "LearningCreate": {
+        "properties": {
+          "outcome_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Id"
+          },
+          "statement": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Statement"
+          },
+          "applies_to": {
+            "type": "string",
+            "enum": [
+              "module",
+              "question_category",
+              "criterion"
+            ],
+            "title": "Applies To"
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "recommend_more",
+              "recommend_less",
+              "note"
+            ],
+            "title": "Direction"
+          },
+          "weight": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Weight",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "statement",
+          "applies_to",
+          "target",
+          "direction"
+        ],
+        "title": "LearningCreate"
+      },
+      "LearningDraft": {
+        "properties": {
+          "outcome_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Id"
+          },
+          "statement": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Statement"
+          },
+          "applies_to": {
+            "type": "string",
+            "enum": [
+              "module",
+              "question_category",
+              "criterion"
+            ],
+            "title": "Applies To"
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "recommend_more",
+              "recommend_less",
+              "note"
+            ],
+            "title": "Direction"
+          },
+          "weight": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Weight",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "statement",
+          "applies_to",
+          "target",
+          "direction"
+        ],
+        "title": "LearningDraft",
+        "description": "A learning Oracle suggests from an assessment; a person decides to keep it."
+      },
+      "LearningOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "outcome_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Id"
+          },
+          "statement": {
+            "type": "string",
+            "title": "Statement"
+          },
+          "applies_to": {
+            "type": "string",
+            "enum": [
+              "module",
+              "question_category",
+              "criterion"
+            ],
+            "title": "Applies To"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "recommend_more",
+              "recommend_less",
+              "note"
+            ],
+            "title": "Direction"
+          },
+          "weight": {
+            "type": "integer",
+            "title": "Weight"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "retired"
+            ],
+            "title": "Status"
+          },
+          "retired_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired Reason"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "retired_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired By"
+          },
+          "retired_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "statement",
+          "applies_to",
+          "target",
+          "direction",
+          "weight",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "LearningOut"
+      },
+      "LearningRetire": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "LearningRetire"
+      },
+      "LearningSignal": {
+        "properties": {
+          "applies_to": {
+            "type": "string",
+            "enum": [
+              "module",
+              "question_category",
+              "criterion"
+            ],
+            "title": "Applies To"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "learning_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Learning Ids"
+          },
+          "statements": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "applies_to",
+          "target",
+          "score",
+          "learning_ids",
+          "statements"
+        ],
+        "title": "LearningSignal",
+        "description": "The net recommendation signal for one module, question category or criterion.\n\n``score``: sum of weights, + for recommend_more, - for recommend_less, 0 for notes.\nAdvisory input for future module and question recommendations; it never changes a\npublished document."
+      },
       "LinkErrorOut": {
         "properties": {
           "detail": {
@@ -21287,7 +22793,8 @@
             "enum": [
               "review_comments",
               "reporting",
-              "refinement"
+              "refinement",
+              "quality_review"
             ],
             "title": "Kind"
           },
@@ -21697,6 +23204,99 @@
         ],
         "title": "MemberPatch"
       },
+      "ModelReviewInfo": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "label": {
+            "type": "string",
+            "const": "model_output",
+            "title": "Label",
+            "default": "model_output"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "report_id",
+          "created_at",
+          "disclaimer"
+        ],
+        "title": "ModelReviewInfo"
+      },
+      "ModelView": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warning",
+              "critical",
+              "not_applicable"
+            ],
+            "title": "Status"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys",
+            "default": []
+          },
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "rationale",
+          "report_id"
+        ],
+        "title": "ModelView",
+        "description": "The built-in quality review job's view of one criterion. Model output, not fact."
+      },
       "ModuleDefinitionOut": {
         "properties": {
           "id": {
@@ -21900,6 +23500,340 @@
         ],
         "title": "OAuthErrorOut"
       },
+      "OutcomeCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "outcome_entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Entity Id"
+          },
+          "prd_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Version Id"
+          },
+          "roadmap_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version Id"
+          },
+          "roadmap_item_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Item Key"
+          },
+          "experiment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment Id"
+          },
+          "prediction": {
+            "$ref": "#/components/schemas/Prediction"
+          },
+          "module_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Module Keys",
+            "default": []
+          },
+          "gap_categories": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "customer_user",
+                "pain_evidence",
+                "goal_alignment",
+                "success_metric",
+                "differentiation",
+                "alternatives",
+                "constraints",
+                "blockers",
+                "economic_benefit",
+                "effort_cost",
+                "security_privacy",
+                "ownership",
+                "non_goals",
+                "release_rollout",
+                "evaluation_criteria",
+                "third_party_policy",
+                "configurability_scaling"
+              ]
+            },
+            "type": "array",
+            "maxItems": 17,
+            "title": "Gap Categories",
+            "default": []
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "goal_id",
+          "prediction"
+        ],
+        "title": "OutcomeCreate"
+      },
+      "OutcomeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "outcome_entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Entity Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "prd_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Version Id"
+          },
+          "roadmap_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version Id"
+          },
+          "roadmap_item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Item Key"
+          },
+          "experiment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment Id"
+          },
+          "prediction": {
+            "$ref": "#/components/schemas/Prediction"
+          },
+          "module_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Module Keys"
+          },
+          "gap_categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Gap Categories"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "tracking",
+              "held",
+              "partially_held",
+              "not_held",
+              "inconclusive"
+            ],
+            "title": "Status"
+          },
+          "observed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed"
+          },
+          "assessments": {
+            "items": {
+              "$ref": "#/components/schemas/Assessment"
+            },
+            "type": "array",
+            "title": "Assessments"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "assessed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessed At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "goal_id",
+          "prediction",
+          "module_keys",
+          "gap_categories",
+          "status",
+          "assessments",
+          "lock_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "OutcomeOut"
+      },
       "PrdAnswers": {
         "properties": {
           "decision": {
@@ -21988,6 +23922,65 @@
         "type": "object",
         "title": "PrdLinks",
         "description": "Cross-document links from a roadmap draft to its PRD version's sections."
+      },
+      "Prediction": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Metric"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "predicted": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Predicted"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric",
+          "predicted"
+        ],
+        "title": "Prediction",
+        "description": "What the PRD predicted for the goal, in its own words and numbers."
       },
       "Preferences": {
         "properties": {
@@ -22896,6 +24889,220 @@
         ],
         "title": "RankingCounts"
       },
+      "ReadinessDashboard": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "composition_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composition Revision"
+          },
+          "policy": {
+            "type": "string",
+            "const": "advisory",
+            "title": "Policy",
+            "default": "advisory"
+          },
+          "policy_note": {
+            "type": "string",
+            "title": "Policy Note"
+          },
+          "evaluated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Evaluated At"
+          },
+          "blocked": {
+            "type": "boolean",
+            "title": "Blocked"
+          },
+          "blocking": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocking"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReadinessItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "model_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelReviewInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "slug",
+          "version",
+          "version_id",
+          "policy_note",
+          "evaluated_at",
+          "blocked",
+          "blocking",
+          "counts",
+          "items"
+        ],
+        "title": "ReadinessDashboard",
+        "description": "The soft readiness dashboard of one document version, criterion by criterion."
+      },
+      "ReadinessItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "hard": {
+            "type": "boolean",
+            "title": "Hard"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warning",
+              "critical",
+              "not_applicable"
+            ],
+            "title": "Status"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence Ids",
+            "default": []
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys",
+            "default": []
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "human": {
+            "items": {
+              "$ref": "#/components/schemas/HumanView"
+            },
+            "type": "array",
+            "title": "Human",
+            "default": []
+          },
+          "agreement": {
+            "$ref": "#/components/schemas/Agreement",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "question",
+          "hard",
+          "status",
+          "rationale"
+        ],
+        "title": "ReadinessItem"
+      },
       "RecommendIn": {
         "properties": {
           "kind": {
@@ -23416,6 +25623,26 @@
           "status"
         ],
         "title": "ReportItem"
+      },
+      "ReportRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created_at"
+        ],
+        "title": "ReportRef"
       },
       "RescoreResult": {
         "properties": {

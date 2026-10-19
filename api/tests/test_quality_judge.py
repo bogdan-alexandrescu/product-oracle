@@ -55,9 +55,7 @@ def V(slug: str, n: int, path: str = "") -> str:
     return f"/v1/documents/{slug}/versions/{n}{path}"
 
 
-async def test_an_approver_queues_a_model_review_that_is_labelled_model_output(
-    client, ctx, judge
-):
+async def test_an_approver_queues_a_model_review_that_is_labelled_model_output(client, ctx, judge):
     case = load_case("good-prd")
     seeded = await seed_case(client, ctx, case)
     url = V(seeded.slug, 1, "/quality-review")
