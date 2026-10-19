@@ -2,7 +2,7 @@
  "title": "product-oracle v2 wave 1",
  "label": "oracle-v2-wave1",
  "repository_url": "https://github.com/bogdan-alexandrescu/product-oracle",
- "repository_ref": "main",
+ "repository_ref": "b1bc1cfd149031f85b9c7856ce75767abfe4d0ce",
  "strategy": "direct-pr",
  "on_step_failure": "continue",
  "steps": [
