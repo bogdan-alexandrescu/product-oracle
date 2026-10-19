@@ -155,6 +155,14 @@ def test_packs_are_templates_only_no_prewritten_content():
         assert "shall" not in blob and "must support" not in blob, key
 
 
+def test_module_text_keeps_to_oracle_words():
+    """Build brief §2 and build prompt §1: no SwarmCloud jargon in Oracle's product (MOD-1)."""
+    for key, c in builtin_contracts().items():
+        text = " ".join(_texts(c.model_dump(mode="json"))).lower()
+        assert "workspace" not in text, key
+        assert "swarm" not in text, key
+
+
 def test_specialised_platform_modules_point_people_at_configuration_artifacts():
     contracts = builtin_contracts()
     for key in ("agents.archetypes", "platform.brand-governance", "platform.config-precedence"):

@@ -221,6 +221,17 @@ def test_a_suggested_module_with_an_unavailable_dependency_is_dropped_and_explai
     tools = by_key(comp)["agents.tool-policies"]
     assert comp.valid and not tools.included
     assert "unavailable" in tools.reason
+    # Archived by the company: not offered, and the composition says so without failing.
+    comp = compose(
+        context(
+            pack="ai-agent.platform",
+            inputs=PLATFORM_INPUTS,
+            contracts=contracts,
+            unavailable={"agents.archetypes"},
+        )
+    )
+    archived = [p for p in comp.problems if p.code == "module_archived"]
+    assert comp.valid and archived and not archived[0].fatal
 
 
 def test_conflicts_drop_the_weaker_module_or_fail():
