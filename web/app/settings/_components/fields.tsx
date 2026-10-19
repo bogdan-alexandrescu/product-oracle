@@ -10,6 +10,9 @@ export const TEXTAREA =
   "w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 py-2 text-[15px] leading-[22px] text-text placeholder:text-text2 focus:border-accent focus:outline-none disabled:opacity-70";
 export const SELECT =
   "h-8 min-w-0 rounded-lg border border-line-strong bg-surface pr-7 pl-2 text-sm text-text focus:border-accent focus:outline-none disabled:opacity-70";
+/** A select that fills a form field, as tall as INPUT. */
+export const SELECT_FIELD =
+  "h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface pr-7 pl-2.5 text-[15px] text-text focus:border-accent focus:outline-none disabled:opacity-70";
 
 const LABEL = "text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2";
 

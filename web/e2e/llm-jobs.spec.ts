@@ -176,7 +176,8 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
     await openTab(page, "Jobs");
     const jobs = page.getByTestId("jobs-panel").filter({ visible: true });
     await expect(jobs.getByTestId("llm-job").first()).toBeVisible();
-    await expect(jobs.getByRole("button")).toHaveCount(0);
+    // No action buttons; the (i) tip is not an action.
+    await expect(jobs.locator('button:not([data-testid="info-tip"])')).toHaveCount(0);
     await expect(jobs.getByTestId("llm-job-settings").getByRole("checkbox").first()).toBeDisabled();
   });
 }

@@ -1,13 +1,28 @@
 "use client";
 
-import Link from "next/link";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useId, useRef, useState } from "react";
 
 import { KIND_LABEL } from "@/app/sources/_components/confidence";
-import { Badge, Button, ErrorNote, Loading } from "@/components/ui";
+import {
+  Button,
+  Chip,
+  Empty,
+  InfoTip,
+  Inspector,
+  InspectorSection,
+  Label,
+  LinkButton,
+  Notice,
+  PageHeader,
+  Panel,
+  Split,
+  type ChipKind,
+} from "@/components/ds";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
+
+import { Field, INPUT, SELECT_FIELD, TEXTAREA } from "../_components/fields";
 
 type Source = Schemas["SourceOut"];
 type Kind = Source["kind"];
@@ -22,7 +37,7 @@ const ALLOWLIST: Record<Exclude<Kind, "upload">, { key: string; label: string; e
   fireflies: { key: "meetings", label: "Meeting title filters", example: "Weekly product review" },
 };
 
-const STATUS_TONE = { active: "green", paused: "neutral", error: "red" } as const;
+const STATUS_KIND: Record<Source["status"], ChipKind> = { active: "pass", paused: "na", error: "crit" };
 
 function entries(config: Record<string, unknown>, key: string): string[] {
   const value = config[key];
@@ -52,7 +67,13 @@ function useAction() {
   return { act, error, setError, busy };
 }
 
+/** A one-line warning (warn tokens): a connector that is not there yet. */
+function Warn({ children }: { children: ReactNode }) {
+  return <p className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">{children}</p>;
+}
+
 function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Source) => void }) {
+  const id = useId();
   const spec = ALLOWLIST[source.kind as Exclude<Kind, "upload">];
   const [text, setText] = useState(entries(source.config, spec.key).join("\n"));
   const { act, error, busy } = useAction();
@@ -67,27 +88,36 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
   }
 
   return (
-    <form onSubmit={save} className="mt-3 space-y-2">
-      <label className="block text-xs text-neutral-600">
-        {spec.label} (one per line)
+    <form onSubmit={save} className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3">
+      <Field
+        label={`${spec.label} (one per line)`}
+        htmlFor={id}
+        tip={
+          <InfoTip label="saving the allowlist" align="start">
+            Saving a new allowlist syncs this source again from the start.
+          </InfoTip>
+        }
+      >
         <textarea
+          id={id}
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={4}
           placeholder={spec.example}
-          className="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-1.5 font-mono text-sm"
+          className={`${TEXTAREA} font-mono`}
         />
-      </label>
-      <p className="text-xs text-neutral-500">Saving a new allowlist syncs this source again from the start.</p>
-      {error && <ErrorNote>{error}</ErrorNote>}
-      <Button type="submit" size="sm" variant="primary" disabled={busy}>
-        Save allowlist
-      </Button>
+      </Field>
+      {error && <Notice tone="error">{error}</Notice>}
+      <div>
+        <Button type="submit" variant="solid" disabled={busy}>
+          Save allowlist
+        </Button>
+      </div>
     </form>
   );
 }
 
-function SourceCard({ source, onChange, onDelete }: { source: Source; onChange: (s: Source) => void; onDelete: () => void }) {
+function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (s: Source) => void; onDelete: () => void }) {
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -143,28 +173,32 @@ function SourceCard({ source, onChange, onDelete }: { source: Source; onChange: 
   }
 
   const items = allowlist ? entries(source.config, allowlist.key) : [];
+  const synced = source.last_synced_at
+    ? `last ${source.kind === "upload" ? "upload" : "sync"} ${formatDateTime(source.last_synced_at)}`
+    : "never synced";
 
   return (
-    <li className="rounded-lg border border-neutral-200 bg-white px-4 py-3" data-testid="source-card" aria-label={source.name}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-neutral-900">{source.name}</span>
-            <Badge>{KIND_LABEL[source.kind]}</Badge>
-            <Badge tone={STATUS_TONE[source.status]}>{source.status}</Badge>
-          </div>
-          <div className="mt-0.5 text-xs text-neutral-500">
-            {source.item_count} item(s) ·{" "}
-            {source.last_synced_at ? `last ${source.kind === "upload" ? "upload" : "sync"} ${formatDateTime(source.last_synced_at)}` : "never synced"}
-            {allowlist && (
-              <>
-                {" "}
-                · {allowlist.label.toLowerCase()}: {items.length ? items.join(", ") : "none yet"}
-              </>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
+    <li
+      className="border-t border-line px-4 py-2.5 first:border-t-0 max-[600px]:px-3"
+      data-testid="source-card"
+      aria-label={source.name}
+    >
+      <div className="flex min-h-9 flex-wrap items-center gap-x-2.5 gap-y-2">
+        <span className="flex min-w-0 flex-1 basis-56 items-center gap-2">
+          <span className="min-w-0 truncate font-semibold" title={source.name}>
+            {source.name}
+          </span>
+          <Chip kind="acc">{KIND_LABEL[source.kind]}</Chip>
+          <Chip kind={STATUS_KIND[source.status]} dot>
+            {source.status}
+          </Chip>
+          {!source.connector_available && (
+            <Chip kind="warn" title={`The ${KIND_LABEL[source.kind]} connector is not available yet.`}>
+              No connector
+            </Chip>
+          )}
+        </span>
+        <span className="flex flex-wrap items-center gap-1">
           {source.kind === "upload" ? (
             <>
               <input
@@ -176,44 +210,53 @@ function SourceCard({ source, onChange, onDelete }: { source: Source; onChange: 
                 aria-label={`Upload files to ${source.name}`}
                 onChange={(e) => upload(e.target.files)}
               />
-              <Button size="sm" variant="primary" disabled={busy || source.status === "paused"} onClick={() => fileRef.current?.click()}>
+              <Button variant="solid" disabled={busy || source.status === "paused"} onClick={() => fileRef.current?.click()}>
                 Upload files
               </Button>
             </>
           ) : (
             <>
-              <Button size="sm" variant="primary" disabled={busy || source.status === "paused" || !source.connector_available} onClick={syncNow}>
+              <Button
+                variant="solid"
+                disabled={busy || source.status === "paused" || !source.connector_available}
+                onClick={syncNow}
+              >
                 Sync now
               </Button>
-              <Button size="sm" disabled={busy} onClick={() => setEditing((v) => !v)}>
+              <Button disabled={busy} aria-expanded={editing} onClick={() => setEditing((v) => !v)}>
                 {editing ? "Close allowlist" : "Edit allowlist"}
               </Button>
             </>
           )}
-          <Button size="sm" disabled={busy} onClick={togglePause}>
+          <Button disabled={busy} onClick={togglePause}>
             {source.status === "paused" ? "Resume" : "Pause"}
           </Button>
-          <Button size="sm" variant="ghost" disabled={busy} onClick={remove}>
+          <Button variant="ghost" disabled={busy} onClick={remove}>
             Delete
           </Button>
-        </div>
+        </span>
       </div>
-      {!source.connector_available && (
-        <p className="mt-2 text-xs text-amber-800">The {KIND_LABEL[source.kind]} connector is not available yet.</p>
-      )}
-      {source.last_error && (
-        <p className="mt-2 rounded-md bg-rose-50 px-2 py-1 text-xs text-rose-800" data-testid="last-error">
-          {source.last_error}
-        </p>
-      )}
-      {notice && (
-        <p className="mt-2 text-xs text-emerald-800" role="status">
-          {notice}
-        </p>
-      )}
-      {error && (
-        <div className="mt-2">
-          <ErrorNote>{error}</ErrorNote>
+      <div className="tnum mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-text2">
+        <span>{source.item_count} item(s)</span>
+        <span>{synced}</span>
+        {allowlist && (
+          <span className="flex min-w-0 max-w-full items-center gap-1.5">
+            <Label className="flex-none">{allowlist.label}</Label>
+            <span className="min-w-0 truncate font-mono text-text" title={items.join(", ")}>
+              {items.length ? items.join(", ") : "none yet"}
+            </span>
+          </span>
+        )}
+      </div>
+      {(source.last_error || notice || error) && (
+        <div className="mt-2 flex flex-col gap-2">
+          {source.last_error && (
+            <p className="rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit" data-testid="last-error">
+              {source.last_error}
+            </p>
+          )}
+          {notice && <Notice tone="pass">{notice}</Notice>}
+          {error && <Notice tone="error">{error}</Notice>}
         </div>
       )}
       {editing && allowlist && (
@@ -260,18 +303,16 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   const blocked = !option?.connector_available || (spec !== null && usable.length === 0);
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-lg border border-neutral-200 bg-white px-4 py-4" aria-label="Add a source">
-      <h2 className="text-sm font-semibold text-neutral-900">Add a source</h2>
-      <div className="flex flex-wrap gap-3">
-        <label className="flex flex-col text-xs text-neutral-600">
-          Kind
+    <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3">
+        <Field label="Kind">
           <select
             value={kind}
             onChange={(e) => {
               setKind(e.target.value as Kind);
               setConnection("");
             }}
-            className="mt-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            className={SELECT_FIELD}
           >
             {kinds.map((k) => (
               <option key={k.kind} value={k.kind}>
@@ -280,62 +321,54 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex min-w-48 flex-1 flex-col text-xs text-neutral-600">
-          Name
+        </Field>
+        <Field label="Name">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
             placeholder={kind === "upload" ? "Research notes" : `My ${KIND_LABEL[kind]}`}
-            className="mt-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+            className={INPUT}
           />
-        </label>
-        {spec && usable.length > 0 && (
-          <label className="flex flex-col text-xs text-neutral-600">
-            Connection
-            <select
-              value={connectionId}
-              onChange={(e) => setConnection(e.target.value)}
-              className="mt-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-            >
-              {usable.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.account_label ?? c.id}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        </Field>
       </div>
-      {!option?.connector_available && (
-        <p className="text-xs text-amber-800">The {KIND_LABEL[kind]} connector is not available yet.</p>
+      {spec && usable.length > 0 && (
+        <Field label="Connection">
+          <select value={connectionId} onChange={(e) => setConnection(e.target.value)} className={SELECT_FIELD}>
+            {usable.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.account_label ?? c.id}
+              </option>
+            ))}
+          </select>
+        </Field>
       )}
+      {!option?.connector_available && <Warn>The {KIND_LABEL[kind]} connector is not available yet.</Warn>}
       {option?.connector_available && spec && usable.length === 0 && (
-        <p className="text-xs text-neutral-600">
-          You have no {KIND_LABEL[kind]} connection yet.{" "}
-          <Link href="/settings/connections" className="underline">
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip kind="warn">No {KIND_LABEL[kind]} account</Chip>
+          <LinkButton href="/settings/connections" icon="link">
             Connect your account
-          </Link>{" "}
-          first.
-        </p>
+          </LinkButton>
+        </div>
       )}
       {spec && usable.length > 0 && (
-        <label className="block text-xs text-neutral-600">
-          {spec.label} to pull in (one per line)
+        <Field label={`${spec.label} to pull in (one per line)`}>
           <textarea
             value={allow}
             onChange={(e) => setAllow(e.target.value)}
             rows={3}
             placeholder={spec.example}
-            className="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-1.5 font-mono text-sm"
+            className={`${TEXTAREA} font-mono`}
           />
-        </label>
+        </Field>
       )}
-      {error && <ErrorNote>{error}</ErrorNote>}
-      <Button type="submit" variant="primary" disabled={busy || blocked || !name.trim()}>
-        Add source
-      </Button>
+      {error && <Notice tone="error">{error}</Notice>}
+      <div>
+        <Button type="submit" variant="solid" icon="plus" disabled={busy || blocked || !name.trim()}>
+          Add source
+        </Button>
+      </div>
     </form>
   );
 }
@@ -344,37 +377,88 @@ export default function SourceSettingsPage() {
   const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
   const kinds = useQuery("source-kinds", () => unwrap(api.GET("/v1/sources/kinds")));
   const list = sources.data ?? [];
+  const errors = list.filter((s) => s.status === "error").length;
+  const items = list.reduce((n, s) => n + s.item_count, 0);
 
   const replace = (s: Source) => sources.setData((prev) => (prev ?? []).map((x) => (x.id === s.id ? s : x)));
 
+  const inspector = (
+    <Inspector
+      eyebrow="Source · new"
+      title="Add a source"
+      label="New source"
+      chips={
+        <>
+          <Chip hero>Only you</Chip>
+          <InfoTip label="private sources" hero align="start" side="bottom">
+            Your sources are yours alone: what they pull in through your connections is visible only to you, and reaches
+            others only as evidence you add to the baseline. Direct messages are never pulled in.
+          </InfoTip>
+        </>
+      }
+      stats={[
+        { label: "Sources", value: sources.data ? list.length : "—" },
+        { label: "Items", value: sources.data ? items : "—" },
+        { label: "Errors", value: sources.data ? errors : "—", tone: errors > 0 ? "crit" : undefined },
+      ]}
+    >
+      <InspectorSection>
+        {kinds.error && <Notice tone="error">{kinds.error}</Notice>}
+        {!kinds.data && !kinds.error && <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
+        {kinds.data && <AddSource kinds={kinds.data} onAdded={(s) => sources.setData((prev) => [...(prev ?? []), s])} />}
+      </InspectorSection>
+    </Inspector>
+  );
+
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8">
-      <h1 className="mb-2 text-2xl font-semibold tracking-tight text-neutral-900">Sources</h1>
-      <p className="mb-6 text-sm text-neutral-600">
-        Your sources are yours alone: what they pull in through your connections is visible only to you, and reaches
-        others only as evidence you add to the baseline. Direct messages are never pulled in.{" "}
-        <Link href="/sources" className="underline">
-          Search your sources
-        </Link>
-        .
-      </p>
-      {sources.error && <ErrorNote>{sources.error}</ErrorNote>}
-      {sources.loading && <Loading />}
-      {sources.data && list.length === 0 && <p className="mb-6 text-neutral-600">You have no sources yet. Add one below.</p>}
-      {list.length > 0 && (
-        <ul className="mb-6 space-y-3" aria-label="My sources">
-          {list.map((s) => (
-            <SourceCard
-              key={s.id}
-              source={s}
-              onChange={replace}
-              onDelete={() => sources.setData((prev) => (prev ?? []).filter((x) => x.id !== s.id))}
-            />
-          ))}
-        </ul>
-      )}
-      {kinds.error && <ErrorNote>{kinds.error}</ErrorNote>}
-      {kinds.data && <AddSource kinds={kinds.data} onAdded={(s) => sources.setData((prev) => [...(prev ?? []), s])} />}
-    </div>
+    <>
+      <PageHeader
+        title="Sources"
+        status={
+          <>
+            <InfoTip label="sources" align="start" side="bottom">
+              What your connections pull in. Only you see it; it reaches others only as evidence you add to the baseline.
+            </InfoTip>
+            {errors > 0 && (
+              <Chip kind="crit" dot>
+                {errors} in error
+              </Chip>
+            )}
+          </>
+        }
+        action={
+          <LinkButton variant="primary" icon="search" href="/sources">
+            Search sources
+          </LinkButton>
+        }
+      />
+      <Split inspector={inspector}>
+        {sources.error && <Notice tone="error">{sources.error}</Notice>}
+        <Panel title="My sources" count={sources.data ? list.length : undefined}>
+          {sources.loading && !sources.data && (
+            <div aria-busy className="flex flex-col">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex h-14 items-center border-t border-line px-4 first:border-t-0">
+                  <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
+                </div>
+              ))}
+            </div>
+          )}
+          {sources.data && list.length === 0 && <Empty>No sources yet</Empty>}
+          {list.length > 0 && (
+            <ul aria-label="My sources" className="flex flex-col">
+              {list.map((s) => (
+                <SourceRow
+                  key={s.id}
+                  source={s}
+                  onChange={replace}
+                  onDelete={() => sources.setData((prev) => (prev ?? []).filter((x) => x.id !== s.id))}
+                />
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </Split>
+    </>
   );
 }

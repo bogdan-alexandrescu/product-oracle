@@ -1098,10 +1098,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   return notFound("Route");
 }
 
+/** One request at a time: each loads the whole db and saves it back, so two in flight would lose a write. */
+let queue: Promise<unknown> = Promise.resolve();
+
 export async function mockFetch(req: Request): Promise<Response> {
   await new Promise((r) => setTimeout(r, LATENCY_MS));
-  const db = load();
-  const res = await route(db, req);
-  save(db);
-  return res;
+  const next = queue.then(async () => {
+    const db = load();
+    const res = await route(db, req);
+    save(db);
+    return res;
+  });
+  queue = next.catch(() => undefined);
+  return next;
 }

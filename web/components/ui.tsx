@@ -101,7 +101,7 @@ export const INPUT = "w-full rounded-lg border border-line-strong bg-surface px-
 
 export function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded border border-neutral-300 bg-neutral-50 px-1 font-mono text-[13px] text-text2">
+    <kbd className="rounded border border-line-strong bg-surface2 px-1 font-mono text-[13px] text-text2">
       {children}
     </kbd>
   );

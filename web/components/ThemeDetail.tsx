@@ -484,7 +484,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
               {t.builtin ? (
                 <p data-testid="slide-css-builtin" className="flex items-center gap-2 text-[15px] text-text2">
                   Built-in themes keep their own slide design.
-                  <InfoTip label="built-in slides" align="start">
+                  <InfoTip label="built-in theme design" align="start">
                     It cannot be edited. To write slide CSS, create a new theme from this one.
                   </InfoTip>
                 </p>

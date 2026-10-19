@@ -276,7 +276,7 @@ function Navs() {
               }`}
             >
               <Icon name={d.icon} />
-              {d.label}
+              <span>{d.label}</span>
               {d.label === "Inbox" && <Badge n={inbox} />}
             </Link>
           );
