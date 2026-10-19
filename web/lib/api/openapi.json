@@ -4666,7 +4666,7 @@
           "search"
         ],
         "summary": "Search Sources",
-        "description": "Search the user's own items. Ranked by relevance x confidence weight; ``as_of``\nsearches the versions pinned at that time.",
+        "description": "Search the user's own items (a run: also those a finding shared in full cites).\nRanked by relevance x confidence weight; ``as_of`` searches the versions pinned at\nthat time.",
         "operationId": "search_sources",
         "security": [
           {
@@ -13010,7 +13010,7 @@
           "intake"
         ],
         "summary": "Search Intake Evidence",
-        "description": "Search your own source items as they were at the intake's pinned snapshot. A run\ntoken searches only the items of the intake's findings shared in full (S6).\n\nResults are untrusted data. Every query is audited (``intake.evidence_query``).",
+        "description": "Search your own source items as they were at the intake's pinned snapshot. A run\ntoken (its author's or anyone's) searches, in full text, only the items the intake's\nfindings shared in full cite, less what any intake of the author withholds (S6,\nowner 2026-10-19): exactly the items ``/v1/source-items/{id}`` and ``/v1/search``\ngive that run.\n\nResults are untrusted data. Every query is audited (``intake.evidence_query``).",
         "operationId": "search_intake_evidence",
         "security": [
           {

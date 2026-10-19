@@ -79,11 +79,22 @@ limits, configurability and scaling (`categories.CATEGORIES`).
   upload results and a run's `item_count`, and are 404 at `/v1/source-items/{id}`; a run
   cannot attach one as baseline evidence (404), cite it in an answer (422), link it from
   a baseline YAML, nor read its title and link on baseline evidence.
-  `/intakes/{id}/evidence` searches, for a run, only the items of the intake's findings
-  shared in full within the intake's chosen sources, filtered in SQL before ranking and
-  the limit (so hidden items that match never change the answer); a hit's snippet shows
-  only where the item itself is shown. To give agents a private source, its author
-  shares it.
+  A model-written gap never registered as a model finding (written before S6) counts
+  as private, so its intake keeps withholding. `record_reads` inserts with
+  `ON CONFLICT DO NOTHING`, so two writers recomputing one intake never conflict.
+- A finding shared in full makes its cited documents readable to runs in full text,
+  search and read (owner, 2026-10-19, round 6), any run's user, while people see the
+  title, link and 400-character excerpt; the intake rule above always wins. What the
+  findings shared in full cite is precomputed in `intake_shared_items` (rewritten with
+  the withheld set). For a run, `/intakes/{id}/evidence` (its author's own run and every
+  other) searches the items the intake's findings shared in full cite, less what any
+  intake of the author withholds (`evidence.run_include`), within the intake's chosen
+  sources, filtered in SQL before ranking and the limit (so hidden items that match
+  never change the answer); a hit's snippet shows only where the item itself is shown.
+  `/v1/source-items/{id}` and `/v1/search` give a run the same items
+  (`evidence.run_shared`), whoever owns them, and the intake summary shows a run no
+  title or excerpt of a withheld item. To give agents a private source, its author
+  shares every finding of its intake in full.
 
 ## 3. Untrusted content
 
@@ -167,10 +178,13 @@ Three more follow-ups (owner, 2026-10-19):
 - Answering a question about a private finding makes no baseline proposal (nothing in
   the baseline names the gap or the intake). When the author shares the finding at
   `counts`, each answer is proposed once with its category's question only; from
-  `summary` up the answer and severity appear (§ Blockers below).
+  `summary` up the answer and severity appear (§ Blockers below). Lowering the finding
+  back to private withdraws its open proposal (status `withdrawn`: never listed by
+  `/v1/baseline/proposals`, 404 to accept or reject); sharing it again makes a new one;
+  an accepted or rejected proposal stays as decided (owner, 2026-10-19, round 6).
 - Setting a level or summary on a finding drawn from shared text only (not restricted)
-  is a 409. The audit of a summary line set on a private finding records the finding id
-  only.
+  is a 409. The audit of a summary line set on a private finding, and of a level
+  lowered to private, records no kind or category.
 - Agent runs read each finding at its level (§2 above).
 
 ## 4. Routes (all `/v1`, all MCP tools)
@@ -187,7 +201,7 @@ Three more follow-ups (owner, 2026-10-19):
 | `PATCH /intakes/{intake_id}/findings/{finding_id}` | `set_intake_finding_sharing` | the author | Sharing panel |
 | `POST /intakes/{intake_id}/findings/sharing` | `set_intake_findings_sharing` | the author | Sharing panel |
 | `PUT /intakes/{intake_id}/findings/{finding_id}/summary` | `set_intake_finding_summary` | the author (never a run) | Sharing panel |
-| `GET /intakes/{intake_id}/evidence?q=` | `search_intake_evidence` | viewer (own items; a run: items shared in full) | Evidence panel |
+| `GET /intakes/{intake_id}/evidence?q=` | `search_intake_evidence` | viewer (own items; a run: items findings shared in full cite, less withheld) | Evidence panel |
 | `GET /intakes/{intake_id}/question-batch` | `get_question_batch` | viewer | Question batch |
 | `POST /intakes/{intake_id}/question-batches` | `ask_next_question_batch` | the author or an approver | Question batch |
 | `GET /intakes/{intake_id}/composition-inputs` | `get_intake_composition_inputs` | viewer | (modules lane) |
@@ -228,8 +242,11 @@ sources, the analysis and the findings' sharing levels live in `product_intakes.
   gap's public importance), which the blockers lane's checks pick up once accepted. An
   answer to a finding shared at counts proposes only its category's fixed question
   (`attrs`: the gap's id and category; no answer text, no severity); from summary up the
-  same open proposal carries the answer and severity, and lowering the level strips them
-  again (owner, 2026-10-19). A PRD patch quotes the answer, so it is proposed, and
+  same open proposal carries the answer and severity, and lowering the level to counts
+  strips them again (owner, 2026-10-19). A question-only proposal is never accepted
+  (409: it waits for the author to share the answer); once it is decided, the answer
+  is proposed as a follow-up from summary up. A stale finding at summary shows its line
+  without the item's confidence (which counts freshness). A PRD patch quotes the answer, so it is proposed, and
   accepted, only while everyone may read the gap.
 - **Review and quality:** two readiness checks are registered (`intake.critical_blockers`
   hard, `intake.open_decisions` advisory); a PRD's gaps are its own and those of the

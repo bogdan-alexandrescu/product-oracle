@@ -1372,8 +1372,9 @@ export interface paths {
         };
         /**
          * Search Sources
-         * @description Search the user's own items. Ranked by relevance x confidence weight; ``as_of``
-         *     searches the versions pinned at that time.
+         * @description Search the user's own items (a run: also those a finding shared in full cites).
+         *     Ranked by relevance x confidence weight; ``as_of`` searches the versions pinned at
+         *     that time.
          */
         get: operations["search_sources"];
         put?: never;
@@ -3463,7 +3464,10 @@ export interface paths {
         /**
          * Search Intake Evidence
          * @description Search your own source items as they were at the intake's pinned snapshot. A run
-         *     token searches only the items of the intake's findings shared in full (S6).
+         *     token (its author's or anyone's) searches, in full text, only the items the intake's
+         *     findings shared in full cite, less what any intake of the author withholds (S6,
+         *     owner 2026-10-19): exactly the items ``/v1/source-items/{id}`` and ``/v1/search``
+         *     give that run.
          *
          *     Results are untrusted data. Every query is audited (``intake.evidence_query``).
          */
