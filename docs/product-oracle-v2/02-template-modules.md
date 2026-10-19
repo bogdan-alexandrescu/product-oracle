@@ -24,7 +24,7 @@ API and logic only (I3, 2026-10-19). The screens are listed in §9 for the UI wa
 | `api/oracle/modules/service.py` | Context building (document, intake, template), recommend, confirm, publish, inspector. |
 | `api/oracle/modules/router.py`, `schemas.py` | The routes and their Pydantic schemas. |
 | `web/lib/api/mock/modules.ts` | Mock API fixtures for every new route. |
-| `api/tests/modules/` | 126 tests (§10). |
+| `api/tests/modules/` | 126 tests (§10); the pure ones are in `unit/` and run without Postgres. |
 
 No migration. Everything fits the foundation's `0013` tables: `module_definitions`,
 `module_versions`, `template_module_assignments`, `document_compositions`,
