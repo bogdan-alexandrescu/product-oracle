@@ -2909,7 +2909,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Blocker Option
+         * @description Edit an option or record its compliance review (``lock_version`` required).
+         */
+        patch: operations["update_blocker_option"];
         trace?: never;
     };
     "/v1/feasibility-experiments": {
@@ -2949,7 +2953,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Feasibility Experiment
+         * @description Edit, start or conclude an experiment (a result is needed to conclude).
+         */
+        patch: operations["update_feasibility_experiment"];
         trace?: never;
     };
     "/v1/blocker-events": {
@@ -4025,6 +4033,270 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/blockers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Blockers
+         * @description Blockers (baseline constraints with a strategy), most severe first. Third-party
+         *     limits filter by ``limit_kind``: capacity, eligibility, permission or policy.
+         */
+        get: operations["list_blockers"];
+        put?: never;
+        /**
+         * Create Blocker
+         * @description Record a blocker: an existing constraint entity (``entity_id``), or a new one.
+         */
+        post: operations["create_blocker"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Blocker Strategy
+         * @description The blocker strategy view: the blocker, evidence, options to compare (with policy
+         *     flags and the recommended compliant one), experiments, events and its gate.
+         */
+        get: operations["get_blocker_strategy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Blocker
+         * @description Edit a blocker. ``revision`` is the one you loaded; a stale one is a 409. The
+         *     status changes only through the status, risk and feasibility routes. B4: lowering a
+         *     blocker that gates (or gated when it was resolved), or removing a document it gates,
+         *     takes ``blocker_risk_acceptance_role`` (403 below it).
+         */
+        patch: operations["update_blocker"];
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Blocker Status
+         * @description Open, mitigating or resolved (resolving needs a reason). Records a resolution
+         *     event and a ``blocker_status`` change event. B4: reopening a resolved blocker lowered
+         *     or narrowed since below the gate it had when resolved takes
+         *     ``blocker_risk_acceptance_role`` (403 below it).
+         */
+        post: operations["set_blocker_status"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}/accept-risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Blocker Risk
+         * @description Accept the risk of an unresolved blocker: who and why are recorded (an assumption
+         *     decision, a resolution event, an audit event) until the review date.
+         */
+        post: operations["accept_blocker_risk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}/feasibility-scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Feasibility Scope
+         * @description Proceed only as a scoped feasibility experiment (owner, success threshold and
+         *     decision gate required). If the experiment fails or is cancelled, the blocker
+         *     reopens.
+         */
+        post: operations["approve_feasibility_scope"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Blocker Option
+         * @description Propose a solution option. It starts as ``needs_review``; text that evades platform
+         *     rules, abuses accounts or messages people without permission is stored as
+         *     ``non_compliant`` and ``rejected``, with the flags.
+         */
+        post: operations["create_blocker_option"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocker-options/{item_id}/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select Blocker Option
+         * @description Select a compliant option with a reason; a previous selection goes back to
+         *     evaluating.
+         */
+        post: operations["select_blocker_option"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocker-options/{item_id}/fallback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Blocker Option Fallback
+         * @description Keep a compliant option as the fallback.
+         */
+        post: operations["mark_blocker_option_fallback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocker-options/{item_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Blocker Option
+         * @description Reject an option with a reason (a selected one leaves the blocker unselected).
+         */
+        post: operations["reject_blocker_option"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blockers/{blocker_id}/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Feasibility Experiment
+         * @description Plan a validation of the blocker or one of its options.
+         */
+        post: operations["create_feasibility_experiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/blocker-strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Document Blocker Strategy
+         * @description Every blocker that gates this document (listed on the blocker or linked from a
+         *     section), most severe first, with the ``critical_blockers`` readiness outcome.
+         */
+        get: operations["get_document_blocker_strategy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/blocker-strategy/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Render Document Blocker Strategy
+         * @description The ``constraints.solutions`` module in the draft format: a brief section, a full
+         *     section, and the citations and appendix lines for Sources and data points (O1c).
+         */
+        get: operations["render_document_blocker_strategy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -4656,6 +4928,194 @@ export interface components {
             source?: string | null;
         };
         /**
+         * BlockerCitation
+         * @description A front matter ``citations`` entry (docs/mvp-app.md, Draft import format).
+         */
+        BlockerCitation: {
+            /** Id */
+            id: string;
+            /** Source */
+            source: string;
+            /** Ref */
+            ref: string;
+            /** Title */
+            title?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Retrieved At */
+            retrieved_at?: string | null;
+        };
+        /** BlockerCompliantPath */
+        BlockerCompliantPath: {
+            /** Approach */
+            approach: string;
+            /** Label */
+            label: string;
+            /** Guidance */
+            guidance: string;
+        };
+        /**
+         * BlockerCreate
+         * @description A new blocker: either an existing constraint entity (``entity_id``) or a new one
+         *     (``key`` and ``statement``).
+         */
+        BlockerCreate: {
+            /** Detail */
+            detail?: string | null;
+            /** Limit Kind */
+            limit_kind?: ("capacity" | "eligibility" | "permission" | "policy" | "other") | null;
+            /** Third Party */
+            third_party?: string | null;
+            /** Severity */
+            severity?: ("critical" | "high" | "medium" | "low") | null;
+            /** Timing */
+            timing?: string | null;
+            /** Threshold */
+            threshold?: string | null;
+            /** Impacted Entity Ids */
+            impacted_entity_ids?: string[] | null;
+            /** Impacted Users */
+            impacted_users?: string[] | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Review At */
+            review_at?: string | null;
+            /** Document Ids */
+            document_ids?: string[] | null;
+            scaling?: components["schemas"]["BlockerScaling"] | null;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Key */
+            key?: string | null;
+            /** Statement */
+            statement?: string | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "hard" | "soft" | "unknown" | "temporary";
+            /**
+             * Status
+             * @default open
+             * @enum {string}
+             */
+            status: "open" | "mitigating";
+            /** Reason */
+            reason?: string | null;
+        };
+        /** BlockerDocumentRef */
+        BlockerDocumentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * BlockerGate
+         * @description This blocker's effect on readiness (the ``critical_blockers`` hard check).
+         */
+        BlockerGate: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "critical" | "not_applicable";
+            /** Rationale */
+            rationale: string;
+        };
+        /** BlockerImpactRef */
+        BlockerImpactRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * BlockerModuleRender
+         * @description The ``constraints.solutions`` module rendered in the draft format.
+         *
+         *     ``brief_markdown`` is one brief section, ``full_markdown`` the full-layer section with
+         *     one sub-section per blocker. Neither carries a citation: ``citations`` go in the
+         *     front matter, and ``evidence_by_section``, ``data_points`` and ``appendix_markdown``
+         *     in Sources and data points (O1c).
+         */
+        BlockerModuleRender: {
+            /** Module Key */
+            module_key: string;
+            /** Brief Section Id */
+            brief_section_id: string;
+            /** Full Section Id */
+            full_section_id: string;
+            /** Section Ids */
+            section_ids: string[];
+            /** Brief Markdown */
+            brief_markdown: string;
+            /** Full Markdown */
+            full_markdown: string;
+            /** Citations */
+            citations: components["schemas"]["BlockerCitation"][];
+            /** Evidence By Section */
+            evidence_by_section: {
+                [key: string]: string[];
+            };
+            /** Data Points */
+            data_points: string[];
+            /** Appendix Markdown */
+            appendix_markdown: string;
+        };
+        /** BlockerOptionCreate */
+        BlockerOptionCreate: {
+            /** Title */
+            title: string;
+            /**
+             * Approach
+             * @enum {string}
+             */
+            approach: "direct_remedy" | "alternative_workflow" | "architecture" | "partnership" | "operations" | "distribution";
+            /** Description */
+            description?: string | null;
+            /**
+             * Technical Feasibility
+             * @default unknown
+             * @enum {string}
+             */
+            technical_feasibility: "high" | "medium" | "low" | "unknown";
+            /**
+             * Policy Feasibility
+             * @default unknown
+             * @enum {string}
+             */
+            policy_feasibility: "high" | "medium" | "low" | "unknown";
+            /** @default {} */
+            details: components["schemas"]["BlockerOptionDetails"];
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** BlockerOptionDecision */
+        BlockerOptionDecision: {
+            /** Lock Version */
+            lock_version: number;
+            /** Reason */
+            reason: string;
+        };
+        /**
          * BlockerOptionDetails
          * @description ``blocker_options.details``.
          */
@@ -4680,6 +5140,13 @@ export interface components {
             corrective_action?: string | null;
             /** Review At */
             review_at?: string | null;
+        };
+        /** BlockerOptionFallback */
+        BlockerOptionFallback: {
+            /** Lock Version */
+            lock_version: number;
+            /** Reason */
+            reason?: string | null;
         };
         /** BlockerOptionOut */
         BlockerOptionOut: {
@@ -4744,6 +5211,241 @@ export interface components {
              */
             updated_at: string;
         };
+        /** BlockerOptionPatch */
+        BlockerOptionPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Approach */
+            approach?: ("direct_remedy" | "alternative_workflow" | "architecture" | "partnership" | "operations" | "distribution") | null;
+            /** Description */
+            description?: string | null;
+            /** Technical Feasibility */
+            technical_feasibility?: ("high" | "medium" | "low" | "unknown") | null;
+            /** Policy Feasibility */
+            policy_feasibility?: ("high" | "medium" | "low" | "unknown") | null;
+            /** Compliance */
+            compliance?: ("compliant" | "needs_review" | "non_compliant") | null;
+            details?: components["schemas"]["BlockerOptionDetails"] | null;
+            /** Evidence Ids */
+            evidence_ids?: string[] | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * BlockerOptionView
+         * @description An option as the strategy view compares it.
+         */
+        BlockerOptionView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Blocker Id
+             * Format: uuid
+             */
+            blocker_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Approach
+             * @enum {string}
+             */
+            approach: "direct_remedy" | "alternative_workflow" | "architecture" | "partnership" | "operations" | "distribution";
+            /** Description */
+            description?: string | null;
+            /**
+             * Technical Feasibility
+             * @enum {string}
+             */
+            technical_feasibility: "high" | "medium" | "low" | "unknown";
+            /**
+             * Policy Feasibility
+             * @enum {string}
+             */
+            policy_feasibility: "high" | "medium" | "low" | "unknown";
+            /**
+             * Compliance
+             * @enum {string}
+             */
+            compliance: "compliant" | "needs_review" | "non_compliant";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "evaluating" | "selected" | "fallback" | "rejected";
+            details: components["schemas"]["BlockerOptionDetails"];
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Selected Reason */
+            selected_reason?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Policy Flags
+             * @default []
+             */
+            policy_flags: components["schemas"]["BlockerPolicyFlag"][];
+            /**
+             * Recommended
+             * @default false
+             */
+            recommended: boolean;
+        };
+        /** BlockerOut */
+        BlockerOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Statement */
+            statement: string;
+            /** Detail */
+            detail?: string | null;
+            /** Entity Status */
+            entity_status: string;
+            /** Locked */
+            locked: boolean;
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Evidence Count
+             * @default 0
+             */
+            evidence_count: number;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "hard" | "soft" | "unknown" | "temporary";
+            /**
+             * Limit Kind
+             * @enum {string}
+             */
+            limit_kind: "capacity" | "eligibility" | "permission" | "policy" | "other";
+            /** Limit Kind Label */
+            limit_kind_label: string;
+            /** Third Party */
+            third_party?: string | null;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "critical" | "high" | "medium" | "low";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "mitigating" | "resolved" | "accepted_risk" | "feasibility_only";
+            /** Timing */
+            timing?: string | null;
+            /** Threshold */
+            threshold?: string | null;
+            /** Impacted Entity Ids */
+            impacted_entity_ids: string[];
+            /**
+             * Impacted
+             * @default []
+             */
+            impacted: components["schemas"]["BlockerImpactRef"][];
+            /** Impacted Users */
+            impacted_users: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Review At */
+            review_at?: string | null;
+            /** Document Ids */
+            document_ids: string[];
+            scaling: components["schemas"]["BlockerScaling"];
+            /** Selected Option Id */
+            selected_option_id?: string | null;
+            /** Revision */
+            revision: number;
+            gate: components["schemas"]["BlockerGate"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** BlockerPatch */
+        BlockerPatch: {
+            /** Detail */
+            detail?: string | null;
+            /** Limit Kind */
+            limit_kind?: ("capacity" | "eligibility" | "permission" | "policy" | "other") | null;
+            /** Third Party */
+            third_party?: string | null;
+            /** Severity */
+            severity?: ("critical" | "high" | "medium" | "low") | null;
+            /** Timing */
+            timing?: string | null;
+            /** Threshold */
+            threshold?: string | null;
+            /** Impacted Entity Ids */
+            impacted_entity_ids?: string[] | null;
+            /** Impacted Users */
+            impacted_users?: string[] | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Review At */
+            review_at?: string | null;
+            /** Document Ids */
+            document_ids?: string[] | null;
+            scaling?: components["schemas"]["BlockerScaling"] | null;
+            /** Revision */
+            revision: number;
+            /** Statement */
+            statement?: string | null;
+            /** Type */
+            type?: ("hard" | "soft" | "unknown" | "temporary") | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Confirm Decision
+             * @default false
+             */
+            confirm_decision: boolean;
+        };
+        /** BlockerPolicyFlag */
+        BlockerPolicyFlag: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "evasion" | "identity_abuse" | "unauthorized_messaging";
+            /** Match */
+            match: string;
+            /** Message */
+            message: string;
+        };
         /** BlockerResolutionEventOut */
         BlockerResolutionEventOut: {
             /**
@@ -4782,6 +5484,122 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Summary
+             * @description One line for a history list. Events that record no status change (a
+             *     reclassification, a gate snapshot, an experiment) have no from/to status.
+             */
+            readonly summary: string;
+        };
+        /** BlockerRiskAcceptanceIn */
+        BlockerRiskAcceptanceIn: {
+            /** Reason */
+            reason: string;
+            /**
+             * Review At
+             * Format: date-time
+             */
+            review_at: string;
+        };
+        /**
+         * BlockerScaling
+         * @description Scaling characteristics, when they apply (§6).
+         */
+        BlockerScaling: {
+            /** Tenants */
+            tenants?: string | null;
+            /** Agents */
+            agents?: string | null;
+            /** Channels */
+            channels?: string | null;
+            /** Quotas */
+            quotas?: string | null;
+            /** Cost */
+            cost?: string | null;
+            /** Blast Radius */
+            blast_radius?: string | null;
+        };
+        /** BlockerStatusIn */
+        BlockerStatusIn: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "mitigating" | "resolved";
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * BlockerStrategy
+         * @description Everything the blocker strategy view shows for one blocker.
+         */
+        BlockerStrategy: {
+            blocker: components["schemas"]["BlockerOut"];
+            gate: components["schemas"]["BlockerGate"];
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceOut"][];
+            /** Options */
+            options: components["schemas"]["BlockerOptionView"][];
+            /** Recommended Option Id */
+            recommended_option_id?: string | null;
+            /** Compliant Paths */
+            compliant_paths: components["schemas"]["BlockerCompliantPath"][];
+            /** Prohibited */
+            prohibited: string;
+            /** Experiments */
+            experiments: components["schemas"]["FeasibilityExperimentOut"][];
+            /** Events */
+            events: components["schemas"]["BlockerResolutionEventOut"][];
+            risk_acceptance?: components["schemas"]["AssumptionDecisionOut"] | null;
+            /** Documents */
+            documents: components["schemas"]["BlockerDocumentRef"][];
+        };
+        /**
+         * BlockerSummary
+         * @description One row of ``GET /v1/blockers``.
+         */
+        BlockerSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Statement */
+            statement: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "hard" | "soft" | "unknown" | "temporary";
+            /**
+             * Limit Kind
+             * @enum {string}
+             */
+            limit_kind: "capacity" | "eligibility" | "permission" | "policy" | "other";
+            /** Third Party */
+            third_party?: string | null;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "critical" | "high" | "medium" | "low";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "mitigating" | "resolved" | "accepted_risk" | "feasibility_only";
+            /** Selected Option Id */
+            selected_option_id?: string | null;
+            /** Document Ids */
+            document_ids: string[];
+            gate: components["schemas"]["BlockerGate"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** Body_oauth_revoke */
         Body_oauth_revoke: {
@@ -5840,6 +6658,13 @@ export interface components {
             /** Sections */
             sections: components["schemas"]["SectionDiff"][];
         };
+        /** DocumentBlockerStrategy */
+        DocumentBlockerStrategy: {
+            document: components["schemas"]["BlockerDocumentRef"];
+            readiness: components["schemas"]["BlockerGate"];
+            /** Blockers */
+            blockers: components["schemas"]["BlockerStrategy"][];
+        };
         /** DocumentCompositionOut */
         DocumentCompositionOut: {
             /**
@@ -6814,6 +7639,26 @@ export interface components {
              */
             updated_at: string;
         };
+        /** FeasibilityExperimentCreate */
+        FeasibilityExperimentCreate: {
+            /** Hypothesis */
+            hypothesis: string;
+            /** Option Id */
+            option_id?: string | null;
+            /** Method */
+            method?: string | null;
+            /** Success Threshold */
+            success_threshold?: string | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Decision Gate At */
+            decision_gate_at?: string | null;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+        };
         /** FeasibilityExperimentOut */
         FeasibilityExperimentOut: {
             /**
@@ -6859,6 +7704,37 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** FeasibilityExperimentPatch */
+        FeasibilityExperimentPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Hypothesis */
+            hypothesis?: string | null;
+            /** Method */
+            method?: string | null;
+            /** Success Threshold */
+            success_threshold?: string | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Decision Gate At */
+            decision_gate_at?: string | null;
+            /** Status */
+            status?: ("planned" | "running" | "succeeded" | "failed" | "inconclusive" | "cancelled") | null;
+            /** Result */
+            result?: string | null;
+            /** Evidence Ids */
+            evidence_ids?: string[] | null;
+        };
+        /** FeasibilityScopeIn */
+        FeasibilityScopeIn: {
+            /**
+             * Experiment Id
+             * Format: uuid
+             */
+            experiment_id: string;
+            /** Reason */
+            reason: string;
         };
         /** FeedbackItemOut */
         FeedbackItemOut: {
@@ -15883,6 +16759,15 @@ export interface operations {
                     "application/json": components["schemas"]["YamlImportResult"];
                 };
             };
+            /** @description A change the caller's role may not make */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YamlImportError"];
+                };
+            };
             /** @description File rejected */
             422: {
                 headers: {
@@ -17829,6 +18714,41 @@ export interface operations {
             };
         };
     };
+    update_blocker_option: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerOptionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerOptionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_feasibility_experiments: {
         parameters: {
             query?: {
@@ -17874,6 +18794,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeasibilityExperimentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_feasibility_experiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeasibilityExperimentPatch"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -19737,6 +20692,484 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArtifactDependencyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_blockers: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                status?: ("open" | "mitigating" | "resolved" | "accepted_risk" | "feasibility_only") | null;
+                type?: ("hard" | "soft" | "unknown" | "temporary") | null;
+                severity?: ("critical" | "high" | "medium" | "low") | null;
+                limit_kind?: ("capacity" | "eligibility" | "permission" | "policy" | "other") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_blocker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_blocker_strategy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_blocker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_blocker_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerStatusIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_blocker_risk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerRiskAcceptanceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_feasibility_scope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeasibilityScopeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_blocker_option: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerOptionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerOptionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_blocker_option: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerOptionDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_blocker_option_fallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerOptionFallback"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerOptionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_blocker_option: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockerOptionDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerOptionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_feasibility_experiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blocker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeasibilityExperimentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeasibilityExperimentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_document_blocker_strategy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBlockerStrategy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    render_document_blocker_strategy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockerModuleRender"];
                 };
             };
             /** @description Validation Error */
