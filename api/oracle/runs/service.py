@@ -2164,7 +2164,6 @@ async def _advance(
     if attempt.get("advanced"):
         return False
     attempt["advanced"] = True
-    checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
     if wait is not None:
         # W5: the token is held from before the import's commit until the checkpoint
         # that stands for this wait is added (cleared in the same transaction).
@@ -2174,7 +2173,7 @@ async def _advance(
             {
                 "workflow_id": wait.get("workflow_id"),
                 "step_id": wait.get("step_id"),
-                "kind": checkpoint_kind,
+                "kind": sdef.checkpoint_for(await _target_kind(db, run)),
             },
         )
     imported: dict[str, Any] | None = None
@@ -2229,6 +2228,7 @@ async def _advance(
     if wait is not None:
         payload["wait"] = wait
         _set_knob(run, "opening_wait", None)
+    checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
     if knobs.checkpoints.get(sdef.checkpoint, True):
         db.add(
             Checkpoint(
@@ -2899,10 +2899,15 @@ async def _read_found(
     :func:`_search_end`, its cost is unknown: shown in the Inbox (Retry lookup) and read
     again now and then until :func:`_cost_cap`, then dropped (noted)."""
     label, wid = e.get("label"), e["id"]
-    cancelling = e.get("cancel", True) and not e.get("cancelled")
+    # The cancel call rests between tries (its status and cost are read every tick).
+    cancelling = (
+        e.get("cancel", True) and not e.get("cancelled") and not _rests(e.get("cancel_tried_at"))
+    )
     out = await (_cancel_call({"id": wid}) if cancelling else _read_call(wid))
-    if cancelling and out.error is None and not out.gone:
-        e["cancelled"] = True  # confirmed: its status and cost are left to read
+    if cancelling:
+        e["cancel_tried_at"] = _now().isoformat()
+        if out.error is None and not out.gone:
+            e["cancelled"] = True  # confirmed: its status and cost are left to read
     final = out.final
     if final is not None:
         _cost_on(run, segments, e, final.cost_usd)

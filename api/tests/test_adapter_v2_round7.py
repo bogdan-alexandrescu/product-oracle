@@ -494,3 +494,26 @@ def test_a_per_segment_attach_carries_its_submission_time():
     run = Run(knobs={})
     wf = service._attach_for_cancel(run, seg, "wf_1")
     assert wf["submitted_at"] == "2026-10-19T10:00:00+00:00"
+
+
+async def test_a_searched_workflows_cancel_call_rests_while_its_cost_is_read_every_tick(
+    client, owner, monkeypatch
+):
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _retried(client, auth, swarm, clock)
+    swarm.other_tasks = 0
+    clock.forward(service.STUCK_LOOKUP_SECONDS + 1)  # due for a lookup
+    swarm.html_404_cancel = True  # its cancel is never confirmed; its status reads
+    await _tick_errors(client, auth)
+    cancels = swarm.cancels.count("wf_1")
+    swarm.workflows["wf_1"].steps[0].cost += 2.0
+    await _tick_errors(client, auth)
+    assert swarm.cancels.count("wf_1") == cancels  # the cancel call rests
+    run = await get(client, auth, run["id"])
+    found = [a for a in run["segments"][0]["attempts"] if a["workflow_id"] == "wf_1"]
+    assert found[0]["cost_usd"] == _wf_cost(swarm, "wf_1")  # its cost read meanwhile
+    clock.forward(service.STUCK_LOOKUP_SECONDS + 1)
+    await _tick_errors(client, auth)
+    assert swarm.cancels.count("wf_1") == cancels + 1
