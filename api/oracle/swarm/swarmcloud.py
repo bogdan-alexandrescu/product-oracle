@@ -17,6 +17,8 @@ so agents cannot reach Oracle's data: the run token is never sent (a prompt is n
 place for a credential) and every run says so in its notes.
 """
 
+import asyncio
+import re
 import time
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -229,6 +231,27 @@ class SwarmCloudRuntime:
             raise RuntimeUnavailable("SwarmCloud accepted the workflow but returned no id")
         return str(workflow_id)
 
+    async def whoami(self) -> dict[str, str | None]:
+        # One deadline for the whole check (minting the token included): httpx's timeout
+        # applies to each phase separately, so a slow server could hold it much longer.
+        try:
+            async with asyncio.timeout(self._timeout):
+                async with self._client() as client:
+                    resp = await self._call(client, "GET", "/v1/tenants/me")
+        except TimeoutError:
+            raise RuntimeUnavailable(
+                f"SwarmCloud did not answer /v1/tenants/me within {self._timeout:g} s"
+            ) from None
+        try:
+            body = resp.json()
+        except ValueError:
+            raise RuntimeUnavailable("SwarmCloud answered /v1/tenants/me without JSON") from None
+        if not isinstance(body, dict):
+            raise RuntimeUnavailable("SwarmCloud answered /v1/tenants/me with an unexpected body")
+        tenant = body.get("tenant") if isinstance(body.get("tenant"), dict) else body
+        tenant_id = tenant.get("tenant_id") or tenant.get("id")
+        return {"tenant_id": None if tenant_id is None else str(tenant_id)}
+
     async def _read(self, workflow_id: str) -> dict[str, Any]:
         async with self._client() as client:
             resp = await self._call(client, "GET", f"/v1/workflows/{workflow_id}")
@@ -294,7 +317,11 @@ def _detail(resp: httpx.Response) -> str:
     detail = body.get("detail") if isinstance(body, dict) else None
     if isinstance(detail, dict):
         detail = detail.get("message") or detail.get("code")
-    return str(detail)[:200] if detail else ""
+    return _TOKEN_SHAPED.sub("<withheld>", str(detail))[:200] if detail else ""
+
+
+# A bearer value or a JWT that an upstream might echo back in an error message.
+_TOKEN_SHAPED = re.compile(r"(?i)bearer\s+\S+|eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}")
 
 
 class UnconfiguredSwarmCloud:
@@ -316,6 +343,9 @@ class UnconfiguredSwarmCloud:
         return RuntimeUnavailable(f"SwarmCloud is not configured: {self.problem}")
 
     async def submit(self, spec: WorkflowSpec) -> str:
+        raise self._refuse()
+
+    async def whoami(self) -> dict[str, str | None]:
         raise self._refuse()
 
     async def status(self, workflow_id: str) -> WorkflowStatus:

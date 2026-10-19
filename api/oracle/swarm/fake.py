@@ -149,6 +149,9 @@ class FakeRuntime:
     def notes(self) -> list[str]:
         return ["Local agent runtime: segments finish at once with generic drafts."]
 
+    async def whoami(self) -> dict[str, str | None]:
+        return {"tenant_id": "fake"}
+
     def _record(self, workflow_id: str) -> _Record:
         record = self._records.get(workflow_id)
         if record is not None:

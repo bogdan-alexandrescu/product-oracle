@@ -8173,6 +8173,36 @@
         ]
       }
     },
+    "/v1/runtime/status": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Runtime Status",
+        "description": "Call the agent runtime as Oracle and report what it answers: reachable, and as which\ntenant. Owner only. Never shows a credential.",
+        "operationId": "runtime_status",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeStatusOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/flows": {
       "get": {
         "tags": [
@@ -18011,6 +18041,71 @@
           "created_at"
         ],
         "title": "RunSummary"
+      },
+      "RuntimeStatusOut": {
+        "properties": {
+          "runtime": {
+            "type": "string",
+            "title": "Runtime"
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth"
+          },
+          "reachable": {
+            "type": "boolean",
+            "title": "Reachable"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "can_reach_oracle": {
+            "type": "boolean",
+            "title": "Can Reach Oracle"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "runtime",
+          "reachable",
+          "can_reach_oracle"
+        ],
+        "title": "RuntimeStatusOut",
+        "description": "Whether Oracle reaches its agent runtime, and as which tenant (owner only)."
       },
       "ScopeOut": {
         "properties": {
