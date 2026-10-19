@@ -48,7 +48,7 @@ async def _call[T](op: Awaitable[T]) -> T:
         raise HTTPException(exc.status, str(exc)) from exc
 
 
-@router.get("/runtime/status", response_model=RuntimeStatusOut, tags=["runs"])
+@router.get("/runtime/status", response_model=RuntimeStatusOut)
 async def runtime_status(_: Owner) -> RuntimeStatusOut:
     """Call the agent runtime as Oracle and report what it answers: reachable, and as which
     tenant. Owner only. Never shows a credential."""

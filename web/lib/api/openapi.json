@@ -8176,7 +8176,6 @@
     "/v1/runtime/status": {
       "get": {
         "tags": [
-          "runs",
           "runs"
         ],
         "summary": "Runtime Status",

@@ -368,3 +368,48 @@ async def test_runtime_status_reports_the_tenant_and_never_the_token(client):
         assert (await client.get("/v1/runtime/status", headers=approver)).status_code == 403
     finally:
         set_runtime(None)
+
+
+async def test_whoami_has_one_deadline_and_never_echoes_a_token():
+    import asyncio
+
+    from oracle.swarm import RuntimeUnavailable
+
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(2)
+        return httpx.Response(200, json={"tenant": {"tenant_id": "u-or-9a0792"}})
+
+    runtime = SwarmCloudRuntime(
+        "https://swarm.test",
+        StaticBearer("sc-bearer"),
+        timeout=0.2,
+        transport=httpx.MockTransport(slow),
+    )
+    started = asyncio.get_running_loop().time()
+    with pytest.raises(RuntimeUnavailable, match="within 0.2 s"):
+        await runtime.whoami()
+    assert asyncio.get_running_loop().time() - started < 1
+
+    def echo(request: httpx.Request) -> httpx.Response:
+        auth = request.headers["Authorization"]
+        return httpx.Response(403, json={"detail": f"refused {auth} eyJhbGciOiJSUzI1NiJ9.e30.sig"})
+
+    runtime = SwarmCloudRuntime(
+        "https://swarm.test", StaticBearer("sc-bearer"), transport=httpx.MockTransport(echo)
+    )
+    with pytest.raises(RuntimeUnavailable) as err:
+        await runtime.whoami()
+    assert "sc-bearer" not in str(err.value) and "eyJ" not in str(err.value)
+    assert "<withheld>" in str(err.value)
+
+    for body in ([1, 2], "text", {"tenant": {"tenant_id": 42}}):
+        runtime = SwarmCloudRuntime(
+            "https://swarm.test",
+            StaticBearer("sc-bearer"),
+            transport=httpx.MockTransport(lambda r, b=body: httpx.Response(200, json=b)),
+        )
+        if isinstance(body, dict):
+            assert await runtime.whoami() == {"tenant_id": "42"}
+        else:
+            with pytest.raises(RuntimeUnavailable, match="unexpected body"):
+                await runtime.whoami()
