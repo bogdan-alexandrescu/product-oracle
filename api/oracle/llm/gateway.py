@@ -15,7 +15,8 @@ the account refused for quota (a rejected ``rate_limit_event``) moves the hold t
 another account (``exhausted``) and runs again there; a credential that will not read
 moves it too (``unusable``). Every reading the stream carried is merged into the
 account. The hold is released when the call ends, however it ends (a cancelled call's
-Claude Code process is gone first, ``transports``).
+Claude Code process is gone first, ``transports``), and a call cancelled while its
+account was being assigned gives back the hold that assignment took.
 
 A caller with a time limit (the run ticker) passes ``deadline`` (``time.monotonic()``):
 no account swap or call starts unless a whole call (``ORACLE_LLM_TIMEOUT_SECONDS``) still
@@ -26,6 +27,8 @@ had.
 Agent workflows do not run here: they run in SwarmCloud on SwarmCloud's accounts.
 """
 
+import asyncio
+import logging
 import time
 import uuid
 from collections.abc import Callable
@@ -55,6 +58,8 @@ from oracle.llm.transports import (
     get_llm_settings,
 )
 from oracle.tenancy import current_tenant
+
+log = logging.getLogger(__name__)
 
 #: The built-in jobs that run on the pool; recorded as the hold's task.
 JOBS = ("review_comments", "reporting", "refinement", "quality_review")
@@ -162,7 +167,7 @@ async def complete(
     ts = transports or get_transports()
     attempt_id = uuid.uuid4().hex
 
-    got = await pool.assign(tenant_id, job=job, attempt_id=attempt_id)
+    got = await _assign(tenant_id, job=job, attempt_id=attempt_id)
     if isinstance(got, pool.NoAccount):
         if not got.is_pool_absent:
             raise NoClaudeAccount(
@@ -247,6 +252,38 @@ async def complete(
         raise NoClaudeAccount("No Claude account's credential could be read", "unusable")
     finally:
         await pool.release(tenant_id, assignment, unusable=unusable)
+
+
+async def _assign(
+    tenant_id: uuid.UUID, *, job: str, attempt_id: str
+) -> pool.Assignment | pool.NoAccount:
+    """``pool.assign``, shielded: cancelled meanwhile, the hold it took is given back
+    before the cancel goes on (the release in ``complete`` has no assignment yet)."""
+    assigning = asyncio.ensure_future(pool.assign(tenant_id, job=job, attempt_id=attempt_id))
+    try:
+        return await asyncio.shield(assigning)
+    except asyncio.CancelledError:
+        giving_back = asyncio.ensure_future(_give_back(tenant_id, assigning))
+        while not giving_back.done():
+            try:
+                await asyncio.shield(giving_back)
+            except asyncio.CancelledError:
+                pass  # cancelled again: the hold still goes back first
+        raise
+
+
+async def _give_back(
+    tenant_id: uuid.UUID, assigning: "asyncio.Future[pool.Assignment | pool.NoAccount]"
+) -> None:
+    try:
+        got = await assigning
+    except Exception:
+        return  # nothing was assigned
+    if isinstance(got, pool.Assignment):
+        try:
+            await pool.release(tenant_id, got)
+        except Exception:
+            log.exception("could not give back the hold of a call cancelled while assigned")
 
 
 class _NoSwap(NoClaudeAccount):

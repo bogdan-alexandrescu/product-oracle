@@ -13,9 +13,9 @@ balancer). Use your own values; none are written here.
 
 ## What the endpoint accepts
 
-- Only a Google ID token as the bearer credential of the `Authorization` header, signed by Google (RS256, checked against
-  https://www.googleapis.com/oauth2/v3/certs, cached for an hour), issuer
-  `https://accounts.google.com` or `accounts.google.com`, audience a single string equal
+- Only a Google ID token as the bearer credential of the `Authorization` header, signed
+  by Google (RS256, checked against https://www.googleapis.com/oauth2/v3/certs, cached
+  for an hour), issuer `https://accounts.google.com` or `accounts.google.com`, audience a single string equal
   to `ORACLE_TICKER_AUDIENCE` (a list audience is refused, even one that contains it),
   `email` exactly equal to `ORACLE_TICKER_SERVICE_ACCOUNT` (no case folding) with
   `email_verified` true, not expired (30 s leeway), and a lifetime (`exp - iat`) of at
@@ -38,27 +38,43 @@ balancer). Use your own values; none are written here.
   nor its jobs (`ORACLE_LLM_JOBS_MAX_PER_TICK=0` runs none). A tick is cut off after
   240 s.
 - The Claude account sweep runs for a company only when its last sweep completed more
-  than `ORACLE_CLAUDE_SWEEP_SECONDS` (300 s) ago, and never more often than every 300 s
-  whatever that setting, including `0`, which only turns the API's in-process sweep off
-  (`claude_accounts.not_due` counts the others): Anthropic's usage endpoint allows about
-  five calls per five minutes per account. `POST /v1/internal/tick` and `oracle tick`
-  apply the same check (their `claude_accounts.lease` is `not_due`), so a cron running
-  `oracle tick` every minute sweeps no more often either. A `429` from it is kept with its `retry-after` (at most an hour): no usage
+  than `ORACLE_CLAUDE_SWEEP_SECONDS` (300 s) ago (`claude_accounts.not_due` counts the
+  others). Whatever that setting (`0` only turns the API's in-process sweep off), no
+  sweep of a company starts within 300 s of the completion of its last one: the check
+  is made again in the transaction that takes the company's sweep lease, so it holds
+  for every entry point (this tick, `POST /v1/internal/tick`, `oracle tick`, the API's
+  in-process sweep, an owner's "sweep now") across any number of API instances, and two
+  callers that both found a company due sweep it once. Anthropic's usage endpoint
+  allows about five calls per five minutes per account. `POST /v1/internal/tick` and
+  `oracle tick` answer `claude_accounts.lease` `not_due` when not due, so a cron
+  running `oracle tick` every minute sweeps no more often either. (A sweep whose process
+  died mid-sweep records no completion: the next may start once its 120 s lease lapses.)
+  A `429`
+  from the usage endpoint is kept with its `retry-after` (at most an hour): no usage
   poll of that company starts before it, from any sweep.
+- While both ticker settings are set, the API starts no in-process sweep task at all
+  (whatever `ORACLE_CLAUDE_SWEEP_SECONDS`): the ticker sweeps, once for all instances.
 - A built-in job is claimed only when a whole model call (`ORACLE_LLM_TIMEOUT_SECONDS`,
   plus 5 s) still fits before the 240 s cut-off, and its calls get that deadline: no
   account swap and no further call (a call can move to up to three accounts) starts unless
-  a whole call still fits. Out of time, the job fails transiently, which counts as an
-  attempt. With the default 300 s timeout no job fits, and built-in jobs run only from the
-  API's background worker (`ORACLE_LLM_JOBS_WORKER_SECONDS`) and `oracle tick`; set
-  `ORACLE_LLM_TIMEOUT_SECONDS` to at most 180 for the scheduled tick to run them.
-- The tick can still cut a job mid-call, when a call or the work around it overruns. Claude
-  Code's process is then killed, and the account's hold given back once it is gone. A job
-  cut before any model call started goes back to `queued` with its attempt given back and
-  nothing recorded as spent. A job cut after one started counts the attempt and records
-  what is known (the account, any call that finished; not the cut call's usage, which
-  never arrived): it goes back to `queued` once, then fails, so a job whose calls keep
-  overrunning cannot hold the tick forever.
+  a whole call still fits. Out of time before any call started, the job goes back to
+  `queued` with its attempt given back; out of time after one had (no time to swap to
+  another account), it fails transiently, which counts as an attempt. The default
+  timeout, 180 s, fits with a minute to spare; over 235 s no job fits, and built-in jobs
+  run only from the API's background worker (`ORACLE_LLM_JOBS_WORKER_SECONDS`); the API
+  logs a warning at startup when the ticker is configured and no call fits.
+  `POST /v1/internal/tick` (so `oracle tick`) runs jobs inside the same 240 s, from the
+  start of its request.
+- The tick can still cut a job mid-call, when a call or the work around it overruns.
+  Claude Code's process is then killed, and the account's hold given back once it is
+  gone. If the API process itself dies (SIGKILL, out of memory), Claude Code dies with it
+  on Linux (`PR_SET_PDEATHSIG`); anything else left over ends with the instance, and the
+  sweep reclaims the account's hold once it expires. A job cut before any model call
+  started goes back to `queued` with its attempt given back and nothing recorded as
+  spent. A job cut after one started counts the attempt and records what is known (the
+  account, any call that finished; not the cut call's usage, which never arrived): it
+  goes back to `queued` once, then fails, so a job whose calls keep overrunning cannot
+  hold the tick forever.
 - It is not in the OpenAPI document, so it is no MCP tool and the web client never sees it.
 
 ## 1. The service account (no roles)
@@ -203,7 +219,7 @@ off as well, unset `ORACLE_TICKER_AUDIENCE` (it answers 404).
 | 401 every minute | Audience differs from `ORACLE_TICKER_AUDIENCE` (scheme, host, path, trailing slash), or the job uses another service account. The API log's DEBUG line names the check. |
 | 404 | A setting is unset on the running revision. |
 | 503 | The API cannot reach www.googleapis.com for Google's certs, or the answer had no usable key (after a failure, retried every 30 s). |
-| `llm_jobs.ran` always 0 while jobs wait | `ORACLE_LLM_TIMEOUT_SECONDS` is over 180: no model call fits in a tick (see above). |
+| `llm_jobs.ran` always 0 while jobs wait | `ORACLE_LLM_TIMEOUT_SECONDS` is over 235: no model call fits in a tick (see above; the API logs a warning at startup). |
 | `{"skipped": "running"}` every minute | A tick never released the lock: check the database URL is session-mode (see step 2). |
 | 302 or IAP 403 | The path rule is missing: the request went to the IAP backend. |
 | A job `failed` with "cut off by the caller's time limit" | Its model calls kept running past the tick's 240 s cut-off twice: lower `ORACLE_LLM_TIMEOUT_SECONDS`, or let the background worker run it. |

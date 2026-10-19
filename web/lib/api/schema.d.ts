@@ -1021,7 +1021,10 @@ export interface paths {
         put?: never;
         /**
          * Sweep Claude Accounts
-         * @description Run the sweep now: reclaim holds, refresh credentials, read usage.
+         * @description Run the sweep now: reclaim holds, refresh credentials, read usage. Within five
+         *     minutes of the last sweep's completion only the holds are reclaimed
+         *     (``sweep_lease.not_due``): Claude's usage endpoint allows about five calls per five
+         *     minutes per account.
          */
         post: operations["sweep_claude_accounts"];
         delete?: never;

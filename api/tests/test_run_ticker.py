@@ -558,6 +558,171 @@ async def test_a_huge_retry_after_is_clamped(client, ticker_on, usage_polls, ret
     assert retry_at <= datetime.now(UTC) + claude_sweep.MAX_USAGE_RETRY_AFTER
 
 
+# --- the 300 s floor: from every entry point, whatever reads the due check first --------
+
+
+async def _always_due(*args) -> bool:
+    """A due check that read the company before another caller's sweep completed."""
+    return True
+
+
+async def test_a_stale_due_check_does_not_sweep_again(client, ticker_on, usage_polls, monkeypatch):
+    # The scheduled tick reads the company as due, then POST /v1/internal/tick sweeps it
+    # before the scheduled tick takes the lease: the recheck under the lease stops it.
+    polls, _ = usage_polls
+    tenant_id, _ = await seed_auth()
+    await add_account(tenant_id, "one")
+    headers = await token_with_role(tenant_id, "owner")
+    real_is_due = claude_sweep.is_due
+    v1_done = asyncio.Event()
+    checks: list[bool] = []
+
+    async def stale_is_due(*args) -> bool:
+        due = await real_is_due(*args)
+        checks.append(due)
+        if len(checks) == 1:
+            await v1_done.wait()
+        return due
+
+    monkeypatch.setattr(claude_sweep, "is_due", stale_is_due)
+    scheduled = asyncio.create_task(client.post(PATH, headers=bearer(id_token())))
+    while not checks:
+        await asyncio.sleep(0.01)
+    v1 = (await client.post("/v1/internal/tick", headers=headers)).json()["claude_accounts"]
+    v1_done.set()
+    out = (await scheduled).json()["claude_accounts"]
+    assert (v1["lease"], v1["polled"]) == ("ran", 1)
+    assert (out["polled"], out["examined"], out["not_due"]) == (0, 0, 1)
+    assert polls == ["acc-one"]
+
+
+async def test_two_in_process_schedulers_sweep_a_company_once(usage_polls, monkeypatch):
+    # Two API instances' background tasks, waking every 10 ms, every due check stale.
+    monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", 60)
+    monkeypatch.setattr(claude_sweep, "is_due", _always_due)
+    polls, _ = usage_polls
+    tenant_id, _ = await seed_auth()
+    await add_account(tenant_id, "one")
+    tasks = [asyncio.create_task(claude_sweep.run_scheduler(0.01)) for _ in range(2)]
+    try:
+        await asyncio.sleep(1.0)
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+    assert polls == ["acc-one"]
+
+
+async def test_a_sweep_completed_ten_seconds_ago_blocks_the_next(
+    client, ticker_on, usage_polls, monkeypatch
+):
+    polls, _ = usage_polls
+    tenant_id, _ = await seed_auth()
+    await add_account(tenant_id, "one")
+    first = await claude_sweep.sweep(tenant_id)
+    assert first["sweep_lease"]["acquired"] is True
+    await _age_sweep(tenant_id, 10)
+    monkeypatch.setattr(claude_sweep, "is_due", _always_due)
+
+    again = await claude_sweep.sweep(tenant_id)
+    assert again["sweep_lease"]["acquired"] is False
+    assert again["sweep_lease"]["not_due"] is True
+    assert claude_sweep.summarise_sweep(again).lease == "not_due"
+    # A shorter interval asked for cannot lower the floor.
+    assert (await claude_sweep.sweep(tenant_id, due_after=timedelta(0)))["sweep_lease"][
+        "not_due"
+    ] is True
+    # Nor can the owner's "sweep now", the ticks or the background task.
+    headers = await token_with_role(tenant_id, "owner")
+    resp = await client.post("/v1/claude-accounts/sweep", headers=headers)
+    assert resp.status_code == 200 and resp.json()["result"]["sweep_lease"]["not_due"] is True
+    v1 = (await client.post("/v1/internal/tick", headers=headers)).json()["claude_accounts"]
+    assert v1["lease"] == "not_due"
+    out = (await client.post(PATH, headers=bearer(id_token()))).json()["claude_accounts"]
+    assert (out["polled"], out["not_due"]) == (0, 1)
+    await claude_sweep.sweep_every_company()
+    assert polls == ["acc-one"]
+
+
+async def test_the_background_sweep_at_sixty_seconds_sweeps_at_most_every_five_minutes(
+    usage_polls, monkeypatch
+):
+    # ORACLE_CLAUDE_SWEEP_SECONDS=60: the task wakes every minute (simulated here by
+    # ageing the last sweep a minute per wake), and sweeps only past the 300 s floor.
+    monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", 60)
+    polls, _ = usage_polls
+    tenant_id, _ = await seed_auth()
+    await add_account(tenant_id, "one")
+    wakes: list[float] = []
+
+    class Stop(Exception):
+        pass
+
+    async def a_minute_later(seconds: float) -> None:
+        if len(wakes) == 10:
+            raise Stop
+        wakes.append(seconds)
+        await _age_sweep(tenant_id, seconds)
+
+    with pytest.raises(Stop):
+        await claude_sweep.run_scheduler(60, sleep=a_minute_later)
+    # Ten minutes: swept on the first wake and five minutes later, not every minute.
+    assert wakes == [60] * 10
+    assert polls == ["acc-one", "acc-one"]
+
+
+async def test_no_in_process_sweep_runs_while_the_ticker_is_configured(ticker_on, monkeypatch):
+    from oracle import main
+
+    started: list[float] = []
+
+    async def scheduler(interval: float) -> None:
+        started.append(interval)
+        await asyncio.Event().wait()
+
+    async def keep_engine() -> None:
+        return None
+
+    monkeypatch.setattr(main, "run_scheduler", scheduler)
+    monkeypatch.setattr(main, "dispose_engine", keep_engine)
+    monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", 60)
+    async with main.lifespan(main.app):
+        await asyncio.sleep(0)
+    assert started == []
+    # Without the ticker, the background task is what sweeps.
+    monkeypatch.setattr(get_settings(), "ticker_audience", "")
+    async with main.lifespan(main.app):
+        await asyncio.sleep(0)
+    assert started == [60]
+
+
+def test_the_default_model_call_fits_in_a_tick(monkeypatch):
+    from oracle.llm.transports import LlmSettings
+
+    monkeypatch.delenv("ORACLE_LLM_TIMEOUT_SECONDS", raising=False)
+    timeout = LlmSettings(_env_file=None).timeout_seconds
+    assert timeout + llm_jobs.JOB_OVERHEAD_SECONDS <= ticker.HARD_LIMIT_SECONDS
+
+
+@pytest.mark.parametrize(("timeout", "warned"), [(300.0, True), (180.0, False)])
+async def test_a_model_call_timeout_no_tick_can_fit_is_warned_at_startup(
+    ticker_on, monkeypatch, caplog, timeout, warned
+):
+    from oracle import main
+
+    async def keep_engine() -> None:
+        return None
+
+    monkeypatch.setattr(main, "dispose_engine", keep_engine)
+    monkeypatch.setattr(main.log, "disabled", False)  # alembic's logging config
+    monkeypatch.setattr(get_llm_settings(), "timeout_seconds", timeout)
+    with caplog.at_level(logging.WARNING, logger="oracle.main"):
+        async with main.lifespan(main.app):
+            pass
+    said = [r.getMessage() for r in caplog.records if r.name == "oracle.main"]
+    assert any("ORACLE_LLM_TIMEOUT_SECONDS" in m for m in said) is warned
+
+
 # --- built-in model jobs: never cut mid-call, put back when cancelled, one share each ----
 
 
@@ -684,6 +849,54 @@ async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
     assert out["llm_jobs"]["succeeded"] == 1
     [job] = await _jobs(tenant_id)
     assert (job.status, job.attempts) == ("succeeded", 1)
+
+
+async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
+    client, ticker_on, claude, monkeypatch
+):
+    tenant_id = await _backlog(client, 1)
+    monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.6)
+    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.5)
+    slow = [True]
+
+    async def slow_inputs(s, job, ask):
+        # Reading the inputs leaves less than a whole call: the gateway starts none.
+        if slow[0]:
+            await asyncio.sleep(1.0)
+        return await ask("review_comments", {"job": str(job.id)})
+
+    monkeypatch.setitem(kinds.RUNNERS, "review_comments", slow_inputs)
+    out = (await client.post(PATH, headers=bearer(id_token()))).json()
+    assert out["timed_out"] is False and claude.calls == []
+    assert out["llm_jobs"] == {"ran": 0, "succeeded": 0, "failed": 0, "retried": 0}
+    [job] = await _jobs(tenant_id)
+    assert (job.status, job.attempts, job.finished_at) == ("queued", 0, None)
+    assert (job.account_label, job.via, job.input_tokens) == (None, None, None)
+    # Its attempt was given back: the next tick runs it, as its first.
+    slow[0] = False
+    out = (await client.post(PATH, headers=bearer(id_token()))).json()
+    assert out["llm_jobs"]["succeeded"] == 1
+    [job] = await _jobs(tenant_id)
+    assert (job.status, job.attempts) == ("succeeded", 1)
+
+
+async def test_the_v1_tick_runs_jobs_only_inside_the_ticks_time_limit(client, claude, monkeypatch):
+    tenant_id = await _backlog(client, 5)
+    headers = await token_with_role(tenant_id, "owner")
+    monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
+    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 2.5)
+
+    async def slow(kind, payload):
+        await asyncio.sleep(0.8)
+
+    claude.on_call = slow
+    began = time.monotonic()
+    out = (await client.post("/v1/internal/tick", headers=headers)).json()
+    assert time.monotonic() - began < 2.5
+    statuses = [j.status for j in await _jobs(tenant_id)]
+    assert "running" not in statuses
+    assert 1 <= out["llm_jobs"]["ran"] == statuses.count("succeeded") < 5
+    assert statuses.count("queued") == 5 - out["llm_jobs"]["ran"]
 
 
 async def test_a_job_swaps_to_no_account_it_has_no_time_left_for(

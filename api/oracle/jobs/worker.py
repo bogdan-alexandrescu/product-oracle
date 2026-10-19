@@ -19,10 +19,11 @@ reclaimed the same way as a transient failure.
 A caller with a time limit (the run ticker) passes ``budget_seconds``: no job is
 claimed unless a whole model call (``ORACLE_LLM_TIMEOUT_SECONDS``) still fits, and the
 job's calls get that deadline (``gateway.complete``), so no account swap or further call
-starts that could not finish inside it (a transient failure instead). A job cancelled
-anyway (``CancelledError``) leaves no claim to go stale:
+starts that could not finish inside it. A job cut by that time limit -- out of time at
+the gateway (``LlmOutOfTime``) or cancelled (``CancelledError``) -- leaves no claim to go
+stale:
 - before any model call started, it goes back to ``queued`` with its attempt given back
-  and nothing recorded as spent;
+  and nothing recorded as spent (``deferred``);
 - once one had, the cut is a transient failure that counts the attempt (``queued`` once
   more, then ``failed``), recording what is known (the account, and any call that
   finished), so a job whose calls keep overrunning cannot run forever.
@@ -47,7 +48,13 @@ from oracle.jobs import kinds, prompting
 from oracle.jobs.models import LlmJob
 from oracle.jobs.schemas import LlmJobsTick
 from oracle.llm import gateway
-from oracle.llm.transports import LlmAuthError, LlmUnavailable, NoClaudeAccount, get_llm_settings
+from oracle.llm.transports import (
+    LlmAuthError,
+    LlmOutOfTime,
+    LlmUnavailable,
+    NoClaudeAccount,
+    get_llm_settings,
+)
 from oracle.tenancy import tenant_session, unscoped_session
 
 log = logging.getLogger(__name__)
@@ -84,7 +91,7 @@ def _now() -> datetime:
 
 @dataclass
 class Outcome:
-    status: str  # succeeded | failed | retried | cancelled
+    status: str  # succeeded | failed | retried | cancelled | deferred (put back unspent)
     error: str | None = None
 
 
@@ -306,6 +313,13 @@ async def _run_job(
 
         try:
             output = await kinds.RUNNERS[job.kind](s, job, ask)
+        except LlmOutOfTime as e:
+            await s.rollback()
+            if not call.started:
+                # Out of time before any model call: as if never claimed.
+                released = await release_claim(tenant_id, job_id)
+                return Outcome("deferred" if released else "cancelled")
+            return await _finish(s, job_id, call, "transient", str(e))
         except NoClaudeAccount as e:
             await s.rollback()
             return await _finish(
@@ -409,6 +423,8 @@ async def run_pending(
             break
         # Cancelled, run_job itself puts the job back or counts the cut.
         outcome = await run_job(tenant_id, job_id, transports, deadline=deadline)
+        if outcome.status == "deferred":
+            break  # put back unspent: no call fits in the time left
         out.ran += 1
         if outcome.status == "succeeded":
             out.succeeded += 1

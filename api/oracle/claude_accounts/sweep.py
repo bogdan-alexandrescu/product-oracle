@@ -4,11 +4,14 @@ Ported from SwarmCloud's ``/v1/quota/sweep`` (``quota_broker/main.py``:
 ``_prune_all_holds``, ``_sweep_account_pool``, ``_record_refreshes``, ``_poll_block``,
 ``_credential_phase``) and ``quota_broker/sweeplease.py``. Cloud Scheduler is replaced
 by the run ticker, ``oracle tick`` (``POST /v1/internal/tick``) and a background task in
-the API process (``ORACLE_CLAUDE_SWEEP_SECONDS``, every five minutes by default). The
-ticks sweep a company only when its last sweep completed at least
-``ORACLE_CLAUDE_SWEEP_SECONDS`` ago, and never more often than every five minutes
-(``MIN_TICK_SWEEP_INTERVAL``), whatever that setting: the usage endpoint allows about
-five calls per five minutes per account.
+the API process (``ORACLE_CLAUDE_SWEEP_SECONDS``, every five minutes by default; not
+started while the run ticker is configured). Each sweeps a company only when its last
+sweep completed more than ``ORACLE_CLAUDE_SWEEP_SECONDS`` ago (``sweep_if_due``), and no
+sweep -- from those, the owner's "sweep now" or any number of processes -- starts
+within ``MIN_SWEEP_INTERVAL`` (five minutes) of the last one's completion: that is
+checked again under the lease, in the transaction that takes it (``acquire_lease``), so
+two callers that both read a company as due sweep it once. The usage endpoint allows
+about five calls per five minutes per account.
 
 The hold backstop runs outside the lease (it is idempotent). The credential phase --
 every exchange and every usage poll -- runs under the company's sweep lease, renewed
@@ -58,10 +61,10 @@ LEASE_TTL = timedelta(seconds=120)
 SWEEP_OK = "ok"
 SWEEP_ERROR = "error"
 
-#: A tick (scheduled, ``POST /v1/internal/tick`` or ``oracle tick``) sweeps a company at
-#: most this often, even with ORACLE_CLAUDE_SWEEP_SECONDS lower (or 0, the background
-#: sweep off): Anthropic's usage endpoint allows about 5 calls per 5 minutes per account.
-MIN_TICK_SWEEP_INTERVAL = timedelta(seconds=300)
+#: No sweep of a company starts within this of its last one's completion, from any entry
+#: point, whatever ORACLE_CLAUDE_SWEEP_SECONDS (0 only turns the background sweep off):
+#: Anthropic's usage endpoint allows about 5 calls per 5 minutes per account.
+MIN_SWEEP_INTERVAL = timedelta(seconds=300)
 
 #: A 429's retry-after is kept for at most this long (a bogus header stops no poll for days).
 MAX_USAGE_RETRY_AFTER = timedelta(hours=1)
@@ -75,8 +78,8 @@ _WROTE_A_VERSION = ("refreshed", "published", "published_unverified")
 class PoolSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ORACLE_CLAUDE_", env_file=".env", extra="ignore")
 
-    # The background sweep's interval; 0 turns it off (ticks still sweep, at most every
-    # MIN_TICK_SWEEP_INTERVAL).
+    # How often a company is swept (never more often than MIN_SWEEP_INTERVAL), and how
+    # often the background task looks; 0 turns that task off (ticks still sweep).
     sweep_seconds: int = 300
     # Usage polls per sweep (the endpoint allows ~5 per 5 minutes, shared).
     max_polls_per_sweep: int = usage.DEFAULT_MAX_POLLS_PER_SWEEP
@@ -130,6 +133,9 @@ class LeaseState:
     holder: str | None
     expires_at: datetime | None
     generation: int | None
+    # Not taken because the last sweep completed within the floor (``acquire_lease``).
+    not_due: bool = False
+    last_completed_at: datetime | None = None
 
 
 def new_holder() -> str:
@@ -145,14 +151,30 @@ async def _lease_row(session: Any, tenant_id: uuid.UUID) -> ClaudeSweepLease:
     return await session.scalar(select(ClaudeSweepLease).with_for_update())
 
 
-async def acquire_lease(tenant_id: uuid.UUID, holder: str, now: datetime) -> LeaseState:
-    """Take the lease if nobody holds it, it was released, or its deadline passed."""
+async def acquire_lease(
+    tenant_id: uuid.UUID,
+    holder: str,
+    now: datetime,
+    *,
+    due_after: timedelta = MIN_SWEEP_INTERVAL,
+) -> LeaseState:
+    """Take the lease if nobody holds it, it was released, or its deadline passed, and
+    the last sweep completed more than ``due_after`` (at least ``MIN_SWEEP_INTERVAL``)
+    before ``now``. Both are read under the row lock, so of two callers that each found
+    the company due, the second sees the first's completion and does not sweep."""
+    floor = max(due_after, MIN_SWEEP_INTERVAL)
     async with tenant_session(tenant_id) as s:
         row = await _lease_row(s, tenant_id)
         expires = row.expires_at
         if row.holder and not row.released and expires is not None and expires > now:
             await s.commit()
             return LeaseState(False, row.holder, expires, row.generation)
+        last = row.last_completed_at
+        if last is not None and now - last <= floor:
+            await s.commit()
+            return LeaseState(
+                False, row.holder, expires, row.generation, not_due=True, last_completed_at=last
+            )
         row.holder = holder
         row.released = False
         row.expires_at = now + LEASE_TTL
@@ -207,16 +229,21 @@ async def is_due(tenant_id: uuid.UUID, interval: timedelta, now: datetime) -> bo
 
 
 def tick_sweep_interval() -> timedelta:
-    """How long after a company's last sweep a tick sweeps it again: at least 5 minutes."""
+    """How long after a company's last sweep it is swept again: at least 5 minutes."""
     configured = timedelta(seconds=max(0, get_pool_settings().sweep_seconds))
-    return max(configured, MIN_TICK_SWEEP_INTERVAL)
+    return max(configured, MIN_SWEEP_INTERVAL)
 
 
 async def sweep_if_due(tenant_id: uuid.UUID) -> dict[str, Any] | None:
-    """A tick's sweep: the company's sweep if due (``tick_sweep_interval``), else None."""
-    if not await is_due(tenant_id, tick_sweep_interval(), datetime.now(UTC)):
+    """The company's sweep if due (``tick_sweep_interval``), else None.
+
+    Every scheduled entry point goes through here: the ticks and the background task.
+    This first read only spares a company that is not due its hold pruning; the sweep
+    checks again under the lease, where it counts."""
+    interval = tick_sweep_interval()
+    if not await is_due(tenant_id, interval, datetime.now(UTC)):
         return None
-    return await sweep(tenant_id)
+    return await sweep(tenant_id, due_after=interval)
 
 
 async def usage_retry_at(tenant_id: uuid.UUID) -> datetime | None:
@@ -424,8 +451,17 @@ async def poll_usage(
     }
 
 
-async def sweep(tenant_id: uuid.UUID, *, now: datetime | None = None) -> dict[str, Any]:
-    """One company's whole sweep. Never raises: ``oracle tick`` advances runs too."""
+async def sweep(
+    tenant_id: uuid.UUID,
+    *,
+    now: datetime | None = None,
+    due_after: timedelta = MIN_SWEEP_INTERVAL,
+) -> dict[str, Any]:
+    """One company's whole sweep. Never raises: ``oracle tick`` advances runs too.
+
+    The hold backstop always runs; the credential phase only when the last sweep
+    completed more than ``due_after`` ago (never under ``MIN_SWEEP_INTERVAL``), checked
+    as the lease is taken: otherwise ``sweep_lease`` says ``not_due``."""
     now = now or datetime.now(UTC)
     result: dict[str, Any] = {}
     try:
@@ -436,9 +472,17 @@ async def sweep(tenant_id: uuid.UUID, *, now: datetime | None = None) -> dict[st
 
     holder = new_holder()
     try:
-        taken = await acquire_lease(tenant_id, holder, now)
+        taken = await acquire_lease(tenant_id, holder, now, due_after=due_after)
     except Exception as exc:
         result["sweep_lease"] = {"acquired": False, "error": type(exc).__name__}
+        return result
+    if taken.not_due:
+        last = taken.last_completed_at
+        result["sweep_lease"] = {
+            "acquired": False,
+            "not_due": True,
+            "last_completed_at": last.isoformat() if last else None,
+        }
         return result
     if not taken.acquired:
         result["sweep_lease"] = {
@@ -471,21 +515,22 @@ async def sweep(tenant_id: uuid.UUID, *, now: datetime | None = None) -> dict[st
 
 
 async def sweep_every_company() -> None:
+    """Every company's sweep, where due (``sweep_if_due``)."""
     from oracle.models import Tenant
 
     async with unscoped_session() as s:
         tenant_ids = list((await s.scalars(select(Tenant.id))).all())
     for tenant_id in tenant_ids:
         try:
-            await sweep(tenant_id)
+            await sweep_if_due(tenant_id)
         except Exception:
             log.exception("the Claude account sweep failed for a company")
 
 
-async def run_scheduler(interval: float) -> None:
-    """The local background scheduler: one sweep of every company per interval."""
+async def run_scheduler(interval: float, *, sleep: Any = asyncio.sleep) -> None:
+    """The local background scheduler: every ``interval``, sweep the companies due."""
     while True:
-        await asyncio.sleep(interval)
+        await sleep(interval)
         try:
             await sweep_every_company()
         except Exception:
@@ -495,7 +540,8 @@ async def run_scheduler(interval: float) -> None:
 def summarise_sweep(result: dict[str, Any] | None) -> Any:
     """The sweep's result as ``oracle.runs.schemas.ClaudeSweepSummary`` for ``oracle tick``.
 
-    None (``sweep_if_due``: not due) is lease ``not_due``.
+    None (``sweep_if_due``: not due) is lease ``not_due``, as is a sweep that found the
+    last one too recent under the lease.
     """
     from oracle.runs.schemas import ClaudeSweepSummary
 
@@ -507,6 +553,12 @@ def summarise_sweep(result: dict[str, Any] | None) -> Any:
         if isinstance(result.get(block), dict) and "error" in result[block]
     ]
     lease = result.get("sweep_lease") or {}
+    if lease.get("acquired"):
+        state = "ran"
+    elif lease.get("not_due"):
+        state = "not_due"
+    else:
+        state = "error" if "error" in lease else "skipped"
     accounts = result.get("accounts") or {}
     return ClaudeSweepSummary(
         reclaimed=int((result.get("holds") or {}).get("reclaimed") or 0),
@@ -514,6 +566,6 @@ def summarise_sweep(result: dict[str, Any] | None) -> Any:
         refreshed=int(accounts.get("refreshed") or 0),
         reauth_required=list(accounts.get("marked_reauth_required") or []),
         polled=int((result.get("usage") or {}).get("polled") or 0),
-        lease="ran" if lease.get("acquired") else ("error" if "error" in lease else "skipped"),
+        lease=state,
         errors=errors,
     )

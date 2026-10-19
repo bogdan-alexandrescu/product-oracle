@@ -1,9 +1,12 @@
 """Built-in model calls on the Claude account pool, and how each credential is called."""
 
 import asyncio
+import contextlib
 import json
 import os
+import signal
 import stat
+import sys
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -511,3 +514,65 @@ async def test_a_cancelled_call_gives_its_hold_back_only_once_the_process_is_gon
         await task
     assert alive_at_release == [False] and not _alive(pid)
     assert (await get_account(tenant_id, account.account_id)).assigned == 0
+
+
+async def test_a_cancel_while_the_account_is_assigned_gives_the_hold_back(
+    tenant_id, fakes, monkeypatch
+):
+    account = await add_account(tenant_id, "alpha")
+    real_assign = gateway.pool.assign
+    taken = asyncio.Event()
+
+    async def slow_assign(*args, **kw):
+        got = await real_assign(*args, **kw)
+        # The hold is committed; the assignment has not reached the caller yet.
+        taken.set()
+        await asyncio.sleep(0.5)
+        return got
+
+    monkeypatch.setattr(gateway.pool, "assign", slow_assign)
+    task = asyncio.create_task(_call(tenant_id, fakes))
+    await taken.wait()
+    assert (await get_account(tenant_id, account.account_id)).assigned == 1
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert fakes.plan.calls == []
+    assert (await get_account(tenant_id, account.account_id)).assigned == 0
+
+
+API_PROCESS = """
+import asyncio, sys
+from oracle.llm.transports import ClaudeCodeTransport, LlmRequest
+request = LlmRequest(system="s", messages=[{"role": "user", "content": "hi"}],
+                     max_tokens=10, model="claude-opus-5")
+asyncio.run(ClaudeCodeTransport(claude_bin=sys.argv[1], timeout=120).complete("t", request))
+"""
+
+
+def _running(pid: int) -> bool:
+    """Alive and not a zombie (an orphan nobody reaps stays one, but is gone)."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except FileNotFoundError:
+        return False
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="PR_SET_PDEATHSIG is Linux's")
+async def test_claude_code_dies_with_the_api_process(slow_claude):
+    script, pidfile = slow_claude
+    api = await asyncio.create_subprocess_exec(sys.executable, "-c", API_PROCESS, script)
+    pid = await _started_pid(pidfile)
+    try:
+        # SIGKILL: no handler, no finally, nothing of the API process's own runs.
+        api.kill()
+        await api.wait()
+        for _ in range(200):
+            if not _running(pid):
+                break
+            await asyncio.sleep(0.025)
+        assert not _running(pid)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGKILL)

@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response, status
@@ -17,7 +18,12 @@ from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
 from oracle.jobs.router import router as llm_jobs_router
-from oracle.jobs.worker import get_worker_settings, run_worker
+from oracle.jobs.worker import (
+    JOB_OVERHEAD_SECONDS,
+    get_worker_settings,
+    job_seconds,
+    run_worker,
+)
 from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
 from oracle.members.router import router as members_router
@@ -29,16 +35,32 @@ from oracle.runs.router import router as runs_router
 from oracle.sources.router import router as sources_router
 from oracle.templates.router import router as templates_router
 from oracle.tenant_settings_api import router as settings_router
+from oracle.ticker.router import HARD_LIMIT_SECONDS
 from oracle.ticker.router import router as ticker_router
 from oracle.v2.router import router as v2_router
+
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings = get_settings()
+    ticker = bool(settings.ticker_audience.strip() and settings.ticker_service_account.strip())
+    if ticker and job_seconds() > HARD_LIMIT_SECONDS:
+        log.warning(
+            "ORACLE_LLM_TIMEOUT_SECONDS is %.0f: no model call fits in a run ticker's %.0f s, "
+            "so the scheduled tick runs no built-in jobs; set it to at most %.0f "
+            "(docs/ops-run-ticker.md)",
+            job_seconds() - JOB_OVERHEAD_SECONDS,
+            HARD_LIMIT_SECONDS,
+            HARD_LIMIT_SECONDS - JOB_OVERHEAD_SECONDS,
+        )
     # The Claude account pool's local scheduler (SwarmCloud runs its sweep from Cloud
-    # Scheduler); `oracle tick` sweeps too. ORACLE_CLAUDE_SWEEP_SECONDS=0 turns it off.
+    # Scheduler): it sweeps the companies due, never one within five minutes of its last
+    # sweep. Not started while the run ticker is configured: the ticker sweeps then, once
+    # for every instance. ORACLE_CLAUDE_SWEEP_SECONDS=0 turns it off.
     interval = get_pool_settings().sweep_seconds
-    tasks = [asyncio.create_task(run_scheduler(interval))] if interval > 0 else []
+    tasks = [asyncio.create_task(run_scheduler(interval))] if interval > 0 and not ticker else []
     # The local worker for built-in model jobs; `oracle tick` runs them too.
     # ORACLE_LLM_JOBS_WORKER_SECONDS=0 turns it off.
     every = get_worker_settings().worker_seconds
