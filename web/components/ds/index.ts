@@ -10,4 +10,6 @@ export { InfoTip } from "./InfoTip";
 export { Inspector, InspectorRow, InspectorSection, type InspectorStat } from "./Inspector";
 export { JOURNEY_STEPS, JourneyTrack, type JourneyStep } from "./Journey";
 export { Empty, Label, Notice, Page, PageHeader, Panel, Split } from "./Layout";
+export { PageTabsProvider } from "./PageTabs";
+export { ScrollStrip } from "./ScrollStrip";
 export { SegmentedControl, type Segment } from "./SegmentedControl";

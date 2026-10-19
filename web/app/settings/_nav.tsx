@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
+
+import { ScrollStrip } from "@/components/ds";
 
 const ITEMS = [
   { label: "Members", href: "/settings/members", testId: "nav-members" },
@@ -12,31 +15,48 @@ const ITEMS = [
   { label: "Themes", href: "/settings/themes", testId: "nav-themes" },
 ];
 
-/** Settings' own sections, a strip under the page header (like the PRD sections strip). */
+/**
+ * Settings' own sections: a strip under the page title (PageHeader draws it, see the
+ * settings layout). Evidence search (/sources) lives under Sources.
+ */
 export function SettingsNav() {
   const pathname = usePathname();
+  const strip = useRef<HTMLDivElement>(null);
+  // On a phone the strip scrolls: bring the current tab into view.
+  useEffect(() => {
+    const s = strip.current;
+    const on = s?.querySelector<HTMLElement>("[aria-current=page]");
+    if (!s || !on) return;
+    const right = on.offsetLeft - s.offsetLeft + on.offsetWidth;
+    if (right > s.scrollLeft + s.clientWidth) s.scrollLeft = right - s.clientWidth + 32;
+  }, [pathname]);
   return (
     <nav
       aria-label="Settings"
       data-testid="settings-nav"
-      className="mb-4 flex min-h-12 items-center gap-1 overflow-x-auto rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
+      className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
     >
-      {ITEMS.map((it) => {
-        const on = pathname === it.href || pathname.startsWith(`${it.href}/`);
-        return (
-          <Link
-            key={it.href}
-            href={it.href}
-            data-testid={it.testId}
-            aria-current={on ? "page" : undefined}
-            className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap ${
-              on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
-            }`}
-          >
-            {it.label}
-          </Link>
-        );
-      })}
+      <ScrollStrip ref={strip} className="min-h-9" stripClassName="items-center gap-1">
+        {ITEMS.map((it) => {
+          const on =
+            pathname === it.href ||
+            pathname.startsWith(`${it.href}/`) ||
+            (it.href === "/settings/sources" && (pathname === "/sources" || pathname.startsWith("/sources/")));
+          return (
+            <Link
+              key={it.href}
+              href={it.href}
+              data-testid={it.testId}
+              aria-current={on ? "page" : undefined}
+              className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap ${
+                on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
+              }`}
+            >
+              {it.label}
+            </Link>
+          );
+        })}
+      </ScrollStrip>
     </nav>
   );
 }

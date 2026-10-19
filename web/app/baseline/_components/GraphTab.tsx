@@ -50,6 +50,8 @@ function TitleButton({ entity, onOpen, className = "" }: { entity: EntityOut; on
 /**
  * The feature × goal Ledger (B1): features grouped by product, a column per goal with
  * each supports link's contribution, then the goals with their metric, target and horizon.
+ * On a phone the grid becomes a list: each feature's title, then its goal links as small
+ * G-tags with their strength.
  */
 export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm }: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
@@ -116,6 +118,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       key: "target",
       header: "Target",
       width: "100px",
+      phoneLabel: "Target",
       cell: (g) => (
         <span data-attr="target" className="tnum font-semibold">
           {formatValue(g.attrs?.target)}
@@ -168,6 +171,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       header: <span className="sr-only">Action</span>,
       width: "104px",
       align: "right",
+      phone: "action",
       cell: (g) =>
         g.status === "proposed" ? (
           <Button
@@ -253,7 +257,11 @@ function Ledger({
   const th = "bg-surface2 px-2 text-[13px] leading-4 font-semibold text-text2";
   return (
     <div className="min-w-0 overflow-clip">
-      <table aria-label="Feature × goal" className="w-full table-fixed border-collapse text-[15px] leading-[22px]">
+      <table
+        aria-label="Feature × goal"
+        role="table"
+        className="w-full table-fixed border-collapse text-[15px] leading-[22px] max-[600px]:block"
+      >
         <colgroup>
           <col />
           <col className="w-[132px] max-[600px]:hidden" />
@@ -262,7 +270,7 @@ function Ledger({
             <col key={g.id} className="w-[124px] max-[1100px]:w-[96px] max-[600px]:w-[52px]" />
           ))}
         </colgroup>
-        <thead>
+        <thead className="max-[600px]:sr-only">
           <tr>
             <th scope="col" className={`${th} h-9 pl-4 text-left align-bottom max-[600px]:pl-3`}>
               Feature
@@ -303,9 +311,15 @@ function Ledger({
             key={group.id}
             data-testid={group.product ? `product-${group.product.key}` : "product-unassigned"}
             aria-label={`Features of ${group.product?.title ?? "Unassigned"}`}
+            role="rowgroup"
+            className="max-[600px]:block"
           >
-            <tr className="border-t border-line bg-surface2">
-              <th colSpan={cols} scope="colgroup" className="h-9 px-4 text-left max-[600px]:px-3">
+            <tr role="row" className="border-t border-line bg-surface2 max-[600px]:block">
+              <th
+                colSpan={cols}
+                scope="colgroup"
+                className="h-9 px-4 text-left max-[600px]:flex max-[600px]:items-center max-[600px]:px-3"
+              >
                 <span className="flex min-w-0 items-center gap-2">
                   {group.product ? (
                     <>
@@ -331,6 +345,7 @@ function Ledger({
                 key={f.id}
                 feature={f}
                 goals={goals}
+                tags={tags}
                 links={links.get(f.id)}
                 trace={traceById.get(f.id)}
                 low={low}
@@ -349,6 +364,7 @@ function Ledger({
 function FeatureRow({
   feature,
   goals,
+  tags,
   links,
   trace,
   low,
@@ -358,6 +374,7 @@ function FeatureRow({
 }: {
   feature: EntityOut;
   goals: EntityOut[];
+  tags: Map<string, string>;
   links: Map<string, EdgeOut> | undefined;
   trace: TraceFeature | undefined;
   low: number;
@@ -371,13 +388,14 @@ function FeatureRow({
       data-testid={`feature-${feature.key}`}
       data-selected={selected || undefined}
       onClick={() => onOpen(feature.id)}
-      className={`h-12 cursor-pointer border-t border-line hover:bg-surface2 ${
+      role="row"
+      className={`h-12 cursor-pointer border-t border-line hover:bg-surface2 max-[600px]:flex max-[600px]:h-auto max-[600px]:flex-wrap max-[600px]:items-center max-[600px]:gap-x-2 max-[600px]:gap-y-1.5 max-[600px]:px-3 max-[600px]:py-2.5 ${
         selected ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] hover:bg-accent-soft" : ""
       }`}
     >
-      <td className="px-2 py-1.5 pl-4 max-[600px]:pl-3">
+      <td role="cell" className="px-2 py-1.5 pl-4 max-[600px]:block max-[600px]:basis-full max-[600px]:p-0">
         <span className="flex min-w-0 items-center gap-2">
-          <TitleButton entity={feature} onOpen={onOpen} />
+          <TitleButton entity={feature} onOpen={onOpen} className="max-[600px]:font-medium max-[600px]:whitespace-normal" />
           <LockMark entity={feature} meId={meId} />
           {feature.status === "proposed" && (
             <span className="flex-none max-[600px]:hidden">
@@ -398,17 +416,29 @@ function FeatureRow({
           )}
         </span>
       </td>
-      <td className="truncate px-2 py-1.5 max-[600px]:hidden">
+      <td role="cell" className="truncate px-2 py-1.5 max-[600px]:hidden">
         <DeliveryChip value={feature.attrs?.status} />
       </td>
-      <td className="px-2 py-1.5 text-center max-[600px]:hidden">
+      <td role="cell" className="px-2 py-1.5 text-center max-[600px]:hidden">
         <ConfidenceRing value={feature.confidence} low={low} size={32} />
       </td>
       {goals.map((g) => {
         const e = links?.get(g.id);
         return (
-          <td key={g.id} className="border-l border-line px-2 py-1.5 text-center max-[600px]:px-1">
-            {e ? <LinkCell edge={e} low={low} /> : <Dot />}
+          <td
+            key={g.id}
+            role="cell"
+            className={`border-l border-line px-2 py-1.5 text-center max-[600px]:border-0 max-[600px]:p-0 ${
+              e ? "max-[600px]:block" : "max-[600px]:hidden"
+            }`}
+          >
+            <span className="max-[600px]:hidden">{e ? <LinkCell edge={e} low={low} /> : <Dot />}</span>
+            {e && (
+              <span className="hidden items-center gap-1.5 rounded-goal border border-line py-0.5 pr-2 pl-0.5 max-[600px]:inline-flex">
+                <GoalTag id={tags.get(g.id) ?? "G"} proposed={g.status === "proposed"} title={g.title} />
+                <ContributionPips value={contributionOf(e.attrs)} proposed={e.status === "proposed"} />
+              </span>
+            )}
           </td>
         );
       })}

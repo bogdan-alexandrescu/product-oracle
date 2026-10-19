@@ -279,6 +279,7 @@ function Pool({
     {
       key: "5h",
       header: "5h",
+      phoneLabel: "5h",
       width: "76px",
       align: "right",
       cell: (a) => <WindowFig reading={readingOf(a, FIVE_HOUR)} window="five-hour" />,
@@ -287,7 +288,8 @@ function Pool({
     {
       key: "clears",
       header: "Clears",
-      width: "150px",
+      width: "176px",
+      wrap: true,
       hideOnPhone: true,
       className: "text-text2",
       cell: (a) => <ClearsLine account={a} now={now} />,
@@ -295,7 +297,8 @@ function Pool({
     {
       key: "given",
       header: "Given out",
-      width: "150px",
+      width: "168px",
+      wrap: true,
       hideOnPhone: true,
       className: "text-text2",
       cell: (a) => (
@@ -465,7 +468,7 @@ function StatFig({ children, note, dim, title }: { children: ReactNode; note?: R
       >
         {children}
       </span>
-      {note && <span className="block truncate text-[13px] leading-4 text-text2">{note}</span>}
+      {note && <span className="block text-[13px] leading-4 text-text2">{note}</span>}
     </span>
   );
 }
@@ -474,7 +477,14 @@ function windowStat(reading: AccountReading, window: string): ReactNode {
   const title = readingTitle(reading, window);
   if (reading.kind === "never" || reading.kind === "absent") {
     return (
-      <StatFig title={title} note="not measured" dim>
+      <StatFig
+        dim
+        note={
+          <InfoTip label={`the ${window} window`} align="start">
+            Not measured. {title}
+          </InfoTip>
+        }
+      >
         —
       </StatFig>
     );
@@ -540,6 +550,7 @@ function Detail({
           <Chip hero>{account.provider} · Claude subscription</Chip>
         </>
       }
+      statColumns={2}
       stats={[
         { label: "5h used", testId: "tile-5h used", figure: windowStat(readingOf(account, FIVE_HOUR), "five-hour") },
         { label: "7d used", testId: "tile-7d used", figure: windowStat(readingOf(account, SEVEN_DAY), "seven-day") },

@@ -214,9 +214,9 @@ function FeatureInspector({ f, id }: { f: RankedFeature; id: string }) {
 
           {e.order && e.order.length > 0 && (
             <InspectorSection label="Order">
-              <ul className="space-y-1 text-sm">
+              <ul className="space-y-1.5 text-sm">
                 {e.order.map((o, i) => (
-                  <li key={i}>{o}</li>
+                  <OrderReason key={i} reason={o} />
                 ))}
               </ul>
             </InspectorSection>
@@ -410,11 +410,18 @@ export default function PrioritiesPage() {
       key: "rank",
       header: "#",
       width: "48px",
-      cell: (f) => <b className="tnum font-semibold">{f.rank}</b>,
+      phone: "meta",
+      cell: (f) => (
+        <b className="tnum font-semibold max-[600px]:text-text">
+          <span className="hidden max-[600px]:inline">#</span>
+          {f.rank}
+        </b>
+      ),
     },
     {
       key: "feature",
       header: "Feature",
+      phone: "title",
       cell: (f) => {
         const on = current?.key === f.key;
         return (
@@ -438,7 +445,6 @@ export default function PrioritiesPage() {
       key: "goal",
       header: "Goal",
       width: "80px",
-      hideOnPhone: true,
       cell: (f) =>
         f.explanation.goals.length === 0 ? (
           <span className="text-text2">—</span>
@@ -469,6 +475,7 @@ export default function PrioritiesPage() {
       header: "Score",
       width: "80px",
       align: "right",
+      phoneLabel: "Score",
       cell: (f) => (
         <span data-testid="score" className="tnum font-mono">
           {fmt(f.score)}
@@ -486,9 +493,8 @@ export default function PrioritiesPage() {
       key: "flags",
       header: "Flags",
       width: "240px",
-      hideOnPhone: true,
       cell: (f) => (
-        <span className="flex items-center gap-1.5 overflow-hidden">
+        <span className="flex items-center gap-1.5 overflow-hidden max-[600px]:flex-wrap">
           {f.flags.slice(0, 1).map((flag) => (
             <FlagChip key={flag} flag={flag} />
           ))}
@@ -608,8 +614,8 @@ export default function PrioritiesPage() {
               <DataTable<GoalRow>
                 label="By goal"
                 columns={[
-                  { key: "id", header: "", width: "64px", cell: (g) => <GoalTag id={g.id} /> },
-                  { key: "title", header: "Goal", cell: (g) => g.title },
+                  { key: "id", header: "", width: "64px", phone: "meta", cell: (g) => <GoalTag id={g.id} /> },
+                  { key: "title", header: "Goal", phone: "title", cell: (g) => g.title },
                   {
                     key: "count",
                     header: "Ranked features",
@@ -619,7 +625,7 @@ export default function PrioritiesPage() {
                       <Meter value={g.count} max={features.length} showMax={false} label={`${g.count} ranked features`} />
                     ),
                   },
-                  { key: "top", header: "Top rank", width: "96px", align: "right", cell: (g) => <span className="tnum">#{g.top}</span> },
+                  { key: "top", header: "Top rank", width: "96px", align: "right", phoneLabel: "Top", cell: (g) => <span className="tnum">#{g.top}</span> },
                 ]}
                 rows={goals}
                 rowKey={(g) => g.id}
@@ -632,4 +638,42 @@ export default function PrioritiesPage() {
       </div>
     </Page>
   );
+}
+
+/**
+ * The scorer's order reasons ("placed earlier because F-2 depend(s) on it") as a label and
+ * feature chips (rule 1: no prose), the meaning behind an (i); a reason of another shape is
+ * shown as given.
+ */
+const ORDER_REASONS: { re: RegExp; label: string; tip: string }[] = [
+  {
+    re: /^placed earlier because (.+) depend\(s\) on it$/,
+    label: "Moved for",
+    tip: "Ranked above its score because these features depend on it.",
+  },
+  {
+    re: /^placed after its prerequisite\(s\) (.+)$/,
+    label: "After",
+    tip: "Ranked below its score because it depends on these features.",
+  },
+];
+
+function OrderReason({ reason }: { reason: string }) {
+  for (const r of ORDER_REASONS) {
+    const m = reason.match(r.re);
+    if (!m) continue;
+    const keys = m[1]!.split(/,\s*/).filter(Boolean);
+    return (
+      <li className="flex flex-wrap items-center gap-1.5" data-reason={reason}>
+        <span className="font-semibold">{r.label}</span>
+        {keys.map((k) => (
+          <Chip key={k} kind="line">
+            <span className="font-mono">{k}</span>
+          </Chip>
+        ))}
+        <InfoTip label={r.label}>{r.tip}</InfoTip>
+      </li>
+    );
+  }
+  return <li>{reason}</li>;
 }

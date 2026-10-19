@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   Avatar,
@@ -26,6 +26,7 @@ import {
   PageHeader,
   Panel,
   Ring,
+  ScrollStrip,
   SegmentedControl,
   Sparkline,
   ToGo,
@@ -54,6 +55,34 @@ function HeroStrip({ children }: { children: ReactNode }) {
 
 function Body({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`flex flex-wrap gap-x-6 gap-y-4 p-4 ${className}`}>{children}</div>;
+}
+
+/**
+ * A scroll box as tall as the table's header plus its first `rows` rows, measured, so it
+ * never cuts a row in half (row heights differ on a phone, where rows stack).
+ */
+function WholeRows({ rows, testId, children }: { rows: number; testId: string; children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number>();
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => {
+      const last = el.querySelectorAll("tr[data-row]")[rows - 1];
+      if (!last) return setHeight(undefined);
+      const top = el.getBoundingClientRect().top - el.scrollTop;
+      setHeight(Math.ceil(last.getBoundingClientRect().bottom - top));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el.firstElementChild ?? el);
+    return () => ro.disconnect();
+  }, [rows]);
+  return (
+    <div ref={box} className="overflow-y-auto" style={{ maxHeight: height }} data-testid={testId}>
+      {children}
+    </div>
+  );
 }
 
 const columns: Column<SampleFeature>[] = [
@@ -120,7 +149,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         }
         testId={id("table-panel")}
       >
-        <div className="max-h-[232px] overflow-y-auto" data-testid={id("table-scroll")}>
+        <WholeRows rows={5} testId={id("table-scroll")}>
           <DataTable
             label="Sample features"
             testId={id("table")}
@@ -131,7 +160,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
             onSelect={(k) => setSelected(k)}
             onActivate={(k) => setOpened(k)}
           />
-        </div>
+        </WholeRows>
       </Panel>
 
       <Panel title="Grouped rows" className="col-span-full" testId={id("table-grouped")}>
@@ -336,6 +365,18 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
+      <Panel title="Scroll strip" testId={id("scroll-strip")}>
+        <Body className="flex-col">
+          <ScrollStrip className="w-full rounded-lg border border-line" stripClassName="gap-1 p-1">
+            {["Summary", "Goal trace", "Problem", "Users and jobs", "Scope", "Proposed flow", "Risks", "Metrics"].map((t) => (
+              <span key={t} className="flex h-8 flex-none items-center rounded-lg px-2.5 text-sm font-medium whitespace-nowrap">
+                {t}
+              </span>
+            ))}
+          </ScrollStrip>
+        </Body>
+      </Panel>
+
       <Panel title="Info tip" testId={id("infotips")}>
         <Body>
           <State name="Closed">
@@ -524,13 +565,13 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
       </Panel>
 
       <Panel title="Icons" count={ICONS.length} className="col-span-full" testId={id("icons")}>
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-1 p-3">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1 p-3">
           {ICONS.map((n) => (
             <li key={n} className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-text2">
               <span className="text-text">
                 <Icon name={n} />
               </span>
-              <span className="truncate font-mono text-[13px]">{n}</span>
+              <span className="min-w-0 font-mono text-[13px] break-all">{n}</span>
             </li>
           ))}
         </ul>

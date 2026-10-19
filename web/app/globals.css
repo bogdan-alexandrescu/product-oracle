@@ -271,11 +271,19 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* A strip that scrolls sideways: fades out at its right edge so a cut-off item reads as "more", not clipped.
-   The padding keeps the last item clear of the fade when nothing overflows. */
+/* A strip that scrolls sideways (ScrollStrip): fades out at each edge that has more to scroll to,
+   so a cut-off item reads as "more", not clipped. Nothing fades when everything fits. */
 @utility scroll-fade {
-  padding-right: 24px;
-  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  --fade-l: 0px;
+  --fade-r: 0px;
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent);
+  scrollbar-width: none;
+  &[data-more-left] {
+    --fade-l: 32px;
+  }
+  &[data-more-right] {
+    --fade-r: 32px;
+  }
 }
 :focus-visible {
   outline: 2px solid var(--accent);

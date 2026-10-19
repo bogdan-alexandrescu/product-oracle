@@ -23,6 +23,7 @@ export function Inspector({
   action,
   head,
   stats,
+  statColumns,
   children,
   label,
   testId,
@@ -36,11 +37,14 @@ export function Inspector({
   /** Extra content in the dark head (a ring and numerals). */
   head?: ReactNode;
   stats?: InspectorStat[];
+  /** Stats per row; more stats than this wrap onto a second row (default: all on one). */
+  statColumns?: number;
   children?: ReactNode;
   /** Accessible name of the region; defaults to the title when it is a string. */
   label?: string;
   testId?: string;
 }) {
+  const cols = Math.max(1, Math.min(statColumns ?? stats?.length ?? 1, stats?.length ?? 1));
   return (
     <aside
       aria-label={label ?? (typeof title === "string" ? title : "Inspector")}
@@ -59,12 +63,14 @@ export function Inspector({
         {head}
       </div>
       {stats && stats.length > 0 && (
-        <dl className="grid border-b border-line" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}>
-          {stats.map((s) => (
+        <dl className="grid border-b border-line" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+          {stats.map((s, i) => (
             <div
               key={s.label}
               data-testid={s.testId}
-              className="flex min-w-0 flex-col-reverse justify-end border-r border-line pt-3.5 pr-2 pb-3 pl-5 last:border-r-0 max-[600px]:pl-4"
+              className={`flex min-w-0 flex-col-reverse justify-end pt-3.5 pr-2 pb-3 pl-5 max-[600px]:pl-4 ${
+                (i + 1) % cols !== 0 && i !== stats.length - 1 ? "border-r border-line" : ""
+              } ${i >= cols ? "border-t border-line" : ""}`}
             >
               <dt className="mt-0.5 truncate text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{s.label}</dt>
               <dd>{s.figure ?? <Numeral value={s.value} of={s.of} tone={s.tone} />}</dd>

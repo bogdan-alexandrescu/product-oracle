@@ -20,6 +20,7 @@ import {
   LinkButton,
   Page,
   PageHeader,
+  ScrollStrip,
   SegmentedControl,
   Split,
 } from "@/components/ds";
@@ -461,7 +462,18 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             Imported
           </InspectorRow>
           {version.snapshot && (
-            <InspectorRow value={<span className="font-mono text-[13px] font-medium">{version.snapshot}</span>}>
+            <InspectorRow
+              value={
+                // A timestamp reads like every other date; anything else (a snapshot label) stays as given.
+                Number.isNaN(Date.parse(version.snapshot)) ? (
+                  <span className="font-mono text-[13px] font-medium">{version.snapshot}</span>
+                ) : (
+                  <span className="text-sm font-medium" title={version.snapshot}>
+                    {formatDateTime(version.snapshot)}
+                  </span>
+                )
+              }
+            >
               Sources as of
             </InspectorRow>
           )}
@@ -573,14 +585,16 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
         </div>
 
         {version && (
-          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-panel border border-line bg-surface py-2 pr-3 pl-4 shadow-panel">
+          // Three columns: the count, the strip (scrolls inside its own column), the view label.
+          <div className="mb-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-panel border border-line bg-surface py-2 pr-3 pl-4 shadow-panel max-[600px]:flex max-[600px]:flex-wrap">
             <span className="flex-none text-[13px] font-semibold tracking-[0.02em] whitespace-nowrap text-text2">
               Sections{" "}
               <b className="tnum font-bold text-text">
                 {reviewedCount}/{version.sections.length}
               </b>
             </span>
-            <nav aria-label="Sections" className="flex min-w-0 flex-1 gap-1 scroll-fade overflow-x-auto max-[600px]:order-last max-[600px]:basis-full">
+            <nav aria-label="Sections" className="min-w-0 max-[600px]:order-last max-[600px]:basis-full">
+              <ScrollStrip stripClassName="gap-1">
               {stripSections.map((s) => {
                 const v = s.verdict?.verdict;
                 return (
@@ -603,9 +617,13 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                   </a>
                 );
               })}
+              </ScrollStrip>
             </nav>
             {hasBrief && (
-              <p data-testid="view-note" className="flex flex-none items-center gap-1.5 text-sm text-text2">
+              <p
+                data-testid="view-note"
+                className="flex flex-none items-center gap-1.5 border-l border-line pl-3 text-sm text-text2 max-[600px]:border-l-0 max-[600px]:pl-0"
+              >
                 {view === "brief" ? (
                   <>
                     <span className="tnum whitespace-nowrap">

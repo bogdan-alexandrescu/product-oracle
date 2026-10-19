@@ -336,7 +336,7 @@ function SegmentItem({
       <div className="grid min-h-12 grid-cols-[40px_minmax(0,1fr)_minmax(0,190px)_120px_minmax(0,200px)] items-center gap-2 px-4 py-1.5 max-[600px]:grid-cols-[28px_minmax(0,1fr)_auto] max-[600px]:px-3">
         <span className="tnum font-semibold">{s.seq}</span>
         <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium">{s.title}</span>
+          <span className="truncate font-medium max-[600px]:whitespace-normal">{s.title}</span>
           {s.attempts.length > 1 && <Chip kind="na">attempt {s.attempts.length}</Chip>}
         </span>
         <span className="flex min-w-0 gap-1.5 overflow-hidden max-[600px]:hidden">

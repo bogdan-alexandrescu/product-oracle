@@ -50,7 +50,7 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
   await expect(detail(page).getByTestId("tile-7d used")).toContainText("12%");
   await expect(detail(page).getByTestId("tile-Clears")).toContainText("5h window");
   await row(page, "spare").getByRole("button").click();
-  await expect(detail(page).getByTestId("tile-5h used")).toContainText("not measured");
+  await expect(detail(page).getByTestId("tile-5h used")).toContainText(/not measured/i);
   await expect(detail(page).getByTestId("tile-Last given out")).toContainText("never");
 });
 

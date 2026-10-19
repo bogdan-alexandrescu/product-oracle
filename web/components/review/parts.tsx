@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { Button, Chip, Icon, type ChipKind } from "@/components/ds";
+import { Button, Chip, Icon, ScrollStrip, type ChipKind } from "@/components/ds";
 import type { FeedbackStatus, LlmJob, Verdict } from "@/lib/api/client";
 import { JOB_STATUS_LABEL, STATUS_LABEL, VERDICT_LABEL } from "@/lib/format";
 
@@ -116,12 +116,13 @@ export function TabBar<T extends string>({
     els[(at + (e.key === "ArrowRight" ? 1 : -1) + els.length) % els.length]?.focus();
   };
   return (
-    <div
+    <ScrollStrip
       ref={ref}
       role="tablist"
       aria-label={label}
       onKeyDown={onKey}
-      className="flex max-w-full gap-1 scroll-fade overflow-x-auto border-b border-line"
+      className="max-w-full border-b border-line"
+      stripClassName="gap-1"
     >
       {tabs.map((t) => {
         const on = t.id === value;
@@ -144,7 +145,7 @@ export function TabBar<T extends string>({
           </button>
         );
       })}
-    </div>
+    </ScrollStrip>
   );
 }
 

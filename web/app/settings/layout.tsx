@@ -1,19 +1,22 @@
 import { Suspense, type ReactNode } from "react";
 
-import { Page } from "@/components/ds";
+import { Page, PageTabsProvider } from "@/components/ds";
 
 import { SettingsNav } from "./_nav";
 
-/** Every settings page: the Settings strip, then the page (title, table, inspector). */
+/** Every settings page: the page (title, Settings tabs under it, table, inspector). */
 export default function SettingsLayout({ children }: { children: ReactNode }) {
   return (
     <Page>
-      <div className="pt-4">
-        <Suspense fallback={<div className="mb-4 h-12" />}>
-          <SettingsNav />
-        </Suspense>
-      </div>
-      {children}
+      <PageTabsProvider
+        tabs={
+          <Suspense fallback={<div className="h-12" />}>
+            <SettingsNav />
+          </Suspense>
+        }
+      >
+        {children}
+      </PageTabsProvider>
     </Page>
   );
 }

@@ -93,6 +93,8 @@ const PATHS = {
   ),
   arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
   back: <path d="M19 12H5M11 6l-6 6 6 6" />,
+  "chevron-left": <path d="M15 6l-6 6 6 6" />,
+  "chevron-right": <path d="M9 6l6 6-6 6" />,
   search: (
     <>
       <circle cx="11" cy="11" r="6" />

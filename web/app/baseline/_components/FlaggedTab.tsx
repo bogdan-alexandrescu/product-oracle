@@ -58,6 +58,7 @@ export function FlaggedTab({
     {
       key: "evidence",
       header: "Evidence",
+      phoneLabel: "Evidence",
       width: "84px",
       align: "right",
       cell: (f) => <span className="tnum">{f.evidence_count}</span>,
@@ -88,6 +89,7 @@ export function FlaggedTab({
     {
       key: "features",
       header: "Features",
+      phoneLabel: "Features",
       width: "92px",
       align: "right",
       cell: (g) => (
@@ -99,6 +101,7 @@ export function FlaggedTab({
     {
       key: "coverage",
       header: "Coverage",
+      phoneLabel: "Coverage",
       width: "96px",
       align: "right",
       cell: (g) =>

@@ -42,20 +42,26 @@ const COLUMNS: Column<Need>[] = [
     key: "kind",
     header: "Kind",
     width: "170px",
+    phone: "meta",
     cell: (n) => (
-      <span className="flex min-w-0 items-center gap-2.5" title={n.kind}>
+      <span className="flex min-w-0 items-center gap-2.5 max-[600px]:gap-1.5" title={n.kind}>
         <Icon name={n.icon} className="flex-none text-accent-ink" />
-        <span className="truncate font-medium max-[600px]:sr-only">{n.kind}</span>
+        <span className="truncate font-medium">{n.kind}</span>
       </span>
     ),
   },
-  { key: "item", header: "Item", cell: (n) => <span className="flex min-w-0 items-center gap-2.5">{n.item}</span> },
-  { key: "context", header: "For", width: "26%", hideOnPhone: true, cell: (n) => n.context },
+  {
+    key: "item",
+    header: "Item",
+    phone: "title",
+    cell: (n) => <span className="flex min-w-0 items-center gap-x-2.5 gap-y-1 max-[600px]:flex-wrap">{n.item}</span>,
+  },
+  { key: "context", header: "For", width: "26%", phone: "meta", cell: (n) => n.context },
   {
     key: "run",
     header: "Run",
     width: "64px",
-    hideOnPhone: true,
+    phone: "hide",
     cell: (n) => <span className="tnum font-mono text-sm text-text2">{n.run ?? ""}</span>,
   },
   {
@@ -63,7 +69,7 @@ const COLUMNS: Column<Need>[] = [
     header: "Age",
     width: "56px",
     align: "right",
-    hideOnPhone: true,
+    phone: "meta",
     cell: (n) => (
       <span className="tnum text-text2" title={n.at ? formatDateTime(n.at) : undefined}>
         {age(n.at)}
@@ -75,6 +81,7 @@ const COLUMNS: Column<Need>[] = [
     header: <span className="sr-only">Action</span>,
     width: "212px",
     align: "right",
+    phone: "action",
     cell: (n) => <span className="inline-flex flex-wrap justify-end gap-1.5">{n.action}</span>,
   },
 ];

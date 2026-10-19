@@ -74,6 +74,7 @@ function versionColumns(doc: string, latest: number | null | undefined): Column<
       header: "Changes",
       width: "128px",
       align: "right",
+      phone: "action",
       cell: (v) =>
         v.number > 1 ? (
           <Link href={`/documents/${doc}/diff?from=${v.number - 1}&to=${v.number}`} className="text-accent-ink hover:underline">

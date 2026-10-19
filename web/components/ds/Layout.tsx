@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { PageTabs } from "./PageTabs";
+
 /**
  * The page under the shell's top bar. Every screen uses it, so the title, status and
  * primary action sit in the same place everywhere (I3 rule 3).
@@ -11,6 +13,7 @@ export function Page({ children, className = "" }: { children: ReactNode; classN
 /**
  * Title and status top-left, one primary action top-right.
  * `back` renders above the title as a small crumb link (a document's PRDs, a run's Runs).
+ * Inside a PageTabsProvider (Settings), the section's tabs follow as the last line.
  */
 export function PageHeader({
   title,
@@ -30,17 +33,23 @@ export function PageHeader({
   back?: ReactNode;
   testId?: string;
 }) {
+  // One flat wrapping row. On a phone the title and the action share line 1 (the title
+  // wraps; a wide action drops below it), and the status chips get their own line under it,
+  // so nothing runs under the action.
   return (
     <header data-testid={testId} className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 py-3 max-[600px]:py-3.5">
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
-        {back && <div className="basis-full text-sm text-text2">{back}</div>}
-        <h1 className="min-w-0 font-display text-[28px] leading-8 font-bold tracking-[-0.02em] max-[600px]:text-2xl max-[600px]:leading-7">
-          {title}
-          {suffix && <span className="ml-1.5 align-baseline font-display text-lg font-semibold tracking-normal text-text2">{suffix}</span>}
-        </h1>
-        {status && <div className="flex flex-wrap items-center gap-2">{status}</div>}
+      {back && <div className="basis-full text-sm text-text2">{back}</div>}
+      <h1 className="min-w-0 font-display text-[28px] leading-8 font-bold tracking-[-0.02em] max-[600px]:flex-[1_1_7.5rem] max-[600px]:text-2xl max-[600px]:leading-7">
+        {title}
+        {suffix && <span className="ml-1.5 align-baseline font-display text-lg font-semibold tracking-normal text-text2">{suffix}</span>}
+      </h1>
+      <div
+        className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 max-[600px]:order-3 max-[600px]:basis-full ${status ? "" : "max-[600px]:hidden"}`}
+      >
+        {status}
       </div>
-      {action && <div className="flex flex-none items-center gap-2">{action}</div>}
+      {action && <div className="ml-auto flex flex-none flex-wrap items-center justify-end gap-2 max-[600px]:order-2">{action}</div>}
+      <PageTabs />
     </header>
   );
 }

@@ -31,12 +31,18 @@ export function JourneyTrack({
   const state = (i: number) => (i + 1 < current ? "done" : i + 1 === current ? "current" : "todo");
   const label = `Journey ${current} of ${steps.length}: ${steps[current - 1] ?? ""}`;
   const dots = (
-    <span role="img" aria-label={label} className="inline-flex items-center gap-[3px]" data-journey-current={current}>
+    // Fills its box up to 9 px dots, and shrinks the dots to fit a narrower one: all nine always show.
+    <span
+      role="img"
+      aria-label={label}
+      className="flex w-full max-w-[111px] min-w-[52px] items-center justify-between px-[2px]"
+      data-journey-current={current}
+    >
       {steps.map((s, i) => (
         <i
           key={s}
           title={s}
-          className={`size-[9px] rounded-full ${
+          className={`aspect-square w-[min(9px,calc((100%_-_16px)/9))] flex-none rounded-full ${
             state(i) === "done"
               ? "bg-accent"
               : state(i) === "current"
@@ -104,7 +110,7 @@ export function JourneyTrack({
         })}
       </ol>
       <span className="hidden items-center gap-2 text-sm font-medium max-[900px]:inline-flex">
-        {dots}
+        <span className="w-[111px] flex-none">{dots}</span>
         <b className="tnum font-semibold">
           {current}/{steps.length}
         </b>

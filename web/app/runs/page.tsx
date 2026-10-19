@@ -61,30 +61,31 @@ export default function RunsPage() {
       key: "id",
       header: "Run",
       width: "68px",
-      hideOnPhone: true,
+      phone: "hide",
       cell: (r) => <span className="tnum font-mono text-sm text-accent-ink">{shortId(r.id)}</span>,
     },
     {
       key: "for",
       header: "For",
+      phone: "title",
       cell: (r) => (
         <Link href={`/runs/${r.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
           {r.document_slug ?? r.flow_title}
         </Link>
       ),
     },
-    { key: "flow", header: "Flow", width: "150px", hideOnPhone: true, cell: (r) => r.flow_title },
+    { key: "flow", header: "Flow", width: "150px", phone: "meta", cell: (r) => r.flow_title },
     {
       key: "state",
       header: "State",
       width: "320px",
+      phone: "meta",
       cell: (r) => (
-        <span className="flex min-w-0 items-center gap-2.5">
+        // P3d: the cost stays on every size; prominent on approvals and overruns.
+        <span className="flex min-w-0 items-center gap-2.5 max-[600px]:flex-wrap max-[600px]:gap-y-1">
           <RunStatusBadge status={r.status} />
           {r.waiting_on && <span className="sr-only">: {CHECKPOINT_LABEL[r.waiting_on]}</span>}
-          <span className="max-[600px]:hidden">
-            <RunCost run={r} />
-          </span>
+          <RunCost run={r} />
         </span>
       ),
     },
@@ -93,7 +94,7 @@ export default function RunsPage() {
       header: <span className="sr-only">Action</span>,
       width: "112px",
       align: "right",
-      hideOnPhone: true,
+      phone: "action",
       cell: (r) =>
         ACTION[r.status] ? (
           <Button
