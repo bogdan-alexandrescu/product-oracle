@@ -20,7 +20,7 @@ from oracle.auth.models import ROLES
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-FLOWS = ("baseline_to_prd", "feedback_loop", "prd_to_roadmap")
+FLOWS = ("baseline_to_prd", "feedback_loop", "prd_to_roadmap", "prd_to_spec")
 RUN_STATUSES = (
     "draft",
     "awaiting_approval",

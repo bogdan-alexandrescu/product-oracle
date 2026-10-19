@@ -35,6 +35,7 @@ from oracle.quality.router import router as quality_router
 from oracle.review.router import router as review_router
 from oracle.runs.router import router as runs_router
 from oracle.sources.router import router as sources_router
+from oracle.specs.router import router as specs_router
 from oracle.templates.router import router as templates_router
 from oracle.tenant_settings_api import router as settings_router
 from oracle.ticker.router import HARD_LIMIT_SECONDS
@@ -141,6 +142,8 @@ def create_app() -> FastAPI:
     # Modules and compositions (CR-01/02): catalogue, packs, manifests, revisions.
     app.include_router(modules_router)
     app.include_router(trace_router)
+    # CR-09: engineering specs, user flows and wireframes from an approved PRD.
+    app.include_router(specs_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).

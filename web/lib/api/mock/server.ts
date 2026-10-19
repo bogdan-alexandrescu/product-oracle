@@ -18,6 +18,7 @@ import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeQuality, seedQuality, type QualityDb } from "./quality";
+import { routeSpecs, seedSpecs, type SpecsDb } from "./specs";
 import { routeTrace } from "./trace";
 import { routeV2, seedV2, type V2Db } from "./v2";
 
@@ -59,6 +60,8 @@ export interface Db {
   quality?: QualityDb;
   /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
   modules?: ModulesDb;
+  /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
+  specs?: SpecsDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -914,6 +917,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     q,
   );
   if (quality) return quality;
+  // Specs, flows and wireframes (./specs.ts) check roles themselves.
+  if (p[1] === "spec-requests" || p[1] === "design-artifacts") {
+    db.specs ??= seedSpecs();
+    const specs = await routeSpecs({ db: db.specs, userId: me.id, role: me.role, uuid, now }, req, p, q);
+    if (specs) return specs;
+  }
   // Modules and compositions check roles themselves (viewers may ask for a recommendation).
   if (!db.modules) {
     const prd = db.documents.find((d) => d.kind === "prd");

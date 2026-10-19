@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from oracle.docs.schemas import DocumentKind, VersionSource
 from oracle.jobs.schemas import LlmJobsTick
 
-Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap"]
+Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap", "prd_to_spec"]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
     "draft",
@@ -102,6 +102,9 @@ class FlowOut(BaseModel):
     target_kind: DocumentKind | None = None
     # The kind of approved document the run reads (prd_to_roadmap: a PRD).
     source_kind: DocumentKind | None = None
+    # The route that starts runs of this flow (prd_to_spec: POST /v1/spec-requests); None:
+    # POST /v1/runs.
+    entry: str | None = None
     segments: list[FlowSegmentOut]
 
 

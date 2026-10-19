@@ -49,7 +49,7 @@ from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
-from oracle.runs import flows, roadmap
+from oracle.runs import extensions, flows, roadmap
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -101,7 +101,15 @@ log = logging.getLogger(__name__)
 FINAL = ("succeeded", "failed", "cancelled")
 ACTIVE = ("running", "awaiting_checkpoint", "paused_overrun")
 # Run knobs Oracle sets (not the user's knobs): kept when a draft's knobs change.
-ORACLE_KNOBS = ("document_slug", "source_version_id", "template", "template_version", "theme")
+ORACLE_KNOBS = (
+    "document_slug",
+    "source_version_id",
+    "template",
+    "template_version",
+    "theme",
+    # prd_to_spec: the spec request the run writes (oracle.specs).
+    "artifact_request_id",
+)
 ITEMS_FILE = "roadmap_items.yaml"
 
 
@@ -183,6 +191,7 @@ def flow_catalog() -> FlowCatalog:
                 requires_document=f.requires_document,
                 target_kind=f.target_kind,  # type: ignore[arg-type]
                 source_kind=f.source_kind,  # type: ignore[arg-type]
+                entry=f.entry,
                 segments=[
                     FlowSegmentOut(
                         name=s.name,
@@ -467,8 +476,9 @@ async def _resolve_source(
         if version is None:
             raise Invalid(f"version {number} of '{document.slug}' not found")
         if version.approved_at is None:
+            target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
             raise Invalid(
-                f"version {number} of '{document.slug}' is not approved: a roadmap is built "
+                f"version {number} of '{document.slug}' is not approved: a {target} is built "
                 f"from an approved {name} version"
             )
         return document, version
@@ -478,9 +488,10 @@ async def _resolve_source(
         .limit(1)
     )
     if version is None:
+        target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
         raise Invalid(
             f"'{document.slug}' has no approved version: approve a version of the {name} "
-            "before building its roadmap"
+            f"before building its {target}"
         )
     return document, version
 
@@ -578,7 +589,7 @@ async def _resolve_inputs(
     default_slug = None
     if source is not None and inputs.document is None:
         # "<prd>-roadmap": that roadmap's next version, or a new roadmap.
-        base = f"{source[0].slug}-roadmap"
+        base = f"{source[0].slug}-{flow.target_kind or 'roadmap'}"
         existing = await docs_service.find_document(db, base)
         default_slug = (
             base
@@ -614,8 +625,19 @@ async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> No
     run.estimate_usd = None
 
 
-async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) -> uuid.UUID:
+async def create_run(
+    db: AsyncSession,
+    principal: Principal,
+    body: RunCreate,
+    *,
+    entry_knobs: dict[str, Any] | None = None,
+    commit: bool = True,
+) -> uuid.UUID:
+    """A draft run. A flow with an ``entry`` route is created only through it, which
+    passes ``entry_knobs`` (what the run builds, e.g. its spec request) and commits."""
     flow = flows.FLOWS[body.flow]
+    if flow.entry and entry_knobs is None:
+        raise Invalid(f"start a {flow.title} run from {flow.entry}")
     knobs = _resolve_knobs(flow, body.knobs)
     document_id, oracle = await _resolve_inputs(
         db,
@@ -625,7 +647,7 @@ async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) ->
     run = Run(
         flow=flow.key,
         status="draft",
-        knobs={**knobs.as_json(), **oracle},
+        knobs={**knobs.as_json(), **oracle, **(entry_knobs or {})},
         document_id=document_id,
         created_by=principal.id,
     )
@@ -636,7 +658,8 @@ async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) ->
     if oracle.get("source_version_id"):
         details["source_version_id"] = oracle["source_version_id"]
     await audit.record(db, principal, "run.created", "run", run.id, details)
-    await db.commit()
+    if commit:
+        await db.commit()
     return run.id
 
 
@@ -669,6 +692,8 @@ async def update_run(
     if body.knobs is not None:
         stored = _resolve_knobs(flow, body.knobs).as_json()
     changed = body.model_fields_set & {"document", "source", "source_version", "template", "theme"}
+    if flow.entry and any(getattr(body, k) is not None for k in changed):
+        raise Invalid(f"a {flow.title} run's document and source come from {flow.entry}")
     if any(getattr(body, k) is not None for k in changed):
         current = await _current_inputs(db, run)
         if body.source is not None:
@@ -804,7 +829,7 @@ async def _prompt_context(
         document = doc.slug
     document = document or run.knobs.get("document_slug")
     kind = await _target_kind(db, run)
-    source = await _source_context(db, run)
+    source = await _source_context(db, run) if _flow(run).source_prompt else None
     roadmap_ctx = None
     if source is not None and _flow(run).segment(segment.name).imports_draft:
         title = doc.title if doc is not None else f"{source.title} roadmap"
@@ -854,6 +879,7 @@ async def _prompt_context(
         kind=kind,
         source=source,
         roadmap=roadmap_ctx,
+        extra_lines=await extensions.prompt_lines(db, run),
     )
 
 
@@ -1201,6 +1227,21 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
     return out
 
 
+async def _run_importer(
+    db: AsyncSession, run: Run, name: str, files: dict[str, str]
+) -> dict[str, Any]:
+    """A lane's importer (oracle.runs.extensions) on the segment's files, as the run's
+    creator."""
+    tenant_id = current_tenant(db)
+    user = await db.get(User, run.created_by) if run.created_by else None
+    token = None if user or not run.created_by else await db.get(ApiToken, run.created_by)
+    try:
+        principal = _creator(tenant_id, user, token)
+    except LookupError as exc:
+        return {"error": str(exc)}
+    return await extensions.run_importer(name, db, run, files, principal)
+
+
 async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, Any]:
     """Merge baseline.yaml through the baseline's YAML import, in its own transaction:
     the run's agent writes, as the run's creator; locked items get proposals."""
@@ -1274,6 +1315,21 @@ async def _advance(
             if imported.get("document_id"):
                 run.document_id = uuid.UUID(imported["document_id"])
                 _set_knob(run, "document_slug", None)
+        art["import"] = imported
+    if sdef.importer:
+        # Committed first: the importer runs in its own transaction.
+        _set_art(segment, art)
+        await db.commit()
+        try:
+            imported = await _run_importer(db, run, sdef.importer, art["files"])
+        except Exception as exc:  # the checkpoint must open whatever the importer does
+            log.exception("run %s: importer %s failed", run.id, sdef.importer)
+            imported = {"error": f"the {sdef.importer} import failed ({type(exc).__name__})"}
+        # The commit released the run's row lock: take it again.
+        await db.execute(select(Run.id).where(Run.id == run.id).with_for_update())
+        if imported.get("document_id"):
+            run.document_id = uuid.UUID(imported["document_id"])
+            _set_knob(run, "document_slug", None)
         art["import"] = imported
     _set_art(segment, art)
 

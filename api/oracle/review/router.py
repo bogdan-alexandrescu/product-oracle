@@ -28,6 +28,7 @@ from oracle.review.schemas import (
     SectionReviewIn,
     SectionReviewOut,
 )
+from oracle.specs import service as spec_service
 
 # Viewers read everything; commenters comment, reply and resolve their own threads;
 # approvers set verdicts, triage feedback and approve versions.
@@ -140,7 +141,9 @@ async def get_resolution_report(doc: str, n: int, db: TenantDB) -> ResolutionRep
 
 @router.post(VERSION + "/approve", response_model=ApproveOut)
 async def approve_version(doc: str, n: int, principal: Approver, db: TenantDB) -> ApproveOut:
-    document, version = await _call(service.approve_version(db, principal, doc, n))
+    # A spec's approval is the engineering approval of its approach (oracle.specs).
+    approve = spec_service.approve_version if await spec_service.is_spec(db, doc) else None
+    document, version = await _call((approve or service.approve_version)(db, principal, doc, n))
     await db.commit()
     return ApproveOut(
         document_id=document.id,
