@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, section, selectText } from "./helpers";
+import { login, openSection, section, sectionStrip, selectText, showAll } from "./helpers";
 
 // O1f: every document has a brief layer and a full layer. The saved-carts fixture has a
 // brief (summary, goals, problem, features by milestone, roadmap, non-goals, top risks,
@@ -23,8 +23,10 @@ const savedView = (page: Page, view: "brief" | "full") =>
     .toBe(true);
 
 const sections = (page: Page) => page.getByTestId("document-sections").filter({ visible: true });
-const topHeadings = (page: Page) =>
-  sections(page).locator(":scope > section[data-section-key] > div > :is(h1,h2,h3)");
+/** The strip's items: the sections of the current mode (Brief or Full), in order. */
+const stripItems = (page: Page) => sectionStrip(page).locator("a[data-strip-key]");
+/** A strip item's text ends with its heading (a reviewed one starts with its verdict for screen readers). */
+const headingsAre = (names: string[]) => names.map((h) => new RegExp(`${h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 
 test("brief: a document opens on its brief; Show full document switches, and the choice is remembered", async ({
   page,
@@ -32,8 +34,9 @@ test("brief: a document opens on its brief; Show full document switches, and the
   await login(page);
   await page.goto("/documents/saved-carts/v/2");
   await expect(sections(page)).toHaveAttribute("data-view", "brief");
-  await expect(topHeadings(page)).toHaveText(BRIEF);
+  await expect(stripItems(page)).toHaveText(headingsAre(BRIEF));
   await expect(page.getByTestId("view-note")).toContainText("Brief: 8 of 20 sections");
+  await openSection(page, "summary");
   await expect(section(page, "summary").getByTestId("layer-badge").first()).toHaveText("Brief");
   // Presenter notes belong to Present mode: the document does not show the notes block.
   await expect(section(page, "summary").first()).toContainText("approve the beta scope");
@@ -42,11 +45,14 @@ test("brief: a document opens on its brief; Show full document switches, and the
   // The detail is not shown.
   await expect(section(page, "feature-detail")).toHaveCount(0);
 
+  await expect(stripItems(page).filter({ hasText: "Feature detail" })).toHaveCount(0);
+
   await page.getByRole("button", { name: "Show full document" }).click();
   await expect(sections(page)).toHaveAttribute("data-view", "full");
-  await expect(section(page, "feature-detail")).toBeVisible();
+  await expect(stripItems(page)).toHaveCount(20);
+  await expect(stripItems(page).first()).toHaveText(/Saved carts PRD$/);
+  await openSection(page, "feature-detail");
   await expect(section(page, "feature-detail").getByTestId("layer-badge").first()).toHaveText("Detail");
-  await expect(topHeadings(page).first()).toHaveText("Saved carts PRD");
 
   // Remembered for this user: after a reload and on another version. The mock saves the
   // choice inside the page, so wait for it before reloading.
@@ -65,7 +71,7 @@ test("brief: a document opens on its brief; Show full document switches, and the
 
   // A version without a brief shows every section, with no view switch or Present.
   await page.goto("/documents/checkout-redesign/v/2");
-  await expect(section(page, "s-5-3")).toBeVisible();
+  await openSection(page, "s-5-3");
   await expect(page.getByRole("group", { name: "Document view" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Present" })).toHaveCount(0);
   await expect(page.getByTestId("layer-badge")).toHaveCount(0);
@@ -109,7 +115,7 @@ test("expand: a feature row and a milestone show their detail in place; comments
 }) => {
   await login(page);
   await page.goto("/documents/saved-carts/v/2");
-  const items = section(page, "brief-items").first();
+  const items = await openSection(page, "brief-items");
 
   await items.getByRole("button", { name: "Expand Save cart" }).click();
   const detail = section(page, "feature-save-cart");
@@ -120,8 +126,8 @@ test("expand: a feature row and a milestone show their detail in place; comments
   // The milestone in the same table expands too, and so does the outcome-level roadmap's.
   await items.getByRole("button", { name: "Expand Beta" }).click();
   await expect(section(page, "milestone-beta")).toContainText("Exit: two weeks without a lost cart");
-  await section(page, "brief-roadmap").first().getByRole("button", { name: "Expand General release" }).click();
-  await expect(section(page, "milestone-ga")).toContainText("opt-outs below 2%");
+  // Expanded detail is content only: the open section keeps the one review bar.
+  await expect(page.getByTestId("review-bar").filter({ visible: true })).toHaveCount(1);
 
   // Comment on the expanded detail: anchored there, labelled Detail in the panel.
   await selectText(page, "feature-save-cart", "my cart kept when I leave");
@@ -135,26 +141,37 @@ test("expand: a feature row and a milestone show their detail in place; comments
   await expect(detailComment.getByTestId("layer-badge")).toHaveText("Detail");
 
   // And on a brief section: labelled Brief.
+  await openSection(page, "problem");
   await selectText(page, "problem", "lose it when they move to a laptop");
   await page.getByRole("button", { name: /^Comment/ }).click();
   await dialog.getByLabel("Comment").fill("How often?");
   await dialog.getByLabel("Comment").press("Control+Enter");
   await expect(page.getByTestId("comment").filter({ hasText: "How often?" }).getByTestId("layer-badge")).toHaveText("Brief");
 
-  // Verdicts work on the brief and on expanded detail.
-  const bar = section(page, "summary").getByTestId("review-bar");
+  // Verdicts work on the brief, and on detail from its expansion (in the full document).
+  const summary = await openSection(page, "summary");
+  const bar = summary.getByTestId("review-bar");
   await bar.getByRole("button", { name: "Approve" }).click();
   await bar.getByRole("button", { name: /^Save/ }).click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
+  const roadmap = await openSection(page, "brief-roadmap");
+  await roadmap.getByRole("button", { name: "Expand General release" }).click();
+  await expect(section(page, "milestone-ga")).toContainText("opt-outs below 2%");
+  await section(page, "milestone-ga").getByRole("button", { name: "Review General release in the full document" }).click();
+  await expect(sections(page)).toHaveAttribute("data-view", "full");
+  await expect(page).toHaveURL(/#milestone-ga$/);
   const detailBar = section(page, "milestone-ga").getByTestId("review-bar");
   await detailBar.getByRole("button", { name: "Request changes" }).click();
   await detailBar.getByLabel(/What should change/).fill("Name the opt-out source.");
   await detailBar.getByRole("button", { name: /^Save/ }).click();
   await expect(detailBar.getByTestId("verdict-state")).toContainText("Changes requested");
 
-  // Collapse hides the detail again; a comment on it opens it from the panel.
+  // Back on the brief, Collapse hides the detail again; a comment on it opens it from the panel.
+  await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Brief" }).click();
+  await openSection(page, "brief-items");
   await items.getByRole("button", { name: "Collapse Save cart" }).click();
   await expect(section(page, "feature-save-cart")).toHaveCount(0);
+  await showAll(page);
   await detailComment.getByRole("button", { name: /Show comment in Save cart/ }).click();
   await expect(section(page, "feature-save-cart")).toBeVisible();
 });

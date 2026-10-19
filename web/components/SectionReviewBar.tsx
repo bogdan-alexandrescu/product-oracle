@@ -7,9 +7,9 @@ import { FIELD_LABEL, InlineError, LockedChip, TEXTAREA, VerdictChip } from "@/c
 import type { Schemas, Verdict } from "@/lib/api/client";
 import { formatDateTime, VERDICT_LABEL } from "@/lib/format";
 
-const ACTIONS: { verdict: Verdict; label: string; icon: IconName }[] = [
+const ACTIONS: { verdict: Verdict; label: string; short?: string; icon: IconName }[] = [
   { verdict: "approved", label: "Approve", icon: "check" },
-  { verdict: "changes_requested", label: "Request changes", icon: "comment" },
+  { verdict: "changes_requested", label: "Request changes", short: "Changes", icon: "comment" },
   { verdict: "rejected", label: "Reject", icon: "x" },
 ];
 
@@ -68,16 +68,30 @@ export function SectionReviewBar({
           )}
         </div>
         {!readOnly && (
-          <div role="group" aria-label={`Verdict for ${heading}`} className="flex flex-wrap gap-1.5">
+          // A phone gets one row of three: short labels, the full ones as the buttons' names.
+          <div
+            role="group"
+            aria-label={`Verdict for ${heading}`}
+            className="flex flex-wrap gap-1.5 max-[600px]:grid max-[600px]:w-full max-[600px]:grid-cols-3"
+          >
             {ACTIONS.map((a) => (
               <Button
                 key={a.verdict}
                 icon={a.icon}
                 variant={draft === a.verdict ? "solid" : "secondary"}
                 aria-pressed={verdict?.verdict === a.verdict}
+                aria-label={a.short ? a.label : undefined}
+                className="max-[600px]:gap-1.5 max-[600px]:px-2"
                 onClick={() => setDraft((d) => (d === a.verdict ? null : a.verdict))}
               >
-                {a.label}
+                {a.short ? (
+                  <>
+                    <span className="max-[600px]:hidden">{a.label}</span>
+                    <span className="min-[601px]:hidden">{a.short}</span>
+                  </>
+                ) : (
+                  a.label
+                )}
               </Button>
             ))}
           </div>

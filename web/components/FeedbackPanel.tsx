@@ -62,17 +62,22 @@ function FeedbackRow({
   );
 }
 
-/** Every comment and section verdict on the document, filterable by status and version. */
+/**
+ * Every comment and section verdict on the document, filterable by status and version;
+ * `sectionKeys` keeps only the items raised on those sections (the open one).
+ */
 export function FeedbackPanel({
   doc,
   current,
   versions,
   refreshKey,
+  sectionKeys,
 }: {
   doc: string;
   current: number;
   versions: VersionSummary[];
   refreshKey: number;
+  sectionKeys?: ReadonlySet<string> | null;
 }) {
   const [status, setStatus] = useState<FeedbackStatus | "">("");
   const [version, setVersion] = useState<number | "">("");
@@ -86,6 +91,7 @@ export function FeedbackPanel({
       }),
     ),
   );
+  const items = q.data && sectionKeys ? q.data.filter((f) => !!f.section_key && sectionKeys.has(f.section_key)) : q.data;
 
   return (
     <div className="flex flex-col gap-3">
@@ -122,18 +128,18 @@ export function FeedbackPanel({
             ))}
           </select>
         </label>
-        {q.data && (
+        {items && (
           <span className="tnum flex-none text-[13px] font-semibold text-text2">
-            {q.data.length} item{q.data.length === 1 ? "" : "s"}
+            {items.length} item{items.length === 1 ? "" : "s"}
           </span>
         )}
       </div>
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {q.loading && !q.data && <Loading />}
-      {q.data && q.data.length === 0 && <Empty>No feedback</Empty>}
-      {q.data && q.data.length > 0 && (
+      {items && items.length === 0 && <Empty>No feedback</Empty>}
+      {items && items.length > 0 && (
         <ol className="flex flex-col" aria-label="Feedback items">
-          {q.data.map((f) => (
+          {items.map((f) => (
             <FeedbackRow key={f.id} item={f} doc={doc} current={current} onChanged={() => void q.reload()} />
           ))}
         </ol>
@@ -142,27 +148,43 @@ export function FeedbackPanel({
   );
 }
 
-/** How this version handled feedback raised on earlier versions. */
-export function ResolutionPanel({ doc, n, refreshKey }: { doc: string; n: number; refreshKey: number }) {
+/** How this version handled feedback raised on earlier versions; `sectionKeys` as in FeedbackPanel. */
+export function ResolutionPanel({
+  doc,
+  n,
+  refreshKey,
+  sectionKeys,
+}: {
+  doc: string;
+  n: number;
+  refreshKey: number;
+  sectionKeys?: ReadonlySet<string> | null;
+}) {
   const q = useQuery(`${doc}|${n}|${refreshKey}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}/resolution-report", { params: { path: { doc, n } } })),
   );
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   if (!q.data) return <Loading />;
-  if (q.data.items.length === 0) {
+  const items = sectionKeys
+    ? q.data.items.filter((f) => !!f.section_key && sectionKeys.has(f.section_key))
+    : q.data.items;
+  if (items.length === 0) {
     return <Empty>No earlier feedback</Empty>;
   }
+  const counts = sectionKeys
+    ? items.reduce<Record<string, number>>((m, f) => ({ ...m, [f.status]: (m[f.status] ?? 0) + 1 }), {})
+    : q.data.counts;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-3">
-        {Object.entries(q.data.counts).map(([s, count]) => (
+        {Object.entries(counts).map(([s, count]) => (
           <span key={s} className="tnum inline-flex items-center gap-1.5 text-sm font-bold">
             <FeedbackStatusChip status={s as FeedbackStatus} /> {count}
           </span>
         ))}
       </div>
       <ol className="flex flex-col">
-        {q.data.items.map((f) => (
+        {items.map((f) => (
           <FeedbackRow key={f.id} item={f} doc={doc} current={n} />
         ))}
       </ol>

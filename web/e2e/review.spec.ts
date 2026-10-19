@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { ADMIN, login, section, selectText } from "./helpers";
+import { ADMIN, login, openSection, section, sectionStrip, selectText } from "./helpers";
 
 test("login: rejects a wrong password, then signs in", async ({ page }) => {
   await page.goto("/documents");
@@ -30,9 +30,10 @@ test("open a version: sections in order with citation chips", async ({ page }) =
   await page.getByRole("link", { name: "Version 2" }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
 
+  // One section at a time: the strip lists them in order, the first unreviewed one is open.
   const headings = page.locator("section[data-section-key] :is(h1,h2,h3)").filter({ visible: true });
-  await expect(headings.first()).toHaveText("Checkout redesign PRD");
-  await expect(headings).toHaveText([
+  await expect(headings).toHaveText(["Checkout redesign PRD"]);
+  await expect(sectionStrip(page).locator("a[data-strip-key]")).toHaveText([
     "Checkout redesign PRD",
     "1. Goal trace",
     "2. Problem",
@@ -47,7 +48,7 @@ test("open a version: sections in order with citation chips", async ({ page }) =
   ]);
 
   // Hovering a chip previews source, title and excerpt.
-  const chip = section(page, "problem").getByTestId("cite-c1");
+  const chip = (await openSection(page, "problem")).getByTestId("cite-c1");
   await expect(chip).toHaveText(/Slack/);
   await chip.hover();
   const card = page.getByRole("tooltip");
@@ -59,8 +60,7 @@ test("open a version: sections in order with citation chips", async ({ page }) =
 test("add an anchored comment that survives reload", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
-  const scope = section(page, "scope");
-  await expect(scope).toBeVisible();
+  const scope = await openSection(page, "scope");
 
   await selectText(page, "scope", "the order review page");
   await page.getByRole("button", { name: /^Comment/ }).click();
@@ -90,7 +90,7 @@ test("add an anchored comment that survives reload", async ({ page }) => {
 test("set a section verdict; approval shows the section as locked", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
-  const users = section(page, "users");
+  const users = await openSection(page, "users");
   const bar = users.getByTestId("review-bar");
   await expect(bar.getByTestId("verdict-state")).toHaveText("Not reviewed");
 
@@ -117,17 +117,18 @@ test("set a section verdict; approval shows the section as locked", async ({ pag
 test("switch versions with the version switcher", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
-  await expect(section(page, "s-5-3")).toBeVisible();
+  await openSection(page, "s-5-3");
 
   await page.getByRole("group", { name: "Version" }).getByRole("link", { name: "v1", exact: true }).click();
   await expect(page).toHaveURL(/\/v\/1$/);
-  await expect(section(page, "rollout")).toBeVisible();
-  await expect(section(page, "s-5-3")).toHaveCount(0);
+  await openSection(page, "rollout");
+  await expect(sectionStrip(page).locator('a[data-strip-key="s-5-3"]')).toHaveCount(0);
   await expect(page.getByText("You are viewing an earlier version.")).toBeVisible();
   // v1 carries the earlier review: the goal trace was approved.
-  await expect(section(page, "goal-trace").getByTestId("verdict-state")).toContainText("Locked");
+  await expect((await openSection(page, "goal-trace")).getByTestId("verdict-state")).toContainText("Locked");
 
-  await page.keyboard.press("]");
+  // { and } switch versions ([ and ] step sections).
+  await page.keyboard.press("}");
   await expect(page).toHaveURL(/\/v\/2$/);
 });
 

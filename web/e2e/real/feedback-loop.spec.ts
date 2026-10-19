@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { section, selectText } from "../helpers";
+import { openSection, section, selectText, showAll } from "../helpers";
 import { oracle, stackState } from "./stack";
 
 const DOC = "e2e-team-invoices";
@@ -33,7 +33,8 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, approve, ex
   await page.getByRole("link", { name: "Version 1" }).click();
   await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/v/1$`));
 
-  await expect(section(page, "solution")).toBeVisible();
+  // One section is open at a time: open each from the section strip before using it.
+  await openSection(page, "solution");
   await selectText(page, "solution", "Each row has a download link");
   await page.getByRole("button", { name: /^Comment/ }).click();
   const dialog = page.getByRole("dialog", { name: "New comment" });
@@ -42,21 +43,26 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, approve, ex
   await expect(dialog).toBeHidden();
   await expect(section(page, "solution").locator("mark.hl-comment")).toHaveText("Each row has a download link");
 
-  const goal = section(page, "goal").getByTestId("review-bar");
+  const goal = (await openSection(page, "goal")).getByTestId("review-bar");
   await goal.getByRole("button", { name: "Approve" }).click();
   await goal.getByRole("button", { name: /^Save/ }).click();
   await expect(goal.getByTestId("verdict-state")).toContainText("Locked");
 
-  const metrics = section(page, "metrics").getByTestId("review-bar");
+  const metrics = (await openSection(page, "metrics")).getByTestId("review-bar");
   await metrics.getByRole("button", { name: "Request changes" }).click();
   await metrics.getByLabel(/What should change/).fill("Give the ticket metric a number and a deadline.");
   await metrics.getByRole("button", { name: /^Save/ }).click();
   await expect(metrics.getByTestId("verdict-state")).toContainText("Changes requested");
 
   // Both survive a reload, i.e. they are stored by the API.
+  // The open section is kept in the hash, so the reload reopens metrics.
   await page.reload();
-  await expect(section(page, "solution").locator("mark.hl-comment")).toHaveText("Each row has a download link");
+  await expect(page).toHaveURL(/#metrics$/);
   await expect(section(page, "metrics").getByTestId("verdict-state")).toContainText("Changes requested");
+  await expect((await openSection(page, "solution")).locator("mark.hl-comment")).toHaveText(
+    "Each row has a download link",
+  );
+  await expect((await openSection(page, "goal")).getByTestId("verdict-state")).toContainText("Locked");
 
   // The agent track pulls the feedback package: two open items, the goal locked.
   const pulled = await oracle("pull", DOC, "--version", "1", "--out", work);
@@ -91,6 +97,8 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, approve, ex
   // The resolution report on v2 shows both items addressed.
   await page.goto(`/documents/${DOC}/v/2`);
   await page.getByRole("tab", { name: "Resolutions" }).click();
+  // The inspector lists the open section's items first; All covers both sections.
+  await showAll(page);
   const report = page.getByRole("tabpanel");
   const rows = report.getByTestId("feedback-item");
   await expect(rows).toHaveCount(2);
