@@ -1,16 +1,18 @@
 # Lane: SwarmCloud adapter v2 (caller MCP, waits for a person)
 
-Dispatch after SwarmCloud reports "MCP on" and "person-wait on" in dev (Bogdan,
-2026-10-18: build after the switches). One SwarmCloud `claude-code` task, strategy
-`direct-pr`. Real end-to-end runs wait for "answering on" as well.
+Dispatched 2026-10-19, before the switches are on (Bogdan, 2026-10-19: build now; the real
+end-to-end check waits for SwarmCloud's "person-wait on" and "answering on"). One
+SwarmCloud `claude-code` task, strategy `direct-pr`.
 
 ## Prompt
 
 SWARMCLOUD ADAPTER V2 for Product Oracle. Read docs/swarmcloud-interface.md first (the
 contract, as SwarmCloud built it), then docs/build-brief.md §5 ("Runs and flows", "Agent
 runtime adapter"), api/oracle/swarm/, api/oracle/runs/, api/oracle/runtokens.py,
-api/oracle/mcp/ and the decisions W1, W2, P3 and P3b in docs/questions.md. Oracle's ID-token
-auth is live, and GET /v1/runtime/status proves it (tenant u-or-9a0792).
+api/oracle/mcp/ and the decisions W1, W2, W2b, P3 and P3b in docs/questions.md. Oracle's
+ID-token auth is live, and GET /v1/runtime/status proves it (tenant u-or-9a0792). Both
+SwarmCloud features are still switched off in dev while you build: work against the fake
+SwarmCloud only, and never call the real SwarmCloud API.
 
 Build, behind feature detection so today's flow keeps working while a feature is off:
 
@@ -37,8 +39,15 @@ Build, behind feature detection so today's flow keeps working while a feature is
 4. **Checkpoints as waits for a person.** When await-input is on, a run is one workflow:
    - Each checkpoint is an `await-input` step with `form: verdict`.
    - Rounds are unrolled with `when` gates, using strategy `collect`.
-   - The step's `expires_after_seconds` and `on_expire` follow the owner's decision
-     recorded in docs/questions.md (ask if it is not there).
+   - The wait follows W2b in docs/questions.md: `on_expire: "fail"`, never an expiry
+     default, and `expires_after_seconds` from a setting `ORACLE_CHECKPOINT_WAIT_SECONDS`
+     (default 86400, held to 300-86400). On expiry, the checkpoint stays open in the
+     Inbox, and once someone decides, the run continues as a new workflow (today's flow).
+   - The run token is one credential from submission. When a decision arrives and less
+     than `ORACLE_CHECKPOINT_TAIL_SECONDS` (default 7200) of the credential is left for
+     the steps after the wait, do not post the answer. Cancel the waiting workflow and
+     continue as a new workflow with a fresh run token, exactly as after an expiry. Note
+     it on the run.
    - The Inbox decision is posted as the answer: `answer_id` = the checkpoint's id;
      approved → MERGE, changes requested → NOT_YET, with the note as findings;
      `on_behalf_of` = the deciding user's email; `via: "mcp"`.
@@ -70,7 +79,9 @@ Tests against an extended fake SwarmCloud:
 
 Product Oracle words only (users, roles; never "workspace"). Never touch .github/. Run the
 full API suite, ruff, `make openapi`, web lint, tsc and build, and Playwright. Commit.
-Write `$SWARM_ARTIFACTS_DIR/adapter-v2-report.md`, including the manual end-to-end check:
+Write `$SWARM_ARTIFACTS_DIR/adapter-v2-report.md`: what was built, the settings, what is
+NOT covered by the fake, and the manual end-to-end check as a runbook for after the switches
+(do not run it):
 1. register the server;
 2. run a two-step workflow with a review;
 3. see AWAITING_INPUT;

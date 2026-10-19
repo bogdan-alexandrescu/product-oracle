@@ -10,14 +10,14 @@ switched on yet.
 ## 0. Admission and auth
 
 - Oracle's API (`oracle-api@saga-agents-staging.iam.gserviceaccount.com`) is its own
-  service tenant `u-or-9a0792` (SwarmCloud #1568, merged). Remaining owner steps: the
-  bootstrap apply that lets it through SwarmCloud's front door, lending a Claude account
-  to the tenant, and a git token only if Oracle's steps ever clone private repositories.
+  service tenant `u-or-9a0792` (SwarmCloud #1568, merged). Done: the bootstrap apply
+  (front door), a Claude account lent to the tenant. Applying on 2026-10-19: the release
+  with the tenant's worker permissions (no task runs for Oracle before it). A git token
+  only if Oracle's steps ever clone private repositories.
 - **Auth is a Google ID token**, not an access token: SwarmCloud verifies an ID token for
-  its API audience (email claim, verified). Oracle setting:
-  `ORACLE_SWARMCLOUD_AUTH=google_id_token`, `ORACLE_SWARMCLOUD_AUDIENCE=<confirmed by a
-  live probe after the bootstrap apply>`. (Oracle's deploy currently says
-  `google_access_token`; it changes when the audience is confirmed.)
+  its API audience (email claim, verified). Oracle settings
+  `ORACLE_SWARMCLOUD_AUTH=google_id_token` and `ORACLE_SWARMCLOUD_AUDIENCE` are live, and
+  `GET /v1/runtime/status` proves them (reachable, tenant `u-or-9a0792`, 2026-10-19).
 - **No tenant header:** the service tenant is the default; naming it is a 403.
 - **No idempotency keys:** a retried `POST /v1/workflows` creates a duplicate. Oracle
   labels each submission `oracle-<run id>-<segment>-<attempt>` and checks for that label
@@ -107,8 +107,10 @@ Artifacts are read by task: `GET /v1/tasks/{task_id}/artifacts`, `.../content?na
 
 ## 3. What Oracle builds
 
-**When (Bogdan, 2026-10-18):** after SwarmCloud switches both features on in dev; until then
-Oracle keeps today's flow unchanged.
+**When (Bogdan, 2026-10-19):** built now, against a fake SwarmCloud, with the fallback below
+so it is safe to merge while a switch is off. The real end-to-end check waits until
+SwarmCloud reports "person-wait on" and "answering on" in dev. (On 2026-10-18 the plan was
+to build only after the switches; it moved once all three were merged.)
 
 1. **Auth:** switch to the ID token, with the audience as a setting. De-duplicate submits
    by label.
@@ -121,7 +123,12 @@ Oracle keeps today's flow unchanged.
    claude-code step; one `mcp_credentials` map.
 4. **Checkpoints:** checkpoints become await-input verdict steps in the unrolled shape.
    The Inbox decision is posted as the answer with a stable `answer_id`, once a service
-   principal may answer.
+   principal may answer. **Wait (W2b in docs/questions.md):** `on_expire: fail`, never an
+   expiry default; on expiry the checkpoint stays open in the Inbox and the run continues
+   as a new workflow once someone decides. The run token is one credential from submission
+   (at most 86400 s), so a decision that arrives when too little of it is left for the
+   steps after the wait is not posted to SwarmCloud: Oracle cancels the waiting workflow
+   and continues as a new workflow, exactly as after an expiry.
 5. **Status and artifacts:** poll for AWAITING_INPUT and the terminal state; read
    artifacts by task; handle the codes above.
 6. **Fallback:** while either switch is off (503 or 422 above), keep today's flow of one
