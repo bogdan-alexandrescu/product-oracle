@@ -2790,7 +2790,8 @@ def _search_for(
     or one an approver stopped cancelling: ``cancel`` False; ``cancelled``: its cancel was
     confirmed and only its status and cost are left to read) has its status and cost read
     until it ends. The first look is on the next tick. One entry per submission (its id,
-    or its label and when it was sent, compared as times): a second call merges into it."""
+    or its label and when it was sent, compared as times; a label-only look that does
+    not say when merges into the label's): a second call merges into it."""
     entries = copy.deepcopy(list((run.knobs or {}).get("searches") or []))
     if not label:
         return
@@ -2803,7 +2804,10 @@ def _search_for(
             and _parse_at(e.get("submitted_at")) == at
             and (not workflow_id or not e.get("id") or e.get("id") == workflow_id)
         )
-        if same_id or same_sent:
+        # Two looks for the same label, neither known by its id: when this one does not
+        # say when it was sent, it is the one already looked for.
+        same_label = not workflow_id and not e.get("id") and e.get("label") == label and at is None
+        if same_id or same_sent or same_label:
             if workflow_id and not e.get("id"):
                 e["id"] = workflow_id
             if not cancel:
