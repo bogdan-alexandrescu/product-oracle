@@ -12,7 +12,7 @@ import json
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import yaml
@@ -90,15 +90,17 @@ def sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-# (cite key, ref, title, excerpt) of a citation a section cites.
-CitedEntry = tuple[str, str | None, str | None, str | None]
+# (cite key, ref, title, excerpt, source, retrieved_at) of a citation a section cites.
+CitedEntry = tuple[str, str | None, str | None, str | None, str | None, str | None]
 
 
 def section_revision(content_hash: str, layer: str, cited: list[CitedEntry]) -> str:
     """A section's revision: its text (``content_hash``), the citation entries it cites
-    (ref, title, excerpt, in citing order) and its brief-layer membership, so changing
-    the evidence behind a section, or moving it in or out of the brief, is a new
-    revision (CR-06). A detail section that cites nothing keeps its content hash."""
+    (ref, title, excerpt, source and retrieved_at, in citing order) and its brief-layer
+    membership, so changing the evidence behind a section, or moving it in or out of the
+    brief, is a new revision (CR-06). A detail section that cites nothing keeps its
+    content hash. Section links are not part of it: they are added after a version is
+    imported, so the review state adds them (``oracle.review.state.review_revision``)."""
     if layer != "brief" and not cited:
         return content_hash
     canonical = json.dumps(
@@ -107,14 +109,25 @@ def section_revision(content_hash: str, layer: str, cited: list[CitedEntry]) -> 
     return sha256(canonical)
 
 
+def instant(value: datetime | str | None) -> str | None:
+    """A citation's ``retrieved_at`` as the revision reads it: UTC, ISO 8601 (a time
+    without a zone is UTC, as the database stores it)."""
+    if value is None or isinstance(value, str):
+        return value
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC).isoformat()
+    return value.astimezone(UTC).isoformat()
+
+
 def cited_entries(citation_keys: list[str], citations: dict[str, Any]) -> list[CitedEntry]:
     """The entries a section cites, from ``citations`` by cite key (objects with
-    ``ref``, ``title`` and ``excerpt``); unknown keys are skipped."""
+    ``ref``, ``title``, ``excerpt``, ``source`` and ``retrieved_at``); unknown keys are
+    skipped."""
     out: list[CitedEntry] = []
     for key in citation_keys:
         c = citations.get(key)
         if c is not None:
-            out.append((key, c.ref, c.title, c.excerpt))
+            out.append((key, c.ref, c.title, c.excerpt, c.source, instant(c.retrieved_at)))
     return out
 
 
@@ -181,6 +194,27 @@ def body_text(body_md: str) -> str:
         if text:
             blocks.append(text)
     return "\n".join(blocks)
+
+
+def unclosed_fence(body_md: str) -> str | None:
+    """The marker of a code fence ``body_md`` leaves open at its end, else ``None``. An
+    open fence swallows whatever follows it, headings of later sections included, so a
+    draft composed from sections closes it (``oracle.jobs.service.compose_markdown``)."""
+    lines = body_md.rstrip("\n").split("\n")
+    for token in reversed(_md.parse(body_md)):
+        if token.level != 0 or token.map is None:
+            continue
+        if token.type != "fence":
+            return None
+        start, end = token.map
+        if end < len(lines):
+            return None
+        marker = token.markup
+        closing = re.compile(rf" {{0,3}}{re.escape(marker[0])}{{{len(marker)},}}[ \t]*")
+        if end - 1 > start and closing.fullmatch(lines[end - 1]):
+            return None
+        return marker
+    return None
 
 
 def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) -> dict[str, Any]:

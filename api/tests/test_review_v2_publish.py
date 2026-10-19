@@ -206,9 +206,11 @@ async def test_publish_pins_everything_and_never_changes(client):
         json={"decider_id": str(decider.user_id), "section_approval": "all_sections"},
         headers=ctx.auth,
     )
+    # The link is part of what the section approvals bind to (a link added after them
+    # would leave them stale).
+    _, item_id = await _linked_item(ctx)
     await approve_all(client, decider.headers, 1)
     assert (await client.post(ctx.v(1, "/approve"), headers=decider.headers)).status_code == 200
-    _, item_id = await _linked_item(ctx)
     async with tenant_session(ctx.tenant_id) as s:
         from oracle.docs.models import Document
 
@@ -334,15 +336,16 @@ async def test_warnings_never_block(client):
         json={
             "section_key": "risks",
             "anchor": {"exact": "lag"},
-            "body": "This is a launch risk",
-            "severity": "critical",
+            "body": "Name the lag",
+            "severity": "major",
         },
         headers=ctx.auth,
     )
     await approved(client, ctx)
     body = await check(client, ctx)
     assert body["can_publish"] is True
-    assert "open_critical_change_request" in [w["code"] for w in body["warnings"]]
+    # A critical change request does block (T2; test_review_v2_security_2).
+    assert "open_change_request" in [w["code"] for w in body["warnings"]]
     assert (await client.post(ctx.v(1, "/publish"), json={}, headers=ctx.auth)).status_code == 201
 
 

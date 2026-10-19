@@ -32,7 +32,7 @@ from oracle.review.schemas import (
     SectionAssignmentIn,
     SectionAssignmentOut,
 )
-from oracle.review.state import history, now, section_status
+from oracle.review.state import counting_history, now, review_revisions, section_status
 from oracle.v2.concurrency import VersionConflict, expect_version, flush_or_conflict
 
 if TYPE_CHECKING:
@@ -326,10 +326,13 @@ async def review_queue(db: AsyncSession, principal: "Principal") -> list[ReviewQ
         )
         if section is None:
             continue
-        hist = await history(db, document.id, key=row.section_key)
+        hist, _ = await counting_history(db, document.id, key=row.section_key)
+        current = await review_revisions(
+            db, document.id, latest.id, {row.section_key: section.revision}
+        )
         st = section_status(
             hist.by_key.get(row.section_key, []),
-            section.revision,
+            current[row.section_key],
             set(row.invalidated_review_ids),
         )
         out.append(

@@ -6,8 +6,10 @@ reviewers, required sections), organization-wide feedback campaigns, in-app
 notifications, section patches (an agent rewrite or removal of an approved section,
 reviewed as a diff), and immutable document publications. ``feedback_items`` gains a
 nullable ``severity``; ``document_versions`` gains ``notes`` (e.g. imported without a base version);
-``sections`` gains ``revision`` (the text, the cited evidence and
-the brief membership; backfilled, and verdicts given on a content hash move to it). A
+``sections`` gains ``revision`` (the text, the cited evidence (ref, title, excerpt,
+source, retrieved_at) and the brief membership; backfilled, and verdicts given on a
+content hash move to it); ``change_events.subject_kind`` admits ``member`` (a role
+change or removal). A
 trigger refuses any UPDATE of a publication and any DELETE that is not a cascade from
 its document or company. See
 docs/product-oracle-v2/08-review-and-publish.md.
@@ -21,6 +23,7 @@ Revises: 0013
 import hashlib
 import json
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from alembic import op
@@ -47,6 +50,33 @@ $$ LANGUAGE plpgsql
 """
 
 
+# change_events.subject_kind as of 0013.
+CHANGE_SUBJECTS = (
+    "document_section",
+    "requirement",
+    "decision",
+    "source_permission",
+    "blocker_status",
+    "composition_revision",
+    "document_version",
+    "entity",
+    "artifact_version",
+)
+
+
+def _quoted(values: tuple[str, ...]) -> str:
+    return ", ".join(f"'{v}'" for v in values)
+
+
+def _instant(value: datetime | None) -> str | None:
+    """oracle.docs.parser.instant, frozen as of this migration."""
+    if value is None or isinstance(value, str):
+        return value
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC).isoformat()
+    return value.astimezone(UTC).isoformat()
+
+
 def _revision(content_hash: str, layer: str, cited: list[list]) -> str:
     """oracle.docs.parser.section_revision, frozen as of this migration."""
     if layer != "brief" and not cited:
@@ -70,12 +100,20 @@ def _backfill_revisions() -> None:
     for i in range(0, len(versions), 500):
         for c in conn.execute(
             sa.text(
-                "SELECT version_id, cite_key, ref, title, excerpt FROM citations "
+                "SELECT version_id, cite_key, ref, title, excerpt, source, retrieved_at "
+                "FROM citations "
                 "WHERE version_id = ANY(:ids)"
             ),
             {"ids": versions[i : i + 500]},
         ):
-            citations[(c.version_id, c.cite_key)] = [c.cite_key, c.ref, c.title, c.excerpt]
+            citations[(c.version_id, c.cite_key)] = [
+                c.cite_key,
+                c.ref,
+                c.title,
+                c.excerpt,
+                c.source,
+                _instant(c.retrieved_at),
+            ]
     for r in rows:
         cited = [
             citations[(r.version_id, k)] for k in r.citation_keys if (r.version_id, k) in citations
@@ -499,6 +537,14 @@ def upgrade() -> None:
     op.execute("UPDATE sections SET revision = content_hash")
     _backfill_revisions()
     op.alter_column("sections", "revision", nullable=False)
+    # A member's role change or removal is a change event (approvals count only while
+    # the approver still is one).
+    op.drop_constraint(op.f("ck_change_events_subject_kind"), "change_events", type_="check")
+    op.create_check_constraint(
+        op.f("ck_change_events_subject_kind"),
+        "change_events",
+        f"subject_kind IN ({_quoted(CHANGE_SUBJECTS + ('member',))})",
+    )
     # A publication is immutable: later edits and source updates never change it, and
     # only deleting its document or company removes it.
     op.execute(IMMUTABLE_FUNCTION)
@@ -510,6 +556,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DELETE FROM change_events WHERE subject_kind = 'member'")
+    op.drop_constraint(op.f("ck_change_events_subject_kind"), "change_events", type_="check")
+    op.create_check_constraint(
+        op.f("ck_change_events_subject_kind"),
+        "change_events",
+        f"subject_kind IN ({_quoted(CHANGE_SUBJECTS)})",
+    )
     op.execute("DROP TRIGGER IF EXISTS document_publications_immutable ON document_publications")
     op.execute("DROP FUNCTION IF EXISTS oracle_refuse_publication_update()")
     op.execute(

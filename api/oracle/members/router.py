@@ -46,6 +46,18 @@ async def update_member(
     return MemberOut.model_validate(user)
 
 
+@router.delete(
+    "/members/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"description": "No such member"}, 409: {"description": "The last owner"}},
+)
+async def remove_member(user_id: uuid.UUID, principal: Owner, db: TenantDB) -> None:
+    """Remove a member with their sessions, API tokens, connections and sources (each
+    source is recorded as revoked first). Their approvals stop counting at once."""
+    await _call(service.remove_member(db, principal, user_id))
+    await db.commit()
+
+
 @router.get("/invites", response_model=list[InviteOut])
 async def list_invites(
     db: TenantDB, status: InviteStatus | Literal["all"] = "open"

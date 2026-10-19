@@ -8,16 +8,20 @@ writes one :class:`~oracle.review.models.DocumentPublication`.
 A publish is refused for:
 
 - a version the decider has not approved (or approved by someone other than the
-  designated decider);
+  designated decider), a version approver or a designated decider who is no longer an
+  approver (approvals count only while the approver still is one, read now:
+  ``oracle.review.state.standing``);
 - missing required sections (template, composition and policy);
 - stale or missing mandatory approvals: each section the policy requires must be
   approved on its current revision, and every mandatory reviewer must have approved it
   (no unanimity unless the company configures mandatory reviewers);
+- an open critical change request (T2: a critical unresolved blocker);
 - a hard readiness check that is critical (``oracle.readiness.evaluate``; a critical
   unresolved blocker, a failed security or policy check). Advisory results never block
   (T2);
 - invalidated source permissions: evidence of the version (section links to items,
-  baseline evidence and entities, and citations by normalized URL or item id) from a
+  baseline evidence and entities, and citations by normalized URL, item id, evidence
+  id or external id) from a
   source item that was deleted, whose connection was revoked or deleted, or that a
   ``source_permission`` change event (a revocation tombstone) revoked;
 - a version already published;
@@ -39,7 +43,7 @@ import json
 import uuid
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
@@ -63,10 +67,12 @@ from oracle.review.schemas import (
     SectionStatesOut,
 )
 from oracle.review.state import (
+    counting_history,
     current_composition,
     effective_policy,
     required_sections,
     section_states,
+    standing,
     template_required_sections,
 )
 from oracle.sources.models import Source, SourceItem
@@ -134,9 +140,17 @@ async def lock_document(db: AsyncSession, document_id: uuid.UUID) -> Document | 
 # --- source permissions -------------------------------------------------------------
 
 
+# Query parameters that only track a click; they never name another page.
+TRACKING_PARAMS = frozenset({"fbclid", "gclid", "dclid", "msclkid", "mc_cid", "mc_eid", "_hsenc"})
+# A citation's ``source`` and the source kinds its external ids come from.
+CITATION_SOURCE_KINDS = {"gdocs": "google_docs"}
+
+
 def normalize_url(url: str) -> str:
-    """A URL as citations and source items are matched: scheme and host lower-cased,
-    default port, fragment and trailing slash dropped. Anything else as given."""
+    """A URL as citations and source items are matched: ``http`` is ``https``, the host
+    lower-cased without ``www.``, the default port, fragment and trailing slash dropped,
+    the query without tracking parameters (``utm_*``, click ids) and sorted. Idempotent,
+    so URLs a tombstone recorded with an earlier normalization still match."""
     raw = url.strip()
     try:
         parts = urlsplit(raw)
@@ -145,18 +159,27 @@ def normalize_url(url: str) -> str:
     if not parts.scheme or not parts.netloc:
         return raw
     scheme = parts.scheme.lower()
-    host = (parts.hostname or "").lower()
+    if scheme == "http":
+        scheme = "https"
+    host = (parts.hostname or "").lower().removeprefix("www.")
     try:
         port = parts.port
     except ValueError:
         port = None
-    if port and (scheme, port) not in (("http", 80), ("https", 443)):
+    if port and port not in (80, 443):
         host = f"{host}:{port}"
     if parts.username or parts.password:
         auth = parts.username or ""
         host = f"{auth}@{host}"
     path = parts.path.rstrip("/")
-    return urlunsplit((scheme, host, path, parts.query, ""))
+    query = urlencode(
+        sorted(
+            (k, v)
+            for k, v in parse_qsl(parts.query, keep_blank_values=True)
+            if not k.lower().startswith("utm_") and k.lower() not in TRACKING_PARAMS
+        )
+    )
+    return urlunsplit((scheme, host, path, query, ""))
 
 
 def _as_uuid(value: str | None) -> uuid.UUID | None:
@@ -172,10 +195,12 @@ async def revocation_record(db: AsyncSession, source_ids: list[uuid.UUID]) -> di
     them, and the section links to them (which go with a hard delete)."""
     items = (
         await db.execute(
-            select(SourceItem.id, SourceItem.url).where(SourceItem.source_id.in_(source_ids))
+            select(SourceItem.id, SourceItem.url, SourceItem.external_id).where(
+                SourceItem.source_id.in_(source_ids)
+            )
         )
     ).all()
-    item_ids = [i for i, _ in items]
+    item_ids = [i for i, _, _ in items]
     evidence_ids: list[uuid.UUID] = []
     links: list[DocumentSectionLink] = []
     if item_ids:
@@ -190,7 +215,8 @@ async def revocation_record(db: AsyncSession, source_ids: list[uuid.UUID]) -> di
     return {
         "source_ids": [str(i) for i in source_ids],
         "item_ids": [str(i) for i in item_ids],
-        "urls": sorted({normalize_url(u) for _, u in items if u}),
+        "urls": sorted({normalize_url(u) for _, u, _ in items if u}),
+        "external_ids": sorted({x for _, _, x in items if x}),
         "evidence_ids": [str(i) for i in evidence_ids],
         "links": [
             {
@@ -264,13 +290,48 @@ async def _url_items(db: AsyncSession, urls: set[str]) -> list[SourceItem]:
     hosts.discard(None)
     if not hosts:
         return []
+    # Not indexed: a scan of the company's items by host, then an exact match on the
+    # normalized URL (an indexed lookup needs a normalized-URL column; see the PR).
     candidates = await db.scalars(
         select(SourceItem).where(
             SourceItem.url.is_not(None),
-            or_(*(func.lower(SourceItem.url).contains(f"://{h}") for h in hosts)),
+            or_(
+                *(
+                    func.lower(SourceItem.url).contains(f"://{w}{h}")
+                    for h in hosts
+                    for w in ("", "www.")
+                )
+            ),
         )
     )
     return [i for i in candidates if normalize_url(i.url) in urls]
+
+
+async def _external_items(
+    db: AsyncSession, refs: dict[tuple[str, str], set[str]]
+) -> list[tuple[SourceItem, str]]:
+    """Source items a citation names by external id: (citation source, ref) -> items of
+    a source of that kind with that external id (any kind for a web citation)."""
+    if not refs:
+        return []
+    rows = (
+        await db.execute(
+            select(SourceItem, Source.kind)
+            .join(Source, Source.id == SourceItem.source_id)
+            .where(SourceItem.external_id.in_({ref for _, ref in refs}))
+        )
+    ).all()
+    return [
+        (item, kind)
+        for item, kind in rows
+        if any(ref == item.external_id and _same_kind(source, kind) for source, ref in refs)
+    ]
+
+
+def _same_kind(citation_source: str | None, source_kind: str | None) -> bool:
+    if not citation_source or citation_source == "web" or not source_kind:
+        return True
+    return CITATION_SOURCE_KINDS.get(citation_source, citation_source) == source_kind
 
 
 async def source_permission_problems(
@@ -304,6 +365,28 @@ async def source_permission_problems(
             evidence_keys[link.evidence_id].add(link.section_key)
         if link.entity_id is not None:
             entity_keys[link.entity_id].add(link.section_key)
+    # Citations name their source by URL, by an item or evidence id, or by the item's
+    # external id in its source.
+    cite_sections: dict[str, set[str]] = defaultdict(set)
+    for s in await db.scalars(select(Section).where(Section.version_id == version.id)):
+        for key in s.citation_keys:
+            cite_sections[key].add(s.section_key)
+    external_keys: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for c in await db.scalars(select(Citation).where(Citation.version_id == version.id)):
+        keys = cite_sections.get(c.cite_key, set())
+        ref = (c.ref or "").strip()
+        ref_id = _as_uuid(ref)
+        if ref_id is not None:
+            item_keys[ref_id] |= keys
+            evidence_keys[ref_id] |= keys
+        elif "://" in ref:
+            url_keys[normalize_url(ref)] |= keys
+        elif ref:
+            external_keys[(c.source, ref)] |= keys
+    for item, _ in await _external_items(db, external_keys):
+        for (_, ref), keys in external_keys.items():
+            if ref == item.external_id:
+                item_keys[item.id] |= keys
     if evidence_keys or entity_keys:
         for e in await db.scalars(
             select(Evidence).where(
@@ -316,18 +399,6 @@ async def source_permission_problems(
                 item_keys[e.source_item_id] |= keys
             if e.url:
                 url_keys[normalize_url(e.url)] |= keys
-    # Citations name their source by URL or item id.
-    cite_sections: dict[str, set[str]] = defaultdict(set)
-    for s in await db.scalars(select(Section).where(Section.version_id == version.id)):
-        for key in s.citation_keys:
-            cite_sections[key].add(s.section_key)
-    for c in await db.scalars(select(Citation).where(Citation.version_id == version.id)):
-        keys = cite_sections.get(c.cite_key, set())
-        item_id = _as_uuid(c.ref)
-        if item_id is not None:
-            item_keys[item_id] |= keys
-        elif c.ref:
-            url_keys[normalize_url(c.ref)] |= keys
     for item in await _url_items(db, set(url_keys)):
         item_keys[item.id] |= url_keys[normalize_url(item.url)]
 
@@ -377,7 +448,11 @@ async def source_permission_problems(
                 revoked.add(item_id)
                 hit |= item_keys[item_id]
         for u in data.get("urls") or []:
-            hit |= url_keys.get(u, set())
+            hit |= url_keys.get(normalize_url(u), set())
+        for x in data.get("external_ids") or []:
+            for (source, ref), keys in external_keys.items():
+                if ref == x and _same_kind(source, data.get("source_kind")):
+                    hit |= keys
         for i in data.get("evidence_ids") or []:
             hit |= evidence_keys.get(_as_uuid(i), set())
         for link in data.get("links") or []:
@@ -445,10 +520,35 @@ async def review_problems(
     required = await required_sections(db, document, version, policy)
     blockers: list[PublishProblem] = []
     warnings: list[PublishProblem] = []
+    # Approvers are who they are now (CR-06): a demoted or removed member, a revoked
+    # token no longer approves; read at gate time, not only when the approval was given.
+    _, lapsed = await counting_history(db, document.id, upto=version.number)
+    why = await standing(
+        db, [policy.decider_id, version.approved_by, *policy.mandatory_reviewer_ids]
+    )
+    if policy.decider_id is not None and why.get(policy.decider_id):
+        blockers.append(
+            _problem(
+                "decider_not_current",
+                f"The designated decider {policy.decider_id} {why[policy.decider_id]}; change "
+                "the review policy",
+                ids=[policy.decider_id],
+            )
+        )
     if version.approved_at is None:
         who = "the designated decider" if policy.decider_id else "an approver"
         blockers.append(
             _problem("version_not_approved", f"Version {version.number} needs {who}'s approval")
+        )
+    elif version.approved_by is None or why.get(version.approved_by):
+        reason = why.get(version.approved_by) if version.approved_by else "is unknown"
+        blockers.append(
+            _problem(
+                "version_approval_lapsed",
+                f"Version {version.number} was approved by {version.approved_by or 'someone'}, "
+                f"who {reason}; it needs an approval again",
+                ids=[version.approved_by] if version.approved_by else [],
+            )
         )
     elif policy.decider_id is not None and version.approved_by != policy.decider_id:
         blockers.append(
@@ -487,11 +587,21 @@ async def review_problems(
             )
         )
     if unapproved:
+        gone = {r: why for k in unapproved for r, why in lapsed.get(k, {}).items()}
+        note = (
+            "; approvals that no longer count: "
+            + "; ".join(f"{r or 'someone'} {why}" for r, why in gone.items())
+            if gone
+            else ""
+        )
         blockers.append(
             _problem(
                 "missing_approval",
-                "These sections need an approval of their current text: " + ", ".join(unapproved),
+                "These sections need an approval of their current text: "
+                + ", ".join(unapproved)
+                + note,
                 section_keys=unapproved,
+                ids=[r for r in gone if r is not None],
             )
         )
     for reviewer in policy.mandatory_reviewer_ids:
@@ -501,11 +611,16 @@ async def review_problems(
             if any(m.reviewer_id == reviewer and not m.approved for m in s.mandatory_approvals)
         ]
         if pending:
+            message = (
+                f"Mandatory reviewer {reviewer} {why[reviewer]}, so their approvals do not "
+                "count; change the review policy or have them approve again: "
+                if why.get(reviewer)
+                else f"Mandatory reviewer {reviewer} has not approved the current text of: "
+            )
             blockers.append(
                 _problem(
                     "mandatory_reviewer_pending",
-                    f"Mandatory reviewer {reviewer} has not approved the current text of: "
-                    + ", ".join(pending),
+                    message + ", ".join(pending),
                     section_keys=pending,
                     ids=[reviewer],
                 )
@@ -543,10 +658,12 @@ async def review_problems(
     )
     critical = [i for i in items if i.severity == "critical"]
     if critical:
-        warnings.append(
+        # T2: a critical unresolved change request is a hard blocker.
+        blockers.append(
             _problem(
                 "open_critical_change_request",
-                f"{len(critical)} critical change request(s) are still open",
+                f"{len(critical)} critical change request(s) are still open; address or "
+                "decline them before publishing",
                 section_keys=sorted({i.section_key for i in critical if i.section_key}),
                 ids=[i.id for i in critical],
             )

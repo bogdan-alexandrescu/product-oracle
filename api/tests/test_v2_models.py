@@ -217,7 +217,13 @@ async def test_verdicts_record_the_section_hash_and_approval_the_approver(client
     assert (await client.post(f"{base}/approve", headers=h)).status_code == 200
     async with tenant_session(ctx.tenant_id) as s:
         review = await s.scalar(select(SectionReview))
-        assert review.section_hash == seeded.section_hash
+        # The review revision: the section's revision and its section link.
+        from oracle.review.state import review_revisions
+
+        bound = await review_revisions(
+            s, seeded.document_id, seeded.version_id, {"goal-trace": seeded.section_hash}
+        )
+        assert review.section_hash == bound["goal-trace"] != seeded.section_hash
         version = await s.get(DocumentVersion, seeded.version_id)
         assert version.approved_by == ctx.users["approver"].id
         assert version.base_number is None

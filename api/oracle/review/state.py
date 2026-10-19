@@ -17,6 +17,12 @@ section in the verdict's version), so:
   where the policy says so, and notifies the section's owner and reviewers. Other
   sections are untouched.
 
+A verdict binds to the section's **review revision** (:func:`review_revision`): its
+revision plus its section links, read at gate time, so a link added after an approval
+leaves it stale. And an approval counts only while its approver still is one
+(:func:`standing`, :func:`counting_history`): a demoted or removed member's approvals and
+a revoked token's are left out wherever approvals are counted.
+
 The legacy per-version view is unchanged: ``SectionOut.verdict`` and
 ``locked_section_keys`` still read the verdicts of one version only.
 
@@ -26,8 +32,11 @@ configures them) and which sections need an approval of their current revision b
 publish.
 """
 
+import hashlib
+import json
 import uuid
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -36,7 +45,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
-from oracle.auth.models import User
+from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import (
@@ -54,7 +63,12 @@ from oracle.review.schemas import (
     SectionStateOut,
     SectionStatesOut,
 )
-from oracle.v2.models import ChangeEvent, CompositionRevision, DocumentComposition
+from oracle.v2.models import (
+    ChangeEvent,
+    CompositionRevision,
+    DocumentComposition,
+    DocumentSectionLink,
+)
 
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
@@ -269,6 +283,8 @@ class Verdict:
     version: int
     revision: str | None
     created_at: datetime
+    # The section's stored revision in the verdict's version (without its links).
+    base: str | None = None
 
 
 @dataclass
@@ -289,6 +305,7 @@ async def history(
             SectionReview,
             DocumentVersion.number,
             func.coalesce(SectionReview.section_hash, Section.revision),
+            Section.revision,
         )
         .join(DocumentVersion, DocumentVersion.id == SectionReview.version_id)
         .outerjoin(
@@ -304,7 +321,7 @@ async def history(
     if key is not None:
         stmt = stmt.where(SectionReview.section_key == key)
     out = History()
-    for review, number, revision in (await db.execute(stmt)).all():
+    for review, number, revision, base in (await db.execute(stmt)).all():
         out.by_key.setdefault(review.section_key, []).append(
             Verdict(
                 review.id,
@@ -314,9 +331,115 @@ async def history(
                 number,
                 revision,
                 review.created_at,
+                base,
             )
         )
     return out
+
+
+def review_revision(revision: str, links: list[list[str | None]] | None) -> str:
+    """What a verdict binds to: the section's revision (text, cited entries, layer)
+    and its section links (kind, target, precision, claim), so a link added or changed
+    after an approval leaves the approval stale. A section without links: its
+    revision."""
+    if not links:
+        return revision
+    canonical = json.dumps(
+        [revision, sorted(links, key=json.dumps)], ensure_ascii=False, separators=(",", ":")
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+async def review_revisions(
+    db: AsyncSession, document_id: uuid.UUID, version_id: uuid.UUID, revisions: dict[str, str]
+) -> dict[str, str]:
+    """:func:`review_revision` of each section of a version (by key, from its stored
+    revision); the links of the version and those of every version count."""
+    links: dict[str, list[list[str | None]]] = defaultdict(list)
+    if revisions:
+        for link in await db.scalars(
+            select(DocumentSectionLink).where(
+                DocumentSectionLink.document_id == document_id,
+                (DocumentSectionLink.version_id == version_id)
+                | DocumentSectionLink.version_id.is_(None),
+                DocumentSectionLink.section_key.in_(list(revisions)),
+            )
+        ):
+            links[link.section_key].append(
+                [
+                    link.kind,
+                    str(link.entity_id) if link.entity_id else None,
+                    str(link.evidence_id) if link.evidence_id else None,
+                    str(link.source_item_id) if link.source_item_id else None,
+                    link.precision,
+                    link.claim,
+                ]
+            )
+    return {k: review_revision(r, links.get(k)) for k, r in revisions.items()}
+
+
+async def standing(
+    db: AsyncSession, ids: "Iterable[uuid.UUID | None]"
+) -> dict[uuid.UUID, str | None]:
+    """Whether each reviewer may approve now: ``None`` when they may, else why not.
+
+    Read at gate time, never only at verdict time: a user with the approver role (or
+    above) today; an API token acting for a user is that user; a user-less API token
+    that is active and has the approver role. A removed member, a demoted one, a revoked
+    token: their approvals no longer count (CR-06)."""
+    wanted = {i for i in ids if i is not None}
+    if not wanted:
+        return {}
+    users = {u.id: u for u in await db.scalars(select(User).where(User.id.in_(wanted)))}
+    rest = wanted - users.keys()
+    tokens = (
+        {t.id: t for t in await db.scalars(select(ApiToken).where(ApiToken.id.in_(rest)))}
+        if rest
+        else {}
+    )
+    behind = {t.user_id for t in tokens.values() if t.user_id is not None} - users.keys()
+    if behind:
+        users |= {u.id: u for u in await db.scalars(select(User).where(User.id.in_(behind)))}
+    out: dict[uuid.UUID, str | None] = {}
+    for i in wanted:
+        token = tokens.get(i)
+        if token is not None and token.revoked_at is not None:
+            out[i] = "is an API token that was revoked"
+            continue
+        user = users.get(token.user_id if token is not None and token.user_id else i)
+        if user is not None:
+            ok = has_role(user.role, "approver")
+            out[i] = None if ok else f"no longer has the approver role (now {user.role})"
+        elif token is not None and token.user_id is None:
+            ok = has_role(token.role, "approver")
+            out[i] = None if ok else f"is an API token without the approver role ({token.role})"
+        else:
+            out[i] = "is no longer a member of this company"
+    return out
+
+
+async def counting_history(
+    db: AsyncSession, document_id: uuid.UUID, upto: int | None = None, key: str | None = None
+) -> tuple[History, dict[str, dict[uuid.UUID | None, str]]]:
+    """The verdict history with only the approvals that count now (:func:`standing`),
+    and per section key the approvals left out: reviewer id -> why it no longer counts.
+    Other verdicts (changes requested, rejected) stay: an objection never lapses."""
+    hist = await history(db, document_id, upto=upto, key=key)
+    approvers = {
+        v.reviewer_id for vs in hist.by_key.values() for v in vs if v.verdict == "approved"
+    }
+    why = await standing(db, approvers)
+    lapsed: dict[str, dict[uuid.UUID | None, str]] = {}
+    for section_key, verdicts in hist.by_key.items():
+        kept = []
+        for v in verdicts:
+            reason = why.get(v.reviewer_id) if v.reviewer_id else "has no reviewer"
+            if v.verdict == "approved" and reason:
+                lapsed.setdefault(section_key, {})[v.reviewer_id] = reason
+            else:
+                kept.append(v)
+        hist.by_key[section_key] = kept
+    return hist, lapsed
 
 
 @dataclass
@@ -394,7 +517,10 @@ async def section_states(
             select(Section).where(Section.version_id == version.id).order_by(Section.ordinal)
         )
     )
-    hist = await history(db, document.id, upto=version.number)
+    hist, _ = await counting_history(db, document.id, upto=version.number)
+    current = await review_revisions(
+        db, document.id, version.id, {s.section_key: s.revision for s in sections}
+    )
     rows = await states_by_key(db, document.id)
     since = await _revision_since(db, document.id, version.number)
     required = set(await required_sections(db, document, version, policy))
@@ -430,7 +556,7 @@ async def section_states(
             for v in verdicts
             if row and v.id in set(row.invalidated_review_ids) and v.version < first
         }
-        st = section_status(verdicts, s.revision, invalidated)
+        st = section_status(verdicts, current[s.section_key], invalidated)
         counts[st.status] += 1
         approval = (
             SectionApproval(
@@ -470,7 +596,9 @@ async def section_states(
                 mandatory_approvals=[
                     MandatoryApproval(
                         reviewer_id=r,
-                        approved=reviewer_approved(verdicts, s.revision, r, invalidated),
+                        approved=reviewer_approved(
+                            verdicts, current[s.section_key], r, invalidated
+                        ),
                     )
                     for r in policy.mandatory_reviewer_ids
                 ]
@@ -550,7 +678,12 @@ async def invalidate_approvals(db: AsyncSession, event: ChangeEvent) -> None:
     if event.document_id is None or not key or not before or before == after:
         return
     hist = await history(db, event.document_id, key=key)
-    approvals = [v for v in hist.on_revision(key, before) if v.verdict == "approved"]
+    # Approvals of the old revision, with or without the section links of the time.
+    approvals = [
+        v
+        for v in hist.by_key.get(key, [])
+        if v.verdict == "approved" and before in (v.revision, v.base)
+    ]
     if not approvals:
         return
     row = await get_or_create_state(db, event.document_id, key)
@@ -667,7 +800,8 @@ async def approved_keys(
             )
         ).all()
     )
-    hist = await history(db, document_id, upto=version.number)
+    hashes = await review_revisions(db, document_id, version.id, hashes)
+    hist, _ = await counting_history(db, document_id, upto=version.number)
     rows = await states_by_key(db, document_id)
     out = set()
     for key, h in hashes.items():

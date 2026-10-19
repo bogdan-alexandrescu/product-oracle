@@ -1116,7 +1116,12 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Remove Member
+         * @description Remove a member with their sessions, API tokens, connections and sources (each
+         *     source is recorded as revoked first). Their approvals stop counting at once.
+         */
+        delete: operations["remove_member"];
         options?: never;
         head?: never;
         /** Update Member */
@@ -4570,7 +4575,7 @@ export interface components {
              * Subject Kind
              * @enum {string}
              */
-            subject_kind: "document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version";
+            subject_kind: "document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version" | "member";
             /** Subject Id */
             subject_id?: string | null;
             /** Subject Ref */
@@ -7786,7 +7791,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "version_not_approved" | "approval_not_by_decider" | "missing_required_section" | "stale_approval" | "missing_approval" | "mandatory_reviewer_pending" | "readiness_critical" | "source_permission_revoked" | "already_published" | "superseded_version" | "template_unresolved" | "open_critical_change_request" | "open_change_request" | "readiness_warning" | "approval_stale_optional" | "review_overdue";
+            code: "version_not_approved" | "version_approval_lapsed" | "decider_not_current" | "approval_not_by_decider" | "missing_required_section" | "stale_approval" | "missing_approval" | "mandatory_reviewer_pending" | "readiness_critical" | "source_permission_revoked" | "already_published" | "superseded_version" | "template_unresolved" | "open_critical_change_request" | "open_change_request" | "readiness_warning" | "approval_stale_optional" | "review_overdue";
             /** Message */
             message: string;
             /**
@@ -12584,6 +12589,49 @@ export interface operations {
             };
         };
     };
+    remove_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The last owner */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_member: {
         parameters: {
             query?: never;
@@ -17189,7 +17237,7 @@ export interface operations {
     list_change_events: {
         parameters: {
             query?: {
-                subject_kind?: ("document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version") | null;
+                subject_kind?: ("document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version" | "member") | null;
                 subject_id?: string | null;
                 document_id?: string | null;
                 limit?: number;

@@ -136,6 +136,7 @@ CHANGE_SUBJECTS = (
     "document_version",
     "entity",
     "artifact_version",
+    "member",
 )
 
 # §10, T2: advisory by default; hard only where a hard readiness check says so.

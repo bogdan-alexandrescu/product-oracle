@@ -9,8 +9,8 @@ system. Migration `0014_review` (down_revision `0013`; the integrator re-chains 
 
 Versions stay immutable (`document_versions`, `sections`). A section's **revision**
 (`sections.revision`, `SectionOut.revision`) covers its text (`content_hash`, over level,
-heading and body), the citation entries it cites (ref, title, excerpt, in citing order)
-and its brief-layer membership (`oracle.docs.parser.section_revision`). So changing the
+heading and body), the citation entries it cites (ref, title, excerpt, source and
+`retrieved_at` in UTC, in citing order) and its brief-layer membership (`oracle.docs.parser.section_revision`). So changing the
 evidence behind a section, or moving it in or out of the brief, is a new revision: it
 invalidates the section's approval and records a `document_section` change. A detail
 section that cites nothing keeps its content hash as its revision (legacy
@@ -18,8 +18,26 @@ section that cites nothing keeps its content hash as its revision (legacy
 later version that kept the section unchanged. `0014_review` backfills the revision of
 existing sections and moves verdicts given on a content hash to the revision.
 
-A verdict binds to the revision it was given on (`section_reviews.section_hash`, set
-since 0013; for older verdicts, the revision of the section in the verdict's version).
+A verdict binds to the **review revision** it was given on
+(`section_reviews.section_hash`, set since 0013; for older verdicts, the revision of the
+section in the verdict's version): the section's revision plus its section links (kind,
+target, precision, claim; the version's links and those of every version,
+`oracle.review.state.review_revision`). Links are written after a version is imported,
+so they are read at gate time: a link added or changed after an approval leaves the
+approval stale. Edits, patches and verdict conflicts still compare `revision`.
+
+An approval counts only while its approver still is one, read at gate time
+(`oracle.review.state.standing`): a user with the approver role or above today, or an
+active user-less API token with that role (a token acting for a user approves as the
+user). A demoted or removed member's approvals, and a revoked token's, are left out of
+the section states, the mandatory reviewers' approvals and the publish check, and come
+back if the member gets the role again (a removed member never comes back: a new
+member is a new id). Their objections (changes requested, rejected) stay. A role change
+(`PATCH /v1/members/{id}`) and a removal (`DELETE /v1/members/{id}`, owner, audited
+`member.remove`; the last owner cannot be removed) record a `member` change event
+(`role_changed`, `member_removed`). A removal deletes the user with their sessions, API
+tokens, connections and sources; each source gets a `source_deleted` revocation first.
+
 So, per stable section id (`{#id}`):
 
 | Status | Meaning |
@@ -102,7 +120,16 @@ unbroken run of versions still show as approved.
   and reviewers). A removed or renamed approved section is kept in place too, with a
   patch of `action: "remove"` (accepting it drops the section). The approved sections'
   citation entries are kept (the draft's front matter cannot redefine them) and so is
-  their brief membership. Unapproved sections take the draft's text as before.
+  their brief membership. Unapproved sections take the draft's text as before. A body
+  that leaves a code fence open is closed before the next section when the held draft is
+  composed, and the held draft is checked like a section edit: every approved section
+  must be there with its approved revision, or the import is refused (422
+  `approved_section_not_held`).
+- An agent's draft closes feedback (front-matter `resolutions`) only as `addressed`, and
+  only on a section whose revision the new version changes. It never declines an item,
+  never closes a document-level item and never closes one on a section it left alone
+  (a held approved section included); those resolutions are skipped, the items stay open
+  and the version carries the warning `resolution_not_applied`.
 - What is an agent's draft: a run's import (`origin="run"`), and **any REST write made
   for a run**: the MCP server's call for a run token carries the creator's session and
   the run token (`x-oracle-run-token`); REST checks the token is active, of the
@@ -162,17 +189,23 @@ nothing the check reads commits while a publish renders.
 | Blocker | When |
 |---|---|
 | `version_not_approved` / `approval_not_by_decider` | The version lacks the final approval, or it is not the designated decider's. |
+| `version_approval_lapsed` | The version's approver is no longer an approver (demoted, removed, a revoked token). |
+| `decider_not_current` | The policy's designated decider is no longer an approver; change the review policy. |
 | `missing_required_section` | A required section (template version, composition, policy) is absent. |
 | `stale_approval` / `missing_approval` | A section the policy requires has no approval of its current revision. |
-| `mandatory_reviewer_pending` | A mandatory reviewer has not approved the current revisions. |
+| `mandatory_reviewer_pending` | A mandatory reviewer has not approved the current revisions, or is no longer an approver. |
+| `open_critical_change_request` | A critical change request is still open (T2: a critical unresolved blocker). |
 | `readiness_critical` | A **hard** check of `oracle.readiness.evaluate(purpose="publish")` is critical (the blockers lane's critical-blocker check, security and policy checks). |
 | `template_unresolved` | The version names a template whose required sections cannot be read (unknown template, a `template_version` that is not a number or does not exist). Fails closed. |
-| `source_permission_revoked` | Evidence of the version comes from a revoked source. The evidence is followed back to source items: section links to an item, to baseline evidence and to an entity (and its evidence), and citations by normalized URL or item id. Revoked: a deleted item, a source on a revoked connection, a source / item whose last `source_permission` event revoked it, or a revocation tombstone naming the item, its URL, the evidence or the link. |
+| `source_permission_revoked` | Evidence of the version comes from a revoked source. The evidence is followed back to source items: section links to an item, to baseline evidence and to an entity (and its evidence), and citations by normalized URL (`http` as
+`https`, no `www.`, no trailing slash, no tracking query parameters, the rest sorted),
+by item id, by evidence id, or by the item's external id in a source of the citation's
+kind. Revoked: a deleted item, a source on a revoked connection, a source / item whose last `source_permission` event revoked it, or a revocation tombstone naming the item, its URL, the evidence or the link. |
 | `superseded_version` | A newer version exists and the company setting `publish_latest_only` (default true) is on. |
 | `already_published` | The version is already a publication. |
 
-Warnings never block (T2): advisory readiness results, open change requests (critical
-ones listed separately), lapsed approvals on sections that need none, overdue reviews.
+Warnings never block (T2): advisory readiness results, open change requests that are
+not critical, lapsed approvals on sections that need none, overdue reviews.
 The lane also registers its invariants as the hard readiness check `review_approvals`
 for the readiness dashboard; the publish check computes them itself and skips it.
 
@@ -188,7 +221,8 @@ match.
 hard-delete (items cascade; a connection's sources keep their items but lose access).
 Before that, `oracle.review.publish.record_source_revocation` records one
 `source_permission` event per source (`source_revoked` or `connection_revoked`) whose
-data is the tombstone: the items' ids and normalized URLs, the baseline evidence from
+data is the tombstone: the items' ids, external ids and normalized URLs, the baseline
+evidence from
 them and the section links to them. A section link to the item alone goes with the
 delete (its target check forbids a null target); the tombstone keeps it.
 
@@ -239,7 +273,8 @@ Extended: `POST .../versions?base_version=`, `PUT .../sections/{key}/review` (`r
 `section_patches` (with `action`), `document_publications` (+ trigger
 `document_publications_immutable` on UPDATE and DELETE), `feedback_items.severity`
 (nullable, checked), `document_versions.notes` (default `[]`) and `sections.revision`
-(backfilled). Nothing in 0013 or earlier changes; legacy rows read as before.
+(backfilled), and `change_events.subject_kind` admits `member`. Nothing in 0013 or
+earlier changes; legacy rows read as before.
 
 ## Tests
 
@@ -247,4 +282,7 @@ Extended: `POST .../versions?base_version=`, `PUT .../sections/{key}/review` (`r
 parallel sections, base version, CLI), `test_review_v2_publish.py` (§16.11 gate half,
 §16.17), `test_review_v2_routes.py` (§16.12, §16.22), `test_review_v2_legacy.py` (§16.1
 next to the legacy suite), `test_review_v2_security.py` (the security review fixes: real
-revocations, confined section edits, agent drafts, evidence in revisions, the minors).
+revocations, confined section edits, agent drafts, evidence in revisions, the minors),
+`test_review_v2_security_2.py` (round 2: approvals by current approvers only, member
+removal, the unclosed fence, revocation matching, links in the review revision, one
+markdown env per exported section, criticals gate, run resolutions).

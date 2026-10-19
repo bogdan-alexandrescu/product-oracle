@@ -466,6 +466,8 @@ class NotificationsRead(BaseModel):
 
 PublishProblemCode = Literal[
     "version_not_approved",
+    "version_approval_lapsed",
+    "decider_not_current",
     "approval_not_by_decider",
     "missing_required_section",
     "stale_approval",
@@ -476,8 +478,8 @@ PublishProblemCode = Literal[
     "already_published",
     "superseded_version",
     "template_unresolved",
-    # Warnings only:
     "open_critical_change_request",
+    # Warnings only:
     "open_change_request",
     "readiness_warning",
     "approval_stale_optional",

@@ -554,16 +554,22 @@ def compose_markdown(
     """A draft from a version's sections, with some sections' (heading, body) replaced.
 
     Untouched sections come out byte-for-byte as stored, so their content hash (and an
-    approved section's lock) is unchanged.
+    approved section's lock) is unchanged. A body that leaves a code fence open is
+    closed before the next section, so it cannot swallow the sections after it (a
+    stored version never has one but in its last section).
     """
+    from oracle.docs.parser import unclosed_fence
+
     fm = {k: v for k, v in front_matter.items() if k != "resolutions"}
     if resolutions:
         fm["resolutions"] = resolutions
     head = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip()
     parts = [f"---\n{head}\n---\n"]
-    for s in sections:
+    for i, s in enumerate(sections):
         heading, body = replace.get(s.section_key, (s.heading, s.body_md))
         parts.append(f"{'#' * s.level} {heading} {{#{s.section_key}}}\n")
+        if body and i + 1 < len(sections) and (marker := unclosed_fence(body)):
+            body = f"{body}\n{marker}"
         if body:
             parts.append(f"{body}\n")
     return "\n".join(parts)

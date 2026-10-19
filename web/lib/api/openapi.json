@@ -3999,6 +3999,55 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Remove Member",
+        "description": "Remove a member with their sessions, API tokens, connections and sources (each\nsource is recorded as revoked first). Their approvals stop counting at once.",
+        "operationId": "remove_member",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "409": {
+            "description": "The last owner"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/invites": {
@@ -12569,7 +12618,8 @@
                     "composition_revision",
                     "document_version",
                     "entity",
-                    "artifact_version"
+                    "artifact_version",
+                    "member"
                   ],
                   "type": "string"
                 },
@@ -16355,7 +16405,8 @@
               "composition_revision",
               "document_version",
               "entity",
-              "artifact_version"
+              "artifact_version",
+              "member"
             ],
             "title": "Subject Kind"
           },
@@ -25045,6 +25096,8 @@
             "type": "string",
             "enum": [
               "version_not_approved",
+              "version_approval_lapsed",
+              "decider_not_current",
               "approval_not_by_decider",
               "missing_required_section",
               "stale_approval",

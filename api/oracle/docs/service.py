@@ -533,6 +533,19 @@ async def import_draft(
                 section_keys=sorted(held),
             )
         )
+    resolutions = draft.resolutions
+    if origin == "run" and previous is not None and resolutions:
+        resolutions, skipped = await _run_resolutions(db, document, previous, draft, revisions)
+        if skipped:
+            warnings.append(
+                VersionWarning(
+                    code="resolution_not_applied",
+                    message="an agent's draft closes feedback only as addressed, and only "
+                    "on a section whose text or evidence it changed in this version; "
+                    f"these stay open: {', '.join(skipped)}",
+                    section_keys=sorted({k for k in skipped.values() if k}),
+                )
+            )
     notes: list[VersionWarning] = []
     if previous is not None and base_version is None and cause == "draft_imported":
         notes.append(
@@ -619,7 +632,7 @@ async def import_draft(
 
     try:
         await review_service.apply_resolutions(
-            db, document.id, version.id, draft.resolutions, principal=principal
+            db, document.id, version.id, resolutions, principal=principal
         )
     except review_service.UnknownFeedbackItemsError as exc:
         await db.rollback()
@@ -753,6 +766,44 @@ async def _check_base(
         )
 
 
+async def _run_resolutions(
+    db: AsyncSession,
+    document: Document,
+    previous: DocumentVersion,
+    draft: ParsedDraft,
+    revisions: dict[str, str],
+) -> tuple[list, dict[str, str | None]]:
+    """The resolutions of an agent's draft it may apply, and the ones it may not (feedback
+    id -> section key). An agent closes a feedback item only as ``addressed`` and only
+    when the item is on a section whose revision this version changes: it never
+    declines feedback, never closes a document-level item, and never closes an item on a
+    section it left alone (an approved section it changed is held, so it is left alone
+    until its patch is accepted). Unknown ids pass through (the import refuses them)."""
+    from oracle.review.models import FeedbackItem
+
+    before = {k: s.revision for k, s in (await _section_rows(db, previous.id)).items()}
+    changed = {k for k, r in revisions.items() if before.get(k) != r}
+    ids = [r.feedback_id for r in draft.resolutions]
+    items = {
+        i.id: i
+        for i in await db.scalars(
+            select(FeedbackItem).where(
+                FeedbackItem.document_id == document.id, FeedbackItem.id.in_(ids)
+            )
+        )
+    }
+    keep, skipped = [], {}
+    for res in draft.resolutions:
+        item = items.get(res.feedback_id)
+        if item is None or (
+            res.status == "addressed" and item.section_key and item.section_key in changed
+        ):
+            keep.append(res)
+        else:
+            skipped[str(res.feedback_id)] = item.section_key
+    return keep, skipped
+
+
 async def _hold_approved_sections(
     db: AsyncSession, document: Document, previous: DocumentVersion, draft: ParsedDraft
 ) -> tuple[ParsedDraft, dict[str, HeldSection]]:
@@ -837,6 +888,24 @@ async def _hold_approved_sections(
             == layers.BRIEF
         ]
         out = parse_draft(compose_markdown(front_matter, sections, {}, resolutions))
+        _, _, layer_of = await _layers(db, document, out)
+    # As a section edit is checked (oracle.docs.edit._confined): the draft to import has
+    # every approved section with its approved revision, or it is refused.
+    revisions = draft_revisions(out, layer_of)
+    lost = [k for k in sorted(approved) if revisions.get(k) != old[k].revision]
+    if lost:
+        raise DraftError(
+            [
+                ImportProblem(
+                    code="approved_section_not_held",
+                    message=f"approved section {k!r} would not keep its approved text, "
+                    "evidence and place in this draft; close code fences and keep its "
+                    "heading on its own line",
+                    section_key=k,
+                )
+                for k in lost
+            ]
+        )
     return out, held
 
 

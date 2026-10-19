@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, changes
 from oracle.auth.models import ROLES, Role, User
 from oracle.members.models import Invite
 from oracle.members.schemas import InviteOut, InviteStatus
@@ -85,7 +85,58 @@ async def set_role(
     await audit.record(
         session, principal, "member.role", "user", user.id, {"before": before, "after": role}
     )
+    # Review gates read approvers' current roles; the change event tells every lane.
+    await changes.record_change(
+        session,
+        "member",
+        cause="role_changed",
+        actor=principal,
+        subject_id=user.id,
+        subject_ref=f"member:{user.id}",
+        data={"before": before, "after": role},
+    )
     return user
+
+
+async def remove_member(session: AsyncSession, principal: "Principal", user_id: uuid.UUID) -> None:
+    """Remove a member: their user row goes, and with it their sessions, API tokens,
+    connections and sources. Each source first gets a ``source_permission`` revocation
+    (oracle.review.publish), so documents citing it cannot publish. Their verdicts and
+    approvals stay in the history but no longer count (oracle.review.state.standing).
+    The last owner cannot be removed."""
+    from oracle.review.publish import record_source_revocation
+    from oracle.sources.models import Source
+
+    user = await session.get(User, user_id, with_for_update=True)
+    if user is None:
+        raise MemberError("not_found", f"Member {user_id} not found")
+    if user.role == "owner":
+        owners = (
+            await session.scalars(select(User.id).where(User.role == "owner").with_for_update())
+        ).all()
+        if len(owners) <= 1:
+            raise MemberError("conflict", "Cannot remove the last owner; make someone else owner")
+    sources = list(await session.scalars(select(Source).where(Source.owner_user_id == user.id)))
+    await record_source_revocation(session, principal, sources, "source_deleted", drop_links=True)
+    await audit.record(
+        session,
+        principal,
+        "member.remove",
+        "user",
+        user.id,
+        {"email": user.email, "role": user.role, "sources": [str(x.id) for x in sources]},
+    )
+    await changes.record_change(
+        session,
+        "member",
+        cause="member_removed",
+        actor=principal,
+        subject_id=user.id,
+        subject_ref=f"member:{user.id}",
+        data={"before": user.role, "after": None},
+    )
+    await session.delete(user)
+    await session.flush()
 
 
 # --- Invites -----------------------------------------------------------------------------

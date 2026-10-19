@@ -451,13 +451,19 @@ async def review_section(
     section = await _get_section(session, version, section_key)
     if revision is not None:
         await _check_revision(session, version, section, revision)
+    from oracle.review.state import review_revisions
+
+    bound = await review_revisions(
+        session, version.document_id, version.id, {section_key: section.revision}
+    )
     review = SectionReview(
         version_id=version.id,
         section_key=section_key,
         verdict=verdict,
         note=note,
         reviewer_id=principal.user_id or principal.id,
-        section_hash=section.revision,
+        # The review revision: the section's revision and its section links.
+        section_hash=bound[section_key],
         created_at=_now(),
     )
     session.add(review)
