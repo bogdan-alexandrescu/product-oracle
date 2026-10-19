@@ -93,6 +93,28 @@ test("settings: its own strip routes to each section, Settings stays active", as
   }
 });
 
+for (const scheme of ["light", "dark"] as const) {
+  test(`rail (${scheme}): SwarmCloud's colours, the same in both themes`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await login(page);
+    const nav = page.getByTestId("app-nav");
+    await expect(nav).toHaveCSS("background-image", "linear-gradient(rgb(11, 58, 122), rgb(6, 16, 30))");
+    const prds = nav.getByTestId("nav-prds");
+    await expect(prds).toHaveCSS("background-color", "rgb(34, 86, 147)");
+    await expect(prds).toHaveCSS("color", "rgb(255, 255, 255)");
+    // The selected item's sky bar, 6 px left of it.
+    const bar = await prds.evaluate((el) => {
+      const s = getComputedStyle(el, "::before");
+      return [s.backgroundColor, s.width, s.left];
+    });
+    expect(bar).toEqual(["rgb(124, 200, 248)", "3px", "-9px"]);
+    await expect(nav.getByTestId("nav-home")).toHaveCSS("color", "rgb(188, 214, 238)");
+    const badge = nav.getByTestId("nav-inbox-badge");
+    await expect(badge).toHaveCSS("background-color", "rgb(245, 196, 81)");
+    await expect(badge).toHaveCSS("color", "rgb(6, 16, 30)");
+  });
+}
+
 test("/settings redirects to members", async ({ page }) => {
   await login(page);
   await page.goto("/settings");
@@ -112,20 +134,20 @@ test("user menu: the theme switch overrides the system setting and is remembered
   await theme.getByRole("radio", { name: "Dark" }).click();
   await expect(html).toHaveAttribute("data-theme", "dark");
   const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  expect(await bg()).toBe("rgb(14, 13, 26)");
+  expect(await bg()).toBe("rgb(6, 16, 30)");
 
   // Survives a full reload (applied before paint) while the system stays light.
   await page.reload();
   await expect(html).toHaveAttribute("data-theme", "dark");
-  expect(await bg()).toBe("rgb(14, 13, 26)");
+  expect(await bg()).toBe("rgb(6, 16, 30)");
 
   // Back to System: follows the system setting again.
   await page.getByTestId("user-menu").click();
   await page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: "System" }).click();
   await expect(html).not.toHaveAttribute("data-theme");
-  expect(await bg()).toBe("rgb(245, 244, 251)");
+  expect(await bg()).toBe("rgb(243, 246, 249)");
   await page.emulateMedia({ colorScheme: "dark" });
-  expect(await bg()).toBe("rgb(14, 13, 26)");
+  expect(await bg()).toBe("rgb(6, 16, 30)");
 });
 
 test("phone: a tab bar with Home, PRDs, Roadmap, Inbox and More, no sideways scroll", async ({ page }) => {

@@ -33,7 +33,7 @@ export function Ring({
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const t = tone === "auto" ? (v != null && v < 50 ? "warn" : "accent") : tone;
-  const col = hero ? "var(--lime)" : TONE_VAR[t];
+  const col = hero ? "var(--hero-accent)" : TONE_VAR[t];
   const fs = size >= 56 ? 18 : size >= 40 ? 14 : 13;
   return (
     <svg
@@ -71,7 +71,7 @@ export function Ring({
         y="50%"
         dy=".35em"
         textAnchor="middle"
-        fontFamily="var(--font-inter), sans-serif"
+        fontFamily="var(--font-sans)"
         fontWeight={600}
         fontSize={fs}
         fill={hero ? "var(--hero-text)" : "var(--text)"}

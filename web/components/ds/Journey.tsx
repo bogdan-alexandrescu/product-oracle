@@ -46,7 +46,7 @@ export function JourneyTrack({
             state(i) === "done"
               ? "bg-accent"
               : state(i) === "current"
-                ? "bg-lime shadow-[0_0_0_2px_var(--on-lime)]"
+                ? "bg-brand shadow-[0_0_0_2px_var(--on-brand)]"
                 : "bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]"
           }`}
         />
@@ -66,7 +66,7 @@ export function JourneyTrack({
                 state(i) === "done"
                   ? "bg-accent"
                   : state(i) === "current"
-                    ? "bg-lime shadow-[inset_0_0_0_2px_var(--on-lime)]"
+                    ? "bg-brand shadow-[inset_0_0_0_2px_var(--on-brand)]"
                     : "bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]"
               }`}
             />
@@ -99,7 +99,7 @@ export function JourneyTrack({
             >
               <i
                 className={`grid size-[22px] place-items-center rounded-full font-mono text-[13px] leading-[22px] not-italic ${
-                  st === "done" ? "bg-pass-bg text-pass" : st === "current" ? "bg-lime text-on-lime" : "bg-surface2 text-text2"
+                  st === "done" ? "bg-pass-bg text-pass" : st === "current" ? "bg-brand text-on-brand" : "bg-surface2 text-text2"
                 }`}
               >
                 {st === "done" ? "✓" : i + 1}

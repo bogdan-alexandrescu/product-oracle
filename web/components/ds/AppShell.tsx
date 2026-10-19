@@ -61,7 +61,7 @@ function Badge({ n, testId }: { n: number | null; testId?: string }) {
     <span
       data-testid={testId}
       aria-label={`${n} waiting`}
-      className="tnum absolute top-0.5 right-3 h-5 min-w-5 rounded-[10px] bg-lime px-[5px] text-center text-[13px] leading-5 font-semibold text-on-lime max-[600px]:right-auto max-[600px]:left-[calc(50%+6px)]"
+      className="tnum absolute top-1 right-1.5 h-4 min-w-4 rounded-lg bg-rail-badge px-1 text-center font-mono text-[13px] leading-4 font-semibold text-on-rail-badge max-[600px]:right-auto max-[600px]:left-[calc(50%+6px)]"
     >
       {n}
     </span>
@@ -118,7 +118,7 @@ function UserMenu({ placement }: { placement: "rail" | "sheet" }) {
       aria-label="Account"
       className={
         placement === "rail"
-          ? "absolute bottom-0 left-[calc(100%+12px)] z-50 w-72 rounded-panel border border-line bg-surface p-3 text-text shadow-tip"
+          ? "absolute bottom-0 left-[calc(100%+12px)] z-50 w-72 rounded-panel border border-line bg-surface p-3 text-text shadow-tip [--focus-ring:var(--accent)]"
           : "border-t border-line pt-3"
       }
     >
@@ -181,7 +181,7 @@ function UserMenu({ placement }: { placement: "rail" | "sheet" }) {
         title={email}
         data-testid="user-menu"
         onClick={() => setOpen((o) => !o)}
-        className="grid size-[38px] place-items-center rounded-full bg-accent text-sm font-semibold text-on-accent"
+        className="grid size-[38px] place-items-center rounded-full bg-rail-avatar text-sm font-semibold text-on-rail-avatar ring-2 ring-rail-avatar-ring"
       >
         {initials}
         <span className="sr-only" data-testid="signed-in-as">
@@ -193,6 +193,16 @@ function UserMenu({ placement }: { placement: "rail" | "sheet" }) {
   );
 }
 
+/**
+ * The selected rail item (aria-current): #225693, white, and a 3 px sky bar 6 px left of the
+ * item, inset 10 px top and bottom. Styled from the attribute, so hover never repaints it.
+ */
+const RAIL_SELECTED =
+  "aria-[current=page]:bg-rail-active aria-[current=page]:font-semibold aria-[current=page]:text-rail-active-text aria-[current=page]:before:absolute aria-[current=page]:before:inset-y-2.5 aria-[current=page]:before:-left-[9px] aria-[current=page]:before:w-[3px] aria-[current=page]:before:rounded-[2px] aria-[current=page]:before:bg-rail-bar aria-[current=page]:before:content-['']";
+/** On the phone tab bar the bar sits on top instead. */
+const TAB_BAR =
+  "before:absolute before:inset-x-2.5 before:-top-1.5 before:h-[3px] before:rounded-[2px] before:bg-rail-bar before:content-['']";
+
 function RailLink({ d, pathname, badge }: { d: Dest; pathname: string; badge?: number | null }) {
   const active = isActive(pathname, d);
   return (
@@ -200,11 +210,9 @@ function RailLink({ d, pathname, badge }: { d: Dest; pathname: string; badge?: n
       href={d.href}
       data-testid={d.testId}
       aria-current={active ? "page" : undefined}
-      className={`relative flex w-[78px] flex-col items-center gap-0.5 rounded-xl pt-[7px] pb-1.5 text-[13px] leading-4 ${
-        active ? "bg-nav-active font-semibold text-nav-active-text" : "font-medium text-nav-text hover:bg-hero-2"
-      }`}
+      className={`relative flex w-[70px] flex-col items-center gap-0.5 rounded-[10px] pt-[7px] pb-1.5 text-[13px] leading-4 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${RAIL_SELECTED}`}
     >
-      <Icon name={d.icon} />
+      <Icon name={d.icon} stroke={1.7} />
       {d.label}
       {badge !== undefined && <Badge n={badge} testId={`${d.testId}-badge`} />}
     </Link>
@@ -236,12 +244,12 @@ function Navs() {
       <nav
         aria-label="Oracle"
         data-testid="app-nav"
-        className="sticky top-0 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 bg-nav py-3.5 max-[600px]:hidden"
+        className="sticky top-0 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 bg-rail py-3.5 [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
       >
         <Link
           href="/home"
           aria-label="Product Oracle"
-          className="mb-3 grid size-10 flex-none place-items-center rounded-xl bg-lime font-display text-[19px] font-bold text-on-lime"
+          className="mb-3 grid size-10 flex-none place-items-center rounded-xl bg-brand font-display tracking-heading text-[19px] font-bold text-on-brand"
         >
           Q
         </Link>
@@ -249,6 +257,7 @@ function Navs() {
           <RailLink key={d.href} d={d} pathname={pathname} badge={d.label === "Inbox" ? inbox : undefined} />
         ))}
         <span className="flex-1" />
+        <span aria-hidden className="mb-1.5 h-px w-10 flex-none bg-rail-sep" />
         <RailLink d={SETTINGS} pathname={pathname} />
         <UserMenu placement="rail" />
       </nav>
@@ -256,7 +265,7 @@ function Navs() {
       <nav
         aria-label="Oracle"
         data-testid="tab-bar"
-        className="fixed inset-x-0 bottom-0 z-40 hidden h-[68px] grid-cols-5 bg-nav px-1.5 pt-1.5 pb-2 max-[600px]:grid"
+        className="fixed inset-x-0 bottom-0 z-40 hidden h-[68px] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] pt-1.5 pb-2 max-[600px]:grid"
       >
         {tabDests.map((d) => {
           const active = isActive(pathname, d) && !more;
@@ -266,11 +275,11 @@ function Navs() {
               href={d.href}
               data-testid={`tab-${d.testId.slice(4)}`}
               aria-current={active ? "page" : undefined}
-              className={`relative flex flex-col items-center justify-center gap-[3px] rounded-xl text-[13px] leading-4 ${
-                active ? "bg-nav-active font-semibold text-nav-active-text" : "font-medium text-nav-text"
+              className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
+                active ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
               }`}
             >
-              <Icon name={d.icon} />
+              <Icon name={d.icon} stroke={1.7} />
               <span>{d.label}</span>
               {d.label === "Inbox" && <Badge n={inbox} />}
             </Link>
@@ -282,11 +291,11 @@ function Navs() {
           aria-controls="more-sheet"
           data-testid="tab-more"
           onClick={() => setMore((m) => !m)}
-          className={`relative flex flex-col items-center justify-center gap-[3px] rounded-xl text-[13px] leading-4 ${
-            more || moreActive ? "bg-nav-active font-semibold text-nav-active-text" : "font-medium text-nav-text"
+          className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
+            more || moreActive ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
           }`}
         >
-          <Icon name="more" />
+          <Icon name="more" stroke={1.7} />
           More
         </button>
       </nav>
@@ -319,7 +328,7 @@ function Navs() {
 }
 
 /**
- * The app shell (I3): a dark rail with the nine destinations on desktop, a tab bar
+ * The app shell (I3): SwarmCloud's navy rail with the nine destinations on desktop, a tab bar
  * (Home, PRDs, Roadmap, Inbox, More) on a phone. No rail on /login, /oauth and when
  * signed out: its grid column then collapses to nothing.
  */

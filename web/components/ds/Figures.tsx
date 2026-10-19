@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Initials in a circle. `oracle` is the Oracle's own lime avatar; `me` the signed-in user's. */
+/** Initials in a circle. `oracle` is the Oracle's own accent-soft avatar; `me` the signed-in user's. */
 /**
  * Two letters for a person: from their name ("Ada Lovelace" -> "AL"), else from an
  * email's local part ("pat.lee@" -> "PL", "admin@" -> "AD"), never from the domain.
@@ -26,7 +26,7 @@ export function Avatar({
   const ini = initials ?? initialsOf(name);
   const cls =
     tone === "oracle"
-      ? "bg-lime text-on-lime"
+      ? "bg-accent-soft text-accent-ink"
       : tone === "me"
         ? "bg-accent text-on-accent"
         : "border border-line bg-surface2 text-text";

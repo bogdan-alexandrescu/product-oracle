@@ -14,13 +14,13 @@ export function AuthCard({ title, children, testId }: { title: string; children:
         <div className="mb-5 flex items-center gap-3">
           <span
             aria-hidden
-            className="grid size-10 flex-none place-items-center rounded-xl bg-lime font-display text-[19px] font-bold text-on-lime"
+            className="grid size-10 flex-none place-items-center rounded-xl bg-brand font-display tracking-heading text-[19px] font-bold text-on-brand"
           >
             Q
           </span>
-          <span className="font-display text-[15px] font-semibold text-text2">Product Oracle</span>
+          <span className="font-display tracking-heading text-[15px] font-semibold text-text2">Product Oracle</span>
         </div>
-        <h1 className="mb-5 font-display text-[28px] leading-8 font-bold tracking-[-0.02em] max-[600px]:text-2xl max-[600px]:leading-7">
+        <h1 className="mb-5 font-display text-[28px] leading-8 font-bold tracking-heading max-[600px]:text-2xl max-[600px]:leading-7">
           {title}
         </h1>
         {children}

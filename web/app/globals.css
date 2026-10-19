@@ -8,122 +8,128 @@
  * Theme: light by default, dark when the system asks for it, unless the user picked
  * one in the user menu (data-theme on <html>, set before paint by the layout).
  */
-/* Generated from docs/product-oracle-v2/design/chosen/B1/tokens.json (B1 Split, I3). */
+/* I3 palette "Open sky" (owner, 2026-10-19), as SwarmCloud's console uses it. Replaces B1's
+   violet and lime; B1's token names stay. Contrast of every text pair: the PR's report. */
 :root {
-  --bg: #f5f4fb;
+  --bg: #f3f6f9;
   --surface: #ffffff;
-  --surface2: #efedf8;
-  --line: #dedaee;
-  --line-strong: #b9b3d6;
-  --text: #16132c;
-  --text2: #3f3a63;
-  --accent: #5a3cf0;
+  --surface2: #eef4fa;
+  --line: #d6e0ea;
+  --line-strong: #7d8ea3;
+  --text: #0d1724;
+  --text2: #4f5d6e;
+  --text-faint: #606a77;
+  --accent: #0369a1;
   --on-accent: #ffffff;
-  --accent-ink: #3d23b8;
-  --accent-soft: #ebe6ff;
-  --accent-mid: #c9bfff;
-  --hero: #1c1838;
-  --hero-2: #2a2550;
-  --hero-text: #f3f1ff;
-  --hero-text2: #d4cff5;
-  --hero-line: #3b3566;
-  --lime: #c8f169;
-  --on-lime: #16132c;
-  --pass: #0d6a4c;
-  --pass-bg: #d9f4e8;
-  --warn: #7a3f00;
-  --warn-bg: #ffecd0;
-  --crit: #a3122f;
-  --crit-bg: #ffe1e8;
-  --na: #46416b;
-  --na-bg: #ebe9f3;
-  --nav: #16132c;
-  --nav-text: #d4cff5;
-  --nav-active: #c8f169;
-  --nav-active-text: #16132c;
-  --tip: #16132c;
-  --tip-text: #f3f1ff;
-  --spark-fill: rgba(90, 60, 240, 0.1);
-  --shadow: 0 1px 2px rgba(22, 19, 44, 0.06);
-  --tip-shadow: 0 12px 32px rgba(22, 19, 44, 0.28);
+  --accent-ink: #075985;
+  --accent-soft: #e5f3fc;
+  --accent-mid: #b6daf2;
+  --hero: #0c1a2e;
+  --hero-2: #173052;
+  --hero-text: #eef4fa;
+  --hero-text2: #b4c3d4;
+  --hero-line: #2a4568;
+  --hero-accent: #7cc8f8;
+  /* Sky: the logo tile and the journey's current step only (lime is retired). */
+  --brand: #38bdf8;
+  --on-brand: #06101e;
+  --pass: #0a7a55;
+  --pass-bg: #e3f5ee;
+  --warn: #8a5a00;
+  --warn-bg: #fdf3dc;
+  --crit: #b42318;
+  --crit-bg: #fdecea;
+  --na: #5b6878;
+  --na-bg: #eef1f5;
+  --tip: #0d1724;
+  --tip-text: #eef4fa;
+  --spark-fill: rgba(3, 105, 161, 0.1);
+  --shadow: 0 1px 2px rgba(13, 23, 36, 0.06);
+  --tip-shadow: 0 12px 32px rgba(13, 23, 36, 0.28);
+  /* The rail and the phone tab bar: the same in both themes (SwarmCloud's rail, state for state). */
+  --rail: linear-gradient(180deg, #0b3a7a, #06101e);
+  --rail-foot: #06101e;
+  --rail-text: #bcd6ee;
+  --rail-hover: #194b89;
+  --rail-active: #225693;
+  --rail-active-text: #ffffff;
+  --rail-bar: #7cc8f8;
+  --rail-badge: #f5c451;
+  --on-rail-badge: #06101e;
+  --rail-sep: rgba(255, 255, 255, 0.16);
+  --rail-avatar: #0369a1;
+  --on-rail-avatar: #ffffff;
+  --rail-avatar-ring: rgba(255, 255, 255, 0.18);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e0d1a;
-    --surface: #17152b;
-    --surface2: #1f1c38;
-    --line: #2d2950;
-    --line-strong: #4a4478;
-    --text: #f1efff;
-    --text2: #c9c4ec;
-    --accent: #a796ff;
-    --on-accent: #120f26;
-    --accent-ink: #c3b8ff;
-    --accent-soft: #2a2357;
-    --accent-mid: #4a4185;
-    --hero: #241f4a;
-    --hero-2: #2e2860;
-    --hero-text: #f3f1ff;
-    --hero-text2: #d4cff5;
-    --hero-line: #40397a;
-    --lime: #c8f169;
-    --on-lime: #16132c;
-    --pass: #5fe0a9;
-    --pass-bg: #0f2b22;
-    --warn: #ffc46e;
-    --warn-bg: #2f2413;
-    --crit: #ff8ca6;
-    --crit-bg: #3a1426;
-    --na: #c9c4ec;
-    --na-bg: #221f3a;
-    --nav: #07060f;
-    --nav-text: #c9c4ec;
-    --nav-active: #c8f169;
-    --nav-active-text: #16132c;
-    --tip: #f1efff;
-    --tip-text: #16132c;
-    --spark-fill: rgba(167, 150, 255, 0.14);
+    --bg: #06101e;
+    --surface: #0c1a2e;
+    --surface2: #11233b;
+    --line: #1e3350;
+    --line-strong: #5f7087;
+    --text: #eef4fa;
+    --text2: #9fb0c4;
+    --text-faint: #828d9b;
+    --accent: #7cc8f8;
+    --on-accent: #06101e;
+    --accent-ink: #b9e3fc;
+    --accent-soft: #10294a;
+    --accent-mid: #1f4a7a;
+    --hero: #11233b;
+    --hero-2: #1a3352;
+    --hero-text: #eef4fa;
+    --hero-text2: #9fb0c4;
+    --hero-line: #2e4c72;
+    --hero-accent: #7cc8f8;
+    --pass: #4cd9a0;
+    --pass-bg: #0d2e25;
+    --warn: #f5c451;
+    --warn-bg: #3a2a0c;
+    --crit: #ff8a80;
+    --crit-bg: #3a1512;
+    --na: #9aa8b8;
+    --na-bg: #16263b;
+    --tip: #eef4fa;
+    --tip-text: #0d1724;
+    --spark-fill: rgba(124, 200, 248, 0.14);
     --shadow: none;
     --tip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0e0d1a;
-  --surface: #17152b;
-  --surface2: #1f1c38;
-  --line: #2d2950;
-  --line-strong: #4a4478;
-  --text: #f1efff;
-  --text2: #c9c4ec;
-  --accent: #a796ff;
-  --on-accent: #120f26;
-  --accent-ink: #c3b8ff;
-  --accent-soft: #2a2357;
-  --accent-mid: #4a4185;
-  --hero: #241f4a;
-  --hero-2: #2e2860;
-  --hero-text: #f3f1ff;
-  --hero-text2: #d4cff5;
-  --hero-line: #40397a;
-  --lime: #c8f169;
-  --on-lime: #16132c;
-  --pass: #5fe0a9;
-  --pass-bg: #0f2b22;
-  --warn: #ffc46e;
-  --warn-bg: #2f2413;
-  --crit: #ff8ca6;
-  --crit-bg: #3a1426;
-  --na: #c9c4ec;
-  --na-bg: #221f3a;
-  --nav: #07060f;
-  --nav-text: #c9c4ec;
-  --nav-active: #c8f169;
-  --nav-active-text: #16132c;
-  --tip: #f1efff;
-  --tip-text: #16132c;
-  --spark-fill: rgba(167, 150, 255, 0.14);
+  --bg: #06101e;
+  --surface: #0c1a2e;
+  --surface2: #11233b;
+  --line: #1e3350;
+  --line-strong: #5f7087;
+  --text: #eef4fa;
+  --text2: #9fb0c4;
+  --text-faint: #828d9b;
+  --accent: #7cc8f8;
+  --on-accent: #06101e;
+  --accent-ink: #b9e3fc;
+  --accent-soft: #10294a;
+  --accent-mid: #1f4a7a;
+  --hero: #11233b;
+  --hero-2: #1a3352;
+  --hero-text: #eef4fa;
+  --hero-text2: #9fb0c4;
+  --hero-line: #2e4c72;
+  --hero-accent: #7cc8f8;
+  --pass: #4cd9a0;
+  --pass-bg: #0d2e25;
+  --warn: #f5c451;
+  --warn-bg: #3a2a0c;
+  --crit: #ff8a80;
+  --crit-bg: #3a1512;
+  --na: #9aa8b8;
+  --na-bg: #16263b;
+  --tip: #eef4fa;
+  --tip-text: #0d1724;
+  --spark-fill: rgba(124, 200, 248, 0.14);
   --shadow: none;
   --tip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
@@ -137,6 +143,7 @@
   --color-line-strong: var(--line-strong);
   --color-text: var(--text);
   --color-text2: var(--text2);
+  --color-text-faint: var(--text-faint);
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);
   --color-accent-ink: var(--accent-ink);
@@ -147,8 +154,9 @@
   --color-hero-text: var(--hero-text);
   --color-hero-text2: var(--hero-text2);
   --color-hero-line: var(--hero-line);
-  --color-lime: var(--lime);
-  --color-on-lime: var(--on-lime);
+  --color-hero-accent: var(--hero-accent);
+  --color-brand: var(--brand);
+  --color-on-brand: var(--on-brand);
   --color-pass: var(--pass);
   --color-pass-bg: var(--pass-bg);
   --color-warn: var(--warn);
@@ -157,12 +165,20 @@
   --color-crit-bg: var(--crit-bg);
   --color-na: var(--na);
   --color-na-bg: var(--na-bg);
-  --color-nav: var(--nav);
-  --color-nav-text: var(--nav-text);
-  --color-nav-active: var(--nav-active);
-  --color-nav-active-text: var(--nav-active-text);
   --color-tip: var(--tip);
   --color-tip-text: var(--tip-text);
+  --color-rail-foot: var(--rail-foot);
+  --color-rail-text: var(--rail-text);
+  --color-rail-hover: var(--rail-hover);
+  --color-rail-active: var(--rail-active);
+  --color-rail-active-text: var(--rail-active-text);
+  --color-rail-bar: var(--rail-bar);
+  --color-rail-badge: var(--rail-badge);
+  --color-on-rail-badge: var(--on-rail-badge);
+  --color-rail-sep: var(--rail-sep);
+  --color-rail-avatar: var(--rail-avatar);
+  --color-on-rail-avatar: var(--on-rail-avatar);
+  --color-rail-avatar-ring: var(--rail-avatar-ring);
 
   --color-white: var(--surface);
   --color-black: var(--text);
@@ -220,17 +236,13 @@
   --color-sky-700: var(--accent-ink);
   --color-sky-800: var(--accent-ink);
   --color-sky-900: var(--accent-ink);
-  --color-violet-50: var(--accent-soft);
-  --color-violet-100: var(--accent-soft);
-  --color-violet-200: var(--accent-mid);
-  --color-violet-500: var(--accent);
-  --color-violet-600: var(--accent);
-  --color-violet-700: var(--accent-ink);
-  --color-violet-800: var(--accent-ink);
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-bricolage), var(--font-inter), system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  /* Inter Tight for the UI, DM Mono for figures, ids and code. Headings are Inter Tight too
+     (`font-display` + `tracking-heading`, weight 650-700): no separate display face. */
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+  --tracking-heading: -0.015em;
 
   /* Type scale (tokens.json): nothing under 13 px; body 15/22. */
   --text-xs: 13px;
@@ -266,6 +278,11 @@ body {
   font: 400 15px/22px var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+/* The rail's gradient (desktop rail; the phone tab bar uses its foot, bg-rail-foot). */
+@utility bg-rail {
+  background: var(--rail);
+}
+
 /* Tabular figures on numbers only (round 2: not on the whole body). */
 .tnum {
   font-variant-numeric: tabular-nums;
@@ -285,8 +302,9 @@ body {
     --fade-r: 32px;
   }
 }
+/* The rail sets --focus-ring to its sky (#7cc8f8); elsewhere the ring is the accent. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring, var(--accent));
   outline-offset: 2px;
 }
 

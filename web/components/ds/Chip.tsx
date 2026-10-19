@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Status colours are only for status (B1); `now` (lime) only for "now"; `acc` for counts and kinds. */
+/** Status colours are only for status (B1); `now` (accent-soft) only for "now"; `acc` for counts and kinds. */
 export type ChipKind = "pass" | "warn" | "crit" | "na" | "acc" | "now" | "line";
 
 const KIND: Record<ChipKind, string> = {
@@ -9,7 +9,7 @@ const KIND: Record<ChipKind, string> = {
   crit: "bg-crit-bg text-crit",
   na: "bg-na-bg text-na",
   acc: "bg-accent-soft text-accent-ink",
-  now: "bg-lime text-on-lime",
+  now: "bg-accent-soft text-accent-ink",
   line: "border border-line-strong bg-transparent text-text",
 };
 

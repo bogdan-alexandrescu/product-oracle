@@ -324,7 +324,7 @@ function Ledger({
                       <button
                         type="button"
                         onClick={() => onOpen(group.product!.id)}
-                        className="min-w-0 truncate font-display font-bold hover:underline"
+                        className="min-w-0 truncate font-display tracking-heading font-bold hover:underline"
                       >
                         {group.product.title}
                       </button>
@@ -332,7 +332,7 @@ function Ledger({
                       <LockMark entity={group.product} meId={meId} />
                     </>
                   ) : (
-                    <span className="font-display font-bold text-text2">Unassigned</span>
+                    <span className="font-display tracking-heading font-bold text-text2">Unassigned</span>
                   )}
                   <span className="tnum ml-auto text-sm font-semibold text-text2">{group.features.length}</span>
                 </span>

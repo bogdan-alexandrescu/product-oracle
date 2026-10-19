@@ -59,7 +59,7 @@ export function Inspector({
           {action}
         </div>
         {title && (
-          <h2 className="mt-1.5 mb-2.5 font-display text-[22px] leading-[27px] font-bold tracking-[-0.01em] break-words">{title}</h2>
+          <h2 className="mt-1.5 mb-2.5 font-display text-[22px] leading-[27px] font-bold tracking-heading break-words">{title}</h2>
         )}
         {chips && <div className="flex flex-wrap gap-2">{chips}</div>}
         {head}

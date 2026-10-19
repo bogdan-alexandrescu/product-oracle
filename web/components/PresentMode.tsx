@@ -146,7 +146,7 @@ function ExpandOverlay({ deck, item, onClose }: { deck: DeckOut; item: ExpandOut
       >
         <div className="flex min-h-14 items-center gap-3 bg-hero px-5 py-2 text-hero-text">
           <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">Detail</span>
-          <span className="min-w-0 truncate font-display text-lg font-bold">{item.heading}</span>
+          <span className="min-w-0 truncate font-display tracking-heading text-lg font-bold">{item.heading}</span>
           <button
             ref={close}
             type="button"

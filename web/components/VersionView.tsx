@@ -704,7 +704,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                 </div>
                 {version.citations.length > 0 && (
                   <section className="border-t border-line px-6 py-4 max-[600px]:px-4" aria-labelledby="sources-heading">
-                    <h2 id="sources-heading" className="mb-2 font-display text-lg leading-6 font-bold">
+                    <h2 id="sources-heading" className="mb-2 font-display tracking-heading text-lg leading-6 font-bold">
                       Sources <span className="tnum text-accent-ink">{version.citations.length}</span>
                     </h2>
                     <ol className="flex flex-col">
