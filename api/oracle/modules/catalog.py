@@ -1,8 +1,9 @@
 """The packaged built-in modules, packs and template manifests (pure data, no database).
 
-``builtin/core.yaml`` and ``builtin/platform.yaml`` hold one release of each built-in
-module contract, ``builtin/packs.yaml`` the two packs (§4.4) and ``builtin/manifests.yaml``
-the module manifests of the seven built-in PRD templates. Everything is validated when
+``builtin/core.yaml`` (the shared core), ``builtin/platform.yaml`` and one file per
+industry pack (O1h) hold one release of each built-in module contract,
+``builtin/packs.yaml`` the packs (§4.4 and O1h) and ``builtin/manifests.yaml`` the module
+manifests of the seven built-in PRD templates. Everything is validated when
 first loaded: a contract through :class:`oracle.v2.contract.ModuleContract`, a pack's
 modules and a manifest's modules against the contracts. A broken file fails loudly at
 import of the first caller (and in the test suite), never silently at request time.
@@ -18,7 +19,17 @@ import yaml
 from oracle.v2.contract import ModuleContract, validate_contract
 
 BUILTIN_DIR = Path(__file__).resolve().parent / "builtin"
-MODULE_FILES = ("core.yaml", "platform.yaml")
+MODULE_FILES = (
+    "core.yaml",
+    "platform.yaml",
+    # Industry packs (O1h, 2026-10-19): each reuses the shared core of startup.standard.
+    "marketplace.yaml",
+    "fintech.yaml",
+    "hardware.yaml",
+    "saas.yaml",
+    "smb.yaml",
+    "enterprise.yaml",
+)
 MANIFEST_FORMAT = 1
 
 
@@ -28,9 +39,19 @@ class Pack:
     version: str
     title: str
     description: str
+    # Every module of the pack, in order: the core pack's modules first, if it has one.
     modules: tuple[str, ...]
     # Composition categories that select this pack when none is chosen.
     categories: tuple[str, ...] = ()
+    # The pack whose modules it reuses as its shared core (O1h); those modules keep their
+    # own applies_to, so adding a pack never changes a core module's contract.
+    core: str | None = None
+    # The pack's own modules (all of them when it has no core).
+    own: tuple[str, ...] = ()
+
+    def member_packs(self) -> tuple[str, ...]:
+        """Pack ids a module's applies_to may name to belong to this pack."""
+        return (self.id, self.core) if self.core else (self.id,)
 
 
 @dataclass(frozen=True)
@@ -84,27 +105,55 @@ def _check_references(contracts: dict[str, ModuleContract]) -> None:
 def builtin_packs() -> dict[str, Pack]:
     contracts = builtin_contracts()
     out: dict[str, Pack] = {}
+    categories: dict[str, str] = {}
     for raw in _load("packs.yaml"):
+        own = tuple(raw["modules"])
+        core_id = raw.get("core")
+        if core_id is not None:
+            core = out.get(core_id)
+            if core is None or core.core is not None:
+                raise CatalogError(f"pack {raw['id']}: core {core_id} must be an earlier pack")
+            modules = core.modules + own
+        else:
+            modules = own
         pack = Pack(
             id=raw["id"],
             version=str(raw["version"]),
             title=raw["title"],
             description=" ".join(str(raw["description"]).split()),
-            modules=tuple(raw["modules"]),
+            modules=modules,
             categories=tuple(raw.get("categories", ())),
+            core=core_id,
+            own=own,
         )
+        if pack.id in out:
+            raise CatalogError(f"pack {pack.id} is defined twice")
         if len(set(pack.modules)) != len(pack.modules):
             raise CatalogError(f"pack {pack.id} lists a module twice")
-        for key in pack.modules:
+        for key in own:
             if key not in contracts:
                 raise CatalogError(f"pack {pack.id} names unknown module {key}")
             if pack.id not in contracts[key].applies_to:
                 raise CatalogError(f"module {key} does not list pack {pack.id} in applies_to")
         listed = {k for k, c in contracts.items() if pack.id in c.applies_to}
-        if listed != set(pack.modules):
+        if listed != set(own):
             raise CatalogError(f"pack {pack.id}: applies_to and modules disagree")
+        for category in pack.categories:
+            if category in categories:
+                raise CatalogError(f"category {category} selects {categories[category]} too")
+            categories[category] = pack.id
         out[pack.id] = pack
     return out
+
+
+def pack_members(pack: Pack, contracts: dict[str, ModuleContract]) -> tuple[str, ...]:
+    """The available modules of a pack, in pack order, then company modules that apply to
+    it (or to its core) by id. A module whose applies_to no longer names the pack (a
+    company override) leaves it."""
+    names = set(pack.member_packs())
+    listed = [k for k in pack.modules if k in contracts and names & set(contracts[k].applies_to)]
+    extra = sorted(k for k, c in contracts.items() if k not in listed and names & set(c.applies_to))
+    return tuple(listed + extra)
 
 
 @cache
@@ -148,4 +197,5 @@ __all__ = [
     "builtin_manifests",
     "builtin_packs",
     "default_pack_for",
+    "pack_members",
 ]

@@ -1,8 +1,10 @@
 /**
  * Mock of the module catalogue and composition routes (api/oracle/modules/router.py) for
  * NEXT_PUBLIC_API_MOCKS=1. A small synthetic catalogue (a few Pack A core modules and two
- * Pack B conditional ones), the two packs, the company module policy, one template
- * manifest, and a confirmed composition for the seeded PRD. Recommendations are canned
+ * Pack B conditional ones), the eight packs (the industry packs list only the shared core
+ * here), the company module policy, one template manifest, and a confirmed composition
+ * for the seeded PRD. A working revision is a draft beside the one in force; a person's
+ * earlier add and remove decisions carry into the next revision. Recommendations are canned
  * from the catalogue; the real composer lives in the API. Placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
@@ -154,6 +156,7 @@ function composed(c: Catalog, included: boolean, selection: Composed["selection"
     field_problems: [],
     condition_error: null,
     user_reason: null,
+    ordered_by_user: false,
     required_review_role: c.required_review_role,
   };
 }
@@ -271,16 +274,24 @@ function summaryOf(r: Revision): Schemas["RevisionSummary"] {
   return { id, number, status, decided_by, decided_at, reason, parent_number, document_version_id, diff };
 }
 
+/** The confirmed (or published) revision in force, if any. */
+function inForce(revisions: Revision[]): Revision | null {
+  return [...revisions].reverse().find((r) => r.status === "confirmed" || r.status === "published") ?? null;
+}
+
 function inspector(db: ModulesDb, doc: { id: string; slug: string; template: string | null }): Schemas["InspectorOut"] {
   const revisions = db.revisions[doc.id] ?? [];
-  const current = revisions[revisions.length - 1] ?? null;
+  const head = revisions[revisions.length - 1] ?? null;
+  const current = inForce(revisions);
   return {
     document_id: doc.id,
     slug: doc.slug,
     legacy: current === null,
-    composition_id: current ? "a3000000-0000-4000-8000-000000000002" : null,
-    lock_version: current ? revisions.length : null,
+    composition_id: head ? "a3000000-0000-4000-8000-000000000002" : null,
+    lock_version: head ? revisions.length : null,
+    head_revision: head?.number ?? null,
     current,
+    working: head?.status === "working" ? head : null,
     recommendation: current ? null : { ...recommend(db, PACK_A, {}, doc.template), document_id: doc.id },
     revisions: [...revisions].reverse().map(summaryOf),
     sections: { version: null, unmapped: [] },
@@ -349,19 +360,28 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
   }
 
   if (p[1] === "module-packs" && m === "GET") {
-    const packs: [string, string][] = [
-      [PACK_A, "General Tech Startup"],
-      [PACK_B, "Multi-tenant AI Agent Platform"],
+    const packs: [string, string, string[]][] = [
+      [PACK_A, "General Tech Startup", []],
+      [PACK_B, "Multi-tenant AI Agent Platform", ["ai_agent_platform"]],
+      ["marketplace.ecommerce", "Marketplace and e-commerce", ["marketplace", "ecommerce"]],
+      ["fintech.payments", "Fintech and payments", ["fintech", "payments"]],
+      ["hardware.iot", "Hardware and IoT", ["hardware", "iot"]],
+      ["saas.b2b", "SaaS and B2B products", ["saas", "b2b_saas"]],
+      ["smb.services", "SMB services", ["smb_services"]],
+      ["enterprise.software", "Enterprise software", ["enterprise_software"]],
     ];
     return json(
       200,
-      packs.map(([id, title]) => ({
+      packs.map(([id, title, categories]) => ({
         id,
         version: "1.0.0",
         title,
         description: "Template only: modules, instructions and questions; no prewritten content.",
-        categories: id === PACK_B ? ["ai_agent_platform"] : [],
-        modules: db.catalog.filter((c) => c.applies_to.includes(id)).map((c) => ({ key: c.key, title: c.title, policy: c.policy })),
+        categories,
+        // Industry packs reuse the shared core (Pack A) in the mock.
+        modules: db.catalog
+          .filter((c) => c.applies_to.includes(id === PACK_B ? PACK_B : PACK_A))
+          .map((c) => ({ key: c.key, title: c.title, policy: c.policy })),
       })),
     );
   }
@@ -412,16 +432,23 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const doc = ctx.document(p[2]);
     if (!doc) return json(404, { detail: `document '${p[2]}' not found` });
     const revisions = (db.revisions[doc.id] ??= []);
-    const current = revisions[revisions.length - 1] ?? null;
+    const head = revisions[revisions.length - 1] ?? null;
+    const current = inForce(revisions);
     if (m === "GET" && !p[4]) return json(200, inspector(db, doc));
     if (m === "POST" && p[4] === "revisions") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
       const data = await body<Schemas["RevisionIn"]>();
-      if ((data.base_revision ?? null) !== (current?.number ?? null)) {
+      if ((data.base_revision ?? null) !== (head?.number ?? null)) {
         return json(409, { detail: "Someone else changed this since you loaded it; reload and try again" });
       }
-      const pack = data.packs?.[0] ?? current?.packs[0] ?? PACK_A;
+      const pack = data.packs?.[0] ?? head?.packs[0] ?? PACK_A;
       const rec = recommend(db, pack, data.inputs ?? {}, data.template ?? doc.template ?? "oracle-default");
+      // A person's earlier decisions carry into the next revision.
+      for (const earlier of head?.modules ?? []) {
+        const target = rec.modules.find((x) => x.key === earlier.key);
+        if (earlier.decided_by !== "user" || !target || target.selection === "mandatory") continue;
+        Object.assign(target, { included: earlier.included, decided_by: "user", user_reason: earlier.user_reason, overridden_by: earlier.overridden_by });
+      }
       for (const key of data.changes?.remove ?? []) {
         const target = rec.modules.find((x) => x.key === key);
         if (!target?.included) return refused("not_included", `${key} is not in the composition.`, key);
@@ -436,8 +463,13 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
         Object.assign(target, { included: true, decided_by: "user", user_reason: data.reason, overridden_by: ctx.userId });
       }
       rec.summary = summary(rec.modules);
-      if (current && current.status !== "published") current.status = "superseded";
-      revisions.push(revisionOf(rec, revisions.length + 1, current, ctx.userId, data.reason, db, data.status ?? "confirmed"));
+      const status = data.status ?? "confirmed";
+      if (status === "confirmed") {
+        // Confirming supersedes the revision in force and any drafts; a working save
+        // supersedes nothing.
+        for (const r of revisions) if (r.status === "confirmed" || r.status === "working") r.status = "superseded";
+      }
+      revisions.push(revisionOf(rec, revisions.length + 1, status === "confirmed" ? current : head, ctx.userId, data.reason, db, status));
       return json(201, inspector(db, doc));
     }
     if (m === "POST" && p[4] === "publish") {

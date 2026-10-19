@@ -15,9 +15,13 @@ Steps, in order:
    advisory score (rules, or an external AI signal) is shown but never decides alone.
    A module the template already renders stays in by default, so the template keeps
    its shape.
-4. **A person's changes**: add, remove, reorder. A mandatory module, or a module an
-   included module depends on, is never removed silently: the request is refused with a
-   problem saying why.
+4. **A person's decisions**: first the earlier ones, carried from the previous revision
+   (a module removed stays out, one added stays in, a custom order holds), then this
+   change's add, remove and reorder, which win over an earlier decision on the same
+   module. A mandatory module, or a module an included module depends on, is never
+   removed silently: the request is refused with a problem saying why. An earlier
+   decision that no longer fits (the module became mandatory, was disabled or archived,
+   or a module now depends on it) is set aside with a non-fatal problem saying why.
 5. **Closure and conflicts**: dependencies are pulled in (explained as "needed by"),
    to a fixpoint; a required dependency that cannot be satisfied fails clearly.
    Conflicts drop the weaker module, or fail when both are mandatory or a person asked
@@ -34,6 +38,7 @@ recommendation shows them; confirming refuses).
 
 import heapq
 import re
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -95,6 +100,16 @@ class Changes:
     actor_id: str | None = None
 
 
+@dataclass(frozen=True)
+class Decision:
+    """A person's earlier decision on one module, carried into the next revision."""
+
+    key: str
+    included: bool
+    reason: str | None = None
+    actor_id: str | None = None
+
+
 @dataclass
 class Context:
     contracts: dict[str, ModuleContract]
@@ -113,6 +128,10 @@ class Context:
     provenance: dict[str, Provenance] = field(default_factory=dict)
     advisory: dict[str, Advisory] = field(default_factory=dict)
     field_values: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Earlier decisions of people (the previous revision's), and their order if a person
+    # set it: decisions are cumulative across revisions.
+    prior_decisions: tuple[Decision, ...] = ()
+    prior_order: tuple[str, ...] | None = None
 
 
 # --- outputs ------------------------------------------------------------------------------
@@ -178,6 +197,8 @@ class ComposedModule(CompositionModule):
     field_problems: list[FieldProblem] = []
     condition_error: str | None = None
     user_reason: str | None = None
+    # The position is a person's (this change's order, or an earlier one carried).
+    ordered_by_user: bool = False
     required_review_role: str = "approver"
 
 
@@ -396,6 +417,9 @@ class _State:
     added_by_user: set[str]
     problems: list[CompositionProblem]
     display: dict[str, int] = field(default_factory=dict)
+    # Earlier decisions applied in this composition.
+    carried_removed: set[str] = field(default_factory=set)
+    carried_added: set[str] = field(default_factory=set)
 
     def problem(self, code: str, message: str, module: str | None = None, fatal: bool = True):
         if not any(p.code == code and p.module == module for p in self.problems):
@@ -433,6 +457,7 @@ def _candidate_keys(ctx: Context, changes: Changes | None) -> list[str]:
     keys.extend(ctx.company_required)
     if changes:
         keys.extend(changes.add)
+    keys.extend(d.key for d in ctx.prior_decisions if d.included)
     seen: set[str] = set()
     return [k for k in keys if not (k in seen or seen.add(k))]
 
@@ -464,6 +489,13 @@ def compose(ctx: Context, changes: Changes | None = None) -> Composition:  # noq
                 )
             elif changes and key in changes.add:
                 st.problem("unknown_module", f"{key} is not an available module.", key)
+            elif any(d.key == key and d.included for d in ctx.prior_decisions):
+                st.problem(
+                    "decision_dropped",
+                    f"{key} was added earlier by a person, but it is no longer available.",
+                    key,
+                    fatal=False,
+                )
             elif key in ctx.unavailable:
                 # A pack or manifest module the company archived is not offered; say so.
                 st.problem(
@@ -562,7 +594,8 @@ def compose(ctx: Context, changes: Changes | None = None) -> Composition:  # noq
                 f"Field {p.field}: {p.message}." for p in mod.field_problems if p.kind == "required"
             )
 
-    # 4: a person's changes.
+    # 4: a person's decisions, the earlier ones first.
+    _apply_prior(ctx, st)
     if changes:
         _apply_changes(ctx, st, changes)
 
@@ -594,6 +627,44 @@ def compose(ctx: Context, changes: Changes | None = None) -> Composition:  # noq
     )
     out.outline = outline(ctx, out)
     return out
+
+
+def _apply_prior(ctx: Context, st: _State) -> None:
+    """Re-apply earlier decisions; this change's own add and remove come after them."""
+    for d in ctx.prior_decisions:
+        mod = st.m.get(d.key)
+        if mod is None:
+            continue  # not offered any more (reported above)
+        said = d.reason or "no reason given"
+        if not d.included:
+            if mod.selection == "mandatory":
+                st.problem(
+                    "decision_superseded",
+                    f"{mod.title} was removed earlier ({said}), but it is now mandatory "
+                    f"({mod.reason}), so it is back in.",
+                    d.key,
+                    fatal=False,
+                )
+                continue
+            mod.included, mod.decided_by, mod.user_reason = False, "user", d.reason
+            mod.overridden_by = _uuid(d.actor_id)
+            mod.explanation.append(f"Removed earlier by a person: {said}.")
+            st.carried_removed.add(d.key)
+            continue
+        if d.key in ctx.company_disabled:
+            st.problem(
+                "decision_dropped",
+                f"{mod.title} was added earlier by a person, but company policy now disables it.",
+                d.key,
+                fatal=False,
+            )
+            continue
+        st.carried_added.add(d.key)
+        if mod.included and mod.selection == "mandatory":
+            continue  # in anyway
+        mod.included, mod.decided_by, mod.user_reason = True, "user", d.reason
+        mod.overridden_by = _uuid(d.actor_id)
+        mod.explanation.append(f"Added earlier by a person: {said}.")
 
 
 def _apply_changes(ctx: Context, st: _State, ch: Changes) -> None:
@@ -647,9 +718,7 @@ def _apply_changes(ctx: Context, st: _State, ch: Changes) -> None:
         mod.explanation.append(f"Added by a person: {reason or 'no reason given'}.")
 
 
-def _uuid(value: str | None):
-    import uuid
-
+def _uuid(value: str | None) -> uuid.UUID | None:
     try:
         return uuid.UUID(value) if value else None
     except ValueError:
@@ -666,7 +735,17 @@ def _close(ctx: Context, st: _State) -> bool:
         for dep in mod.depends_on:
             target = st.m.get(dep)
             unavailable = dep not in ctx.contracts or dep in ctx.company_disabled
-            if dep in st.removed_by_user:
+            if dep in st.carried_removed:
+                # Removed in an earlier revision; a module now needs it, so it is back.
+                st.carried_removed.discard(dep)
+                st.problem(
+                    "decision_superseded",
+                    f"{st.m[dep].title} was removed earlier, but {mod.title} depends on it, "
+                    "so it is back in.",
+                    dep,
+                    fatal=False,
+                )
+            elif dep in st.removed_by_user:
                 st.problem(
                     "required_dependency",
                     f"{st.m[dep].title} cannot be removed: {mod.title} depends on it. "
@@ -729,7 +808,7 @@ def _strength(st: _State, key: str) -> tuple:
     mod = st.m[key]
     return (
         mod.selection == "mandatory",
-        key in st.added_by_user,
+        key in st.added_by_user or key in st.carried_added,
         mod.decided_by == "template",
         mod.selection == "suggested",
         mod.score or 0.0,
@@ -831,12 +910,37 @@ def _edges(ctx: Context, st: _State, keys: list[str]) -> set[tuple[str, str]]:
     return edges
 
 
+def _carried_order(prior: tuple[str, ...], default: list[str]) -> list[str]:
+    """An earlier person's order over today's modules: modules no longer included drop
+    out, and new ones go right after the module that precedes them by default."""
+    keys = set(default)
+    out = [k for k in prior if k in keys]
+    for i, key in enumerate(default):
+        if key in out:
+            continue
+        before = next((k for k in reversed(default[:i]) if k in out), None)
+        out.insert(out.index(before) + 1 if before is not None else 0, key)
+    return out
+
+
 def _order(ctx: Context, st: _State, changes: Changes | None) -> list[str]:
     keys = [k for k, mod in st.m.items() if mod.included]
     edges = _edges(ctx, st, keys)
     default = _topological(ctx, st, keys, edges)
     if changes is None or changes.order is None:
-        return default
+        if not ctx.prior_order:
+            return default
+        carried = _carried_order(ctx.prior_order, default)
+        pos = {k: i for i, k in enumerate(carried)}
+        if any(pos[a] > pos[b] for a, b in edges):
+            st.problem(
+                "decision_superseded",
+                "The order a person set earlier no longer meets the ordering constraints, "
+                "so the default order is used.",
+                fatal=False,
+            )
+            return default
+        return _mark_order(st, carried, default)
     wanted = list(changes.order)
     if sorted(wanted) != sorted(keys) or len(set(wanted)) != len(wanted):
         missing = sorted(set(keys) - set(wanted))
@@ -855,10 +959,15 @@ def _order(ctx: Context, st: _State, changes: Changes | None) -> list[str]:
         st.problem("order_violation", f"{st.m[a].title} must come before {st.m[b].title}.", b)
     if bad:
         return default
-    for i, k in enumerate(wanted):
+    return _mark_order(st, wanted, default)
+
+
+def _mark_order(st: _State, order: list[str], default: list[str]) -> list[str]:
+    for i, k in enumerate(order):
+        st.m[k].ordered_by_user = True
         if default[i] != k:
             st.m[k].explanation.append("Position set by a person.")
-    return wanted
+    return order
 
 
 def _topological(
@@ -976,6 +1085,7 @@ __all__ = [
     "ComposedModule",
     "Composition",
     "Context",
+    "Decision",
     "LayerImpact",
     "ManifestEntry",
     "OutlineEntry",

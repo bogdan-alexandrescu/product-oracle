@@ -346,3 +346,20 @@ def test_core_module_contracts_are_unchanged():
     for key in PACK_A:
         assert contracts[key].version == "1.0.0"
         assert contracts[key].applies_to == ["startup.standard", "ai-agent.platform"], key
+
+
+def test_every_condition_tag_can_be_inferred_from_a_brief():
+    """Each capability tag an industry module's condition reads has advisory keyword
+    hints, and no hint phrase is shared between tags."""
+    from oracle.modules.service import CAPABILITY_HINTS, infer_capabilities
+
+    contracts = builtin_contracts()
+    for pack_id in INDUSTRY:
+        for key in builtin_packs()[pack_id].own:
+            for leaf in _leaves(contracts[key].condition):
+                if isinstance(leaf, Contains) and leaf.path == "scope.capabilities":
+                    assert leaf.value in CAPABILITY_HINTS, (key, leaf.value)
+                    phrase = CAPABILITY_HINTS[leaf.value][0]
+                    assert leaf.value in infer_capabilities(f"A brief about {phrase}."), phrase
+    phrases = [p for ps in CAPABILITY_HINTS.values() for p in ps]
+    assert len(phrases) == len(set(phrases))

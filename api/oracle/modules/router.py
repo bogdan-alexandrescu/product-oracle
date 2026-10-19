@@ -2,6 +2,8 @@
 compositions (build prompt §4, CR-01/CR-02).
 
 Anyone signed in reads and asks for a recommendation (computing one changes nothing).
+Reads never write: built-ins are seeded at startup, when a company is created, and on the
+write paths below.
 Approvers confirm composition revisions, publish them and edit template manifests;
 adding or removing a module whose contract asks for the owner role needs an owner.
 Owners set the company module policy and add company modules or overrides. Every write
@@ -22,7 +24,7 @@ from oracle.authz import require_role
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document
 from oracle.modules import registry, service
-from oracle.modules.catalog import builtin_packs
+from oracle.modules.catalog import builtin_packs, pack_members
 from oracle.modules.composer import CompositionProblem
 from oracle.modules.registry import ModulePolicySettings, RegistryError
 from oracle.modules.schemas import (
@@ -44,7 +46,6 @@ from oracle.modules.schemas import (
     RevisionIn,
 )
 from oracle.templates.models import Template
-from oracle.v2.concurrency import VersionConflict
 from oracle.v2.schemas import CompositionRevisionOut
 
 router = APIRouter(prefix="/v1", tags=["modules"])
@@ -132,16 +133,23 @@ async def list_module_catalog(
     pack: str | None = None,
     include_archived: bool = False,
 ) -> list[CatalogModuleOut]:
-    """Every module the company can compose with (built-ins seeded on first use)."""
-    await service.ensure_seeded(db)
-    await db.commit()
+    """Every module the company can compose with."""
     catalog = await registry.load_catalog(db)
     policy, _ = await registry.read_policy(db)
+    packs = builtin_packs()
+    if pack is None:
+        members: set[str] = set()
+    elif pack in packs:
+        # A built-in pack: its modules, including the shared core it reuses.
+        members = set(pack_members(packs[pack], catalog.available()))
+        members |= {k for k, e in catalog.entries.items() if pack in e.contract.applies_to}
+    else:
+        members = {k for k, e in catalog.entries.items() if pack in e.contract.applies_to}
     out = []
     for entry in catalog.entries.values():
         if entry.archived and not include_archived:
             continue
-        if pack is not None and pack not in entry.contract.applies_to:
+        if pack is not None and entry.key not in members:
             continue
         detail = _catalog_out(entry, policy)
         out.append(CatalogModuleOut(**detail.model_dump(exclude={"contract"})))
@@ -151,8 +159,6 @@ async def list_module_catalog(
 @router.get("/module-catalog/{key}", response_model=CatalogModuleDetail)
 async def get_module_catalog_entry(key: str, db: TenantDB, _: Viewer) -> CatalogModuleDetail:
     """One module with its effective contract and its release history."""
-    await service.ensure_seeded(db)
-    await db.commit()
     catalog = await registry.load_catalog(db)
     entry = catalog.entries.get(key)
     if entry is None:
@@ -212,14 +218,12 @@ async def create_module_override(key: str, data: ModuleContractIn, db: TenantDB,
 
 @router.get("/module-packs", response_model=list[PackOut])
 async def list_module_packs(db: TenantDB, _: Viewer) -> list[PackOut]:
-    """The seeded packs: General Tech Startup and Multi-tenant AI Agent Platform."""
-    await service.ensure_seeded(db)
-    await db.commit()
+    """The built-in packs: General Tech Startup, the Multi-tenant AI Agent Platform and the
+    industry packs (O1h), each with its modules in order and their policy tier."""
     contracts = (await registry.load_catalog(db)).available()
     out = []
     for pack in builtin_packs().values():
-        keys = [k for k in pack.modules if k in contracts and pack.id in contracts[k].applies_to]
-        keys += sorted(k for k, c in contracts.items() if pack.id in c.applies_to and k not in keys)
+        keys = pack_members(pack, contracts)
         out.append(
             PackOut(
                 id=pack.id,
@@ -254,15 +258,19 @@ async def get_module_policy(db: TenantDB, _: Viewer) -> ModulePolicyOut:
 
 @router.put("/module-policy", response_model=ModulePolicyOut, responses=REFUSED)
 async def put_module_policy(data: ModulePolicySettings, db: TenantDB, principal: Owner):
+    """Set the company module policy. Each document's composition in force gets a change
+    event saying what changed; a person re-confirms it to apply the policy."""
     await service.ensure_seeded(db)
     before, _ = await registry.read_policy(db)
     try:
         await registry.write_policy(db, data, principal.id)
     except RegistryError as e:
         return _registry_refused(e)
+    revisions = await service.record_policy_change(db, before, data, principal)
     await audit.record(
         db, principal, "module_policy.update", "tenant_setting", None,
-        {"before": before.model_dump(), "after": data.model_dump()},
+        {"before": before.model_dump(), "after": data.model_dump(),
+         "compositions": [str(r) for r in revisions]},
     )  # fmt: skip
     await db.commit()
     return await _policy_out(db)
@@ -312,8 +320,6 @@ async def get_template_manifest(template: str, db: TenantDB, _: Viewer) -> Manif
     """A template's module manifest: which module renders which of its sections, and the
     sections no module claims (template-owned, preserved as-is). Empty for a template
     without a manifest, which composes exactly as before."""
-    await service.ensure_seeded(db)
-    await db.commit()
     return await _manifest_out(db, await _template_row(db, template))
 
 
@@ -361,7 +367,6 @@ async def recommend_composition(data: CompositionRecommendIn, db: TenantDB, prin
         raise _not_found(str(e)) from e
     except service.CompositionRefused as e:
         return _refused(str(e), e.problems)
-    await db.commit()  # built-in seeding only
     return out
 
 
@@ -373,7 +378,6 @@ async def get_document_composition(doc: str, db: TenantDB, principal: Viewer) ->
     document without a composition is legacy and gets a recommendation instead."""
     document = await _document(db, doc)
     out = await service.inspect(db, document, role=principal.role)
-    await db.commit()  # built-in seeding only
     return out
 
 
@@ -386,9 +390,11 @@ async def get_document_composition(doc: str, db: TenantDB, principal: Viewer) ->
 async def confirm_composition_revision(
     doc: str, data: RevisionIn, db: TenantDB, principal: Approver
 ):
-    """Confirm a composition revision (or save it as working): who decided and why.
-    Mandatory modules and dependencies are never removed silently; a material change
-    records change events for the affected sections."""
+    """Confirm a composition revision, or save it as a working draft: who decided and
+    why. It starts from the newest revision, so earlier decisions carry. Mandatory
+    modules and dependencies are never removed silently. Confirming puts it in force and
+    records change events for the affected sections; a working draft supersedes nothing
+    and records none."""
     document = await _document(db, doc)
     try:
         revision, change = await service.confirm(
@@ -398,8 +404,6 @@ async def confirm_composition_revision(
         raise _not_found(str(e)) from e
     except service.CompositionRefused as e:
         return _refused(str(e), e.problems)
-    except VersionConflict:
-        raise
     await audit.record(
         db, principal, "composition.revision", "composition_revision", revision.id,
         {
