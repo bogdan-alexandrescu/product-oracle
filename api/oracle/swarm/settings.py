@@ -16,7 +16,8 @@ ORACLE_RUN_TOKEN_TTL_SECONDS    lifetime of a segment's run token while it is no
 Adapter v2 (docs/swarmcloud-interface.md):
 
 ORACLE_CHECKPOINT_WAIT_SECONDS  how long a checkpoint waits for a person inside a workflow
-                                (W2b; default 86400, held to 300-86400)
+                                (W2b; default 72000, 20 h, so draft, wait and revise fit one
+                                24 h credential; held to 300-86400)
 ORACLE_CHECKPOINT_TAIL_SECONDS  a decision arriving with less than this left of the run's
                                 credential is not posted: the run continues as a new
                                 workflow (default 7200)
@@ -56,7 +57,7 @@ class RuntimeSettings(BaseSettings):
     swarmcloud_timeout_seconds: float = 30.0
     public_url: str = "http://localhost:8000"
     run_token_ttl_seconds: int = 6 * 60 * 60
-    checkpoint_wait_seconds: int = MAX_CREDENTIAL_SECONDS
+    checkpoint_wait_seconds: int = 20 * 60 * 60  # W2b
     checkpoint_tail_seconds: int = 2 * 60 * 60
     step_seconds: int = 2 * 60 * 60
     swarmcloud_features_ttl_seconds: float = 60.0

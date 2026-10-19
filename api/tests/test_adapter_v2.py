@@ -176,7 +176,7 @@ async def test_features_are_cached_and_bounded_by_the_timeout():
 def test_wait_setting_is_held_to_300_86400():
     assert RuntimeSettings(checkpoint_wait_seconds=10).checkpoint_wait_seconds == 300
     assert RuntimeSettings(checkpoint_wait_seconds=10**6).checkpoint_wait_seconds == 86400
-    assert RuntimeSettings().checkpoint_wait_seconds == 86400
+    assert RuntimeSettings().checkpoint_wait_seconds == 72000  # W2b: 20 h
     assert RuntimeSettings().checkpoint_tail_seconds == 7200
 
 
@@ -248,7 +248,7 @@ async def test_one_workflow_credential_map_and_step_inputs(client, owner):
             "form": "verdict",
             "artifact": s["step_id"][-1].join(("review", ".json")),
             "max_files": 0,
-            "expires_after_seconds": 86400,
+            "expires_after_seconds": 72000,
             "on_expire": "fail",
             "remind": [],
         }

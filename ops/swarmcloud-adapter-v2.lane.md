@@ -2,7 +2,9 @@
 
 Dispatched 2026-10-19, before the switches are on (Bogdan, 2026-10-19: build now; the real
 end-to-end check waits for SwarmCloud's "person-wait on" and "answering on"). One
-SwarmCloud `claude-code` task, strategy `direct-pr`.
+SwarmCloud `claude-code` task, strategy `direct-pr`: task_d6ae4b64dac44ba9b508 @22d26e9.
+At review: W2b changed after dispatch to a 20 h wait, so set the
+`ORACLE_CHECKPOINT_WAIT_SECONDS` default to 72000 (the prompt below says 86400).
 
 ## Prompt
 

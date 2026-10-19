@@ -629,7 +629,12 @@ class SwarmCloudRuntime:
             task = tasks.get(str(task_id)) if task_id else None
             task_state = str((task or {}).get("state") or row.get("state") or "PENDING").upper()
             steps.append(
-                StepStatus(step_id, task_id, task_state, (task or {}).get("last_error") or None)
+                StepStatus(
+                    step_id,
+                    task_id,
+                    task_state,
+                    _redact(str(task["last_error"])) if (task or {}).get("last_error") else None,
+                )
             )
             if task is not None and task_state == "PARKED":
                 waiting = (task.get("metadata") or {}).get("await_input") or {}
@@ -651,8 +656,9 @@ class SwarmCloudRuntime:
                 and (t.get("last_error") or t.get("error_code"))
             ]
             if failed:
-                error = failed[0].get("last_error") or failed[0].get("error_code")
-                code = failed[0].get("error_code") or _known_code(str(error))
+                raw_error = str(failed[0].get("last_error") or failed[0].get("error_code"))
+                code = failed[0].get("error_code") or _known_code(raw_error)
+                error = _redact(raw_error)
             else:
                 error = f"workflow ended {raw}"
         return WorkflowStatus(
@@ -777,12 +783,30 @@ def _detail(resp: httpx.Response) -> str:
     detail = body.get("detail") if isinstance(body, dict) else None
     if isinstance(detail, dict):
         detail = detail.get("message") or detail.get("code")
-    return _TOKEN_SHAPED.sub("<withheld>", str(detail))[:200] if detail else ""
+    return _redact(str(detail)) if detail else ""
 
 
-# A bearer value or a JWT that an upstream might echo back in an error message.
+def _redact(text: str) -> str:
+    """Withhold credential-shaped strings from upstream text and keep 200 characters."""
+    if len(text) > _DETAIL_SCAN_CHARS:
+        # Scan a bounded prefix, since an upstream may send text of any size. Redaction can
+        # shrink what precedes the cut into the 200 kept, so drop the word the cut lands
+        # in: a token that lost its tail may no longer match the pattern.
+        head = text[:_DETAIL_SCAN_CHARS].rsplit(None, 1)
+        text = head[0] if len(head) == 2 else ""
+    return _TOKEN_SHAPED.sub("<withheld>", text)[:200]
+
+
+_DETAIL_SCAN_CHARS = 4096
+# What an upstream might echo back in an error: a bearer value however it is joined to
+# the word, a JWT, a Google access token, a GitHub token, a token in a git URL, or one of
+# Oracle's own tokens (run, API and OAuth).
 _TOKEN_SHAPED = re.compile(
-    r"(?i)bearer\s+\S+|eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}"
+    r"(?i)bearer[\s:=]+\S+"
+    r"|eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}"
+    r"|ya29\.[A-Za-z0-9_.-]+"
+    r"|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
+    r"|x-access-token:[^@\s]+"
     r"|\b(?:ort|po|poa)_[A-Za-z0-9_-]{8,}"
 )
 
