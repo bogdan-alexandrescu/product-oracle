@@ -9,9 +9,14 @@ enforced** (:func:`require_constraint`): every write path goes through it.
 Entity writes go through :mod:`oracle.baseline.service` (a person's write: revisions,
 lock). Every status change appends a :class:`~oracle.v2.models.BlockerResolutionEvent`
 and calls :func:`oracle.changes.record_change` (subject ``blocker_status``) once per
-document the blocker gates. A blocker's status is only trusted when a recorded event
-carries it: :func:`assess` checks that, so a status written around these functions (a
-generic baseline edit of ``attrs``) never clears the readiness gate.
+document the blocker gates.
+
+Only this module writes ``attrs["blocker"]`` (``baseline.MANAGED_ATTRS``: every other
+baseline write path refuses to). On top of that the gate fails closed: every write
+that changes what the gate reads (type, severity, status, gated documents) records a
+snapshot of it on a resolution event (``data["gate"]``), and :func:`assess` treats a
+strategy that disagrees with its last snapshot as ``critical``, so a strategy changed
+around these functions (straight in the database) never clears the readiness gate.
 
 The caller commits.
 """
@@ -19,7 +24,7 @@ The caller commits.
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pydantic import ValidationError
@@ -29,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, changes
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
+from oracle.authz import has_role
 from oracle.baseline import service as baseline
 from oracle.baseline.models import Edge, Entity, Evidence
 from oracle.blockers import policy
@@ -49,6 +55,7 @@ from oracle.blockers.schemas import (
     dump,
 )
 from oracle.docs.models import Document
+from oracle.tenant_settings_api import get_setting
 from oracle.v2.concurrency import expect_version, flush_or_conflict
 from oracle.v2.models import (
     AssumptionDecision,
@@ -98,6 +105,10 @@ class ConflictError(BlockerError):
     status_code = 409
 
 
+class ForbiddenError(BlockerError):
+    status_code = 403
+
+
 class NotABlockerError(ConflictError):
     """A constraint entity without a strategy yet."""
 
@@ -111,7 +122,8 @@ def _aware(value: datetime) -> datetime:
 
 
 def _writer(principal: Principal, reason: str | None) -> baseline.Writer:
-    return baseline.Writer(principal, "user", reason=reason)
+    # The only writer allowed to change attrs.blocker (baseline.MANAGED_ATTRS).
+    return baseline.Writer(principal, "user", reason=reason, manages=("blocker",))
 
 
 # --- lookups: the constraint-only rule ---------------------------------------------------
@@ -226,6 +238,36 @@ def _dedupe(ids: list[uuid.UUID]) -> list[uuid.UUID]:
     return list(dict.fromkeys(ids))
 
 
+def gate_snapshot(spec: BlockerSpec) -> dict[str, Any]:
+    """What the readiness gate reads from a strategy, as recorded on its events."""
+    return {
+        "type": spec.type,
+        "severity": spec.severity,
+        "status": spec.status,
+        "document_ids": sorted(str(d) for d in spec.document_ids),
+    }
+
+
+def _gating(snapshot: dict[str, Any]) -> bool:
+    return snapshot.get("type") == "hard" and snapshot.get("severity") == "critical"
+
+
+# --- B4: who decides a critical hard blocker, and for how long ---------------------------
+
+
+async def _require_decider(db: AsyncSession, principal: Principal, spec: BlockerSpec, what: str):
+    """B4: accepting a critical hard blocker's risk or approving its feasibility scope is
+    for the company's ``blocker_risk_acceptance_role`` (default owner) and above."""
+    if not _gating(gate_snapshot(spec)):
+        return
+    role = await get_setting(db, "blocker_risk_acceptance_role")
+    if not has_role(principal.role, role):
+        raise ForbiddenError(
+            f"Only an {role} may {what} of a critical hard blocker (company setting "
+            "blocker_risk_acceptance_role); propose it to one"
+        )
+
+
 # --- affects edges for impacted requirements and features (§7) ---------------------------
 
 
@@ -288,7 +330,12 @@ async def _event(
     option_id: uuid.UUID | None = None,
     experiment_id: uuid.UUID | None = None,
     data: dict[str, Any] | None = None,
+    spec: BlockerSpec | None = None,
 ) -> BlockerResolutionEvent:
+    """Append a resolution event; with ``spec``, it records the gate's snapshot too."""
+    data = dict(data or {})
+    if spec is not None:
+        data["gate"] = gate_snapshot(spec)
     event = BlockerResolutionEvent(
         blocker_id=entity.id,
         option_id=option_id,
@@ -298,7 +345,7 @@ async def _event(
         to_status=to_status,
         reason=reason,
         actor=principal.actor,
-        data=data or {},
+        data=data,
         # Python's clock, not the transaction's: two events of one request stay ordered.
         created_at=_now(),
     )
@@ -343,8 +390,10 @@ async def _transition(
     option_id: uuid.UUID | None = None,
     experiment_id: uuid.UUID | None = None,
     data: dict[str, Any] | None = None,
+    audit_action: str = "blocker.status_changed",
 ) -> BlockerResolutionEvent:
-    """Change the blocker's status: event, entity write, change event and audit."""
+    """Change the blocker's status: event, entity write, change event and one audit
+    event (``audit_action``: a risk acceptance or a feasibility scope is its own)."""
     from_status = spec.status
     spec.status = to_status  # type: ignore[assignment]
     await _save(db, principal, entity, spec, reason)
@@ -359,6 +408,7 @@ async def _transition(
         option_id=option_id,
         experiment_id=experiment_id,
         data=data,
+        spec=spec,
     )
     payload = {
         "from_status": from_status,
@@ -373,7 +423,7 @@ async def _transition(
     if experiment_id:
         payload["experiment_id"] = str(experiment_id)
     await _record(db, principal, entity, spec, cause or kind, payload)
-    await audit.record(db, principal, "blocker.status_changed", "entity", entity.id, payload)
+    await audit.record(db, principal, audit_action, "entity", entity.id, payload)
     return event
 
 
@@ -438,6 +488,7 @@ async def create_blocker(db: AsyncSession, principal: Principal, body: BlockerCr
         "status_changed",
         to_status=spec.status,
         reason=body.reason or "Blocker recorded",
+        spec=spec,
     )
     await audit.record(
         db,
@@ -484,8 +535,20 @@ async def update_blocker(
     if "scaling" in given and body.scaling is not None:
         spec.scaling = body.scaling
     _check_classification(spec)
+    snapshot_before = gate_snapshot(spec_of(entity))
     await _save(db, principal, entity, spec, body.reason, **fields)
     after = dump(spec)
+    if gate_snapshot(spec) != snapshot_before:
+        # What the gate reads changed: record it, so the gate trusts the new strategy.
+        await _event(
+            db,
+            principal,
+            entity,
+            "status_changed",
+            reason=body.reason,
+            data={"change": "reclassified", "before": snapshot_before},
+            spec=spec,
+        )
     if (before["type"], before["severity"]) != (after["type"], after["severity"]):
         await _record(
             db,
@@ -536,8 +599,15 @@ async def accept_risk(
     review_at = _aware(body.review_at)
     if review_at <= _now():
         raise InvalidError("The review date of an accepted risk must be in the future")
+    max_days = await get_setting(db, "blocker_risk_review_max_days")
+    if review_at > _now() + timedelta(days=max_days):
+        raise InvalidError(
+            f"An accepted risk must be reviewed within {max_days} days (company setting "
+            "blocker_risk_review_max_days); choose an earlier review date"
+        )
     if spec.status == "resolved":
         raise ConflictError("The blocker is resolved; there is no risk left to accept")
+    await _require_decider(db, principal, spec, "accept the risk")
     docs = await linked_document_ids(db, entity, spec)
     decision = AssumptionDecision(
         entity_id=entity.id,
@@ -566,14 +636,7 @@ async def accept_risk(
         kind="risk_accepted",
         reason=body.reason,
         data=data,
-    )
-    await audit.record(
-        db,
-        principal,
-        "blocker.risk_accepted",
-        "entity",
-        entity.id,
-        {"reason": body.reason, **data},
+        audit_action="blocker.risk_accepted",
     )
     return entity
 
@@ -588,6 +651,7 @@ async def approve_feasibility_scope(
         raise InvalidError("No such feasibility experiment on this blocker")
     if spec.status == "resolved":
         raise ConflictError("The blocker is resolved; it needs no feasibility scope")
+    await _require_decider(db, principal, spec, "approve the feasibility scope")
     missing = []
     if exp.owner_id is None:
         missing.append("an owner")
@@ -595,6 +659,8 @@ async def approve_feasibility_scope(
         missing.append("a success threshold")
     if exp.decision_gate_at is None:
         missing.append("a decision gate date")
+    elif _aware(exp.decision_gate_at) <= _now():
+        missing.append("a decision gate date in the future")
     if exp.status not in LIVE_EXPERIMENT:
         missing.append("a planned or running experiment")
     if missing:
@@ -610,14 +676,7 @@ async def approve_feasibility_scope(
         reason=body.reason,
         experiment_id=exp.id,
         data=data,
-    )
-    await audit.record(
-        db,
-        principal,
-        "blocker.feasibility_scope_approved",
-        "entity",
-        entity.id,
-        {"reason": body.reason, "experiment_id": str(exp.id), **data},
+        audit_action="blocker.feasibility_scope_approved",
     )
     return entity
 
@@ -812,6 +871,7 @@ async def select_option(
         reason=body.reason,
         option_id=option.id,
         data={"previous_option_id": data["previous_option_id"]},
+        spec=spec,
     )
     await _record(db, principal, entity, spec, "option_selected", data)
     await audit.record(db, principal, "blocker_option.selected", "blocker_option", option.id, data)
@@ -1023,6 +1083,29 @@ async def _last_status_events(
     return out
 
 
+async def _last_gate_snapshots(
+    db: AsyncSession, blocker_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, dict[str, Any]]:
+    """The gate snapshot the latest recording event left for each blocker."""
+    if not blocker_ids:
+        return {}
+    rows = (
+        await db.scalars(
+            select(BlockerResolutionEvent)
+            .where(
+                BlockerResolutionEvent.blocker_id.in_(blocker_ids),
+                BlockerResolutionEvent.data.has_key("gate"),
+            )
+            .order_by(BlockerResolutionEvent.created_at.desc(), BlockerResolutionEvent.id)
+        )
+    ).all()
+    out: dict[uuid.UUID, dict[str, Any]] = {}
+    for r in rows:
+        if r.blocker_id not in out and isinstance(r.data.get("gate"), dict):
+            out[r.blocker_id] = r.data["gate"]
+    return out
+
+
 @dataclass
 class GateInputs:
     """What :func:`assess` needs, loaded in bulk for many blockers."""
@@ -1030,6 +1113,8 @@ class GateInputs:
     last_event: dict[uuid.UUID, BlockerResolutionEvent] = field(default_factory=dict)
     decisions: dict[uuid.UUID, AssumptionDecision] = field(default_factory=dict)
     experiments: dict[uuid.UUID, FeasibilityExperiment] = field(default_factory=dict)
+    # The gate snapshot last recorded for each blocker (see gate_snapshot).
+    recorded_gate: dict[uuid.UUID, dict[str, Any]] = field(default_factory=dict)
 
 
 async def gate_inputs(db: AsyncSession, blocker_ids: list[uuid.UUID]) -> GateInputs:
@@ -1065,25 +1150,46 @@ async def gate_inputs(db: AsyncSession, blocker_ids: list[uuid.UUID]) -> GateInp
                 )
             ).all()
         }
-    return GateInputs(last, decisions, experiments)
+    recorded_gate = await _last_gate_snapshots(db, blocker_ids)
+    return GateInputs(last, decisions, experiments, recorded_gate)
 
 
 def _name(entity: Entity) -> str:
     return f"'{entity.title}' ({entity.key})"
 
 
+def _date(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return _aware(value)
+    if isinstance(value, str):
+        try:
+            return _aware(datetime.fromisoformat(value))
+        except ValueError:
+            return None
+    return None
+
+
 def assess(entity: Entity, spec: BlockerSpec | None, inputs: GateInputs) -> BlockerGate:
     """This blocker's readiness: ``critical`` for a critical hard blocker that is
     unresolved, unless its status rests on a recorded, still valid decision: a
     resolution, a risk acceptance before its review date, or a scoped feasibility
-    experiment that has not failed."""
+    experiment within its decision gate. Fails closed: a strategy that cannot be read,
+    or that disagrees with the last snapshot its events recorded, is ``critical``."""
     if spec is None:
         return BlockerGate(
             status="critical",
             rationale=f"The blocker strategy of {_name(entity)} cannot be read; it cannot vouch "
             "for readiness until it is fixed",
         )
-    gating = spec.type == "hard" and spec.severity == "critical"
+    recorded_gate = inputs.recorded_gate.get(entity.id)
+    if recorded_gate != gate_snapshot(spec):
+        return BlockerGate(
+            status="critical",
+            rationale=f"Blocker {_name(entity)} was changed outside the blocker strategy "
+            "(its type, severity, status or documents differ from the last recorded "
+            "decision); restore it or change it through the blocker routes",
+        )
+    gating = _gating(recorded_gate)
     if not gating:
         if spec.status in UNRESOLVED and (
             spec.type in ("hard", "unknown") or spec.severity == "critical"
@@ -1157,10 +1263,46 @@ def assess(entity: Entity, spec: BlockerSpec | None, inputs: GateInputs) -> Bloc
             rationale=f"The feasibility experiment of {_name(entity)} {exp.status}; the scope "
             "no longer holds",
         )
+    missing = [
+        what
+        for what, ok in (
+            ("an owner", exp.owner_id is not None),
+            ("a success threshold", bool((exp.success_threshold or "").strip())),
+        )
+        if not ok
+    ]
+    if missing:
+        return BlockerGate(
+            status="critical",
+            rationale=f"The feasibility experiment of {_name(entity)} no longer has "
+            f"{' or '.join(missing)}; the scope no longer holds",
+        )
+    # The scope holds until the decision gate approved with it; moving the experiment's
+    # date later needs a new approval, moving it earlier shortens the scope.
+    dates = [
+        d
+        for d in (_date((event.data or {}).get("decision_gate_at")), _date(exp.decision_gate_at))
+        if d is not None
+    ]
+    gate_at = min(dates) if dates else None
+    if gate_at is None or gate_at <= _now():
+        when = gate_at.date().isoformat() if gate_at else "no date"
+        if exp.status == "succeeded":
+            return BlockerGate(
+                status="critical",
+                rationale=f"The feasibility experiment of {_name(entity)} succeeded, but its "
+                f"time box ended at its decision gate ({when}); resolve the blocker or "
+                "approve a new scope",
+            )
+        return BlockerGate(
+            status="critical",
+            rationale=f"The feasibility scope of {_name(entity)} passed its decision gate "
+            f"({when}); decide: resolve the blocker, accept the risk or approve a new scope",
+        )
     return BlockerGate(
         status="pass",
         rationale=f"{_name(entity)} proceeds only as a scoped feasibility experiment "
-        f"({exp.status}): {exp.hypothesis}",
+        f"({exp.status}) until {gate_at.date().isoformat()}: {exp.hypothesis}",
     )
 
 
@@ -1176,20 +1318,44 @@ def safe_spec(entity: Entity) -> BlockerSpec | None:
 
 async def blockers_for_document(db: AsyncSession, document_id: uuid.UUID) -> list[Entity]:
     """Constraint entities with a strategy that gate this document: listed in their
-    ``document_ids`` or linked from one of its sections."""
-    linked = select(DocumentSectionLink.entity_id).where(
-        DocumentSectionLink.document_id == document_id,
-        DocumentSectionLink.entity_id.is_not(None),
+    ``document_ids``, linked from one of its sections, or listed in their last recorded
+    gate snapshot (so a strategy edited or removed around the blocker routes still
+    gates, and fails closed in :func:`assess`). An archived (rejected) or deleted
+    constraint no longer gates."""
+    linked = set(
+        (
+            await db.scalars(
+                select(DocumentSectionLink.entity_id).where(
+                    DocumentSectionLink.document_id == document_id,
+                    DocumentSectionLink.entity_id.is_not(None),
+                )
+            )
+        ).all()
     )
+    recorded = select(BlockerResolutionEvent.blocker_id).where(
+        BlockerResolutionEvent.data.contains({"gate": {"document_ids": [str(document_id)]}})
+    )
+    with_events = select(BlockerResolutionEvent.blocker_id).where(
+        BlockerResolutionEvent.data.has_key("gate")
+    )
+    listed = Entity.attrs.contains({"blocker": {"document_ids": [str(document_id)]}})
     stmt = select(Entity).where(
         Entity.type == "constraint",
-        Entity.attrs.has_key("blocker"),
-        or_(
-            Entity.attrs.contains({"blocker": {"document_ids": [str(document_id)]}}),
-            Entity.id.in_(linked),
-        ),
+        Entity.status != "rejected",
+        or_(Entity.attrs.has_key("blocker"), Entity.id.in_(with_events)),
+        or_(listed, Entity.id.in_(linked), Entity.id.in_(recorded)),
     )
-    return list((await db.scalars(stmt)).all())
+    candidates = list((await db.scalars(stmt)).all())
+    snapshots = await _last_gate_snapshots(db, [e.id for e in candidates])
+    doc = str(document_id)
+    out = []
+    for e in candidates:
+        raw = (e.attrs or {}).get("blocker")
+        in_attrs = isinstance(raw, dict) and doc in [str(d) for d in raw.get("document_ids") or []]
+        in_snapshot = doc in (snapshots.get(e.id) or {}).get("document_ids", [])
+        if in_attrs or e.id in linked or in_snapshot:
+            out.append(e)
+    return out
 
 
 async def all_blockers(db: AsyncSession) -> list[Entity]:

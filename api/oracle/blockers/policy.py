@@ -16,7 +16,14 @@ proposes: evading platform restrictions, abusing identities or accounts, and mes
 people without permission. It is conservative on purpose: a flagged option is stored as
 ``non_compliant`` and ``rejected``, is never recommended and can never be selected or
 kept as a fallback. Rewording an idea that was flagged by mistake is the way out; no
-role can mark flagged text compliant.
+role can mark flagged text compliant. The screen is only a first filter: an option it
+does not flag is still ``needs_review`` until a person reviews its compliance, and only
+a reviewed option can be selected or kept as a fallback.
+
+A tactic named only to rule it out ("never scrape", "instead of bypassing the limit")
+is not flagged, but the negation must govern the tactic directly: in the same clause,
+at most two words before it ("without" only directly), so "without delay, bypass the
+limit" or "without bypassing anything, then evade the limit" are still flagged.
 """
 
 import re
@@ -69,9 +76,10 @@ _RULES: list[tuple[str, str]] = [
     (
         "evasion",
         r"\b(bypass\w*|circumvent\w*|evad\w*|evasion|sidestep\w*|defeat\w*|get(?:ting)? around"
-        r"|work(?:ing)? around|dodg\w*)\b[^.;]{0,40}?\b(rate[ -]?limit\w*|limit\w*|quota\w*"
-        r"|restriction\w*|bans?|block\w*|captcha\w*|detection|terms|tos|polic\w*|throttl\w*"
-        r"|filters?)",
+        r"|work(?:ing)? around|dodg\w*|skirt\w*|gam(?:e|es|ed|ing)|trick\w*|get(?:ting)? past"
+        r"|slip\w* past)\b[^.;]{0,40}?\b(rate[ -]?limit\w*|limit\w*|quota\w*|caps?\b"
+        r"|thresholds?|ceilings?|allowances?|restriction\w*|bans?|block\w*|captcha\w*"
+        r"|detection|terms|tos|polic\w*|throttl\w*|filters?|safeguards?|guardrails?|checks?\b)",
     ),
     ("evasion", r"\brotat\w*\s+(?:\w+\s+){0,2}(ips?|ip addresses|prox(?:y|ies)|user[ -]?agents?)"),
     ("evasion", r"\bresidential prox(?:y|ies)"),
@@ -81,6 +89,8 @@ _RULES: list[tuple[str, str]] = [
     ("evasion", r"\b(cannot|can't|won't|not)\s+(?:\w+\s+){0,2}detect\b"),
     ("evasion", r"\bstealth\w*\s+(?:\w+\s+){0,2}(browser|crawl\w*|scrap\w*|mode)"),
     ("evasion", r"\bscrap\w*\b[^.;]{0,40}?\b(despite|against|violat\w*|without permission)"),
+    # Scraping a platform instead of its approved access, whatever the reason given.
+    ("evasion", r"\bscrap(?:e|es|ed|ing|ers?)\b"),
     ("evasion", r"\b(violat\w*|break\w*|ignor\w*)\s+(?:\w+\s+){0,3}(terms|tos|polic\w*)"),
     # Abusing identities or accounts.
     (
@@ -96,6 +106,11 @@ _RULES: list[tuple[str, str]] = [
     ),
     ("identity_abuse", r"\b(buy|buying|rent|renting|purchas\w*)\s+(?:\w+\s+){0,2}accounts?"),
     ("identity_abuse", r"\baccount[ -]?farm\w*"),
+    (
+        "identity_abuse",
+        r"\b(cycl\w*|rotat\w*)\s+(?:(?:through|between|among|across)\s+)?(?:\w+\s+){0,2}?"
+        r"(accounts|profiles|identities|logins|personas)\b",
+    ),
     ("identity_abuse", r"\bimpersonat\w*|\bpos(?:e|ing) as\b"),
     (
         "identity_abuse",
@@ -127,9 +142,12 @@ _RULES: list[tuple[str, str]] = [
 _COMPILED = [(cat, re.compile(rx, re.I)) for cat, rx in _RULES]
 # A tactic named only to rule it out ("instead of bypassing the limit", "never create
 # extra accounts") is not a proposal.
+# The negation must govern the tactic: same clause (no punctuation between), at most
+# two words before it ("not only", "not just" do not negate), and "without" directly.
 _NEGATION = re.compile(
-    r"\b(not|never|no|without|instead of|rather than|avoid(?:ing)?|refuse to|don't|do not)"
-    r"(\s+\w+){0,2}\s*$",
+    r"(?:\b(?:not|never|no|instead of|rather than|avoid(?:ing)?|refuse to|don't|do not"
+    r"|won't|will not|cannot|can't)(?:\s+(?!only\b|just\b|merely\b|also\b)\w+){0,2}"
+    r"|\bwithout(?:\s+(?:ever|any|having))?)\s+$",
     re.I,
 )
 
@@ -143,9 +161,14 @@ def screen(*texts: str | None) -> list[BlockerPolicyFlag]:
         if not text:
             continue
         for category, rx in _COMPILED:
-            for m in rx.finditer(text):
+            pos = 0
+            while (m := rx.search(text, pos)) is not None:
                 if _NEGATION.search(text[max(0, m.start() - 30) : m.start()]):
+                    # Only this word is ruled out: look again from the next one, so a
+                    # negated tactic never hides another later in the sentence.
+                    pos = m.start() + 1
                     continue
+                pos = max(m.end(), m.start() + 1)
                 key = (category, m.group(0).lower())
                 if key in seen:
                     continue

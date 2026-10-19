@@ -6,6 +6,12 @@ to an unlocked item but becomes a proposal on a locked one (B1: agents must ask
 before overriding a user correction). Every applied change writes an
 ``entity_revisions`` row with the fields before and after.
 
+Some attrs keys belong to a module with its own rules (:data:`MANAGED_ATTRS`): only a
+writer that names the key in ``manages`` may set, change or remove it. Every other
+path (PATCH, POST, proposals and their acceptance, agent writes, YAML imports,
+conflict resolution) is refused, so a blocker's strategy cannot be weakened around
+its recorded decisions.
+
 The caller commits.
 """
 
@@ -32,6 +38,8 @@ from oracle.baseline.models import (
 )
 
 ENTITY_FIELDS = ("title", "body", "attrs", "status")
+# attrs keys a module owns, and the routes that change them.
+MANAGED_ATTRS = {"blocker": "the blocker routes (/v1/blockers)"}
 EDGE_FIELDS = ("attrs", "status")
 
 
@@ -61,6 +69,8 @@ class Writer:
     origin: str  # user | agent | import
     run_id: uuid.UUID | None = None
     reason: str | None = None
+    # MANAGED_ATTRS keys this writer may change (the owning module's writes only).
+    manages: tuple[str, ...] = ()
 
     @property
     def actor(self) -> str:
@@ -217,6 +227,31 @@ async def evidence_counts(
 # --- validation --------------------------------------------------------------------------
 
 
+def check_managed_attrs(
+    writer: Writer, before: dict[str, Any] | None, after: dict[str, Any] | None
+) -> None:
+    """Refuse a change to a managed attrs key by a writer that does not manage it."""
+    before, after = before or {}, after or {}
+    for key, where in MANAGED_ATTRS.items():
+        if key in writer.manages:
+            continue
+        if before.get(key) != after.get(key):
+            raise InvalidError(
+                f"attrs.{key} cannot be set, changed or removed here; change it through {where}"
+            )
+
+
+def _check_fields_managed_attrs(
+    writer: Writer, entity: Entity | None, fields: dict[str, Any]
+) -> None:
+    """The managed-attrs rule for a proposal's entity fields (create or update)."""
+    attrs = fields.get("attrs")
+    if not isinstance(attrs, dict):
+        return
+    current = dict(entity.attrs or {}) if entity is not None else {}
+    check_managed_attrs(writer, current, merge_attrs(current, attrs))
+
+
 def _check_status(status: str | None) -> None:
     if status is not None and status not in NODE_STATUSES:
         raise InvalidError(f"status must be one of {', '.join(NODE_STATUSES)}")
@@ -254,6 +289,8 @@ async def propose(
     edge: Edge | None = None,
 ) -> Proposal:
     """A proposal, or the identical open one already there (so repeats are idempotent)."""
+    if kind == "entity" and op in ("create", "update"):
+        _check_fields_managed_attrs(writer, entity, fields)
     payload = _jsonable(
         {"op": op, "kind": kind, "fields": fields, "reason": writer.reason, "origin": writer.origin}
     )
@@ -407,6 +444,7 @@ async def create_entity(
         raise InvalidError(f"type must be one of {', '.join(ENTITY_TYPES)}")
     if await find_entity(db, type_, key) is not None:
         raise ConflictError(f"{type_}:{key} already exists")
+    check_managed_attrs(writer, {}, attrs)
     entity = Entity(
         type=type_,
         key=key,
@@ -450,6 +488,8 @@ async def update_entity(
     diff = _entity_changes(entity, changes)
     if not diff:
         return WriteResult(entity=entity)
+    if "attrs" in diff:
+        check_managed_attrs(writer, entity.attrs, diff["attrs"])
     if entity.type == "goal" and diff.get("status") == "confirmed":
         raise InvalidError("confirm a goal with POST .../confirm")
     if entity.locked and not writer.locks:

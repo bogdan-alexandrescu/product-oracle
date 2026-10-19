@@ -62,6 +62,8 @@ const PROVIDERS: Schemas["ProviderOut"][] = [
 const SETTING_DEFAULTS: Record<string, unknown> = {
   iap_default_role: "commenter",
   confidence_weights: {},
+  blocker_risk_acceptance_role: "owner",
+  blocker_risk_review_max_days: 90,
 };
 
 function load(): ConnDb {

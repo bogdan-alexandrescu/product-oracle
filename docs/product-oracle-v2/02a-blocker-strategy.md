@@ -45,8 +45,8 @@ Statuses: `open`, `mitigating`, `resolved`, `accepted_risk`, `feasibility_only`.
 | Transition | Route | Rule |
 |---|---|---|
 | open, mitigating, resolved | `POST /v1/blockers/{id}/status` | resolving needs a reason; back to `open` from a closed state is a `reopened` event |
-| accepted_risk | `POST /v1/blockers/{id}/accept-risk` | approver or owner; reason and a future review date required; writes an `AssumptionDecision`, a `risk_accepted` event and the audit event `blocker.risk_accepted` |
-| feasibility_only | `POST /v1/blockers/{id}/feasibility-scope` | the experiment belongs to the blocker, is planned or running, and has an owner, a success threshold and a decision gate date |
+| accepted_risk | `POST /v1/blockers/{id}/accept-risk` | reason and a review date required, in the future and within `blocker_risk_review_max_days` (B4, default 90); for a critical hard blocker only `blocker_risk_acceptance_role` and above (B4, default `owner`), otherwise approvers too; writes an `AssumptionDecision`, a `risk_accepted` event and one audit event, `blocker.risk_accepted` |
+| feasibility_only | `POST /v1/blockers/{id}/feasibility-scope` | the experiment belongs to the blocker, is planned or running, and has an owner, a success threshold and a decision gate date in the future; for a critical hard blocker only `blocker_risk_acceptance_role` and above (B4); one audit event, `blocker.feasibility_scope_approved` |
 | open → mitigating | selecting an option | `option_selected` event |
 | feasibility_only → open | the scope's experiment fails, is cancelled or is inconclusive | automatic, `status_changed` event |
 
@@ -59,19 +59,47 @@ and changing a blocker's type or severity, record a `blocker_status` change too 
 `option_selected`, `option_rejected`, `blocker_reclassified`). A handler that raises
 aborts the whole change.
 
+### Only the blocker routes write `attrs.blocker`
+
+`attrs.blocker` is a managed attrs key (`oracle.baseline.service.MANAGED_ATTRS`). Only a
+`Writer` that names it in `manages` (the blocker service's) may set, change or remove it.
+Every other baseline write path refuses (422, naming `/v1/blockers`): `POST` and `PATCH
+/v1/baseline/entities`, proposals (`POST /v1/baseline/proposals`, the MCP
+`propose_change` tool, agent writes that would become proposals) and accepting one made
+before this rule, conflict resolution, and YAML imports. A YAML file that leaves
+`attrs.blocker` out keeps it (it is not dropped with the other missing keys); a file
+that changes it is rejected. Other attrs, the title and the body stay editable. Rejecting
+(archiving) or deleting the constraint entity stays possible through the baseline, and
+then it no longer gates (§3).
+
+Each write that changes what the gate reads (type, severity, status, gated documents)
+records it on a resolution event as `data.gate`. A status change does it on its own event.
+A type, severity or documents edit through `PATCH /v1/blockers/{id}` appends a
+`status_changed` event with no from or to status and `data.change = "reclassified"` (a
+new event kind would need a migration).
+
 ## 3. The hard readiness check
 
 `oracle/blockers/readiness.py` registers `critical_blockers` with `hard=True` when
 `oracle.main` imports the router. For a document:
 
-- no blocker linked: `not_applicable`;
+- no blocker linked: `not_applicable`. A blocker gates a document listed in its
+  `document_ids`, linked from one of its sections, or listed in its last recorded gate
+  snapshot. An archived (rejected) or deleted constraint no longer gates;
+- **fails closed** first: a strategy whose type, severity, status or documents differ
+  from the last recorded `data.gate` snapshot (or that has none) is `critical`, whatever
+  it says, so a strategy edited straight in the database never clears the gate;
 - a **critical, hard** blocker is `critical` while it is `open` or `mitigating`. It passes
   only when its status rests on a **recorded** decision:
   - `resolved` by a status event;
   - `accepted_risk` by a `risk_accepted` event whose `AssumptionDecision` exists and is
     before its review date (past it, the blocker is critical again);
   - `feasibility_only` by a `feasibility_scope_approved` event whose experiment is still
-    planned, running or succeeded;
+    planned, running or succeeded, still has its owner and success threshold, and has
+    not reached its decision gate. The gate date is the earlier of the one approved with
+    the scope and the experiment's current one: moving it later needs a new approval. A
+    succeeded experiment does not pass on its own. It is time-boxed to its gate date,
+    and after that the blocker must be resolved (or get a new decision);
 - a status written around these routes (a generic baseline edit of `attrs`) does not match
   the last recorded event, so it stays `critical` with a rationale that says so;
 - an unreadable strategy fails closed (`critical`);
@@ -97,8 +125,14 @@ transaction refuses a publish when it is critical.
   detail for three categories: `evasion` (bypassing limits, rotating proxies, spoofing,
   avoiding detection, scraping against terms), `identity_abuse` (fake, bought or extra
   accounts, impersonation, shared logins) and `unauthorized_messaging` (unsolicited or
-  mass messages, messaging without consent, auto-DM, scraped contacts). A tactic named
-  only to rule it out ("instead of bypassing the limit") is not flagged.
+  mass messages, messaging without consent, auto-DM, scraped contacts). Synonyms include
+  cycling or rotating accounts, mass DMs, scraping (any), and bypassing, evading or
+  skirting a limit, cap or threshold. A tactic named only to rule it out ("instead of
+  bypassing the limit", "never scrape") is not flagged, but only when the negation
+  governs it: same clause, at most two words before it, "without" directly before it.
+  "Without delay, bypass the limit" is flagged, and a negated tactic never hides a later
+  one. The screen is a first filter: an unflagged option still needs a person's
+  compliance review before it can be chosen.
 
 Rules: a new option starts `needs_review`. A flagged one is stored `non_compliant`,
 `rejected`, policy feasibility `low`, with its flags, so the record of the idea stays but
@@ -147,8 +181,8 @@ All `/v1`, Pydantic in and out, company-scoped, MCP tools generated from OpenAPI
 | `GET /blockers/{id}` | viewer | The strategy view: blocker, gate, evidence, options (flags, recommended), compliant paths, experiments, events, risk acceptance, documents |
 | `PATCH /blockers/{id}` | approver | Edit; `revision` required (409 when stale); no status |
 | `POST /blockers/{id}/status` | approver | open, mitigating, resolved |
-| `POST /blockers/{id}/accept-risk` | approver | Reason and review date |
-| `POST /blockers/{id}/feasibility-scope` | approver | Experiment id and reason |
+| `POST /blockers/{id}/accept-risk` | approver; owner for a critical hard blocker (B4 setting) | Reason and review date (within the B4 horizon) |
+| `POST /blockers/{id}/feasibility-scope` | approver; owner for a critical hard blocker (B4 setting) | Experiment id and reason |
 | `POST /blockers/{id}/options` | commenter | Propose an option (screened) |
 | `PATCH /blocker-options/{id}` | approver | Edit or record the compliance review; `lock_version` |
 | `POST /blocker-options/{id}/select` | approver | Select with a reason |

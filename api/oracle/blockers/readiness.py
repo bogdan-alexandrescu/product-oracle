@@ -2,8 +2,11 @@
 
 A critical, hard, unresolved blocker that gates a document is ``critical``, so the
 publish transaction refuses the publish, unless its status rests on a recorded decision:
-an approved scoped feasibility experiment that has not failed, or a risk an authorized
-person accepted (who and why are recorded, with an audit event) before its review date.
+an approved scoped feasibility experiment before its decision gate (with its owner and
+success threshold), or a risk an authorized person accepted (who and why are recorded,
+with an audit event) before its review date. A strategy that disagrees with its last
+recorded snapshot fails closed (``service.assess``). Archived (rejected) or deleted
+constraints no longer gate.
 Lesser unresolved blockers (hard but not critical, critical but not hard) are a
 ``warning``. A document with no blockers is ``not_applicable``.
 """

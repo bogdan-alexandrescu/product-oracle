@@ -52,9 +52,7 @@ async def _gated(client, ctx):
 
 
 async def _put_setting(client, ctx, key: str, value):
-    return await client.put(
-        f"/v1/settings/{key}", json={"value": value}, headers=ctx.as_("owner")
-    )
+    return await client.put(f"/v1/settings/{key}", json={"value": value}, headers=ctx.as_("owner"))
 
 
 async def _experiment(client, ctx, blocker_id, **body) -> dict:
@@ -188,9 +186,7 @@ async def test_a_proposal_cannot_carry_a_strategy_change(client, op):
                 "attrs": {"blocker": {"type": "hard", "severity": "critical"}},
             },
         }
-    resp = await client.post(
-        "/v1/baseline/proposals", json=body, headers=ctx.as_("commenter")
-    )
+    resp = await client.post("/v1/baseline/proposals", json=body, headers=ctx.as_("commenter"))
     assert resp.status_code == 422, resp.text
 
 
@@ -571,6 +567,4 @@ async def test_a_feasibility_scope_is_audited_once(client):
     )
     assert resp.status_code == 200, resp.text
     added = [a for i, a in (await _actions(ctx)).items() if i not in before]
-    assert [a for a in added if a.startswith("blocker.")] == [
-        "blocker.feasibility_scope_approved"
-    ]
+    assert [a for a in added if a.startswith("blocker.")] == ["blocker.feasibility_scope_approved"]

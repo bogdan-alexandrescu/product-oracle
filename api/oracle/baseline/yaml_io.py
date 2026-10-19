@@ -322,9 +322,12 @@ async def import_yaml(
                 entity = by_ref[ref] = write.entity
                 result.created += 1
             else:
-                # The file states the full attrs: keys it drops are removed.
+                # The file states the full attrs: keys it drops are removed, except the
+                # keys a module manages (a blocker's strategy), which a file leaving them
+                # out keeps; a file that changes one is refused.
                 attrs = doc.get("attrs") or {}
-                attrs_patch = {**dict.fromkeys(entity.attrs or {}), **attrs}
+                kept = [k for k in entity.attrs or {} if k not in service.MANAGED_ATTRS]
+                attrs_patch = {**dict.fromkeys(kept), **attrs}
                 changes = {"title": doc["title"], "body": doc.get("body"), "attrs": attrs_patch}
                 if status is not None:
                     changes["status"] = status
