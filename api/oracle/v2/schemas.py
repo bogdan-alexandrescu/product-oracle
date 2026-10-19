@@ -446,6 +446,9 @@ class ArtifactDependencyOut(ORM):
     upstream_section_key: str | None = None
     upstream_section_hash: str | None = None
     upstream_entity_id: uuid.UUID | None = None
+    # A deleted upstream entity: what it was, and when it went.
+    upstream_snapshot: dict[str, Any] | None = None
+    upstream_deleted_at: datetime | None = None
     composition_revision: int | None = None
     freshness: Freshness
     caused_by_change_id: uuid.UUID | None = None

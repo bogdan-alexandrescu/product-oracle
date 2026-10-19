@@ -77,6 +77,9 @@ class TraceUpstream(BaseModel):
     section_hash: str | None = None
     composition_revision: int | None = None
     entity: TraceEntityRef | None = None
+    # The upstream entity was deleted: ``entity`` is what it was when it went.
+    deleted: bool = False
+    deleted_at: datetime | None = None
 
 
 class TraceDependency(BaseModel):
@@ -155,6 +158,19 @@ class ImpactReport(BaseModel):
     affected_entities: list[TraceEntityRef] = []
     plan: list[RegenerationProposal]
     counts: dict[str, int]
+    # The graph walk stopped at its bound: more may be affected than listed.
+    truncated: bool = False
+
+
+class StaleOutputsPage(BaseModel):
+    """A page of outputs that are not fresh, stalest first."""
+
+    items: list[TraceOutput]
+    total: int
+    limit: int
+    offset: int
+    # The offset of the next page; null on the last one.
+    next_offset: int | None = None
 
 
 class StalenessAction(BaseModel):
@@ -366,6 +382,8 @@ class EntityTrace(BaseModel):
     outputs: list[TraceOutput]
     # A feature's place in the goal-weighted ranking, with its explanation.
     priority: RankedFeature | None = None
+    # A graph walk stopped at its bound: the chain or the outputs may be longer.
+    truncated: bool = False
 
 
 class VersionAnchors(BaseModel):
@@ -409,3 +427,5 @@ class VersionTrace(BaseModel):
     whole_version_downstream: list[TraceOutput]
     # For a roadmap or other derived version: what it depends on.
     upstream: list[TraceDependency] = []
+    # The walk to the sections' goals stopped at its bound.
+    truncated: bool = False

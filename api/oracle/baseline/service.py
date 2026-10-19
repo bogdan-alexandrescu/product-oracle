@@ -10,6 +10,8 @@ The caller commits.
 """
 
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -403,21 +405,149 @@ def _change_subject(entity: Entity, before: dict[str, Any] | None) -> str:
     return "entity"
 
 
+# Edge meaning for change propagation (as in oracle.trace.graph): for these types the
+# destination is downstream of the source; for the rest (but owned_by) the source is.
+DST_DOWNSTREAM_EDGES = ("affects", "blocks", "mitigates")
+# A person named as owner is not content: nothing is recorded for it.
+UNTRACED_EDGES = ("owned_by",)
+# The destination is a whole the source belongs to: it changes when a part comes or goes.
+WHOLE_EDGES = ("part_of", "verifies")
+REMOVAL_PRIORITY = {"entity_deleted": 2, "entity_rejected": 1}
+_BATCH = "baseline.change_batch"
+
+
+def _entity_ref(entity: Entity) -> dict[str, Any]:
+    return _jsonable(
+        {"id": entity.id, "type": entity.type, "key": entity.key, "title": entity.title,
+         "status": entity.status}
+    )  # fmt: skip
+
+
 async def _record_change(
-    db: AsyncSession, actor: str, entity: Entity, before: dict[str, Any] | None, cause: str
+    db: AsyncSession,
+    actor: str,
+    entity: Entity,
+    before: dict[str, Any] | None,
+    cause: str,
+    *,
+    edge: dict[str, Any] | None = None,
+    wholes: list[uuid.UUID] | None = None,
 ) -> None:
-    """v2 hook: what is built on this entity may now be stale (oracle.trace)."""
+    """v2 hook: what is built on this entity may now be stale (oracle.trace).
+
+    Inside :func:`batched_changes` the change is collected instead (a deletion is
+    always recorded at once, while the entity and its edges still exist)."""
     after = entity_snapshot(entity)
+    entry = {
+        "kind": _change_subject(entity, before),
+        "id": entity.id,
+        "ref": f"{entity.type}:{entity.key}",
+        "cause": cause,
+        "actor": actor,
+        "fields": sorted(k for k in after if (before or {}).get(k) != after.get(k)),
+        "entity": _entity_ref(entity),
+        "edge": edge,
+        "wholes": [str(w) for w in wholes or []],
+    }
+    batch = db.info.get(_BATCH)
+    if batch is not None and cause != "entity_deleted":
+        _collect(batch, entry)
+        return
+    await _record_one(db, entry)
+
+
+def _collect(batch: dict[uuid.UUID, dict[str, Any]], entry: dict[str, Any]) -> None:
+    """One entry per entity: fields and wholes merge, a removal outranks an update."""
+    seen = batch.get(entry["id"])
+    if seen is None:
+        batch[entry["id"]] = entry
+        return
+    seen["fields"] = sorted(set(seen["fields"]) | set(entry["fields"]))
+    seen["wholes"] = list(dict.fromkeys(seen["wholes"] + entry["wholes"]))
+    seen["entity"] = entry["entity"]
+    if entry["kind"] == "blocker_status":
+        seen["kind"] = "blocker_status"
+    if REMOVAL_PRIORITY.get(entry["cause"], 0) > REMOVAL_PRIORITY.get(seen["cause"], 0):
+        seen["cause"] = entry["cause"]
+    seen["edge"] = seen["edge"] or entry["edge"]
+
+
+def _data(entry: dict[str, Any]) -> dict[str, Any]:
+    data: dict[str, Any] = {"fields": entry["fields"], "entity": entry["entity"]}
+    if entry["edge"] is not None:
+        data["edge"] = entry["edge"]
+    if entry["wholes"]:
+        data["wholes"] = entry["wholes"]
+    return data
+
+
+async def _record_one(db: AsyncSession, entry: dict[str, Any]) -> None:
     await changes.record_change(
         db,
-        _change_subject(entity, before),
-        cause=cause,
-        actor=actor,
-        subject_id=entity.id,
-        subject_ref=f"{entity.type}:{entity.key}",
-        data={
-            "fields": sorted(k for k in after if (before or {}).get(k) != after.get(k)),
-        },
+        entry["kind"],
+        cause=entry["cause"],
+        actor=entry["actor"],
+        subject_id=entry["id"],
+        subject_ref=entry["ref"],
+        data=_data(entry),
+    )
+
+
+@asynccontextmanager
+async def batched_changes(db: AsyncSession) -> AsyncIterator[None]:
+    """Collect the entity and edge changes of a bulk write (a YAML import, a run's
+    baseline) and record them when the block ends: one change event per subject kind,
+    so the trace handler walks the graph once per kind, not once per write. A single
+    entity's change is recorded as it would be on its own; several go in one event
+    with ``subject_id`` null and ``data["roots"]`` (and ``data["entity_ids"]``). Nested
+    blocks join the outer one. Nothing is recorded if the block raises."""
+    if _BATCH in db.info:
+        yield
+        return
+    batch: dict[uuid.UUID, dict[str, Any]] = {}
+    db.info[_BATCH] = batch
+    try:
+        yield
+    finally:
+        db.info.pop(_BATCH, None)
+    by_kind: dict[str, list[dict[str, Any]]] = {}
+    for entry in batch.values():
+        by_kind.setdefault(entry["kind"], []).append(entry)
+    for kind, entries in by_kind.items():
+        if len(entries) == 1:
+            await _record_one(db, entries[0])
+            continue
+        causes = {e["cause"] for e in entries}
+        await changes.record_change(
+            db,
+            kind,
+            cause=causes.pop() if len(causes) == 1 else "bulk_write",
+            actor=entries[0]["actor"],
+            subject_ref=f"{len(entries)} baseline items",
+            data={
+                "entity_ids": [str(e["id"]) for e in entries],
+                "fields": sorted({f for e in entries for f in e["fields"]}),
+                "roots": [
+                    {"id": str(e["id"]), "ref": e["ref"], "cause": e["cause"], **_data(e)}
+                    for e in entries
+                ],
+            },
+        )
+
+
+async def _record_edge_change(db: AsyncSession, actor: str, edge: Edge, cause: str) -> None:
+    """An edge created, removed or changed (a re-parent is a removal and a creation):
+    recorded against its downstream end, with the whole it joins or leaves."""
+    if edge.type in UNTRACED_EDGES:
+        return
+    target_id = edge.dst_id if edge.type in DST_DOWNSTREAM_EDGES else edge.src_id
+    target = await db.get(Entity, target_id)
+    if target is None:
+        return
+    wholes = [edge.dst_id] if edge.type in WHOLE_EDGES else []
+    snapshot = {"id": str(edge.id), **edge_snapshot(edge)}
+    await _record_change(
+        db, actor, target, entity_snapshot(target), cause, edge=snapshot, wholes=wholes
     )
 
 
@@ -630,6 +760,7 @@ async def create_edge(
     if type_ == "supports":
         await scoring.rescore_around(db, [src_id])
     await db.flush()
+    await _record_edge_change(db, writer.actor, edge, "edge_created")
     return WriteResult(edge=edge)
 
 
@@ -663,6 +794,7 @@ async def update_edge(
     if edge.type == "supports":
         await scoring.rescore_around(db, [edge.src_id])
     await db.flush()
+    await _record_edge_change(db, writer.actor, edge, "edge_updated")
     return WriteResult(edge=edge)
 
 
@@ -679,6 +811,7 @@ async def delete_edge(db: AsyncSession, writer: Writer, edge: Edge) -> WriteResu
         edge.id,
         {"before": edge_snapshot(edge), "origin": writer.origin, "reason": writer.reason},
     )
+    await _record_edge_change(db, writer.actor, edge, "edge_deleted")
     await db.delete(edge)
     await db.flush()
     if type_ == "supports":

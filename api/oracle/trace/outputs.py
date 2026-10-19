@@ -16,7 +16,7 @@ from oracle.trace.schemas import (
     TraceOutput,
     TraceUpstream,
 )
-from oracle.v2.models import ArtifactDependency, ArtifactRequest, ArtifactVersion
+from oracle.v2.models import ArtifactDependency, ArtifactRequest, ArtifactVersion, ChangeEvent
 
 # Worst first: an output is as fresh as its stalest dependency.
 FRESHNESS_ORDER = {"fresh": 0, "reconciled": 1, "under_review": 2, "potentially_stale": 3}
@@ -36,6 +36,37 @@ def entity_ref(e: Entity) -> TraceEntityRef:
         locked=e.locked,
         confidence=None if e.confidence is None else float(e.confidence),
     )
+
+
+def deleted_ref(snapshot: dict) -> TraceEntityRef:
+    """A deleted entity, from the snapshot its dependencies kept."""
+    return TraceEntityRef(
+        id=snapshot["id"],
+        type=snapshot.get("type") or "entity",
+        key=snapshot.get("key") or "",
+        title=snapshot.get("title") or "",
+        status=snapshot.get("status") or "deleted",
+        locked=False,
+    )
+
+
+async def recorded_reasons(
+    db: AsyncSession, deps: list[ArtifactDependency]
+) -> dict[uuid.UUID, list[str]]:
+    """Why each dependency was marked, from the change that marked it (its
+    ``data["trace"]["marked"]``)."""
+    change_ids = {d.caused_by_change_id for d in deps if d.caused_by_change_id}
+    if not change_ids:
+        return {}
+    wanted = {str(d.id) for d in deps}
+    out: dict[uuid.UUID, list[str]] = {}
+    for data in (
+        await db.scalars(select(ChangeEvent.data).where(ChangeEvent.id.in_(change_ids)))
+    ).all():
+        for m in ((data or {}).get("trace") or {}).get("marked") or []:
+            if m.get("id") in wanted:
+                out.setdefault(uuid.UUID(m["id"]), list(m.get("reasons") or []))
+    return out
 
 
 def downstream_key(dep: ArtifactDependency) -> tuple[str, uuid.UUID]:
@@ -153,6 +184,9 @@ async def describe(
             up.version_id, up.version_number = uv.id, uv.number
         if dep.upstream_entity_id in entities:
             up.entity = entity_ref(entities[dep.upstream_entity_id])
+        elif dep.upstream_entity_id is None and dep.upstream_snapshot:
+            up.entity = deleted_ref(dep.upstream_snapshot)
+            up.deleted, up.deleted_at = True, dep.upstream_deleted_at
         why = reasons.get(dep.id, [])
         view.dependencies.append(
             TraceDependency(

@@ -95,6 +95,8 @@ function upstreamOf(ctx: TraceContext, dep: Schemas["ArtifactDependencyOut"]): S
     section_hash: dep.upstream_section_hash ?? null,
     composition_revision: dep.composition_revision ?? null,
     entity: e ? entityRef(e) : null,
+    deleted: false,
+    deleted_at: null,
   };
 }
 
@@ -177,7 +179,7 @@ function report(
   const affected = describe(ctx, deps, true);
   const counts: Record<string, number> = { total: affected.length, approved: affected.filter((a) => a.approved).length };
   for (const a of affected) counts[a.category] = (counts[a.category] ?? 0) + 1;
-  return { subject, change: extra.change ?? null, changes: extra.changes ?? [], preview: extra.preview, affected, affected_entities: [], plan: plan(affected), counts };
+  return { subject, change: extra.change ?? null, changes: extra.changes ?? [], preview: extra.preview, affected, affected_entities: [], plan: plan(affected), counts, truncated: false };
 }
 
 function linkViews(ctx: TraceContext, version: TraceVersion, key: string): Schemas["SectionLinkView"][] {
@@ -217,6 +219,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
       const comp = v2.compositions.find((c) => c.document_id === d.id);
       const rev = comp && v2.composition_revisions.find((r) => r.composition_id === comp.id && r.number === comp.current_revision);
       const out: Schemas["VersionTrace"] = {
+        truncated: false,
         anchors: {
           document_id: d.id, document_slug: d.slug, document_kind: d.kind, version_id: v.id, number: v.number,
           content_hash: v.content_hash, template: comp?.template ?? d.template ?? null,
@@ -304,6 +307,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
       return json(200, report(ctx, { kind, id: e.id, ref: `${e.type}:${e.key}`, title: e.title, document_id: null }, deps, { preview: true }));
     }
     const out: Schemas["EntityTrace"] = {
+      truncated: false,
       entity: entityRef(e),
       flags: [],
       goals: [],
@@ -347,7 +351,15 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
       if (!doc) return true;
       return ctx.versions.find((v) => v.id === x.upstream_version_id)?.document_id === doc;
     });
-    return json(200, describe(ctx, deps));
+    // Paged by output, as the API (limit 1-200, default 50).
+    const limit = Number(q.get("limit") ?? 50);
+    const offset = Number(q.get("offset") ?? 0);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200 || !Number.isInteger(offset) || offset < 0) {
+      return json(422, { detail: "limit is 1-200 and offset 0 or more" });
+    }
+    const all = describe(ctx, deps, true);
+    const next = offset + limit;
+    return json(200, { items: all.slice(offset, next), total: all.length, limit, offset, next_offset: next < all.length ? next : null });
   }
   if (p[2] === "staleness" && p[3] === "actions" && m === "POST") {
     if (!approver()) return forbidden();

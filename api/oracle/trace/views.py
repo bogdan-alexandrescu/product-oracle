@@ -29,6 +29,7 @@ from oracle.trace.schemas import (
     TraceDependency,
     TraceEvidenceRef,
     TraceExperimentRef,
+    TraceOutput,
     TraceRelated,
     TraceSectionRef,
     VersionAnchors,
@@ -187,7 +188,13 @@ async def _sections_linking(db: AsyncSession, entity_ids: list[uuid.UUID]) -> li
 
 
 async def entity_trace(db: AsyncSession, entity: Entity) -> EntityTrace:
-    g = await graph_mod.load(db)
+    # Rejected items are not part of the trace: a rejected node shows no chain.
+    active = entity.status != "rejected"
+    g = (
+        await graph_mod.load_around(db, [entity.id], up=True, down=True, related=True)
+        if active
+        else graph_mod.Graph(entities={entity.id: entity})
+    )
     goals = g.confirmed_goals(entity.id)
     flags: list[str] = []
     priority = None
@@ -196,22 +203,35 @@ async def entity_trace(db: AsyncSession, entity: Entity) -> EntityTrace:
         flags = next((f.flags for f in report.features if f.id == entity.id), [])
         ranking = await priorities.compute(db, "goal_weighted")
         priority = next((f for f in ranking.features if f.entity_id == str(entity.id)), None)
-    elif entity.type in GOAL_TRACED and not goals and entity.status != "rejected":
+    elif entity.type in GOAL_TRACED and not goals and active:
         flags = ["serves_no_goal"]
-    down = g.chain_down(entity.id) if entity.id in g.entities else []
+    down = g.chain_down(entity.id)
+    up = g.upstream(entity.id)
     found = await staleness.affected(db, staleness.Subject(subject_kind_of(entity), entity.id))
     return EntityTrace(
         entity=entity_ref(entity),
         flags=flags,
         goals=[entity_ref(x) for x in goals],
-        upstream=_steps(g, g.upstream(entity.id)) if entity.id in g.entities else [],
+        upstream=_steps(g, up),
         downstream=_steps(g, down),
         related=await _related(db, g, entity),
         evidence=await _evidence(db, entity.id),
         sections=await _sections_linking(db, [entity.id] + [s.entity_id for s in down]),
         outputs=await describe(db, list(found.deps.values())),
         priority=priority,
+        truncated=g.truncated or found.truncated,
     )
+
+
+def _for_section(views: list[TraceOutput], key: str | None) -> list[TraceOutput]:
+    """The outputs among ``views`` that depend on section ``key`` (None: on the whole
+    version), each with only those dependencies."""
+    out = []
+    for view in views:
+        deps = [d for d in view.dependencies if d.upstream.section_key == key]
+        if deps:
+            out.append(view.model_copy(update={"dependencies": deps}))
+    return out
 
 
 async def _anchors(
@@ -269,7 +289,13 @@ async def version_trace(
     views = await evidence_mod.link_views(
         db, await evidence_mod.version_links(db, version), hashes, principal
     )
-    g = await graph_mod.load(db)
+    linked = [
+        link.target.id
+        for section_links in views.values()
+        for link in section_links
+        if link.target.type == "entity"
+    ]
+    g = await graph_mod.load_around(db, linked, up=True, down=False)
     on_version = list(
         (
             await db.scalars(
@@ -279,18 +305,20 @@ async def version_trace(
             )
         ).all()
     )
+    # One description for every output built on this version, split by section below.
+    downstream = await describe(db, on_version)
     out = []
     for s in sections:
         entities = []
         goals: dict[uuid.UUID, Entity] = {}
         for link in views.get(s.section_key, []):
-            if link.target.type == "entity" and link.target.id in g.entities:
-                e = g.entities[link.target.id]
-                if all(x.id != e.id for x in entities):
-                    entities.append(entity_ref(e))
-                for goal in g.confirmed_goals(e.id) + ([e] if e.type == "goal" else []):
-                    goals[goal.id] = goal
-        deps = [d for d in on_version if d.upstream_section_key == s.section_key]
+            e = g.entities.get(link.target.id) if link.target.type == "entity" else None
+            if e is None or e.status == "rejected":
+                continue
+            if all(x.id != e.id for x in entities):
+                entities.append(entity_ref(e))
+            for goal in g.confirmed_goals(e.id) + ([e] if e.type == "goal" else []):
+                goals[goal.id] = goal
         out.append(
             SectionTrace(
                 section_key=s.section_key,
@@ -301,7 +329,7 @@ async def version_trace(
                 links=views.get(s.section_key, []),
                 entities=entities,
                 goals=[entity_ref(x) for x in sorted(goals.values(), key=lambda x: x.key)],
-                downstream=await describe(db, deps),
+                downstream=_for_section(downstream, s.section_key),
             )
         )
     upstream_deps = list(
@@ -319,8 +347,7 @@ async def version_trace(
     return VersionTrace(
         anchors=await _anchors(db, document, version),
         sections=out,
-        whole_version_downstream=await describe(
-            db, [d for d in on_version if d.upstream_section_key is None]
-        ),
+        whole_version_downstream=_for_section(downstream, None),
         upstream=upstream,
+        truncated=g.truncated,
     )

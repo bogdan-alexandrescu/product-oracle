@@ -13,7 +13,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import case, func, or_, select
 
 from oracle import audit, changes
 from oracle.auth.deps import Principal, TenantDB
@@ -23,7 +23,7 @@ from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.sources.models import Source, SourceItem
 from oracle.trace import evidence, impact, staleness, views
-from oracle.trace.outputs import describe
+from oracle.trace.outputs import FRESHNESS_ORDER, describe, recorded_reasons
 from oracle.trace.schemas import (
     DependenciesCreate,
     EntityTrace,
@@ -31,6 +31,7 @@ from oracle.trace.schemas import (
     ImpactReport,
     SectionLinksCreate,
     StalenessAction,
+    StaleOutputsPage,
     TraceOutput,
     VersionTrace,
 )
@@ -232,23 +233,71 @@ async def get_change_impact(change_id: uuid.UUID, principal: Reader, db: TenantD
     return await impact.for_change(db, event)
 
 
-@router.get("/trace/staleness", response_model=list[TraceOutput])
+@router.get("/trace/staleness", response_model=StaleOutputsPage)
 async def list_stale_outputs(
     principal: Reader,
     db: TenantDB,
     document_id: uuid.UUID | None = None,
     freshness: Freshness | None = None,
-) -> list[TraceOutput]:
-    """Outputs that are not fresh (potentially stale or under review by default), with
-    the dependencies that make them so; ``document_id`` filters by upstream document."""
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> StaleOutputsPage:
+    """Outputs that are not fresh (potentially stale or under review by default), a page
+    at a time, stalest first, with the dependencies that make them so and why (from the
+    change that marked each); ``document_id`` filters by upstream document."""
     states = [freshness] if freshness else ["potentially_stale", "under_review"]
-    stmt = select(ArtifactDependency).where(ArtifactDependency.freshness.in_(states))
+    conditions = [ArtifactDependency.freshness.in_(states)]
     if document_id is not None:
-        stmt = stmt.join(
-            DocumentVersion, DocumentVersion.id == ArtifactDependency.upstream_version_id
-        ).where(DocumentVersion.document_id == document_id)
-    deps = list((await db.scalars(stmt.order_by(ArtifactDependency.created_at))).all())
-    return await describe(db, deps)
+        conditions.append(
+            ArtifactDependency.upstream_version_id.in_(
+                select(DocumentVersion.id).where(DocumentVersion.document_id == document_id)
+            )
+        )
+    rank = case({k: v for k, v in FRESHNESS_ORDER.items()}, value=ArtifactDependency.freshness)
+    output = (ArtifactDependency.artifact_version_id, ArtifactDependency.document_version_id)
+    grouped = select(*output).where(*conditions).group_by(*output)
+    total = await db.scalar(select(func.count()).select_from(grouped.subquery()))
+    page = (
+        await db.execute(
+            grouped.order_by(
+                func.max(rank).desc(),
+                func.min(ArtifactDependency.created_at),
+                func.coalesce(*output),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    keys = [("artifact_version", a) if a else ("document_version", d) for a, d in page]
+    items: list[TraceOutput] = []
+    if keys:
+        av_ids = [i for k, i in keys if k == "artifact_version"]
+        dv_ids = [i for k, i in keys if k == "document_version"]
+        deps = list(
+            (
+                await db.scalars(
+                    select(ArtifactDependency)
+                    .where(
+                        *conditions,
+                        or_(
+                            ArtifactDependency.artifact_version_id.in_(av_ids),
+                            ArtifactDependency.document_version_id.in_(dv_ids),
+                        ),
+                    )
+                    .order_by(ArtifactDependency.created_at, ArtifactDependency.id)
+                )
+            ).all()
+        )
+        views = {
+            (v.kind, v.artifact_version_id or v.document_version_id): v
+            for v in await describe(db, deps, await recorded_reasons(db, deps))
+        }
+        items = [views[k] for k in keys if k in views]
+    nxt = offset + limit
+    return StaleOutputsPage(
+        items=items, total=total or 0, limit=limit, offset=offset,
+        next_offset=nxt if nxt < (total or 0) else None,
+    )  # fmt: skip
 
 
 async def _downstream_view(db, body) -> TraceOutput:
@@ -258,7 +307,7 @@ async def _downstream_view(db, body) -> TraceOutput:
         else ArtifactDependency.document_version_id == body.document_version_id
     )
     deps = list((await db.scalars(select(ArtifactDependency).where(flt))).all())
-    described = await describe(db, deps)
+    described = await describe(db, deps, await recorded_reasons(db, deps))
     if not described:
         raise _404("Output not found")
     return described[0]
