@@ -7,18 +7,22 @@ SwarmCloud workflows"). Each wave is one SwarmCloud workflow. Each step is one l
 take precedence over the build prompt. A lane that would conflict with one builds the
 compatible version and records a proposed change in [change-requests.md](change-requests.md).
 
-## Wave 1: foundation, then six lanes in parallel
+## Wave 1: foundation, then six lanes in parallel (API and logic)
+
+The six lanes build API and logic only (I3, 2026-10-19: the UI is redesigned first). They
+run as a second workflow on the foundation's branch (`ops/v2-wave1-lanes.workflow.json`),
+and each lane's report lists the screens its feature needs for the UI wave.
 
 | Step | Change requests | Build prompt | Owns (new code goes here) | Writes |
 |---|---|---|---|---|
 | `v2-foundation` | shared schema, contracts, hooks | §3, §4.2, §7, §9, §14 | migration `0013`, `oracle/models.py` additions, `oracle/v2/` schemas, `oracle/changes.py`, `oracle/readiness.py`, thin `/v1` read routes | `01-solution-architecture.md` |
 | `v2-audit` (parallel with the foundation) | CR-00 | §1, §15 Phase 0, §16 | new regression tests under `api/tests/legacy/` and `web/e2e/legacy/` only | `00-baseline-and-delta.md`, `06-security-and-threat-model.md` |
-| `v2-modules` | CR-01, CR-02 | §4 | `oracle/modules/`, template manifests, composition routes, picker composition inspector | `02-template-modules.md` |
-| `v2-blockers` | CR-04 | §6 | `oracle/blockers/`, blocker routes and UI | `02a-blocker-strategy.md` |
-| `v2-intake` | CR-03 (+ snapshot lock from CR-12) | §5, §13 steps 1-6 | `oracle/intake/`, gap and question routes, New product idea and Opportunity and Gaps screens | `03-discovery-and-quality.md` |
-| `v2-trace` | CR-05 (+ staleness, §11.5) | §7, §11.5 | `oracle/trace/`, trace and impact routes, impact explorer and evidence inspector | `05-artifact-contracts.md` (lineage and staleness) |
-| `v2-review` | CR-06 | §9 (not the chat) | `oracle/review/` extensions, publish transaction, assignees and due dates | `08-review-and-publish.md` |
-| `v2-quality` | CR-08 | §10 | `oracle/quality/`, evaluation corpus under `api/tests/fixtures/eval/`, readiness dashboard | `03b-quality-and-readiness.md` |
+| `v2-modules` | CR-01, CR-02 | §4 | `oracle/modules/`, template manifests, composition routes | `02-template-modules.md` |
+| `v2-blockers` | CR-04 | §6 | `oracle/blockers/`, blocker routes | `02a-blocker-strategy.md` |
+| `v2-intake` | CR-03 (+ snapshot lock from CR-12) | §5, §13 steps 1-6 | `oracle/intake/`, gap and question routes | `03-discovery-and-quality.md` |
+| `v2-trace` | CR-05 (+ staleness, §11.5) | §7, §11.5 | `oracle/trace/`, trace, impact and evidence-inspector routes | `05-artifact-contracts.md` (lineage and staleness) |
+| `v2-review` | CR-06 | §9 (not the chat) | `oracle/review/` extensions, publish transaction, assignees and due dates (API) | `08-review-and-publish.md` |
+| `v2-quality` | CR-08 | §10 | `oracle/quality/`, evaluation corpus under `api/tests/fixtures/eval/`, readiness routes | `03b-quality-and-readiness.md` |
 
 In flight before wave 1: **CR-07 SwarmCloud v2**, the adapter v2 lane
 (`ops/swarmcloud-adapter-v2.lane.md`, task `task_d6ae4b64dac44ba9b508`). The foundation
@@ -38,7 +42,7 @@ Lanes never call another lane's code. They meet at two small registries:
 - **`oracle/readiness.py`**: `register_check(key, fn, hard=...)` and `evaluate(...)` return
   results of `pass / warning / critical / not_applicable` with a rationale, evidence ids
   and an owner. `v2-blockers` registers the critical-hard-blocker check (hard).
-  `v2-quality` registers the ten quality criteria (advisory, per T2 below) and the hard
+  `v2-quality` registers the ten quality criteria (advisory, per T2) and the hard
   security and policy checks. `v2-review`'s publish transaction refuses a publish when a
   hard check is critical.
 
@@ -74,6 +78,21 @@ Lanes never call another lane's code. They meet at two small registries:
    and the client, and run the full suite.
 3. Merge adapter v2 when its review passes. Deploy follows the owner's cadence.
 
+## Design track (I3: redesign now), in parallel with wave 1
+
+1. `v2-design-directions`: three distinct visual directions for Oracle's app UI (not the
+   document themes), as rendered mockups of five screens in light and dark, desktop and
+   mobile. The orchestrator reviews every frame, publishes an options page, and the owner
+   picks.
+2. `v2-design-system`: the chosen direction as tokens and components, restyling every
+   existing screen without changing behaviour or the Playwright contracts.
+3. `v2-ui`: the screens wave 1 needs, on the design system, from the lanes' screen lists:
+   New product idea, Opportunity and Gaps, question batches, the composition inspector,
+   blocker strategy, impact explorer, evidence inspector, section review status, the
+   publish check and the readiness dashboard.
+
+Deploys (V2a): one per wave, after the merged wave passes the full suite and a smoke check.
+
 ## Wave 2: linked artifacts and proactive work (after wave 1 merges)
 
 - `v2-specs`: CR-09, engineering specs, SVG flows and low-fidelity wireframes linked to
@@ -101,8 +120,8 @@ SwarmCloud end-to-end check from `docs/swarmcloud-interface.md`.
 
 | Id | Decision | Asked | Lanes build meanwhile with |
 |---|---|---|---|
-| T2 | PRD quality policy | wave 1 dispatch | advisory evaluation; hard blocks only for review and publish invariants, critical blockers, failed security or policy checks |
-| I3 | UI visual language | wave 1 dispatch | the existing UI and themes, improved in place |
+| T2 | PRD quality policy | answered 2026-10-19 | advisory; gate criticals only |
+| I3 | UI visual language | answered 2026-10-19 | redesign now: design track first, lanes API-only |
 | X3 | SwarmCloud bundled when Oracle is sold | before CR-15 | nothing (deferred) |
 | T1 | Enterprise privacy and compliance | before CR-15 | nothing (deferred) |
 | O6 | Figma authoring path | before `v2-prototypes` | Figma disabled |
