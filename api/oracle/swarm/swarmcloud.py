@@ -229,6 +229,16 @@ class SwarmCloudRuntime:
             raise RuntimeUnavailable("SwarmCloud accepted the workflow but returned no id")
         return str(workflow_id)
 
+    async def whoami(self) -> dict[str, str | None]:
+        async with self._client() as client:
+            resp = await self._call(client, "GET", "/v1/tenants/me")
+        try:
+            body = resp.json()
+        except ValueError:
+            raise RuntimeUnavailable("SwarmCloud answered /v1/tenants/me without JSON") from None
+        tenant = body.get("tenant") if isinstance(body.get("tenant"), dict) else body
+        return {"tenant_id": tenant.get("tenant_id") or tenant.get("id")}
+
     async def _read(self, workflow_id: str) -> dict[str, Any]:
         async with self._client() as client:
             resp = await self._call(client, "GET", f"/v1/workflows/{workflow_id}")
@@ -316,6 +326,9 @@ class UnconfiguredSwarmCloud:
         return RuntimeUnavailable(f"SwarmCloud is not configured: {self.problem}")
 
     async def submit(self, spec: WorkflowSpec) -> str:
+        raise self._refuse()
+
+    async def whoami(self) -> dict[str, str | None]:
         raise self._refuse()
 
     async def status(self, workflow_id: str) -> WorkflowStatus:

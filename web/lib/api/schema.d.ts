@@ -2208,6 +2208,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runtime/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runtime Status
+         * @description Call the agent runtime as Oracle and report what it answers: reachable, and as which
+         *     tenant. Owner only. Never shows a credential.
+         */
+        get: operations["runtime_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/flows": {
         parameters: {
             query?: never;
@@ -5549,6 +5570,29 @@ export interface components {
             finished_at?: string | null;
             /** Waiting On */
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
+            /** Error */
+            error?: string | null;
+        };
+        /**
+         * RuntimeStatusOut
+         * @description Whether Oracle reaches its agent runtime, and as which tenant (owner only).
+         */
+        RuntimeStatusOut: {
+            /** Runtime */
+            runtime: string;
+            /** Auth */
+            auth?: string | null;
+            /** Reachable */
+            reachable: boolean;
+            /** Tenant Id */
+            tenant_id?: string | null;
+            /** Can Reach Oracle */
+            can_reach_oracle: boolean;
+            /**
+             * Notes
+             * @default []
+             */
+            notes: string[];
             /** Error */
             error?: string | null;
         };
@@ -11660,6 +11704,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemsResponse"];
+                };
+            };
+        };
+    };
+    runtime_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeStatusOut"];
                 };
             };
         };

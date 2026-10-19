@@ -322,3 +322,16 @@ class InboxOut(BaseModel):
     # Approvers and owners: open feedback on documents they can approve.
     feedback: list[InboxDocument]
     total: int
+
+
+class RuntimeStatusOut(BaseModel):
+    """Whether Oracle reaches its agent runtime, and as which tenant (owner only)."""
+
+    runtime: str
+    # How Oracle authenticates to SwarmCloud; None for other runtimes.
+    auth: str | None = None
+    reachable: bool
+    tenant_id: str | None = None
+    can_reach_oracle: bool
+    notes: list[str] = []
+    error: str | None = None

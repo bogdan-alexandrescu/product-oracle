@@ -29,8 +29,11 @@ from oracle.runs.schemas import (
     RunPatch,
     RunStatus,
     RunSummary,
+    RuntimeStatusOut,
     TickOut,
 )
+from oracle.swarm import RuntimeUnavailable, get_runtime
+from oracle.swarm.settings import get_runtime_settings
 
 router = APIRouter(prefix="/v1", tags=["runs"])
 
@@ -43,6 +46,28 @@ async def _call[T](op: Awaitable[T]) -> T:
         return await op
     except service.RunError as exc:
         raise HTTPException(exc.status, str(exc)) from exc
+
+
+@router.get("/runtime/status", response_model=RuntimeStatusOut, tags=["runs"])
+async def runtime_status(_: Owner) -> RuntimeStatusOut:
+    """Call the agent runtime as Oracle and report what it answers: reachable, and as which
+    tenant. Owner only. Never shows a credential."""
+    runtime = get_runtime()
+    out = RuntimeStatusOut(
+        runtime=runtime.name,
+        auth=get_runtime_settings().swarmcloud_auth if runtime.name == "swarmcloud" else None,
+        reachable=False,
+        can_reach_oracle=runtime.can_reach_oracle,
+        notes=runtime.notes(),
+    )
+    try:
+        me = await runtime.whoami()
+    except RuntimeUnavailable as exc:
+        out.error = str(exc)
+        return out
+    out.reachable = True
+    out.tenant_id = me.get("tenant_id")
+    return out
 
 
 @router.get("/flows", response_model=FlowCatalog)
