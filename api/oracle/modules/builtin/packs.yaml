@@ -1,0 +1,190 @@
+# Built-in module packs (build prompt §4.4 and O1h). A pack is an ordered list of module
+# ids; the modules themselves (core.yaml, platform.yaml and one file per industry pack)
+# say whether each is required, conditional or optional. A pack with `core` reuses that
+# pack's modules as its shared core and lists only its own modules; the core modules'
+# contracts are not changed by it. `categories` (composition input `category`) select a
+# pack when none is chosen. Templates only: no example product, feature, brand or
+# character content.
+
+- id: startup.standard
+  version: 1.0.0
+  title: General Tech Startup
+  description: >-
+    The shared core for any product or feature PRD: decision, goals, problem, evidence,
+    users, outcomes, scope, requirements, constraints, economics, risks, validation,
+    release, history and sources.
+  modules:
+    - decision.executive
+    - strategy.alignment
+    - problem.opportunity
+    - evidence.assumptions
+    - users.jtbd
+    - goals.outcomes
+    - solution.alternatives
+    - scope.non-goals
+    - requirements.functional
+    - constraints.solutions
+    - requirements.nonfunctional
+    - economics.value
+    - risks.register
+    - validation.plan
+    - release.rollout
+    - decision.history
+    - sources.data-points
+
+- id: ai-agent.platform
+  version: 1.0.0
+  title: Multi-tenant AI Agent Platform
+  description: >-
+    The shared core plus conditional modules for a reusable platform capability that
+    serves many customers and agent types. Specialised modules apply only when the
+    capability scope or company policy calls for them. Individual characters, personas,
+    relationship modes and brand canon belong in linked configuration artifacts.
+  # Categories (composition input `category`) that select this pack when none is chosen.
+  categories: [ai_agent_platform]
+  modules:
+    - decision.executive
+    - strategy.alignment
+    - problem.opportunity
+    - evidence.assumptions
+    - users.jtbd
+    - goals.outcomes
+    - solution.alternatives
+    - scope.non-goals
+    - requirements.functional
+    - constraints.solutions
+    - requirements.nonfunctional
+    - economics.value
+    - risks.register
+    - validation.plan
+    - release.rollout
+    - decision.history
+    - sources.data-points
+    - platform.customer-onboarding
+    - platform.tenant-isolation
+    - platform.config-precedence
+    - agents.archetypes
+    - agents.tool-policies
+    - agents.knowledge-memory
+    - agents.evaluation
+    - platform.rollout-migration
+    - platform.fleet-operations
+    - platform.cost-quotas
+    - agents.external-channels
+    - agents.human-interaction
+    - platform.brand-governance
+    - agents.continuous-improvement
+    - agents.capability-portability
+
+- id: marketplace.ecommerce
+  version: 1.0.0
+  title: Marketplace and e-commerce
+  description: >-
+    The shared core plus modules for products that match buyers and sellers or sell goods
+    online: both sides and their jobs, trust and safety, unit economics, and conditional
+    payouts, fulfilment and catalogue quality.
+  core: startup.standard
+  categories: [marketplace, ecommerce]
+  modules:
+    - marketplace.two-sided-users
+    - marketplace.trust-safety
+    - marketplace.unit-economics
+    - marketplace.payouts
+    - marketplace.fulfilment-logistics
+    - marketplace.catalogue-quality
+    - marketplace.seller-tools
+    - marketplace.liquidity-growth
+
+- id: fintech.payments
+  version: 1.0.0
+  title: Fintech and payments
+  description: >-
+    The shared core plus modules for products that hold or move money: regulatory scope,
+    money-movement integrity, fraud, and conditional KYC and AML, card data and
+    cross-border modules.
+  core: startup.standard
+  categories: [fintech, payments]
+  modules:
+    - fintech.regulatory-scope
+    - fintech.money-movement
+    - fintech.fraud-abuse
+    - fintech.kyc-aml
+    - fintech.card-compliance
+    - fintech.cross-border
+    - fintech.partner-dependencies
+    - fintech.regulator-reporting
+
+- id: hardware.iot
+  version: 1.0.0
+  title: Hardware and IoT
+  description: >-
+    The shared core plus modules for physical and connected devices: hardware constraints,
+    manufacturing and supply, and conditional certification, firmware updates and
+    companion app modules.
+  core: startup.standard
+  categories: [hardware, iot]
+  modules:
+    - hardware.physical-constraints
+    - hardware.manufacturing-supply
+    - hardware.certification
+    - hardware.firmware-ota
+    - hardware.companion-app
+    - hardware.field-service
+    - hardware.end-of-life
+
+- id: saas.b2b
+  version: 1.0.0
+  title: SaaS and B2B products
+  description: >-
+    The shared core plus modules for software sold to businesses: buyer, admin and user
+    roles, onboarding and activation, and conditional permissions, integrations, pricing
+    and migration modules.
+  core: startup.standard
+  categories: [saas, b2b_saas]
+  modules:
+    - saas.buyer-user-roles
+    - saas.onboarding-activation
+    - saas.admin-permissions
+    - saas.integrations
+    - saas.pricing-packaging
+    - saas.data-migration
+    - saas.usage-analytics
+    - saas.expansion-retention
+
+- id: smb.services
+  version: 1.0.0
+  title: SMB services
+  description: >-
+    The shared core plus modules for products serving small businesses: owner-operator
+    workflows, setup without IT staff, affordability, and conditional regulation, offline
+    and end-customer modules.
+  core: startup.standard
+  categories: [smb_services]
+  modules:
+    - smb.owner-workflows
+    - smb.self-setup
+    - smb.affordability
+    - smb.local-regulations
+    - smb.offline-low-tech
+    - smb.customer-touchpoints
+    - smb.support-model
+    - smb.tool-switching
+
+- id: enterprise.software
+  version: 1.0.0
+  title: Enterprise software
+  description: >-
+    The shared core plus modules for software sold to large organisations: security review,
+    procurement and contracts, and conditional identity, data residency, deployment model
+    and audit logging modules.
+  core: startup.standard
+  categories: [enterprise_software]
+  modules:
+    - enterprise.security-review
+    - enterprise.procurement-contracts
+    - enterprise.identity-sso
+    - enterprise.data-residency
+    - enterprise.deployment-model
+    - enterprise.audit-logging
+    - enterprise.service-levels
+    - enterprise.change-management

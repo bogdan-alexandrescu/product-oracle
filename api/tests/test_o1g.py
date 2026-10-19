@@ -18,7 +18,8 @@ from oracle.templates.builtins import BUILTIN_TEMPLATES, BUILTIN_THEMES, builtin
 from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.templates.validation import check_slide_css, check_template, check_theme_css
 from oracle.tenancy import tenant_session
-from tests.test_brief import BRIEF_KEYS, DRAFT, _import, _seeded, requires_pdf
+from tests.conftest import seed_company
+from tests.test_brief import BRIEF_KEYS, DRAFT, _import, requires_pdf
 from tests.test_priorities import _token
 from tests.test_templates import THEME
 
@@ -56,7 +57,7 @@ async def test_validate_refuses_a_template_without_brief_and_says_how_to_fix_it(
 
 async def test_create_and_edit_refuse_a_template_without_brief(client, tenant_id):
     h = await _token(tenant_id, "approver")
-    await _seeded(client, h)
+    await seed_company(tenant_id)
     payload = {"key": "plain", "name": "Plain", "kind": "prd", "body": BRIEFLESS}
     resp = await client.post("/v1/templates", json=payload, headers=h)
     assert resp.status_code == 422
@@ -84,7 +85,7 @@ async def test_create_and_edit_refuse_a_template_without_brief(client, tenant_id
 
 async def test_a_stored_template_without_brief_keeps_working_until_its_next_edit(client, tenant_id):
     h = await _token(tenant_id, "approver")
-    await _seeded(client, h)
+    await seed_company(tenant_id)
     # A company template saved before O1g, with no brief markers.
     async with tenant_session(tenant_id) as s:
         t = Template(key="legacy", name="Legacy", kind="prd", builtin=False)
@@ -283,7 +284,7 @@ async def test_slide_css_is_stored_updated_cleared_and_audited(client, tenant_id
 
 async def test_builtin_themes_keep_their_slide_variant(client, tenant_id):
     h = await _token(tenant_id, "approver")
-    await _seeded(client, h)
+    await seed_company(tenant_id)
     resp = await client.patch("/v1/themes/clean-document", json={"slide_css": SLIDE_CSS}, headers=h)
     assert resp.status_code == 422
     assert [p["code"] for p in resp.json()["problems"]] == ["builtin_slide_css"]
@@ -318,7 +319,7 @@ async def test_theme_roles_are_unchanged(client, tenant_id):
 
 async def _themed_doc(client, tenant_id, h, slide_css: str | None) -> None:
     """The checkout draft in a company theme with ``slide_css``."""
-    await _seeded(client, h)
+    await seed_company(tenant_id)
     theme = {**THEME, "slide_css": slide_css}
     assert (await client.post("/v1/themes", json=theme, headers=h)).status_code == 201
     resp = await _import(client, h, DRAFT)
@@ -471,7 +472,7 @@ GUIDED = DRAFT.replace(
 
 async def test_notes_come_only_from_notes_blocks(client, tenant_id):
     h = await _token(tenant_id, "approver")
-    await _seeded(client, h)
+    await seed_company(tenant_id)
     assert (await _import(client, h, GUIDED)).status_code == 201
     v = (await client.get("/v1/documents/checkout/versions/1", headers=h)).json()
     notes = {s["section_key"]: s["notes"] for s in v["sections"]}
@@ -497,7 +498,7 @@ async def test_notes_come_only_from_notes_blocks(client, tenant_id):
 
 async def test_notes_rule_applies_to_versions_imported_before_o1g(client, tenant_id):
     h = await _token(tenant_id, "approver")
-    await _seeded(client, h)
+    await seed_company(tenant_id)
     assert (await _import(client, h, GUIDED)).status_code == 201
     # Notes are computed when a version is read, so an older version (whose template
     # has guidance for every section) shows none where it has no notes block.
@@ -510,7 +511,7 @@ async def test_notes_rule_applies_to_versions_imported_before_o1g(client, tenant
 
 async def test_themeless_export_strips_notes_and_guidance(client, tenant_id):
     h = await _token(tenant_id, "approver")
-    await _seeded(client, h)
+    await seed_company(tenant_id)
     assert (await _import(client, h, GUIDED)).status_code == 201
     async with tenant_session(tenant_id) as s:
         ev = await load_export_version(s, "checkout", 1)

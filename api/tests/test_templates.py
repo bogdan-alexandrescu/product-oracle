@@ -11,6 +11,7 @@ from oracle.templates.defaults import DEFAULT_TEMPLATE_BODY, ensure_default_temp
 from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.templates.validation import check_template, contrast
 from oracle.tenancy import tenant_session
+from tests.conftest import seed_company
 from tests.test_priorities import _token
 
 REPO = Path(__file__).resolve().parents[2]
@@ -78,7 +79,7 @@ async def test_seeding_is_idempotent_and_keeps_default_v1(db):
 
 async def test_seeding_leaves_edited_and_archived_builtins_alone(client, tenant_id):
     h = await _token(tenant_id)
-    await client.get("/v1/templates", headers=h)
+    await seed_company(tenant_id)
     assert (await client.delete("/v1/templates/pr-faq", headers=h)).status_code == 200
     body = (await client.get("/v1/templates/one-pager", headers=h)).json()["versions"][0]["body"]
     edited = body.replace("## Problem {#problem}", "## The problem {#problem}")
@@ -95,6 +96,7 @@ async def test_seeding_leaves_edited_and_archived_builtins_alone(client, tenant_
 
 
 async def test_list_filters_by_kind_and_reads_need_sign_in(client, tenant_id):
+    await seed_company(tenant_id)
     h = await _token(tenant_id, "viewer")
     prd = (await client.get("/v1/templates?kind=prd", headers=h)).json()
     roadmap = (await client.get("/v1/templates?kind=roadmap", headers=h)).json()
@@ -108,7 +110,7 @@ async def test_list_filters_by_kind_and_reads_need_sign_in(client, tenant_id):
 async def test_create_edit_versions_archive_restore(client, tenant_id):
     viewer = await _token(tenant_id, "viewer")
     h = await _token(tenant_id, "approver")
-    await client.get("/v1/templates", headers=h)  # seed themes for the theme check
+    await seed_company(tenant_id)  # the built-in themes, for the theme check
     payload = {"key": "bug-bash", "name": "Bug bash", "kind": "prd", "body": VALID}
     assert (await client.post("/v1/templates", json=payload, headers=viewer)).status_code == 403
     resp = await client.post("/v1/templates", json=payload, headers=h)
@@ -144,6 +146,7 @@ async def test_create_edit_versions_archive_restore(client, tenant_id):
 
 
 async def test_builtins_are_editable_as_new_versions_and_archivable(client, tenant_id):
+    await seed_company(tenant_id)
     h = await _token(tenant_id)
     t = (await client.get("/v1/templates/prd-rfc", headers=h)).json()
     body = t["versions"][-1]["body"].replace("## Open questions", "## Questions")
@@ -214,6 +217,7 @@ async def test_validation_reports_every_problem(client, tenant_id, body, codes):
 
 
 async def test_citation_problem_names_the_line_and_section(client, tenant_id):
+    await seed_company(tenant_id)
     h = await _token(tenant_id)
     body = (
         "---\nbrief: [problem]\n---\n"
@@ -257,6 +261,7 @@ THEME = {
 
 
 async def test_theme_crud_and_archive(client, tenant_id):
+    await seed_company(tenant_id)
     h = await _token(tenant_id, "approver")
     viewer = await _token(tenant_id, "viewer")
     themes = (await client.get("/v1/themes", headers=viewer)).json()

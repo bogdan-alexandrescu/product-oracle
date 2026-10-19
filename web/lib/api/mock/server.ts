@@ -14,6 +14,7 @@ import { connectionsRoute } from "./connections";
 import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeQuality, seedQuality, type QualityDb } from "./quality";
@@ -55,6 +56,8 @@ export interface Db {
   v2?: V2Db;
   /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
   quality?: QualityDb;
+  /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
+  modules?: ModulesDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -881,6 +884,28 @@ async function route(db: Db, req: Request): Promise<Response> {
     q,
   );
   if (quality) return quality;
+  // Modules and compositions check roles themselves (viewers may ask for a recommendation).
+  if (!db.modules) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    db.modules = seedModules(prd?.id ?? null, db.user_id);
+  }
+  const modules = await routeModules(
+    db.modules,
+    {
+      userId: me.id,
+      role: me.role,
+      document: (ref) => {
+        const doc = findDocument(db, ref);
+        return doc && doc.kind === "prd" ? { id: doc.id, slug: doc.slug, template: doc.template ?? null } : null;
+      },
+      approvedVersion: (documentId, n) =>
+        db.versions.find((v) => v.document_id === documentId && v.number === n && v.approved_at)?.id ?? null,
+    },
+    req,
+    p,
+    q,
+  );
+  if (modules) return modules;
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"

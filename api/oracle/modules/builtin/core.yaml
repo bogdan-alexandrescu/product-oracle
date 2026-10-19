@@ -1,0 +1,500 @@
+# Built-in semantic modules: the shared core (Pack A, General Tech Startup; also the core
+# of Pack B). Each entry is one release of a module contract (oracle.v2.contract). These
+# are TEMPLATES ONLY: titles, instructions, typed fields, question prompts and evidence
+# expectations. No example product, feature, brand, character or persona content.
+#
+# Releasing a change: bump `version` (semver). Seeding adds the new release to every
+# company that has not overridden or archived the module (oracle/modules/registry.py).
+
+- id: decision.executive
+  version: 1.0.0
+  title: Executive decision
+  description: The decision this PRD asks for, the recommendation and what happens next.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  display_order: 10
+  section_ids: [executive-decision]
+  brief_section_ids: [executive-decision]
+  full_layer: false
+  fields:
+    - {key: decision_asked, label: "Decision asked of readers", type: text, required: true}
+    - {key: recommendation, label: "Recommendation", type: markdown, required: true}
+    - {key: decider, label: "Final decider", type: reference, reference_type: person}
+    - {key: decision_needed_by, label: "Decision needed by", type: date}
+  validators:
+    - {kind: required, field: decision_asked}
+    - {kind: max_length, field: decision_asked, value: 400}
+  question_prompts:
+    - key: decision_wanted
+      prompt: What decision do you want readers to make, and who makes the final call?
+      category: ownership
+      importance: critical
+      fills: [decision_asked, decider]
+  instructions: >-
+    State the single decision asked of readers, the recommendation and what happens if it
+    is approved. Plain language, one slide. Name the final decider. No evidence prose here;
+    sources go in the appendix.
+  agent_instructions:
+    - role: drafter
+      instructions: >-
+        Write the decision and recommendation last, from the approved sections. Never
+        invent a decider or a deadline; leave a visible placeholder and raise a question.
+  owner_role: product
+  required_review_role: approver
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [decision_asked]
+
+- id: strategy.alignment
+  version: 1.0.0
+  title: Strategic alignment
+  description: The confirmed company goals this work serves and how it moves them.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  display_order: 20
+  section_ids: [strategic-alignment]
+  brief_section_ids: [strategic-alignment]
+  full_layer: false
+  fields:
+    - {key: goals, label: "Company goals served", type: list, item_type: reference, reference_type: goal, required: true}
+    - {key: contribution, label: "How it moves each goal", type: markdown, required: true}
+    - {key: no_goal_rationale, label: "Why proceed if no confirmed goal is served", type: markdown}
+  validators:
+    - {kind: required, field: goals, message: Every proposed feature traces to a confirmed company goal (F3b).}
+    - {kind: requires_evidence, field: contribution}
+  question_prompts:
+    - key: goal_served
+      prompt: Which confirmed company goal does this serve, and how would we see it move?
+      category: goal_alignment
+      importance: critical
+      fills: [goals, contribution]
+  instructions: >-
+    Link each confirmed company goal from the baseline and say in one line how this work
+    moves it. Work that serves no confirmed goal is flagged, with the prioritization
+    rationale shown; never invent a goal.
+  evidence_expectations: {min_sources: 1, fields: [contribution]}
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [goals]
+
+- id: problem.opportunity
+  version: 1.0.0
+  title: Opportunity and problem
+  description: The problem in the customer's terms, why now and the size of the opportunity.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  display_order: 30
+  section_ids: [opportunity]
+  brief_section_ids: [opportunity]
+  full_layer: false
+  fields:
+    - {key: problem_statement, label: "Problem statement", type: markdown, required: true}
+    - {key: why_now, label: "Why now", type: markdown}
+    - {key: affected_users, label: "Who has the problem", type: text}
+  validators:
+    - {kind: required, field: problem_statement}
+    - {kind: requires_evidence, field: problem_statement}
+  question_prompts:
+    - key: pain_evidence
+      prompt: What evidence shows this problem is real and frequent enough to solve now?
+      category: pain_evidence
+      importance: critical
+      fills: [problem_statement, why_now]
+  instructions: >-
+    Describe the problem in the customer's words, without solution words. Say why now.
+    Conclusions only in the body; the evidence goes in Sources and data points.
+  evidence_expectations: {min_sources: 1, max_age_days: 365, fields: [problem_statement]}
+
+- id: evidence.assumptions
+  version: 1.0.0
+  title: Evidence and assumptions
+  description: What is known, how strongly, and which assumptions still need confirming.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  display_order: 40
+  section_ids: [evidence-assumptions]
+  brief_layer: false
+  fields:
+    - {key: assumptions, label: "Open assumptions", type: list, item_type: reference, reference_type: assumption}
+    - {key: confidence_summary, label: "Confidence summary", type: markdown}
+  question_prompts:
+    - key: riskiest_assumption
+      prompt: Which assumption, if wrong, would change this PRD the most, and how could we test it?
+      category: alternatives
+      importance: high
+      fills: [assumptions]
+  instructions: >-
+    Separate verified facts, user decisions, AI inferences and hypotheses; never present an
+    inference as a fact. List each open assumption with its owner and how it will be
+    confirmed. Source details belong in the appendix.
+  agent_instructions:
+    - role: researcher
+      instructions: >-
+        Classify every claim by knowledge state. Propose research or a decision for each
+        critical unknown; do not resolve it by assumption.
+  evidence_expectations: {min_sources: 1}
+
+- id: users.jtbd
+  version: 1.0.0
+  title: Users and jobs to be done
+  description: Target users, their jobs to be done, and who it is not for.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  display_order: 50
+  section_ids: [users-jobs]
+  brief_layer: false
+  fields:
+    - {key: segments, label: "Target segments", type: list, item_type: text, required: true}
+    - {key: jobs, label: "Jobs to be done", type: markdown, required: true}
+    - {key: not_for, label: "Who it is not for", type: text}
+  validators:
+    - {kind: required, field: segments}
+  question_prompts:
+    - key: target_user
+      prompt: Who is the primary user, and what job are they hiring this for?
+      category: customer_user
+      importance: critical
+      fills: [segments, jobs]
+  instructions: >-
+    Name target segments and their jobs to be done as job stories. Say who it is not for.
+    Use the company's own segment names from the baseline; never invent fictional users.
+
+- id: goals.outcomes
+  version: 1.0.0
+  title: Intended outcomes and success metrics
+  description: Measurable outcomes with a baseline, a target and a time frame.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  depends_on: [strategy.alignment]
+  order_after: [strategy.alignment]
+  display_order: 60
+  section_ids: [outcomes-metrics]
+  brief_layer: false
+  fields:
+    - {key: outcomes, label: "Outcomes", type: list, item_type: reference, reference_type: outcome, required: true}
+    - {key: metric, label: "Primary metric", type: text, required: true}
+    - {key: baseline_value, label: "Baseline value", type: number}
+    - {key: target_value, label: "Target value", type: number}
+    - {key: time_frame, label: "Time frame", type: text}
+  validators:
+    - {kind: required, field: metric}
+    - {kind: requires_evidence, field: baseline_value}
+  question_prompts:
+    - key: success_metric
+      prompt: Which metric shows this worked, what is its value today, and what target by when?
+      category: success_metric
+      importance: critical
+      fills: [metric, baseline_value, target_value, time_frame]
+  instructions: >-
+    One to three measurable outcomes, each with a metric, baseline, target and time frame,
+    derived from the goals above. A number may appear in the body; its source, date and
+    confidence go in Sources and data points (O1e).
+  evidence_expectations: {min_sources: 1, fields: [baseline_value]}
+  outputs: [prd, roadmap, acceptance_tests]
+  output_mappings:
+    roadmap: [outcomes]
+    acceptance_tests: [metric]
+
+- id: solution.alternatives
+  version: 1.0.0
+  title: Alternatives and trade-offs
+  description: The options considered, the trade-offs and why the chosen path wins.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: in, path: brief.decision, values: [choose_between, technical_design]}
+      - {op: gte, path: signals.option_count, value: 2}
+      - {op: eq, path: brief.size, value: new_product}
+  depends_on: [problem.opportunity]
+  display_order: 70
+  section_ids: [alternatives-tradeoffs]
+  brief_layer: false
+  fields:
+    - {key: options, label: "Options considered", type: list, item_type: text, required: true}
+    - {key: tradeoffs, label: "Trade-offs", type: markdown}
+    - {key: chosen, label: "Chosen option and why", type: markdown, required: true}
+  validators:
+    - {kind: required, field: options}
+  question_prompts:
+    - key: options_considered
+      prompt: Which other ways of solving this were considered, including doing nothing?
+      category: alternatives
+      importance: high
+      fills: [options, chosen]
+  instructions: >-
+    List the real options, including doing nothing, with their trade-offs. Say which is
+    recommended and what would change the choice.
+
+- id: scope.non-goals
+  version: 1.0.0
+  title: Scope and non-goals
+  description: What is in scope, and explicit exclusions.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  display_order: 80
+  section_ids: [scope-non-goals]
+  brief_section_ids: [scope-non-goals]
+  full_layer: false
+  fields:
+    - {key: in_scope, label: "In scope", type: list, item_type: text, required: true}
+    - {key: non_goals, label: "Non-goals", type: list, item_type: text, required: true}
+  validators:
+    - {kind: required, field: non_goals}
+  question_prompts:
+    - key: non_goals
+      prompt: What is explicitly out of scope for this release?
+      category: non_goals
+      importance: high
+      fills: [non_goals]
+  instructions: >-
+    Two to five explicit exclusions, so reviewers know what not to expect.
+
+- id: requirements.functional
+  version: 1.0.0
+  title: Functional requirements and acceptance
+  description: Requirements with stable ids, each with acceptance criteria.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  depends_on: [users.jtbd, goals.outcomes]
+  order_after: [users.jtbd]
+  display_order: 90
+  section_ids: [functional-requirements]
+  brief_layer: false
+  fields:
+    - {key: requirements, label: "Requirements", type: list, item_type: reference, reference_type: requirement, required: true}
+    - {key: acceptance_criteria, label: "Acceptance criteria", type: list, item_type: reference, reference_type: acceptance_criterion, required: true}
+  validators:
+    - {kind: required, field: requirements}
+    - {kind: required, field: acceptance_criteria}
+  question_prompts:
+    - key: acceptance
+      prompt: For each requirement, what observable behaviour proves it is done?
+      category: evaluation_criteria
+      importance: high
+      fills: [acceptance_criteria]
+  instructions: >-
+    Each requirement has a stable id, traces to an outcome, and has testable acceptance
+    criteria. Rules and edge cases go with the requirement they constrain.
+  agent_instructions:
+    - role: drafter
+      instructions: >-
+        Derive requirements from confirmed outcomes and the baseline; never add a feature
+        that serves no confirmed goal without flagging it.
+  outputs: [prd, engineering_spec, acceptance_tests, tech_brief]
+  output_mappings:
+    engineering_spec: [requirements]
+    acceptance_tests: [acceptance_criteria]
+    tech_brief: [requirements]
+
+- id: constraints.solutions
+  version: 1.0.0
+  title: Constraints, blockers and solution strategy
+  description: Current and potential limitations, viable solutions, feasibility tests, fallbacks and scaling triggers.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  depends_on: [goals.outcomes]
+  display_order: 100
+  section_ids: [constraints-solutions]
+  brief_layer: false
+  fields:
+    - {key: blockers, label: "Blockers and constraints", type: list, item_type: reference, reference_type: constraint}
+    - {key: strategy, label: "Solution strategy", type: markdown}
+    - {key: fallbacks, label: "Fallbacks", type: markdown}
+    - {key: scaling_triggers, label: "Scaling triggers", type: markdown}
+  question_prompts:
+    - key: known_limits
+      prompt: Which technical, policy, capacity or third-party limits could stop or slow this?
+      category: blockers
+      importance: critical
+      fills: [blockers]
+    - key: third_party_policy
+      prompt: Which third-party rules, quotas or eligibility requirements apply?
+      category: third_party_policy
+      importance: high
+      fills: [blockers]
+  instructions: >-
+    Identify and prioritize current and potential limitations with their evidence, viable
+    solutions, feasibility tests, fallbacks, scaling triggers and owners. Separate rate or
+    capacity limits, eligibility, permissions and third-party policy. Recommended options
+    stay within platform rules.
+  evidence_policy: record_provenance_in_appendix
+  evidence_expectations: {min_sources: 1}
+  required_review_role: approver
+  outputs: [prd, roadmap, engineering_spec]
+  output_mappings:
+    roadmap: [blockers]
+    engineering_spec: [strategy]
+
+- id: requirements.nonfunctional
+  version: 1.0.0
+  title: Non-functional requirements
+  description: Performance, reliability, security, privacy and accessibility requirements.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  display_order: 110
+  section_ids: [nonfunctional-requirements]
+  brief_layer: false
+  fields:
+    - {key: performance, label: "Performance and scale", type: markdown}
+    - {key: reliability, label: "Reliability", type: markdown}
+    - {key: security_privacy, label: "Security and privacy", type: markdown, required: true}
+    - {key: accessibility, label: "Accessibility", type: markdown}
+  validators:
+    - {kind: required, field: security_privacy}
+  question_prompts:
+    - key: data_sensitivity
+      prompt: What data does this touch, and what security or privacy rules apply to it?
+      category: security_privacy
+      importance: high
+      fills: [security_privacy]
+  instructions: >-
+    State measurable non-functional requirements. Security and privacy are always
+    addressed, even if only to say no new data is touched.
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [performance, reliability, security_privacy]
+
+- id: economics.value
+  version: 1.0.0
+  title: Value and cost economics
+  description: Expected value, cost to build and run, and unit economics.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: eq, path: signals.monetized, value: true}
+      - {op: eq, path: brief.size, value: new_product}
+      - {op: eq, path: brief.model_driven, value: true}
+      - {op: present, path: signals.cost_drivers}
+      - {op: contains, path: scope.capabilities, value: usage_billing}
+  depends_on: [goals.outcomes]
+  display_order: 120
+  section_ids: [value-economics]
+  brief_layer: false
+  fields:
+    - {key: expected_value, label: "Expected value", type: markdown, required: true}
+    - {key: build_cost, label: "Cost to build", type: text}
+    - {key: run_cost, label: "Cost to run", type: text}
+    - {key: unit_economics, label: "Unit economics", type: markdown}
+  question_prompts:
+    - key: economic_benefit
+      prompt: What revenue, saving or strategic value do we expect, and over what period?
+      category: economic_benefit
+      importance: high
+      fills: [expected_value]
+    - key: effort_cost
+      prompt: What will it cost to build and to run at the expected volume?
+      category: effort_cost
+      importance: medium
+      fills: [build_cost, run_cost]
+  instructions: >-
+    Estimate value and cost with ranges and stated assumptions. Headline numbers may appear
+    in the body; their sources and confidence go in the appendix.
+  evidence_expectations: {min_sources: 1, fields: [expected_value]}
+
+- id: risks.register
+  version: 1.0.0
+  title: Risks
+  description: The biggest risks with likelihood, impact, owner and mitigation.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  display_order: 130
+  section_ids: [risk-register]
+  brief_section_ids: [risk-register]
+  full_layer: false
+  fields:
+    - {key: risks, label: "Risks", type: list, item_type: reference, reference_type: risk, required: true}
+  validators:
+    - {kind: required, field: risks}
+  question_prompts:
+    - key: top_risk
+      prompt: What is most likely to make this fail, and what would we do about it?
+      category: constraints
+      importance: high
+      fills: [risks]
+  instructions: >-
+    The few risks that matter most, each with likelihood, impact, owner and mitigation.
+
+- id: validation.plan
+  version: 1.0.0
+  title: Validation plan
+  description: How the riskiest assumptions and the outcomes are validated before and after release.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  depends_on: [goals.outcomes]
+  order_after: [goals.outcomes]
+  display_order: 140
+  section_ids: [validation-plan]
+  brief_layer: false
+  fields:
+    - {key: experiments, label: "Validation steps", type: markdown, required: true}
+    - {key: decision_gates, label: "Decision gates", type: markdown}
+  question_prompts:
+    - key: validation
+      prompt: How and when will we know whether the riskiest assumption holds?
+      category: evaluation_criteria
+      importance: high
+      fills: [experiments]
+  instructions: >-
+    For each critical assumption and outcome: the method, the threshold that counts as a
+    pass, the owner and the decision it informs.
+
+- id: release.rollout
+  version: 1.0.0
+  title: Release and rollout
+  description: Release stages, audiences, flags, migration and rollback.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  depends_on: [requirements.functional]
+  order_after: [requirements.functional]
+  display_order: 150
+  section_ids: [release-rollout]
+  brief_layer: false
+  fields:
+    - {key: stages, label: "Release stages", type: markdown, required: true}
+    - {key: rollback, label: "Rollback plan", type: markdown}
+  question_prompts:
+    - key: rollout
+      prompt: Who gets this first, behind what switch, and how do we roll back?
+      category: release_rollout
+      importance: medium
+      fills: [stages, rollback]
+  instructions: >-
+    Stages, audiences and gates for each release. Dates only where a real estimate exists.
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [stages]
+
+- id: decision.history
+  version: 1.0.0
+  title: Decision and change history
+  description: Decisions taken, overrides with their reasons, and what changed between versions.
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  display_order: 900
+  section_ids: [decision-history]
+  brief_layer: false
+  fields:
+    - {key: decisions, label: "Decisions", type: list, item_type: reference, reference_type: decision}
+    - {key: overrides, label: "Overrides and their reasons", type: markdown}
+  instructions: >-
+    Record each decision, who took it and why, and any override of Oracle's advice with its
+    documented reason. Oracle fills this from the decision log; edit only to clarify.
+
+- id: sources.data-points
+  version: 1.0.0
+  title: Sources and data points
+  description: The final appendix holding every source, data point and the evidence by section (O1c).
+  applies_to: [startup.standard, ai-agent.platform]
+  policy: required
+  display_order: 1000
+  section_ids: [sources, sources-list, sources-data, sources-evidence]
+  brief_layer: false
+  instructions: >-
+    The only place for sources, numbers and evidence. List each source, each data point
+    (value, as of, source) and the evidence by section. The body above carries no
+    citations.
+  evidence_policy: record_provenance_in_appendix
