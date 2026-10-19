@@ -26,11 +26,12 @@ Adapter v2 (docs/swarmcloud-interface.md), each part behind SwarmCloud's switch:
                                              the payload), the verdict being in the step's
                                              form artifact
 
-Caller MCP counts as on only once SwarmCloud accepted a registration write or a submission
-carrying the run token. While it is off (or not confirmed), the run token is never sent (a
-prompt is not a place for a credential) and every run says so in its notes. Once it is
-on, the token goes only in the workflow's ``mcp_credentials``, never in a step's input,
-whether the run is one workflow or one workflow per segment.
+Caller MCP counts as on only once SwarmCloud accepted a registration write (a new server,
+a changed URL, or, when the registration is already current, the same URL PATCHed again to
+confirm it) or a submission carrying the run token. While it is off or not confirmed, the
+run token is never sent (a prompt is not a place for a credential) and every run says so
+in its notes. Once it is on, the token goes only in the workflow's ``mcp_credentials``,
+never in a step's input, whether the run is one workflow or one workflow per segment.
 
 SwarmCloud's errors are ``{"code": ..., "message": ..., "detail": {"reason": ..., ...}}``:
 the reason, when there is one, is what a refusal means.
@@ -77,6 +78,9 @@ NO_MCP_NOTE = (
 # Text artifacts worth bringing back; agent streams and logs stay in SwarmCloud.
 TEXT_SUFFIXES = (".md", ".yaml", ".yml", ".json", ".txt")
 MAX_ARTIFACT_BYTES = 1_000_000
+# A wait's form artifact (a verdict and its findings) is small; anything larger is not read.
+MAX_FORM_BYTES = 256 * 1024
+MAX_FINDINGS = 50
 # Finding a lost submission among Oracle's own tasks: page size and how far back to look.
 TASK_PAGE = 50
 MAX_TASK_PAGES = 20
@@ -117,6 +121,9 @@ class GoogleIdToken:
     url: str = METADATA_IDENTITY_URL
     _token: str | None = field(default=None, repr=False)
     _expires_at: float = 0.0
+    # The service account the token names (its email claim): who SwarmCloud records as
+    # having answered a wait for Oracle.
+    email: str | None = None
 
     async def header(self, client: httpx.AsyncClient) -> str:
         if self._token is None or time.time() > self._expires_at - 60:
@@ -137,6 +144,8 @@ class GoogleIdToken:
                 raise RuntimeUnavailable("the metadata server returned no ID token") from None
             self._token = token
             self._expires_at = float(claims.get("exp", time.time() + 300))
+            if isinstance(claims.get("email"), str):
+                self.email = claims["email"]
         return f"Bearer {self._token}"
 
 
@@ -256,6 +265,7 @@ class SwarmCloudRuntime:
         transport: httpx.AsyncBaseTransport | None = None,
         features_ttl: float = 60.0,
         egress_refresh: float = 300.0,
+        principal: str | None = None,
     ) -> None:
         if not base_url:
             raise ValueError("ORACLE_SWARMCLOUD_URL is required for the swarmcloud runtime")
@@ -268,7 +278,8 @@ class SwarmCloudRuntime:
         self._features: Features | None = None
         self._features_at = 0.0
         # What calls taught us (a 422 at submit, an answer refused): feature -> (state,
-        # reason, until). It outlives one cached reading, not the TTL after it.
+        # reason, until). It outlives one cached reading, not the TTL after it, except a
+        # sticky one (until is infinite), kept until SwarmCloud reports the feature on.
         self._learned: dict[str, tuple[FeatureState, str, float]] = {}
         self._egress: frozenset[str] | None = None
         self._egress_until = 0.0
@@ -277,6 +288,9 @@ class SwarmCloudRuntime:
         # SwarmCloud accepted a registration write or a submission with the run token:
         # caller MCP is known to work (reads alone do not show it).
         self._mcp_works = False
+        # Oracle's own principal in SwarmCloud (who a service answer is recorded as):
+        # ORACLE_SWARMCLOUD_PRINCIPAL, else the ID token's email claim once minted.
+        self._principal = principal
 
     @classmethod
     def from_settings(cls, settings: RuntimeSettings) -> "SwarmCloudRuntime":
@@ -288,7 +302,12 @@ class SwarmCloudRuntime:
             timeout=settings.swarmcloud_timeout_seconds,
             features_ttl=settings.swarmcloud_features_ttl_seconds,
             egress_refresh=settings.egress_refresh_seconds,
+            principal=settings.swarmcloud_principal or None,
         )
+
+    @property
+    def principal(self) -> str | None:
+        return self._principal or getattr(self._auth, "email", None)
 
     # ------------------------------------------------------------------ features
 
@@ -314,9 +333,13 @@ class SwarmCloudRuntime:
                 reasons.pop(key, None)
         return Features(**states, reasons=reasons)
 
-    def learn(self, feature: str, state: FeatureState, reason: str = "") -> None:
-        """Record what a call showed about a feature (kept for the cache's lifetime)."""
-        self._learned[feature] = (state, reason, time.monotonic() + max(self._features_ttl, 1))
+    def learn(
+        self, feature: str, state: FeatureState, reason: str = "", *, sticky: bool = False
+    ) -> None:
+        """Record what a call showed about a feature: kept for the cache's lifetime, or,
+        ``sticky``, until SwarmCloud's own reading reports the feature on."""
+        until = float("inf") if sticky else time.monotonic() + max(self._features_ttl, 1)
+        self._learned[feature] = (state, reason, until)
         if feature == "mcp":
             self._mcp_works = state == "on"
 
@@ -346,6 +369,11 @@ class SwarmCloudRuntime:
             for k in FEATURES:
                 if states[k] == "unknown":
                     reasons.setdefault(k, str(exc))
+        for key, state in states.items():
+            # SwarmCloud reports the feature on: what a refusal taught is over.
+            learned = self._learned.get(key)
+            if state == "on" and learned is not None and learned[2] == float("inf"):
+                del self._learned[key]
         self._features = Features(**states, reasons=reasons)
         self._features_at = time.monotonic()
         return self._known()
@@ -399,14 +427,17 @@ class SwarmCloudRuntime:
     # ------------------------------------------------------------------ MCP server
 
     def _take_egress(self, body: Any) -> None:
-        """A 200 from ``GET /v1/mcp-servers``: its addresses, and the refresh time even
-        when it lists none (each refused run token must not cost an upstream call)."""
+        """A 200 from ``GET /v1/mcp-servers``: its addresses, fresh for the refresh time.
+        A listing without an address list is not a new list: the last one (none read yet:
+        no address is SwarmCloud's) is kept but not made fresher, and read again soon, as
+        after a failed read (each refused run token must not cost an upstream call)."""
         addresses = body.get("egress_addresses") if isinstance(body, dict) else None
         if isinstance(addresses, list):
             self._egress = frozenset(str(a).strip() for a in addresses if str(a).strip())
+            self._egress_until = time.monotonic() + self._egress_refresh
         else:
             log.warning("SwarmCloud's MCP server listing has no egress_addresses list")
-        self._egress_until = time.monotonic() + self._egress_refresh
+            self._egress_until = time.monotonic() + min(self._egress_refresh, 30.0)
 
     def _egress_fresh(self) -> bool:
         return time.monotonic() < self._egress_until
@@ -428,7 +459,10 @@ class SwarmCloudRuntime:
         return self._egress if self._egress is not None else frozenset()
 
     async def ensure_mcp_server(self, url: str) -> str:
-        if self._registered_url == url:
+        """Register Oracle's MCP server at ``url``. A registration already current is
+        PATCHed with the same URL while caller MCP is not confirmed: reads are served while
+        the switch is off, so only an accepted write shows that it is on."""
+        if self._registered_url == url and self._mcp_works:
             return "unchanged"
         async with self._client() as client:
             try:
@@ -444,6 +478,10 @@ class SwarmCloudRuntime:
                 server = current.get("server", current) if isinstance(current, dict) else {}
                 if isinstance(server, dict) and server.get("url") == url:
                     result = "unchanged"
+                    if not self._mcp_works:
+                        await self._write(
+                            client, "PATCH", f"/v1/mcp-servers/{MCP_SERVER}", json={"url": url}
+                        )
                 else:
                     await self._write(
                         client, "PATCH", f"/v1/mcp-servers/{MCP_SERVER}", json={"url": url}
@@ -493,22 +531,22 @@ class SwarmCloudRuntime:
                 f"cannot reach SwarmCloud ({method} {path}): {type(exc).__name__}", lost=sent
             ) from None
         if resp.status_code >= 400:
-            code = _code(resp)
+            # Redacted before anything keeps them: the code and the detail end up in a
+            # run's workflow state, its checkpoint's payload and its notes.
+            raw_code = _code(resp)
+            code = _redact(raw_code) if raw_code else None
             detail = _detail(resp)
-            shown = _redact(code) if code else None
-            if shown and shown not in detail:
-                detail = f"{shown}: {detail}" if detail else shown
+            if code and code not in detail:
+                detail = f"{code}: {detail}" if detail else code
             envelope = _json(resp).get("detail")
             raise RuntimeUnavailable(
                 f"SwarmCloud refused {method} {path}: HTTP {resp.status_code} {detail}",
                 code=code,
                 status=resp.status_code,
-                lost=resp.status_code >= 500 and code is None,
-                detail=(
-                    {k: _redact(v) if isinstance(v, str) else v for k, v in envelope.items()}
-                    if isinstance(envelope, dict)
-                    else None
-                ),
+                # A 5xx may have landed (a submit is not idempotent) unless its reason is
+                # a refusal the contract names: those wrote nothing.
+                lost=resp.status_code >= 500 and code not in DEFINITE_REFUSALS,
+                detail=redact(envelope) if isinstance(envelope, dict) else None,
             )
         return resp
 
@@ -586,6 +624,7 @@ class SwarmCloudRuntime:
         query, so pages are exact, while any other filter (state, runner_profile,
         workflow_id) is applied after the cursor and pages come back short."""
         params: dict[str, str | int] = {"submitted_by": "me", "limit": TASK_PAGE}
+        seen: set[str] = set()
         async with self._client() as client:
             for _ in range(MAX_TASK_PAGES):
                 body = _json(await self._call(client, "GET", "/v1/tasks", params=params))
@@ -599,6 +638,10 @@ class SwarmCloudRuntime:
                 token = body.get("next_page_token") or body.get("page_token")
                 if not isinstance(token, str) or not token:
                     return None
+                if token in seen:
+                    log.warning("SwarmCloud repeated a task listing cursor; stopped looking")
+                    return None
+                seen.add(token)
                 params = {"submitted_by": "me", "limit": TASK_PAGE, "page_token": token}
         log.warning(
             "submission %s not among Oracle's last %d tasks", label, TASK_PAGE * MAX_TASK_PAGES
@@ -625,64 +668,76 @@ class SwarmCloudRuntime:
                 # A replay is only ever a 200: a 409 already_answered means this post was
                 # not recorded (another answer, or an earlier different one of Oracle's,
                 # was), whatever its answer_id.
+                # Nor does it show that Oracle may answer: it is no answer of Oracle's.
                 if exc.code == "person_required":
+                    # Kept off until SwarmCloud reports service answers on (workflow.ADVICE).
                     self.learn(
                         "service_answer",
                         "off",
                         "SwarmCloud answered 403 person_required: Oracle's principal may not "
                         "answer yet",
+                        sticky=True,
                     )
-                elif exc.code == "already_answered":
-                    self.learn("service_answer", "on")
                 raise
         self.learn("service_answer", "on")
         return Answer(replayed=_json(resp).get("replayed") is True)
 
     async def answer_record(self, workflow_id: str, step_id: str, artifact: str) -> RecordedAnswer:
-        """``GET .../input`` for who answered, and the verdict from the waiting step's
-        form ``artifact`` (the record's sha256 is over SwarmCloud's own re-serialised form,
-        never Oracle's bytes, so it is not compared)."""
+        """``GET .../input`` for the wait's state and who answered, and the verdict from
+        the waiting step's form ``artifact`` (the record's sha256 is over SwarmCloud's own
+        re-serialised form, never Oracle's bytes, so it is not compared). Bodies of any
+        shape are read defensively: an odd one gives no verdict, never an error."""
         async with self._client() as client:
             body = _json(
                 await self._call(
                     client, "GET", f"/v1/workflows/{workflow_id}/steps/{step_id}/input"
                 )
             )
+            state = body.get("state") if isinstance(body.get("state"), str) else None
             record = body.get("answer") if isinstance(body.get("answer"), dict) else {}
-            payload = _json(await self._call(client, "GET", f"/v1/workflows/{workflow_id}"))
-            rows = (payload.get("workflow") or {}).get("steps") or []
-            task_id = next((r.get("task_id") for r in rows if r.get("step_id") == step_id), None)
             form: Any = None
-            if task_id:
-                try:
-                    resp = await self._call(
-                        client,
-                        "GET",
-                        f"/v1/tasks/{task_id}/artifacts/raw",
-                        params={"name": artifact},
-                    )
-                    form = resp.json()
-                except RuntimeUnavailable as exc:
-                    if exc.retryable:
-                        raise
-                except ValueError:
-                    form = None
+            if record or state == "answered":
+                task_id = _task_of(
+                    _json(await self._call(client, "GET", f"/v1/workflows/{workflow_id}")),
+                    step_id,
+                )
+                if task_id:
+                    try:
+                        resp = await self._call(
+                            client,
+                            "GET",
+                            f"/v1/tasks/{task_id}/artifacts/raw",
+                            params={"name": artifact},
+                        )
+                        if len(resp.content) <= MAX_FORM_BYTES:
+                            form = resp.json()
+                    except RuntimeUnavailable as exc:
+                        if exc.retryable:
+                            raise
+                    except ValueError:
+                        form = None
         form = form if isinstance(form, dict) else {}
         verdict = form.get("verdict")
-        findings = form.get("findings") if isinstance(form.get("findings"), list) else []
+        items = form.get("findings") if isinstance(form.get("findings"), list) else []
+        findings = [f for f in items if isinstance(f, str | int | float)]
 
         def text(key: str) -> str | None:
             value = record.get(key)
-            return _redact(str(value)) if value not in (None, "") else None
+            return _redact(str(value)) if isinstance(value, str | int) and value != "" else None
 
+        answered_by, via = text("answered_by"), text("via")
+        principal = self.principal
         return RecordedAnswer(
-            answer_id=None if record.get("answer_id") is None else str(record["answer_id"]),
-            answered_by=text("answered_by"),
+            answer_id=text("answer_id"),
+            answered_by=answered_by,
             on_behalf_of=text("on_behalf_of"),
             answered_at=_parse_time(record.get("answered_at")),
-            via=text("via"),
+            via=via,
             verdict=verdict if verdict in (MERGE, NOT_YET) else None,
-            findings=tuple(_redact(str(f)) for f in findings),
+            findings=tuple(_redact(str(f)) for f in findings[:MAX_FINDINGS]),
+            state=_redact(state) if state else ("answered" if record else None),
+            # Posted by Oracle: its own principal, through the channel it posts with.
+            by_oracle=bool(principal) and answered_by == principal and via == "mcp",
         )
 
     async def whoami(self) -> dict[str, str | None]:
@@ -831,6 +886,17 @@ def mcp_server_body(url: str) -> dict[str, Any]:
     }
 
 
+def _task_of(payload: dict[str, Any], step_id: str) -> str | None:
+    """The task id of ``step_id`` in a ``GET /v1/workflows/{id}`` body of any shape."""
+    workflow = payload.get("workflow")
+    rows = workflow.get("steps") if isinstance(workflow, dict) else None
+    for row in rows if isinstance(rows, list) else []:
+        if isinstance(row, dict) and row.get("step_id") == step_id:
+            task_id = row.get("task_id")
+            return task_id if isinstance(task_id, str) and task_id else None
+    return None
+
+
 def _json(resp: httpx.Response) -> dict[str, Any]:
     try:
         body = resp.json()
@@ -854,6 +920,24 @@ KNOWN_CODES = (
     "expired",
     "person_required",
 )
+# 5xx reasons that say nothing was written (the call is refused, not lost).
+DEFINITE_REFUSALS = frozenset(
+    {*KNOWN_CODES, "await_input_disabled", "membership_unavailable", "role_unavailable"}
+)
+# Reasons that say no more than the HTTP status: the message is read for what it means.
+GENERIC_REASONS = frozenset(
+    {
+        "bad_request",
+        "conflict",
+        "error",
+        "forbidden",
+        "invalid_request",
+        "not_found",
+        "unavailable",
+        "unprocessable_entity",
+        "validation_error",
+    }
+)
 _AWAIT_DISABLED = re.compile(r"(?i)await[-_ ]input'?\s+is\s+disabled")
 
 
@@ -868,10 +952,15 @@ def _known_code(text: str) -> str | None:
 
 def _code(resp: httpx.Response) -> str | None:
     """What a refusal means: ``detail.reason`` of SwarmCloud's envelope (``{"code",
-    "message", "detail": {"reason", ...}}``), else its code."""
+    "message", "detail": {"reason", ...}}``), never overridden by message text (which may
+    echo input); then, for a generic reason or none, the await-input switch named in the
+    message; then the top-level code."""
     body = _json(resp)
     detail = body.get("detail")
     holders = (detail if isinstance(detail, dict) else {}, body)
+    reason = holders[0].get("reason")
+    if isinstance(reason, str) and reason and reason not in GENERIC_REASONS:
+        return reason
     messages = " ".join(str(h.get("message") or "") for h in holders)
     if _AWAIT_DISABLED.search(messages):
         return "await_input_disabled"
@@ -897,6 +986,20 @@ def _detail(resp: httpx.Response) -> str:
         detail = detail.get("message") or None
     detail = detail or body.get("message")
     return _redact(str(detail)) if detail else ""
+
+
+def redact(value: Any) -> Any:
+    """``value`` with every string in it redacted (:func:`_redact`), however nested:
+    what an upstream sends is never stored as it came."""
+    if isinstance(value, str):
+        return _redact(value)
+    if isinstance(value, dict):
+        return {_redact(str(k)): redact(v) for k, v in list(value.items())[:50]}
+    if isinstance(value, list | tuple):
+        return [redact(v) for v in list(value)[:50]]
+    if value is None or isinstance(value, bool | int | float):
+        return value
+    return _redact(str(value))
 
 
 def _redact(text: str) -> str:

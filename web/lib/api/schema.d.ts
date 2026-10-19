@@ -5845,6 +5845,10 @@ export interface components {
             cost_usd: number;
             /** Note */
             note?: string | null;
+            /** Note By */
+            note_by?: string | null;
+            /** Not Applied */
+            not_applied?: string | null;
             /** State */
             state?: string | null;
         };

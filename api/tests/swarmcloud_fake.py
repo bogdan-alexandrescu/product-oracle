@@ -8,7 +8,8 @@ polled, ``await-input`` steps park until answered or expired, ``when`` gates on 
 recorded verdict, skipped dependants), answers (a replay only when answer_id, payload,
 on_behalf_of and files all match; any other second answer 409 already_answered, and the
 workflow goes on with the first), the answer record without its payload, the verdict in
-the step's form artifact, artifacts by task, cancel, and Oracle's tasks listed newest
+the step's form artifact, artifacts by task, cancel (and transient cancel failures), and
+Oracle's tasks listed newest
 first with each step's metadata. Errors use SwarmCloud's envelope
 ``{"code", "message", "detail": {"reason", ...}}``; a workflow has no metadata. What it
 cannot know about the real service is listed in the adapter v2 report.
@@ -127,6 +128,13 @@ class FakeSwarmCloud:
         # Record the next answer, then lose the response (a timeout).
         self.lose_next_answer = False
         self.fail_next_answer: httpx.Response | None = None  # refuse without recording
+        # Create the workflow, then answer with this (a 5xx that landed).
+        self.fail_after_create: httpx.Response | None = None
+        # Transient cancel failures (503, nothing cancelled), one per cancel call.
+        self.fail_cancels = 0
+        self.cancels: list[str] = []  # cancel calls, confirmed or not
+        # Refuse the next MCP server registration write without recording it.
+        self.fail_next_server_write: httpx.Response | None = None
         # Agent steps run per poll (None: all that can).
         self.steps_per_poll: int | None = None
         # Other tasks of Oracle's, newer than any workflow here (for paging).
@@ -135,6 +143,7 @@ class FakeSwarmCloud:
         self._n = 0
 
     def runtime(self, **kw: Any) -> SwarmCloudRuntime:
+        kw.setdefault("principal", SERVICE_PRINCIPAL)
         return SwarmCloudRuntime(
             "https://swarm.test", StaticBearer("sc-bearer"), transport=self.transport(), **kw
         )
@@ -224,6 +233,9 @@ class FakeSwarmCloud:
         # Reads are served while caller MCP is switched off; writes are not.
         if not self.mcp and method != "GET":
             return _err(503, "mcp_unavailable", "caller MCP is switched off")
+        if method != "GET" and self.fail_next_server_write is not None:
+            resp, self.fail_next_server_write = self.fail_next_server_write, None
+            return resp
         if path == "/v1/mcp-servers" and method == "GET":
             return httpx.Response(
                 200, json={"servers": list(self.servers.values()), "egress_addresses": self.egress}
@@ -326,6 +338,9 @@ class FakeSwarmCloud:
         if self.lose_next_submit:
             self.lose_next_submit = False
             raise httpx.ReadTimeout("the answer was lost")
+        if self.fail_after_create is not None:
+            resp, self.fail_after_create = self.fail_after_create, None
+            return resp
         return httpx.Response(201, json={"workflow": {"workflow_id": wid}, "dispatch": {}})
 
     def _tasks(self, params: httpx.QueryParams) -> httpx.Response:
@@ -374,8 +389,9 @@ class FakeSwarmCloud:
         findings: list[str] | None = None,
         *,
         by: str = "reviewer@example.com",
+        answer_id: str | None = None,
     ) -> None:
-        """A person answers in SwarmCloud's console."""
+        """A person answers in SwarmCloud's console (``answer_id``: any id they give)."""
         wf = self.workflows[workflow_id]
         self._advance(wf)
         step = wf.step(step_id)
@@ -384,7 +400,7 @@ class FakeSwarmCloud:
             wf,
             step,
             {
-                "answer_id": f"console-{step.task_id}",
+                "answer_id": answer_id or f"console-{step.task_id}",
                 "payload": {"verdict": verdict, "findings": findings or []},
                 "via": "console",
             },
@@ -424,6 +440,10 @@ class FakeSwarmCloud:
         return None
 
     def _cancel(self, wf: Workflow) -> httpx.Response:
+        self.cancels.append(wf.workflow_id)
+        if self.fail_cancels > 0:
+            self.fail_cancels -= 1
+            return _err(503, "unavailable", "try again later")
         if wf.state in ("SUCCEEDED", "FAILED", "CANCELLED"):
             return _err(409, "not_cancellable", f"workflow is {wf.state}")
         wf.state = "CANCELLED"

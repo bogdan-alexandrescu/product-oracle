@@ -242,10 +242,12 @@ async def _run_output(app, caller, ops, args) -> types.CallToolResult:
 
 
 def _plain_file_name(name: object) -> bool:
-    """A file name, not a path: no separators, no '..', no control characters."""
+    """A file name, not a path: no separators, no '..', no control characters, and not
+    blank, '.' or '..' (however padded)."""
     return (
         isinstance(name, str)
         and 0 < len(name) <= 255
+        and name.strip() not in ("", ".", "..")
         and "/" not in name
         and "\\" not in name
         and ".." not in name

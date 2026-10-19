@@ -18715,6 +18715,28 @@
             ],
             "title": "Note"
           },
+          "note_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note By"
+          },
+          "not_applied": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Applied"
+          },
           "state": {
             "anyOf": [
               {

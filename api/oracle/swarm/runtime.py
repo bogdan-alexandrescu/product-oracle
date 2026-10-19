@@ -164,6 +164,14 @@ class RecordedAnswer:
     # MERGE | NOT_YET, or None when the form artifact could not be read.
     verdict: str | None = None
     findings: tuple[str, ...] = ()
+    # The wait's state: waiting, not_open, answered, expired or cancelled.
+    state: str | None = None
+    # Recorded as posted by Oracle's own principal through its channel (not the console).
+    by_oracle: bool = False
+
+    @property
+    def answered(self) -> bool:
+        return self.answer_id is not None or self.state == "answered"
 
 
 class RuntimeUnavailable(RuntimeError):
@@ -265,6 +273,7 @@ class AgentRuntime(Protocol):
         ...
 
     async def answer_record(self, workflow_id: str, step_id: str, artifact: str) -> RecordedAnswer:
-        """The answer a waiting step holds (after a 409 ``already_answered``): the
-        runtime's record and the verdict from the step's form ``artifact``."""
+        """The wait's state and the answer it holds, if any (after a 409
+        ``already_answered``, or watched while the run waits): the runtime's record and
+        the verdict from the step's form ``artifact``."""
         ...

@@ -23,9 +23,17 @@ follow the wait (the tail rule, :func:`tail_seconds`), Oracle cancels the waitin
 and continues as a new workflow with a fresh run token.
 
 An answer SwarmCloud refuses with 409 ``already_answered`` was not recorded, but the wait
-was answered and the workflow goes on with that first answer: Oracle follows it when its
-verdict is the decision's, and otherwise takes the Inbox decision as a correction (the
-workflow is cancelled, the run continues as a new workflow carrying it).
+was answered and the workflow goes on with that first answer. Oracle follows it whenever
+the workflow ran what the Inbox decision needs: the same verdict, or an approval over a
+recorded NOT_YET (an earlier segment's checkpoint has no revise step and no gate, so the
+next segment runs whatever the verdict; at the last, the approval ends the run). Only a
+change request over a recorded MERGE is a correction: the workflow is cancelled and the
+run continues as a new workflow carrying it. A wait answered outside Oracle while the run
+waits (SwarmCloud's console) is noticed by the tick and followed the same way.
+
+No segment runs in two workflows: a successor is submitted only once SwarmCloud confirms
+the earlier workflow is cancelled (or it has ended). Until then it stays attached, its
+cost counted, and the tick cancels it again.
 
 The plan of the live workflow is kept on the run (``knobs["workflow"]``): its id, label,
 credential expiry, and per segment the steps that produce its files and its waits.
@@ -280,9 +288,10 @@ ADVICE: dict[str, str] = {
     "the step resumes on its own.",
     "already_answered": "SwarmCloud already held an answer for this checkpoint's wait (409 "
     "already_answered): Oracle's post was not recorded and the workflow went on with the "
-    "first answer. Oracle followed it when its verdict matched the Inbox decision, and "
-    "otherwise cancelled the workflow and continued the run as a new workflow carrying "
-    "the Inbox decision.",
+    "first answer. Oracle followed it when the workflow ran what the Inbox decision needs "
+    "(the same verdict, or an approval), and otherwise (changes requested over a recorded "
+    "MERGE) cancelled the workflow and continued the run as a new workflow carrying the "
+    "Inbox decision.",
     "not_open": "The checkpoint's wait in SwarmCloud is not open (409 not_open), so Oracle "
     "did not post the decision: it cancelled that workflow and continued the run as a new "
     "workflow from the Inbox decision.",
@@ -296,7 +305,8 @@ ADVICE: dict[str, str] = {
     "person_required): Oracle's principal may not answer yet, so Oracle records service "
     "answers as off, cancelled the workflow and continued the run as a new workflow from "
     "the Inbox decision. Later runs keep checkpoints in the Inbox, one workflow per "
-    "segment, until SwarmCloud lets Oracle answer.",
+    "segment, until SwarmCloud reports service answers on (GET /v1/capacity) or Oracle's "
+    "API restarts; nothing to do meanwhile.",
 }
 
 

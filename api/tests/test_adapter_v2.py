@@ -143,15 +143,18 @@ async def test_features_follow_each_switch(client, owner):
             assert "mcp_unavailable" in body["feature_reasons"]["mcp"]
         assert "sc-bearer" not in json.dumps(body)
 
-    # Registered earlier and unchanged (no write): known to work only once a run's token
-    # is accepted at submit.
+    # Registered earlier and unchanged: a fresh process confirms caller MCP with a write
+    # (the same URL, PATCHed) before any run token is sent; reads alone never do.
     swarm = on()
     await swarm.runtime().ensure_mcp_server(MCP_URL)
     runtime = use(swarm)
-    assert await runtime.ensure_mcp_server(MCP_URL) == "unchanged"
     assert (await runtime.features(refresh=True)).mcp == "unknown"
-    await started(client, auth)
+    assert await runtime.ensure_mcp_server(MCP_URL) == "unchanged"
+    patch = [r for r in swarm.requests if r.method == "PATCH"]
+    assert [json.loads(r.content) for r in patch] == [{"url": MCP_URL}]
     assert (await runtime.features(refresh=True)).mcp == "on"
+    await started(client, auth)
+    assert swarm.submissions()[-1]["mcp_credentials"]["oracle"]["value"]
 
     # Not reported by SwarmCloud: unknown, learned at submit or answer.
     swarm.report_capacity = False
@@ -225,7 +228,7 @@ async def test_registration_is_idempotent(client, owner):
     # A new public URL: PATCHed, not created.
     other = swarm.runtime()
     assert await other.ensure_mcp_server("https://oracle.example.com/mcp") == "updated"
-    patch = next(r for r in swarm.requests if r.method == "PATCH")
+    patch = [r for r in swarm.requests if r.method == "PATCH"][-1]
     assert json.loads(patch.content) == {"url": "https://oracle.example.com/mcp"}
     assert swarm.servers["oracle"]["url"] == "https://oracle.example.com/mcp"
     assert all("x-swarm-tenant" not in r.headers for r in swarm.requests)
@@ -690,6 +693,14 @@ async def test_already_answered_by_oracles_lost_post_with_the_same_verdict(clien
     answered = decided["payload"]["wait"]["answered"]
     assert answered["answer_id"] == cp["id"] and answered["kept_earlier"] is True
     assert answered["answered_by"] == SERVICE_PRINCIPAL and answered["at"]
+    # What was applied is SwarmCloud's recorded wording, by whom; the Inbox's is kept apart.
+    recorded = decided["payload"]["wait"]["recorded"]
+    assert recorded["findings"] == ["Add a guardrail metric"]
+    assert answered["not_applied"] == "Add a guardrail KPI"
+    attempt = run["segments"][0]["attempts"][-1]
+    assert attempt["note"] == "Add a guardrail metric"
+    assert attempt["note_by"] == recorded["on_behalf_of"] and attempt["note_by"]
+    assert attempt["not_applied"] == "Add a guardrail KPI"
     # The revision used the first wording; the run goes on to round 2 in the same workflow.
     staged = json.loads(swarm.workflows["wf_1"].step("next_draft-revise1").staged["review1.json"])
     assert staged["findings"] == ["Add a guardrail metric"]
@@ -739,9 +750,10 @@ async def test_answered_in_the_console_with_the_same_verdict_is_followed(client,
     assert cp["payload"]["wait"]["answered"]["answered_by"] == "lead@example.com"
 
 
-async def test_answered_in_the_console_with_another_verdict_is_corrected(client, owner):
-    """(d) + (c): the console answered NOT_YET; Oracle approves. The workflow (already
-    revising) is cancelled; approved at the last checkpoint, the run ends."""
+async def test_console_changes_at_the_last_checkpoint_then_approval_stops_the_rest(client, owner):
+    """(d): the console answered NOT_YET at the last checkpoint; Oracle approves. The
+    approval needs no work the workflow did not do: the run ends on the draft it showed,
+    and the workflow's revision (work nobody uses) is stopped. Nothing is resubmitted."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -751,29 +763,42 @@ async def test_answered_in_the_console_with_another_verdict_is_corrected(client,
     assert run["status"] == "succeeded" and len(swarm.submissions()) == 1
     notes = " ".join(run["notes"])
     assert "decided outside Oracle" in notes and "cto@example.com" in notes
-    assert "correction" in notes
+    assert "console recorded NOT_YET" in notes and "Shorter" in notes
+    assert "correction" not in notes
 
 
 async def test_console_changes_mid_run_then_approval_continues_once(client, owner):
-    """(d) + (c) mid-run: the console answered NOT_YET at the first checkpoint and the
-    workflow went on into the next segment; Oracle approves. The workflow is cancelled
-    and the next segment runs once, as a new workflow."""
+    """(d) mid-run: the console answered NOT_YET at the first checkpoint, which has no
+    revise step and no gate, so the workflow went on into the next segment, exactly what
+    Oracle's approval needs. Oracle follows it: feature_set runs once, in wf_1, and a
+    note records what the console answered."""
     _, auth = owner
     swarm = on()
     use(swarm)
     run = await started(client, auth)
     await tick(client, auth)
     run = await get(client, auth, run["id"])
-    swarm.console_answer("wf_1", "baseline-review1", "NOT_YET", ["Missing goal"])
+    swarm.console_answer("wf_1", "baseline-review1", "NOT_YET", ["Missing goal"], by="cto@x.test")
     # The workflow went on with the console's answer, into the next segment.
     went_on = [s for s in swarm.workflows["wf_1"].steps if s.step_id.startswith("feature_set-1")]
     assert went_on and went_on[0].state == "SUCCEEDED"
     run = await decide(client, auth, run, "approved")
-    assert swarm.workflows["wf_1"].state == "CANCELLED"
-    assert len(swarm.submissions()) == 2
-    assert swarm.submissions()[1]["steps"][0]["step_id"].startswith("feature_set-")
-    assert _live_with(swarm, "feature_set") == ["wf_2"]
-    assert any("correction" in n for n in run["notes"])
+    assert swarm.workflows["wf_1"].state == "RUNNING" and swarm.cancels == []
+    assert len(swarm.submissions()) == 1
+    assert _live_with(swarm, "feature_set") == ["wf_1"]
+    assert run["status"] == "running" and run["segments"][1]["status"] == "running"
+    notes = " ".join(run["notes"])
+    assert "console recorded NOT_YET" in notes and "cto@x.test" in notes
+    assert "via console" in notes and "Missing goal" in notes
+    assert "correction" not in notes
+    # feature_set's checkpoint opens from wf_1: it ran once, nothing is resubmitted.
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "feature_set"
+    assert pending(run)["payload"]["wait"]["workflow_id"] == "wf_1"
+    assert len(swarm.submissions()) == 1
+    ran = [s for s in swarm.workflows["wf_1"].steps if s.step_id.startswith("feature_set-")]
+    assert all(s.state == "SUCCEEDED" for s in ran if s.profile == "claude-code")
 
 
 @pytest.mark.parametrize("reason", ["not_open", "expired", "cancelled"])
@@ -1318,3 +1343,568 @@ async def test_checkpoint_off_segments_stop_spending_when_paused(client, owner):
     assert len(swarm.submissions()) == 2
     assert swarm.submissions()[1]["steps"][0]["step_id"] == "baseline-1-researcher"
     assert _live_with(swarm, "baseline") == ["wf_2"]
+
+
+# --------------------------------------------------------------------------- review fixes, round 2
+# The invariant: no segment ever runs in two workflows, and spend never escapes the ceiling.
+
+
+def _input_reads(swarm: FakeSwarmCloud, step_id: str) -> int:
+    path = f"/steps/{step_id}/input"
+    return sum(1 for r in swarm.requests if r.method == "GET" and r.url.path.endswith(path))
+
+
+async def _knobs_of(tenant_id, run_id: str) -> dict:
+    async with tenant_session(tenant_id) as s:
+        return (await s.get(Run, uuid.UUID(run_id))).knobs
+
+
+async def test_console_approval_mid_run_then_changes_is_a_correction(client, owner):
+    """The console answered MERGE at the first checkpoint and the workflow moved on; the
+    Inbox requests changes, which needs a revision the workflow never ran: the workflow
+    is cancelled and the segment runs again, once, as a new workflow."""
+    _, auth = owner
+    swarm = on()
+    use(swarm)
+    run = await started(client, auth)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    swarm.console_answer("wf_1", "baseline-review1", "MERGE")
+    run = await decide(client, auth, run, "changes_requested", note="Name the owner of G1")
+    assert swarm.workflows["wf_1"].state == "CANCELLED"
+    assert len(swarm.submissions()) == 2
+    assert swarm.submissions()[1]["steps"][0]["step_id"].startswith("baseline-")
+    assert "Name the owner of G1" in swarm.submissions()[1]["steps"][0]["input"]["prompt"]
+    assert _live_with(swarm, "baseline") == ["wf_2"]
+    assert _live_with(swarm, "feature_set") == ["wf_2"]
+    # Not posted: a change request there has no revise step to go to.
+    assert any("no revision step" in n for n in run["notes"])
+
+
+async def test_an_unreadable_recorded_verdict_is_never_a_correction(client, owner):
+    """409 already_answered, and the form artifact cannot be read: Oracle reads it again,
+    then says "decide again"; it never cancels on a verdict it could not see."""
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    swarm.console_answer("wf_1", "next_draft-review1", "MERGE")
+    step = swarm.workflows["wf_1"].step("next_draft-review1")
+    form = step.files.pop("review1.json")
+    resp = await _decide_raw(client, auth, run, "changes_requested", "Cover returns")
+    assert resp.status_code == 503 and "decide again" in resp.text
+    reads = [
+        r
+        for r in swarm.requests
+        if r.url.path.endswith("/artifacts/raw") and r.url.params.get("name") == "review1.json"
+    ]
+    assert len(reads) == 2  # read again before giving up
+    assert swarm.cancels == [] and len(swarm.submissions()) == 1
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint"
+    # Readable again: the decision is the correction it is.
+    step.files["review1.json"] = form
+    run = await decide(client, auth, run, "changes_requested", note="Cover returns")
+    assert swarm.workflows["wf_1"].state == "CANCELLED" and len(swarm.submissions()) == 2
+
+
+async def test_same_verdict_other_findings_records_what_was_applied(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    cp = pending(run)
+    swarm.console_answer("wf_1", "next_draft-review1", "NOT_YET", ["Shorter"], by="cto@example.com")
+    run = await decide(client, auth, run, "changes_requested", note="Longer")
+    assert run["status"] == "running" and len(swarm.submissions()) == 1
+    attempt = run["segments"][0]["attempts"][-1]
+    assert attempt["note"] == "Shorter" and attempt["note_by"] == "cto@example.com"
+    assert attempt["not_applied"] == "Longer"
+    wait = next(c for c in run["checkpoints"] if c["id"] == cp["id"])["payload"]["wait"]
+    assert wait["recorded"]["findings"] == ["Shorter"]
+    assert wait["answered"]["not_applied"] == "Longer"
+
+
+# A failed cancel: the workflow stays attached and nothing is submitted after it.
+
+_DECIDE_PATHS = ["correction", "closed", "tail", "no_revise", "refused", "stop_rest"]
+
+
+async def _arm(client, auth, tenant_id, swarm, path, monkeypatch):
+    """A run waiting on a checkpoint, set up so that deciding it cancels the workflow."""
+    if path == "no_revise":
+        use(swarm)
+        run = await started(client, auth)
+        await tick(client, auth)
+        return await get(client, auth, run["id"]), "changes_requested", "baseline"
+    run = await _waiting(client, auth, tenant_id, swarm)
+    decision = "approved" if path == "stop_rest" else "changes_requested"
+    if path == "correction":
+        swarm.console_answer("wf_1", "next_draft-review1", "MERGE")
+    elif path == "tail":
+        real_now = service._now
+        monkeypatch.setattr(service, "_now", lambda: real_now() + timedelta(hours=23))
+    elif path == "refused":
+        swarm.service_answer = False
+    return run, decision, "next_draft"
+
+
+def _refuse_closed(swarm: FakeSwarmCloud) -> None:
+    swarm.fail_next_answer = httpx.Response(
+        409,
+        json={"code": "conflict", "message": "x", "detail": {"reason": "not_open"}},
+    )
+
+
+@pytest.mark.parametrize("path", _DECIDE_PATHS)
+async def test_a_failed_cancel_on_a_decision_says_decide_again(client, owner, monkeypatch, path):
+    tenant_id, auth = owner
+    swarm = on()
+    run, decision, prefix = await _arm(client, auth, tenant_id, swarm, path, monkeypatch)
+    cp = pending(run)
+    token = token_of(swarm)
+    if path == "closed":
+        _refuse_closed(swarm)
+    swarm.fail_cancels = 1
+    resp = await _decide_raw(client, auth, run, decision, "Cover returns")
+    assert resp.status_code == 503 and "decide again" in resp.text, resp.text
+    assert swarm.cancels == ["wf_1"]  # tried, not confirmed
+    assert swarm.workflows["wf_1"].state != "CANCELLED"
+    # Nothing submitted after it, and nothing changed in Oracle.
+    assert len(swarm.submissions()) == 1
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint" and pending(run)["id"] == cp["id"]
+    assert await verify_run_token(token) is not None
+    # Deciding again: the cancel is confirmed first, then the run goes on.
+    if path == "closed":
+        _refuse_closed(swarm)
+    run = await decide(client, auth, run, decision, note="Cover returns")
+    assert swarm.workflows["wf_1"].state == "CANCELLED"
+    if path == "stop_rest":
+        assert run["status"] == "succeeded" and len(swarm.submissions()) == 1
+    else:
+        assert len(swarm.submissions()) == 2 and _live_with(swarm, prefix) == ["wf_2"]
+
+
+async def test_a_failed_cancel_on_overrun_keeps_the_workflow_attached(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    use(swarm)
+    off = {"baseline_confirm": False, "feature_set": False, "priority_order": False}
+    run = await started(client, auth, checkpoints=off)
+    await _ceiling(tenant_id, run["id"], "0.5")
+    swarm.steps_per_poll = 1
+    swarm.fail_cancels = 1
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "paused_overrun"
+    wf = (await _knobs_of(tenant_id, run["id"]))["workflow"]
+    assert wf["state"] == "live" and wf["cancel_pending"]
+    assert swarm.workflows["wf_1"].state == "RUNNING"
+    spent = run["spent_usd"]
+    # Still not cancelled: its cost is read on every tick, so the spend stays in view.
+    swarm.fail_cancels = 1
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["spent_usd"] > spent
+    assert len(swarm.cancels) == 2 and len(swarm.submissions()) == 1
+    # Resumed while the cancel is unconfirmed: nothing is submitted.
+    resp = await client.post(f"/v1/runs/{run['id']}/resume", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert len(swarm.submissions()) == 1
+    # The cancel is confirmed on the next tick; only then is the segment submitted again.
+    await tick(client, auth)
+    assert swarm.workflows["wf_1"].state == "CANCELLED"
+    assert len(swarm.submissions()) == 2
+    assert _live_with(swarm, "baseline") == ["wf_2"]
+    # Everything wf_1 spent is in the run's spend.
+    run = await get(client, auth, run["id"])
+    assert run["spent_usd"] == sum(s.cost for s in swarm.workflows["wf_1"].steps)
+
+
+async def test_a_cancelled_run_whose_cancel_failed_is_cancelled_by_the_tick(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    use(swarm)
+    run = await started(client, auth)
+    swarm.fail_cancels = 1
+    resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
+    assert resp.status_code == 200, resp.text
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "cancelled"
+    assert swarm.workflows["wf_1"].state == "RUNNING"
+    await tick(client, auth)
+    assert swarm.workflows["wf_1"].state == "CANCELLED"
+    run = await get(client, auth, run["id"])
+    assert run["spent_usd"] == sum(s.cost for s in swarm.workflows["wf_1"].steps)
+    assert (await _knobs_of(tenant_id, run["id"]))["workflow"]["state"] != "live"
+    assert len(swarm.submissions()) == 1
+
+
+# Answers given outside Oracle, noticed while the run waits.
+
+
+async def test_a_console_answer_while_waiting_is_followed_by_the_tick(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    cp = pending(run)
+    swarm.console_answer(
+        "wf_1", "next_draft-review1", "NOT_YET", ["Cover refunds"], by="lead@example.com"
+    )
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    decided = next(c for c in run["checkpoints"] if c["id"] == cp["id"])
+    assert decided["status"] == "changes_requested" and decided["decided_by"] is None
+    assert decided["note"] == "Cover refunds" and decided["decided_at"]
+    recorded = decided["payload"]["wait"]["recorded"]
+    assert recorded["answered_by"] == "lead@example.com" and recorded["via"] == "console"
+    assert recorded["verdict"] == "NOT_YET" and recorded["findings"] == ["Cover refunds"]
+    assert recorded["answered_at"] and recorded["outside_oracle"] is True
+    assert swarm.answers == []
+    # Followed: the same workflow revised, and its second wait is the open checkpoint.
+    assert run["status"] == "awaiting_checkpoint"
+    assert pending(run)["payload"]["wait"]["step_id"] == "next_draft-review2"
+    assert len(swarm.submissions()) == 1
+    attempt = run["segments"][0]["attempts"][1]
+    assert attempt["note"] == "Cover refunds" and attempt["note_by"] == "lead@example.com"
+    assert any("decided outside Oracle" in n and "lead@example.com" in n for n in run["notes"])
+
+
+async def test_the_tick_reads_a_waiting_step_at_most_once_a_minute(client, owner, monkeypatch):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    assert _input_reads(swarm, "next_draft-review1") == 0
+    await tick(client, auth)
+    assert _input_reads(swarm, "next_draft-review1") == 1
+    await tick(client, auth)
+    assert _input_reads(swarm, "next_draft-review1") == 1
+    real_now = service._now
+    monkeypatch.setattr(service, "_now", lambda: real_now() + timedelta(seconds=61))
+    await tick(client, auth)
+    assert _input_reads(swarm, "next_draft-review1") == 2
+    assert (await get(client, auth, run["id"]))["status"] == "awaiting_checkpoint"
+
+
+async def test_spend_over_the_ceiling_while_waiting_pauses_the_run(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    cp = pending(run)
+    await _ceiling(tenant_id, run["id"], "0.5")
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "paused_overrun"
+    assert swarm.workflows["wf_1"].state == "CANCELLED"
+    # Resumed: the checkpoint is still open, now in the Inbox only.
+    resp = await client.post(f"/v1/runs/{run['id']}/resume", headers=auth)
+    assert resp.status_code == 200, resp.text
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint" and pending(run)["id"] == cp["id"]
+    run = await decide(client, auth, run, "approved")
+    assert run["status"] == "succeeded" and swarm.answers == []
+    assert len(swarm.submissions()) == 1
+
+
+async def test_a_console_merge_with_later_checkpoints_off_completes_from_the_harvest(client, owner):
+    """Checkpoint 1 answered MERGE in the console, the later checkpoints off: the workflow
+    ran to SUCCEEDED. The tick follows the answer and takes every segment's files from
+    the steps that wrote them: nothing is resubmitted, the run completes."""
+    _, auth = owner
+    swarm = on()
+    use(swarm)
+    off = {"feature_set": False, "priority_order": False, "prd_review": False}
+    run = await started(client, auth, checkpoints=off)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "baseline_confirm"
+    cp = pending(run)
+    swarm.console_answer("wf_1", "baseline-review1", "MERGE", by="lead@example.com")
+    assert swarm.workflows["wf_1"].state == "SUCCEEDED"
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "succeeded", run
+    assert len(swarm.submissions()) == 1 and swarm.answers == []
+    assert all(s["status"] == "succeeded" and s["workflow_id"] == "wf_1" for s in run["segments"])
+    assert run["segments"][3]["draft_import"]["version"] == 1
+    decided = next(c for c in run["checkpoints"] if c["id"] == cp["id"])
+    assert decided["status"] == "approved"
+    assert decided["payload"]["wait"]["recorded"]["answered_by"] == "lead@example.com"
+
+
+async def test_a_console_change_request_mid_run_reruns_after_the_cancel_is_confirmed(client, owner):
+    """The console asked for changes at a checkpoint with no revise step: the workflow
+    went on without them. The tick follows the answer by re-running the segment, but only
+    once SwarmCloud confirms the old workflow is cancelled."""
+    _, auth = owner
+    swarm = on()
+    use(swarm)
+    run = await started(client, auth)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    cp = pending(run)
+    swarm.console_answer("wf_1", "baseline-review1", "NOT_YET", ["Missing goal"])
+    swarm.fail_cancels = 1
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    decided = next(c for c in run["checkpoints"] if c["id"] == cp["id"])
+    assert decided["status"] == "changes_requested"
+    assert swarm.workflows["wf_1"].state == "RUNNING" and len(swarm.submissions()) == 1
+    await tick(client, auth)
+    assert swarm.workflows["wf_1"].state == "CANCELLED"
+    assert len(swarm.submissions()) == 2
+    assert "Missing goal" in swarm.submissions()[1]["steps"][0]["input"]["prompt"]
+    assert _live_with(swarm, "feature_set") == ["wf_2"]
+
+
+# Minors.
+
+
+async def test_the_run_token_is_sent_only_once_caller_mcp_is_confirmed(client, owner):
+    _, auth = owner
+    swarm = on()
+    await swarm.runtime().ensure_mcp_server(MCP_URL)  # registered by an earlier process
+    use(swarm)
+    swarm.fail_next_server_write = httpx.Response(500, json={"code": "internal"})
+    await started(client, auth)
+    body = swarm.submissions()[-1]
+    assert "mcp_credentials" not in body
+    assert all("mcp_servers" not in s["input"] for s in body["steps"])
+    # The confirming write is accepted: the next run carries the token.
+    await started(client, auth)
+    assert swarm.submissions()[-1]["mcp_credentials"]["oracle"]["value"]
+    methods = [r.method for r in swarm.requests if r.url.path.startswith("/v1/mcp-servers/")]
+    assert methods.count("PATCH") == 2
+
+
+async def test_refusal_codes_and_details_are_redacted_everywhere(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    secret = "ghp_" + "a" * 30
+    swarm.fail_next_answer = httpx.Response(
+        403,
+        json={
+            "code": "forbidden",
+            "message": "no",
+            "detail": {"reason": secret, "who": {"token": f"Bearer {secret}"}, "list": [secret]},
+        },
+    )
+    run = await decide(client, auth, run, "approved")
+    assert run["status"] == "succeeded"
+    async with tenant_session(tenant_id) as s:
+        from oracle.runs.models import Checkpoint, RunSegment
+
+        rows = [json.dumps(r.knobs, default=str) for r in await s.scalars(select(Run))]
+        rows += [json.dumps(c.payload, default=str) for c in await s.scalars(select(Checkpoint))]
+        rows += [json.dumps(g.artifacts, default=str) for g in await s.scalars(select(RunSegment))]
+    assert all(secret not in r for r in rows)
+    # The runtime's exception carries them redacted, however deep.
+    swarm.fail_next_answer = httpx.Response(
+        403,
+        json={
+            "code": f"x {secret}",
+            "detail": {"reason": secret, "n": {"a": [f"Bearer {secret}"]}},
+        },
+    )
+    with pytest.raises(RuntimeUnavailable) as exc:
+        await swarm.runtime().answer(
+            "wf_1", "next_draft-review1", answer_id="x", payload={"verdict": "MERGE"}
+        )
+    assert secret not in (exc.value.code or "") and secret not in json.dumps(exc.value.detail)
+
+
+def test_the_reason_wins_over_the_message():
+    from oracle.swarm.swarmcloud import _code
+
+    def resp(reason: str, message: str) -> httpx.Response:
+        body = {"code": "validation_error", "message": message, "detail": {"reason": reason}}
+        return httpx.Response(422, json=body)
+
+    disabled = "runner_profile 'await-input' is disabled"
+    assert _code(resp("mcp_credential_shape", disabled)) == "mcp_credential_shape"
+    assert _code(resp("not_open", "already_answered")) == "not_open"
+    # A generic reason says nothing more than the status: the message is read.
+    assert _code(resp("validation_error", disabled)) == "await_input_disabled"
+
+
+async def test_an_answer_reusing_oracles_answer_id_from_the_console_is_not_oracles(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    cp = pending(run)
+    swarm.console_answer(
+        "wf_1", "next_draft-review1", "MERGE", by="mallory@example.com", answer_id=cp["id"]
+    )
+    run = await decide(client, auth, run, "approved")
+    assert any("decided outside Oracle" in n and "mallory" in n for n in run["notes"])
+    decided = next(c for c in run["checkpoints"] if c["id"] == cp["id"])
+    assert decided["payload"]["wait"]["recorded"]["outside_oracle"] is True
+
+
+async def test_already_answered_does_not_switch_service_answers_on(client, owner):
+    from oracle.swarm import get_runtime
+
+    tenant_id, auth = owner
+    swarm = on()
+    await _waiting(client, auth, tenant_id, swarm)
+    swarm.console_answer("wf_1", "next_draft-review1", "MERGE")
+    runtime = get_runtime()
+    runtime.learn("service_answer", "off", "test")
+    with pytest.raises(RuntimeUnavailable) as exc:
+        await runtime.answer(
+            "wf_1",
+            "next_draft-review1",
+            answer_id="x",
+            payload={"verdict": "MERGE", "findings": []},
+        )
+    assert exc.value.code == "already_answered"
+    assert (await runtime.features()).service_answer == "off"
+
+
+def _one_wait_spec() -> WorkflowSpec:
+    from oracle.swarm import StepSpec
+
+    return WorkflowSpec(
+        name="x",
+        steps=(
+            StepSpec("a", "writer", "claude-code", "Write these files as artifacts: a.md.\n"),
+            StepSpec(
+                "r",
+                "reviewer",
+                "await-input",
+                "ok",
+                ("a",),
+                {"a": "a.md"},
+                await_input=workflow.await_input(1, RuntimeSettings()),
+            ),
+        ),
+        label="k",
+    )
+
+
+async def test_person_required_keeps_service_answers_off_past_the_cache(monkeypatch):
+    import time
+    from types import SimpleNamespace
+
+    from oracle.swarm import swarmcloud
+
+    swarm = on()
+    swarm.report_capacity = False
+    runtime = swarm.runtime(features_ttl=60)
+    wid = await runtime.submit(_one_wait_spec())
+    await runtime.status(wid)
+    swarm.service_answer = False
+    with pytest.raises(RuntimeUnavailable):
+        await runtime.answer(wid, "r", answer_id="1", payload={"verdict": "MERGE", "findings": []})
+    assert (await runtime.features(refresh=True)).service_answer == "off"
+    later = time.monotonic() + 3600
+    monkeypatch.setattr(
+        swarmcloud, "time", SimpleNamespace(monotonic=lambda: later, time=time.time)
+    )
+    feats = await runtime.features(refresh=True)
+    assert feats.service_answer == "off" and "person_required" in feats.reasons["service_answer"]
+    # Until SwarmCloud reports service answers on.
+    swarm.report_capacity = swarm.service_answer = True
+    assert (await runtime.features(refresh=True)).service_answer == "on"
+
+
+async def test_find_by_label_stops_on_a_repeated_cursor():
+    from oracle.swarm import SwarmCloudRuntime
+    from oracle.swarm.swarmcloud import StaticBearer
+
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"tasks": [], "next_page_token": "same"})
+
+    runtime = SwarmCloudRuntime(
+        "https://swarm.test", StaticBearer("x"), transport=httpx.MockTransport(handler)
+    )
+    assert await runtime.find_by_label("k") is None
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize(
+    "workflow_body,form",
+    [
+        ({"workflow": {"steps": ["junk", 5, {"step_id": "r", "task_id": "t1"}]}}, "big"),
+        ({"workflow": "nope"}, "ok"),
+        ({"workflow": {"steps": "nope"}}, "ok"),
+        ({"workflow": {"steps": [{"step_id": "r", "task_id": {"x": 1}}]}}, "ok"),
+        ({"workflow": {"steps": [{"step_id": "r", "task_id": "t1"}]}}, "list"),
+    ],
+)
+async def test_answer_record_survives_odd_bodies(workflow_body, form):
+    from oracle.swarm import SwarmCloudRuntime
+    from oracle.swarm.swarmcloud import StaticBearer
+
+    forms = {
+        "big": json.dumps({"verdict": "MERGE", "findings": ["x" * (2 * 1024 * 1024)]}),
+        "ok": json.dumps({"verdict": "MERGE", "findings": []}),
+        "list": json.dumps(["MERGE"]),
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/input"):
+            return httpx.Response(
+                200, json={"state": "answered", "answer": {"answer_id": "a", "answered_by": "p"}}
+            )
+        if path == "/v1/workflows/w":
+            return httpx.Response(200, json=workflow_body)
+        return httpx.Response(200, text=forms[form])
+
+    runtime = SwarmCloudRuntime(
+        "https://swarm.test", StaticBearer("x"), transport=httpx.MockTransport(handler)
+    )
+    record = await runtime.answer_record("w", "r", "review1.json")
+    assert record.answered_by == "p" and record.verdict is None
+
+
+async def test_a_5xx_submit_that_landed_is_found_before_resubmitting(client, owner):
+    _, auth = owner
+    swarm = on()
+    use(swarm)
+    swarm.fail_after_create = httpx.Response(
+        500, json={"code": "internal", "message": "boom", "detail": {"reason": "internal"}}
+    )
+    run = await started(client, auth)
+    assert len(swarm.workflows) == 1 and run["segments"][0]["workflow_id"] == "wf_1"
+    await tick(client, auth)
+    assert len(swarm.workflows) == 1 and len(swarm.submissions()) == 1
+
+
+def test_plain_file_names_refuse_dots_and_blanks():
+    from oracle.mcp.curated import _plain_file_name
+
+    for bad in (".", "..", " ", "   ", " . ", "", "a/b", "x\\y", "a..b"):
+        assert not _plain_file_name(bad), bad
+    for good in ("summary.md", "baseline.yaml", ".notes.md"):
+        assert _plain_file_name(good), good
+
+
+async def test_a_listing_without_addresses_does_not_keep_the_old_list_fresh(monkeypatch):
+    import time
+    from types import SimpleNamespace
+
+    from oracle.swarm import swarmcloud
+
+    swarm = on()
+    runtime = swarm.runtime(egress_refresh=300)
+
+    def listings() -> int:
+        return sum(1 for r in swarm.requests if r.url.path == "/v1/mcp-servers")
+
+    assert await runtime.egress_addresses() == frozenset(EGRESS)
+    now = [time.monotonic()]
+    monkeypatch.setattr(
+        swarmcloud, "time", SimpleNamespace(monotonic=lambda: now[0], time=time.time)
+    )
+    swarm.egress = None  # type: ignore[assignment]
+    now[0] += 301
+    assert await runtime.egress_addresses() == frozenset(EGRESS)  # kept, not refreshed
+    seen = listings()
+    now[0] += 31
+    await runtime.egress_addresses()
+    assert listings() == seen + 1  # re-read soon, not in another 300 s

@@ -139,7 +139,12 @@ class SegmentAttempt(BaseModel):
     workflow_id: str | None = None
     submitted_at: datetime | None = None
     cost_usd: float = 0
+    # The reviewer's note this attempt applied: for a wait answered in SwarmCloud, the
+    # findings SwarmCloud recorded, by whom (``note_by``); an Inbox note that SwarmCloud
+    # did not record (it already held an answer) is ``not_applied``.
     note: str | None = None
+    note_by: str | None = None
+    not_applied: str | None = None
     state: str | None = None
 
 

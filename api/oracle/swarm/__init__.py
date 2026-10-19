@@ -22,7 +22,7 @@ from oracle.swarm.runtime import (
     WorkflowStatus,
 )
 from oracle.swarm.settings import get_runtime_settings
-from oracle.swarm.swarmcloud import SwarmCloudRuntime, UnconfiguredSwarmCloud
+from oracle.swarm.swarmcloud import SwarmCloudRuntime, UnconfiguredSwarmCloud, redact
 
 __all__ = [
     "AgentRuntime",
@@ -41,6 +41,7 @@ __all__ = [
     "WorkflowSpec",
     "WorkflowStatus",
     "get_runtime",
+    "redact",
     "set_runtime",
 ]
 

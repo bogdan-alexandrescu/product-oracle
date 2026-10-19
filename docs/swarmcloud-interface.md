@@ -179,21 +179,29 @@ not. SwarmCloud's team confirmed the real contract, and it overrides anything ab
   short.
 - **Caller MCP reads** (`GET /v1/mcp-servers`) are served while the switch is off, so
   Oracle counts MCP as on only once SwarmCloud accepted its registration or a run's token.
+  A registration that is already current is PATCHed with the same URL to confirm it, and
+  no run token is sent before that (adapter v2 review fixes, round 2).
 
 What Oracle does with an answer (adapter v2 review fixes, 2026-10-19):
 
 | SwarmCloud answers | Oracle |
 | --- | --- |
 | 200 (or 200 `replayed: true`) | posted; the run follows the workflow |
-| 409 `already_answered`, recorded verdict = the Inbox decision | treated as posted (who and when recorded on the checkpoint); the run follows the workflow; a note says SwarmCloud kept the earlier wording |
-| 409 `already_answered`, recorded verdict differs | the Inbox decision is a correction: the workflow is cancelled and the run continues as a new workflow carrying it; noted |
-| either, `answer_id` not Oracle's | also noted: who answered, via what, and that it was decided outside Oracle |
+| 409 `already_answered`, recorded verdict = the Inbox decision | treated as posted (who and when recorded on the checkpoint); the run follows the workflow; the revision's note is SwarmCloud's recorded findings, by their author, and the Inbox note is kept as not applied |
+| 409 `already_answered`, recorded NOT_YET, the Inbox approves | the workflow ran what the approval needs (an earlier checkpoint has no revise step or gate, so the next segment ran; at the last, the run ends and Oracle stops the revision): followed, with a note of what the console recorded (who, via, findings) |
+| 409 `already_answered`, recorded MERGE, the Inbox requests changes | a correction (the revision never ran): the workflow is cancelled and the run continues as a new workflow carrying it; noted |
+| 409 `already_answered`, the recorded verdict cannot be read | read again; still unreadable: "decide again", never a correction |
+| either, `answer_id` not Oracle's, or not recorded as Oracle's principal via `mcp` | also noted: who answered, via what, and that it was decided outside Oracle |
+| answered in SwarmCloud's console while the run waits | the tick reads the wait at most once a minute, records the answer (who, via, when, verdict, findings) as the checkpoint's decision and follows it; a change request where the workflow has no revise step re-runs the segment as a new workflow |
 | 409 `not_open`, `expired`, `cancelled` | the wait is closed: cancel, continue as a new workflow with the decision |
-| 403 `person_required` | service answers recorded as off (cached like the other features); cancel, continue as a new workflow (today's flow); later runs keep checkpoints in the Inbox |
+| 403 `person_required` | service answers recorded as off until SwarmCloud reports them on (or Oracle's API restarts); cancel, continue as a new workflow (today's flow); later runs keep checkpoints in the Inbox |
 | other refusals (403, 404, 422) | not posted: cancel, continue as a new workflow, with a note |
 | 503, 429, timeout | nothing recorded: "decide again" (the same answer replays) |
 
 No case runs a segment in two workflows: a workflow is cancelled before its successor is
-submitted. **Tail rule:** a decision is posted only when the credential left covers the
+submitted, and a cancel SwarmCloud does not confirm holds the successor back. The
+workflow stays attached (`cancel_pending`), its cost counted in the run's spend, and
+every tick cancels it again; an Inbox decision that needs the cancel says "decide again".
+The spend ceiling is checked while a run waits on a checkpoint too. **Tail rule:** a decision is posted only when the credential left covers the
 agent steps that follow the wait (`ORACLE_STEP_SECONDS` x their count, at least
 `ORACLE_CHECKPOINT_TAIL_SECONDS`); otherwise the run continues as a new workflow.
