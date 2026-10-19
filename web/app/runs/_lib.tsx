@@ -67,6 +67,9 @@ export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
 export const RETRY_CONFIRM =
   "This can start a paid duplicate run: if the lost submission landed, it runs too until Oracle finds it, cancels it and counts its cost. Retry?";
 
+/** Asked before Stop cancelling: Oracle stops the cancel calls, and still counts the workflow's spend until it ends. */
+export const STOP_CANCELLING_CONFIRM = "Stop cancelling? Its spend still counts until it ends.";
+
 const usdFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 export function usd(value: number | null | undefined): string {

@@ -15,6 +15,7 @@ import {
   FINAL_STATUSES,
   RETRY_CONFIRM,
   RunStatusBadge,
+  STOP_CANCELLING_CONFIRM,
   RunsWhere,
   SEGMENT_STATUS_TONE,
   SpendBar,
@@ -152,8 +153,16 @@ export function RunDetail({ id }: { id: string }) {
                   Retry
                 </Button>
               )}
-              {mayManage && FINAL_STATUSES.includes(run.status) && (
-                <Button size="sm" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel", path)))}>
+              {mayManage && run.can_stop_cancelling && (
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    if (window.confirm(STOP_CANCELLING_CONFIRM)) {
+                      void act(() => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path)));
+                    }
+                  }}
+                >
                   Stop cancelling
                 </Button>
               )}
@@ -166,7 +175,7 @@ export function RunDetail({ id }: { id: string }) {
           )}
           {run.token_read_only && (
             <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="run-token-read-only">
-              Waiting for approval: a SwarmCloud console answer that does not count (or that Oracle could not read) waits for an approver, so the run&apos;s agents may read Oracle but their writes are refused until it is confirmed or decided.
+              Waiting for approval: a SwarmCloud console answer that does not count (or that Oracle could not read, or has not read yet) waits, so the run&apos;s agents may read Oracle but their writes are refused until it is read and confirmed or decided.
             </p>
           )}
           {run.status === "awaiting_approval" && (
@@ -441,7 +450,7 @@ function CheckpointRow({
                 <Button size="sm" disabled={busy || !note.trim()} onClick={() => onDecide(cp, "changes_requested", note)}>
                   Request changes
                 </Button>
-                {answer?.needs === "unreadable" && (
+                {(answer?.needs === "unreadable" || answer?.needs === "unread") && (
                   <Button size="sm" disabled={busy || redoBlocked} onClick={() => onDecide(cp, "redo", note)}>
                     Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)})
                   </Button>
@@ -461,6 +470,8 @@ const CONSOLE_NEEDS: Record<ConsoleAnswer["needs"], string> = {
   redo_or_continue:
     "The workflow had no revision step here and went on regardless. Redo runs this segment again as a new workflow with the findings; Continue keeps what ran.",
   unreadable: "Oracle could not read the recorded verdict. Approving follows the workflow; Redo runs the segment again.",
+  unread:
+    "Oracle has not read the answer yet and reads it again each minute. Until then the run's agents may read Oracle but not write to it.",
 };
 
 function ConsolePanel({ answer: c }: { answer: ConsoleAnswer }) {

@@ -175,6 +175,16 @@ async def cancel_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> Ru
     return await service.read_run(db, run_id, principal)
 
 
+@router.post("/runs/{run_id}/stop-cancelling", response_model=RunOut)
+async def stop_cancelling_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+    """Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that
+    proves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox
+    item clears, but Oracle keeps reading the workflow's status and cost in the
+    background until it ends, and counts its spend against the run's ceiling (P3d)."""
+    await _call(service.stop_cancelling(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
 @router.post("/runs/{run_id}/checkpoints/{checkpoint_id}/decide", response_model=RunOut)
 async def decide_checkpoint(
     run_id: uuid.UUID,

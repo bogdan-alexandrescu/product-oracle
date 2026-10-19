@@ -8,7 +8,7 @@ import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CHECKPOINT_LABEL, FINAL_STATUSES, RETRY_CONFIRM, usd, type RunSummary } from "../runs/_lib";
+import { CHECKPOINT_LABEL, FINAL_STATUSES, RETRY_CONFIRM, STOP_CANCELLING_CONFIRM, usd, type RunSummary } from "../runs/_lib";
 
 function Section({ title, count, children, testId }: { title: string; count: number; children: ReactNode; testId: string }) {
   if (count === 0) return null;
@@ -85,7 +85,9 @@ export default function InboxPage() {
                         ? "needs an approver to confirm"
                         : c.console.needs === "redo_or_continue"
                           ? `changes requested; choose Redo from ${c.console.redo_segment} or Continue`
-                          : "the verdict could not be read"}
+                          : c.console.needs === "unread"
+                            ? "waiting to read the answer"
+                            : "the verdict could not be read"}
                     </div>
                   )}
                 </div>
@@ -167,13 +169,28 @@ export default function InboxPage() {
                     Retry
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  disabled={busy !== null}
-                  onClick={() => act(`cancel-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/cancel", path(r.id))))}
-                >
-                  {FINAL_STATUSES.includes(r.status) ? "Stop cancelling" : "Cancel run"}
-                </Button>
+                {r.can_stop_cancelling && (
+                  <Button
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      if (window.confirm(STOP_CANCELLING_CONFIRM)) {
+                        void act(`stop-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path(r.id))));
+                      }
+                    }}
+                  >
+                    Stop cancelling
+                  </Button>
+                )}
+                {!FINAL_STATUSES.includes(r.status) && (
+                  <Button
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => act(`cancel-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/cancel", path(r.id))))}
+                  >
+                    Cancel run
+                  </Button>
+                )}
               </li>
             ))}
           </Section>

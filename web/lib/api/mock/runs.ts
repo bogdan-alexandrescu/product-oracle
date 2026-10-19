@@ -140,6 +140,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     waiting_on: r.waiting_on,
     error: r.error,
     can_retry: r.can_retry,
+    can_stop_cancelling: r.can_stop_cancelling,
   };
 }
 
@@ -420,6 +421,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       waiting_on: null,
       error: null,
       can_retry: false,
+      can_stop_cancelling: false,
       knobs,
       snapshot_id: null,
       snapshot_as_of: null,
@@ -523,6 +525,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     finish(ctx, r, "cancelled");
     return done();
   }
+  if (action === "stop-cancelling" && m === "POST") {
+    if (!r.can_stop_cancelling) return fail(409, "nothing to stop: no cancel of this run waits on SwarmCloud's 404s");
+    Object.assign(r, { can_stop_cancelling: false, stuck: null });
+    return done();
+  }
   if (action === "checkpoints" && p[5] === "decide" && m === "POST") {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, "checkpoint not found");
@@ -574,6 +581,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
       waiting_on: null,
       error: null,
       can_retry: false,
+      can_stop_cancelling: false,
       knobs: k,
       snapshot_id: ctx.uuid(),
       snapshot_as_of: created_at,

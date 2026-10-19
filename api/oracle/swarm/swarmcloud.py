@@ -1223,25 +1223,31 @@ _DETAIL_SCAN_CHARS = 4096
 # the word, a JWT, a Google access token, a GitHub token, a token in a git URL, or one of
 # Oracle's own tokens (run, API and OAuth).
 _TOKEN_SHAPED = re.compile(
-    # A bearer value, after a space, ":", "=", "%20" or a form-encoded "+": a word with a
-    # digit or an inner symbol (sc-secret, abc123), or a long one; never an ordinary word
-    # or a hyphenated phrase of them after "bearer" (bearer token handling, bearer
-    # token-based auth).
-    r"(?i:bearer)(?:[\s:=+]|%20)+"
+    # A bearer value, after a space, ":", "=", a form-encoded "+", a quote (escaped or
+    # not), a percent-escape (%20, %0A), or an escaped control character (\n, \u000a,
+    # \x0a): a word with a digit or an inner symbol (sc-secret, abc123, token-xyzabc), or
+    # a long one; never an ordinary word, or a hyphenated phrase of them, after "bearer"
+    # (bearer token handling, bearer token-based auth, the bearer header-only scheme).
+    r"(?i:bearer)"
+    r"(?:[\s:=+]|\\?[\"']|%[0-9A-Fa-f]{2}|\\[nrtbf]|\\u[0-9A-Fa-f]{4}|\\x[0-9A-Fa-f]{2})+"
     r"(?!(?i:token|tokens|auth|authentication|authorization|scheme|header|credentials?)"
-    r"(?:-[A-Za-z]+)*(?![A-Za-z0-9_.~+/=%-]))"
+    r"(?:-(?i:based|only|bound|style|less|like|free|types?|formats?|values?|auth"
+    r"|authentication|authorization|scheme|header|tokens?|credentials?))*"
+    r"(?![A-Za-z0-9_.~+/=%-]))"
     r"(?:(?=[A-Za-z]*(?:[0-9]|[-_.~+/=%][A-Za-z0-9]))\S+|[A-Za-z]{16,}\S*)"
     r"|eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}"
     r"|ya29\.[A-Za-z0-9_.-]+"
     r"|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|(?i:x-access-token):[^@\s]+"
-    # Oracle's prefixes, also when joined to a word by an underscore (credential_ort_...),
-    # to digits (123ort_..., Bearer%20ort_...) or to an escaped or encoded line break
-    # (\nort_..., \u000aort_..., %0Aort_...); never inside a word (support_ticket). Its
-    # tokens are random URL-safe text, so the value has a digit or a capital: an
-    # identifier made of words (max_po_lines_per_page, alice_po_reviewer@...) is not one.
-    r"|(?:(?<![A-Za-z])|(?<=\\[nrt])|(?<=\\u000[AaDd])|(?<=%0[AaDd]))"
-    r"(?:ort|po|poa)_(?=[a-z_-]*[A-Z0-9])[A-Za-z0-9_-]{8,}"
+    # Oracle's prefixes (run, API, OAuth access, refresh and code), also when joined to a
+    # word by an underscore (credential_ort_...), to digits (123ort_...), to a
+    # percent-escape (Bearer%20ort_..., %3Dort_..., %2Bpo_...) or to an escaped control
+    # character (\nort_..., \u000aort_..., \x0aort_..., \bort_...); never inside a
+    # word (support_ticket). Its tokens are random URL-safe text, so the value has a digit
+    # or a capital: an identifier made of words (max_po_lines_per_page, por_table) is not.
+    r"|(?:(?<![A-Za-z])|(?<=\\[nrtbf])|(?<=\\u[0-9A-Fa-f]{4})|(?<=\\x[0-9A-Fa-f]{2})"
+    r"|(?<=%[0-9A-Fa-f]{2}))"
+    r"(?:ort|po|poa|por|poc)_(?=[a-z_-]*[A-Z0-9])[A-Za-z0-9_-]{8,}"
 )
 
 

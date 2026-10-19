@@ -3036,7 +3036,9 @@ async def test_a_background_search_ends_when_the_credential_would_have_expired(
     clock.forward(service.STUCK_LOOKUP_SECONDS + 1)
     await tick(client, auth)
     assert (await get(client, auth, run["id"]))["searching"]
-    clock.forward(86400 + 60)  # past the lost submission's credential (at most 24 h)
+    # Past the lost submission's credential (at most 24 h) and the slack for a step that
+    # was running then (round 6).
+    clock.forward(86400 + get_runtime_settings().step_seconds + 60)
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert run["searching"] is None
@@ -3149,15 +3151,17 @@ async def test_a_bare_404_while_cancelling_surfaces_in_the_inbox_after_n_tries(
         assert any("HTTP 404" in e for e in await _tick_errors(client, auth))
     [stuck] = (await _inbox(client, auth))["lookups"]
     assert stuck["id"] == run["id"] and "404" in stuck["stuck"] and stuck["can_retry"] is False
-    # Past the cap it is tried again now and then, not on every tick.
-    calls = len(swarm.requests)
+    # Past the cap the cancel call is tried again now and then, not on every tick (its
+    # status is still read every tick: round 6).
+    calls = len([r for r in swarm.requests if r.url.path.endswith("/cancel")])
     assert await _tick_errors(client, auth) == []
-    assert len(swarm.requests) == calls
-    # Cancel from the Inbox stops trying, noted.
+    assert len([r for r in swarm.requests if r.url.path.endswith("/cancel")]) == calls
+    # Cancel from the Inbox stops trying, noted; its cost is still read (P3d, round 6).
     resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
     assert resp.status_code == 200, resp.text
-    wf = (await _knobs_of(tenant_id, run["id"]))["workflow"]
-    assert wf["state"] == "cancelled" and wf["gone"]
+    knobs = await _knobs_of(tenant_id, run["id"])
+    assert knobs["workflow"]["state"] == "cancelled" and knobs["workflow"]["stopped"]
+    assert [e["id"] for e in knobs["searches"]] == ["wf_1"]
     assert any("stopped cancelling" in n for n in resp.json()["notes"])
     assert (await _inbox(client, auth))["lookups"] == []
 

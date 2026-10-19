@@ -2435,6 +2435,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/stop-cancelling": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Cancelling Run
+         * @description Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that
+         *     proves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox
+         *     item clears, but Oracle keeps reading the workflow's status and cost in the
+         *     background until it ends, and counts its spend against the run's ceiling (P3d).
+         */
+        post: operations["stop_cancelling_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide": {
         parameters: {
             query?: never;
@@ -3284,7 +3307,8 @@ export interface components {
          * @description What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):
          *     an answer that does not count (its answerer is not an Oracle member with the
          *     checkpoint's role), a counted change request the workflow had no revision step for,
-         *     or an answer Oracle could not read.
+         *     an answer Oracle could not read, or one it has not read yet (``unread``: SwarmCloud
+         *     errors, a 404 or a lagging record; read again on every tick).
          */
         ConsoleAnswer: {
             /** Answered By */
@@ -3310,7 +3334,7 @@ export interface components {
              * Needs
              * @enum {string}
              */
-            needs: "confirm" | "redo_or_continue" | "unreadable";
+            needs: "confirm" | "redo_or_continue" | "unreadable" | "unread";
             /**
              * Revise
              * @default false
@@ -5614,6 +5638,11 @@ export interface components {
              * @default false
              */
             can_retry: boolean;
+            /**
+             * Can Stop Cancelling
+             * @default false
+             */
+            can_stop_cancelling: boolean;
             /** Searching */
             searching?: string | null;
             knobs: components["schemas"]["KnobsOut"];
@@ -5713,6 +5742,11 @@ export interface components {
              * @default false
              */
             can_retry: boolean;
+            /**
+             * Can Stop Cancelling
+             * @default false
+             */
+            can_stop_cancelling: boolean;
             /** Searching */
             searching?: string | null;
         };
@@ -12241,6 +12275,37 @@ export interface operations {
         };
     };
     cancel_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_cancelling_run: {
         parameters: {
             query?: never;
             header?: never;

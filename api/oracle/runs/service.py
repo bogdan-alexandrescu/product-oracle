@@ -46,11 +46,21 @@ its cost is still counted, its run token is revoked, every tick cancels it again
 up, recorded, on SwarmCloud's not_found; other 404s are counted, and past
 ``NOT_FOUND_TRIES`` the run shows in the Inbox with Cancel), and nothing is submitted
 after it until the cancel holds; an Inbox decision that would need it says "decide
-again". A submission given up on (Retry, or a cancel past the lookup cap) is looked for
-in the background (``searches``) until found, then cancelled and its cost counted, or
-ruled out, within its credential's lifetime. A confirmed cancel reads the
-workflow's final cost, and the spend is checked against the ceiling before every
-submission and before anything follows an answer.
+again". Past the cap only the cancel call rests: the workflow's status and cost are read
+every tick. Stop cancelling (P3d) ends the cancel calls and clears the Inbox item, but
+the workflow is never detached from the spend: it goes on ``searches`` with its id, its
+status and cost read until it ends. A submission given up on (Retry, or a cancel past the
+lookup cap) is looked for in the background (``searches``, the first look on the next
+tick) until found, then cancelled and its cost counted, or ruled out, within its
+credential's lifetime plus a step's timeout of slack; a found workflow whose status
+reads is followed until SwarmCloud says it ended. Search results are committed on their
+own, before the rest of the tick. A confirmed cancel reads the workflow's final cost (a
+recorded cost is never lowered), and the spend is checked against the ceiling before
+every submission and before anything follows an answer.
+
+W5: an answered wait Oracle cannot read yet (SwarmCloud errors, a 404, a record that lags
+the step, or a 409 already_answered whose record does not read) holds the run token
+read-only (``needs: unread``) until the answer is read; the approver rule applies then.
 
 Segment ``artifacts`` (jsonb) hold ``files`` (name -> text), ``attempts`` (one entry
 per submission or in-workflow round: workflow id, label, cost, the reviewer's note),
@@ -273,11 +283,14 @@ async def _get_run(db: AsyncSession, run_id: uuid.UUID, *, lock: bool = False) -
     return run
 
 
-async def _segments(db: AsyncSession, run_id: uuid.UUID) -> list[RunSegment]:
-    rows = await db.scalars(
-        select(RunSegment).where(RunSegment.run_id == run_id).order_by(RunSegment.seq)
-    )
-    return list(rows)
+async def _segments(
+    db: AsyncSession, run_id: uuid.UUID, *, fresh: bool = False
+) -> list[RunSegment]:
+    stmt = select(RunSegment).where(RunSegment.run_id == run_id).order_by(RunSegment.seq)
+    if fresh:
+        # Read again as they are now: another transaction may have changed them.
+        stmt = stmt.execution_options(populate_existing=True)
+    return list(await db.scalars(stmt))
 
 
 async def _checkpoints(db: AsyncSession, run_ids: list[uuid.UUID]) -> list[Checkpoint]:
@@ -349,6 +362,7 @@ def _summary(run: Run, refs: _Refs, waiting: Checkpoint | None) -> RunSummary:
         error=run.error,
         stuck=_stuck(run),
         can_retry=_can_retry(run),
+        can_stop_cancelling=_cancel_stuck(run) is not None,
         searching=_searching(run),
     )
 
@@ -371,9 +385,21 @@ def _stuck(run: Run) -> str | None:
         return (
             f"SwarmCloud answered HTTP 404 {pending.get('not_found')} times while Oracle "
             f"cancelled workflow {wf.get('id')}, without saying it does not exist "
-            f"({pending.get('error')}): it may still run, and Oracle cannot read its cost. "
-            f"Oracle tries again every {_duration(STUCK_LOOKUP_SECONDS)}; in the Inbox, "
-            "Cancel stops trying (then cancel it in SwarmCloud's console)."
+            f"({pending.get('error')}): it may still run. Oracle keeps reading its cost and "
+            f"cancels it again every {_duration(STUCK_LOOKUP_SECONDS)}; in the Inbox, Stop "
+            "cancelling stops the cancel calls (its cost is still read and counted until "
+            "it ends; cancel it in SwarmCloud's console)."
+        )
+    lost = next((e for e in knobs.get("searches") or [] if e.get("stuck")), None)
+    if lost is not None:
+        return (
+            f"SwarmCloud answered HTTP 404 {lost.get('not_found')} times about workflow "
+            f"{lost.get('id')} (submission {lost.get('label')}), given up on earlier, "
+            f"without saying it does not exist ({lost.get('error')}): Oracle can neither "
+            "cancel it nor read its cost. It reads it again every "
+            f"{_duration(STUCK_LOOKUP_SECONDS)} until it ends or "
+            f"{_search_end(lost).isoformat(timespec='minutes')}; cancel it in SwarmCloud's "
+            "console."
         )
     post = knobs.get("post_404")
     if (
@@ -483,10 +509,12 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
 
 
 # Console answers that did not count (W5): one Oracle could not count (its answerer),
-# and one it could not read (the form over its limit or odd, a verdict that is neither
-# MERGE nor NOT_YET, a refused read of a step that SUCCEEDED). Either waits for an
-# approver, and the run's token is read-only meanwhile.
-_HOLDING = ("confirm", "unreadable")
+# one it could not read (the form over its limit or odd, a verdict that is neither
+# MERGE nor NOT_YET, a refused read of a step that SUCCEEDED), and one it cannot read
+# yet (``unread``: SwarmCloud errors, a 404, a record that lags the step; read again on
+# every tick). Each waits for an approver or for the read, and the run's token is
+# read-only meanwhile.
+_HOLDING = ("confirm", "unreadable", "unread")
 
 
 def _holds_token(cp: Checkpoint) -> bool:
@@ -514,11 +542,12 @@ async def token_hold(db: AsyncSession, run_id: uuid.UUID) -> str | None:
     if held is None:
         return None
     kind, needs = held
-    why = (
-        "by someone whose answer does not count until an Oracle approver confirms it"
-        if needs == "confirm"
-        else "and Oracle could not read the recorded answer, so an Oracle approver decides"
-    )
+    if needs == "confirm":
+        why = "by someone whose answer does not count until an Oracle approver confirms it"
+    elif needs == "unread":
+        why = "and Oracle has not read the recorded answer yet (it reads it again each tick)"
+    else:
+        why = "and Oracle could not read the recorded answer, so an Oracle approver decides"
     return (
         f"waiting for approval: {kind} was answered in SwarmCloud's console {why}; until "
         "then this run's token may read Oracle but not write to it"
@@ -1482,11 +1511,21 @@ async def _give_up(db: AsyncSession, run: Run, wf: dict[str, Any], state: str) -
 
 
 async def _end_workflow(
-    db: AsyncSession, run: Run, wf: dict[str, Any], state: str, *, gone: str | None = None
+    db: AsyncSession,
+    run: Run,
+    wf: dict[str, Any],
+    state: str,
+    *,
+    gone: str | None = None,
+    stopped: bool = False,
 ) -> None:
+    """Detach the run's workflow: Oracle no longer drives or cancels it. ``stopped``: an
+    approver stopped cancelling it, and its cost is still read (``searches``)."""
     rest = {k: v for k, v in wf.items() if k != "cancel_pending"}
     if gone:
         rest["gone"] = gone
+    if stopped:
+        rest["stopped"] = True
     _set_knob(run, "workflow", {**rest, "state": state, "ended_at": _now().isoformat()})
     await revoke_run_tokens(db, run.id)
 
@@ -1978,6 +2017,16 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
     return result.model_dump(mode="json")
 
 
+def _current_attempt(art: dict[str, Any], segment: RunSegment) -> dict[str, Any]:
+    """The segment's current attempt: the latest on its workflow. A found earlier
+    submission (a search, a cancel's lookup) is listed by its number and may sit after
+    it; the last listed is taken only when none is on the segment's workflow."""
+    ours = [a for a in art["attempts"] if a.get("workflow_id") == segment.swarm_workflow_id]
+    if ours:
+        return ours[-1]
+    return art["attempts"][-1] if art["attempts"] else {}
+
+
 async def _advance(
     db: AsyncSession,
     run: Run,
@@ -1995,7 +2044,7 @@ async def _advance(
     flow, knobs = _flow(run), _knobs(run)
     sdef = flow.segment(segment.name)
     art = _art(segment)
-    attempt = art["attempts"][-1] if art["attempts"] else {}
+    attempt = _current_attempt(art, segment)
     if attempt.get("advanced"):
         return False
     attempt["advanced"] = True
@@ -2125,7 +2174,14 @@ class _TickStats:
 async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
     runtime = get_runtime()
     segments = await _segments(db, run.id)
-    await _search_earlier(db, run, segments, stats)
+    if (run.knobs or {}).get("searches"):
+        await _search_earlier(db, run, segments, stats)
+        # Committed on its own: what was found, cancelled and counted stays so, whatever
+        # the rest of this tick does. The commit released the run's row lock: taken
+        # again, the run and its segments are read as they are now.
+        await db.commit()
+        run = await _get_run(db, run.id, lock=True)
+        segments = await _segments(db, run.id, fresh=True)
     wf = _live(run)
     if wf is not None and (wf.get("cancel_pending") or run.status in FINAL):
         if not await _cancel_again(db, run, wf, segments, stats) or run.status != "running":
@@ -2158,9 +2214,8 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
     art = _art(running)
     if art["attempts"]:
         # The running workflow's attempt (one found later may sit after it).
-        ours = [a for a in art["attempts"] if a.get("workflow_id") == running.swarm_workflow_id]
-        current = ours[-1] if ours else art["attempts"][-1]
-        current["cost_usd"] = float(status.cost_usd)
+        current = _current_attempt(art, running)
+        current["cost_usd"] = _higher(status.cost_usd, current.get("cost_usd"))
         current["state"] = status.state
     running.cost_usd = sum(
         (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
@@ -2209,14 +2264,17 @@ def _take_cost(
     the run's spend from it. Returns that segment.
 
     The whole workflow's cost goes on its first attempt there: a revision inside the
-    workflow is another attempt on the same workflow, and counts nothing again."""
+    workflow is another attempt on the same workflow, and counts nothing again. A cost
+    is never lowered."""
     start = next((s for s in segments if s.seq == wf.get("start_seq")), None)
     if start is not None:
         art = _art(start)
         first = True
         for a in art["attempts"]:
             if a.get("workflow_id") == wf["id"]:
-                a["cost_usd"] = float(status.cost_usd) if first else 0
+                # Never lowered: a read made earlier (cancel() reads before it takes the
+                # run's row lock) is not newer than one the tick recorded meanwhile.
+                a["cost_usd"] = _higher(status.cost_usd, a.get("cost_usd")) if first else 0
                 first = False
         start.cost_usd = sum(
             (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
@@ -2248,8 +2306,13 @@ async def _pause_overrun(
     )
 
 
+# Run states the ceiling pauses (a run waiting on a checkpoint can spend too).
+_SPENDING = ("running", "awaiting_checkpoint")
+
+
 def _rested(pending: dict[str, Any]) -> bool:
-    """A cancel past :data:`NOT_FOUND_TRIES` (in the Inbox) is tried again now and then."""
+    """A cancel past :data:`NOT_FOUND_TRIES` (in the Inbox) is tried again now and then
+    (only the cancel call rests: the workflow's status and cost are read every tick)."""
     tried = _parse_at(pending.get("tried_at"))
     return (
         bool(pending.get("stuck"))
@@ -2274,8 +2337,8 @@ async def _cancel_again(
     runtime = get_runtime()
     pending = wf.get("cancel_pending") or {}
     state = pending.get("state") or "ended"
-    if _rested(pending):
-        return False
+    # Past the cap only the cancel call rests: its status and cost are read every tick.
+    rested = _rested(pending)
     if not wf.get("id"):
         label = wf.get("lookup") or ""
         try:
@@ -2302,6 +2365,9 @@ async def _cancel_again(
         if exc.gone:
             await _give_up(db, run, wf, state)
             return True
+        if rested:
+            log.warning("run %s: %s not read (resting): %s", run.id, wf["id"], exc)
+            return False
         if pending.get("confirmed"):
             # Its cancel was confirmed and this was the one more read of its last cost.
             note = (
@@ -2324,9 +2390,9 @@ async def _cancel_again(
     if status.terminal:
         await _end_workflow(db, run, wf, state)
         return True
-    if await _detach(db, run, cancel=True, state=state):
+    if not rested and await _detach(db, run, cancel=True, state=state):
         return True
-    if run.status == "running" and (ceiling := _overrun(run)) is not None:
+    if run.status in _SPENDING and (ceiling := _overrun(run)) is not None:
         await _pause_overrun(db, run, ceiling, stats)
     return False
 
@@ -2412,6 +2478,25 @@ def _adopt(segments: list[RunSegment], wf: dict[str, Any]) -> None:
 # --------------------------------------------------------------------------- searches
 
 
+def _credential_end(info: dict[str, Any]) -> str | None:
+    """When a submission's run credential ends, if it was sent one (attached): its agents
+    lose Oracle's data then. A submission sent without it is not bounded by the run
+    token's lifetime: None (the default bound applies, :data:`SEARCH_SECONDS`)."""
+    if info.get("credential_seconds"):
+        return info.get("expires_at")
+    return info.get("lookup_until")
+
+
+def _search_end(entry: dict[str, Any]) -> datetime:
+    """Past this, a search gives up while SwarmCloud neither shows the submission nor
+    rules it out, or does not serve its status: the credential's end (else
+    :data:`SEARCH_SECONDS` after it was sent) plus a step's timeout of slack, for a step
+    already running then. A workflow whose status reads is followed until it ends."""
+    sent = _parse_at(entry.get("submitted_at")) or _now()
+    end = _parse_at(entry.get("until")) or sent + timedelta(seconds=SEARCH_SECONDS)
+    return end + timedelta(seconds=get_runtime_settings().step_seconds)
+
+
 def _search_for(
     run: Run,
     *,
@@ -2420,50 +2505,84 @@ def _search_for(
     submitted_at: str | None,
     until: str | None,
     why: str,
+    workflow_id: str | None = None,
+    cancel: bool = True,
 ) -> None:
-    """Keep looking for a submission given up on (Retry submitted the segment again, or
-    a cancelled run stopped looking for it on every tick): the run's ``searches``."""
+    """Keep checking work the run gave up on: the run's ``searches``. A submission whose
+    answer was lost (Retry submitted the segment again, or a cancelled run stopped looking
+    for it on every tick) is looked for by its label; a workflow known by its id (found,
+    or one an approver stopped cancelling: ``cancel`` False) has its status and cost read.
+    The first look is on the next tick."""
     entries = list((run.knobs or {}).get("searches") or [])
-    if not label or any(e.get("label") == label for e in entries):
+    if not label:
         return
+    for e in entries:
+        if workflow_id and e.get("id") == workflow_id:
+            return
+        if e.get("label") == label and e.get("submitted_at") == submitted_at:
+            return
     sent = _parse_at(submitted_at) or _now()
     end = _parse_at(until) or sent + timedelta(seconds=SEARCH_SECONDS)
-    entries.append(
-        {
-            "label": label,
-            "seq": seq,
-            "submitted_at": sent.isoformat(),
-            "until": end.isoformat(),
-            "why": why,
-            "looked_at": _now().isoformat(),
-            "lookups": 0,
-        }
-    )
+    entry: dict[str, Any] = {
+        "label": label,
+        "seq": seq,
+        "submitted_at": sent.isoformat(),
+        "until": end.isoformat(),
+        "why": why,
+        "looked_at": None,
+        "lookups": 0,
+    }
+    if workflow_id:
+        entry["id"] = workflow_id
+    if not cancel:
+        entry["cancel"] = False
+    entries.append(entry)
     _set_knob(run, "searches", entries)
 
 
 def _searching(run: Run) -> str | None:
-    """What the Inbox says while Oracle looks for submissions given up on."""
+    """What the Inbox says while Oracle checks work the run gave up on."""
     entries = (run.knobs or {}).get("searches") or []
     if not entries:
         return None
-    labels = ", ".join(str(e.get("label")) for e in entries)
-    return (
-        f"Oracle is looking for an earlier submission ({labels}) every "
-        f"{_duration(STUCK_LOOKUP_SECONDS)}: if it landed, Oracle cancels it and counts its "
-        "cost in the run's spend; it stops once it is ruled out, or when its credential "
-        "would have expired."
-    )
+    every = _duration(STUCK_LOOKUP_SECONDS)
+    says: list[str] = []
+    lost = [str(e.get("label")) for e in entries if not e.get("id")]
+    if lost:
+        says.append(
+            f"Oracle is looking for an earlier submission ({', '.join(lost)}) every {every}: "
+            "if it landed, Oracle cancels it and counts its cost in the run's spend; it stops "
+            "once it is ruled out, or when its credential would have expired."
+        )
+    for e in entries:
+        if not e.get("id"):
+            continue
+        if e.get("cancel") is False:
+            says.append(
+                f"Oracle stopped cancelling workflow {e['id']} ({e.get('label')}), and reads "
+                f"its status and cost every {every} until it ends, counting its spend against "
+                "the run's ceiling."
+            )
+        else:
+            says.append(
+                f"Oracle found earlier submission {e.get('label')} (workflow {e['id']}) and "
+                f"cancels it, reading its cost every {every} until it is counted."
+            )
+    return " ".join(says)
 
 
 def _cost_on(run: Run, segments: list[RunSegment], entry: dict[str, Any], cost: Decimal) -> None:
+    """A searched workflow's cost on its segment's first attempt with its id (a revision
+    inside a workflow counts nothing again), never lower than one already recorded."""
     segment = next((s for s in segments if s.seq == entry.get("seq")), None)
     if segment is None:
         return
     art = _art(segment)
+    first = True
     for a in art["attempts"]:
         if a.get("workflow_id") == entry["id"]:
-            a["cost_usd"] = float(cost)
+            a["cost_usd"] = _higher(cost, a.get("cost_usd")) if first else 0
+            first = False
     segment.cost_usd = sum(
         (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
     )
@@ -2471,14 +2590,41 @@ def _cost_on(run: Run, segments: list[RunSegment], entry: dict[str, Any], cost: 
     _recompute_spend(run, segments)
 
 
+def _higher(cost: Decimal, recorded: Any) -> float:
+    """A cost read now, never lower than the one recorded: SwarmCloud's costs only grow,
+    so a lower reading is an older one (read before a newer one was recorded)."""
+    return max(float(cost), float(recorded or 0))
+
+
+def _rests(at: Any) -> bool:
+    looked = _parse_at(at)
+    return looked is not None and (_now() - looked).total_seconds() < STUCK_LOOKUP_SECONDS
+
+
+async def _read_call(workflow_id: str) -> _Cancelled:
+    """Read a workflow Oracle no longer cancels (stopped, or its cancel confirmed): its
+    cost and whether it ended. A call only, nothing written."""
+    out = _Cancelled()
+    try:
+        out.final = await get_runtime().status(workflow_id)
+    except RuntimeUnavailable as exc:
+        if exc.gone:
+            out.gone = True
+        else:
+            out.unread = exc
+    return out
+
+
 async def _search_earlier(
     db: AsyncSession, run: Run, segments: list[RunSegment], stats: _TickStats
 ) -> None:
-    """Look for the submissions the run gave up on (``searches``), each every
-    :data:`STUCK_LOOKUP_SECONDS`: found, it is cancelled and its cost counted in the
-    run's spend (as :func:`_adopt` does; cancelled again on every tick until SwarmCloud
-    confirms); ruled out by the listing, or past its credential's end, it is dropped
-    (noted). Whatever the run's state: a landed one spends on its own budget otherwise."""
+    """Check the work the run gave up on (``searches``), each every
+    :data:`STUCK_LOOKUP_SECONDS` (the first on the next tick). A submission looked for by
+    its label: found, it is cancelled and its cost counted in the run's spend (as
+    :func:`_adopt` does); ruled out by the listing, it is dropped; neither, past
+    :func:`_search_end`, dropped (noted). A workflow known by its id (:func:`_read_found`)
+    is cancelled (unless an approver stopped cancelling it) and its status and cost read
+    until it ends. Whatever the run's state: a landed one spends otherwise."""
     entries = copy.deepcopy((run.knobs or {}).get("searches") or [])
     if not entries:
         return
@@ -2489,8 +2635,7 @@ async def _search_earlier(
         label = str(e.get("label") or "")
         segment = next((s for s in segments if s.seq == e.get("seq")), target)
         if not e.get("id"):
-            looked = _parse_at(e.get("looked_at"))
-            if looked is not None and (_now() - looked).total_seconds() < STUCK_LOOKUP_SECONDS:
+            if _rests(e.get("looked_at")):
                 keep.append(e)
                 continue
             e["looked_at"] = _now().isoformat()
@@ -2499,8 +2644,7 @@ async def _search_earlier(
             except RuntimeUnavailable as exc:
                 e["lookups"] = int(e.get("lookups") or 0) + 1
                 e["error"] = _shown(exc)
-                until = _parse_at(e.get("until"))
-                if until is not None and _now() >= until:
+                if _now() >= _search_end(e):
                     if segment is not None:
                         _note(
                             segment,
@@ -2518,23 +2662,87 @@ async def _search_earlier(
             e["id"] = found
             if segment is not None:
                 _add_attempt(segment, found, label, "cancelled", mode="abandoned")
-        out = await _cancel_call({"id": e["id"]})
-        if out.final is not None:
-            _cost_on(run, segments, e, out.final.cost_usd)
-        if out.gone or ((out.error is None or out.ended) and out.unread is None):
-            if segment is not None:
-                cost = f"${out.final.cost_usd} counted" if out.final else "its cost unread"
-                _note(
-                    segment,
-                    f"Oracle found submission {label} (workflow {e['id']}), given up on "
-                    f"earlier, and cancelled it ({cost} in the run's spend).",
-                )
+        elif _rests(e.get("read_at")):
+            keep.append(e)
             continue
-        e["error"] = _shown(out.error or out.unread)
-        keep.append(e)  # found, its cancel not confirmed: again on the next tick
+        e["read_at"] = _now().isoformat()
+        if await _read_found(run, segments, segment, e):
+            keep.append(e)
     _set_knob(run, "searches", keep or None)
-    if run.status == "running" and (ceiling := _overrun(run)) is not None:
+    if run.status in _SPENDING and (ceiling := _overrun(run)) is not None:
         await _pause_overrun(db, run, ceiling, stats)
+
+
+async def _read_found(
+    run: Run, segments: list[RunSegment], segment: RunSegment | None, e: dict[str, Any]
+) -> bool:
+    """One look at a searched workflow known by its id: cancel it (until SwarmCloud
+    confirms; not one an approver stopped cancelling) and read its status and cost, the
+    cost counted in the run's spend. Returns True to keep it: until it ended (its cost
+    read), or SwarmCloud says it does not exist. When nothing could be read, 404s that
+    prove nothing are counted (past :data:`NOT_FOUND_TRIES` the run shows in the Inbox),
+    and it is given up past :func:`_search_end` (noted); a confirmed cancel whose cost
+    is not read yet is kept for that read, up to the same caps."""
+    label, wid = e.get("label"), e["id"]
+    cancelling = e.get("cancel", True) and not e.get("cancelled")
+    out = await (_cancel_call({"id": wid}) if cancelling else _read_call(wid))
+    if cancelling and out.error is None and not out.gone:
+        e["cancelled"] = True  # confirmed: only its last cost is left to read
+    final = out.final
+    if final is not None:
+        _cost_on(run, segments, e, final.cost_usd)
+        e.pop("not_found", None)
+        e.pop("stuck", None)
+        e.pop("error", None)
+        if final.terminal or e.get("cancelled"):
+            if segment is not None:
+                if e.get("cancel") is False:
+                    said = (
+                        f"Workflow {wid}, which an approver stopped cancelling, ended "
+                        f"{final.state} in SwarmCloud: ${final.cost_usd} counted in the "
+                        "run's spend."
+                    )
+                else:
+                    said = (
+                        f"Oracle found submission {label} (workflow {wid}), given up on "
+                        f"earlier, and cancelled it (${final.cost_usd} counted in the run's "
+                        "spend)."
+                    )
+                _note(segment, said)
+            return False
+        return True  # still running: read again (its cost counts meanwhile)
+    if out.gone and not e.get("cancelled"):
+        if segment is not None:
+            _note(
+                segment,
+                f"SwarmCloud does not know workflow {wid} (submission {label}, HTTP 404): "
+                "Oracle stopped checking it; its cost is what Oracle last read.",
+            )
+        return False
+    # Nothing read this time.
+    e["error"] = _shown(out.error or out.unread) or "its cost was not read"
+    e["unread"] = int(e.get("unread") or 0) + 1
+    if _not_found(out.error) or _not_found(out.unread):
+        e["not_found"] = int(e.get("not_found") or 0) + 1
+        if e["not_found"] >= NOT_FOUND_TRIES:
+            e["stuck"] = True
+    capped = e.get("cancelled") and e["unread"] >= NOT_FOUND_TRIES
+    if capped or _now() >= _search_end(e):
+        if segment is not None:
+            what = (
+                f"SwarmCloud confirmed cancelling workflow {wid} (submission {label}), but its "
+                f"last cost could not be read ({e['error']})"
+                if e.get("cancelled")
+                else f"SwarmCloud did not answer about workflow {wid} (submission {label}) "
+                f"before its credential would have ended ({e['error']})"
+            )
+            _note(
+                segment,
+                f"{what}: Oracle stopped checking it, and the run's spend has what Oracle "
+                "last read. If it still runs, cancel it in SwarmCloud's console.",
+            )
+        return False
+    return True
 
 
 async def _harvest(run: Run, segment: RunSegment, workflow_id: str, steps: tuple[str, ...]) -> None:
@@ -2544,7 +2752,7 @@ async def _harvest(run: Run, segment: RunSegment, workflow_id: str, steps: tuple
     art = _art(segment)
     art["files"] = {**art["files"], **files}
     if art["attempts"]:
-        art["attempts"][-1]["state"] = "succeeded"
+        _current_attempt(art, segment)["state"] = "succeeded"
     _set_art(segment, art)
     segment.status = "succeeded"
     segment.finished_at = _now()
@@ -2624,6 +2832,11 @@ async def _tick_workflow(
                 wait["expires_at"] = parked.expires_at.isoformat() if parked.expires_at else None
             elif answered:
                 wait["task_id"] = ended.task_id  # type: ignore[union-attr]
+                # W5: answered and not read yet, so held from the start; the next look
+                # at the wait reads it and applies the approver rule.
+                wait["console"] = _unread_console(
+                    run, current, wf, wait, "answered before Oracle opened the checkpoint"
+                )
             else:
                 # The wait ended before Oracle opened its checkpoint (it expired while the
                 # run was paused): the checkpoint opens in the Inbox only.
@@ -2684,7 +2897,7 @@ async def _pause_workflow(
         else:
             art = _art(current)
             if art["attempts"]:
-                art["attempts"][-1]["state"] = "cancelled"
+                _current_attempt(art, current)["state"] = "cancelled"
             _set_art(current, art)
             current.status = "pending"
             current.error = (
@@ -2764,6 +2977,8 @@ async def _watch_wait(
     round_ = int(wait.get("round") or 1)
     step = status.step(wait.get("step_id", ""))
     answered_step = step is not None and step.state == "SUCCEEDED"
+    seq = (cp.payload or {}).get("segment_seq")
+    segment = next(s for s in segments if s.seq == seq)
     try:
         record = await get_runtime().answer_record(
             wf["id"], wait["step_id"], wait.get("artifact") or workflow.review_artifact(round_)
@@ -2773,13 +2988,14 @@ async def _watch_wait(
             log.warning(
                 "run %s: wait %s not read, again next tick: %s", run.id, wait["step_id"], exc
             )
+            if answered_step:
+                # W5: answered, not read yet: held until it is (read again next tick).
+                _unread(run, cp, segment, wf, wait, f"SwarmCloud did not serve it ({_shown(exc)})")
             return
         log.warning("run %s: cannot read wait %s: %s", run.id, wait.get("step_id"), exc)
         record = RecordedAnswer(state="answered") if answered_step else RecordedAnswer()
     wait["checked_at"] = _now().isoformat()
     _set_wait(cp, wait)
-    seq = (cp.payload or {}).get("segment_seq")
-    segment = next(s for s in segments if s.seq == seq)
     if record.answered:
         if record.verdict is None:
             # Never guessed: shown in the Inbox, and read again next time.
@@ -2788,7 +3004,9 @@ async def _watch_wait(
         await _take_answer(db, run, cp, segment, segments, wf, wait, record)
         return
     if answered_step:
-        return  # the record lags the step: read again next time
+        # The record lags the step: answered, not read yet (W5), held; read again.
+        _unread(run, cp, segment, wf, wait, "SwarmCloud's record does not show the answer yet")
+        return
     if status.terminal:
         await _wait_ended(db, run, wf, status, segments)
 
@@ -3020,6 +3238,67 @@ def _unreadable(
         )
 
 
+def _unread_console(
+    run: Run,
+    segment: RunSegment,
+    wf: dict[str, Any] | None,
+    wait: dict[str, Any],
+    why: str,
+    *,
+    by: str | None = None,
+    at: str | None = None,
+    via: str | None = None,
+) -> dict[str, Any]:
+    """What the Inbox shows of a wait answered in SwarmCloud that Oracle has not read
+    yet (``needs: unread``)."""
+    round_ = int(wait.get("round") or 1)
+    entry = (_plan_entry(wf, segment.seq) or {}) if wf is not None else {}
+    earlier = wait.get("console") or {}
+    console = _console_record(
+        run, segment, RecordedAnswer(), None, round_ <= len(entry.get("revises") or [])
+    )
+    console.update(
+        answered_by=by or earlier.get("answered_by"),
+        answered_at=at or earlier.get("answered_at"),
+        via=via or earlier.get("via"),
+        counted=None,
+        reason=f"Oracle has not read the recorded answer yet: {why}",
+        needs="unread",
+        seen_at=earlier.get("seen_at") or console["seen_at"],
+    )
+    return console
+
+
+def _unread(
+    run: Run,
+    cp: Checkpoint,
+    segment: RunSegment,
+    wf: dict[str, Any],
+    wait: dict[str, Any],
+    why: str,
+) -> None:
+    """W5 (owner, 2026-10-19): the wait was answered (its step SUCCEEDED) and Oracle
+    cannot read the answer yet (SwarmCloud errors, a 404, a lagging record): it counts as
+    unconfirmed, so the run's token is read-only until the answer is read, and the Inbox
+    shows the checkpoint waiting to read it. Read again on every tick; once read, the
+    approver rule applies. An answer already shown (one that did not count, or could not
+    be read) stays as it is."""
+    needs = (wait.get("console") or {}).get("needs")
+    if needs not in (None, "unread"):
+        return
+    wait["console"] = _unread_console(run, segment, wf, wait, why)
+    _set_wait(cp, wait)
+    if needs is None:
+        round_ = int(wait.get("round") or 1)
+        _note(
+            segment,
+            f"{cp.kind} (round {round_}) was answered in SwarmCloud, and Oracle cannot read "
+            f"the answer yet ({_clip(why)}). Until it does, the run's agents may read Oracle "
+            "but not write to it; Oracle reads it again on every tick, then applies the "
+            "approver rule.",
+        )
+
+
 def _recorded(
     record: RecordedAnswer, by: str | None, at: str | None, via: str | None, ours: bool
 ) -> dict[str, Any]:
@@ -3218,6 +3497,9 @@ async def decide_checkpoint(
         except _PostNotFound as exc:
             await _count_post_404(db, run_id, cp.id, exc.cause)
             raise
+        except _Unread as exc:
+            await _hold_unread(db, run_id, cp.id, exc)
+            raise
         if posted:
             if _cancel_pending(run):
                 raise _unconfirmed("go on with the decision")
@@ -3244,6 +3526,62 @@ class _PostNotFound(Unavailable):
             f"SwarmCloud did not confirm the decision ({cause}); decide again, it is safe to repeat"
         )
         self.cause = cause
+
+
+class _Unread(Unavailable):
+    """The wait was answered (409 already_answered, or the answer the Inbox showed) and
+    Oracle cannot read the recorded answer: "decide again", nothing recorded, and the
+    run's token is held read-only until it is read (W5; :func:`_hold_unread`)."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        needs: str,
+        by: str | None = None,
+        at: str | None = None,
+        via: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.needs, self.by, self.at, self.via = needs, by, at, via
+
+
+async def _hold_unread(
+    db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID, exc: _Unread
+) -> None:
+    """W5 (owner, 2026-10-19): an answered checkpoint Oracle cannot read yet counts as
+    unconfirmed. The decision itself rolls back; the hold is written on its own (the
+    checkpoint shows in the Inbox waiting to read the answer, the tick reads it again),
+    unless the checkpoint already shows what the console recorded."""
+    await db.rollback()
+    run = await _get_run(db, run_id, lock=True)
+    cp = await db.scalar(
+        select(Checkpoint).where(Checkpoint.id == checkpoint_id, Checkpoint.run_id == run.id)
+    )
+    wait = dict(((cp.payload or {}).get("wait") or {}) if cp is not None else {})
+    if cp is None or cp.status != "pending" or not wait:
+        return
+    if ((wait.get("console") or {}).get("needs")) not in (None, "unread"):
+        return
+    segments = await _segments(db, run.id)
+    segment = next((s for s in segments if s.seq == (cp.payload or {}).get("segment_seq")), None)
+    if segment is None:
+        return
+    why = "SwarmCloud did not serve it" if exc.needs == "unread" else "its verdict is unreadable"
+    console = _unread_console(
+        run, segment, _live(run), wait, why, by=exc.by, at=exc.at, via=exc.via
+    )
+    if exc.needs == "unreadable":
+        console.update(reason="the recorded verdict could not be read", needs="unreadable")
+    wait["console"] = console
+    _set_wait(cp, wait)
+    _note(
+        segment,
+        f"{cp.kind} was already answered in SwarmCloud, and Oracle could not read the answer "
+        f"({why}). Until it does, the run's agents may read Oracle but not write to it; "
+        "Oracle reads it again on every tick, and an approver may decide again.",
+    )
+    await db.commit()
 
 
 async def _count_post_404(
@@ -3295,7 +3633,7 @@ def _console_choice(
         if console.get("revise"):
             return "changes_requested", with_note, False
         return "confirm", None, False
-    if needs not in ("redo_or_continue", "unreadable"):
+    if needs not in ("redo_or_continue", "unreadable", "unread"):
         raise Invalid(
             f"{choice} answers a change request recorded in SwarmCloud's console that the "
             "workflow has no revision step for (or one Oracle could not read); there is none "
@@ -3485,10 +3823,14 @@ async def _already_answered(
     approved = verdict == MERGE
     if record.verdict is None and not approved:
         title = _flow(run).segment(segment.name).title
-        raise Unavailable(
+        raise _Unread(
             f"SwarmCloud says {cp.kind} was already answered, but Oracle could not read the "
             f"recorded verdict ({artifact}); decide again, it is safe to repeat, or choose "
-            f"Redo from '{title}' to run it again as a new workflow"
+            f"Redo from '{title}' to run it again as a new workflow",
+            needs="unreadable" if record.answered else "unread",
+            by=by,
+            at=at,
+            via=via,
         )
     wait.pop("console", None)
     wait["recorded"] = _recorded(record, by, at, via, ours)
@@ -3589,9 +3931,11 @@ async def _read_recorded(
             record = await get_runtime().answer_record(wf["id"], wait["step_id"], artifact)
         except RuntimeUnavailable as read:
             if read.retryable:
-                raise Unavailable(
+                # Answered, not read yet (W5): held until it is (decide_checkpoint).
+                raise _Unread(
                     f"SwarmCloud says {cp.kind} was already answered but did not show the "
-                    f"answer ({read}); decide again, it is safe to repeat"
+                    f"answer ({read}); decide again, it is safe to repeat",
+                    needs="unread",
                 ) from None
             record = RecordedAnswer()
         if record.verdict is not None:
@@ -3709,32 +4053,63 @@ def _cancel_stuck(run: Run) -> dict[str, Any] | None:
 
 
 async def _stop_cancelling(db: AsyncSession, run: Run) -> bool:
-    """Cancel from the Inbox on a cancel stuck on 404s: Oracle stops trying (noted)."""
+    """Stop cancelling a workflow whose cancel is stuck on 404s (P3d, owner 2026-10-19):
+    the cancel calls stop and the Inbox item clears, but the workflow is never detached
+    from the run's spend. It goes on ``searches`` with its id, so its status and cost are
+    still read (every :data:`STUCK_LOOKUP_SECONDS`) until SwarmCloud says it ended, its
+    cost counted in the run's spend against the ceiling. The run itself goes on (a new
+    workflow may follow) or stays as it is."""
     wf = _cancel_stuck(run)
     if wf is None:
         return False
     pending = wf.get("cancel_pending") or {}
-    gone = (
-        f"An approver stopped cancelling workflow {wf.get('id')}: SwarmCloud answered HTTP 404 "
-        f"{pending.get('not_found')} times without saying it does not exist "
-        f"({pending.get('error')}). If it still runs, cancel it in SwarmCloud's console; its "
-        "cost is what Oracle last read."
+    stopped = (
+        f"An approver stopped cancelling workflow {wf.get('id')}: SwarmCloud answered HTTP "
+        f"404 {pending.get('not_found')} times without saying it does not exist "
+        f"({pending.get('error')}). Oracle no longer cancels it, but keeps reading its status "
+        f"and cost every {_duration(STUCK_LOOKUP_SECONDS)} until it ends, and counts its "
+        "spend against the run's ceiling. If it still runs, cancel it in SwarmCloud's console."
     )
-    log.warning("run %s: %s", run.id, gone)
+    log.warning("run %s: %s", run.id, stopped)
+    _search_for(
+        run,
+        label=wf.get("label") or wf["id"],
+        seq=wf.get("start_seq"),
+        submitted_at=wf.get("submitted_at") or pending.get("since"),
+        until=_credential_end(wf),
+        why="stopped",
+        workflow_id=wf["id"],
+        cancel=False,
+    )
     segments = await _segments(db, run.id)
     target = next((s for s in segments if s.seq == wf.get("start_seq")), None)
     if target is not None or segments:
-        _note(target or segments[0], gone)
-    await _end_workflow(db, run, wf, pending.get("state") or "cancelled", gone=gone)
+        _note(target or segments[0], stopped)
+    await _end_workflow(db, run, wf, pending.get("state") or "cancelled", stopped=True)
     return True
+
+
+async def stop_cancelling(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
+    """Stop cancelling from the Inbox (a cancel stuck on 404s, whatever the run's state):
+    see :func:`_stop_cancelling`."""
+    run = await _get_run(db, run_id, lock=True)
+    if not _may_manage(principal, run):
+        raise Forbidden("Only an owner or the approver who created the run can stop this")
+    if not await _stop_cancelling(db, run):
+        raise RunError("nothing to stop: no cancel of this run waits on SwarmCloud's 404s")
+    await audit.record(db, principal, "run.cancel_stopped", "run", run.id, {})
+    await db.commit()
 
 
 async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
     """Cancel the run: its workflows are cancelled (a lost submission looked up first, and
     cancelled if it landed), its checkpoints skipped. SwarmCloud is called without the
     run's row lock; the run is then read again under it and changed as it is now (what
-    appeared meanwhile is called about under the lock). On a run whose cancel is stuck
-    on 404s (in the Inbox), Cancel stops trying."""
+    appeared meanwhile is called about under the lock, and a lookup is reused only for
+    the very submission it was made for: its label and when it was sent). A cancel stuck
+    on 404s is tried once more; still not confirmed, Oracle stops cancelling it and keeps
+    reading its cost (:func:`_stop_cancelling`). On an ended run, Cancel is Stop
+    cancelling."""
     run = await _get_run(db, run_id)
     if not _may_manage(principal, run):
         raise Forbidden("Only an owner or the approver who created the run can cancel it")
@@ -3744,32 +4119,31 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     # What to ask SwarmCloud, read without the lock.
     wf = _live(run)
     ids: list[str] = []
-    if wf is not None and wf.get("id") and _cancel_stuck(run) is None:
-        ids.append(wf["id"])
-    lookups: dict[str, str | None] = {}
+    if wf is not None and wf.get("id") and run.status not in FINAL:
+        ids.append(wf["id"])  # a stuck cancel too: one more try
+    lookups: dict[tuple[str, str | None], str | None] = {}
     for s in await _segments(db, run.id):
         lost = _art(s).get("lost")
         if s.status == "running" and s.swarm_workflow_id:
             ids.append(s.swarm_workflow_id)
         elif s.status == "pending" and isinstance(lost, dict) and lost.get("label"):
-            lookups[lost["label"]] = lost.get("submitted_at")
+            lookups[(lost["label"], lost.get("submitted_at"))] = lost.get("submitted_at")
     await db.rollback()
-    found: dict[str, str | None | RuntimeUnavailable] = {}
-    for label, since in lookups.items():
+    found: dict[tuple[str, str | None], str | None | RuntimeUnavailable] = {}
+    for key, since in lookups.items():
         try:
-            found[label] = await runtime.find_by_label(label, since=_parse_at(since))
+            found[key] = await runtime.find_by_label(key[0], since=_parse_at(since))
         except RuntimeUnavailable as exc:
-            log.warning("run %s: looking up %s: %s", run_id, label, exc)
-            found[label] = exc
-        if isinstance(found[label], str):
-            ids.append(found[label])  # type: ignore[arg-type]
+            log.warning("run %s: looking up %s: %s", run_id, key[0], exc)
+            found[key] = exc
+        if isinstance(found[key], str):
+            ids.append(found[key])  # type: ignore[arg-type]
     done = {i: await _cancel_call({"id": i}) for i in dict.fromkeys(ids)}
 
     # Under the lock, as the run is now.
     run = await _get_run(db, run_id, lock=True)
-    stopped = await _stop_cancelling(db, run)
     if run.status in FINAL:
-        if not stopped:
+        if not await _stop_cancelling(db, run):
             raise RunError(f"run is already {run.status}")
         await audit.record(db, principal, "run.cancel_stopped", "run", run.id, {})
         await db.commit()
@@ -3789,29 +4163,71 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                 out = done.get(s.swarm_workflow_id) or await _cancel_call(
                     {"id": s.swarm_workflow_id}
                 )
+                if out.final is not None:
+                    _cost_on(
+                        run, segments, {"seq": s.seq, "id": s.swarm_workflow_id}, out.final.cost_usd
+                    )
                 if out.error is not None and not out.ended and not out.gone:
                     s.error = f"cancel not confirmed by the runtime: {_shown(out.error)}"
+                    # Not attached (one workflow is): cancelled and costed in the
+                    # background until SwarmCloud confirms.
+                    label = (_current_attempt(_art(s), s).get("label")) or s.swarm_workflow_id
+                    _search_for(
+                        run,
+                        label=label,
+                        seq=s.seq,
+                        submitted_at=None,
+                        until=None,
+                        why="cancel",
+                        workflow_id=s.swarm_workflow_id,
+                    )
             s.status = "cancelled"
             s.finished_at = _now()
         elif s.status == "pending":
             lost = _art(s).get("lost")
-            if wf is None and isinstance(lost, dict) and lost.get("label"):
+            if isinstance(lost, dict) and lost.get("label"):
                 # A submission whose answer was lost may have landed: found, it is
-                # cancelled; not looked up yet, the tick looks again and cancels it.
+                # cancelled; not looked up yet, the tick looks again and cancels it. Never
+                # left behind: what cannot be attached is searched for in the background.
                 label, since = lost["label"], lost.get("submitted_at")
-                result = found.get(label)
-                if label not in found:
-                    # Lost since Oracle looked: looked up now.
+                key = (label, since)
+                if key in found:
+                    result = found[key]
+                else:
+                    # Lost since Oracle looked (or sent again under the same label): the
+                    # earlier lookup says nothing of it, so it is looked up now.
                     try:
                         result = await runtime.find_by_label(label, since=_parse_at(since))
                     except RuntimeUnavailable as exc:
                         result = exc
-                until = lost.get("expires_at")
-                if isinstance(result, RuntimeUnavailable):
-                    wf = _attach_for_cancel(run, s, None, label, since, until)
-                elif result:
-                    wf = _attach_for_cancel(run, s, result, label, since, until)
-                    _adopt(segments, wf)
+                until = _credential_end(lost)
+                if isinstance(result, str):
+                    if wf is None:
+                        wf = _attach_for_cancel(run, s, result, label, since, until)
+                        _adopt(segments, wf)
+                    else:
+                        _add_attempt(s, result, label, "cancelled", mode=lost.get("mode"))
+                        _search_for(
+                            run,
+                            label=label,
+                            seq=s.seq,
+                            submitted_at=since,
+                            until=until,
+                            why="cancel",
+                            workflow_id=result,
+                        )
+                elif result is not None:  # neither found nor ruled out
+                    if wf is None:
+                        wf = _attach_for_cancel(run, s, None, label, since, until)
+                    else:
+                        _search_for(
+                            run,
+                            label=label,
+                            seq=s.seq,
+                            submitted_at=since,
+                            until=until,
+                            why="cancel",
+                        )
             s.status = "cancelled"
     for cp in await _checkpoints(db, [run.id]):
         if cp.status == "pending":
@@ -3820,8 +4236,10 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
             cp.decided_at = _now()
     _set_knob(run, "stuck_lookup", None)
     # A cancel SwarmCloud does not confirm leaves the workflow attached: the tick cancels
-    # it again and counts its cost.
+    # it again and counts its cost. One stuck on 404s that this one more try did not
+    # confirm either: Oracle stops cancelling it, and keeps reading its cost.
     await _finish(db, run, "cancelled", state="cancelled", done=done)
+    await _stop_cancelling(db, run)
     if _cancel_pending(run) and segments:
         _note(
             segments[0],
@@ -3849,10 +4267,25 @@ async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     segment = next((s for s in await _segments(db, run.id) if s.seq == stuck.get("seq")), None)
     lost = _art(segment).get("lost") if segment is not None else None
     if segment is None or segment.status != "pending" or not isinstance(lost, dict):
+        # Resolved, as read without the lock: checked again under it before the marker
+        # is cleared (the tick may have lost the submission again meanwhile).
         run = await _get_run(db, run_id, lock=True)
-        _set_knob(run, "stuck_lookup", None)
-        await db.commit()
-        raise RunError("nothing waits for a retry: the submission was resolved")
+        now = (run.knobs or {}).get("stuck_lookup")
+        segment = next(
+            (s for s in await _segments(db, run.id, fresh=True) if s.seq == (now or {}).get("seq")),
+            None,
+        )
+        lost = _art(segment).get("lost") if segment is not None else None
+        if now == stuck and (
+            segment is None or segment.status != "pending" or not isinstance(lost, dict)
+        ):
+            _set_knob(run, "stuck_lookup", None)
+            await db.commit()
+            raise RunError("nothing waits for a retry: the submission was resolved")
+        await db.rollback()
+        raise RunError(
+            "nothing was retried: the run changed while Oracle read it; look at it again"
+        )
     label, since = lost["label"], lost.get("submitted_at")
     await db.rollback()
     runtime = get_runtime()
@@ -3894,7 +4327,7 @@ async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
             label=label,
             seq=segment.seq,
             submitted_at=since,
-            until=lost.get("expires_at"),
+            until=_credential_end(lost),
             why="retry",
         )
         _note_art(
@@ -4028,14 +4461,20 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
 
     approvals = [_summary(r, refs, None) for r in waiting_runs if r.status == "awaiting_approval"]
     overruns = [_summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"]
-    # Lost submissions past the lookup cap (Retry or Cancel), and cancels or answer posts
-    # past NOT_FOUND_TRIES 404s (Cancel), by those who manage the run.
+    # Lost submissions past the lookup cap (Retry or Cancel), cancels past NOT_FOUND_TRIES
+    # 404s (Stop cancelling), answer posts past them (Cancel), and searched workflows past
+    # them (shown), by those who manage the run.
     live = Run.knobs["workflow"]["state"].astext == "live"
     stuck_runs = [
         r
         for r in await db.scalars(
             select(Run)
-            .where(Run.knobs.has_key("stuck_lookup") | Run.knobs.has_key("post_404") | live)
+            .where(
+                Run.knobs.has_key("stuck_lookup")
+                | Run.knobs.has_key("post_404")
+                | Run.knobs.has_key("searches")
+                | live
+            )
             .order_by(Run.created_at)
         )
         if _may_manage(principal, r) and _stuck(r)

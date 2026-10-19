@@ -210,7 +210,8 @@ class ConsoleAnswer(BaseModel):
     """What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):
     an answer that does not count (its answerer is not an Oracle member with the
     checkpoint's role), a counted change request the workflow had no revision step for,
-    or an answer Oracle could not read."""
+    an answer Oracle could not read, or one it has not read yet (``unread``: SwarmCloud
+    errors, a 404 or a lagging record; read again on every tick)."""
 
     answered_by: str | None = None
     on_behalf_of: str | None = None
@@ -223,8 +224,9 @@ class ConsoleAnswer(BaseModel):
     # Why it does not count, or why it cannot be read.
     reason: str | None = None
     # What an approver does: confirm it (or approve / request changes), choose Redo from
-    # the segment or Continue, or decide over an answer Oracle cannot read.
-    needs: Literal["confirm", "redo_or_continue", "unreadable"]
+    # the segment or Continue, or decide over an answer Oracle cannot read (or has not
+    # read yet: the run's token is read-only until it is).
+    needs: Literal["confirm", "redo_or_continue", "unreadable", "unread"]
     # The workflow has a revision step for a change request here.
     revise: bool = False
     # Redo: the segment that runs again as a new workflow, and its estimate (one more).
@@ -278,12 +280,18 @@ class RunSummary(BaseModel):
     error: str | None = None
     # What the Inbox says of a run waiting for its owner or creator: a lost submission
     # Oracle could neither find nor rule out past the lookup cap (Retry and Cancel;
-    # ``can_retry``), or a cancel or an answer post SwarmCloud keeps answering with a 404
-    # that proves nothing (Cancel only).
+    # ``can_retry``), a cancel SwarmCloud keeps answering with a 404 that proves nothing
+    # (Stop cancelling: ``can_stop_cancelling``; Cancel on a run not ended), an answer
+    # post answered so (Cancel), or a workflow given up on that SwarmCloud answers so
+    # about (shown).
     stuck: str | None = None
     can_retry: bool = False
-    # Submissions given up on (Retry, or Cancel past the lookup cap) that Oracle still
-    # looks for, to cancel them and count their cost if they landed.
+    # Stop cancelling: Oracle stops the cancel calls, and keeps reading the workflow's
+    # status and cost until it ends, counted against the run's ceiling (P3d).
+    can_stop_cancelling: bool = False
+    # Work given up on that Oracle still checks: submissions it looks for (Retry, or
+    # Cancel past the lookup cap), to cancel them and count their cost if they landed,
+    # and workflows it stopped cancelling, whose cost it reads until they end.
     searching: str | None = None
 
 

@@ -160,6 +160,19 @@ class FakeSwarmCloud:
         # Refuse this many reads of a workflow (503) once a cancel was confirmed.
         self.fail_reads_after_cancel = 0
         self._failing_reads = 0
+        # Round 6. Answer only the cancel route with a bare HTML 404 (reads still work).
+        self.html_404_cancel = False
+        # Answer every call about these workflows with a bare HTML 404.
+        self.html_404_ids: set[str] = set()
+        # Answer this many reads of a workflow with SwarmCloud's enveloped not_found once
+        # a cancel was confirmed (it forgot the workflow, for a while).
+        self.gone_reads_after_cancel = 0
+        self._gone_reads = 0
+        # Answer every read of a waiting step's form artifact with this status and a bare
+        # body, not SwarmCloud's envelope (a proxy's 502, a bare 404), while set.
+        self.form_status: int | None = None
+        # Serve the record of an answered wait as still waiting (a lagging record).
+        self.lag_records = False
         self.step_failure: dict[str, tuple[str, str]] = {}  # step_id -> (code, message)
         self._n = 0
 
@@ -227,11 +240,17 @@ class FakeSwarmCloud:
                 return _err(503, "unavailable", "the task listing is unavailable")
             return self._tasks(request.url.params)
         m = re.fullmatch(r"/v1/workflows/([^/]+)(/cancel|/steps/([^/]+)/input)?", path)
-        if m and self.html_404:
+        if m and (self.html_404 or m[1] in self.html_404_ids):
+            return httpx.Response(404, text="<html><body>Not Found</body></html>")
+        if m and m[2] == "/cancel" and self.html_404_cancel:
+            self.cancels.append(m[1])
             return httpx.Response(404, text="<html><body>Not Found</body></html>")
         if m and not m[2] and method == "GET" and self._failing_reads > 0:
             self._failing_reads -= 1
             return _err(503, "unavailable", "try again later")
+        if m and not m[2] and method == "GET" and self._gone_reads > 0:
+            self._gone_reads -= 1
+            return _err(404, "not_found", "no such workflow")
         if m:
             wf = self.workflows.get(m[1])
             if wf is None:
@@ -250,6 +269,8 @@ class FakeSwarmCloud:
                 return _err(404, "not_found", "no such task")
             if m[2]:
                 name = request.url.params["name"]
+                if step.await_input and self.form_status is not None:
+                    return httpx.Response(self.form_status, text="<html>upstream error</html>")
                 if name not in step.files:
                     return _err(404, "not_found", "no such artifact")
                 return httpx.Response(200, text=step.files[name])
@@ -493,6 +514,7 @@ class FakeSwarmCloud:
             return _err(409, "not_cancellable", f"workflow is {wf.state}")
         wf.state = "CANCELLED"
         self._failing_reads = self.fail_reads_after_cancel
+        self._gone_reads = self.gone_reads_after_cancel
         for s in wf.steps:
             if s.state in ("PENDING", "RUNNING", "PARKED"):
                 if s.state == "PARKED" and s.await_input:
@@ -509,6 +531,8 @@ class FakeSwarmCloud:
             self.fail_input_reads -= 1
             reason = "unavailable" if self.fail_input_status >= 500 else "not_a_member"
             return _err(self.fail_input_status, reason, "cannot read the wait")
+        if method == "GET" and self.lag_records and step.answer is not None:
+            return httpx.Response(200, json={"state": "waiting", "answer": None})
         if method == "GET":
             # The record only: who, when, via, the form's hash and size, never the payload.
             return httpx.Response(200, json={"state": step.answer_state, "answer": step.answer})

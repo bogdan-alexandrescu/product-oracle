@@ -8804,6 +8804,58 @@
         }
       }
     },
+    "/v1/runs/{run_id}/stop-cancelling": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Stop Cancelling Run",
+        "description": "Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that\nproves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox\nitem clears, but Oracle keeps reading the workflow's status and cost in the\nbackground until it ends, and counts its spend against the run's ceiling (P3d).",
+        "operationId": "stop_cancelling_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide": {
       "post": {
         "tags": [
@@ -11290,7 +11342,8 @@
             "enum": [
               "confirm",
               "redo_or_continue",
-              "unreadable"
+              "unreadable",
+              "unread"
             ],
             "title": "Needs"
           },
@@ -11332,7 +11385,7 @@
           "needs"
         ],
         "title": "ConsoleAnswer",
-        "description": "What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):\nan answer that does not count (its answerer is not an Oracle member with the\ncheckpoint's role), a counted change request the workflow had no revision step for,\nor an answer Oracle could not read."
+        "description": "What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):\nan answer that does not count (its answerer is not an Oracle member with the\ncheckpoint's role), a counted change request the workflow had no revision step for,\nan answer Oracle could not read, or one it has not read yet (``unread``: SwarmCloud\nerrors, a 404 or a lagging record; read again on every tick)."
       },
       "DeckOut": {
         "properties": {
@@ -17956,6 +18009,11 @@
             "title": "Can Retry",
             "default": false
           },
+          "can_stop_cancelling": {
+            "type": "boolean",
+            "title": "Can Stop Cancelling",
+            "default": false
+          },
           "searching": {
             "anyOf": [
               {
@@ -18366,6 +18424,11 @@
           "can_retry": {
             "type": "boolean",
             "title": "Can Retry",
+            "default": false
+          },
+          "can_stop_cancelling": {
+            "type": "boolean",
+            "title": "Can Stop Cancelling",
             "default": false
           },
           "searching": {
