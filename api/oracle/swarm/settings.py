@@ -10,8 +10,9 @@ ORACLE_SWARMCLOUD_TOKEN         the static bearer, for ``bearer``
 ORACLE_SWARMCLOUD_AUDIENCE      the ID token audience, for ``google_id_token``
 ORACLE_SWARMCLOUD_PROFILE       runner profile for agent steps (default claude-code)
 ORACLE_SWARMCLOUD_PRINCIPAL     Oracle's principal as SwarmCloud records it on an answer
-                                (e.g. oracle-api@<project>.iam.gserviceaccount.com); with
-                                google_id_token auth, the token's email claim when unset.
+                                (e.g. oracle-api@<project>.iam.gserviceaccount.com); when
+                                unset, resolved from the token: an ID token's or JWT
+                                bearer's email claim, an access token's service account.
                                 Only an answer recorded as this principal's is Oracle's
 ORACLE_PUBLIC_URL               where agents reach Oracle (its /mcp endpoint)
 ORACLE_RUN_TOKEN_TTL_SECONDS    lifetime of a segment's run token while it is not sent to

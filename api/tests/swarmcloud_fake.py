@@ -133,6 +133,9 @@ class FakeSwarmCloud:
         # Transient cancel failures (503, nothing cancelled), one per cancel call.
         self.fail_cancels = 0
         self.cancels: list[str] = []  # cancel calls, confirmed or not
+        # Refuse this many reads of a wait (GET .../input) with this status.
+        self.fail_input_reads = 0
+        self.fail_input_status = 503
         # Refuse the next MCP server registration write without recording it.
         self.fail_next_server_write: httpx.Response | None = None
         # Agent steps run per poll (None: all that can).
@@ -390,6 +393,7 @@ class FakeSwarmCloud:
         *,
         by: str = "reviewer@example.com",
         answer_id: str | None = None,
+        on_behalf_of: str | None = None,
     ) -> None:
         """A person answers in SwarmCloud's console (``answer_id``: any id they give)."""
         wf = self.workflows[workflow_id]
@@ -403,6 +407,7 @@ class FakeSwarmCloud:
                 "answer_id": answer_id or f"console-{step.task_id}",
                 "payload": {"verdict": verdict, "findings": findings or []},
                 "via": "console",
+                "on_behalf_of": on_behalf_of,
             },
             by=by,
         )
@@ -459,6 +464,10 @@ class FakeSwarmCloud:
         step = next((s for s in wf.steps if s.step_id == step_id), None)
         if step is None or step.await_input is None:
             return _err(404, "not_found", "no such waiting step")
+        if method == "GET" and self.fail_input_reads > 0:
+            self.fail_input_reads -= 1
+            reason = "unavailable" if self.fail_input_status >= 500 else "not_a_member"
+            return _err(self.fail_input_status, reason, "cannot read the wait")
         if method == "GET":
             # The record only: who, when, via, the form's hash and size, never the payload.
             return httpx.Response(200, json={"state": step.answer_state, "answer": step.answer})

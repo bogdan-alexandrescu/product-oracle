@@ -192,16 +192,24 @@ What Oracle does with an answer (adapter v2 review fixes, 2026-10-19):
 | 409 `already_answered`, recorded MERGE, the Inbox requests changes | a correction (the revision never ran): the workflow is cancelled and the run continues as a new workflow carrying it; noted |
 | 409 `already_answered`, the recorded verdict cannot be read | read again; still unreadable: "decide again", never a correction |
 | either, `answer_id` not Oracle's, or not recorded as Oracle's principal via `mcp` | also noted: who answered, via what, and that it was decided outside Oracle |
-| answered in SwarmCloud's console while the run waits | the tick reads the wait at most once a minute, records the answer (who, via, when, verdict, findings) as the checkpoint's decision and follows it; a change request where the workflow has no revise step re-runs the segment as a new workflow |
+| answered in SwarmCloud's console while the run waits, by an Oracle member whose role meets the checkpoint's approver role (matched by `answered_by`, never `on_behalf_of`; W5) | the tick reads the wait at most once a minute, records the answer (who, via, when, verdict, findings) as the checkpoint's decision and follows it |
+| answered there by anyone else (not a member, or a member below the approver role) | recorded ("answered in SwarmCloud by ..."); the checkpoint stays open in the Inbox showing it, for an approver to Confirm it, approve or request changes |
+| a counted console NOT_YET where the workflow has no revise step (an earlier checkpoint) | never re-run on its own: the checkpoint stays open with the findings, and an approver chooses Redo from the segment (cancel, re-run as a new workflow with the findings: one more segment, its estimate shown) or Continue (follow the workflow, the note recorded) |
+| answered, and the verdict cannot be read (form missing or over 256 KB, the record refused) | shown in the Inbox and read again each minute; an approval is followed (it needs nothing the workflow did not do), a change request says "decide again", and Redo runs the segment again as a new workflow |
 | 409 `not_open`, `expired`, `cancelled` | the wait is closed: cancel, continue as a new workflow with the decision |
 | 403 `person_required` | service answers recorded as off until SwarmCloud reports them on (or Oracle's API restarts); cancel, continue as a new workflow (today's flow); later runs keep checkpoints in the Inbox |
 | other refusals (403, 404, 422) | not posted: cancel, continue as a new workflow, with a note |
 | 503, 429, timeout | nothing recorded: "decide again" (the same answer replays) |
 
-No case runs a segment in two workflows: a workflow is cancelled before its successor is
-submitted, and a cancel SwarmCloud does not confirm holds the successor back. The
-workflow stays attached (`cancel_pending`), its cost counted in the run's spend, and
-every tick cancels it again; an Inbox decision that needs the cancel says "decide again".
-The spend ceiling is checked while a run waits on a checkpoint too. **Tail rule:** a decision is posted only when the credential left covers the
+No case runs a segment in two workflows unless an approver chose Redo: a workflow is
+cancelled before its successor is submitted, and a cancel SwarmCloud does not confirm
+holds the successor back. The workflow stays attached (`cancel_pending`), its run token
+revoked, its cost counted in the run's spend, and every tick cancels it again (a 404 ends
+that, recorded); an Inbox decision that needs the cancel says "decide again". A confirmed
+cancel reads the workflow's final cost. The spend ceiling is checked on every tick before
+anything that follows an answer or submits (a wait SwarmCloud does not serve is read
+again next tick, the cost reading kept), and before every submission. A submission whose
+answer was lost is looked up before anything is resubmitted; a lookup that cannot finish
+holds it, and cancelling the run cancels it if it landed. **Tail rule:** a decision is posted only when the credential left covers the
 agent steps that follow the wait (`ORACLE_STEP_SECONDS` x their count, at least
 `ORACLE_CHECKPOINT_TAIL_SECONDS`); otherwise the run continues as a new workflow.

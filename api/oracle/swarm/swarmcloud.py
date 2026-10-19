@@ -38,6 +38,7 @@ the reason, when there is one, is what a refusal means.
 """
 
 import asyncio
+import json
 import logging
 import re
 import time
@@ -90,6 +91,9 @@ METADATA_IDENTITY_URL = (
 METADATA_TOKEN_URL = (
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
 )
+METADATA_EMAIL_URL = (
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email"
+)
 
 _STATES: dict[str, WorkflowState] = {
     "SUCCEEDED": "succeeded",
@@ -111,6 +115,11 @@ class StaticBearer:
 
     async def header(self, client: httpx.AsyncClient) -> str:
         return f"Bearer {self.token}"
+
+    @property
+    def email(self) -> str | None:
+        """The principal a JWT bearer names (its email claim); None for an opaque one."""
+        return _email_claim(self.token)
 
 
 @dataclass
@@ -158,6 +167,20 @@ class GoogleAccessToken:
     url: str = METADATA_TOKEN_URL
     _token: str | None = field(default=None, repr=False)
     _expires_at: float = 0.0
+    # The service account the token is for, from the metadata server once asked.
+    email: str | None = None
+    email_url: str = METADATA_EMAIL_URL
+
+    async def identity(self, client: httpx.AsyncClient) -> str | None:
+        """The service account whose token this is (who SwarmCloud records)."""
+        if self.email is None:
+            try:
+                resp = await client.get(self.email_url, headers={"Metadata-Flavor": "Google"})
+            except httpx.HTTPError:
+                return None
+            text = resp.text.strip() if resp.status_code == 200 else ""
+            self.email = text if "@" in text and len(text) <= 254 else None
+        return self.email
 
     async def header(self, client: httpx.AsyncClient) -> str:
         if self._token is None or time.time() > self._expires_at - 300:
@@ -178,6 +201,15 @@ class GoogleAccessToken:
             self._token = token
             self._expires_at = time.time() + ttl
         return f"Bearer {self._token}"
+
+
+def _email_claim(token: str) -> str | None:
+    try:
+        claims = jwt.decode(token, options={"verify_signature": False})
+    except jwt.PyJWTError:
+        return None
+    email = claims.get("email") if isinstance(claims, dict) else None
+    return email if isinstance(email, str) and email else None
 
 
 def auth_from_settings(settings: RuntimeSettings) -> Auth:
@@ -289,7 +321,8 @@ class SwarmCloudRuntime:
         # caller MCP is known to work (reads alone do not show it).
         self._mcp_works = False
         # Oracle's own principal in SwarmCloud (who a service answer is recorded as):
-        # ORACLE_SWARMCLOUD_PRINCIPAL, else the ID token's email claim once minted.
+        # ORACLE_SWARMCLOUD_PRINCIPAL, else resolved from the token (an ID token's or JWT
+        # bearer's email claim, an access token's service account).
         self._principal = principal
 
     @classmethod
@@ -308,6 +341,16 @@ class SwarmCloudRuntime:
     @property
     def principal(self) -> str | None:
         return self._principal or getattr(self._auth, "email", None)
+
+    async def _resolve_principal(self, client: httpx.AsyncClient) -> str | None:
+        """Oracle's principal, resolved from the token when no setting names it."""
+        if self.principal:
+            return self.principal
+        await self._auth.header(client)  # an ID token's email arrives with the token
+        identity = getattr(self._auth, "identity", None)
+        if not self.principal and identity is not None:
+            await identity(client)
+        return self.principal
 
     # ------------------------------------------------------------------ features
 
@@ -531,23 +574,7 @@ class SwarmCloudRuntime:
                 f"cannot reach SwarmCloud ({method} {path}): {type(exc).__name__}", lost=sent
             ) from None
         if resp.status_code >= 400:
-            # Redacted before anything keeps them: the code and the detail end up in a
-            # run's workflow state, its checkpoint's payload and its notes.
-            raw_code = _code(resp)
-            code = _redact(raw_code) if raw_code else None
-            detail = _detail(resp)
-            if code and code not in detail:
-                detail = f"{code}: {detail}" if detail else code
-            envelope = _json(resp).get("detail")
-            raise RuntimeUnavailable(
-                f"SwarmCloud refused {method} {path}: HTTP {resp.status_code} {detail}",
-                code=code,
-                status=resp.status_code,
-                # A 5xx may have landed (a submit is not idempotent) unless its reason is
-                # a refusal the contract names: those wrote nothing.
-                lost=resp.status_code >= 500 and code not in DEFINITE_REFUSALS,
-                detail=redact(envelope) if isinstance(envelope, dict) else None,
-            )
+            raise _refusal(resp, method, path)
         return resp
 
     def submission_body(self, spec: WorkflowSpec) -> dict[str, Any]:
@@ -622,14 +649,20 @@ class SwarmCloudRuntime:
         """The workflow whose steps carry ``oracle_key`` = ``label``, from Oracle's own
         tasks, newest first. Only ``submitted_by`` is sent: SwarmCloud applies it in the
         query, so pages are exact, while any other filter (state, runner_profile,
-        workflow_id) is applied after the cursor and pages come back short."""
+        workflow_id) is applied after the cursor and pages come back short.
+
+        None only when the listing ended without it; a search that could not finish (a
+        repeated cursor, an odd body, more pages than Oracle reads) raises, so that the
+        caller holds the submission and looks again instead of submitting a duplicate."""
         params: dict[str, str | int] = {"submitted_by": "me", "limit": TASK_PAGE}
         seen: set[str] = set()
         async with self._client() as client:
             for _ in range(MAX_TASK_PAGES):
                 body = _json(await self._call(client, "GET", "/v1/tasks", params=params))
                 rows = body.get("tasks", body.get("items"))
-                for row in rows if isinstance(rows, list) else []:
+                if not isinstance(rows, list):
+                    raise _inconclusive(label, "SwarmCloud's task listing had no rows")
+                for row in rows:
                     if not isinstance(row, dict):
                         continue
                     meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
@@ -640,13 +673,15 @@ class SwarmCloudRuntime:
                     return None
                 if token in seen:
                     log.warning("SwarmCloud repeated a task listing cursor; stopped looking")
-                    return None
+                    raise _inconclusive(label, "SwarmCloud repeated a task listing cursor")
                 seen.add(token)
                 params = {"submitted_by": "me", "limit": TASK_PAGE, "page_token": token}
         log.warning(
             "submission %s not among Oracle's last %d tasks", label, TASK_PAGE * MAX_TASK_PAGES
         )
-        return None
+        raise _inconclusive(
+            label, f"not among Oracle's last {TASK_PAGE * MAX_TASK_PAGES} tasks, not looked further"
+        )
 
     async def answer(
         self,
@@ -703,19 +738,19 @@ class SwarmCloudRuntime:
                 )
                 if task_id:
                     try:
-                        resp = await self._call(
+                        raw = await self._read_limited(
                             client,
-                            "GET",
                             f"/v1/tasks/{task_id}/artifacts/raw",
-                            params={"name": artifact},
+                            {"name": artifact},
+                            MAX_FORM_BYTES,
                         )
-                        if len(resp.content) <= MAX_FORM_BYTES:
-                            form = resp.json()
+                        form = json.loads(raw) if raw is not None else None
                     except RuntimeUnavailable as exc:
                         if exc.retryable:
                             raise
                     except ValueError:
                         form = None
+            principal = await self._resolve_principal(client)
         form = form if isinstance(form, dict) else {}
         verdict = form.get("verdict")
         items = form.get("findings") if isinstance(form.get("findings"), list) else []
@@ -726,7 +761,6 @@ class SwarmCloudRuntime:
             return _redact(str(value)) if isinstance(value, str | int) and value != "" else None
 
         answered_by, via = text("answered_by"), text("via")
-        principal = self.principal
         return RecordedAnswer(
             answer_id=text("answer_id"),
             answered_by=answered_by,
@@ -734,11 +768,50 @@ class SwarmCloudRuntime:
             answered_at=_parse_time(record.get("answered_at")),
             via=via,
             verdict=verdict if verdict in (MERGE, NOT_YET) else None,
-            findings=tuple(_redact(str(f)) for f in findings[:MAX_FINDINGS]),
+            # Whole: they go to the agents as the change request (only logs are clipped).
+            findings=tuple(redact_whole(str(f)) for f in findings[:MAX_FINDINGS]),
             state=_redact(state) if state else ("answered" if record else None),
             # Posted by Oracle: its own principal, through the channel it posts with.
             by_oracle=bool(principal) and answered_by == principal and via == "mcp",
         )
+
+    async def _read_limited(
+        self, client: httpx.AsyncClient, path: str, params: dict[str, str], limit: int
+    ) -> bytes | None:
+        """A GET body of at most ``limit`` bytes, streamed: None, without reading on,
+        when its Content-Length or the bytes received pass the limit."""
+        headers = {"Authorization": await self._auth.header(client)}
+        request = client.build_request("GET", path, params=params, headers=headers)
+        try:
+            resp = await client.send(request, stream=True)
+        except httpx.HTTPError as exc:
+            sent = not isinstance(exc, httpx.ConnectError | httpx.ConnectTimeout)
+            raise RuntimeUnavailable(
+                f"cannot reach SwarmCloud (GET {path}): {type(exc).__name__}", lost=sent
+            ) from None
+        body = bytearray()
+        try:
+            declared = resp.headers.get("content-length", "")
+            if declared.isdigit() and int(declared) > limit:
+                return None
+            async for chunk in resp.aiter_bytes():
+                body += chunk
+                if len(body) > limit:
+                    return None
+        except httpx.HTTPError as exc:
+            raise RuntimeUnavailable(
+                f"cannot read SwarmCloud's answer (GET {path}): {type(exc).__name__}", lost=True
+            ) from None
+        finally:
+            await resp.aclose()
+        if resp.status_code >= 400:
+            # A refusal: read as any other call's, from the bytes received.
+            raise _refusal(
+                httpx.Response(resp.status_code, headers=resp.headers, content=bytes(body)),
+                "GET",
+                path,
+            )
+        return bytes(body)
 
     async def whoami(self) -> dict[str, str | None]:
         # One deadline for the whole check (minting the token included): httpx's timeout
@@ -866,6 +939,29 @@ class SwarmCloudRuntime:
             await self._call(client, "POST", f"/v1/workflows/{workflow_id}/cancel")
 
 
+def _refusal(resp: httpx.Response, method: str, path: str) -> RuntimeUnavailable:
+    """A SwarmCloud error response as the exception every call raises."""
+    # Redacted before anything keeps them: the code and the detail end up in a run's
+    # workflow state, its checkpoint's payload and its notes.
+    raw_code = _code(resp)
+    code = _redact(raw_code) if raw_code else None
+    detail = _detail(resp)
+    if code and code not in detail:
+        detail = f"{code}: {detail}" if detail else code
+    envelope = _json(resp).get("detail")
+    return RuntimeUnavailable(
+        f"SwarmCloud refused {method} {path}: HTTP {resp.status_code} {detail}",
+        code=code,
+        status=resp.status_code,
+        # A 5xx may have landed (a submit is not idempotent) unless SwarmCloud's own
+        # envelope names a refusal the contract lists: those wrote nothing. A body that is
+        # not that envelope (a proxy's page) proves nothing.
+        lost=resp.status_code >= 500
+        and not (code in DEFINITE_REFUSALS and _enveloped(resp, raw_code)),
+        detail=redact(envelope) if isinstance(envelope, dict) else None,
+    )
+
+
 def mcp_server_body(url: str) -> dict[str, Any]:
     """Oracle's MCP server registration, exactly as the contract gives it."""
     return {
@@ -954,7 +1050,8 @@ def _code(resp: httpx.Response) -> str | None:
     """What a refusal means: ``detail.reason`` of SwarmCloud's envelope (``{"code",
     "message", "detail": {"reason", ...}}``), never overridden by message text (which may
     echo input); then, for a generic reason or none, the await-input switch named in the
-    message; then the top-level code."""
+    message; then a specific top-level code (``already_answered`` over a generic
+    ``conflict`` reason); then the generic reason or code."""
     body = _json(resp)
     detail = body.get("detail")
     holders = (detail if isinstance(detail, dict) else {}, body)
@@ -964,14 +1061,37 @@ def _code(resp: httpx.Response) -> str | None:
     messages = " ".join(str(h.get("message") or "") for h in holders)
     if _AWAIT_DISABLED.search(messages):
         return "await_input_disabled"
+    generic: str | None = None
     for keys in (("reason",), ("code", "error")):
         for holder in holders:
             for key in keys:
                 value = holder.get(key)
                 if isinstance(value, str) and value:
-                    return value
+                    if value not in GENERIC_REASONS:
+                        return value
+                    generic = generic or value
+    if generic:
+        return generic
     text = detail if isinstance(detail, str) else (body.get("message") or resp.text[:500])
     return _known_code(str(text))
+
+
+def _enveloped(resp: httpx.Response, code: str | None) -> bool:
+    """Whether ``code`` came from SwarmCloud's JSON envelope (its reason or code field),
+    not from text found in a body of another shape."""
+    try:
+        body = resp.json()
+    except ValueError:
+        return False
+    if not isinstance(body, dict) or not code:
+        return False
+    detail = body.get("detail") if isinstance(body.get("detail"), dict) else {}
+    return code in (detail.get("reason"), body.get("code"), body.get("error"))
+
+
+def _inconclusive(label: str, why: str) -> RuntimeUnavailable:
+    # Retryable (no HTTP status): the caller holds the submission and looks again.
+    return RuntimeUnavailable(f"looking up submission {label} was inconclusive: {why}")
 
 
 def _detail(resp: httpx.Response) -> str:
@@ -1002,6 +1122,12 @@ def redact(value: Any) -> Any:
     return _redact(str(value))
 
 
+def redact_whole(text: str) -> str:
+    """``text`` with credential-shaped strings withheld, not clipped: for what goes on to
+    the agents (a reviewer's findings), whose size the caller bounds."""
+    return _TOKEN_SHAPED.sub("<withheld>", text)
+
+
 def _redact(text: str) -> str:
     """Withhold credential-shaped strings from upstream text and keep 200 characters."""
     if len(text) > _DETAIL_SCAN_CHARS:
@@ -1023,7 +1149,8 @@ _TOKEN_SHAPED = re.compile(
     r"|ya29\.[A-Za-z0-9_.-]+"
     r"|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|x-access-token:[^@\s]+"
-    r"|\b(?:ort|po|poa)_[A-Za-z0-9_-]{8,}"
+    # Oracle's prefixes, also when joined to a word by an underscore (credential_ort_...).
+    r"|(?<![A-Za-z0-9])(?:ort|po|poa)_[A-Za-z0-9_-]{8,}"
 )
 
 

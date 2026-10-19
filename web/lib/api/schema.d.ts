@@ -2847,7 +2847,7 @@ export interface components {
              * Decision
              * @enum {string}
              */
-            decision: "approved" | "changes_requested";
+            decision: "approved" | "changes_requested" | "confirm" | "redo" | "continue";
             /** Note */
             note?: string | null;
         };
@@ -2900,6 +2900,7 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            console?: components["schemas"]["ConsoleAnswer"] | null;
         };
         /** Choice */
         Choice: {
@@ -3256,6 +3257,48 @@ export interface components {
              * @enum {string}
              */
             effective_role: "viewer" | "commenter" | "approver" | "owner";
+        };
+        /**
+         * ConsoleAnswer
+         * @description What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):
+         *     an answer that does not count (its answerer is not an Oracle member with the
+         *     checkpoint's role), a counted change request the workflow had no revision step for,
+         *     or an answer Oracle could not read.
+         */
+        ConsoleAnswer: {
+            /** Answered By */
+            answered_by?: string | null;
+            /** On Behalf Of */
+            on_behalf_of?: string | null;
+            /** Answered At */
+            answered_at?: string | null;
+            /** Via */
+            via?: string | null;
+            /** Verdict */
+            verdict?: ("MERGE" | "NOT_YET") | null;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: string[];
+            /** Counted */
+            counted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Needs
+             * @enum {string}
+             */
+            needs: "confirm" | "redo_or_continue" | "unreadable";
+            /**
+             * Revise
+             * @default false
+             */
+            revise: boolean;
+            /** Redo Segment */
+            redo_segment?: string | null;
+            /** Redo Cost Usd */
+            redo_cost_usd?: number | null;
         };
         /**
          * DeckOut
@@ -4322,6 +4365,7 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            console?: components["schemas"]["ConsoleAnswer"] | null;
             /**
              * Flow
              * @enum {string}

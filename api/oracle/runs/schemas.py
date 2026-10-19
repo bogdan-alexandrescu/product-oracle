@@ -206,6 +206,32 @@ class SegmentOut(BaseModel):
     error: str | None = None
 
 
+class ConsoleAnswer(BaseModel):
+    """What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):
+    an answer that does not count (its answerer is not an Oracle member with the
+    checkpoint's role), a counted change request the workflow had no revision step for,
+    or an answer Oracle could not read."""
+
+    answered_by: str | None = None
+    on_behalf_of: str | None = None
+    answered_at: str | None = None
+    via: str | None = None
+    verdict: Literal["MERGE", "NOT_YET"] | None = None
+    findings: list[str] = []
+    # None when the verdict could not be read.
+    counted: bool | None = None
+    # Why it does not count, or why it cannot be read.
+    reason: str | None = None
+    # What an approver does: confirm it (or approve / request changes), choose Redo from
+    # the segment or Continue, or decide over an answer Oracle cannot read.
+    needs: Literal["confirm", "redo_or_continue", "unreadable"]
+    # The workflow has a revision step for a change request here.
+    revise: bool = False
+    # Redo: the segment that runs again as a new workflow, and its estimate (one more).
+    redo_segment: str | None = None
+    redo_cost_usd: float | None = None
+
+
 class CheckpointOut(BaseModel):
     id: uuid.UUID
     run_id: uuid.UUID
@@ -220,6 +246,8 @@ class CheckpointOut(BaseModel):
     created_at: datetime
     # Whether the caller's role may decide it (pending checkpoints only).
     can_decide: bool = False
+    # An open checkpoint answered in SwarmCloud's console, waiting on an approver (W5).
+    console: ConsoleAnswer | None = None
 
 
 class RunSummary(BaseModel):
@@ -263,7 +291,11 @@ class RunOut(RunSummary):
 
 
 class CheckpointDecision(BaseModel):
-    decision: Literal["approved", "changes_requested"]
+    # confirm, redo and continue answer what SwarmCloud's console recorded (W5, see
+    # CheckpointOut.console): confirm takes an answer that did not count as the decision;
+    # redo re-runs the segment as a new workflow with the console's findings (one more
+    # segment); continue follows the workflow, which went on regardless.
+    decision: Literal["approved", "changes_requested", "confirm", "redo", "continue"]
     # Required with changes_requested: it goes to the agents re-running the segment.
     note: str | None = Field(default=None, max_length=10_000)
 

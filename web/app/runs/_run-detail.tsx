@@ -18,7 +18,9 @@ import {
   SEGMENT_STATUS_TONE,
   SpendBar,
   usd,
+  type CheckpointChoice,
   type CheckpointOut,
+  type ConsoleAnswer,
   type RunOut,
   type SegmentOut,
 } from "./_lib";
@@ -208,7 +210,7 @@ function SegmentCard({
   segment: SegmentOut;
   checkpoints: CheckpointOut[];
   busy: boolean;
-  onDecide: (cp: CheckpointOut, decision: "approved" | "changes_requested", note: string) => void;
+  onDecide: (cp: CheckpointOut, decision: CheckpointChoice, note: string) => void;
 }) {
   const kind = s.checkpoint;
   return (
@@ -343,9 +345,12 @@ function CheckpointRow({
 }: {
   cp: CheckpointOut;
   busy: boolean;
-  onDecide: (cp: CheckpointOut, decision: "approved" | "changes_requested", note: string) => void;
+  onDecide: (cp: CheckpointOut, decision: CheckpointChoice, note: string) => void;
 }) {
   const [note, setNote] = useState("");
+  const answer = cp.console;
+  // A counted console change request the workflow went on past: Redo or Continue only.
+  const redoOrContinue = answer?.needs === "redo_or_continue";
   return (
     <li className="text-sm" data-testid={`checkpoint-${cp.kind}`}>
       <div className="flex flex-wrap items-center gap-2">
@@ -355,26 +360,88 @@ function CheckpointRow({
         {cp.decided_at && <span className="text-xs text-neutral-500">{formatDateTime(cp.decided_at)}</span>}
       </div>
       {cp.note && <p className="mt-1 text-neutral-600">{cp.note}</p>}
+      {answer && <ConsolePanel answer={answer} />}
       {cp.status === "pending" && cp.can_decide && (
         <div className="mt-2 space-y-2">
           <textarea
             aria-label="Note for the agents"
-            placeholder="Note (required to request changes)"
+            placeholder={redoOrContinue ? "Note (optional, added to the findings)" : "Note (required to request changes)"}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={2}
             className="w-full rounded-md border border-neutral-300 px-2.5 py-1.5 text-sm focus:border-neutral-500 focus:outline-none"
           />
-          <div className="flex gap-2">
-            <Button variant="primary" size="sm" disabled={busy} onClick={() => onDecide(cp, "approved", note)}>
-              Approve and continue
-            </Button>
-            <Button size="sm" disabled={busy || !note.trim()} onClick={() => onDecide(cp, "changes_requested", note)}>
-              Request changes
-            </Button>
+          <div className="flex flex-wrap gap-2">
+            {redoOrContinue ? (
+              <>
+                <Button variant="primary" size="sm" disabled={busy} onClick={() => onDecide(cp, "continue", note)}>
+                  Continue
+                </Button>
+                <Button size="sm" disabled={busy} onClick={() => onDecide(cp, "redo", note)}>
+                  Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)}, one more segment)
+                </Button>
+              </>
+            ) : (
+              <>
+                {answer?.needs === "confirm" && (
+                  <Button variant="primary" size="sm" disabled={busy} onClick={() => onDecide(cp, "confirm", note)}>
+                    Confirm {answer.verdict === "MERGE" ? "approval" : "change request"}
+                  </Button>
+                )}
+                <Button
+                  variant={answer?.needs === "confirm" ? undefined : "primary"}
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => onDecide(cp, "approved", note)}
+                >
+                  Approve and continue
+                </Button>
+                <Button size="sm" disabled={busy || !note.trim()} onClick={() => onDecide(cp, "changes_requested", note)}>
+                  Request changes
+                </Button>
+                {answer?.needs === "unreadable" && (
+                  <Button size="sm" disabled={busy || !note.trim()} onClick={() => onDecide(cp, "redo", note)}>
+                    Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)})
+                  </Button>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
     </li>
+  );
+}
+
+const CONSOLE_NEEDS: Record<ConsoleAnswer["needs"], string> = {
+  confirm: "It does not count on its own: an approver confirms it or decides otherwise.",
+  redo_or_continue:
+    "The workflow had no revision step here and went on regardless. Redo runs this segment again as a new workflow with the findings; Continue keeps what ran.",
+  unreadable: "Oracle could not read the recorded verdict. Approving follows the workflow; Redo runs the segment again.",
+};
+
+function ConsolePanel({ answer: c }: { answer: ConsoleAnswer }) {
+  return (
+    <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-neutral-700" data-testid="console-answer">
+      <p>
+        Answered in SwarmCloud by <span className="font-medium">{c.answered_by ?? "someone"}</span>
+        {c.via && ` via ${c.via}`}
+        {c.verdict && (
+          <>
+            : <span className="font-medium">{c.verdict === "MERGE" ? "approved" : "changes requested"}</span>
+          </>
+        )}
+        {c.answered_at && <span className="text-xs text-neutral-500"> · {formatDateTime(c.answered_at)}</span>}
+      </p>
+      {c.findings.length > 0 && (
+        <ul className="mt-1 list-disc pl-5">
+          {c.findings.map((f, i) => (
+            <li key={i}>{f}</li>
+          ))}
+        </ul>
+      )}
+      {c.reason && c.counted === false && <p className="mt-1 text-xs text-neutral-600">Not counted: {c.reason}.</p>}
+      <p className="mt-1 text-xs text-neutral-600">{CONSOLE_NEEDS[c.needs]}</p>
+    </div>
   );
 }

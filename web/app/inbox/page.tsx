@@ -78,6 +78,16 @@ export default function InboxPage() {
                     {c.segment_title && ` · ${c.segment_title}`}
                     {c.document_slug && ` · ${c.document_slug}`} · {formatDateTime(c.created_at)}
                   </div>
+                  {c.console && (
+                    <div className="text-xs text-amber-700">
+                      Answered in SwarmCloud by {c.console.answered_by ?? "someone"}:{" "}
+                      {c.console.needs === "confirm"
+                        ? "needs an approver to confirm"
+                        : c.console.needs === "redo_or_continue"
+                          ? `changes requested; choose Redo from ${c.console.redo_segment} or Continue`
+                          : "the verdict could not be read"}
+                    </div>
+                  )}
                 </div>
                 <Link
                   href={`/runs/${c.run_id}`}

@@ -10011,7 +10011,10 @@
             "type": "string",
             "enum": [
               "approved",
-              "changes_requested"
+              "changes_requested",
+              "confirm",
+              "redo",
+              "continue"
             ],
             "title": "Decision"
           },
@@ -10139,6 +10142,16 @@
             "type": "boolean",
             "title": "Can Decide",
             "default": false
+          },
+          "console": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsoleAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -11128,6 +11141,141 @@
         ],
         "title": "ConsentRequestOut",
         "description": "What the consent screen shows for a pending authorization request."
+      },
+      "ConsoleAnswer": {
+        "properties": {
+          "answered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered By"
+          },
+          "on_behalf_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Behalf Of"
+          },
+          "answered_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          },
+          "via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Via"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MERGE",
+                  "NOT_YET"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "findings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          },
+          "counted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counted"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "needs": {
+            "type": "string",
+            "enum": [
+              "confirm",
+              "redo_or_continue",
+              "unreadable"
+            ],
+            "title": "Needs"
+          },
+          "revise": {
+            "type": "boolean",
+            "title": "Revise",
+            "default": false
+          },
+          "redo_segment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redo Segment"
+          },
+          "redo_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redo Cost Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "needs"
+        ],
+        "title": "ConsoleAnswer",
+        "description": "What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):\nan answer that does not count (its answerer is not an Oracle member with the\ncheckpoint's role), a counted change request the workflow had no revision step for,\nor an answer Oracle could not read."
       },
       "DeckOut": {
         "properties": {
@@ -14145,6 +14293,16 @@
             "type": "boolean",
             "title": "Can Decide",
             "default": false
+          },
+          "console": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsoleAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "flow": {
             "type": "string",
