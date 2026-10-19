@@ -8,6 +8,7 @@ research and decision actions).
 
 import uuid
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select
@@ -545,8 +546,7 @@ async def test_baseline_conflicts_on_linked_entities_are_listed(client):
 
 async def _document(client, ctx) -> str:
     """A PRD with one version, so an intake can link to it."""
-    with open("tests/fixtures/prd_v1.md", encoding="utf-8") as f:
-        markdown = f.read()
+    markdown = (Path(__file__).parent / "fixtures" / "prd_v1.md").read_text(encoding="utf-8")
     slug = "checkout-redesign"
     resp = await client.post(
         f"/v1/documents/{slug}/versions",
