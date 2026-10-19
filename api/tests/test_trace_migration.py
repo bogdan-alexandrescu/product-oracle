@@ -133,12 +133,15 @@ def _link_item_on_delete() -> str:
     return row[0]
 
 
-def test_a_section_links_source_item_cascades_like_its_other_targets(scratch_db):
+def test_a_section_links_source_item_stays_set_null(scratch_db):
+    """A link that names an entity too must outlive its source item: the delete paths
+    null the reference (or delete a link left with no target) before the item goes."""
     cfg = _cfg()
     command.upgrade(cfg, "0013")
-    assert _link_item_on_delete() == "n"  # SET NULL: at odds with the target check
+    assert _link_item_on_delete() == "n"
     command.upgrade(cfg, "0014_trace")
-    assert _link_item_on_delete() == "c"
+    assert _link_item_on_delete() == "n"
     command.downgrade(cfg, "0013")
     assert _link_item_on_delete() == "n"
     command.upgrade(cfg, "head")
+    assert _link_item_on_delete() == "n"

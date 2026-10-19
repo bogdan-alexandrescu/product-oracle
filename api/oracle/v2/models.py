@@ -613,8 +613,9 @@ class DocumentSectionLink(TenantScoped, Base):
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     entity_id: Mapped[uuid.UUID | None] = _fk("entities")
     evidence_id: Mapped[uuid.UUID | None] = _fk("evidence")
-    # Cascades like entity_id and evidence_id: a link has at least one target (0014_trace).
-    source_item_id: Mapped[uuid.UUID | None] = _fk("source_items")
+    # SET NULL: a link keeps its other targets when its source item goes. The delete paths
+    # delete a link that would be left with no target first (oracle.v2.links).
+    source_item_id: Mapped[uuid.UUID | None] = _fk("source_items", "SET NULL")
     precision: Mapped[str] = mapped_column(Text, nullable=False, server_default="section")
     # The claim, for precision "claim" (the exact words it supports).
     claim: Mapped[str | None] = mapped_column(Text)

@@ -18,6 +18,7 @@ from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.sources import base
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
+from oracle.v2 import links
 
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
@@ -299,8 +300,9 @@ async def delete_source(
     db: AsyncSession, source: Source, *, actor: "Principal | str | None"
 ) -> None:
     """Delete a source and its items. Recorded first (v2 hook, oracle.trace): what the
-    items' evidence backs, and the section links citing the items (which cascade away
-    with them), are marked potentially stale while they still exist."""
+    items' evidence backs, and the section links citing the items, are marked potentially
+    stale while they still exist. Then a link citing an item keeps its other target (an
+    entity or evidence) and only drops the item; one left with no target is deleted."""
     await changes.record_change(
         db,
         "source_permission",
@@ -311,6 +313,10 @@ async def delete_source(
         # The name stays out: a source is private to its owner.
         data={"source": {"id": str(source.id), "kind": source.kind}},
     )
+    item_ids = (
+        await db.scalars(select(SourceItem.id).where(SourceItem.source_id == source.id))
+    ).all()
+    await links.release(db, source_item_ids=set(item_ids))
     await db.delete(source)
     await db.commit()
 
