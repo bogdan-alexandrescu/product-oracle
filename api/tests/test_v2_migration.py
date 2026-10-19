@@ -78,10 +78,11 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_0013_is_the_single_head_after_0012():
+def test_0013_follows_0012_and_0014_follows_it():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0013"]
+    assert script.get_heads() == ["0014"]
     assert script.get_revision("0013").down_revision == "0012"
+    assert script.get_revision("0014").down_revision == "0013"
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):

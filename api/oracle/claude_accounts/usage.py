@@ -11,7 +11,8 @@ whatever OAuth access token is presented, so an account is read without being us
 * The budget is roughly FIVE calls per five minutes, shared with anyone running
   ``/usage`` on the same accounts, answered 429 with ``retry-after``. So a round
   polls at most ``DEFAULT_MAX_POLLS_PER_SWEEP`` accounts, OLDEST READING FIRST, and a
-  429 ENDS the round.
+  429 ENDS the round. The sweep keeps its ``retry-after`` (``sweep.poll_usage``): no
+  round starts before it.
 
 A failed read is never a reading: every failure raises, and the previous windows
 stay in place to age out.
@@ -128,6 +129,8 @@ class PollOutcome:
     account_id: str
     polled: bool
     reason: str
+    # A 429's retry-after, on a ``rate_limited`` outcome.
+    retry_after_seconds: int | None = None
 
 
 Fetch = Callable[[str], Awaitable[dict[str, WindowReading]]]
@@ -172,8 +175,10 @@ async def poll_round(
             continue
         try:
             windows = await get(token)
-        except RateLimited:
-            outcomes.append(PollOutcome(account.account_id, False, "rate_limited"))
+        except RateLimited as e:
+            outcomes.append(
+                PollOutcome(account.account_id, False, "rate_limited", e.retry_after_seconds)
+            )
             break
         except UsageUnavailable:
             outcomes.append(PollOutcome(account.account_id, False, "unavailable"))
