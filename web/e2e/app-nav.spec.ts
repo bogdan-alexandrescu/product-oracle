@@ -191,3 +191,48 @@ test("brand (I3 logo): the Compass mark tops the rail and links Home; sign-in sh
   await home.click();
   await expect(page).toHaveURL(/\/home$/);
 });
+
+test("phone header (I3): navy bar, compact mark to Home, the page's title once, the user menu", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/login");
+  const bar = page.getByTestId("phone-header");
+  await expect(bar.getByTestId("phone-title")).toHaveText("Sign in");
+  await expect(bar.getByTestId("phone-user-menu")).toHaveCount(0);
+
+  await login(page);
+  await page.goto("/settings/members");
+  await expect(bar).toBeVisible();
+  const box = (await bar.boundingBox())!;
+  expect(box.y).toBe(0);
+  expect(box.height).toBe(44);
+  await expect(bar).toHaveCSS("background-color", "rgb(11, 58, 122)");
+  const title = bar.getByTestId("phone-title");
+  await expect(title).toHaveText("Members");
+  await expect(title).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(title).toHaveCSS("font-weight", "600");
+  // The page's H1 stays for screen readers but is not drawn a second time.
+  const h1 = page.getByRole("heading", { level: 1, name: "Members" });
+  await expect(h1).toHaveCount(1);
+  expect((await h1.boundingBox())!.height).toBeLessThanOrEqual(1);
+
+  // The title follows the open page, a document's name and version included.
+  await page.goto("/documents/checkout-redesign/v/2");
+  await expect(title).toHaveText("Checkout redesign PRD v2");
+
+  const user = bar.getByTestId("phone-user-menu");
+  await user.click();
+  await expect(bar.getByRole("dialog", { name: "Account" })).toContainText("admin@example.com");
+  await page.keyboard.press("Escape");
+
+  const home = bar.getByRole("link", { name: "Product Oracle" });
+  await expect(home.locator("svg")).toHaveAttribute("width", "22");
+  await home.click();
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(title).toHaveText("Home");
+  await expect(page.getByTestId("tab-bar")).toBeVisible();
+
+  await page.setViewportSize({ width: 1366, height: 820 });
+  await expect(bar).toBeHidden();
+  await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
+  expect((await page.getByRole("heading", { level: 1, name: "Home" }).boundingBox())!.height).toBeGreaterThan(20);
+});

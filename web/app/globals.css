@@ -46,8 +46,9 @@
   --spark-fill: rgba(3, 105, 161, 0.1);
   --shadow: 0 1px 2px rgba(13, 23, 36, 0.06);
   --tip-shadow: 0 12px 32px rgba(13, 23, 36, 0.28);
-  /* The rail and the phone tab bar: the same in both themes (SwarmCloud's rail, state for state). */
+  /* The rail, the phone header and tab bar: the same in both themes (SwarmCloud's rail, state for state). */
   --rail: linear-gradient(180deg, #0b3a7a, #06101e);
+  --rail-top: #0b3a7a;
   --rail-foot: #06101e;
   --rail-text: #bcd6ee;
   --rail-hover: #194b89;
@@ -167,6 +168,7 @@
   --color-na-bg: var(--na-bg);
   --color-tip: var(--tip);
   --color-tip-text: var(--tip-text);
+  --color-rail-top: var(--rail-top);
   --color-rail-foot: var(--rail-foot);
   --color-rail-text: var(--rail-text);
   --color-rail-hover: var(--rail-hover);
@@ -278,7 +280,7 @@ body {
   font: 400 15px/22px var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
-/* The rail's gradient (desktop rail; the phone tab bar uses its foot, bg-rail-foot). */
+/* The rail's gradient (desktop rail; the phone header uses its top, bg-rail-top, the tab bar its foot, bg-rail-foot). */
 @utility bg-rail {
   background: var(--rail);
 }

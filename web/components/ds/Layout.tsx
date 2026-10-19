@@ -34,22 +34,26 @@ export function PageHeader({
   back?: ReactNode;
   testId?: string;
 }) {
-  // One flat wrapping row. On a phone the title and the action share line 1 (the title
-  // wraps; a wide action drops below it), and the status chips get their own line under it,
-  // so nothing runs under the action.
+  // One flat wrapping row. On a phone the phone header draws the title, so the H1 is kept
+  // for screen readers only, and the status chips and the action share the line when the
+  // chips fit at their full width; otherwise the action drops below them.
   return (
-    <header data-testid={testId} data-page-header className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 py-3 max-[600px]:py-3.5">
+    <header
+      data-testid={testId}
+      data-page-header
+      className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 py-3 max-[600px]:min-h-0 max-[600px]:py-3"
+    >
       {back && <div className="basis-full text-sm text-text2">{back}</div>}
-      <h1 className="min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading max-[600px]:flex-[1_1_7.5rem] max-[600px]:text-2xl max-[600px]:leading-7">
+      <h1 className="min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading max-[600px]:sr-only">
         {title}
         {suffix && <span className="ml-1.5 align-baseline font-display text-lg font-semibold tracking-normal text-text2">{suffix}</span>}
       </h1>
       <div
-        className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 max-[600px]:order-3 max-[600px]:basis-full ${status ? "" : "max-[600px]:hidden"}`}
+        className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 max-[600px]:flex-auto ${status ? "" : "max-[600px]:hidden"}`}
       >
         {status}
       </div>
-      {action && <div className="ml-auto flex flex-none flex-wrap items-center justify-end gap-2 max-[600px]:order-2">{action}</div>}
+      {action && <div className="ml-auto flex flex-none flex-wrap items-center justify-end gap-2">{action}</div>}
       <PageTabs />
     </header>
   );

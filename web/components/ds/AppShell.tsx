@@ -76,7 +76,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: IconName }[] = [
 ];
 
 /** The user menu: who is signed in, the theme switch, mock reset, sign out. */
-function UserMenu({ placement }: { placement: "rail" | "sheet" }) {
+function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
   const router = useRouter();
   const { me, clear } = useMe();
   const [theme, setTheme] = useTheme();
@@ -115,15 +115,17 @@ function UserMenu({ placement }: { placement: "rail" | "sheet" }) {
 
   const panel = (
     <div
-      role={placement === "rail" ? "dialog" : undefined}
+      role={placement === "sheet" ? undefined : "dialog"}
       aria-label="Account"
       className={
         placement === "rail"
           ? "absolute bottom-0 left-[calc(100%+12px)] z-50 w-72 rounded-panel border border-line bg-surface p-3 text-text shadow-tip [--focus-ring:var(--accent)]"
-          : "border-t border-line pt-3"
+          : placement === "header"
+            ? "absolute top-[calc(100%+8px)] right-0 z-50 w-72 max-w-[calc(100vw-20px)] rounded-panel border border-line bg-surface p-3 text-left text-text shadow-tip [--focus-ring:var(--accent)]"
+            : "border-t border-line pt-3"
       }
     >
-      <p className="mb-3 truncate px-1 text-sm font-medium" data-testid={placement === "rail" ? undefined : "signed-in-as-sheet"}>
+      <p className="mb-3 truncate px-1 text-sm font-medium" data-testid={placement === "sheet" ? "signed-in-as-sheet" : undefined}>
         {email}
       </p>
       <div role="radiogroup" aria-label="Theme" className="mb-3 grid grid-cols-3 overflow-hidden rounded-button border border-line-strong">
@@ -172,22 +174,27 @@ function UserMenu({ placement }: { placement: "rail" | "sheet" }) {
   );
 
   if (placement === "sheet") return panel;
+  const rail = placement === "rail";
   return (
-    <div ref={root} className="relative mt-2">
+    <div ref={root} className={rail ? "relative mt-2" : "relative flex-none"}>
       <button
         type="button"
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={`Account ${email}`}
         title={email}
-        data-testid="user-menu"
+        data-testid={rail ? "user-menu" : "phone-user-menu"}
         onClick={() => setOpen((o) => !o)}
-        className="grid size-[38px] place-items-center rounded-full bg-rail-avatar text-sm font-semibold text-on-rail-avatar ring-2 ring-rail-avatar-ring"
+        className={`grid place-items-center rounded-full bg-rail-avatar font-semibold text-on-rail-avatar ring-2 ring-rail-avatar-ring ${
+          rail ? "size-[38px] text-sm" : "size-8 text-[13px]"
+        }`}
       >
         {initials}
-        <span className="sr-only" data-testid="signed-in-as">
-          {email}
-        </span>
+        {rail && (
+          <span className="sr-only" data-testid="signed-in-as">
+            {email}
+          </span>
+        )}
       </button>
       {open && panel}
     </div>
@@ -245,7 +252,7 @@ function Navs() {
       <nav
         aria-label="Oracle"
         data-testid="app-nav"
-        className="sticky top-0 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 bg-rail py-3.5 [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
+        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 bg-rail py-3.5 [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
       >
         <Link href="/home" aria-label="Product Oracle" data-testid="nav-brand" className="mb-3 flex-none rounded-xl">
           <Mark size={44} tone="sky" className="block" />
@@ -324,9 +331,77 @@ function Navs() {
   );
 }
 
+/** Titles of the screens outside the rail's destinations, for when the page draws no H1 yet. */
+const OTHER_TITLES: [string, string][] = [
+  ["/login", "Sign in"],
+  ["/oauth", "Connect an MCP client"],
+  ["/sources", "Sources"],
+  ["/design", "Design system"],
+];
+
+function fallbackTitle(pathname: string): string {
+  if (pathname.endsWith("/present")) return "Present";
+  const other = OTHER_TITLES.find(([p]) => pathname === p || pathname.startsWith(`${p}/`));
+  if (other) return other[1];
+  return [...DESTINATIONS, SETTINGS].find((d) => isActive(pathname, d))?.label ?? "Product Oracle";
+}
+
+/**
+ * The open page's title, read from its H1 (PageHeader's title and suffix, "Checkout PRD v3")
+ * and kept in step as the page loads; the destination's label until the page draws one.
+ */
+function usePageTitle(pathname: string): string {
+  const [title, setTitle] = useState<string | null>(null);
+  useEffect(() => {
+    const main = document.querySelector("main");
+    if (!main) return;
+    const read = () => {
+      const h1 = main.querySelector("h1");
+      const text = h1
+        ? Array.from(h1.childNodes, (n) => n.textContent?.trim() ?? "")
+            .filter(Boolean)
+            .join(" ")
+            .replace(/\s+/g, " ")
+        : "";
+      setTitle(text || null);
+    };
+    read();
+    const watch = new MutationObserver(read);
+    watch.observe(main, { subtree: true, childList: true, characterData: true });
+    return () => watch.disconnect();
+  }, [pathname]);
+  return title ?? fallbackTitle(pathname);
+}
+
+/**
+ * The phone header (I3, 2026-10-19): a slim 44 px bar in the rail's navy on top of every phone
+ * screen, below the top safe-area inset: the compact sky Compass mark (links Home), the page's
+ * title and the user menu. The page's own H1 hides on a phone (kept for screen readers). The
+ * title is white in both themes: rail-active-text, since `white` follows the theme. Desktop: hidden.
+ */
+function PhoneHeader() {
+  const pathname = usePathname();
+  const { me } = useMe();
+  const title = usePageTitle(pathname);
+  return (
+    <header
+      data-testid="phone-header"
+      className="sticky top-0 z-30 hidden h-[calc(44px+env(safe-area-inset-top))] items-center gap-2.5 bg-rail-top pt-[env(safe-area-inset-top)] pr-2.5 pl-3 [--focus-ring:var(--rail-bar)] max-[600px]:flex"
+    >
+      <Link href="/home" aria-label="Product Oracle" data-testid="phone-brand" className="flex-none rounded-md">
+        <Mark size={22} tone="sky" className="block" />
+      </Link>
+      <p data-testid="phone-title" className="min-w-0 flex-1 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text">
+        {title}
+      </p>
+      {me && <UserMenu placement="header" />}
+    </header>
+  );
+}
+
 /**
  * The app shell (I3): SwarmCloud's navy rail with the nine destinations on desktop, a tab bar
- * (Home, PRDs, Roadmap, Inbox, More) on a phone. No rail on /login, /oauth and when
+ * (Home, PRDs, Roadmap, Inbox, More) and the phone header on a phone. No rail on /login, /oauth and when
  * signed out: its grid column then collapses to nothing.
  */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -335,7 +410,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Suspense fallback={null}>
         <Navs />
       </Suspense>
-      <main className="col-start-2 row-start-1 min-w-0">{children}</main>
+      <main className="col-start-2 row-start-1 min-w-0">
+        <Suspense fallback={null}>
+          <PhoneHeader />
+        </Suspense>
+        {children}
+      </main>
     </div>
   );
 }

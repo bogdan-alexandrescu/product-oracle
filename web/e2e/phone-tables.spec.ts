@@ -96,15 +96,16 @@ test("phone runs: run names are whole, costs show on approvals and overruns, the
   await expect(rows.nth(1)).toBeFocused();
 });
 
-test("phone run detail: the status chips sit on their own line, clear of the primary action", async ({ page }) => {
+test("phone run detail: the status chips sit under the phone header, clear of the primary action", async ({ page }) => {
   await login(page);
   await page.goto("/runs");
   await page.getByTestId("run-row").filter({ hasText: "Awaiting cost approval" }).getByRole("link").click();
   const action = page.getByRole("button", { name: /^Approve \$[\d.]+ and start$/ });
   await expect(action).toBeVisible();
-  const chip = page.locator("header").getByText("Awaiting cost approval", { exact: true });
+  const chip = page.locator("header[data-page-header]").getByText("Awaiting cost approval", { exact: true });
   await expect(chip).toBeVisible();
-  const [a, c, h] = await Promise.all([action.boundingBox(), chip.boundingBox(), page.locator("header h1").filter({ visible: true }).boundingBox()]);
+  // The phone header draws the title (I3), so the chips come right under it.
+  const [a, c, h] = await Promise.all([action.boundingBox(), chip.boundingBox(), page.getByTestId("phone-header").boundingBox()]);
   expect(overlaps(a!, c!)).toBe(false);
   expect(c!.y).toBeGreaterThanOrEqual(h!.y + h!.height - 1);
   await expectInViewport(page, action);

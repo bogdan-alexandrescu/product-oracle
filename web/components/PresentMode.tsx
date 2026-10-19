@@ -305,12 +305,13 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
   const back = `/documents/${doc}/v/${n}`;
   const counter = deck ? `${index + 1} / ${total}` : "";
 
+  // On a phone the deck starts under the phone header (I3); Full screen still covers it all.
   return (
     <div
       ref={rootRef}
       data-testid="present-mode"
       data-presenter={presenter ? "true" : "false"}
-      className="fixed inset-0 z-50 flex flex-col bg-hero text-hero-text"
+      className="fixed inset-0 z-50 flex flex-col bg-hero text-hero-text max-[600px]:top-[calc(44px+env(safe-area-inset-top))]"
     >
       {deckQ.error && (
         <div className="m-auto max-w-md rounded-panel bg-surface p-6 text-text">
