@@ -30,6 +30,14 @@ async def test_defaults_and_unknown_keys(client, owner):
     assert {s["key"]: s["value"] for s in listed} == {
         "iap_default_role": "commenter",
         "confidence_weights": {},
+        # v2-review: the company's default review policy (oracle.review.state).
+        "review_policy": {
+            "decider_id": None,
+            "mandatory_reviewer_ids": [],
+            "required_section_keys": [],
+            "section_approval": "required_sections",
+            "rereview_on_change": True,
+        },
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404

@@ -79,8 +79,10 @@ def scratch_db():
 
 
 def test_0013_is_the_single_head_after_0012():
+    """0013 follows 0012; the wave-1 lanes' 0014_* revisions chain on it (one head)."""
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0013"]
+    [head] = script.get_heads()
+    assert head == "0013" or head.startswith("0014_")
     assert script.get_revision("0013").down_revision == "0012"
 
 
