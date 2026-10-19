@@ -379,7 +379,8 @@ async def exchange_code(
             raise OAuthError("invalid_grant", "redirect_uri does not match the authorization")
         if not secrets.compare_digest(s256(code_verifier), row.code_challenge):
             raise OAuthError("invalid_grant", "PKCE verification failed")
-        user = await s.get(User, row.user_id)
+        # Shared lock on the member: a disable running now finishes first (and refuses).
+        user = await s.get(User, row.user_id, with_for_update={"read": True})
         if user is None or user.disabled_at is not None:
             raise OAuthError("invalid_grant", "The user no longer exists or is disabled")
         if user.sessions_valid_after is not None and row.created_at < user.sessions_valid_after:
@@ -406,10 +407,18 @@ async def refresh(
     if not refresh_token:
         raise OAuthError("invalid_request", "refresh_token is required")
     async with tenant_session(client.tenant_id) as s:
+        digest = hash_token(refresh_token)
+        found = await s.scalar(select(OAuthToken.user_id).where(OAuthToken.refresh_hash == digest))
+        if found is not None:
+            # The member's row first (shared), then the token's: a disable's order (it
+            # locks the member, then revokes their tokens). A refresh that arrives while
+            # a disable runs waits for it and is refused; none rotates past its revoke.
+            await s.execute(select(User.id).where(User.id == found).with_for_update(read=True))
         row = await s.scalar(
             select(OAuthToken)
-            .where(OAuthToken.refresh_hash == hash_token(refresh_token))
+            .where(OAuthToken.refresh_hash == digest)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if row is None or row.client_id != client.id:
             raise OAuthError("invalid_grant", "Unknown refresh token")
@@ -434,7 +443,7 @@ async def refresh(
             if not set(asked) <= set(granted):
                 raise OAuthError("invalid_scope", "Cannot widen the scope on refresh")
             granted = asked
-        user = await s.get(User, row.user_id)
+        user = await s.get(User, row.user_id, populate_existing=True)
         if user is None or user.disabled_at is not None:
             raise OAuthError("invalid_grant", "The user no longer exists or is disabled")
         row.revoked_at = _now()

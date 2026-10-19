@@ -553,3 +553,101 @@ async def test_an_unrelated_revoked_notion_source_does_not_block(client):
     await approved(client, ctx, 2)
     assert (await disable(client, ctx, owner.user_id)).status_code == 200
     assert (await check(client, ctx, 2))["can_publish"] is True
+
+
+async def test_an_oauth_refresh_racing_a_disable_leaves_no_live_token(client, monkeypatch):
+    """A refresh that arrives while a disable runs either waits and is refused, or its
+    new token is revoked: none survives to work after a restore."""
+    import asyncio
+
+    from oracle.mcp.oauth.models import OAuthToken
+    from oracle.members import service as members
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    client_id, _, refresh, _ = await oauth_grant(ctx, pm.user_id)
+    real = members._disconnect_all
+    holding, refreshing = asyncio.Event(), asyncio.Event()
+
+    async def slow(session, principal, user, via):
+        out = await real(session, principal, user, via)
+        holding.set()  # the disable holds the member's row lock from here to its commit
+        await refreshing.wait()
+        await asyncio.sleep(0.5)
+        return out
+
+    monkeypatch.setattr(members, "_disconnect_all", slow)
+    a = asyncio.create_task(disable(client, ctx, pm.user_id))
+    await holding.wait()
+    form = {"grant_type": "refresh_token", "client_id": client_id, "refresh_token": refresh}
+    b = asyncio.create_task(client.post("/oauth/token", data=form))
+    refreshing.set()
+    ra, rb = await asyncio.gather(a, b)
+    assert ra.status_code == 200, ra.text
+    assert rb.status_code == 400 and rb.json()["error"] == "invalid_grant", rb.text
+    async with tenant_session(ctx.tenant_id) as s:
+        live = await s.scalars(
+            select(OAuthToken).where(
+                OAuthToken.user_id == pm.user_id, OAuthToken.revoked_at.is_(None)
+            )
+        )
+        assert list(live) == []
+
+
+async def test_a_connections_callback_racing_a_disable_connects_nothing(client, monkeypatch):
+    """The provider's callback authenticated before the disable; the member is disabled
+    while the code is exchanged. No connection is created for them."""
+    from datetime import UTC, datetime
+
+    from oracle.connections import oauth as provider_oauth
+    from oracle.connections.models import Connection
+    from oracle.connections.providers import PROVIDERS
+    from tests.connection_helpers import clear_provider_http, use_provider_http
+
+    for key, value in {
+        "ORACLE_OAUTH_GITHUB_CLIENT_ID": "client-123",
+        "ORACLE_OAUTH_GITHUB_CLIENT_SECRET": "secret-456",
+        "ORACLE_OAUTH_REDIRECT_BASE": "https://oracle.example.com",
+    }.items():
+        monkeypatch.setenv(key, value)
+    provider_oauth.get_oauth_settings.cache_clear()
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    state = provider_oauth.encode_state(
+        provider_oauth.State(
+            tenant_id=ctx.tenant_id,
+            user_id=pm.user_id,
+            provider="github",
+            verifier="v" * 64,
+            connection_id=None,
+        )
+    )
+    real = provider_oauth.exchange_code
+
+    async def exchange(*args, **kw):
+        out = await real(*args, **kw)
+        async with tenant_session(ctx.tenant_id) as s:
+            (await s.get(User, pm.user_id)).disabled_at = datetime.now(UTC)
+            await s.commit()
+        return out
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url == "https://github.com/login/oauth/access_token":
+            return httpx.Response(200, json={"access_token": "example-access", "scope": "repo"})
+        return httpx.Response(200, json={"id": 42, "login": "user-42"})
+
+    monkeypatch.setattr(provider_oauth, "exchange_code", exchange)
+    use_provider_http(handler)
+    try:
+        back = await client.get(
+            "/v1/connections/github/callback",
+            params={"code": "the-code", "state": state},
+            headers=pm.headers,
+        )
+    finally:
+        clear_provider_http()
+        provider_oauth.get_oauth_settings.cache_clear()
+    assert PROVIDERS
+    assert back.status_code == 303 and "error=" in back.headers["location"], back.headers
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.scalars(select(Connection))).all() == []

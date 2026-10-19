@@ -20,6 +20,7 @@ from sqlalchemy import select
 from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
+from oracle.auth.service import may_sign_in
 from oracle.connections import oauth, service
 from oracle.connections.models import Connection
 from oracle.connections.providers import (
@@ -213,6 +214,8 @@ async def connect_with_token(
         raise _rejected(e) from None
     except ProviderUnavailable as e:
         raise _unavailable(e) from None
+    except service.MemberDisabled as e:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None
     await audit.record(
         db, principal, "connection.connect", "connection", conn.id,
         {"provider": p.key, "auth_mode": "token", "account": conn.account_label},
@@ -270,14 +273,16 @@ async def oauth_callback(
     if client is None:
         return _back(provider=p.key, error=f"Sign-in with {p.name} is not configured")
     async with tenant_session(st.tenant_id) as db:
-        if await db.get(User, st.user_id) is None:
+        # "is None" alone let a removed member's callback through (C2); the credential
+        # is stored only after their row is locked and re-read (service.save).
+        if not may_sign_in(await db.get(User, st.user_id)):
             return _back(provider=p.key, error="Unknown user")
         try:
             tokens = await oauth.exchange_code(http, p, client, code, st.verifier)
             conn = await service.connect_oauth(
                 db, http, user_id=st.user_id, provider=p, tokens=tokens
             )
-        except (CredentialRejected, ProviderUnavailable) as e:
+        except (CredentialRejected, ProviderUnavailable, service.MemberDisabled) as e:
             return _back(provider=p.key, error=str(e))
         await audit.record(
             db, principal, "connection.connect", "connection", conn.id,
@@ -340,15 +345,18 @@ async def reconnect_connection(
                 f"That token belongs to {identity.label}, not {conn.account_label}; "
                 "connect it as a new connection",
             )
-        conn = await service.save(
-            db,
-            user_id=conn.user_id,
-            provider=p,
-            auth_mode="token",
-            identity=identity,
-            bundle={"access_token": body.token.strip()},
-            label=conn.account_label if conn.auth_mode == "token" else None,
-        )
+        try:
+            conn = await service.save(
+                db,
+                user_id=conn.user_id,
+                provider=p,
+                auth_mode="token",
+                identity=identity,
+                bundle={"access_token": body.token.strip()},
+                label=conn.account_label if conn.auth_mode == "token" else None,
+            )
+        except service.MemberDisabled as e:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None
     else:
         try:
             conn = await service.recheck(db, http, conn)
