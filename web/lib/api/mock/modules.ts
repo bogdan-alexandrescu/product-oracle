@@ -295,6 +295,7 @@ function inspector(db: ModulesDb, doc: { id: string; slug: string; template: str
     recommendation: current ? null : { ...recommend(db, PACK_A, {}, doc.template), document_id: doc.id },
     revisions: [...revisions].reverse().map(summaryOf),
     sections: { version: null, unmapped: [] },
+    problems: [],
   };
 }
 
@@ -441,8 +442,13 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
       if ((data.base_revision ?? null) !== (head?.number ?? null)) {
         return json(409, { detail: "Someone else changed this since you loaded it; reload and try again" });
       }
-      const pack = data.packs?.[0] ?? head?.packs[0] ?? PACK_A;
+      // Only a pack a person chose carries; a default or category pack is recomputed.
+      const carried = head?.inputs.policy?.packs_source === "chosen" ? head.packs[0] : undefined;
+      const category = data.inputs?.category ?? head?.inputs.category;
+      const pack = data.packs?.[0] ?? carried ?? db.policy.default_packs[0] ?? (category === "ai_agent_platform" ? PACK_B : PACK_A);
+      const packsSource = data.packs?.length || carried ? "chosen" : db.policy.default_packs.length ? "default" : "category";
       const rec = recommend(db, pack, data.inputs ?? {}, data.template ?? doc.template ?? "oracle-default");
+      rec.inputs.policy = { ...rec.inputs.policy, packs_source: packsSource };
       // A person's earlier decisions carry into the next revision.
       for (const earlier of head?.modules ?? []) {
         const target = rec.modules.find((x) => x.key === earlier.key);
@@ -451,7 +457,9 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
       }
       for (const key of data.changes?.remove ?? []) {
         const target = rec.modules.find((x) => x.key === key);
-        if (!target?.included) return refused("not_included", `${key} is not in the composition.`, key);
+        // Re-sending an earlier removal refreshes its reason and who decided.
+        const again = head?.modules.some((e) => e.key === key && e.decided_by === "user" && !e.included);
+        if (!target || (!target.included && !again)) return refused("not_included", `${key} is not in the composition.`, key);
         if (target.selection === "mandatory") {
           return refused("required_module", `${target.title} is mandatory (${target.reason}) and cannot be removed.`, key);
         }

@@ -49,7 +49,12 @@ file fails the test suite, never a request. Releasing a change is bumping `versi
 startup for every company (`service.seed_all_companies`, so a release's new or upgraded
 built-ins reach everyone before anyone reads), when a company is created (`oracle.seed`),
 and on the write paths (confirming a revision, manifest, policy and module writes).
-Reads never write: the catalogue, packs, policy, manifest, recommend and inspector routes
+At startup each company is seeded in its own transaction: one that fails (another
+replica seeding it at the same time, say) is retried once after the others, then logged
+by company id (never by name) and left to its next write or the next startup; the other
+companies are seeded and the API starts. Built-in templates and themes follow the same
+rule: startup, company creation and the template, theme and draft write paths seed
+them; no template or theme read does. Reads never write: the catalogue, packs, policy, manifest, recommend and inspector routes
 only read, so a viewer changes nothing. Seeding follows the rule for built-in templates in
 `templates/builtins.py`: an upgrade never overwrites what a company changed.
 
@@ -190,8 +195,11 @@ stay template-owned and are preserved as-is.
 
 1. **Candidates**: the chosen packs' modules (company modules join a pack through
    `applies_to`), the template manifest, the company's mandatory modules, and modules a
-   person adds. Packs: the request's, else the previous revision's, else the company
-   default, else by `category`.
+   person adds. Packs: the request's, else the previous revision's when a person chose
+   them there, else the company default, else by `category`. Each revision records how
+   (`inputs.policy.packs_source`: `chosen`, `default` or `category`); default and
+   category packs are recomputed every revision, so a `default_packs` or category
+   change applies on the next one, and only a chosen pack carries.
 2. **Policy**: the company module policy first (`required`, `optional`, `disabled`),
    else the strongest of the pack contract's and the manifest's
    (required > conditional > optional).
@@ -209,11 +217,14 @@ stay template-owned and are preserved as-is.
    default predecessor). An earlier decision that no longer fits is set aside with a
    non-fatal problem: a removed module that became mandatory or that a module now
    depends on comes back (`decision_superseded`); an added module now disabled or gone
-   is dropped (`decision_dropped`). Then this change (`changes`: add, remove, order),
+   is dropped (`decision_dropped`). These problems come back in the confirm response's
+   `problems`, so the person confirming sees what was set aside. Then this change (`changes`: add, remove, order),
    which wins over an earlier decision on the same module:
    - removing a mandatory module is refused (`required_module`), naming who requires it;
    - removing a module an included module depends on is refused
      (`required_dependency`) unless the dependents are removed in the same change;
+   - removing a module an earlier revision already removed is not an error: it stays
+     out with this change's reason and decider;
    - adding pulls in its dependencies, each explained as "needed by";
    - a module whose contract asks for the owner role needs an owner (`role_required`);
    - a disabled or unknown module cannot be added.

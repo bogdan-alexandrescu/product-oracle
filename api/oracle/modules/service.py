@@ -12,9 +12,10 @@ Reads never write: built-in templates, modules and manifests are seeded at start
 a company is created, and on the write paths (:func:`ensure_seeded`).
 """
 
+import logging
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -63,6 +64,8 @@ from oracle.v2.contract import CONDITION_ROOTS, validate_contract
 from oracle.v2.models import CompositionRevision, DocumentComposition, ProductIntake
 from oracle.v2.schemas import CompositionInputs, IntakeAnalysis
 
+logger = logging.getLogger(__name__)
+
 INPUT_ROOTS = (*CONDITION_ROOTS, "intake_id", "baseline_snapshot_id", "source_snapshot_ids")
 
 
@@ -89,20 +92,51 @@ async def ensure_seeded(db: AsyncSession) -> None:
     await registry.ensure_builtin_modules(db)
 
 
-async def seed_all_companies() -> int:
+@dataclass
+class SeedResult:
+    changed: int = 0
+    # Companies still not seeded after a retry: their next write path or the next
+    # startup seeds them (ensure_seeded runs on every write path).
+    failed: list[uuid.UUID] = field(default_factory=list)
+
+
+async def _seed_company(tenant_id: uuid.UUID) -> bool:
+    async with tenant_session(tenant_id) as s:
+        templates = await ensure_builtins(s)
+        modules = await registry.ensure_builtin_modules(s)
+        if templates or modules:
+            await s.commit()
+            return True
+        return False
+
+
+async def seed_all_companies() -> SeedResult:
     """Seed every company's built-ins (at startup, so a release's new or upgraded
-    built-in modules reach every company before anyone reads). Returns how many changed."""
+    built-in modules reach every company before anyone reads).
+
+    One company failing (another replica seeding it at the same time, say) never stops
+    the others: each is seeded in its own transaction, a failure is retried once after
+    the rest, and what still fails is logged by company id (never by name)."""
     async with unscoped_session() as s:
         tenant_ids = list((await s.scalars(select(Tenant.id).order_by(Tenant.created_at))).all())
-    changed = 0
-    for tenant_id in tenant_ids:
-        async with tenant_session(tenant_id) as s:
-            templates = await ensure_builtins(s)
-            modules = await registry.ensure_builtin_modules(s)
-            if templates or modules:
-                await s.commit()
-                changed += 1
-    return changed
+    result = SeedResult()
+    retry: list[uuid.UUID] = []
+    for attempt, pending in enumerate((tenant_ids, retry)):
+        for tenant_id in list(pending):
+            try:
+                result.changed += await _seed_company(tenant_id)
+            except Exception:
+                if attempt == 0:
+                    retry.append(tenant_id)
+                    continue
+                result.failed.append(tenant_id)
+                logger.warning(
+                    "seeding built-ins failed for company %s; its next write or the next "
+                    "startup seeds it",
+                    tenant_id,
+                    exc_info=True,
+                )
+    return result
 
 
 # --- inputs from an intake ------------------------------------------------------------
@@ -393,17 +427,18 @@ async def build(
                 contracts[mkey] = validate_contract(pinned.contract)
             manifest[mkey] = ManifestEntry(tuple(row.section_ids), row.policy, row.module_version)
 
-    # Packs: given, else the previous revision's (a decision too), else company default,
-    # else by category.
-    previous_packs = []
-    if previous is not None and not data.packs:
-        previous_packs = list(((previous.inputs or {}).get("policy") or {}).get("packs") or [])
-    pack_ids = (
-        data.packs
-        or previous_packs
-        or policy.default_packs
-        or [default_pack_for(inputs.get("category"))]
-    )
+    # Packs: given, else the previous revision's when a person chose them there (a
+    # decision too), else the company default, else by category. Default and category
+    # packs are recomputed each revision, so a policy or category change applies.
+    previous_policy = ((previous.inputs or {}).get("policy") or {}) if previous else {}
+    if data.packs:
+        pack_ids, packs_source = list(data.packs), "chosen"
+    elif previous_policy.get("packs_source") == "chosen" and previous_policy.get("packs"):
+        pack_ids, packs_source = list(previous_policy["packs"]), "chosen"
+    elif policy.default_packs:
+        pack_ids, packs_source = list(policy.default_packs), "default"
+    else:
+        pack_ids, packs_source = [default_pack_for(inputs.get("category"))], "category"
     known = builtin_packs()
     if unknown := sorted(p for p in pack_ids if p not in known):
         raise CompositionRefused(
@@ -417,6 +452,9 @@ async def build(
     inputs["policy"] = {
         **(inputs.get("policy") or {}),
         "packs": list(pack_ids),
+        # How the packs were picked: "chosen" by a person (carried to the next
+        # revision), else the company "default" or the "category" (recomputed).
+        "packs_source": packs_source,
         "required": policy.required,
         "optional": policy.optional,
         "disabled": policy.disabled,
@@ -592,9 +630,10 @@ async def confirm(
     role: str,
     actor: Any,
     actor_id: uuid.UUID | None,
-) -> tuple[CompositionRevision, RevisionDiff]:
+) -> tuple[CompositionRevision, RevisionDiff, list[CompositionProblem]]:
     """Confirm a composition revision, or save it as a working draft. The caller audits
-    and commits.
+    and commits. Returns the revision, what changed, and the composition's non-fatal
+    problems (an earlier decision set aside, say) for the confirmer to see.
 
     Every revision starts from the newest one (``base_revision``), so a person's earlier
     decisions carry. A working revision supersedes nothing and records no change event;
@@ -650,7 +689,7 @@ async def confirm(
             await db.flush()
         except IntegrityError as e:
             raise VersionConflict() from e
-        return revision, change
+        return revision, change, comp.problems
 
     if in_force is not None and in_force.status == "confirmed":
         in_force.status = "superseded"
@@ -690,7 +729,7 @@ async def confirm(
     )
     if change.material:
         await _record_section_changes(db, document, revision, change, actor)
-    return revision, change
+    return revision, change, comp.problems
 
 
 async def record_policy_change(
@@ -993,6 +1032,7 @@ __all__ = [
     "CompositionRefused",
     "Conflict",
     "NotFound",
+    "SeedResult",
     "build",
     "confirm",
     "diff",

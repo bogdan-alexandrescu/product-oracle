@@ -299,7 +299,7 @@ async def _resolve_theme(db: AsyncSession, ev: ExportVersion) -> None:
     default for the document's kind, else the built-in default theme for the kind
     (clean-document for PRDs, roadmap-board for roadmaps). Archived themes and templates
     still resolve."""
-    from oracle.templates.builtins import DEFAULT_THEME_FOR_KIND, ensure_builtins
+    from oracle.templates.builtins import DEFAULT_THEME_FOR_KIND
     from oracle.templates.service import company_draft_defaults, version_meta
 
     document = ev.document
@@ -327,13 +327,10 @@ async def _resolve_theme(db: AsyncSession, ev: ExportVersion) -> None:
         if theme is not None:
             ev.theme, ev.theme_source = theme, source
             return
-    # Nothing chosen: the built-in default theme, seeding the built-ins if this company
-    # has never listed them.
+    # Nothing chosen: the built-in default theme (seeded at startup and company creation;
+    # an export reads, it never seeds).
     key = DEFAULT_THEME_FOR_KIND.get(document.kind, DEFAULT_THEME_FOR_KIND["prd"])
     theme = await db.scalar(select(Theme).where(Theme.key == key))
-    if theme is None and await ensure_builtins(db):
-        await db.commit()
-        theme = await db.scalar(select(Theme).where(Theme.key == key))
     if theme is not None:
         ev.theme, ev.theme_source = theme, "builtin_default"
 

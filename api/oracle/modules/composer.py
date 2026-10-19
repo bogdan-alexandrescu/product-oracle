@@ -18,7 +18,8 @@ Steps, in order:
 4. **A person's decisions**: first the earlier ones, carried from the previous revision
    (a module removed stays out, one added stays in, a custom order holds), then this
    change's add, remove and reorder, which win over an earlier decision on the same
-   module. A mandatory module, or a module an included module depends on, is never
+   module (re-sending an earlier removal refreshes its reason and who decided). A
+   mandatory module, or a module an included module depends on, is never
    removed silently: the request is refused with a problem saying why. An earlier
    decision that no longer fits (the module became mandatory, was disabled or archived,
    or a module now depends on it) is set aside with a non-fatal problem saying why.
@@ -674,7 +675,10 @@ def _apply_changes(ctx: Context, st: _State, ch: Changes) -> None:
         st.problem("add_and_remove", f"{both} is both added and removed.")
     for key in ch.remove:
         mod = st.m.get(key)
-        if mod is None or not mod.included:
+        # Removed by an earlier revision and sent again: not an error; it stays out with
+        # this reason and decider, and counts as this change's removal.
+        again = mod is not None and not mod.included and key in st.carried_removed
+        if (mod is None or not mod.included) and not again:
             st.problem("not_included", f"{key} is not in the composition.", key)
             continue
         if mod.selection == "mandatory":
@@ -696,6 +700,7 @@ def _apply_changes(ctx: Context, st: _State, ch: Changes) -> None:
         mod.overridden_by = _uuid(ch.actor_id)
         mod.explanation.append(f"Removed by a person: {reason or 'no reason given'}.")
         st.removed_by_user.add(key)
+        st.carried_removed.discard(key)
     for key in ch.add:
         mod = st.m.get(key)
         if mod is None:
