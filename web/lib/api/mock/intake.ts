@@ -172,7 +172,7 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
     gaps: out,
     next_actions: gaps.filter((g) => g.importance === "critical").flatMap(nextActions),
     template: { key: "oracle-default", name: "Goal-traced PRD", reason: "A cross-functional build: the goal-traced PRD agrees the problem, then the prioritized solution, then launch.", theme: null, modules },
-    readiness: { open_critical: critical.length, blocking_gap_ids: blocking, gate: blocking.length ? "blocked" : "clear" },
+    readiness: { open_critical: critical.length, blocking_gap_ids: blocking, gate: blocking.length ? "blocked" : "clear", private_blocking_gap_ids: [] },
     batch: {
       current: batches.length ? Math.max(...batches) : null,
       asked: questions.filter((q) => q.status === "asked" || q.status === "delegated").length,

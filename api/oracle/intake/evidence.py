@@ -5,7 +5,8 @@ new connector or store. Source items stay visible to their owner only (S3 as bui
 AUD-9): anyone else sees that a piece of evidence exists, its kind and its confidence,
 never its title, link or text, unless the intake's author shared a finding citing it in
 full (S6, ``oracle.intake.sharing``). A run token never sees an item's content as its
-owner, even when it acts for the owner.
+owner, even when it acts for the owner, and never reads raw an item behind a finding
+that is not shared in full (:func:`run_withheld`).
 
 Everything read from a source is **untrusted data**: it is returned under
 ``data_excerpt`` with ``untrusted: true``, never placed in instructions, and every
@@ -95,9 +96,47 @@ def excerpt(text: str | None, limit: int = EXCERPT_CHARS) -> str | None:
 
 
 def caller_user(principal: Principal | None) -> uuid.UUID | None:
-    if principal is None or principal.kind != "user":
+    """The user whose own items the caller reads as their owner: never through a run
+    token (S6: an agent run, the owner's own included, reads each finding at its
+    sharing level only)."""
+    if principal is None or principal.kind != "user" or principal.is_run:
         return None
     return principal.user_id
+
+
+def _cited(intake: ProductIntake) -> set[uuid.UUID]:
+    """Items an intake's analysis draws on that no finding shares in full."""
+    from oracle.intake import sharing
+
+    reg = sharing.registry(intake)
+    analysis = intake.analysis or {}
+    out: set[uuid.UUID] = set()
+    for entry in reg.values():
+        if not sharing.is_open(entry) and entry.get("sharing", sharing.DEFAULT) != "full":
+            out |= {uuid.UUID(i) for i in entry.get("source_item_ids") or []}
+            out |= {uuid.UUID(i) for i in entry.get("evidence_ids") or []}
+    if reg.unregistered:
+        # Analysed before findings were registered: everything it read (fail closed).
+        out |= {uuid.UUID(i) for i in analysis.get("relevant_item_ids") or []}
+        out |= {uuid.UUID(s["item_id"]) for s in analysis.get("stale") or []}
+        out |= {uuid.UUID(cl["item_id"]) for c in analysis.get("conflicts") or []
+                for cl in c.get("claims") or []}  # fmt: skip
+    return out
+
+
+async def run_withheld(db: AsyncSession, principal: Principal | None) -> set[uuid.UUID] | None:
+    """Source items a run token may not read raw (S6, owner 2026-10-19): those behind a
+    finding of its user's intakes that is not shared in full. None: not a run."""
+    if principal is None or not principal.is_run:
+        return None
+    if principal.user_id is None:
+        return set()
+    out: set[uuid.UUID] = set()
+    for intake in (
+        await db.scalars(select(ProductIntake).where(ProductIntake.author_id == principal.user_id))
+    ).all():
+        out |= _cited(intake)
+    return out
 
 
 async def refs(
@@ -130,7 +169,7 @@ async def refs(
         if version is not None:
             versions[item.id] = version
     settings = await source_items.confidence_settings(db)
-    me = caller_user(principal) if principal is not None and not principal.is_run else None
+    me = caller_user(principal)
     out: dict[uuid.UUID, EvidenceRef] = {}
     for item, source in rows:
         version = versions.get(item.id)

@@ -9,13 +9,17 @@ decisions and change events), and a gap shared as a summary in Oracle's words. T
 lists leave those rows out in SQL, before paging (:func:`register`), so a reader's
 pages never shift because of rows they may not see. Only rows the call itself may
 list are read to find them, and the hidden ids travel as one array parameter. A
-question's priority shows to anyone but the author as everyone may see it.
+question's priority shows to anyone but the author as everyone may see it. Filters
+match what readers see: ``/v1/gaps?importance=`` reads an old rule-made row's
+importance from the brief as its view does (:func:`gaps_by_importance`); every other
+filter (and every question filter: intake, document, gap, status) is on a column that
+holds a public value.
 """
 
 import uuid
 from typing import Any
 
-from sqlalchemy import Text, Uuid, any_, bindparam, cast, not_, or_, select
+from sqlalchemy import Text, Uuid, and_, any_, bindparam, cast, not_, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -280,7 +284,39 @@ def _events_kept(hidden: set[uuid.UUID]) -> Any:
     return or_(text.is_(None), not_(text == any_(ids)))
 
 
+async def gaps_by_importance(db: AsyncSession, principal: Principal, value: Any) -> Any:
+    """``/v1/gaps?importance=``: what readers see (S6). A rule-made row from before its
+    importance basis was recorded reads its importance from the brief, so it matches on
+    that; every other row on its column (its stored value is the public one)."""
+    legacy = (
+        await db.scalars(
+            select(KnowledgeGap).where(
+                KnowledgeGap.intake_id.is_not(None),
+                KnowledgeGap.rule_key.is_not(None),
+                KnowledgeGap.importance_basis.is_(None),
+            )
+        )
+    ).all()
+    regs: dict[uuid.UUID, Any] = {}
+    matching = []
+    for gap in legacy:
+        if gap.intake_id not in regs:
+            intake = await db.get(ProductIntake, gap.intake_id)
+            regs[gap.intake_id] = sharing.registry(intake) if intake else {}
+        if sharing.public_importance(gap, regs[gap.intake_id]) == value:
+            matching.append(gap.id)
+    stored = KnowledgeGap.importance == value
+    if not legacy:
+        return stored
+    old_ids = [g.id for g in legacy]
+    return or_(
+        and_(stored, not_(KnowledgeGap.id == any_(_uuids(old_ids)))),
+        KnowledgeGap.id == any_(_uuids(matching or [uuid.UUID(int=0)])),
+    )
+
+
 def register() -> None:
+    v2_router.register_filter("/gaps", "importance", gaps_by_importance)
     v2_router.register_hidden(
         "/gaps", _hidden(_gap_scope, lambda h: _not_hidden(KnowledgeGap.id, h, nullable=False))
     )

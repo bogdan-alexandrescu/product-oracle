@@ -156,8 +156,6 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
     conf = {i.id: i.confidence for i in chosen}
     # The author's sources were read: what the model writes is a finding (S6).
     restricted = bool(chosen)
-    texts = [t for i in chosen for t in (i.text, i.title or "")]
-    shared = f"{intake.title} {intake.brief}"
     analysis = dict(intake.analysis or {})
     reg = sharing.registry(intake)
 
@@ -188,12 +186,13 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         fid = str(uuid.uuid4())
         item["finding_id"] = fid
         label = sharing.category_label(raw["field"])
+        # The model's words are only a draft for the summary level: the author confirms
+        # or edits it before anyone else reads it (S6).
         sharing.register(
             reg, fid, kind="item", origin="model", category=raw["field"],
             source_item_ids=evidence, restricted=restricted,
-            summary=sharing.oracle_summary(
-                text, texts, f"Oracle inferred something about the {label} from the "
-                "author's sources.", shared),
+            summary=f"Oracle inferred something about the {label} from the author's sources.",
+            draft=sharing.one_line(text),
         )  # fmt: skip
         items.append(item)
         added += 1
@@ -250,9 +249,9 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         sharing.register(
             reg, str(gap.id), kind="gap", origin="model", category=cat.key,
             source_item_ids=evidence, gap_id=gap.id, restricted=restricted,
-            summary=sharing.oracle_summary(
-                statement, texts, f"Oracle found an open question about "
-                f"{sharing.category_label(cat.key)} in the author's sources.", shared),
+            summary=f"Oracle found an open question about "
+            f"{sharing.category_label(cat.key)} in the author's sources.",
+            draft=sharing.one_line(statement),
         )  # fmt: skip
 
     analysis["items"] = items

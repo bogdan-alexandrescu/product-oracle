@@ -155,8 +155,10 @@ async def source_items(
     ids: list[uuid.UUID] | None = None,
     limit: int = 100,
     offset: int = 0,
+    exclude: set[uuid.UUID] | None = None,
 ) -> list[ItemRow]:
-    """A source's items (or those of ``ids``) with their current versions, newest first."""
+    """A source's items (or those of ``ids``) with their current versions, newest first.
+    ``exclude``: items the caller may not read (left out before paging)."""
     stmt = (
         select(SourceItem, SourceItemVersion)
         .outerjoin(SourceItemVersion, SourceItemVersion.id == SourceItem.current_version_id)
@@ -174,6 +176,8 @@ async def source_items(
         stmt = stmt.where(SourceItem.deleted_at.is_(None))
     if ids is not None:
         stmt = stmt.where(SourceItem.id.in_(ids))
+    if exclude:
+        stmt = stmt.where(SourceItem.id.not_in(exclude))
     rows = await session.execute(stmt)
     return [ItemRow(item, version, source.kind) for item, version in rows.all()]
 

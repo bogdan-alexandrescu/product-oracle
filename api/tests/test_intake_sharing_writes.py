@@ -81,11 +81,14 @@ async def author_questions(ctx, intake_id: str) -> tuple[StakeholderQuestion, St
         gaps = (
             await s.scalars(select(KnowledgeGap).where(KnowledgeGap.intake_id == intake_id))
         ).all()
+        # What the author's sources say about a rule-made gap is kept in its finding.
+        reg = (await s.get(ProductIntake, uuid.UUID(intake_id))).analysis["findings"]
         model = next(g for g in gaps if g.statement == MODEL_GAP)
         rule = next(
             g for g in gaps
-            if g.statement != MODEL_GAP and g.knowledge_state == "ai_inference"
-            and g.evidence_ids and g.status in ("unknown", "asked")
+            if g.statement != MODEL_GAP and g.rule_key is not None
+            and (reg.get(str(g.id)) or {}).get("evidence_ids")
+            and g.status in ("unknown", "asked")
         )  # fmt: skip
         out = []
         for gap in (model, rule):
@@ -473,10 +476,13 @@ async def test_an_unregistered_model_gap_is_private_even_in_a_registered_intake(
     assert entry["origin"] == "model" and entry["sharing"] == "private"
 
 
-def test_oracle_summary_refuses_three_words_of_a_source():
-    source = "Shoppers abandon carts when the address form keeps resetting on mobile."
-    fallback = "Oracle's fixed wording."
-    said = "We should know why shoppers abandon carts so often."
-    assert sharing.oracle_summary(said, [source], fallback) == fallback
-    fine = "We should know why people leave checkout early."
-    assert sharing.oracle_summary(fine, [source], fallback) != fallback
+def test_no_filter_publishes_model_text_at_the_summary_level():
+    """S6 (owner 2026-10-19): the summary level shows the line its author confirmed or
+    wrote; until then Oracle's fixed category line, whatever the model drafted."""
+    draft = "We should know why people leave checkout early."
+    entry = {"kind": "gap", "origin": "model", "category": "release_rollout",
+             "summary": "x", "draft": draft}  # fmt: skip
+    fixed = "Oracle found an open question about release and rollout in the author's sources."
+    assert sharing.shared_summary(entry) == fixed
+    assert sharing.shared_summary(sharing.set_summary(entry, None)) == entry["draft"]
+    assert sharing.shared_summary(sharing.set_summary(entry, "  Mine.  ")) == "Mine."

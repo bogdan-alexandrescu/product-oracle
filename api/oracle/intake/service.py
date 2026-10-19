@@ -318,12 +318,15 @@ async def set_sharing(
     if missing:
         raise not_found(f"Finding {missing[0]}")
     done: list[str] = []
+    raised: list[str] = []
     for fid, level in changes:
         entry = dict(reg[fid])
         before = entry.get("sharing", sharing.DEFAULT)
         done.append(fid)
         if before == level:
             continue
+        if sharing.RANK[before] < sharing.RANK["counts"] <= sharing.RANK[level]:
+            raised.append(fid)
         entry["sharing"] = level
         reg[fid] = entry
         await audit.record(
@@ -336,8 +339,35 @@ async def set_sharing(
     gaps = await engine.intake_gaps(db, intake.id)
     await engine.sync_questions(db, intake, gaps)
     engine.refresh_status(intake, gaps)
+    if raised:
+        # Answers to a gap that was private are proposed to the baseline now (S6).
+        from oracle.intake import answers
+
+        shared = [g for g in gaps if str(g.id) in raised]
+        await answers.propose_shared(db, principal, intake, shared)
     await flush_or_conflict(db)
     return done
+
+
+async def set_summary(
+    db: AsyncSession, principal: Principal, intake: ProductIntake, fid: str, text: str | None
+) -> None:
+    """The author confirms Oracle's draft line for the summary level, or writes their
+    own (S6); audited, without the text."""
+    author_only(principal, intake, "set what its findings say")
+    reg = sharing.registry(intake)
+    entry = reg.get(fid)
+    if entry is None:
+        raise not_found(f"Finding {fid}")
+    edited = text is not None and bool(text.strip())
+    reg[fid] = sharing.set_summary(entry, text)
+    intake.analysis = {**(intake.analysis or {}), "findings": dict(reg)}
+    await audit.record(
+        db, principal, "intake.finding_summary_set", "intake", intake.id,
+        {"finding_id": fid, "kind": entry["kind"], "category": entry.get("category"),
+         "edited": edited},
+    )  # fmt: skip
+    await flush_or_conflict(db)
 
 
 # --- runs ----------------------------------------------------------------------------------

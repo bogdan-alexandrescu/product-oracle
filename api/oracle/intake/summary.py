@@ -390,13 +390,30 @@ async def template_hint(
     )
 
 
-def gate(gaps: list) -> GateView:
-    unresolved = [g for g in gaps if g.importance == "critical" and g.status not in engine.DECIDED]
+def _unresolved_critical(gaps: list) -> list:
+    return [g for g in gaps if g.importance == "critical" and g.status not in engine.DECIDED]
+
+
+def gate(view: "View") -> GateView:
+    """The review gate as everyone sees it (S6 decision 1): a private critical gap gates
+    nothing until its author shares it at counts or above; the author alone sees their
+    private blockers listed apart."""
+    raw = list(view.raw.values())
+    public = [g for g in (sharing.gating_view(g, view.reg) for g in raw) if g is not None]
+    unresolved = _unresolved_critical(public)
     blocking = [g.id for g in unresolved if g.category in cats.HARD_BLOCKER_CATEGORIES]
+    private: list[uuid.UUID] = []
+    if view.v.is_author:
+        private = [
+            g.id
+            for g in _unresolved_critical([g for g in raw if sharing.withheld(g, view.reg)])
+            if g.category in cats.HARD_BLOCKER_CATEGORIES
+        ]
     return GateView(
         open_critical=len(unresolved),
         blocking_gap_ids=blocking,
         gate="blocked" if blocking else "clear",
+        private_blocking_gap_ids=private,
     )
 
 
@@ -472,6 +489,12 @@ class View:
         self.questions.sort(key=lambda q: (q.priority, q.created_at))
         return self
 
+    def importance(self, gap: Any) -> str:
+        """The gap's importance as everyone reads it (S6): what names who decides it and
+        what counts as an open critical gap, for every reader alike."""
+        raw = self.raw.get(gap.id)
+        return sharing.public_importance(raw, self.reg) if raw is not None else gap.importance
+
     async def refs(
         self, db: AsyncSession, ids: set[uuid.UUID], pin: Pinned
     ) -> dict[uuid.UUID, EvidenceRef]:
@@ -543,7 +566,10 @@ async def build(
             )
         )
     actions = [
-        a for g in engine.ranked(gaps) if g.importance == "critical" for a in next_actions(g)
+        a
+        for g in engine.ranked(gaps)
+        if view.importance(g) == "critical"
+        for a in next_actions(g, view.importance(g))
     ]
     return IntakeSummary(
         intake=await intake_out(db, intake, principal),
@@ -583,7 +609,7 @@ async def build(
         gaps=ranked,
         next_actions=actions,
         template=await template_hint(db, intake, gaps),
-        readiness=gate(gaps),
+        readiness=gate(view),
         batch=batch_state(questions),
         proposals=await proposals_of(db, intake, principal),
         shared_counts=[FindingCount(**c) for c in sharing.counts(view.reg, view.v)],
@@ -646,7 +672,7 @@ async def composition_inputs(
         c["count"] for c in analysis.get("shared_counts") or [] if c["kind"] == "conflict"
     )
     open_critical = [
-        g for g in gaps if g.importance == "critical" and g.status not in engine.DECIDED
+        g for g in gaps if view.importance(g) == "critical" and g.status not in engine.DECIDED
     ]
     return CompositionInputs(
         brief={"title": intake.title, "text": intake.brief},

@@ -4,19 +4,22 @@ An intake reads its author's own sources (AUD-9), which nobody else may read. Wh
 Oracle draws from them is a **finding**, and its author chooses, per finding, what
 everyone else sees:
 
-- ``private`` (the default): nothing from it;
+- ``private`` (the default): nothing from it, not even that it exists;
 - ``counts``: counts and categories only ("1 conflict in success metric evidence");
-- ``summary``: Oracle's own summary, never a verbatim excerpt or a number taken from
-  the item;
+- ``summary``: one line per finding. Oracle drafts it and the author confirms or edits
+  it; until then others see only Oracle's fixed category line (no filter ever
+  publishes model text on its own);
 - ``full``: everything, excerpts included.
 
 Findings are the model-written items and gaps (``origin: model``), source conflicts,
 stale evidence, and what a rule-made gap's evidence says (``origin: rules``: the gap
 itself, a fixed category text known by its ``rule_key``, stays shared; its evidence,
-confidence, inferred state and coverage row are the finding, and its importance comes
-from the brief and public facts only). A finding drawn only from sources everyone may read is not
-restricted; under AUD-9 every source is its owner's alone, so every finding drawn from
-an intake's pinned items is.
+confidence, inferred state and coverage row are the finding, kept in the finding and
+never on the shared row, so their arrival moves no row anyone else reads; its
+importance comes from the brief and public facts only, recorded on the row with its
+basis, ``brief`` or ``person``). A finding drawn only from sources everyone may read is
+not restricted; under AUD-9 every source is its owner's alone, so every finding drawn
+from an intake's pinned items is.
 
 The levels live in the intake's analysis (``analysis["findings"]``, keyed by finding
 id: an item's id, a gap's id, or a stable id for a conflict or stale item), so a
@@ -25,13 +28,15 @@ re-analysis keeps them. Model output written from shared text only is registered
 analysed before S6) fails closed: others see it as ``private``, and a model-written gap
 never registered as such is registered as a private model finding by the next
 analysis. Conflict and stale findings get random ids, so an id never confirms a
-guessed topic. Viewers, commenters, approvers, owners and run tokens all see
-only what the level allows; the author (never as a run token) sees everything. Every
-change of level is audited, and the author can lower a level again at any time.
+guessed topic. Viewers, commenters, approvers, owners and run tokens all see only what
+the level allows; the author sees everything, but never through a run token (agent
+runs, the author's own included, read each finding at its level). A private finding
+gates no publish and proposes nothing to the baseline until it is shared at counts or
+above (:func:`withheld`). Every change of level, and every summary line the author
+confirms, is audited; the author can lower a level again at any time.
 """
 
 import hashlib
-import re
 import uuid
 from collections import Counter
 from dataclasses import dataclass
@@ -44,6 +49,10 @@ from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
 from oracle.v2.schemas import KnowledgeGapOut, StakeholderQuestionOut
 
 LEVELS = ("private", "counts", "summary", "full")
+# What the author's sources add to a rule-made gap, kept in its finding (S6).
+PRIVATE_KEYS = ("evidence_ids", "confidence", "state")
+STATE_ORDER = ["unknown", "hypothesis", "ai_inference", "user_decision", "verified_fact"]
+OPEN_STATUSES = frozenset({"unknown", "under_investigation", "asked"})
 RANK = {level: n for n, level in enumerate(LEVELS)}
 DEFAULT = "private"
 KINDS = ("item", "gap", "conflict", "stale")
@@ -152,12 +161,18 @@ def register(
     restricted: bool = True,
     match: str | None = None,
     public_state: str | None = None,
+    draft: str | None = None,
+    private: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Add or refresh a finding; an existing finding keeps the level its author set.
-    ``restricted=False``: drawn from shared text only (shown to everyone). ``match``:
-    what finds a conflict or stale finding again on the next analysis
-    (:func:`finding_id`). ``public_state``: a rule-made gap's knowledge state without
-    the author's sources (what others see while its evidence is not shared)."""
+    """Add or refresh a finding; an existing finding keeps the level its author set and
+    the summary they confirmed. ``summary``: Oracle's fixed line for the finding;
+    ``draft``: the line Oracle drafts for the summary level, which shows only once the
+    author confirms or edits it (``published``). ``restricted=False``: drawn from
+    shared text only (shown to everyone). ``match``: what finds a conflict or stale
+    finding again on the next analysis (:func:`finding_id`). ``public_state``: a
+    rule-made gap's knowledge state without the author's sources. ``private``: what the
+    author's sources add to a rule-made gap (``evidence_ids``, ``confidence``,
+    ``state``), kept here and never on the shared row (None: keep what was kept)."""
     previous = reg.get(finding_id) or {}
     entry = {
         "kind": kind,
@@ -173,9 +188,17 @@ def register(
         entry["match"] = match
     if public_state is not None:
         entry["public_state"] = public_state
-    if previous.get("public_importance"):
-        # A person set the gap's importance: a public fact, kept.
-        entry["public_importance"] = previous["public_importance"]
+    for kept in ("public_importance", "published", "draft"):
+        # public_importance: a person's importance edit recorded before the gap row
+        # carried its basis (read for old rows only).
+        if previous.get(kept):
+            entry[kept] = previous[kept]
+    if draft is not None:
+        entry["draft"] = draft
+    for key in PRIVATE_KEYS:
+        value = (private or {}).get(key) if private is not None else previous.get(key)
+        if value is not None:
+            entry[key] = value
     if not restricted:
         entry["restricted"] = False
     reg[finding_id] = entry
@@ -205,59 +228,45 @@ def finding_id(
     return str(uuid.uuid4()), old.get(stable_id(intake_id, kind, *parts)) or {}, match
 
 
-# --- Oracle's own summaries -------------------------------------------------------------
+# --- the summary level ------------------------------------------------------------------
 
-_NUMBER = re.compile(r"[$€£]?\s?\d[\d.,:/]*\s?%?|\b(?:percent|per cent)\b", re.I)
-_QUOTE = re.compile(r"[\"“”‘’`«»]")
-_WORDS = re.compile(r"[a-z0-9']+")
-SHINGLE = 3
+
 MAX_SUMMARY = 240
 
 
-def _shingles(text: str, n: int = SHINGLE) -> set[tuple[str, ...]]:
-    words = _WORDS.findall(text.lower())
-    return {tuple(words[i : i + n]) for i in range(len(words) - n + 1)}
+def one_line(text: str | None, limit: int = MAX_SUMMARY) -> str:
+    text = " ".join((text or "").split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-_TOKEN = re.compile(r"[A-Za-z0-9][\w'-]*")
+def fixed_line(entry: dict[str, Any]) -> str:
+    """Oracle's fixed line for a finding: its kind and category, nothing drawn from the
+    author's sources. What the summary level shows until the author confirms a line."""
+    label = category_label(entry.get("category"))
+    if entry.get("origin") == "model":
+        if entry.get("kind") == "item":
+            return f"Oracle inferred something about the {label} from the author's sources."
+        return f"Oracle found an open question about {label} in the author's sources."
+    # Rule-made findings are stored with a fixed template already.
+    return entry.get("summary") or f"Oracle found evidence about {label} in the author's sources."
 
 
-def _identifying(token: str, first: bool) -> bool:
-    """A name, code or figure rather than an ordinary word."""
-    if any(c.isdigit() for c in token) or (len(token) > 1 and token.isupper()):
-        return True
-    if "-" in token and any(c.isupper() for c in token):
-        return True
-    return token[:1].isupper() and not first
+def shared_summary(entry: dict[str, Any]) -> str:
+    """The line the summary level shows (S6, owner 2026-10-19): the one the author
+    confirmed or wrote, else the fixed category line. Model text is never published by
+    a filter, only by its author."""
+    return entry.get("published") or fixed_line(entry)
 
 
-def oracle_summary(text: str, source_texts: list[str], fallback: str, shared: str = "") -> str:
-    """A model sentence fit for the ``summary`` level, else ``fallback``.
+def draft_summary(entry: dict[str, Any]) -> str:
+    """Oracle's draft for the summary level (the author's eyes only)."""
+    return entry.get("draft") or fixed_line(entry)
 
-    Numbers and quotation marks are removed. A sentence that repeats any three
-    consecutive words of a source text, or any name, code or figure a source contains
-    (and the shared text, ``shared``, does not), is replaced by the fallback (Oracle's
-    fixed wording). So a summary never carries a verbatim excerpt, a figure or a name
-    from an item, whatever the model was told inside the data."""
-    original = text or ""
-    words = _TOKEN.findall(original)
-    sources_lower = " ".join(source_texts).lower()
-    shared_lower = shared.lower()
-    for n, token in enumerate(words):
-        low = token.lower()
-        if _identifying(token, n == 0) and low in sources_lower and low not in shared_lower:
-            return fallback
-    cleaned = _QUOTE.sub("", _NUMBER.sub(" ", original))
-    cleaned = " ".join(cleaned.split()).strip(" .,;:-")
-    if len(cleaned.split()) < 3:
-        return fallback
-    mine = _shingles(cleaned)
-    for source in source_texts:
-        if mine & _shingles(source):
-            return fallback
-    if len(cleaned) > MAX_SUMMARY:
-        cleaned = cleaned[: MAX_SUMMARY - 1].rstrip() + "…"
-    return cleaned + ("" if cleaned.endswith((".", "?", "!", "…")) else ".")
+
+def set_summary(entry: dict[str, Any], text: str | None) -> dict[str, Any]:
+    """The author confirms the draft (``text`` None) or publishes their own line."""
+    line = one_line(text) if text is not None and text.strip() else draft_summary(entry)
+    return {**entry, "published": line}
 
 
 def category_label(category: str | None) -> str:
@@ -327,18 +336,56 @@ def model_written(gap: KnowledgeGap) -> bool:
     return gap.created_by is None and gap.intake_id is not None and not rule_made(gap)
 
 
-def public_importance(gap: KnowledgeGap, reg: dict[str, dict[str, Any]], entry: dict) -> str:
-    """A rule-made gap's importance as everyone else sees it (S6, owner 2026-10-19):
-    from the brief and public facts only. A person's edit (``public_importance``) is a
-    public fact; otherwise the brief decides, so a row written while the author's
-    sources still moved importance shows what the brief gives."""
+def stronger(a: str, b: str) -> str:
+    return a if STATE_ORDER.index(a) >= STATE_ORDER.index(b) else b
+
+
+def public_importance(
+    gap: KnowledgeGap, reg: dict[str, dict[str, Any]], entry: dict | None = None
+) -> str:
+    """A gap's importance as everyone else sees it (S6, owner 2026-10-19): from the
+    brief and public facts only. A row that records its basis (``brief``: the engine
+    set it from the brief; ``person``: someone set it) holds that value. Only a
+    rule-made row from before the basis was recorded is read from the brief (or the
+    person's edit its finding recorded then): its importance may have been moved by
+    the author's sources."""
+    if not rule_made(gap) or getattr(gap, "importance_basis", None) is not None:
+        return gap.importance
+    entry = entry if entry is not None else reg.get(str(gap.id)) or {}
     if entry.get("public_importance"):
         return entry["public_importance"]
     signals = getattr(reg, "signals", None)
-    if not rule_made(gap) or signals is None:
+    if signals is None:
         return gap.importance
-    speaks = cats.BRIEF_FIELDS.get(gap.category) in getattr(reg, "brief_fields", frozenset())
-    return cats.brief_importance(cats.BY_KEY[gap.category], signals, speaks)
+    return cats.brief_importance(cats.BY_KEY[gap.category], signals, _brief_speaks(gap, reg))
+
+
+def _brief_speaks(gap: Any, reg: dict[str, dict[str, Any]]) -> bool:
+    return cats.BRIEF_FIELDS.get(gap.category) in getattr(reg, "brief_fields", frozenset())
+
+
+def private_overlay(gap: KnowledgeGap, entry: dict[str, Any] | None) -> dict[str, Any]:
+    """What the author's sources add to a rule-made gap, from its finding: evidence,
+    confidence and, while the gap is open, the inferred state. The shared row never
+    holds them, so their arrival moves no row anyone else reads."""
+    if entry is None or entry.get("origin") == "model":
+        return {}
+    changes: dict[str, Any] = {}
+    have = set(gap.evidence_ids)
+    extra = [uuid.UUID(e) for e in entry.get("evidence_ids") or [] if uuid.UUID(e) not in have]
+    if extra:
+        changes["evidence_ids"] = [*gap.evidence_ids, *extra]
+    if entry.get("confidence") is not None and gap.confidence is None:
+        changes["confidence"] = entry["confidence"]
+    state = entry.get("state")
+    if (
+        state
+        and gap.status in OPEN_STATUSES
+        and gap.knowledge_state != "user_decision"
+        and stronger(gap.knowledge_state, state) != gap.knowledge_state
+    ):
+        changes["knowledge_state"] = stronger(gap.knowledge_state, state)
+    return changes
 
 
 def gap_changes(
@@ -347,8 +394,10 @@ def gap_changes(
     """What ``v`` sees differently of the gap: None when it is hidden from them, ``{}``
     when they see it as it is."""
     entry = reg.get(str(gap.id))
-    if v.is_author or is_open(entry):
+    if is_open(entry):
         return {}
+    if v.is_author:
+        return private_overlay(gap, entry)
     if (
         getattr(reg, "analysed", False)
         and model_written(gap)
@@ -370,12 +419,12 @@ def gap_changes(
     if entry.get("origin") == "model":
         if RANK[level] < RANK["summary"]:
             return None
-        return {"statement": entry["summary"]} if level == "summary" else {}
+        return {"statement": shared_summary(entry)} if level == "summary" else {}
     if RANK[level] >= RANK["summary"]:
-        return {}
-    # A rule-made gap: its statement is a fixed category text; what the author's
-    # sources say about it (evidence, confidence, the inferred state, any importance
-    # they once gave it) is not shared.
+        return private_overlay(gap, entry)
+    # A rule-made gap: its statement is a fixed category text and its row holds only
+    # public facts. A row written before that (evidence, confidence or an inferred state
+    # from the author's sources, an importance they once moved) shows without them.
     changes: dict[str, Any] = {}
     importance = public_importance(gap, reg, entry)
     if importance != gap.importance:
@@ -386,20 +435,36 @@ def gap_changes(
         return changes
     state = gap.knowledge_state
     if state == "ai_inference":
-        state = entry.get("public_state", "unknown")
+        state = entry.get("public_state") or (
+            "hypothesis" if _brief_speaks(gap, reg) else "unknown"
+        )
     return {**changes, "evidence_ids": kept, "confidence": None, "knowledge_state": state}
 
 
-def set_public_importance(intake: ProductIntake, gap: KnowledgeGap) -> None:
-    """Record a person's choice of a rule-made gap's importance in its finding, so
-    everyone else reads it rather than what the brief alone gives."""
-    analysis = intake.analysis or {}
-    reg = dict(analysis.get("findings") or {})
+def withheld(gap: KnowledgeGap, reg: dict[str, dict[str, Any]]) -> bool:
+    """A private finding: hidden from everyone else and not shared at counts or above.
+    It gates nothing and proposes nothing until its author shares it (S6 decisions 1
+    and 4, owner 2026-10-19)."""
+    if gap_changes(gap, reg, EVERYONE) is not None:
+        return False
     entry = reg.get(str(gap.id))
-    if entry is None or entry.get("origin") == "model":
-        return
-    reg[str(gap.id)] = {**entry, "public_importance": gap.importance}
-    intake.analysis = {**analysis, "findings": reg}
+    return entry is None or RANK[entry.get("sharing", DEFAULT)] < RANK["counts"]
+
+
+def gating_view(gap: KnowledgeGap, reg: dict[str, dict[str, Any]]) -> Any | None:
+    """The gap as the review gate counts it for everyone: as everyone sees it; a finding
+    shared as counts by its id, category, importance and status only; None while it is
+    private (it gates nothing then)."""
+    view = gap_view(gap, reg, EVERYONE)
+    if view is not None:
+        return view
+    if withheld(gap, reg):
+        return None
+    return SimpleNamespace(
+        id=gap.id, category=gap.category, importance=gap.importance, status=gap.status,
+        statement=f"shared as counts: {counts_label('gap', gap.category, 1)}",
+        evidence_ids=[], owner_id=None, section_keys=[],
+    )  # fmt: skip
 
 
 def gap_view(gap: KnowledgeGap, reg: dict[str, dict[str, Any]], v: Viewer) -> Any | None:
@@ -502,7 +567,7 @@ def item_view(
         return None
     evidence = [e for e in item.get("evidence_ids") or [] if uuid.UUID(e) in shared]
     if level == "summary":
-        return {**item, "text": entry["summary"], "evidence_ids": evidence}  # type: ignore[index]
+        return {**item, "text": shared_summary(entry), "evidence_ids": evidence}  # type: ignore[arg-type]
     return {**item, "evidence_ids": evidence}
 
 
@@ -518,7 +583,7 @@ def conflict_view(c: dict[str, Any], reg: dict[str, dict[str, Any]], v: Viewer) 
     if level == "summary":
         return {
             "finding_id": c.get("finding_id"),
-            "topic": entry["summary"],
+            "topic": shared_summary(entry),
             "summary_only": True,
             "claims": [
                 {

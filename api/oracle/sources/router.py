@@ -1,7 +1,10 @@
 """Sources, sync, uploads, items, snapshots and search (Lane B1).
 
 Sources are owned (S3 revised): every route acts for the signed-in user, who sees and
-syncs only their own sources and items. Another user's source or item is a 404.
+syncs only their own sources and items. Another user's source or item is a 404. A run
+token acting for its user never reads raw an item behind one of the user's intake
+findings not shared in full (S6, ``oracle.intake.evidence.run_withheld``): the item is
+left out of every list and search, and is a 404.
 """
 
 import uuid
@@ -40,6 +43,13 @@ def _user(principal: Principal) -> uuid.UUID:
     if principal.kind != "user" or principal.user_id is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_A_USER)
     return principal.user_id
+
+
+async def _withheld(db: TenantDB, principal: Principal) -> set[uuid.UUID]:
+    """Items a run token may not read raw (empty for anyone else)."""
+    from oracle.intake.evidence import run_withheld
+
+    return await run_withheld(db, principal) or set()
 
 
 def _http(exc: Exception) -> HTTPException:
@@ -261,8 +271,9 @@ async def list_source_items(
 ) -> list[ItemOut]:
     source = await _owned(db, principal, source_id)
     rows = await items.source_items(
-        db, source, include_deleted=include_deleted, limit=limit, offset=offset
-    )
+        db, source, include_deleted=include_deleted, limit=limit, offset=offset,
+        exclude=await _withheld(db, principal),
+    )  # fmt: skip
     settings = await items.confidence_settings(db)
     return [ItemOut(**items.item_out(r, settings)) for r in rows]
 
@@ -272,7 +283,7 @@ async def get_source_item(
     item_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> ItemDetail:
     row = await items.owned_item(db, _user(principal), item_id)
-    if row is None:
+    if row is None or item_id in await _withheld(db, principal):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
     versions = await db.scalar(select(func.count()).where(SourceItemVersion.item_id == row.item.id))
     settings = await items.confidence_settings(db)
@@ -364,6 +375,8 @@ async def list_snapshot_items(
     rows = await items.items_as_of(
         db, _user(principal), snapshot.as_of, source_id=source, txn_snapshot=snapshot.txn_snapshot
     )
+    withheld = await _withheld(db, principal)
+    rows = [r for r in rows if r.item.id not in withheld]
     settings = await items.confidence_settings(db)
     return [ItemOut(**items.item_out(r, settings, now=snapshot.as_of)) for r in rows]
 
@@ -399,6 +412,7 @@ async def search_sources(
     if as_of is not None and as_of.tzinfo is None:
         as_of = as_of.replace(tzinfo=UTC)
     hits = await search_service.search(
-        db, user_id, q, kinds=_kinds(kinds), source_id=source, as_of=as_of, limit=limit
-    )
+        db, user_id, q, kinds=_kinds(kinds), source_id=source, as_of=as_of, limit=limit,
+        exclude=await _withheld(db, principal),
+    )  # fmt: skip
     return SearchResults(query=q, as_of=as_of, hits=hits)  # type: ignore[arg-type]

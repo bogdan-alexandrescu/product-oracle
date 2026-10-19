@@ -13010,7 +13010,7 @@
           "intake"
         ],
         "summary": "Search Intake Evidence",
-        "description": "Search your own source items as they were at the intake's pinned snapshot.\n\nResults are untrusted data. Every query is audited (``intake.evidence_query``).",
+        "description": "Search your own source items as they were at the intake's pinned snapshot. A run\ntoken searches only the items of the intake's findings shared in full (S6).\n\nResults are untrusted data. Every query is audited (``intake.evidence_query``).",
         "operationId": "search_intake_evidence",
         "security": [
           {
@@ -13602,6 +13602,78 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SharingIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/findings/{finding_id}/summary": {
+      "put": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Set Intake Finding Summary",
+        "description": "Confirm Oracle's draft line for the summary level (no ``text``) or write your own\n(the author only, never a run; audited). Until then, the summary level shows others\nonly Oracle's fixed category line (S6).",
+        "operationId": "set_intake_finding_summary",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FindingSummaryIn"
               }
             }
           }
@@ -20296,7 +20368,14 @@
             "default": true
           },
           "snippet": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Snippet"
           },
           "relevance": {
@@ -20309,7 +20388,6 @@
           "source_item_id",
           "visible",
           "source_kind",
-          "snippet",
           "relevance"
         ],
         "title": "EvidenceHit"
@@ -21540,6 +21618,28 @@
             ],
             "title": "Summary"
           },
+          "summary_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Confirmed"
+          },
+          "draft_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Summary"
+          },
           "gap_id": {
             "anyOf": [
               {
@@ -21570,7 +21670,26 @@
           "sharing"
         ],
         "title": "FindingOut",
-        "description": "A finding drawn from the author's own sources and what others see of it (S6).\n\nThe author sees every finding. Anyone else sees those shared at \"counts\" or above:\nthe kind and category; from \"summary\" Oracle's summary and the gap; at \"full\" the\nsource items it cites."
+        "description": "A finding drawn from the author's own sources and what others see of it (S6).\n\nThe author sees every finding. Anyone else sees those shared at \"counts\" or above:\nthe kind and category; from \"summary\" its line and the gap; at \"full\" the source\nitems it cites. ``summary``: the line the summary level shows, the one its author\nconfirmed or wrote, else Oracle's fixed category line. ``draft_summary``: Oracle's\ndraft, for the author only."
+      },
+      "FindingSummaryIn": {
+        "properties": {
+          "text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 240
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "title": "FindingSummaryIn",
+        "description": "The line others see at the summary level: omit ``text`` to confirm Oracle's draft\nas it stands."
       },
       "FlowCatalog": {
         "properties": {
@@ -21947,6 +22066,15 @@
               "blocked"
             ],
             "title": "Gate"
+          },
+          "private_blocking_gap_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Private Blocking Gap Ids",
+            "default": []
           }
         },
         "type": "object",
@@ -21955,7 +22083,8 @@
           "blocking_gap_ids",
           "gate"
         ],
-        "title": "GateView"
+        "title": "GateView",
+        "description": "The review gate as everyone sees it. ``private_blocking_gap_ids``: for the author\nonly, their private critical blockers, which gate nothing until shared at counts or\nabove (S6)."
       },
       "GoalLink": {
         "properties": {

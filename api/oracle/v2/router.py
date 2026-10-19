@@ -11,7 +11,8 @@ a reader's view of a resource (:func:`register_view`): rows the reader may not s
 left out (a get is 404), and the rest are returned as the view shapes them. A lane that
 hides rows also registers the SQL that leaves them out (:func:`register_hidden`), which a
 list applies before ``limit`` and ``offset``: pages never shift, so their size never
-tells the reader where a hidden row is.
+tells the reader where a hidden row is. A lane whose readers see a value other than the
+stored column's registers how a filter on it reads (:func:`register_filter`).
 """
 
 import inspect
@@ -44,6 +45,16 @@ VIEWS: dict[str, View] = {}
 # call's own filters (column name -> value), so only rows the call may list are read.
 Hidden = Callable[[Any, Principal, dict[str, Any]], Awaitable[Any]]
 HIDDEN: dict[str, Hidden] = {}
+
+
+# (path, filter name) -> async (db, principal, value) -> the WHERE clause a list call's
+# filter applies, when the value readers see is not always the stored column's.
+Filter = Callable[[Any, Principal, Any], Awaitable[Any]]
+FILTERS: dict[tuple[str, str], Filter] = {}
+
+
+def register_filter(path: str, name: str, fn: Filter) -> None:
+    FILTERS[(path, name)] = fn
 
 
 def register_view(path: str, view: View) -> None:
@@ -286,7 +297,11 @@ def _list_endpoint(res: Resource) -> Callable[..., Any]:
         stmt = select(res.model)
         filters = {name: value for name, value in params.items() if value is not None}
         for name, value in filters.items():
-            stmt = stmt.where(getattr(res.model, name) == value)
+            custom = FILTERS.get((res.path, name))
+            if custom is not None:
+                stmt = stmt.where(await custom(db, principal, value))
+            else:
+                stmt = stmt.where(getattr(res.model, name) == value)
         hidden = HIDDEN.get(res.path)
         if hidden is not None:
             visible = await hidden(db, principal, filters)

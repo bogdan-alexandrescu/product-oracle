@@ -3462,7 +3462,8 @@ export interface paths {
         };
         /**
          * Search Intake Evidence
-         * @description Search your own source items as they were at the intake's pinned snapshot.
+         * @description Search your own source items as they were at the intake's pinned snapshot. A run
+         *     token searches only the items of the intake's findings shared in full (S6).
          *
          *     Results are untrusted data. Every query is audited (``intake.evidence_query``).
          */
@@ -3657,6 +3658,28 @@ export interface paths {
          *     author only; audited; lower it again at any time).
          */
         patch: operations["set_intake_finding_sharing"];
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings/{finding_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Intake Finding Summary
+         * @description Confirm Oracle's draft line for the summary level (no ``text``) or write your own
+         *     (the author only, never a run; audited). Until then, the summary level shows others
+         *     only Oracle's fixed category line (S6).
+         */
+        put: operations["set_intake_finding_summary"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/intakes/{intake_id}/findings/sharing": {
@@ -6062,7 +6085,7 @@ export interface components {
              */
             untrusted: true;
             /** Snippet */
-            snippet: string;
+            snippet?: string | null;
             /** Relevance */
             relevance: number;
         };
@@ -6470,8 +6493,10 @@ export interface components {
          * @description A finding drawn from the author's own sources and what others see of it (S6).
          *
          *     The author sees every finding. Anyone else sees those shared at "counts" or above:
-         *     the kind and category; from "summary" Oracle's summary and the gap; at "full" the
-         *     source items it cites.
+         *     the kind and category; from "summary" its line and the gap; at "full" the source
+         *     items it cites. ``summary``: the line the summary level shows, the one its author
+         *     confirmed or wrote, else Oracle's fixed category line. ``draft_summary``: Oracle's
+         *     draft, for the author only.
          */
         FindingOut: {
             /**
@@ -6498,6 +6523,10 @@ export interface components {
             sharing: "private" | "counts" | "summary" | "full";
             /** Summary */
             summary?: string | null;
+            /** Summary Confirmed */
+            summary_confirmed?: boolean | null;
+            /** Draft Summary */
+            draft_summary?: string | null;
             /** Gap Id */
             gap_id?: string | null;
             /**
@@ -6505,6 +6534,15 @@ export interface components {
              * @default []
              */
             source_item_ids: string[];
+        };
+        /**
+         * FindingSummaryIn
+         * @description The line others see at the summary level: omit ``text`` to confirm Oracle's draft
+         *     as it stands.
+         */
+        FindingSummaryIn: {
+            /** Text */
+            text?: string | null;
         };
         /** FlowCatalog */
         FlowCatalog: {
@@ -6610,7 +6648,12 @@ export interface components {
             /** Stop Condition */
             stop_condition?: string | null;
         };
-        /** GateView */
+        /**
+         * GateView
+         * @description The review gate as everyone sees it. ``private_blocking_gap_ids``: for the author
+         *     only, their private critical blockers, which gate nothing until shared at counts or
+         *     above (S6).
+         */
         GateView: {
             /** Open Critical */
             open_critical: number;
@@ -6621,6 +6664,11 @@ export interface components {
              * @enum {string}
              */
             gate: "clear" | "blocked";
+            /**
+             * Private Blocking Gap Ids
+             * @default []
+             */
+            private_blocking_gap_ids: string[];
         };
         /** GoalLink */
         GoalLink: {
@@ -17473,6 +17521,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SharingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_intake_finding_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingSummaryIn"];
             };
         };
         responses: {

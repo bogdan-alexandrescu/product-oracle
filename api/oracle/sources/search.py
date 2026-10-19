@@ -32,7 +32,9 @@ async def search(
     as_of: datetime | None = None,
     txn_snapshot: str | None = None,
     limit: int = 20,
+    exclude: set[uuid.UUID] | None = None,
 ) -> list[dict[str, Any]]:
+    """``exclude``: items the caller may not read (left out before ranking)."""
     query = func.websearch_to_tsquery("english", q)
     visible = items.version_ids(user_id, as_of, txn_snapshot).subquery()
     rank = func.ts_rank(SourceItemVersion.search, query)
@@ -51,6 +53,8 @@ async def search(
         stmt = stmt.where(SourceItem.kind.in_(kinds))
     if source_id is not None:
         stmt = stmt.where(SourceItem.source_id == source_id)
+    if exclude:
+        stmt = stmt.where(SourceItem.id.not_in(exclude))
     rows = (await session.execute(stmt)).all()
     if not rows:
         return []

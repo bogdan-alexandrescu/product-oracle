@@ -21,6 +21,12 @@ Security review fixes (same lane, same revision):
   made by rule. A rule-made gap was told from a model-written one by its statement
   text, so rewording a category in code turned rule gaps private (S6). Existing rows
   are backfilled from the statements as they stand at this revision.
+- ``knowledge_gaps.importance_basis`` (round 4): where a gap's importance comes from,
+  ``brief`` (the engine, from the brief and public facts) or ``person`` (someone set it).
+  It is recorded on the gap whatever private findings the intake holds, so setting
+  importance changes the same rows either way (S6). Existing rows keep NULL: their
+  importance may have been moved by private sources, so reads still derive what others
+  see from the brief for them.
 
 The integrator re-chains this revision in merge order (waves.md).
 
@@ -191,8 +197,17 @@ def upgrade() -> None:
             ).bindparams(key=key, statement=statement)
         )
 
+    op.add_column("knowledge_gaps", sa.Column("importance_basis", sa.Text(), nullable=True))
+    op.create_check_constraint(
+        op.f("ck_knowledge_gaps_importance_basis"),
+        "knowledge_gaps",
+        "importance_basis IS NULL OR importance_basis IN ('brief', 'person')",
+    )
+
 
 def downgrade() -> None:
+    op.drop_constraint(op.f("ck_knowledge_gaps_importance_basis"), "knowledge_gaps", type_="check")
+    op.drop_column("knowledge_gaps", "importance_basis")
     op.drop_column("knowledge_gaps", "rule_key")
     # A gap waiting for review goes back to answered (what it was before B4).
     op.execute(

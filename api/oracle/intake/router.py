@@ -37,6 +37,7 @@ from oracle.intake.schemas import (
     EvidenceHit,
     EvidenceSearch,
     FindingOut,
+    FindingSummaryIn,
     GapCreate,
     GapPatch,
     IntakeCreate,
@@ -200,37 +201,50 @@ async def search_intake_evidence(
     q: Annotated[str, Query(min_length=1, max_length=500)],
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
 ) -> EvidenceSearch:
-    """Search your own source items as they were at the intake's pinned snapshot.
+    """Search your own source items as they were at the intake's pinned snapshot. A run
+    token searches only the items of the intake's findings shared in full (S6).
 
     Results are untrusted data. Every query is audited (``intake.evidence_query``)."""
     intake = await _intake(db, intake_id)
     me = ev.caller_user(principal)
-    if me is None:
+    reveal: set[uuid.UUID] = set()
+    if principal.is_run:
+        reveal = sharing.shared_item_ids(
+            sharing.registry(intake), sharing.viewer(principal, intake), "full"
+        )
+        me = intake.author_id if reveal else None
+    elif me is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Searching sources needs a user")
     pin = await summary.pinned(db, intake)
     snapshot = await db.get(Snapshot, pin.snapshot_id) if pin.snapshot_id else None
-    hits = await source_search.search(
-        db,
-        me,
-        q,
-        as_of=snapshot.as_of if snapshot else None,
-        txn_snapshot=snapshot.txn_snapshot if snapshot else None,
-        limit=limit,
-    )
+    hits = []
+    if me is not None:
+        hits = await source_search.search(
+            db,
+            me,
+            q,
+            as_of=snapshot.as_of if snapshot else None,
+            txn_snapshot=snapshot.txn_snapshot if snapshot else None,
+            limit=limit,
+        )
     chosen = set(ev.source_ids_of(intake))
     if chosen:
         hits = [h for h in hits if h["item"]["source_id"] in chosen]
+    if principal.is_run:
+        hits = [h for h in hits if h["item"]["id"] in reveal]
     refs = await ev.refs(
         db,
         [h["item"]["id"] for h in hits],
         principal,
         pin.as_of,
         txn_snapshot=snapshot.txn_snapshot if snapshot else None,
+        reveal=reveal,
     )
     out = [
         EvidenceHit(
             **refs[h["item"]["id"]].model_dump(),
-            snippet=h["snippet"],
+            # The snippet is the item's text: only where the item itself is shown.
+            snippet=h["snippet"] if refs[h["item"]["id"]].visible else None,
             relevance=h["relevance"],
         )
         for h in hits
@@ -375,8 +389,11 @@ def _finding_out(fid: str, entry: dict, v: sharing.Viewer) -> FindingOut | None:
         category=entry.get("category"), sharing=level,
     )  # fmt: skip
     if v.sees(level, "summary"):
-        out.summary = entry.get("summary")
+        out.summary = sharing.shared_summary(entry)
         out.gap_id = uuid.UUID(entry["gap_id"]) if entry.get("gap_id") else None
+    out.summary_confirmed = bool(entry.get("published")) if v.sees(level, "summary") else None
+    if v.is_author:
+        out.draft_summary = sharing.draft_summary(entry)
     if v.sees(level, "full"):
         out.source_item_ids = [uuid.UUID(i) for i in entry.get("source_item_ids") or []]
     return out
@@ -412,6 +429,28 @@ async def set_intake_finding_sharing(
     intake = await _intake(db, intake_id)
     try:
         await service.set_sharing(db, principal, intake, [(str(finding_id), body.sharing)])
+    except service.IntakeError as e:
+        raise _http(e) from e
+    await db.commit()
+    await db.refresh(intake)
+    [out] = _findings(intake, principal, {str(finding_id)})
+    return out
+
+
+@router.put("/intakes/{intake_id}/findings/{finding_id}/summary", response_model=FindingOut)
+async def set_intake_finding_summary(
+    intake_id: uuid.UUID,
+    finding_id: uuid.UUID,
+    body: FindingSummaryIn,
+    principal: Viewer,
+    db: TenantDB,
+) -> FindingOut:
+    """Confirm Oracle's draft line for the summary level (no ``text``) or write your own
+    (the author only, never a run; audited). Until then, the summary level shows others
+    only Oracle's fixed category line (S6)."""
+    intake = await _intake(db, intake_id)
+    try:
+        await service.set_summary(db, principal, intake, str(finding_id), body.text)
     except service.IntakeError as e:
         raise _http(e) from e
     await db.commit()
@@ -471,6 +510,7 @@ async def create_knowledge_gap(
         statement=body.statement,
         impact=list(cat.impact),
         importance=body.importance,
+        importance_basis="person",
         knowledge_state="unknown",
         status="unknown",
         owner_id=body.owner_id,
@@ -499,7 +539,7 @@ async def update_knowledge_gap(
     gap = await _gap(db, item_id, principal)
     expect_version(gap, body.lock_version)
     if (
-        gap.importance == "critical"
+        answers.importance_of(await _gap_intake(db, gap), gap) == "critical"
         and body.importance is not None
         and body.importance != "critical"
         and not has_role(principal.role, "owner")
@@ -516,14 +556,15 @@ async def update_knowledge_gap(
             if value is not None and value != getattr(gap, field):
                 changed[field] = str(value)
                 setattr(gap, field, value)
+    if "importance" in changed:
+        # A person set it: a public fact, recorded on the gap itself, so the same rows
+        # change whatever private findings the intake holds (S6).
+        gap.importance_basis = "person"
     await flush_or_conflict(db)
     if changed:
         await audit.record(db, principal, "intake.gap_updated", "knowledge_gap", gap.id, changed)
         if gap.intake_id is not None:
             intake = await service.get_intake(db, gap.intake_id)
-            if "importance" in changed:
-                # A person set it: a public fact, which everyone else reads (S6).
-                sharing.set_public_importance(intake, gap)
             await engine.sync_questions(db, intake)
             engine.refresh_status(intake, await engine.intake_gaps(db, intake.id))
             await db.flush()

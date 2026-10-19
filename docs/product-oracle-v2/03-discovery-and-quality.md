@@ -63,6 +63,15 @@ limits, configurability and scaling (`categories.CATEGORIES`).
   that snapshot (`GET /v1/snapshots/{id}/items` allows a snapshot a run of the caller is
   pinned to); what it reads there is the run creator's own items, never the author's, and
   the intake itself only as its findings are shared (S6).
+- Agent runs, including runs the author starts, read each finding only at its sharing
+  level (S6 follow-up 3, owner 2026-10-19): a run token is never the author for reads. It
+  reads no item raw that a finding of its user's intakes cites unless that finding is
+  shared in full: such items are left out of `/v1/search`, `/v1/sources/{id}/items`,
+  `/v1/snapshots/{id}/items` and are 404 at `/v1/source-items/{id}`
+  (`oracle.intake.evidence.run_withheld`; an intake analysed before findings were
+  registered withholds everything it read). `/intakes/{id}/evidence` searches, for a run,
+  only the items of the intake's findings shared in full; a hit's snippet shows only
+  where the item itself is shown. To give agents a private source, its author shares it.
 
 ## 3. Untrusted content
 
@@ -98,7 +107,7 @@ see of a finding drawn from their own sources (`oracle/intake/sharing.py`):
 |---|---|
 | `private` (default) | nothing: the finding is left out, a model-written gap is 404 with its questions, answers and decisions, a rule-made gap shows no evidence, confidence or inferred state |
 | `counts` | `shared_counts` on the summary and `analysis`: kind, category and number ("1 conflict in success metric and baseline evidence") |
-| `summary` | Oracle's summary: a model sentence without figures, quotes, any name or code from a source or four words in a row from one, else Oracle's fixed wording; evidence refs without titles, links or excerpts; conflicts without values |
+| `summary` | one line per finding: Oracle drafts it and the author confirms or edits it (`PUT /v1/intakes/{id}/findings/{finding_id}/summary`, audited as `intake.finding_summary_set` without the text); until then others see only Oracle's fixed category line ("Oracle found an open question about release and rollout in the author's sources."). No filter publishes model text. Evidence refs without titles, links or excerpts; conflicts without values |
 | `full` | everything, excerpts of the cited items included |
 
 Findings are the model-written items and gaps, source conflicts, stale evidence, and the
@@ -119,6 +128,34 @@ to); the author can lower a level at any time. Text that travels into shared pla
 (baseline proposals, PRD patches, research proposals, coverage reasons) never carries a
 model-written gap's own words.
 
+`private` means others see nothing, including that a finding exists. So what the
+author's sources say about a rule-made gap (its evidence, confidence and inferred state)
+is kept in the gap's finding (`evidence_ids`, `confidence`, `state`), never on the shared
+gap row: the author's reads (and anyone's, at `summary` or above) add it back. A repin
+that changes only what private sources say moves no shared row, not even a
+`lock_version` or `updated_at`, and a draft question's stored rationale is the one
+everyone reads. Gap importance comes from the brief and public facts only:
+`knowledge_gaps.importance_basis` records where it came from, `brief` (the engine sets it
+from the brief and refreshes it on each analysis while the gap is open) or `person`
+(someone set it, `PATCH /v1/gaps/{id}` or `POST /v1/gaps`; kept). Recording it changes the
+same rows whether or not the intake holds a private finding for the gap. Only a
+rule-made row from before the basis was recorded (NULL) is read from the brief, or from
+the importance edit its finding recorded then; `/v1/gaps?importance=`, next actions,
+composition inputs and the B4 checks all read that same public importance.
+
+Three more follow-ups (owner, 2026-10-19):
+
+- A critical gap from private sources blocks publishing only once its author shares it
+  at `counts` or above; it is then named in the gate by its id and category alone. While
+  it is private, publish passes, and the author alone is warned: the readiness check
+  adds "Only you see this: ..." (status `warning`) when the report is read by the author
+  (`ReadinessContext.viewer`), and the summary's `readiness.private_blocking_gap_ids`
+  lists them for the author.
+- Answering a question about a private finding makes no baseline proposal (nothing in
+  the baseline names the gap or the intake). When the author shares the finding at
+  `counts` or above, each answer is proposed as usual, once.
+- Agent runs read each finding at its level (§2 above).
+
 ## 4. Routes (all `/v1`, all MCP tools)
 
 | Route | Tool | Role | Screen |
@@ -132,7 +169,8 @@ model-written gap's own words.
 | `GET /intakes/{intake_id}/findings` | `list_intake_findings` | viewer | Sharing panel |
 | `PATCH /intakes/{intake_id}/findings/{finding_id}` | `set_intake_finding_sharing` | the author | Sharing panel |
 | `POST /intakes/{intake_id}/findings/sharing` | `set_intake_findings_sharing` | the author | Sharing panel |
-| `GET /intakes/{intake_id}/evidence?q=` | `search_intake_evidence` | viewer (own items) | Evidence panel |
+| `PUT /intakes/{intake_id}/findings/{finding_id}/summary` | `set_intake_finding_summary` | the author (never a run) | Sharing panel |
+| `GET /intakes/{intake_id}/evidence?q=` | `search_intake_evidence` | viewer (own items; a run: items shared in full) | Evidence panel |
 | `GET /intakes/{intake_id}/question-batch` | `get_question_batch` | viewer | Question batch |
 | `POST /intakes/{intake_id}/question-batches` | `ask_next_question_batch` | the author or an approver | Question batch |
 | `GET /intakes/{intake_id}/composition-inputs` | `get_intake_composition_inputs` | viewer | (modules lane) |

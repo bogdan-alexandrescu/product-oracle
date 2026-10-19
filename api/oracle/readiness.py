@@ -24,7 +24,7 @@ import uuid
 from collections.abc import Awaitable, Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +42,9 @@ class ReadinessContext:
     composition_revision: int | None = None
     # "publish" when the publish transaction asks; checks may be stricter then.
     purpose: Literal["advisory", "publish"] = "advisory"
+    # Who reads the report, when known: a check may add what only they may see (S6: an
+    # intake's author is warned of their private findings), never change what blocks.
+    viewer: Any = None
 
 
 class CheckOutcome(BaseModel):

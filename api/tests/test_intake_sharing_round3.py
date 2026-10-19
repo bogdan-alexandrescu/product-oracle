@@ -423,6 +423,8 @@ async def test_old_rows_show_importance_and_priority_from_public_facts(client):
         touched = [g for g in gaps if str(g.id) in reg]
         assert touched
         for g in touched:
+            # A row from before its importance basis was recorded.
+            g.importance_basis = None
             g.importance = "low" if g.importance != "low" else "critical"
             for q in (
                 await s.scalars(

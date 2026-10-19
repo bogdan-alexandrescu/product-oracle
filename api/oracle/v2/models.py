@@ -369,6 +369,10 @@ class KnowledgeGap(TenantScoped, Base):
         CheckConstraint(_all_in("impact", IMPACT_AREAS), name="impact"),
         CheckConstraint(CONFIDENCE_RANGE, name="confidence"),
         CheckConstraint("intake_id IS NOT NULL OR document_id IS NOT NULL", name="subject"),
+        CheckConstraint(
+            "importance_basis IS NULL OR importance_basis IN ('brief', 'person')",
+            name="importance_basis",
+        ),
     )
 
     intake_id: Mapped[uuid.UUID | None] = _fk("product_intakes")
@@ -396,6 +400,10 @@ class KnowledgeGap(TenantScoped, Base):
     # None for a gap a person or the model wrote. Its statement text may change in
     # code; this does not (S6: model-written gaps are private, rule-made ones are not).
     rule_key: Mapped[str | None] = mapped_column(Text)
+    # Where the importance comes from: "brief" (the engine, from the brief and public
+    # facts; refreshed by each analysis) or "person" (someone set it; kept). None: a row
+    # from before this was recorded, whose importance others read from the brief (S6).
+    importance_basis: Mapped[str | None] = mapped_column(Text)
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
     updated_at: Mapped[datetime] = _updated_at()

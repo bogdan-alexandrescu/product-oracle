@@ -276,8 +276,10 @@ class FindingOut(BaseModel):
     """A finding drawn from the author's own sources and what others see of it (S6).
 
     The author sees every finding. Anyone else sees those shared at "counts" or above:
-    the kind and category; from "summary" Oracle's summary and the gap; at "full" the
-    source items it cites."""
+    the kind and category; from "summary" its line and the gap; at "full" the source
+    items it cites. ``summary``: the line the summary level shows, the one its author
+    confirmed or wrote, else Oracle's fixed category line. ``draft_summary``: Oracle's
+    draft, for the author only."""
 
     id: uuid.UUID
     kind: FindingKind
@@ -285,12 +287,21 @@ class FindingOut(BaseModel):
     category: str | None = None
     sharing: SharingLevel
     summary: str | None = None
+    summary_confirmed: bool | None = None
+    draft_summary: str | None = None
     gap_id: uuid.UUID | None = None
     source_item_ids: list[uuid.UUID] = []
 
 
 class SharingIn(BaseModel):
     sharing: SharingLevel
+
+
+class FindingSummaryIn(BaseModel):
+    """The line others see at the summary level: omit ``text`` to confirm Oracle's draft
+    as it stands."""
+
+    text: str | None = Field(default=None, max_length=240)
 
 
 class SharingChange(BaseModel):
@@ -328,9 +339,14 @@ class TemplateHint(BaseModel):
 
 
 class GateView(BaseModel):
+    """The review gate as everyone sees it. ``private_blocking_gap_ids``: for the author
+    only, their private critical blockers, which gate nothing until shared at counts or
+    above (S6)."""
+
     open_critical: int
     blocking_gap_ids: list[uuid.UUID]
     gate: Literal["clear", "blocked"]
+    private_blocking_gap_ids: list[uuid.UUID] = []
 
 
 class BatchState(BaseModel):
@@ -419,7 +435,8 @@ class DecisionResult(BaseModel):
 
 
 class EvidenceHit(EvidenceRef):
-    snippet: str
+    # None when the item is not shown to the caller (``visible`` false).
+    snippet: str | None = None
     relevance: float
 
 
