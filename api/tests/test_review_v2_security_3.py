@@ -16,6 +16,7 @@ from oracle import readiness
 from oracle.audit import AuditEvent
 from oracle.auth.models import ApiToken, User
 from oracle.auth.service import create_api_token
+from oracle.config import get_settings
 from oracle.connections.models import Connection
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.models import Invite
@@ -292,9 +293,9 @@ async def test_disabling_revokes_connections_at_the_provider_and_records_sources
         assert invites[analyst_email].revoked_at is not None
         assert invites["later@example.com"].revoked_at is None
 
-    # Restored: they sign in again, but nothing is reconnected or un-revoked.
+    # Restored: they sign in again (fresh), but nothing is reconnected or un-revoked.
     assert (await restore(client, ctx, analyst.user_id)).status_code == 200
-    assert (await client.get(f"/v1/documents/{DOC}", headers=analyst.headers)).status_code == 200
+    assert (await client.get(f"/v1/documents/{DOC}", headers=analyst.headers)).status_code == 401
     assert codes(await check(client, ctx)) == ["source_permission_revoked"]
     async with tenant_session(ctx.tenant_id) as s:
         assert await s.get(Connection, conn_id) is None
@@ -339,7 +340,15 @@ async def test_restore_is_owner_only_and_audited(client):
     resp = await restore(client, ctx, pm.user_id)
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] == "active" and resp.json()["disabled_at"] is None
-    assert (await client.get(f"/v1/documents/{DOC}", headers=pm.headers)).status_code == 200
+    # A session signed before the disable stays dead (round 4); they sign in fresh.
+    assert (await client.get(f"/v1/documents/{DOC}", headers=pm.headers)).status_code == 401
+    login = await client.post("/v1/auth/login", json={"email": email, "password": "pw"})
+    assert login.status_code == 200
+    client.cookies.clear()
+    fresh = {
+        "Cookie": f"{get_settings().session_cookie_name}={login.cookies[get_settings().session_cookie_name]}"
+    }
+    assert (await client.get(f"/v1/documents/{DOC}", headers=fresh)).status_code == 200
     assert (await restore(client, ctx, uuid.uuid4())).status_code == 404
     async with tenant_session(ctx.tenant_id) as s:
         assert (

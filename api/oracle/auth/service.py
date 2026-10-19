@@ -3,6 +3,7 @@
 import hashlib
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from argon2 import PasswordHasher
@@ -91,16 +92,42 @@ def _serializer() -> URLSafeTimedSerializer:
 
 
 def make_session_cookie(user: User) -> str:
-    return _serializer().dumps({"u": str(user.id), "t": str(user.tenant_id)})
+    # "i": when it was signed, in microseconds (the signature's own timestamp has whole
+    # seconds only, too coarse to tell a cookie from the second of a restore).
+    issued = int(datetime.now(UTC).timestamp() * 1_000_000)
+    return _serializer().dumps({"u": str(user.id), "t": str(user.tenant_id), "i": issued})
 
 
-def read_session_cookie(value: str) -> tuple[uuid.UUID, uuid.UUID] | None:
-    """Return (user_id, tenant_id) from a valid, unexpired cookie, else None."""
+@dataclass(frozen=True)
+class SessionCookie:
+    user_id: uuid.UUID
+    tenant_id: uuid.UUID
+    signed_at: datetime
+
+
+def read_session_cookie(value: str) -> SessionCookie | None:
+    """The user, tenant and signing time of a valid, unexpired cookie, else None."""
     try:
-        data = _serializer().loads(value, max_age=get_settings().session_max_age_seconds)
-        return uuid.UUID(data["u"]), uuid.UUID(data["t"])
-    except (BadSignature, KeyError, ValueError, TypeError):
+        data, stamp = _serializer().loads(
+            value, max_age=get_settings().session_max_age_seconds, return_timestamp=True
+        )
+        signed_at = stamp
+        if "i" in data:
+            signed_at = datetime.fromtimestamp(int(data["i"]) / 1_000_000, UTC)
+        return SessionCookie(uuid.UUID(data["u"]), uuid.UUID(data["t"]), signed_at)
+    except (BadSignature, KeyError, ValueError, TypeError, OverflowError):
         return None
+
+
+def session_is_current(user: User | None, signed_at: datetime) -> bool:
+    """Whether a session cookie signed at ``signed_at`` signs ``user`` in: they may sign
+    in, and it was signed after their last disable or restore (C2: a disable ends every
+    session, a restored member signs in fresh). A cookie without its own issue time has
+    the signature's whole seconds, so it counts only from the second after."""
+    if not may_sign_in(user):
+        return False
+    after = user.sessions_valid_after  # type: ignore[union-attr]
+    return after is None or signed_at >= after
 
 
 _DUMMY_HASH = hash_password(secrets.token_hex(16))

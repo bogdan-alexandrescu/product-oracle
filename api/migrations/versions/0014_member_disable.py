@@ -33,6 +33,9 @@ def upgrade() -> None:
     op.add_column("audit_events", sa.Column("actor_token_id", sa.Uuid(), nullable=True))
     op.add_column("users", sa.Column("disabled_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("users", sa.Column("disabled_by", sa.Uuid(), nullable=True))
+    op.add_column(
+        "users", sa.Column("sessions_valid_after", sa.DateTime(timezone=True), nullable=True)
+    )
     op.add_column("section_reviews", sa.Column("token_id", sa.Uuid(), nullable=True))
     op.add_column(
         "section_reviews", sa.Column("lapsed_at", sa.DateTime(timezone=True), nullable=True)
@@ -76,6 +79,7 @@ def downgrade() -> None:
     op.drop_column("section_reviews", "lapse_reason")
     op.drop_column("section_reviews", "lapsed_at")
     op.drop_column("section_reviews", "token_id")
+    op.drop_column("users", "sessions_valid_after")
     op.drop_column("users", "disabled_by")
     op.drop_column("users", "disabled_at")
     op.drop_column("audit_events", "actor_token_id")

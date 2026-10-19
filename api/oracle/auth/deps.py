@@ -157,15 +157,18 @@ async def _get_principal(
             tenant_id=iap_user.tenant_id, kind="user", role=iap_user.role, user_id=iap_user.id
         )
     if cookie:
-        ids = service.read_session_cookie(cookie)
-        if ids is not None:
-            user_id, tenant_id = ids
-            async with tenant_session(tenant_id) as s:
-                user = await s.get(User, user_id)
-                # A session minted before the member was disabled no longer signs in.
-                if service.may_sign_in(user):
+        session = service.read_session_cookie(cookie)
+        if session is not None:
+            async with tenant_session(session.tenant_id) as s:
+                user = await s.get(User, session.user_id)
+                # A disabled member's sessions, and every session signed before their
+                # last disable or restore, no longer sign in (C2).
+                if service.session_is_current(user, session.signed_at):
                     return Principal(
-                        tenant_id=tenant_id, kind="user", role=user.role, user_id=user_id
+                        tenant_id=session.tenant_id,
+                        kind="user",
+                        role=user.role,
+                        user_id=session.user_id,
                     )
     raise _unauthorized()
 

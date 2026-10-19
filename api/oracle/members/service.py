@@ -225,6 +225,8 @@ async def disable_member(
 
     user.disabled_at = at
     user.disabled_by = principal.id
+    # Every session signed so far ends here (a restore never revives one).
+    user.sessions_valid_after = at
     await session.flush()
     await audit.record(
         session,
@@ -268,6 +270,9 @@ async def restore_member(session: AsyncSession, principal: "Principal", user_id:
     disabled_at = user.disabled_at
     user.disabled_at = None
     user.disabled_by = None
+    # They sign in fresh: nothing signed before the restore (a sign-in that raced the
+    # disable, an authorization code issued before it) counts.
+    user.sessions_valid_after = datetime.now(UTC)
     await session.flush()
     await audit.record(
         session,

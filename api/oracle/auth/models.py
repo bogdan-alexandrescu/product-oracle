@@ -29,6 +29,9 @@ class User(TenantScoped, Base):
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # The owner (user or API token id) who disabled them; no FK, like the other *_by.
     disabled_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # Session cookies signed before this are refused (C2): set by a disable and by a
+    # restore, so a disable ends every session and a restored member signs in fresh.
+    sessions_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ApiToken(TenantScoped, Base):
