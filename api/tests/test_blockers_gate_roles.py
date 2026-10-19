@@ -5,8 +5,9 @@
 - B4 (owner, 2026-10-19): archiving (rejecting) or deleting a constraint whose blocker
   still gates publishing takes the owner role, on every path (REST, proposals, YAML,
   MCP); resolved or non-gating blockers stay with approvers.
-- A blocker recorded before gate snapshots existed (legacy) is snapshotted on its
-  first assessment instead of failing closed.
+- A blocker recorded before gate snapshots existed (legacy) is judged on its strategy
+  instead of failing closed; migration 0014 or its first write records its snapshot
+  (reads never write: tests/test_blockers_lowering.py).
 - Events of one blocker are strictly ordered; a reclassification reads sensibly; the
   403s name the configured role; a blank success threshold is refused at approval.
 """
@@ -134,14 +135,18 @@ async def test_reclassifying_an_approvers_decision_into_the_gate_reopens_it(
 
 
 @pytest.mark.parametrize("action", ["accept-risk", "feasibility-scope"])
-async def test_an_owner_reclassifying_keeps_the_decision(client, action):
+async def test_an_owner_reclassifying_and_confirming_keeps_the_decision(client, action):
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx, severity="high")
     resp = await _decide(client, ctx, b["id"], action, "approver")
     assert resp.status_code == 200, resp.text
     resp = await client.patch(
         f"/v1/blockers/{b['id']}",
-        json={"revision": await _revision(ctx, b["id"]), "severity": "critical"},
+        json={
+            "revision": await _revision(ctx, b["id"]),
+            "severity": "critical",
+            "confirm_decision": True,
+        },
         headers=ctx.as_("owner"),
     )
     assert resp.status_code == 200, resp.text
@@ -262,8 +267,8 @@ async def test_a_yaml_import_cannot_archive_a_gating_blocker_for_an_approver(cli
         content=yaml.safe_dump(data),
         headers={**ctx.as_("approver"), **headers},
     )
-    assert resp.status_code == 422, resp.text
-    assert STILL_GATES in resp.text
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["detail"] == STILL_GATES
     assert (await _check(ctx, doc_id)).status == "critical"
     resp = await client.post(
         "/v1/baseline/yaml", content=yaml.safe_dump(data), headers={**ctx.as_("owner"), **headers}
@@ -331,13 +336,8 @@ async def test_a_legacy_soft_low_resolved_blocker_does_not_block(client, status_
     )  # fmt: skip
     out = await _check(ctx, doc_id)
     assert out.status == "pass", out
-    snapshots = [e for e in await _events(ctx, entity_id) if "gate" in e.data]
-    assert len(snapshots) == 1
-    assert snapshots[0].data["change"] == "legacy_snapshot"
-    assert snapshots[0].data["gate"]["status"] == "resolved"
-    # Assessed again, it is not snapshotted twice.
-    assert (await _check(ctx, doc_id)).status == "pass"
-    assert len([e for e in await _events(ctx, entity_id) if "gate" in e.data]) == 1
+    # Judged on its strategy; the read records no snapshot (migration 0014 does).
+    assert [e for e in await _events(ctx, entity_id) if "gate" in e.data] == []
 
 
 async def test_a_legacy_critical_blocker_is_judged_on_its_status_not_as_tampered(client):
@@ -353,6 +353,23 @@ async def test_a_legacy_blocker_edited_after_its_snapshot_fails_closed(client):
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     entity_id = await _legacy(ctx, doc_id, "legacy-edited", severity="low", type="soft")
+    assert (await _check(ctx, doc_id)).status == "pass"
+    async with tenant_session(ctx.tenant_id) as s:
+        # The snapshot migration 0014 records for it.
+        s.add(
+            m.BlockerResolutionEvent(
+                blocker_id=entity_id,
+                kind="status_changed",
+                actor="system:migration",
+                data={
+                    "change": "legacy_snapshot",
+                    "gate": blockers.gate_snapshot(
+                        blockers.spec_of(await s.get(Entity, entity_id))
+                    ),
+                },
+            )
+        )
+        await s.commit()
     assert (await _check(ctx, doc_id)).status == "pass"
     async with tenant_session(ctx.tenant_id) as s:
         entity = await s.get(Entity, entity_id)
@@ -409,7 +426,7 @@ async def test_a_reclassification_reads_sensibly_in_the_history(client):
     resp = await client.patch(
         f"/v1/blockers/{b['id']}",
         json={"revision": b["revision"], "severity": "high", "reason": "Pilot volume is small"},
-        headers=ctx.as_("approver"),
+        headers=ctx.as_("owner"),
     )
     assert resp.status_code == 200, resp.text
     strategy = (await client.get(f"/v1/blockers/{b['id']}", headers=ctx.as_("viewer"))).json()

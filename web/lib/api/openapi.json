@@ -6875,6 +6875,16 @@
               }
             }
           },
+          "403": {
+            "description": "A change the caller's role may not make",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YamlImportError"
+                }
+              }
+            }
+          },
           "422": {
             "description": "File rejected",
             "content": {
@@ -16800,6 +16810,11 @@
               }
             ],
             "title": "Reason"
+          },
+          "confirm_decision": {
+            "type": "boolean",
+            "title": "Confirm Decision",
+            "default": false
           }
         },
         "additionalProperties": false,

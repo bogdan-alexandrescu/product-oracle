@@ -49,7 +49,7 @@ Statuses: `open`, `mitigating`, `resolved`, `accepted_risk`, `feasibility_only`.
 | feasibility_only | `POST /v1/blockers/{id}/feasibility-scope` | the experiment belongs to the blocker, is planned or running, and has an owner, a success threshold and a decision gate date in the future; for a critical hard blocker only `blocker_risk_acceptance_role` and above (B4); one audit event, `blocker.feasibility_scope_approved` |
 | open → mitigating | selecting an option | `option_selected` event |
 | feasibility_only → open | the scope's experiment fails, is cancelled or is inconclusive | automatic, `status_changed` event |
-| accepted_risk or feasibility_only → open | `PATCH /v1/blockers/{id}` makes the blocker critical and hard, and the caller is below `blocker_risk_acceptance_role` | automatic, `status_changed` event saying why (`data.change = "reopened_by_reclassification"`): a decision taken while the blocker did not gate was not B4's; an owner reclassifying keeps it |
+| accepted_risk or feasibility_only → open | `PATCH /v1/blockers/{id}` makes the blocker critical and hard, and the decision was not made by `blocker_risk_acceptance_role` | automatic, `status_changed` event saying why (`data.change = "reopened_by_reclassification"`, summary "Reopened by reclassification to hard critical (the risk acceptance needs an owner)"). The rule: a decision taken while the blocker did not gate stands only if the B4 role made it (`data.by_decider` on its event) or confirmed it since; whoever reclassifies, it reopens otherwise. The B4 role keeps it by sending `confirm_decision: true` with the PATCH (a `data.change = "confirmed"` event and a `blocker.decision_confirmed` audit event); below that role `confirm_decision` is a 403. On a reopen of a feasibility scope, its experiment, if planned or running, goes back to planned (`data.experiment`) |
 
 Every status change appends a resolution event, writes the entity through
 `oracle.baseline.service` (revision and lock), audits, and calls
@@ -71,6 +71,18 @@ before this rule, conflict resolution, and YAML imports. A YAML file that leaves
 `attrs.blocker` out keeps it (it is not dropped with the other missing keys); a file
 that changes it is rejected. Other attrs, the title and the body stay editable.
 
+### Lowering a blocker that gates (B4)
+
+Changing a blocker's type or severity through `PATCH /v1/blockers/{id}` so that it stops
+gating publish (it was critical, hard and not resolved, and is no longer critical and
+hard) takes `blocker_risk_acceptance_role` (B4, default `owner`; owner decision
+2026-10-19). Below it the request is refused with 403 "This blocker gates publishing.
+Only an owner can lower it." and nothing is stored. "Before" is both the strategy and
+the gate's last recorded snapshot, so a strategy lowered in the database is not
+laundered into a new snapshot by an approver's edit. Approvers may still resolve it
+(`POST .../status`, a reason required, audited as `blocker.status_changed`), and lower
+blockers that do not gate (lesser, or resolved).
+
 ### Archiving or deleting a blocker that still gates (B4)
 
 Rejecting (archiving) or deleting the constraint entity removes it from the gate (§3), so
@@ -83,8 +95,9 @@ only for a while), or while the gate fails closed on it. Approvers may archive o
 resolved or lesser blockers, and plain constraints. The check sits in
 `oracle.baseline.service` (`_check_archivable`), so every path applies it: `POST
 .../reject`, `PATCH` with `status: rejected`, `DELETE`, accepting a proposal, conflict
-resolution, YAML imports (a locked blocker gets a proposal, checked on acceptance) and
-the MCP tools, which call these routes.
+resolution, YAML imports (a locked blocker gets a proposal, checked on acceptance; an
+unlocked one refused is a 403 with the same text, not a 422) and the MCP tools, which
+call these routes.
 
 Each write that changes what the gate reads (type, severity, status, gated documents)
 records it on a resolution event as `data.gate`. A status change does it on its own event.
@@ -97,10 +110,14 @@ Events of one blocker are strictly ordered by `created_at`: each is stamped afte
 blocker's latest one (writers hold the blocker's row lock), so a repeated clock value
 cannot tie them.
 
-A blocker recorded before gate snapshots existed has none. On its first assessment its
-snapshot is taken from its current, readable strategy and recorded as an event
-(`data.change = "legacy_snapshot"`, actor `system:legacy-snapshot`); from then on it
-fails closed like any other. An unreadable strategy gets no snapshot and stays critical.
+A blocker recorded before gate snapshots existed got one from migration
+`0014_blockers_snapshot`: a `legacy_snapshot` event (actor `system:migration`) from its
+current strategy, if readable; an unreadable strategy gets none and stays critical.
+Reads never write. A blocker with no snapshot after that (legacy-unrecorded) is judged
+on its current strategy, failing closed only if it cannot be read; the first write that
+locks it (`get_blocker(for_update=True)`) records its snapshot from the strategy as it
+was (actor `system:legacy-snapshot`), under the row lock, and from then on it fails
+closed like any other.
 
 ## 3. The hard readiness check
 
@@ -204,7 +221,7 @@ All `/v1`, Pydantic in and out, company-scoped, MCP tools generated from OpenAPI
 | `GET /blockers` | viewer | Summaries; filters `document_id`, `status`, `type`, `severity`, `limit_kind` |
 | `POST /blockers` | approver | Make an existing constraint a blocker (`entity_id`) or create one (`key`, `statement`) |
 | `GET /blockers/{id}` | viewer | The strategy view: blocker, gate, evidence, options (flags, recommended), compliant paths, experiments, events, risk acceptance, documents |
-| `PATCH /blockers/{id}` | approver | Edit; `revision` required (409 when stale); no status |
+| `PATCH /blockers/{id}` | approver; owner to lower a gating blocker or to `confirm_decision` (B4 setting) | Edit; `revision` required (409 when stale); no status |
 | `POST /blockers/{id}/status` | approver | open, mitigating, resolved |
 | `POST /blockers/{id}/accept-risk` | approver; owner for a critical hard blocker (B4 setting) | Reason and review date (within the B4 horizon) |
 | `POST /blockers/{id}/feasibility-scope` | approver; owner for a critical hard blocker (B4 setting) | Experiment id and reason |

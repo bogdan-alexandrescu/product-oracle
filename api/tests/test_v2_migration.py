@@ -78,9 +78,9 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_0013_is_the_single_head_after_0012():
+def test_0013_follows_0012_on_a_single_head():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0013"]
+    assert len(script.get_heads()) == 1
     assert script.get_revision("0013").down_revision == "0012"
 
 

@@ -49,6 +49,15 @@ class YamlInvalid(Exception):
         self.problems = problems
 
 
+class YamlForbidden(YamlInvalid):
+    """A change the caller's role may not make (B4: archiving a blocker that still gates
+    publishing): a 403 with the refusal's own text, not a rejected file."""
+
+    def __init__(self, message: str, where: str):
+        super().__init__([ImportIssue(code="forbidden", message=message, where=where)])
+        self.message = message
+
+
 def _ref(e: Entity) -> str:
     return f"{e.type}:{e.key}"
 
@@ -334,6 +343,8 @@ async def import_yaml(
                 changed = bool(service._entity_changes(entity, changes))
                 write = await service.update_entity(db, writer, entity, changes)
                 _count(result, write, changed)
+        except service.ForbiddenError as e:
+            raise YamlForbidden(str(e), f"entities[{i}]") from None
         except service.BaselineError as e:
             raise YamlInvalid(
                 [ImportIssue(code="rejected", message=str(e), where=f"entities[{i}]")]
@@ -372,6 +383,8 @@ async def import_yaml(
                     changes.get("status", before[1]),
                 )
                 _count(result, write, after != before)
+        except service.ForbiddenError as e:
+            raise YamlForbidden(str(e), where) from None
         except service.BaselineError as e:
             raise YamlInvalid([ImportIssue(code="rejected", message=str(e), where=where)]) from None
         await _import_evidence(db, doc.get("evidence"), own, result, edge_id=edge.id)

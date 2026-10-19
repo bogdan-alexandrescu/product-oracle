@@ -185,6 +185,12 @@ export function describeEvent(e: Pick<ResolutionEvent, "kind" | "from_status" | 
     const is = `${gate.type} ${gate.severity}`;
     return was !== is ? `Reclassified from ${words(was)} to ${words(is)} (${stays})` : `Gated documents changed (${stays})`;
   }
+  if (data.change === "reopened_by_reclassification" || data.change === "confirmed") {
+    const what = (data.withdrawn ?? data.confirmed) === "accepted_risk" ? "risk acceptance" : "feasibility scope";
+    const is = words(`${gate.type} ${gate.severity}`);
+    if (data.change === "confirmed") return `${what.charAt(0).toUpperCase()}${what.slice(1)} confirmed on reclassification to ${is}`;
+    return `Reopened by reclassification to ${is} (the ${what} needs an ${String(data.role ?? "owner")})`;
+  }
   if (data.change === "legacy_snapshot") return `Gate snapshot recorded for an older blocker (${words(gate.status)})`;
   if (e.kind === "experiment_started" || e.kind === "experiment_concluded") return `Experiment ${words(data.to ?? e.kind.replace("experiment_", ""))}`;
   if (e.to_status && e.from_status && e.to_status !== e.from_status) return `Status changed from ${words(e.from_status)} to ${words(e.to_status)}`;
@@ -309,17 +315,35 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
       const patch = await body<Schemas["BlockerPatch"]>();
       if (patch.revision !== b.revision) return json(409, { detail: "Someone else changed this blocker since you loaded it; reload" });
       const before = snapshot(b);
-      Object.assign(b, given(patch, ["revision", "reason"]));
+      // B4: lowering a gating blocker so that it stops gating takes an owner.
+      const lowered = { type: patch.type ?? b.type, severity: patch.severity ?? b.severity };
+      if (gating(b) && b.status !== "resolved" && !gating(lowered) && !can("owner")) {
+        return json(403, { detail: "This blocker gates publishing. Only an owner can lower it." });
+      }
+      if (patch.confirm_decision && !can("owner")) {
+        return json(403, { detail: "Only an owner can confirm a risk acceptance or feasibility scope (company setting blocker_risk_acceptance_role)" });
+      }
+      Object.assign(b, given(patch, ["revision", "reason", "confirm_decision"]));
       b.revision += 1;
       b.updated_at = now();
       if (JSON.stringify(snapshot(b)) !== JSON.stringify(before)) {
         event(ctx, b, "status_changed", null, { from_status: null, reason: patch.reason ?? null, data: { change: "reclassified", before, gate: snapshot(b) } });
         b.revision -= 1;
       }
-      // An approver's acceptance or scope on a blocker that now gates reopens (B4).
-      if (!gating(before) && gating(b) && ["accepted_risk", "feasibility_only"].includes(b.status) && !can("owner")) {
+      // A decision an owner did not make reopens once the blocker gates, unless an owner confirms it (B4).
+      const last = [...ctx.v2.blocker_events].reverse().find((e) => e.blocker_id === b.id && e.to_status);
+      const byOwner = (last?.data as Record<string, unknown> | undefined)?.by_decider === true;
+      if (!gating(before) && gating(b) && ["accepted_risk", "feasibility_only"].includes(b.status) && !byOwner) {
         const what = b.status === "accepted_risk" ? "risk acceptance" : "feasibility scope";
-        event(ctx, b, "status_changed", "open", { reason: `Reclassified as critical and hard: its ${what} was not decided by an owner, so the blocker is open again until an owner decides` });
+        if (patch.confirm_decision) {
+          event(ctx, b, "status_changed", null, { from_status: null, reason: patch.reason ?? null, data: { change: "confirmed", confirmed: b.status, gate: snapshot(b) } });
+        } else {
+          const x = b.status === "feasibility_only" ? ctx.v2.feasibility_experiments.find((e) => e.id === last?.experiment_id) : undefined;
+          const experiment = x ? { from: x.status, to: ["planned", "running"].includes(x.status) ? "planned" : x.status } : undefined;
+          if (x && experiment) x.status = experiment.to as typeof x.status;
+          const data = { change: "reopened_by_reclassification", withdrawn: b.status, role: "owner", ...(experiment ? { experiment } : {}), gate: { ...snapshot(b), status: "open" } };
+          event(ctx, b, "status_changed", "open", { experiment_id: x?.id ?? null, data, reason: `Reclassified as critical and hard: its ${what} was not decided by an owner, so the blocker is open again until an owner decides` });
+        }
       }
       return json(200, strategy(ctx, db, b));
     }
@@ -345,7 +369,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
       db.acceptances.push(decision);
       ctx.v2.assumption_decisions.push(decision);
       b.review_at = input.review_at;
-      event(ctx, b, "risk_accepted", "accepted_risk", { reason: input.reason, data: { assumption_decision_id: decision.id } });
+      event(ctx, b, "risk_accepted", "accepted_risk", { reason: input.reason, data: { assumption_decision_id: decision.id, by_decider: can("owner") } });
       return json(200, strategy(ctx, db, b));
     }
     if (p[3] === "feasibility-scope" && m === "POST") {
@@ -354,7 +378,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
       if (!x) return json(422, { detail: "No such feasibility experiment on this blocker" });
       const missing = [!x.owner_id && "an owner", !x.success_threshold?.trim() && "a success threshold", !x.decision_gate_at && "a decision gate date"].filter(Boolean);
       if (missing.length) return json(422, { detail: `A feasibility scope needs ${missing.join(", ")}` });
-      event(ctx, b, "feasibility_scope_approved", "feasibility_only", { reason: input.reason, experiment_id: x.id });
+      event(ctx, b, "feasibility_scope_approved", "feasibility_only", { reason: input.reason, experiment_id: x.id, data: { by_decider: can("owner") } });
       return json(200, strategy(ctx, db, b));
     }
     if (p[3] === "options" && m === "POST") {

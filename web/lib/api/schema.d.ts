@@ -4648,6 +4648,11 @@ export interface components {
             type?: ("hard" | "soft" | "unknown" | "temporary") | null;
             /** Reason */
             reason?: string | null;
+            /**
+             * Confirm Decision
+             * @default false
+             */
+            confirm_decision: boolean;
         };
         /** BlockerPolicyFlag */
         BlockerPolicyFlag: {
@@ -13816,6 +13821,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["YamlImportResult"];
+                };
+            };
+            /** @description A change the caller's role may not make */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YamlImportError"];
                 };
             };
             /** @description File rejected */

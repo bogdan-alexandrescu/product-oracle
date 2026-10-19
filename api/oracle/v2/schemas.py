@@ -429,6 +429,14 @@ def describe_blocker_event(
         if was != now:
             return f"Reclassified from {_words(was)} to {_words(now)} ({stays})"
         return f"Gated documents changed ({stays})"
+    if change in ("reopened_by_reclassification", "confirmed"):
+        status = data.get("withdrawn") or data.get("confirmed")
+        what = "risk acceptance" if status == "accepted_risk" else "feasibility scope"
+        now = _words(f"{gate.get('type')} {gate.get('severity')}")
+        if change == "confirmed":
+            return f"{what.capitalize()} confirmed on reclassification to {now}"
+        role = data.get("role") or "owner"
+        return f"Reopened by reclassification to {now} (the {what} needs an {role})"
     if change == "legacy_snapshot":
         return f"Gate snapshot recorded for an older blocker ({_words(gate.get('status'))})"
     if kind in ("experiment_started", "experiment_concluded"):

@@ -284,15 +284,15 @@ async def test_a_third_party_limit_must_be_classified(client):
 
 async def test_patch_needs_the_current_revision(client):
     ctx = await make_ctx()
-    b = (await create_blocker(client, ctx))["blocker"]
+    b = (await create_blocker(client, ctx, severity="high"))["blocker"]
     h = ctx.as_("approver")
     ok = await client.patch(
         f"/v1/blockers/{b['id']}",
-        json={"revision": 1, "severity": "high", "reason": "r"},
+        json={"revision": 1, "severity": "medium", "reason": "r"},
         headers=h,
     )
     assert ok.status_code == 200, ok.text
-    assert ok.json()["blocker"]["severity"] == "high"
+    assert ok.json()["blocker"]["severity"] == "medium"
     assert ok.json()["blocker"]["revision"] == 2
     stale = await client.patch(
         f"/v1/blockers/{b['id']}", json={"revision": 1, "severity": "low"}, headers=h

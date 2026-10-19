@@ -273,13 +273,14 @@ async def test_a_yaml_import_cannot_change_the_strategy(client):
 
 
 async def test_the_blocker_routes_still_reclassify(client):
-    """The blocker PATCH is the way to change type or severity; the gate follows it."""
+    """The blocker PATCH is the way to change type or severity; the gate follows it.
+    Lowering a gating blocker takes an owner (B4, tests/test_blockers_lowering.py)."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     resp = await client.patch(
         f"/v1/blockers/{b['id']}",
         json={"revision": b["revision"], "severity": "high", "reason": "Pilot volume is small"},
-        headers=ctx.as_("approver"),
+        headers=ctx.as_("owner"),
     )
     assert resp.status_code == 200, resp.text
     assert (await _check(ctx, doc_id)).status == "warning"

@@ -653,7 +653,10 @@ async def export_yaml(principal: Reader, db: TenantDB) -> PlainTextResponse:
 @router.post(
     "/yaml",
     response_model=YamlImportResult,
-    responses={422: {"model": YamlImportError, "description": "File rejected"}},
+    responses={
+        403: {"model": YamlImportError, "description": "A change the caller's role may not make"},
+        422: {"model": YamlImportError, "description": "File rejected"},
+    },
     openapi_extra={
         "requestBody": {
             "required": True,
@@ -673,6 +676,10 @@ async def import_yaml(
         if text is None:
             raise yaml_io.YamlInvalid([])
         result = await yaml_io.import_yaml(db, principal, text, run_id=run_id)
+    except yaml_io.YamlForbidden as exc:
+        await db.rollback()
+        body = YamlImportError(detail=exc.message, errors=exc.problems)
+        return JSONResponse(body.model_dump(mode="json"), 403)
     except yaml_io.YamlInvalid as exc:
         await db.rollback()
         problems = exc.problems or []

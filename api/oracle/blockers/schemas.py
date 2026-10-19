@@ -106,6 +106,9 @@ class BlockerPatch(_BlockerFields):
     statement: str | None = Field(None, min_length=1, max_length=500)
     type: BlockerType | None = None
     reason: str | None = Field(None, max_length=2000)
+    # B4: reclassifying into the gate (critical and hard) reopens a risk acceptance or
+    # feasibility scope the B4 role did not decide, unless that role confirms it here.
+    confirm_decision: bool = False
 
 
 class BlockerStatusIn(BaseModel):
