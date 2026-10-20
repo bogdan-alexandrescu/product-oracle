@@ -323,6 +323,8 @@ async def _run_document_refusal(caller: McpCaller, doc: str) -> str | None:
     name = own.slug if own is not None else own_slug
     mine = f" ('{name}')" if name else " (this run has none)"
     return f"Refused: a run token pushes drafts only to its own run's document{mine}, not '{doc}'."
+
+
 def _writes(method: str, needed: str | None) -> bool:
     """Whether a call writes: any method but GET, or any scope but a read scope."""
     return method.upper() != "GET" or (needed is not None and not needed.startswith("read:"))

@@ -23,6 +23,7 @@ and Sources and data points (Oracle's provenance). Pure functions, no database.
 """
 
 import html
+import json
 import re
 import unicodedata
 from collections.abc import Collection
@@ -42,6 +43,7 @@ from oracle.docs.parser import (
 )
 from oracle.docs.schemas import ImportProblem
 from oracle.runs.flows import prd_link
+from oracle.specs.confusables import CONFUSABLES
 
 Part = Literal[
     "context",
@@ -263,21 +265,35 @@ def _agent_bodies(text: str, problems: list[Problem]) -> dict[str, str]:
 
 
 _INLINE_SPECIAL = re.compile(r"([\\`*_\[\]<>#|~!&{}])")
+# What could still open a block at the start of the line: a list item, a thematic break or
+# a setext underline ('-', '+', '='), or an ordered list item ('1.', '1)').
+_BLOCK_START = re.compile(r"^(?:[-+=]|(\d{1,9})([.)]))")
 
 
 def escape_inline(text: str) -> str:
     """Baseline text (a requirement's title or statement, an acceptance criterion) as one
     line of literal markdown: whitespace collapsed (no line can open a code fence, a list
     or a heading) and markdown's special characters escaped (no '<!--', link or
-    emphasis)."""
-    return _INLINE_SPECIAL.sub(r"\\\1", " ".join(text.split()))
+    emphasis), its first character too when it could open a block ('---', '===', '1.')."""
+    out = _INLINE_SPECIAL.sub(r"\\\1", " ".join(text.split()))
+    return _BLOCK_START.sub(lambda m: f"{m[1]}\\{m[2]}" if m[1] else f"\\{m[0]}", out)
+
+
+def _oracle_text(text: str | None, fallback: str) -> str:
+    """Text Oracle copies into what it writes (a PRD's title, a feature's name): one
+    escaped line (:func:`escape_inline`, so no newline, link or emphasis), or
+    ``fallback`` when it would read as one of Oracle's labels or notes."""
+    if not text or not text.strip() or _takes_label(text, anywhere=True):
+        return fallback
+    return escape_inline(text)
 
 
 def _requirements_body(inputs: SpecInputs) -> str:
     headings = dict(inputs.sections)
     lines = [REQUIREMENTS_NOTE, ""]
     lines.append(
-        f"From PRD [{inputs.prd_title}](/documents/{inputs.prd_slug}/v/{inputs.prd_version}), "
+        f"From PRD [{_oracle_text(inputs.prd_title, inputs.prd_slug)}]"
+        f"(/documents/{inputs.prd_slug}/v/{inputs.prd_version}), "
         f"version {inputs.prd_version}."
     )
     lines.append("")
@@ -399,10 +415,12 @@ def compose(agent_md: str, inputs: SpecInputs) -> Composed:
             "code_capability_map": "used" if inputs.capability_map else "unavailable",
         },
     }
+    feature = _oracle_text(inputs.feature, "")
     intro = (
         f"{'Technical brief' if inputs.depth == 'brief' else 'Engineering spec'}"
-        + (f" for {inputs.feature}" if inputs.feature else "")
-        + f", from the approved PRD {inputs.prd_title} (version {inputs.prd_version}). "
+        + (f" for {feature}" if feature else "")
+        + f", from the approved PRD {_oracle_text(inputs.prd_title, inputs.prd_slug)} "
+        f"(version {inputs.prd_version}). "
         "Product requirements come from that PRD; the engineering approach is proposed until "
         "an engineering approver approves this version."
     )
@@ -444,7 +462,16 @@ def compose(agent_md: str, inputs: SpecInputs) -> Composed:
     after = composed_problems(markdown, inputs.depth)
     if after:
         return Composed(None, problems + after)
+    # M3: and it can be served with its labels (refused at import, not a 500 when served).
+    try:
+        label_markdown(markdown, False, None)
+    except DraftError as exc:
+        return Composed(None, problems + [_problem(p) for p in exc.problems])
     return Composed(markdown, problems)
+
+
+def _problem(p: ImportProblem) -> Problem:
+    return Problem(p.code, f"spec.md: {p.message}", p.section_key)
 
 
 def expected_keys(depth: str) -> list[str]:
@@ -597,17 +624,24 @@ def _fenced_lines(body: str, offset: int) -> set[int]:
     return out
 
 
+_SETEXT_UNDERLINE = re.compile(r"^ {0,3}(?:=+|-+)[ \t]*$")
+
+
 def label_markdown(
-    markdown: str, approved: bool, oracle_citations: Collection[str] | None = None
+    markdown: str,
+    approved: bool,
+    oracle_citations: Collection[str] | None = None,
+    draft: ParsedDraft | None = None,
 ) -> str:
     """A spec version's markdown with every section's state label at the start of its
     body (the parser's body line) and before the proposed acceptance criteria, and the
-    citations an edit added named in a comment above ``citations:`` (those not in
-    ``oracle_citations``; all of them when it is None). :func:`strip_state_labels` undoes
-    it, so the markdown imports back as the same version. Fails closed: a version that
-    does not parse, or whose section headings are not top-level ATX headings, raises
-    :class:`DraftError` rather than being served unlabelled."""
-    draft = parse_draft(markdown)
+    citations an edit added named in a comment on the front matter's first line (those
+    not in ``oracle_citations``; all of them when it is None). :func:`strip_state_labels`
+    undoes it, so the markdown imports back with the same sections. Fails closed: a
+    version that does not parse, or whose section headings are not top-level ATX
+    headings, raises :class:`DraftError` rather than being served unlabelled. ``draft``
+    is ``markdown`` already parsed."""
+    draft = draft if draft is not None else parse_draft(markdown)
     lines = draft.markdown.split("\n")
     states = section_states(draft, approved)
     inserts: list[tuple[int, list[str]]] = []
@@ -624,7 +658,11 @@ def label_markdown(
             continue
         found = states[s.section_key]
         at = s.body_line - 1
-        inserts.append((at, ["", state_line(found[0].label)]))
+        # A blank line after the label when the body starts right under the heading with
+        # '---' or '===': the label would read as a setext heading. (Stripped, such a
+        # body keeps that blank line: the same sections, one more blank line.)
+        tail = [""] if at < len(lines) and _SETEXT_UNDERLINE.match(lines[at]) else []
+        inserts.append((at, ["", state_line(found[0].label), *tail]))
         if len(found) > 1:
             split = next(
                 (
@@ -643,10 +681,12 @@ def label_markdown(
             inserts.append((split, [state_line(found[1].label), ""]))
     added = _added_citation_ids(draft, oracle_citations)
     if added:
-        at = _citations_key_line(lines)
-        if at is None:
+        if draft.front_matter is None or not lines or lines[0].strip() != "---":
             raise _refuse("citations_unlabelled", "the added sources can not be labelled")
-        inserts.append((at, [f"{ADDED_SOURCES_COMMENT} {', '.join(added)}"]))
+        # On the front matter's first line, whatever its style (block, flow, indented):
+        # a comment there is YAML in any front matter. Ids JSON-quoted.
+        ids = ", ".join(json.dumps(i, ensure_ascii=False) for i in added)
+        inserts.append((1, [f"{ADDED_SOURCES_COMMENT} {ids}"]))
     for at, new in sorted(inserts, key=lambda i: i[0], reverse=True):
         lines[at:at] = new
     return "\n".join(lines)
@@ -654,18 +694,6 @@ def label_markdown(
 
 def _added_citation_ids(draft: ParsedDraft, oracle: Collection[str] | None) -> list[str]:
     return [c.id for c in draft.citations if oracle is None or c.id not in oracle]
-
-
-def _citations_key_line(lines: list[str]) -> int | None:
-    """The 0-based line of the front matter's top-level ``citations:`` key."""
-    if not lines or lines[0].strip() != "---":
-        return None
-    for i in range(1, len(lines)):
-        if lines[i].strip() in ("---", "..."):
-            return None
-        if re.match(r"^['\"]?citations['\"]?\s*:", lines[i]):
-            return i
-    return None
 
 
 def added_citations(
@@ -681,14 +709,17 @@ def added_citations(
 def strip_state_labels(markdown: str) -> str:
     """The markdown without Oracle's state labels (each with the blank line before it) and
     its Added sources comment: they are shown, never stored, whoever wrote them. Lines
-    inside code blocks are left alone."""
+    inside code blocks are left alone. (A body that started right under its heading keeps
+    the blank line :func:`label_markdown` put after the label: the same sections.)"""
     text = markdown.replace("\r\n", "\n")
     lines = text.split("\n")
     fm, body, offset = split_front_matter(text)
     fenced = _fenced_lines(body, offset)
     out: list[str] = []
     for i, line in enumerate(lines):
-        if fm is not None and 0 < i < offset - 1 and line.startswith(ADDED_SOURCES_COMMENT):
+        # Only where :func:`label_markdown` puts it: a line further down may be part of a
+        # multi-line scalar.
+        if fm is not None and i == 1 and line.startswith(ADDED_SOURCES_COMMENT):
             continue
         if i >= offset and i not in fenced and line.strip() in _STATE_LINES:
             if out and not out[-1].strip():
@@ -703,27 +734,22 @@ def strip_state_labels(markdown: str) -> str:
 PRD_PART_TITLES = {k: SECTIONS_BY_KEY[k].title for k in PRD_PARTS}
 
 # M4: text compared with Oracle's titles, notes and labels is normalised first: HTML
-# entities decoded, NFKC, format characters (soft hyphen, zero-width ones, BOM) dropped,
-# markdown rendered to its plain text, look-alike Cyrillic and Greek letters folded to
-# Latin, lower case.
+# entities decoded, NFKC, format and default-ignorable characters (soft hyphen,
+# zero-width ones, BOM, Hangul fillers, variation selectors, tags) dropped, markdown
+# rendered to its plain text, then reduced to a confusable skeleton (UTS #39 style:
+# accents dropped, look-alike letters of any script folded to the Latin letter they look
+# like, lower case). Only ever compared with Oracle's few fixed phrases, so non-Latin text
+# is refused only when it reads as one of them.
 _PLAIN_MD = MarkdownIt("commonmark", {"html": False}).enable("strikethrough")
-_HTML_MD = MarkdownIt("commonmark", {"html": True}).enable("table")
+_HTML_MD = MarkdownIt("commonmark", {"html": True}).enable(["table", "strikethrough"])
 _EMPHASIS = re.compile(r"[*_`~]+")
-_CONFUSABLES = str.maketrans(
-    {
-        # Cyrillic
-        "а": "a", "в": "b", "е": "e", "ё": "e", "к": "k", "м": "m", "н": "h", "о": "o",
-        "р": "p", "с": "c", "т": "t", "у": "y", "х": "x", "і": "i", "ї": "i", "ј": "j",
-        "ѕ": "s", "ԁ": "d", "ӏ": "l", "ԛ": "q", "ԝ": "w", "ɡ": "g", "һ": "h", "п": "n",
-        "г": "r", "ь": "b",
-        # Greek
-        "α": "a", "β": "b", "ε": "e", "η": "n", "ι": "i", "κ": "k", "ν": "v", "ο": "o",
-        "ρ": "p", "τ": "t", "υ": "u", "χ": "x", "γ": "y", "ϲ": "c", "ς": "c", "μ": "u",
-        "δ": "d", "ω": "w",
-        # Latin look-alikes
-        "ı": "i", "ȷ": "j", "ℓ": "l",
-    }
-)  # fmt: skip
+# Default_Ignorable_Code_Point (DerivedCoreProperties.txt) outside category Cf: what
+# renders as nothing, or as blank space, yet is a letter or a mark.
+_IGNORABLE = re.compile(
+    "[\u034f\u115f\u1160\u17b4\u17b5\u180b-\u180f\u3164\ufe00-\ufe0f\uffa0\U000e0000-\U000e0fff]"
+)
+# After the table: letters that still read alike (I, l, 1, |; O, 0).
+_ALIKE = str.maketrans({"l": "i", "1": "i", "|": "i", "0": "o"})
 
 
 def _visible(text: str) -> str:
@@ -732,8 +758,19 @@ def _visible(text: str) -> str:
         if decoded == text:
             break
         text = decoded
-    text = unicodedata.normalize("NFKC", text)
+    text = unicodedata.normalize("NFKC", _IGNORABLE.sub("", text))
+    text = _IGNORABLE.sub("", text)
     return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+
+
+def skeleton(text: str) -> str:
+    """Visible text (already plain) reduced to what it looks like: accents dropped, each
+    look-alike letter (:mod:`oracle.specs.confusables`) folded to its Latin prototype,
+    lower case, emphasis markers and runs of space collapsed."""
+    text = unicodedata.normalize("NFD", _visible(text))
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
+    text = text.translate(CONFUSABLES).lower().translate(CONFUSABLES).translate(_ALIKE)
+    return " ".join(_EMPHASIS.sub("", text).split())
 
 
 def _inline_plain(text: str) -> str:
@@ -750,10 +787,8 @@ def _inline_plain(text: str) -> str:
 
 
 def normalised(text: str) -> str:
-    """Text as compared with Oracle's titles, notes and labels (M4)."""
-    plain = _visible(_inline_plain(_visible(text)))
-    plain = _EMPHASIS.sub("", plain).lower().translate(_CONFUSABLES)
-    return " ".join(plain.split())
+    """Markdown text as compared with Oracle's titles, notes and labels (M4)."""
+    return skeleton(_inline_plain(_visible(text)))
 
 
 def _squashed(text: str) -> str:
@@ -765,19 +800,66 @@ def _squashed(text: str) -> str:
 # colon...) reads as a state label.
 _LABEL_START = re.compile(r"^[\W_]*(?:decided|proposed)\s*[^\w\s]")
 _LIST_MARKER = re.compile(r"^\s*(?:(?:>|[-*+]|\d{1,9}[.)])\s*)+")
-# Oracle's notes and labels, squashed: no body line or added heading may take them.
+# Oracle's notes and labels, as skeletons squashed: no body text or added heading may
+# take them.
 _NOTES = ("decidedintheapprovedprd", "decidedwiththeprd", "inthebaselinedecidedwiththeprd")
-_LABELS_SQUASHED = tuple(_squashed(label) for label in STATE_LABELS)
+
+
+def _phrase(text: str) -> str:
+    return re.sub(r"[\W_]+", "", skeleton(text))
+
+
+_PHRASES = tuple(_phrase(p) for p in (*_NOTES, *STATE_LABELS))
+
+
+def _takes_plain(plain: str, anywhere: bool) -> bool:
+    """Plain (rendered) text reads as one of Oracle's labels or notes: at its start, or
+    ``anywhere``."""
+    sk = skeleton(_LIST_MARKER.sub("", skeleton(plain)))
+    squashed = re.sub(r"[\W_]+", "", sk)
+    if _LABEL_START.match(sk):
+        return True
+    if anywhere:
+        return any(n in squashed for n in _PHRASES)
+    return squashed.startswith(_PHRASES)
 
 
 def _takes_label(text: str, anywhere: bool) -> bool:
-    plain = normalised(_LIST_MARKER.sub("", text))
-    squashed = re.sub(r"[\W_]+", "", plain)
-    if _LABEL_START.match(plain):
-        return True
-    if anywhere:
-        return any(n in squashed for n in _NOTES + _LABELS_SQUASHED)
-    return squashed.startswith(_NOTES + _LABELS_SQUASHED)
+    """Markdown text (a heading, a title) reads as one of Oracle's labels or notes."""
+    return _takes_plain(_inline_plain(_visible(text)), anywhere)
+
+
+def _plain_runs(body: str) -> list[str]:
+    """The rendered text of a body, block by block (a paragraph, a heading, every table
+    cell, a list item's paragraph): soft breaks read as spaces, a hard break starts a
+    run of its own; code blocks are left out, inline HTML renders as nothing."""
+    runs: list[str] = []
+    for tok in _HTML_MD.parse(body):
+        if tok.type != "inline":
+            continue
+        run: list[str] = []
+        for child in tok.children or []:
+            if child.type in ("text", "code_inline"):
+                run.append(child.content)
+            elif child.type == "softbreak":
+                run.append(" ")
+            elif child.type == "hardbreak":
+                runs.append("".join(run))
+                run = []
+            elif child.type == "image":
+                run.append(child.content)
+        runs.append("".join(run))
+    return runs
+
+
+def _inline_comments(body: str) -> bool:
+    """A body holds an inline HTML comment (one inside a paragraph, on one line)."""
+    return any(
+        child.type == "html_inline" and child.content.startswith("<!--")
+        for tok in _HTML_MD.parse(body)
+        if tok.type == "inline"
+        for child in tok.children or []
+    )
 
 
 def _comment_spans(text: str) -> bool:
@@ -917,17 +999,59 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
         if s.section_key in ORACLE_PARTS and s.section_key != "acceptance-criteria":
             continue
         text = _editable_text(s.section_key, s.body_md)
-        if any(_takes_label(line, anywhere=False) for line in text.split("\n")):
+        # M4/M6: the text as it renders, block by block (not raw lines: a label may be
+        # split over two lines, or hide behind characters that render as nothing).
+        if any(_takes_plain(run, anywhere=False) for run in _plain_runs(text)):
             problems.append(
                 Problem(
                     "body_takes_oracle_label",
-                    "A line may not start with a Decided or Proposed label or Oracle's note "
-                    "('Decided in the approved PRD', 'In the baseline (decided with the "
-                    "PRD)'): Oracle shows each part's state itself.",
+                    "A paragraph, list item, heading or table cell may not start with a "
+                    "Decided or Proposed label or Oracle's note ('Decided in the approved "
+                    "PRD', 'In the baseline (decided with the PRD)'): Oracle shows each "
+                    "part's state itself.",
                     s.section_key,
                 )
             )
+        if _inline_comments(text):
+            problems.append(
+                Problem(
+                    "inline_comment",
+                    "A spec may not hold HTML comments ('<!-- -->'), inline ones included: "
+                    "write it as markdown.",
+                    s.section_key,
+                )
+            )
+    if any(_comment_takes_label(c) for c in _front_matter_comments(draft.markdown)):
+        problems.append(
+            Problem(
+                "front_matter_comment",
+                "A front matter comment may not read as Oracle's labels, notes or its Added "
+                "sources line: Oracle shows them itself.",
+            )
+        )
     return problems
+
+
+def _front_matter_comments(markdown: str) -> list[str]:
+    """The text after each '#' that may open a YAML comment in the front matter (at the
+    start of a line or after a space; one inside a quoted scalar counts too, so nothing
+    is missed)."""
+    lines = markdown.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return []
+    out: list[str] = []
+    for line in lines[1:]:
+        if line.strip() in ("---", "..."):
+            break
+        out += [m.group(1) for m in re.finditer(r"(?:^|\s)#(.*)$", line)]
+    return out
+
+
+def _comment_takes_label(text: str) -> bool:
+    plain = _visible(text)
+    return _takes_plain(plain, anywhere=True) or "addedsources" in re.sub(
+        r"[\W_]+", "", skeleton(plain)
+    )
 
 
 def _leading_label(body: str) -> str | None:
@@ -935,14 +1059,23 @@ def _leading_label(body: str) -> str | None:
     return first if first in SECTION_LABELS else None
 
 
-def prd_parts(markdown: str) -> dict[str, object]:
-    """What of a spec version Oracle writes and an edit may not change: (level, heading,
-    body) of each of Oracle's sections, their order, the ones the brief lists, the labels
-    on the engineering sections and the assumptions, and the front matter's ``spec``
-    block (source and requirement ids), title, template and template version."""
+def _parsed(markdown: str, draft: ParsedDraft | None) -> ParsedDraft | None:
+    if draft is not None:
+        return draft
     try:
-        draft = parse_draft(markdown)
+        return parse_draft(markdown)
     except DraftError:
+        return None
+
+
+def prd_parts(markdown: str, draft: ParsedDraft | None = None) -> dict[str, object]:
+    """What of a spec version Oracle writes and an edit may not change: (level, heading,
+    body) of each of Oracle's sections, their order, the ones the brief lists, the label
+    on each engineering section and the assumptions (in order, per section), and the
+    front matter's ``spec`` block (source and requirement ids), title, template and
+    template version. ``draft`` is ``markdown`` already parsed."""
+    draft = _parsed(markdown, draft)
+    if draft is None:
         return {}
     fm = draft.front_matter or {}
     keys = keys_of(fm)
@@ -953,7 +1086,7 @@ def prd_parts(markdown: str) -> dict[str, object]:
         "template_version": fm.get("template_version"),
     }
     order: list[str] = []
-    labels: set[tuple[str, str]] = set()
+    labels: list[tuple[str, str, str]] = []
     for s in draft.sections:
         body = s.body_md.strip()
         if s.section_key in ORACLE_PARTS:
@@ -963,18 +1096,17 @@ def prd_parts(markdown: str) -> dict[str, object]:
             order.append(s.section_key)
         part = part_of(s.section_key, keys)
         if part in ("engineering_approach", "assumption"):
-            labels.add((part, _leading_label(body) or ""))
+            labels.append((s.section_key, part, _leading_label(body) or ""))
     out["order"] = tuple(order)
     out["brief"] = tuple(k for k in draft.brief or [] if k in ORACLE_PARTS)
-    out["labels"] = tuple(sorted(labels))
+    out["labels"] = tuple(labels)
     return out
 
 
-def oracle_citations(markdown: str) -> dict[str, dict[str, Any]]:
+def oracle_citations(markdown: str, draft: ParsedDraft | None = None) -> dict[str, dict[str, Any]]:
     """The citations of a version Oracle wrote, by id, as its front matter has them."""
-    try:
-        draft = parse_draft(markdown)
-    except DraftError:
+    draft = _parsed(markdown, draft)
+    if draft is None:
         return {}
     raw = (draft.front_matter or {}).get("citations")
     if not isinstance(raw, list):
@@ -982,10 +1114,12 @@ def oracle_citations(markdown: str) -> dict[str, dict[str, Any]]:
     return {str(c["id"]): c for c in raw if isinstance(c, dict) and "id" in c}
 
 
-def citation_problems(markdown: str, oracle: dict[str, dict[str, Any]]) -> list[Problem]:
+def citation_problems(
+    markdown: str, oracle: dict[str, dict[str, Any]], draft: ParsedDraft | None = None
+) -> list[Problem]:
     """E1 (owner, 2026-10-20): an edit may add citations (listed as Added sources) but
     may not change or remove Oracle's."""
-    mine = oracle_citations(markdown)
+    mine = oracle_citations(markdown, draft)
     return [
         Problem(
             "oracle_citation_changed",
@@ -1002,6 +1136,54 @@ def expected_prd_parts(inputs: SpecInputs) -> dict[str, object]:
     stub = "\n\n".join(f"## {s.title} {{#{s.key}}}\n\n-" for s in agent_sections(inputs.depth))
     composed = compose(stub, inputs)
     return prd_parts(composed.markdown) if composed.markdown else {}
+
+
+@dataclass
+class EditCheck:
+    """What :func:`edit_check` finds in an edit of a spec version."""
+
+    # Structure, citation and labelling problems (refused whatever else holds).
+    problems: list[Problem]
+    # :func:`prd_parts` of the edit, and of each version it may keep Oracle's parts as.
+    submitted: dict[str, object]
+    allowed: list[dict[str, object]]
+
+
+def edit_check(
+    markdown: str,
+    written: str | None,
+    previous: str | None,
+    inputs: SpecInputs,
+) -> EditCheck:
+    """The pure half of an edit's check (:func:`oracle.specs.service.check_edit`), run off
+    the event loop: the edit parsed once, then its structure (:func:`structure_problems`),
+    Oracle's citations as ``written`` (the version Oracle wrote) has them, Oracle's parts
+    against ``written`` and ``previous`` (the version the edit replaces; the version
+    :func:`compose` writes from ``inputs`` when there is neither), and whether the
+    version can be served with its labels (:func:`label_markdown`, M3: refused here
+    rather than a 500 on every read)."""
+    try:
+        draft = parse_draft(markdown)
+    except DraftError as exc:
+        return EditCheck([_problem(p) for p in exc.problems], {}, [])
+    problems = structure_problems(markdown, draft)
+    allowed: list[dict[str, object]] = []
+    oracle: dict[str, dict[str, Any]] | None = None
+    for i, text in enumerate((written, previous)):
+        if text is None:
+            continue
+        other = _parsed(text, None)
+        allowed.append(prd_parts(text, other) if other is not None else {})
+        if i == 0:
+            oracle = oracle_citations(text, other) if other is not None else {}
+            problems += citation_problems(markdown, oracle, draft)
+    if not allowed:
+        allowed.append(expected_prd_parts(inputs))
+    try:
+        label_markdown(markdown, False, None if oracle is None else list(oracle), draft)
+    except DraftError as exc:
+        problems += [Problem(p.code, p.message, p.section_key) for p in exc.problems]
+    return EditCheck(problems, prd_parts(markdown, draft), allowed)
 
 
 SLUG_RE = re.compile(r"[^a-z0-9]+")

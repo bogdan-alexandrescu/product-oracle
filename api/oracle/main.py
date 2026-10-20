@@ -3,8 +3,9 @@ import contextlib
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 
@@ -17,7 +18,9 @@ from oracle.config import get_settings
 from oracle.connections.notion_pages import router as notion_pages_router
 from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
+from oracle.docs.parser import DraftError
 from oracle.docs.router import router as docs_router
+from oracle.docs.schemas import ImportErrorResponse
 from oracle.export.router import router as export_router
 from oracle.jobs.router import router as llm_jobs_router
 from oracle.jobs.worker import (
@@ -111,6 +114,17 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(DraftError)
+    async def draft_rejected(_request: Request, exc: DraftError) -> JSONResponse:
+        # M3: a version that can not be served as it must be (a spec version that can not
+        # carry its state labels) is a 422 on every read path (the markdown, the exports,
+        # the feedback package, MCP), never a 500. Routes that import drafts answer the
+        # same body themselves.
+        body = ImportErrorResponse(
+            detail=f"draft rejected: {len(exc.problems)} problem(s)", errors=exc.problems
+        )
+        return JSONResponse(body.model_dump(mode="json"), 422)
 
     @app.get("/healthz", response_model=Health, tags=["health"])
     async def healthz(response: Response) -> Health:

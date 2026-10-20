@@ -277,7 +277,9 @@ async def spec_markdown(db: AsyncSession, version: DocumentVersion) -> str:
         return version.markdown
     from oracle.specs import contract, lineage
 
-    return contract.label_markdown(
+    # Off the event loop: the version's text is an edit's (oracle.safe_yaml).
+    return await safe_yaml.run_parse(
+        contract.label_markdown,
         version.markdown,
         await lineage.approach_approved(db, version),
         await lineage.oracle_citation_keys(db, version),
@@ -434,10 +436,10 @@ async def import_draft(
             # E1: the state labels a spec's markdown is served with are never stored.
             from oracle.specs.contract import strip_state_labels
 
-            stripped = strip_state_labels(draft.markdown)
+            stripped = await safe_yaml.run_parse(strip_state_labels, draft.markdown)
             if stripped != draft.markdown:
                 named = draft.template, draft.template_version
-                draft = parse_draft(stripped)
+                draft = await safe_yaml.run_parse(parse_draft, stripped)
                 if draft.template is None:
                     draft.template, draft.template_version = named
         existing = await db.scalar(

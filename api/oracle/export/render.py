@@ -36,6 +36,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from oracle import safe_yaml
 from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
@@ -336,7 +337,10 @@ async def _label_spec(db: AsyncSession, ev: ExportVersion) -> None:
     ev.added_citations = {
         c.cite_key for c in ev.citations if oracle is None or c.cite_key not in oracle
     }
-    ev.markdown = contract.label_markdown(ev.version.markdown, approved, oracle)
+    # Off the event loop: the version's text is an edit's (oracle.safe_yaml).
+    ev.markdown = await safe_yaml.run_parse(
+        contract.label_markdown, ev.version.markdown, approved, oracle
+    )
 
 
 def state_html(state) -> str:

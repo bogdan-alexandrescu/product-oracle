@@ -23,7 +23,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
@@ -616,7 +616,8 @@ async def import_spec(
         request_id, version_id = request.id, version.id
         out: dict[str, Any] = {"kind": "spec", "slug": inputs.slug, "request_id": str(request_id)}
 
-        composed = contract.compose(files.get("spec.md") or "", inputs)
+        # Off the event loop: spec.md is the run's (untrusted) text (oracle.safe_yaml).
+        composed = await safe_yaml.run_parse(contract.compose, files.get("spec.md") or "", inputs)
         out["spec_check"] = [p.as_json() for p in composed.problems]
         if inputs.dropped:
             out["dropped_requirements"] = list(inputs.dropped)
@@ -798,10 +799,6 @@ async def check_edit(
     engineering sections and the ``spec`` front matter must read as in the version Oracle
     wrote from the PRD version, or as the version the edit replaces has them; otherwise the
     edit is refused (DraftError, 422), naming what changed."""
-    structure = [
-        ImportProblem(code=p.code, message=p.message, section_key=p.section)
-        for p in contract.structure_problems(markdown)
-    ]
     versions = await _versions(db, request.id)
     by_run = next(
         (v for v in reversed(versions) if (v.provenance or {}).get("origin") == "run"), None
@@ -813,26 +810,22 @@ async def check_edit(
         inputs, _, version = await _inputs(db, request, run, source_version_id)
     except Invalid as exc:
         raise DraftError([ImportProblem(code="spec_inputs", message=str(exc))]) from exc
-    allowed: list[dict[str, object]] = []
     # As Oracle wrote them from the PRD version (not from today's baseline, which may
     # have moved on since), then as the version this edit replaces has them.
-    for av in (by_run, previous):
+    texts: dict[str, str | None] = {"written": None, "previous": None}
+    for name, av in (("written", by_run), ("previous", previous)):
         if av is not None and (dv_id := _doc_version_id(av)) is not None:
             dv = await db.get(DocumentVersion, dv_id)
             if dv is not None:
-                allowed.append(contract.prd_parts(dv.markdown))
-                if av is by_run:
-                    # Oracle's citations stay as Oracle wrote them; an edit may add others
-                    # (listed as Added sources, E1, owner, 2026-10-20).
-                    structure += [
-                        ImportProblem(code=p.code, message=p.message)
-                        for p in contract.citation_problems(
-                            markdown, contract.oracle_citations(dv.markdown)
-                        )
-                    ]
-    if not allowed:
-        allowed.append(contract.expected_prd_parts(inputs))
-    submitted = contract.prd_parts(markdown)
+                texts[name] = dv.markdown
+    # Off the event loop, the edit parsed once: it is untrusted text (oracle.safe_yaml).
+    check = await safe_yaml.run_parse(contract.edit_check, markdown, inputs=inputs, **texts)
+    structure = [
+        ImportProblem(code=p.code, message=p.message, section_key=p.section) for p in check.problems
+    ]
+    allowed, submitted = check.allowed, check.submitted
+    if not allowed:  # the edit does not parse
+        raise DraftError(structure)
     if submitted in allowed:
         if structure:
             raise DraftError(structure)

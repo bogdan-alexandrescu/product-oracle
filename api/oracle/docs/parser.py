@@ -8,6 +8,7 @@ front matter), so the agent track can fix a draft in one pass.
 """
 
 import hashlib
+import json
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -41,10 +42,15 @@ class DraftError(ValueError):
         super().__init__("; ".join(p.message for p in problems))
 
 
+# A citation id: what a [c:id] marker can name, and nothing that could break a line of the
+# markdown it is served in (E1: a spec names its added sources by id).
+CITATION_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$"
+
+
 class CitationIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: str = Field(min_length=1)
+    id: str = Field(pattern=CITATION_ID_PATTERN)
     source: CitationSource
     ref: str = Field(min_length=1)
     title: str | None = None
@@ -207,6 +213,13 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
     return _jsonable(data)
 
 
+def _shown_id(key: str | None) -> str:
+    """A citation id as a problem names it: JSON-quoted when it is not a valid id."""
+    if not key:
+        return "no id"
+    return key if re.fullmatch(CITATION_ID_PATTERN, key) else json.dumps(key[:100])
+
+
 def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn]:
     if raw is None:
         return []
@@ -225,10 +238,12 @@ def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn
             )
         except ValidationError as exc:
             fields = ", ".join(".".join(map(str, e["loc"])) for e in exc.errors())
+            if any(e["loc"] == ("id",) for e in exc.errors()):
+                fields += " (letters, digits and _ . : -, up to 100, from a letter or digit)"
             problems.append(
                 ImportProblem(
                     code="invalid_citation",
-                    message=f"citation #{i + 1} ({key or 'no id'}) is invalid: {fields}",
+                    message=f"citation #{i + 1} ({_shown_id(key)}) is invalid: {fields}",
                     cite_key=key,
                 )
             )
