@@ -198,7 +198,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (m === "GET") return json(200, db.sources.map((s) => counted(db, s)));
     const body = (await req.json()) as Schemas["SourceCreate"];
     if (!AVAILABLE[body.kind]) return json(422, { detail: "connector not available yet" });
-    // As the real connector reads a Notion allowlist: "roots" ("pages" only from before the picker).
+    // As the real connector reads a Notion allowlist: "roots" only.
     if (body.kind === "notion" && !(Array.isArray(body.config?.roots) && body.config.roots.length)) {
       return json(422, { detail: "allowlist at least one root page or database" });
     }

@@ -23,10 +23,35 @@ export function notionId(value: string): string | null {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-/** The ids of a Notion source's roots: "roots", plus "pages" from before the picker. */
+/** The ids of a Notion source's roots. */
 export function notionRoots(config: Record<string, unknown>): string[] {
-  const ids = ["roots", "pages"].flatMap((k) => (Array.isArray(config[k]) ? (config[k] as unknown[]).map(String) : []));
+  const ids = Array.isArray(config.roots) ? (config.roots as unknown[]).map(String) : [];
   return [...new Set(ids.map((v) => notionId(v) ?? v))];
+}
+
+// Where Notion serves page icons from: its own sites and its file CDN.
+const ICON_HOSTS = ["notion.so", "notion.site", "notion-static.com"];
+const ICON_EXACT_HOSTS = ["prod-files-secure.s3.us-west-2.amazonaws.com"];
+
+/** A page icon's URL if it is safe to load: https, on a Notion host. Anything else (a tracking
+ * pixel, plain http) gets the default glyph instead. */
+export function notionIconUrl(icon: string | null | undefined): string | null {
+  if (!icon || !/^https:\/\//i.test(icon)) return null;
+  let host: string;
+  try {
+    const url = new URL(icon);
+    if (url.username || url.password) return null;
+    host = url.hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  const ok = ICON_EXACT_HOSTS.includes(host) || ICON_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  return ok ? icon : null;
+}
+
+/** An emoji icon (not a URL of any kind). */
+function isEmoji(icon: string): boolean {
+  return !/^[a-z][a-z0-9+.-]*:/i.test(icon) && icon.length <= 16;
 }
 
 /** The parent this picker can place: a page or database it has seen. */
@@ -49,11 +74,13 @@ function pickedAncestor(id: string, known: Map<string, NotionPage>, picked: Set<
 
 function PageIcon({ page }: { page: NotionPage }) {
   const box = "grid size-6 flex-none place-items-center rounded-md";
-  if (page.icon && /^https?:/.test(page.icon)) {
+  const src = notionIconUrl(page.icon);
+  if (src) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={page.icon} alt="" className={`${box} object-cover`} />;
+    return <img src={src} alt="" referrerPolicy="no-referrer" className={`${box} object-cover`} data-testid="page-icon-img" />;
   }
-  if (page.icon) return <span aria-hidden className={`${box} text-[16px] leading-none`}>{page.icon}</span>;
+  if (page.icon && isEmoji(page.icon))
+    return <span aria-hidden className={`${box} text-[16px] leading-none`}>{page.icon}</span>;
   return (
     <span aria-hidden className={`${box} bg-surface2 text-text2`}>
       <Icon name={page.type === "database" ? "priorities" : "doc"} size={16} />

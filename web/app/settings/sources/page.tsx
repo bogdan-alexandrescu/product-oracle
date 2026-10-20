@@ -152,18 +152,14 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
 
   async function save(e: FormEvent) {
     e.preventDefault();
-    let config: Record<string, unknown> = { ...source.config, [spec.key]: parseLines(text) };
-    if (notion) {
-      // "pages" was the key before the picker; the picks replace it.
-      const { pages: _legacy, ...rest } = source.config;
-      void _legacy;
-      config = { ...rest, roots };
-    }
+    const config: Record<string, unknown> = { ...source.config, [spec.key]: notion ? roots : parseLines(text) };
     const saved = await act(() =>
       unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config } })),
     );
     if (saved) onSaved(saved);
   }
+
+  if (notion && !source.connection_id) return <ReconnectNotion picked={roots.length} />;
 
   return (
     <form onSubmit={save} className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3">
@@ -196,6 +192,27 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
         </Button>
       </div>
     </form>
+  );
+}
+
+/** A Notion source whose connection is gone: its pages can only be picked through a connection. */
+function ReconnectNotion({ picked }: { picked: number }) {
+  return (
+    <div
+      className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3"
+      data-testid="notion-reconnect"
+    >
+      <Warn>Reconnect Notion to change pages.</Warn>
+      <p className="text-sm text-text2">
+        This source&rsquo;s Notion connection was removed. It keeps its {picked} picked{" "}
+        {picked === 1 ? "page" : "pages"}; changing them needs a Notion connection.
+      </p>
+      <div>
+        <LinkButton href="/settings/connections" icon="link">
+          Go to Connections
+        </LinkButton>
+      </div>
+    </div>
   );
 }
 

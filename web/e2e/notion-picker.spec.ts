@@ -113,6 +113,80 @@ test("notion picker: tree by parent, pick a parent, search, paste a link, save r
   expect(await savedConfig(page, "Handbook")).toEqual({ roots: [HANDBOOK, RESEARCH_INTERVIEWS] });
 });
 
+test("notion picker: loads icons only over https from Notion's hosts, without a referrer", async ({ page }) => {
+  const fetched: string[] = [];
+  await page.route("https://www.notion.so/icons/**", (route) => {
+    fetched.push(route.request().url());
+    return route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#6b7a90"/></svg>',
+    });
+  });
+  await page.route("**/tracker.example.com/**", (route) => {
+    fetched.push(route.request().url());
+    return route.abort();
+  });
+  const { picker } = await openPicker(page);
+  const tree = picker.getByRole("tree", { name: "Shared Notion pages" });
+  await tree.getByRole("button", { name: "Expand Research" }).click();
+  await tree.getByRole("button", { name: "Expand Customer interviews" }).click();
+
+  const icon = (title: string) => tree.getByRole("treeitem", { name: title }).getByTestId("notion-page").first().locator("img");
+  // A Notion-hosted icon loads, with no referrer.
+  await expect(icon("Pricing survey")).toHaveAttribute("src", "https://www.notion.so/icons/chart-line_gray.svg");
+  await expect(icon("Pricing survey")).toHaveAttribute("referrerpolicy", "no-referrer");
+  // A tracking pixel and a plain-http icon get the default glyph and are never requested.
+  await expect(tree.getByRole("treeitem", { name: "Interview: Globex" })).toBeVisible();
+  await expect(icon("Interview: Globex")).toHaveCount(0);
+  await expect(icon("Interview: Acme")).toHaveCount(0);
+  await expect(tree.getByRole("treeitem", { name: "Interview: Globex" })).not.toContainText("tracker.example.com");
+  await expect.poll(() => fetched).toEqual(["https://www.notion.so/icons/chart-line_gray.svg"]);
+});
+
+test("notion picker: a source whose Notion connection is gone asks to reconnect, with nothing to edit", async ({
+  page,
+}) => {
+  const { form, picker } = await openPicker(page);
+  await picker.getByRole("checkbox", { name: "Product handbook", exact: true }).check();
+  await form.getByLabel("Name").fill("Handbook");
+  await form.getByRole("button", { name: "Add source" }).click();
+  await expect(page.getByRole("listitem", { name: "Handbook" })).toContainText("1 picked");
+
+  // The connection is removed (sources keep a null connection_id).
+  await page.evaluate((key) => {
+    const db = JSON.parse(localStorage.getItem(key)!);
+    for (const s of db.sources) if (s.name === "Handbook") s.connection_id = null;
+    localStorage.setItem(key, JSON.stringify(db));
+  }, SOURCES_STORAGE_KEY);
+  await page.reload();
+  const row = page.getByRole("listitem", { name: "Handbook" });
+  await row.getByRole("button", { name: "More actions for Handbook" }).click();
+  await row.getByRole("menuitem", { name: "Edit allowlist" }).click();
+  const reconnect = row.getByTestId("notion-reconnect");
+  await expect(reconnect).toContainText("Reconnect Notion to change pages.");
+  await expect(reconnect).toContainText("It keeps its 1 picked page; changing them needs a Notion connection.");
+  await expect(reconnect.getByRole("link", { name: "Go to Connections" })).toHaveAttribute("href", "/settings/connections");
+  await expect(row.locator("textarea, input")).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Save allowlist" })).toHaveCount(0);
+  expect(await smallestText(reconnect)).toBeGreaterThanOrEqual(13);
+  expect(await savedConfig(page, "Handbook")).toEqual({ roots: [HANDBOOK] });
+
+  const shots = process.env.SWARM_ARTIFACTS_DIR ? `${process.env.SWARM_ARTIFACTS_DIR}/screens/after` : null;
+  if (shots) {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await reconnect.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${shots}/notion-reconnect-1440-light.png` });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+    await page.screenshot({ path: `${shots}/notion-reconnect-1440-dark.png` });
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await reconnect.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 120));
+    await page.screenshot({ path: `${shots}/notion-reconnect-390-light.png` });
+  }
+});
+
 test("notion picker: a rate limit shows a retry message", async ({ page }) => {
   const { picker } = await openPicker(page);
   await picker.getByLabel("Search Notion pages").fill("slow");

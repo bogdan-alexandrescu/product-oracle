@@ -40,9 +40,10 @@ export const MOCK_NOTION_PAGES: NotionPage[] = [
   page(7, "Single sign-on", 4, "17T12:00", { parent_type: "database" }),
   page(8, "Research", null, "16T10:00", { icon: "🧪" }),
   page(9, "Customer interviews", 8, "16T09:00"),
-  page(10, "Interview: Acme", 9, "15T09:00"),
-  page(11, "Interview: Globex", 9, "15T08:00"),
-  page(12, "Pricing survey", 8, "14T09:00"),
+  // Icons the picker must not load (plain http, a host that is not Notion's) and one it may.
+  page(10, "Interview: Acme", 9, "15T09:00", { icon: "http://www.notion.so/icons/user_gray.svg" }),
+  page(11, "Interview: Globex", 9, "15T08:00", { icon: "https://tracker.example.com/pixel.gif" }),
+  page(12, "Pricing survey", 8, "14T09:00", { icon: "https://www.notion.so/icons/chart-line_gray.svg" }),
   page(13, "Team notes", null, "12T09:00", { parent_type: "block", parent_id: "b0000000-0000-4000-8000-000000000001" }),
   page(14, "Engineering onboarding", null, "10T09:00", { icon: "🚀" }),
 ];
