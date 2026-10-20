@@ -422,8 +422,14 @@ lands, only that function changes.
 
 An edit and a run's import are refused (422, every problem at once,
 `oracle.specs.contract.structure_problems`) when a section's heading or body holds raw HTML
-(an HTML block or inline tag, escaped tag-like text included), HTML comment syntax (`<!--`
-or `-->`, code included) or a data: URL in an image or link. The label check reads each
+(an HTML block or inline tag, including one a backslash escapes, `\<span>`), HTML comment
+syntax (`<!--` or `-->`, code included), a data:, javascript: or vbscript: URL in an image
+or link, or a line over 20,000 characters (`line_too_long`). Text escaped as entities
+(`&lt;script&gt;`) is not refused: it renders literally. markdown-it's parse is quadratic on
+one long line of tag-like text, so such a line is refused before any parse, and an import's
+or edit's parse also runs under the draft parse time cap (`too_slow`). The web renders a
+link only for http, https, mailto and relative or anchor destinations; any other scheme
+shows as plain text. The label check reads each
 block as it renders in every output: the body, the body without citation markers, and
 `layers.slide_body(body)` with and without them. Images are no visible text; a task-list
 box or footnote marker before a label, emphasis ending right after 'Decided' or 'Proposed',

@@ -624,7 +624,14 @@ async def import_spec(
         out: dict[str, Any] = {"kind": "spec", "slug": inputs.slug, "request_id": str(request_id)}
 
         # Off the event loop: spec.md is the run's (untrusted) text (oracle.safe_yaml).
-        composed = await safe_yaml.run_parse(contract.compose, files.get("spec.md") or "", inputs)
+        try:
+            composed = await safe_yaml.run_parse_within(
+                contract.compose, files.get("spec.md") or "", inputs, name="spec.md"
+            )
+        except safe_yaml.ParseTimeout as exc:
+            composed = contract.Composed(
+                None, [contract.Problem(exc.code, str(exc), severity="error")]
+            )
         out["spec_check"] = [p.as_json() for p in composed.problems]
         if inputs.dropped:
             out["dropped_requirements"] = list(inputs.dropped)
@@ -827,9 +834,13 @@ async def check_edit(
             if dv is not None:
                 texts[name] = dv.markdown
     # Off the event loop, the edit parsed once: it is untrusted text (oracle.safe_yaml).
-    check = await safe_yaml.run_parse(
-        contract.edit_check, markdown, inputs=inputs, draft=draft, **texts
-    )
+    # Time-capped too: a parse of tag-like text can be slow (markdown-it).
+    try:
+        check = await safe_yaml.run_parse_within(
+            contract.edit_check, markdown, inputs=inputs, draft=draft, name="the edit", **texts
+        )
+    except safe_yaml.ParseTimeout as exc:
+        raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
     structure = [
         ImportProblem(code=p.code, message=p.message, section_key=p.section) for p in check.problems
     ]

@@ -27,9 +27,22 @@ export type Block =
   | { t: "table"; head: Inline[][]; rows: Inline[][][] };
 
 // Citation ids are those the API accepts ([A-Za-z0-9_.:-]); an image is matched before a
-// link, so its alt text never shows as link text.
+// link, so its alt text never shows as link text. Alt and link text and a destination are
+// length-bounded, so many unclosed `![` or `[` scan a bounded stretch each (linear overall,
+// not quadratic); a longer one reads as plain text.
 const INLINE =
-  /\[c:([\w.:-]+)\]|!\[([^\]]*)\]\(([^)\s]+)\)|`([^`]+)`|\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])|(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/g;
+  /\[c:([\w.:-]+)\]|!\[([^\]]{0,500})\]\(([^)\s]{1,1000})\)|`([^`]+)`|\*\*(.+?)\*\*|\[([^\]]{1,500})\]\(([^)\s]{1,1000})\)|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])|(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/g;
+
+/**
+ * Whether a link destination may render as a link: http, https, mailto, or relative or an
+ * anchor (no scheme). Any other scheme (javascript:, vbscript:, data:, ...) is plain text.
+ * Control characters and spaces inside the scheme are ignored, as a browser does.
+ */
+export function isSafeHref(href: string): boolean {
+  const head = href.replace(/[\u0000-\u0020\u007f-\u009f]/g, "");
+  const m = /^([a-z][a-z0-9+.-]*):/i.exec(head);
+  return !m || ["http", "https", "mailto"].includes(m[1].toLowerCase());
+}
 
 export function parseInline(src: string): Inline[] {
   const out: Inline[] = [];

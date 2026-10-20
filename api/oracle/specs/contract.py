@@ -623,7 +623,7 @@ def _refuse(code: str, message: str, key: str | None = None) -> DraftError:
 def _fenced_lines(body: str, offset: int) -> set[int]:
     """0-based lines (of the whole file) inside code blocks, fenced or indented."""
     out: set[int] = set()
-    for tok in _BLOCK_MD.parse(body):
+    for tok in _parse_blocks(body):
         if tok.type in ("fence", "code_block") and tok.map:
             out.update(range(tok.map[0] + offset, tok.map[1] + offset))
     return out
@@ -752,6 +752,24 @@ _PLAIN_MD = MarkdownIt("commonmark", {"html": False}).enable("strikethrough")
 # HTML rule is quadratic on many unclosed '<!--' (or '<?', '<a b="'), and a spec holds no
 # raw HTML anyway (:func:`_html_and_data` finds it in the text tokens, linearly).
 _BLOCK_MD = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
+# markdown-it's parse is quadratic on one long line of tag-like text even with HTML off
+# ('<b>' x 300k, 900 KB, takes ~12 s), so a line over this many characters is refused
+# (``line_too_long``) before any parse, and the parse run off the event loop is given a
+# time cap (:func:`oracle.safe_yaml.run_parse_within`).
+MAX_LINE = 20_000
+_LONG_LINE = re.compile(rf"[^\n]{{{MAX_LINE + 1}}}")
+
+
+def _has_long_line(text: str) -> bool:
+    return _LONG_LINE.search(text) is not None
+
+
+def _parse_blocks(text: str) -> list:
+    """``_BLOCK_MD``'s tokens for ``text``; none for a text with an over-long line (the
+    structure check refuses it, :func:`structure_problems`, so no output is built from it)."""
+    return [] if _has_long_line(text) else _BLOCK_MD.parse(text)
+
+
 _EMPHASIS = re.compile(r"[*_`~]+")
 # Default_Ignorable_Code_Point (DerivedCoreProperties.txt) outside category Cf: what
 # renders as nothing, or as blank space, yet is a letter or a mark.
@@ -784,6 +802,8 @@ def skeleton(text: str) -> str:
 
 
 def _inline_plain(text: str) -> str:
+    if _has_long_line(text):  # refused by structure_problems; not parsed (quadratic)
+        return text
     out: list[str] = []
     for block in _PLAIN_MD.parseInline(text):
         for tok in block.children or []:
@@ -854,7 +874,7 @@ def _plain_runs(body: str) -> list[str]:
     (alt text is not visible text); each line of a code block is a run. (Raw HTML is
     refused before, :func:`_html_and_data`.)"""
     runs: list[str] = []
-    for tok in _BLOCK_MD.parse(body):
+    for tok in _parse_blocks(body):
         if tok.type in ("fence", "code_block"):
             runs += tok.content.split("\n")
         if tok.type != "inline":
@@ -909,10 +929,29 @@ _HEADING_LINE = re.compile(r"^ {0,3}#{1,6}(?:\s|$)", re.M)
 # A data: URL as a link or image destination, or a reference definition, as written (a
 # data: URL markdown-it does not accept stays text here but may render elsewhere).
 _DATA_DEST = re.compile(r"\]\(\s*(?:<\s*)?data:|^ {0,3}\[[^\]\n]+\]:\s*(?:<\s*)?data:", re.I | re.M)
+# The same for javascript: and vbscript: (a destination markdown-it refuses stays text
+# here, but the raw text is what an export or another reader may link).
+_SCRIPT_DEST = re.compile(
+    r"\]\(\s*(?:<\s*)?(?:javascript|vbscript):"
+    r"|^ {0,3}\[[^\]\n]+\]:\s*(?:<\s*)?(?:javascript|vbscript):",
+    re.I | re.M,
+)
+_URL_JUNK = re.compile(r"[\x00-\x20\x7f-\x9f]")
+
+
+def _scheme_of(url: str | None) -> str:
+    """The lower-case scheme of ``url`` as a browser reads it (control characters and
+    spaces inside it are ignored), or ''."""
+    head = _URL_JUNK.sub("", url or "").lower()
+    return head.split(":", 1)[0] if ":" in head else ""
 
 
 def _is_data_url(url: str | None) -> bool:
-    return (url or "").strip().lower().startswith("data:")
+    return _scheme_of(url) == "data"
+
+
+def _is_script_url(url: str | None) -> bool:
+    return _scheme_of(url) in ("javascript", "vbscript")
 
 
 # Text markdown-it with HTML on would read as HTML (a block or an inline tag): an open or
@@ -921,24 +960,28 @@ def _is_data_url(url: str | None) -> bool:
 _TAG_LIKE = re.compile(r"<(?:/?[A-Za-z][A-Za-z0-9-]*(?=[\s/>]|$)|[!?])")
 
 
-def _html_and_data(text: str) -> tuple[bool, bool]:
-    """(raw HTML, a data: URL) in ``text``: tag-like text outside code (as markdown-it
-    with HTML on would read it, a block or an inline tag; escaped text that renders as a
-    tag counts too), and an image or link whose URL is a data: URL. Linear."""
+def _html_and_data(text: str) -> tuple[bool, bool, bool]:
+    """(raw HTML, a data: URL, a javascript:/vbscript: URL) in ``text``: tag-like text
+    outside code (as markdown-it with HTML on would read it, a block or an inline tag;
+    text a backslash escapes ('\\<span>') counts, entity-escaped text ('&lt;b&gt;') does
+    not: it renders literally), and an image or link whose URL has one of those schemes.
+    Linear in the text's lines, each at most ``MAX_LINE`` long (the caller refuses a longer
+    one first: markdown-it's parse is quadratic on a long line)."""
     data_found = bool(_DATA_DEST.search(text))
+    script_found = bool(_SCRIPT_DEST.search(text))
     if not _TAG_LIKE.search(text):
         # No tag-like text at all: nothing to tell apart from code, no parse.
-        return False, data_found
+        return False, data_found, script_found
     html_found = False
-    for tok in _BLOCK_MD.parse(text):
+    for tok in _parse_blocks(text):
         for child in tok.children or []:
             if child.type == "text" and _TAG_LIKE.search(child.content):
                 html_found = True
-            elif child.type in ("image", "link_open") and _is_data_url(
-                child.attrGet("src") or child.attrGet("href")
-            ):
-                data_found = True
-    return html_found, data_found
+            elif child.type in ("image", "link_open"):
+                url = child.attrGet("src") or child.attrGet("href")
+                data_found = data_found or _is_data_url(url)
+                script_found = script_found or _is_script_url(url)
+    return html_found, data_found, script_found
 
 
 def _renderings(text: str) -> list[str]:
@@ -1021,7 +1064,17 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
                 )
             )
             continue
-        raw_html, data_url = _html_and_data(text)
+        if _has_long_line(text):
+            problems.append(
+                Problem(
+                    "line_too_long",
+                    f"A spec line may not be over {MAX_LINE:,} characters: break it into "
+                    "paragraphs or list items.",
+                    s.section_key,
+                )
+            )
+            continue
+        raw_html, data_url, script_url = _html_and_data(text)
         if raw_html:
             problems.append(
                 Problem(
@@ -1036,6 +1089,15 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
                 Problem(
                     "data_url",
                     "A spec may not hold data: URLs in images or links: link to an https URL.",
+                    s.section_key,
+                )
+            )
+        if script_url:
+            problems.append(
+                Problem(
+                    "script_url",
+                    "A spec may not hold javascript: or vbscript: URLs in images or links: "
+                    "link to an https URL.",
                     s.section_key,
                 )
             )

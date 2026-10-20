@@ -4,7 +4,7 @@ import { Fragment, type ReactNode } from "react";
 import { CitationChip } from "@/components/CitationChip";
 import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut, DateMarkOut } from "@/lib/api/client";
-import type { Block, Inline } from "@/lib/markdown";
+import { isSafeHref, type Block, type Inline } from "@/lib/markdown";
 import { sectionHash, sectionHref } from "@/lib/section-link";
 
 /** A highlighted span of a section's anchorable text. */
@@ -171,6 +171,8 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
       case "em":
         return <em key={k}>{renderInline(n.c, ctx, k)}</em>;
       case "link": {
+        // Only http, https, mailto and relative or anchor links render as links.
+        if (!isSafeHref(n.href)) return <Fragment key={k}>{renderInline(n.c, ctx, k)}</Fragment>;
         const doc = docLinkHref(n.href);
         if (doc) {
           return (
