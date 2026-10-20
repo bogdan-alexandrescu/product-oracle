@@ -4,7 +4,9 @@ The same list Google's Drive picker shows in the browser, for MCP clients acting
 person (S5, 'Browse access and narrowing', owner 2026-10-19): an assistant can find the
 ids of the docs and folders to put in a Google Docs source. Only the connection's owner
 may use it; API tokens without a user are refused (403), and run tokens cannot reach it
-(their scopes do not cover connections).
+(their scopes do not cover connections). A read-only credential (an MCP client approved
+with oracle:read only) is refused too (403): browsing only finds ids for a source edit,
+which such a client cannot make.
 
 The search text is sent to Drive as one escaped ``name contains '...'`` term and a folder
 must be a Drive id (:data:`oracle.sources.connectors.google_docs.DRIVE_ID`), so a caller
@@ -24,7 +26,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
-from oracle.auth.deps import TenantDB
+from oracle.auth.deps import READ_ONLY, TenantDB
 from oracle.connections import service
 from oracle.connections.providers import DRIVE_READONLY, RECONNECT_TO_CHOOSE_FILES
 from oracle.connections.router import ProviderHttp, UserPrincipal
@@ -148,7 +150,10 @@ def drive_query(text: str, folder: str | None) -> str:
     response_model=DriveFilePage,
     responses={
         400: {"description": "folder is not a Drive folder id"},
-        403: {"description": "Not a person (an API token without a user)"},
+        403: {
+            "description": "Not a person (an API token without a user), or a read-only "
+            "credential (oracle:read)"
+        },
         404: {"description": "Not one of your Google connections"},
         409: {"description": "The connection needs reconnecting (or lacks Drive access)"},
         429: {
@@ -175,6 +180,8 @@ async def list_google_drive_files(
     Read through your own Google connection. Answers are cached for a minute, and you
     may search Drive a limited number of times a minute."""
     assert principal.user_id is not None
+    if principal.read_only:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY)
     if folder is not None and not valid_id(folder):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"folder {NOT_A_DRIVE_ID}")
     conn = await service.get_own(db, connection_id, principal.user_id)

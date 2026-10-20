@@ -5,13 +5,15 @@ throttled per person."""
 
 import httpx
 import pytest
+from sqlalchemy import select
 
+from oracle.auth.models import User
 from oracle.auth.service import create_api_token
 from oracle.connections import browse_google
 from oracle.connections.providers import DRIVE_FILE, DRIVE_READONLY
 from oracle.mcp import scopes
 from oracle.sources.connectors.google_docs import DOC_MIME, DRIVE_URL, FOLDER_MIME
-from oracle.tenancy import tenant_session
+from oracle.tenancy import tenant_session, unscoped_session
 from tests.connection_helpers import (
     add_connection,
     clear_provider_http,
@@ -127,6 +129,29 @@ async def test_owner_only(tenant_id, drive):
         resp = await c.get(PATH.format(conn.id))
     assert resp.status_code == 404
     assert drive == []
+
+
+@pytest.mark.parametrize(("scope", "allowed"), [("oracle:read", False), (None, True)])
+async def test_read_only_credentials_are_refused(client, drive, scope, allowed):
+    """Browsing only finds ids for a source edit, which a read-only MCP client cannot
+    make: it gets 403 and Drive is never asked."""
+    from tests.test_oauth import full_flow
+
+    _, tok = await full_flow(client, scope=scope)
+    client.cookies.clear()
+    async with unscoped_session() as s:
+        admin = await s.scalar(select(User).where(User.email == "admin@example.com"))
+    conn = await add_connection(admin.tenant_id, admin.id, "google", scopes=READONLY)
+    resp = await client.get(
+        PATH.format(conn.id), headers={"Authorization": f"Bearer {tok['access_token']}"}
+    )
+    if allowed:
+        assert resp.status_code == 200, resp.text
+        assert len(drive) == 1
+    else:
+        assert resp.status_code == 403
+        assert "oracle:read" in resp.json()["detail"]
+        assert drive == []
 
 
 async def test_service_tokens_are_refused(tenant_id, drive):

@@ -1,6 +1,7 @@
 """Changing sources needs write access: an MCP client approved with oracle:read only
 reads as a viewer and may not add, edit, sync, pause or delete the person's sources,
-over REST or through its MCP tools. It may still list them and browse Drive."""
+over REST or through its MCP tools. It may still list them (browsing Drive is refused:
+that only finds ids for an edit)."""
 
 import pytest
 from sqlalchemy import select
