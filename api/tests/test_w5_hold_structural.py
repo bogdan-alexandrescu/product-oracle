@@ -4,9 +4,10 @@ release the run token's hold.
 Until SwarmCloud's multi-tenancy Design B is on, any worker can rewrite any task row, so
 a review step's ``state``, ``park_reason`` and ``opened_at`` are forgeable. A review step
 counts as reached once its predecessor (the step it depends on) reads SUCCEEDED in the
-same status read, whatever its own row says; a task with no state of its own, a step
-whose task was not read, and PENDING or SKIPPED (states SwarmCloud does not have) all
-hold. The only release is a review PARKED with exactly DEPENDENCY_INCOMPLETE whose
+same status read (or SKIPPED: a gated step whose verdict did not match also counts as
+finished), whatever its own row says; a task with no state of its own, a step whose task
+was not read, and PENDING or SKIPPED (states SwarmCloud does not have) all hold. The
+release fails closed on the predecessor too: only a known in-progress state releases. The only release is a review PARKED with exactly DEPENDENCY_INCOMPLETE whose
 predecessor was read and has not succeeded (#112: agents write during work steps)."""
 
 import uuid
@@ -195,6 +196,47 @@ async def test_a_work_step_running_with_later_reviews_dependency_parked_releases
     assert await _hold(monkeypatch, rt, reviews) == service.HOLD_DECISION
 
 
+IN_PROGRESS = "SUBMITTED QUEUED PARKED READY LEASED DISPATCHED STARTING RUNNING PENDING".split()
+
+
+@pytest.mark.parametrize("state", IN_PROGRESS)
+def test_a_known_in_progress_predecessor_releases(state):
+    before = StepStatus(WORK, "t0", state, task_read=True)
+    step = StepStatus(REVIEW, "t", "PARKED", park_reason="DEPENDENCY_INCOMPLETE", task_read=True)
+    assert not_reached(step, before) is True
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        "FAILED",
+        "CANCELLED",
+        "DEAD_LETTERED",
+        "SUCCEEDED",
+        "SKIPPED",
+        "UNKNOWN",
+        "",
+        "RUNNING ",
+        " RUNNING",
+        "running",
+        "Running",
+        "RUNNING\n",
+        "RUNN1NG",
+        "BACKOFF",
+    ],
+)
+def test_an_unknown_or_finished_predecessor_state_holds(state):
+    before = StepStatus(WORK, "t0", state, task_read=True)
+    step = StepStatus(REVIEW, "t", "PARKED", park_reason="DEPENDENCY_INCOMPLETE", task_read=True)
+    assert not_reached(step, before) is False
+
+
+@pytest.mark.parametrize("state", ["FAILED", "CANCELLED", "DEAD_LETTERED", "BACKOFF", "RUNNING "])
+async def test_an_unknown_predecessor_state_from_the_real_adapter_holds(monkeypatch, state):
+    rt = _adapter({WORK: {"state": state}, REVIEW: dict(_DEP_PARKED)})
+    assert await _hold(monkeypatch, rt) == service.HOLD_DECISION
+
+
 # --------------------------------------------------------------------------- end to end
 
 
@@ -252,4 +294,53 @@ async def test_an_opened_wait_holds_before_oracle_records_its_checkpoint(client,
     service._hold_cache.clear()
     assert await _run_token_writes(token) is True
     assert swarm.workflows["wf_1"].step("baseline-review1").park_reason == "AWAITING_INPUT"
+    assert (await get(client, auth, run["id"]))["status"] != "awaiting_checkpoint"
+
+
+async def test_a_forged_review_row_after_the_wait_opened_holds_end_to_end(client, owner):
+    """The fake has opened the wait (the work step ran); a worker then rewrites the
+    review's task: state, park_reason and metadata removed. Held, not released."""
+    _, auth = owner
+    swarm = on()
+    use(swarm)
+    swarm.steps_per_poll = 0
+    run = await started(client, auth)
+    token = token_of(swarm)
+    swarm.steps_per_poll = None
+    service._hold_cache.clear()
+    assert await _run_token_writes(token) is True
+    review = "baseline-review1"
+    assert swarm.workflows["wf_1"].step(review).park_reason == "AWAITING_INPUT"
+
+    swarm.forged[review] = {"state": None, "park_reason": None, "metadata": None}
+    service._hold_cache.clear()
+    assert await _run_token_writes(token) is True
+    assert (await get(client, auth, run["id"]))["status"] != "awaiting_checkpoint"
+
+
+async def test_two_row_forgery_is_the_accepted_residual(client, owner):
+    """ACCEPTED RESIDUAL (owner, 2026-10-20, until SwarmCloud's Design B cutover): a
+    worker that forges BOTH rows, the work step back to RUNNING and the review back to
+    PARKED/DEPENDENCY_INCOMPLETE with no opened wait, is indistinguishable from a
+    workflow that has not reached the review. Oracle never records the checkpoint, so
+    the token stays writable for as long as the forgery stands. This pins that; it is
+    not a guarantee. Design B closes it."""
+    _, auth = owner
+    swarm = on()
+    use(swarm)
+    swarm.steps_per_poll = None
+    run = await started(client, auth)
+    token = token_of(swarm)
+    review = "baseline-review1"
+    before = _predecessor(swarm, review)
+    assert await _run_token_writes(token) is True  # the wait is open: held
+
+    swarm.forged[before] = {"state": "RUNNING"}
+    swarm.forged[review] = {
+        "state": "PARKED",
+        "park_reason": "DEPENDENCY_INCOMPLETE",
+        "metadata": None,
+    }
+    service._hold_cache.clear()
+    assert await _run_token_writes(token) is False
     assert (await get(client, auth, run["id"]))["status"] != "awaiting_checkpoint"
