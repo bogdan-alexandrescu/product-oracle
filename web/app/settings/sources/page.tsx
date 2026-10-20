@@ -24,7 +24,7 @@ import { formatDateTime } from "@/lib/format";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD, TEXTAREA } from "../_components/fields";
-import { driveConfig, driveFiles, DriveFiles, ReconnectToChoose, type DriveFile } from "./DriveFiles";
+import { driveConfig, driveFiles, DriveFiles, DriveNotes, ReconnectToChoose, type DriveFile } from "./DriveFiles";
 
 type Source = Schemas["SourceOut"];
 type Kind = Source["kind"];
@@ -200,7 +200,9 @@ function DriveFilesEditor({
   const [files, setFiles] = useState<DriveFile[]>(driveFiles(source.config));
   const { act, error, busy } = useAction();
   const reconnect = !!connection?.reconnect_reason;
-  const unavailable = Object.fromEntries((source.unavailable_items ?? []).map((u) => [u.external_id, u.reason]));
+  const unavailable = Object.fromEntries(
+    (source.unavailable_items ?? []).filter((u) => (u.status ?? "unavailable") === "unavailable").map((u) => [u.external_id, u.reason]),
+  );
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -268,6 +270,8 @@ function SourceRow({
       setNotice(`Synced: ${r.upserted} item(s) seen, ${r.versions_written} new version(s), ${r.deleted} deleted.`);
     } else if (r.outcome === "rate_limited") {
       setNotice("Rate limited: the next sync resumes where this one stopped.");
+    } else if (r.outcome === "superseded") {
+      setNotice("The source was edited while it synced: sync again to use the new settings.");
     }
   }
 
@@ -403,7 +407,8 @@ function SourceRow({
         )}
       </div>
       {source.reconnect_reason && <ReconnectToChoose className="mt-2" />}
-      {unavailable.length > 0 && (
+      {drive && <DriveNotes notes={unavailable} picked={picked} sourceName={source.name} />}
+      {!drive && unavailable.length > 0 && (
         <ul aria-label={`Unreadable files of ${source.name}`} className="mt-2 flex flex-col gap-1">
           {unavailable.map((u) => {
             const name = picked.find((f) => f.id === u.external_id)?.name ?? u.external_id;

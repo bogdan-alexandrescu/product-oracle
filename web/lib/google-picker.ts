@@ -41,6 +41,7 @@ interface DocsView {
   setMimeTypes(types: string): DocsView;
   setIncludeFolders(include: boolean): DocsView;
   setSelectFolderEnabled(enabled: boolean): DocsView;
+  setEnableDrives(enabled: boolean): DocsView;
   setMode(mode: unknown): DocsView;
 }
 interface PickerBuilder {
@@ -167,9 +168,9 @@ function driveToken(config: PickerConfig, hint: string): Promise<string> {
 }
 
 /**
- * Opens Google's Drive picker: Google Docs and folders, several at once. Call it from a
- * click after preloadDrivePicker resolved. Resolves with the picked docs and folders, or
- * null when the person cancels.
+ * Opens Google's Drive picker: Google Docs and folders, in My Drive and shared drives,
+ * several at once. Call it from a click after preloadDrivePicker resolved. Resolves with
+ * the picked docs and folders, or null when the person cancels.
  */
 export function chooseFromDrive(config: PickerConfig, hint: string): Promise<PickedFile[] | null> {
   const picker = window.google?.picker;
@@ -183,6 +184,8 @@ export function chooseFromDrive(config: PickerConfig, hint: string): Promise<Pic
           .setMimeTypes(`${DOC_MIME},${FOLDER_MIME}`)
           .setIncludeFolders(true)
           .setSelectFolderEnabled(true)
+          // Shared drives too, so a shared drive's folders and docs can be picked.
+          .setEnableDrives(true)
           .setMode(picker.DocsViewMode.LIST);
         new picker.PickerBuilder()
           .addView(view)

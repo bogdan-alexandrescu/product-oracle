@@ -57,6 +57,8 @@ test("sources › Google Docs: choose files and a folder from Drive, remove one,
       mimeTypes: "application/vnd.google-apps.document,application/vnd.google-apps.folder",
       includeFolders: true,
       selectFolderEnabled: true,
+      // Shared drives' folders and docs can be picked too.
+      enableDrives: true,
       mode: "list",
     },
   ]);
@@ -103,17 +105,25 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   await page.goto("/settings/sources");
   const row = page.getByRole("listitem", { name: "Product docs" });
   await expect(row).toContainText("Pricing strategy, Activation v2 PRD, Customer interviews Q3");
-  await expect(row).toContainText("FoldersProduct specs");
+  await expect(row).toContainText("FoldersProduct specs, Vendor research");
   await expect(row).toContainText("3 item(s)");
-  // An unshared file is reported on its own; the source is still active.
-  await expect(row.getByRole("list", { name: "Unreadable files of Product docs" })).toContainText("No accessCustomer interviews Q3");
+  // An unshared file and an unreadable folder are reported on their own (the folder's
+  // docs are kept), and docs owned outside the company are listed as skipped, with their
+  // count and names; the source is still active.
+  const notes = row.getByRole("list", { name: "Sync notes for Product docs" });
+  await expect(notes.getByRole("listitem")).toHaveText([
+    /No access\s*Vendor research\s*its docs are kept until you remove it/,
+    /No access\s*Customer interviews Q3/,
+    /Skipped: owned outside example.com\s*3 docs\s*Agency SOW 2026, Partner pricing sheet, Contractor onboarding notes/,
+  ]);
   await expect(row).toContainText("Active");
 
   await row.getByRole("button", { name: "More actions for Product docs" }).click();
   await row.getByRole("menuitem", { name: "Edit files and folders" }).click();
   const list = row.getByRole("list", { name: "Picked files and folders" });
   await expect(list.getByRole("listitem")).toHaveText([
-    /Product specs\s*Folder · every doc in it/,
+    /Product specs\s*Folder · every doc in it$/,
+    /Vendor research\s*Folder · every doc in it\s*No access/,
     /Pricing strategy\s*Google Doc/,
     /Activation v2 PRD\s*Google Doc/,
     /Customer interviews Q3\s*Google Doc\s*No access/,
@@ -121,7 +131,7 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   // The picker opens on a click, not by itself.
   expect((await drive(page))?.opened ?? 0).toBe(0);
   await row.getByRole("button", { name: "Choose from Drive" }).click();
-  await expect(list.getByRole("listitem")).toHaveCount(5);
+  await expect(list.getByRole("listitem")).toHaveCount(6);
   await expect(list.getByRole("listitem").last()).toHaveText(/Roadmap notes\s*Google Doc/);
   expect((await drive(page)).signIns).toEqual([{ inClick: true }]);
 
@@ -131,7 +141,8 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   await expect(row.getByRole("status")).toHaveText("Files saved.");
   await expect(row).toContainText("Pricing strategy, Activation v2 PRD, Roadmap notes");
   await expect(row).not.toContainText("Product specs");
-  await expect(row.getByRole("list", { name: "Unreadable files of Product docs" })).toHaveCount(0);
+  // Saving clears the last sync's notes until the next sync.
+  await expect(row.getByRole("list", { name: "Sync notes for Product docs" })).toHaveCount(0);
 
   // Narrowing: the next sync deletes the doc that came from the removed folder.
   await row.getByRole("button", { name: "Sync now" }).click();
@@ -191,6 +202,11 @@ test("CSP: every page allows exactly Google's picker hosts, so in-app navigation
     expect([...hosts].sort()).toEqual(["accounts.google.com", "apis.google.com", "docs.google.com"]);
     expect(csp).not.toMatch(/\*|https:(?!\/\/)|'unsafe-eval'|blob:/);
     const directive = (name: string) => csp.split("; ").find((d) => d.startsWith(`${name} `));
+    // Everything not named below stays on this origin.
+    expect(directive("default-src")).toBe("default-src 'self'");
+    expect(directive("style-src")).toBe("style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style");
+    expect(directive("img-src")).toBe("img-src 'self' data:");
+    expect(directive("font-src")).toBe("font-src 'self' data:");
     expect(directive("script-src")).toBe("script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com/gsi/");
     expect(directive("frame-src")).toBe("frame-src 'self' https://docs.google.com https://accounts.google.com/gsi/");
     expect(directive("connect-src")).toBe("connect-src 'self' https://accounts.google.com/gsi/");
@@ -218,4 +234,29 @@ test("CSP: after in-app navigation to Sources, the picker still loads under the 
   await expect(form.getByRole("list", { name: "Picked files and folders" }).getByRole("listitem")).toHaveCount(2);
   expect(asked.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
+});
+
+test("sources › Google Docs: pasted ids must be Drive ids; links copied from Drive work", async ({ page }) => {
+  await fakeGoogle(page, PICKED);
+  await login(page);
+  await page.goto("/settings/sources");
+  const form = page.getByRole("form", { name: "Add a source" });
+  await form.getByLabel("Kind").selectOption("google_docs");
+  await form.getByRole("button", { name: "Paste ids" }).click();
+  await form
+    .getByLabel("Drive file ids")
+    .fill(
+      [
+        "https://docs.google.com/document/d/1DocLinkedExample/edit",
+        "https://drive.google.com/drive/folders/1FolderLinkedExample",
+        "root",
+        "root?x='",
+      ].join("\n"),
+    );
+  await form.getByRole("button", { name: "Add ids" }).click();
+  const list = form.getByRole("list", { name: "Picked files and folders" });
+  await expect(list.getByRole("listitem")).toHaveText([/1DocLinkedExample\s*Drive id/, /1FolderLinkedExample\s*Folder/]);
+  // What is not an id stays in the box, with a reason.
+  await expect(form.getByText("Not a Drive file or folder id: root, root?x=")).toBeVisible();
+  await expect(form.getByLabel("Drive file ids")).toHaveValue("root\nroot?x='");
 });

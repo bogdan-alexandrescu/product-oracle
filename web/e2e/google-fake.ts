@@ -52,6 +52,7 @@ window.gapi = { load(name, options) {
     setMimeTypes(t) { this.v.mimeTypes = t; return this; }
     setIncludeFolders(b) { this.v.includeFolders = b; return this; }
     setSelectFolderEnabled(b) { this.v.selectFolderEnabled = b; return this; }
+    setEnableDrives(b) { this.v.enableDrives = b; return this; }
     setMode(m) { this.v.mode = m; return this; }
   }
   class PickerBuilder {

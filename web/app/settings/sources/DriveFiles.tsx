@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Button, Chip, Icon, InfoTip, LinkButton, Notice } from "@/components/ds";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { chooseFromDrive, drivePickerReady, preloadDrivePicker, type PickerConfig } from "@/lib/google-picker";
 import { errorMessage } from "@/lib/use-query";
 
@@ -45,6 +45,18 @@ export function driveConfig(config: Record<string, unknown>, files: DriveFile[])
   };
   if (folders.length === 0) delete next.folders;
   return next;
+}
+
+/** What a Drive file id looks like; the API refuses anything else (and "root"). */
+export const DRIVE_ID = /^[A-Za-z0-9_-]{10,200}$/;
+
+/** A pasted id, or the id in a pasted Drive link (/d/<id>, /folders/<id>, ?id=<id>). */
+export function pastedFile(text: string): DriveFile | null {
+  const folder = text.match(/\/folders\/([A-Za-z0-9_-]+)/);
+  const doc = text.match(/\/d\/([A-Za-z0-9_-]+)/) ?? text.match(/[?&]id=([A-Za-z0-9_-]+)/);
+  const id = folder?.[1] ?? doc?.[1] ?? text;
+  if (!DRIVE_ID.test(id) || id.toLowerCase() === "root") return null;
+  return { id, name: id, kind: folder ? "folder" : "doc" };
 }
 
 function merge(list: DriveFile[], more: DriveFile[]): DriveFile[] {
@@ -142,8 +154,16 @@ export function DriveFiles({
   }
 
   function addPasted() {
-    const pastedIds = [...new Set(pasted.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))];
-    onChange(merge(files, pastedIds.map((id) => ({ id, name: id, kind: "doc" as const }))));
+    const parts = [...new Set(pasted.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))];
+    const found = parts.map(pastedFile);
+    const bad = parts.filter((_, i) => !found[i]);
+    onChange(merge(files, found.filter((f): f is DriveFile => f !== null)));
+    if (bad.length) {
+      setPasted(bad.join("\n"));
+      setError(`Not a Drive file or folder id: ${bad.join(", ")}`);
+      return;
+    }
+    setError(null);
     setPasted("");
     setPasting(false);
   }
@@ -208,6 +228,7 @@ export function DriveFiles({
           <label htmlFor={pasteId} className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
             Drive file ids
           </label>
+          <span className="text-[13px] leading-4 text-text2">Ids or links copied from Drive, one per line.</span>
           <textarea
             id={pasteId}
             value={pasted}
@@ -234,5 +255,102 @@ export function DriveFiles({
       )}
       {error && <Notice tone="error">{error}</Notice>}
     </div>
+  );
+}
+
+type SourceNote = Schemas["UnavailableItem"];
+
+/** The chip for an item the last sync could not read. */
+function noAccessLabel(reason: string): string {
+  if (reason.startsWith("In the trash")) return "In the trash";
+  if (reason.startsWith("Not a")) return reason;
+  if (reason.startsWith("Not picked")) return "Not picked";
+  return "No access";
+}
+
+/** Up to `shown` names, then "+N more"; every name is in the title. */
+function NameList({ names, shown = 4 }: { names: string[]; shown?: number }) {
+  const rest = names.length - shown;
+  return (
+    <span className="min-w-0 truncate text-text" title={names.join(", ")}>
+      {names.slice(0, shown).join(", ")}
+      {rest > 0 && <span className="text-text2">{` +${rest} more`}</span>}
+    </span>
+  );
+}
+
+/**
+ * What the last sync of a Google Docs source reported, on its card: picked docs and folders
+ * it cannot read (a folder's docs are kept until it is removed), docs in a picked folder it
+ * left out because they are owned outside the company (count and names), docs it pulled in
+ * with that warning, and a folder listing that stopped at the source's cap.
+ */
+export function DriveNotes({
+  notes,
+  picked,
+  sourceName,
+}: {
+  notes: SourceNote[];
+  picked: DriveFile[];
+  sourceName: string;
+}) {
+  const byId = new Map(picked.map((f) => [f.id, f]));
+  const nameOf = (n: SourceNote) => byId.get(n.external_id)?.name ?? n.name ?? n.external_id;
+  const unreadable = notes.filter((n) => (n.status ?? "unavailable") === "unavailable");
+  const limited = notes.filter((n) => n.status === "limited");
+  const groups = (status: "skipped" | "flagged") => {
+    const out = new Map<string, string[]>();
+    for (const n of notes.filter((x) => x.status === status)) out.set(n.reason, [...(out.get(n.reason) ?? []), nameOf(n)]);
+    return [...out.entries()];
+  };
+  const skipped = groups("skipped");
+  const flagged = groups("flagged");
+  if (!notes.length) return null;
+  return (
+    <ul aria-label={`Sync notes for ${sourceName}`} className="mt-2 flex flex-col gap-1.5" data-testid="drive-notes">
+      {unreadable.map((n) => {
+        const folder = byId.get(n.external_id)?.kind === "folder";
+        return (
+          <li key={n.external_id} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+            <Chip kind="warn" title={n.reason}>
+              {noAccessLabel(n.reason)}
+            </Chip>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Icon name={folder ? "folder" : "doc"} size={16} className="flex-none text-text2" />
+              <span className="min-w-0 truncate font-medium" title={`${nameOf(n)}: ${n.reason}`}>
+                {nameOf(n)}
+              </span>
+            </span>
+            {folder && <span className="text-text2">its docs are kept until you remove it</span>}
+          </li>
+        );
+      })}
+      {skipped.map(([reason, names]) => (
+        <li key={reason} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+          <Chip kind="na" title="Docs in a picked folder whose owner is outside the company are not pulled in">
+            {reason}
+          </Chip>
+          <span className="tnum flex-none font-medium">{names.length === 1 ? "1 doc" : `${names.length} docs`}</span>
+          <NameList names={names} />
+        </li>
+      ))}
+      {flagged.map(([reason, names]) => (
+        <li key={reason} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+          <Chip kind="warn" title="Pulled in, but owned outside the company">
+            {reason}
+          </Chip>
+          <span className="tnum flex-none font-medium">{names.length === 1 ? "1 doc" : `${names.length} docs`}</span>
+          <NameList names={names} />
+        </li>
+      ))}
+      {limited.map((n) => (
+        <li key={`limit-${n.external_id}`} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+          <Chip kind="warn">Capped</Chip>
+          <span className="min-w-0 text-text2">
+            <span className="font-medium text-text">{nameOf(n)}</span>: {n.reason}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

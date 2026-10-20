@@ -7,16 +7,22 @@ const apiUrl = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
 /**
  * Settings > Sources opens Google's Drive picker (lib/google-picker.ts). The page is
  * usually reached by in-app navigation, which keeps the CSP of the document first loaded,
- * so this policy is sent on every page. It allows Google's two scripts from their own
- * hosts, Google's picker frame (docs.google.com) and sign-in frame and requests
- * (accounts.google.com/gsi/), and no other outside host for scripts, frames or requests.
- * 'unsafe-inline' scripts cover Next's inline bootstrap and the theme script; development
- * adds 'unsafe-eval' for React and ws: for hot reload. Styles, images and fonts are left
- * open: theme previews (sandboxed srcdoc frames, which inherit this policy) may use any.
+ * so this policy is sent on every page. Everything defaults to this origin only
+ * (default-src 'self'); on top of it the policy allows Google's two scripts from their own
+ * hosts, Google's picker frame (docs.google.com), and Google sign-in's frame, requests and
+ * stylesheet (accounts.google.com/gsi/), and no other outside host. 'unsafe-inline'
+ * scripts cover Next's inline bootstrap and the theme script; development adds
+ * 'unsafe-eval' for React and ws: for hot reload. Inline styles and data: images and fonts
+ * are allowed: the picker's dialog and theme previews (sandboxed srcdoc frames, which
+ * inherit this policy; theme CSS may use no URL but data:) use them.
  */
 const DEV = process.env.NODE_ENV !== "production";
 const APP_CSP = [
+  "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${DEV ? " 'unsafe-eval'" : ""} https://apis.google.com https://accounts.google.com/gsi/`,
+  "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
+  "img-src 'self' data:",
+  "font-src 'self' data:",
   "frame-src 'self' https://docs.google.com https://accounts.google.com/gsi/",
   `connect-src 'self'${DEV ? " ws:" : ""} https://accounts.google.com/gsi/`,
   "object-src 'none'",

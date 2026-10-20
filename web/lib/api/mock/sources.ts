@@ -95,7 +95,9 @@ function seed(): SourcesDb {
     item_count: 1,
     connector_available: true,
   };
-  // Google Docs and a folder picked in the Drive picker; one doc was unshared since.
+  // Google Docs and folders picked in the Drive picker. Since: one doc was unshared, one
+  // folder can no longer be read (its docs are kept), and three docs in a picked folder
+  // are owned outside the company, so they were skipped.
   const docs: Source = {
     id: "50000000-0000-4000-8000-000000000003",
     kind: "google_docs",
@@ -103,12 +105,13 @@ function seed(): SourcesDb {
     connection_id: CONNECTIONS.google[0].id,
     config: {
       docs: ["1DocPricingExample", "1DocActivationExample", "1DocInterviewsExample"],
-      folders: ["1FolderSpecsExample"],
+      folders: ["1FolderSpecsExample", "1FolderVendorExample"],
       names: {
         "1DocPricingExample": "Pricing strategy",
         "1DocActivationExample": "Activation v2 PRD",
         "1DocInterviewsExample": "Customer interviews Q3",
         "1FolderSpecsExample": "Product specs",
+        "1FolderVendorExample": "Vendor research",
       },
     },
     status: "active",
@@ -118,7 +121,21 @@ function seed(): SourcesDb {
     updated_at: "2026-10-19T08:00:00Z",
     item_count: 3,
     connector_available: true,
-    unavailable_items: [{ external_id: "1DocInterviewsExample", reason: "No access: removed, or no longer shared with you" }],
+    unavailable_items: [
+      {
+        external_id: "1FolderVendorExample",
+        reason: "No access to this folder: removed, or no longer shared with you. What came from it is kept until you remove it here",
+        name: null,
+        status: "unavailable",
+      },
+      { external_id: "1DocInterviewsExample", reason: "No access: removed, or no longer shared with you", name: null, status: "unavailable" },
+      ...["Agency SOW 2026", "Partner pricing sheet", "Contractor onboarding notes"].map((name, i) => ({
+        external_id: `1DocOutside${i}Example`,
+        reason: "Skipped: owned outside example.com",
+        name,
+        status: "skipped" as const,
+      })),
+    ],
     reconnect_reason: null,
   };
   // A folder source on a connection holding only the short-lived drive.file grant, which
