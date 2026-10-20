@@ -29,11 +29,18 @@ source PRD (``date_bases``, oracle.roadmap.schedule), that source must name a ba
 covers the item and supports exactly that date: a date with no verified estimate,
 capacity or commitment behind it is refused (``unverified_date``).
 
-The file is read by :func:`load_items_yaml` on every path (the run's checkpoint, a run's
-import, a person's import): it refuses YAML aliases and anchors (``yaml.safe_load``
-shares an alias's node, so a few hundred bytes can expand to gigabytes once copied to
-JSON or text), more than ``MAX_NODES`` nodes, and a file larger than
-``MAX_STORED_BYTES`` once parsed.
+The file is agent output. It is read by :func:`load_items_yaml` on every path (the run's
+checkpoint, a run's import, a person's import), which refuses, as an
+:class:`ItemsYamlError` and never any other exception: YAML aliases and anchors
+(``yaml.safe_load`` shares an alias's node, so a few hundred bytes can expand to
+gigabytes once copied to JSON or text); explicit tags; numbers in any form but plain
+decimal (YAML 1.1 base-60 ``1:1:1...`` is quadratic to build, and Python refuses
+``int()`` of more than 4,300 digits), NaN and infinities; values longer than
+``MAX_SCALAR_CHARS``, nesting deeper than ``MAX_DEPTH`` (a few hundred ``[`` overflow the
+composer's recursion), more than ``MAX_NODES`` nodes, and a file larger than
+``MAX_STORED_BYTES`` once parsed. Async callers use :func:`check_items_async`, which
+parses in a worker thread, at most ``PARSE_SECONDS``: a bad file is a failed check, never
+a stalled event loop or a tick exception.
 """
 
 import asyncio
