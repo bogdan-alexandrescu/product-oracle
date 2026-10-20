@@ -20,7 +20,7 @@ import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeQuality, seedQuality, type QualityDb } from "./quality";
 import { routeTrace } from "./trace";
-import { routeV2, seedV2, type V2Db } from "./v2";
+import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
@@ -67,6 +67,11 @@ export interface Db {
 const STORAGE_KEY = "po-mock-db-v2";
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
+/**
+ * Tests and screenshots set this localStorage key to "empty" before the first call to start
+ * as a new company: members only, no goals, documents, runs or questions.
+ */
+export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
 
 /** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
@@ -128,6 +133,27 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
       retrieved_at: c.retrieved_at,
     })),
   };
+}
+
+/** A new company: the members and their invites, nothing else yet. */
+function seedEmpty(): Db {
+  const db: Db = {
+    session: null,
+    tenant_id: uuid(),
+    user_id: uuid(),
+    members: [],
+    invites: [],
+    documents: [],
+    versions: [],
+    comments: [],
+    reviews: [],
+    feedback: [],
+    baseline: { entities: [], edges: [], evidence: [], conflicts: [], proposals: [], revisions: [] },
+    runs: { runs: [], artifacts: {} },
+    v2: emptyV2(),
+  };
+  db.members = MOCK_MEMBERS.map((m) => ({ ...m, id: m.email === MOCK_LOGIN.email ? db.user_id : uuid() }));
+  return db;
 }
 
 function seed(): Db {
@@ -424,7 +450,7 @@ function load(): Db {
       // fall through to a fresh seed
     }
   }
-  const db = seeded("db", seed);
+  const db = seeded("db", localStorage.getItem(MOCK_SCENARIO_KEY) === "empty" ? seedEmpty : seed);
   save(db);
   return db;
 }
@@ -803,12 +829,39 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   return notFound("Route");
 }
 
+/**
+ * The PRDs in review trace to the baseline: their goal-trace and scope sections link the
+ * goals and features they serve, so Home and the trace show goal tags.
+ */
+function goalLinks(db: Db): V2Db["section_links"] {
+  const out: V2Db["section_links"] = [];
+  const link = (slug: string, section: string, entityKey: string) => {
+    const doc = findDocument(db, slug);
+    const v = doc && docVersions(db, doc).at(-1);
+    const e = db.baseline.entities.find((x) => x.key === entityKey);
+    if (!doc || !v || !e || !v.sections.some((s) => s.section_key === section)) return;
+    out.push({
+      id: uuid(), document_id: doc.id, version_id: v.id, section_key: section, section_hash: null, composition_revision: null,
+      module_key: null, kind: "implements", entity_id: e.id, evidence_id: null, source_item_id: null, precision: "section",
+      claim: null, created_by: null, created_at: v.created_at,
+    });
+  };
+  link("checkout-redesign", "goal-trace", "g.activation");
+  link("checkout-redesign", "goal-trace", "g.paid-conversion");
+  link("team-workspaces", "scope", "f.team-invites");
+  return out;
+}
+
 /** The v2 rows, seeded on first use against the first mock PRD. */
 function ensureV2(db: Db): V2Db {
   if (!db.v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
     const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
-    db.v2 = seeded("v2", () => seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id));
+    db.v2 = seeded("v2", () => {
+      const v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
+      v2.section_links.push(...goalLinks(db));
+      return v2;
+    });
   }
   return db.v2;
 }
@@ -859,6 +912,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         documents: db.documents,
         versions: db.versions,
         entities: db.baseline.entities,
+        edges: db.baseline.edges,
         userId: me.id,
         role: me.role,
         now,

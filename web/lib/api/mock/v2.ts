@@ -57,6 +57,11 @@ const PATHS: Record<string, keyof V2Db> = {
   "artifact-review-events": "artifact_review_events",
 };
 
+/** No v2 rows: a new company's (the mock's empty-company scenario). */
+export function emptyV2(): V2Db {
+  return Object.fromEntries(Object.values(PATHS).map((t) => [t, []])) as unknown as V2Db;
+}
+
 /** Fixed ids, so fixtures link to each other and tests can address them. */
 export const V2_IDS = {
   module: "a2000000-0000-4000-8000-000000000001",
