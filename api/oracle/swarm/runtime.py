@@ -31,8 +31,24 @@ FeatureState = Literal["on", "off", "unknown"]
 # which SwarmCloud does not have, included), no row, no task, or a task with no state of
 # its own counts as reached.
 DEPENDENCY_INCOMPLETE = "DEPENDENCY_INCOMPLETE"
-# The predecessor states that make a review reached whatever its own row says.
-DEPENDENCY_MET: frozenset[str] = frozenset({"SUCCEEDED", "SKIPPED"})
+# The predecessor states that leave a review unreached: SwarmCloud's task states from
+# submission to running (swarm_common.states.TaskState: SUBMITTED, QUEUED, PARKED, READY,
+# LEASED, DISPATCHED, STARTING, RUNNING; it has no retry or backoff state) plus PENDING,
+# the adapter's default for a row with no state. An allow-list: FAILED, CANCELLED,
+# DEAD_LETTERED, an unknown string, or a padded or re-cased one does not release the hold.
+DEPENDENCY_IN_PROGRESS: frozenset[str] = frozenset(
+    {
+        "PENDING",
+        "SUBMITTED",
+        "QUEUED",
+        "PARKED",
+        "READY",
+        "LEASED",
+        "DISPATCHED",
+        "STARTING",
+        "RUNNING",
+    }
+)
 FEATURES = ("mcp", "await_input", "service_answer")
 
 # The profile of a step that waits for a person, and the verdicts it takes.
@@ -101,12 +117,12 @@ class WorkflowSpec:
 def not_reached(step: "StepStatus", before: "StepStatus | None") -> bool:
     """True when the workflow has not reached review step ``step``: it is PARKED on its
     dependencies and ``before``, the step it depends on in the same status read, was
-    read and has not finished. Fails closed: a step or predecessor whose task was not
-    read, a predecessor that finished, or a wait that has opened is reached whatever the
-    step's state or park reason says."""
+    read and is in a known in-progress state. Fails closed: a step or predecessor whose
+    task was not read, a predecessor that finished or is in any other state, or a wait
+    that has opened is reached whatever the step's state or park reason says."""
     if not step.task_read or step.wait_opened:
         return False
-    if before is None or not before.task_read or before.state in DEPENDENCY_MET:
+    if before is None or not before.task_read or before.state not in DEPENDENCY_IN_PROGRESS:
         return False
     return step.state == "PARKED" and step.park_reason == DEPENDENCY_INCOMPLETE
 

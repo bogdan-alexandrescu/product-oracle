@@ -7,8 +7,9 @@ counts as reached once its predecessor (the step it depends on) reads SUCCEEDED 
 same status read (or SKIPPED: a gated step whose verdict did not match also counts as
 finished), whatever its own row says; a task with no state of its own, a step whose task
 was not read, and PENDING or SKIPPED (states SwarmCloud does not have) all hold. The
-release fails closed on the predecessor too: only a known in-progress state releases. The only release is a review PARKED with exactly DEPENDENCY_INCOMPLETE whose
-predecessor was read and has not succeeded (#112: agents write during work steps)."""
+release fails closed on the predecessor too: only a known in-progress state
+releases. The only release is a review PARKED with exactly DEPENDENCY_INCOMPLETE whose
+predecessor was read and is in progress (#112: agents write during work steps)."""
 
 import uuid
 
