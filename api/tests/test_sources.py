@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from oracle.auth.service import create_api_token
 from oracle.connections.models import Connection
 from oracle.sources import base, service
-from oracle.sources.base import ConnectorAuthError, ConnectorRateLimited, ItemDelete
+from oracle.sources.base import SCOPE_KEY, ConnectorAuthError, ConnectorRateLimited, ItemDelete
 from oracle.sources.items import items_as_of
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 from oracle.tenancy import tenant_session
@@ -21,6 +21,11 @@ from tests.sources_helpers import (
     make_user,
     message,
 )
+
+
+def position(cursor: dict | None) -> dict | None:
+    """A saved cursor without the engine's fingerprint of the selection."""
+    return {k: v for k, v in (cursor or {}).items() if k != SCOPE_KEY}
 
 
 @pytest.fixture
@@ -160,13 +165,14 @@ async def test_patch_pause_resume_delete(a, tenant_id, alice, slack):
     resp = await a.patch(f"/v1/sources/{src['id']}", json={"name": "Renamed"})
     assert resp.status_code == 200 and resp.json()["name"] == "Renamed"
     async with tenant_session(tenant_id) as s:
-        assert (await s.get(Source, src["id"])).cursor == {"page": 1}
+        assert position((await s.get(Source, src["id"])).cursor) == {"page": 1}
 
-    # A new allowlist starts the sync from the beginning.
+    # A new allowlist starts the next sync from the beginning (a connector without
+    # rescope_cursor gets no cursor).
     resp = await a.patch(f"/v1/sources/{src['id']}", json={"config": {"channels": ["C2"]}})
     assert resp.status_code == 200 and resp.json()["config"] == {"channels": ["C2"]}
-    async with tenant_session(tenant_id) as s:
-        assert (await s.get(Source, src["id"])).cursor is None
+    await _sync(a, src["id"])
+    assert slack.calls[-1]["cursor"] is None
 
     assert (await a.post(f"/v1/sources/{src['id']}/pause")).json()["status"] == "paused"
     resp = await a.post(f"/v1/sources/{src['id']}/sync")
@@ -299,7 +305,7 @@ async def test_interrupted_sync_resumes_from_cursor(a, tenant_id, alice, slack):
     assert result["error"] == "Sync failed unexpectedly (RuntimeError)"
     async with tenant_session(tenant_id) as s:
         source = await s.get(Source, src["id"])
-        assert source.cursor == {"page": 1}
+        assert position(source.cursor) == {"page": 1}
         ids = (await s.scalars(select(SourceItem.external_id))).all()
     # Page one was checkpointed; page two's first item was rolled back.
     assert ids == ["m1"]
@@ -339,7 +345,7 @@ async def test_rate_limit_stops_cleanly_and_keeps_cursor(a, tenant_id, alice, sl
     assert result["source"]["status"] == "active"
     assert "resumes" in result["source"]["last_error"]
     async with tenant_session(tenant_id) as s:
-        assert (await s.get(Source, src["id"])).cursor == {"page": 1}
+        assert position((await s.get(Source, src["id"])).cursor) == {"page": 1}
 
     slack.fail = {}
     result = await _sync(a, src["id"])

@@ -162,11 +162,12 @@ async def test_full_sync_messages_threads_and_pagination():
     events = await collect(connector(fake), {"channels": ["C0PRODUCT"]})
 
     items = [e for e in events if isinstance(e, ItemUpsert)]
-    assert [(i.external_id, i.kind) for i in items] == [
+    assert sorted((i.external_id, i.kind) for i in items) == [
         ("C0PRODUCT:1760000100.000100", "message"),
         ("C0PRODUCT:1760000200.000200", "thread"),
         ("C0PRODUCT:1760000300.000300", "message"),
-    ]  # oldest first; the channel_join is skipped
+    ]  # the channel_join is skipped
+    items.sort(key=lambda i: i.external_id)
     first, thread, bot = items
     assert first.author == "Ada"
     assert first.content == "Ada: Kickoff notes for the onboarding revamp are in the doc."
@@ -190,6 +191,7 @@ async def test_full_sync_messages_threads_and_pagination():
                 "C0PRODUCT": {
                     "oldest": "1760000300.000300",
                     "threads": {"1760000200.000200": "1760000260.000600"},
+                    "messages": ["1760000100.000100", "1760000300.000300"],
                 }
             }
         }
@@ -230,9 +232,11 @@ async def test_incremental_sync_updates_threads_with_new_replies():
         "Ada (2025-10-09 08:59): Update: legal signed off on the pricing copy."
     )
     assert edited.source_updated_at == datetime.fromtimestamp(1760000410, UTC)
+    # A cursor from before deletes were tracked: the messages it covers count as known.
     assert events[-1].cursor["channels"]["C0PRODUCT"] == {
         "oldest": "1760000400.000400",
         "threads": {"1760000200.000200": "1760000350.000700"},
+        "messages": ["1760000100.000100", "1760000300.000300", "1760000400.000400"],
     }
 
     # Nothing new: no items, no replies fetched.
@@ -250,7 +254,11 @@ async def test_checkpoint_per_channel_keeps_other_channels():
     assert item.acl["is_private"] is True
     assert events[-1].cursor["channels"] == {
         "C0OTHER": {"oldest": "1750000000.000000", "threads": {}},
-        "C0ROADMAP": {"oldest": "1760000500.000500", "threads": {}},
+        "C0ROADMAP": {
+            "oldest": "1760000500.000500",
+            "threads": {},
+            "messages": ["1760000500.000500"],
+        },
     }
 
 

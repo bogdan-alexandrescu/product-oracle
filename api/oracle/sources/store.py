@@ -2,12 +2,11 @@
 
 import hashlib
 import uuid
-from collections.abc import Callable
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle.sources.base import ItemDelete, ItemUpsert, StoredItem
+from oracle.sources.base import ItemDelete, ItemUpsert, Scope
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 
 
@@ -83,23 +82,33 @@ async def delete_item(db: AsyncSession, source: Source, event: ItemDelete) -> bo
     return True
 
 
-async def delete_out_of_scope(
-    db: AsyncSession, source: Source, in_scope: Callable[[StoredItem], bool]
-) -> int:
-    """Mark deleted every live item ``in_scope`` rejects; returns how many."""
-    rows = await db.scalars(
-        select(SourceItem).where(SourceItem.source_id == source.id, SourceItem.deleted_at.is_(None))
-    )
-    gone = 0
-    for item in rows.all():
-        stored = StoredItem(
-            external_id=item.external_id,
-            kind=item.kind,
-            occurred_at=item.occurred_at,
-            acl=dict(item.acl or {}),
+async def delete_out_of_scope(db: AsyncSession, source: Source, scope: Scope) -> int:
+    """Mark deleted every live item outside ``scope``, in one statement; returns how
+    many. Their versions stay (frozen shares and audit still read them)."""
+    keep = []
+    if scope.groups is not None:
+        group = func.lower(func.split_part(SourceItem.external_id, ":", 1))
+        keep.append(group.in_(sorted(g.lower() for g in scope.groups)))
+    if scope.kinds is not None:
+        keep.append(SourceItem.kind.in_(sorted(scope.kinds)))
+    if scope.occurred_from is not None:
+        keep.append(
+            or_(SourceItem.occurred_at.is_(None), SourceItem.occurred_at >= scope.occurred_from)
         )
-        if not in_scope(stored):
-            item.deleted_at = func.clock_timestamp()
-            gone += 1
-    await db.flush()
-    return gone
+    if scope.occurred_before is not None:
+        keep.append(
+            or_(SourceItem.occurred_at.is_(None), SourceItem.occurred_at < scope.occurred_before)
+        )
+    if not keep:
+        return 0
+    result = await db.execute(
+        update(SourceItem)
+        .where(
+            SourceItem.source_id == source.id,
+            SourceItem.deleted_at.is_(None),
+            not_(and_(*keep)),
+        )
+        .values(deleted_at=func.clock_timestamp())
+        .execution_options(synchronize_session=False)
+    )
+    return result.rowcount or 0

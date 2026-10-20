@@ -1,8 +1,9 @@
 """Slack date range (S5, owner 2026-10-19): ``{"since"?, "until"?}`` (YYYY-MM-DD, UTC).
 
-Messages posted from ``since`` through the end of ``until`` are read; replies posted
-after ``until`` in a thread started inside the range are kept. Once the range is behind
-the newest message, later syncs only re-check the threads inside it.
+Messages posted from ``since`` through the end of ``until`` are read. ``until`` clips
+everything posted after it, thread replies included (owner, 2026-10-20): a thread started
+inside the range holds only its replies inside the range. Once the range is behind the
+newest message, later syncs only re-check the threads inside it, and never fetch past it.
 """
 
 from datetime import UTC, datetime
@@ -10,7 +11,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
-from oracle.sources.base import ConnectorConfigError, CursorCheckpoint, ItemUpsert, StoredItem
+from oracle.sources.base import ConnectorConfigError, CursorCheckpoint, ItemUpsert, Scope
 from oracle.sources.connectors.slack import SlackConnector
 from tests.slack_world import SlackWorld, ts
 
@@ -87,18 +88,26 @@ async def test_until_alone_keeps_everything_before_it():
     assert [u.occurred_at.day for u in upserts(events)] == [1, 5]
 
 
-async def test_replies_after_until_in_a_thread_started_inside_it_are_kept():
+async def test_replies_after_until_are_clipped_from_a_thread_started_inside_it():
     world = SlackWorld()
     parent_ts, reply_ts = with_thread(world)
+    inside = ts("2025-10-05", 18)
+    world.replies[parent_ts].insert(
+        1, {"ts": inside, "user": "U0ADA", "text": "inside the range", "thread_ts": parent_ts}
+    )
     config = {"channels": ["C0PRODUCT"], "until": "2025-10-05"}
     events = await collect(connector(world), config)
     thread = next(u for u in upserts(events) if u.kind == "thread")
     assert thread.external_id == f"C0PRODUCT:{parent_ts}"
-    assert "after the range" in thread.content
-    assert thread.source_updated_at.timestamp() == float(reply_ts)
+    assert "inside the range" in thread.content
+    assert "after the range" not in thread.content
+    assert thread.source_updated_at.timestamp() == float(inside)
+    # Slack is asked for nothing after the range either.
+    (call,) = [p for m, p in world.calls if m == "conversations.replies"]
+    assert float(call["latest"]) == END
 
 
-async def test_later_syncs_only_recheck_threads_in_the_range():
+async def test_later_syncs_never_fetch_past_until():
     world = SlackWorld()
     parent_ts, _ = with_thread(world)
     config = {"channels": ["C0PRODUCT"], "until": "2025-10-05"}
@@ -106,7 +115,8 @@ async def test_later_syncs_only_recheck_threads_in_the_range():
     cursor = first[-1].cursor
     assert cursor["channels"]["C0PRODUCT"]["oldest"] == parent_ts
 
-    # Later: a new message after the range, and a new reply in the thread inside it.
+    # Later: a new message after the range, and a new reply in the thread inside it,
+    # both after ``until``: neither is read.
     world.channels["C0PRODUCT"].append({"ts": ts("2025-10-20"), "user": "U0ADA", "text": "new"})
     late = ts("2025-10-21")
     world.channels["C0PRODUCT"][1]["latest_reply"] = late
@@ -117,32 +127,32 @@ async def test_later_syncs_only_recheck_threads_in_the_range():
 
     (call,) = history_calls(world)
     assert float(call["latest"]) == END
-    assert [u.external_id for u in upserts(again)] == [f"C0PRODUCT:{parent_ts}"]
-    assert "later still" in upserts(again)[0].content
+    assert upserts(again) == []
+    assert [m for m, _ in world.calls if m == "conversations.replies"] == []
     # The cursor stays inside the range.
     assert again[-1].cursor["channels"]["C0PRODUCT"]["oldest"] == parent_ts
-
-    # Nothing new: the thread is re-checked, nothing is fetched or written.
-    world.calls.clear()
-    third = await collect(connector(world), config, again[-1].cursor)
-    assert upserts(third) == []
-    assert [m for m, _ in world.calls if m == "conversations.replies"] == []
-    assert isinstance(third[-1], CursorCheckpoint)
+    assert isinstance(again[-1], CursorCheckpoint)
 
 
-def test_in_scope_follows_the_range():
-    conn = SlackConnector()
+async def test_a_reply_inside_the_range_still_updates_its_thread():
+    world = SlackWorld()
+    parent_ts, _ = with_thread(world)  # replied to on 2025-10-08 at 12:00
+    config = {"channels": ["C0PRODUCT"], "until": "2025-10-08"}
+    first = await collect(connector(world), config)
+    later = ts("2025-10-08", 13)
+    world.channels["C0PRODUCT"][1]["latest_reply"] = later
+    world.replies[parent_ts].append(
+        {"ts": later, "user": "U0ADA", "text": "late but inside", "thread_ts": parent_ts}
+    )
+    again = await collect(connector(world), config, first[-1].cursor)
+    (thread,) = upserts(again)
+    assert "late but inside" in thread.content
+
+
+def test_scope_follows_the_range():
     config = {"channels": ["C0PRODUCT"], "since": "2025-10-02", "until": "2025-10-05"}
-
-    def item(day: str, hour: int = 12) -> StoredItem:
-        stamp = ts(day, hour)
-        return StoredItem(
-            external_id=f"C0PRODUCT:{stamp}",
-            kind="message",
-            occurred_at=datetime.fromtimestamp(float(stamp), UTC),
-        )
-
-    assert not conn.in_scope(config, item("2025-10-01"))
-    assert conn.in_scope(config, item("2025-10-02", 0))
-    assert conn.in_scope(config, item("2025-10-05", 23))
-    assert not conn.in_scope(config, item("2025-10-06", 0))
+    assert SlackConnector().scope(config) == Scope(
+        groups=frozenset({"C0PRODUCT"}),
+        occurred_from=datetime(2025, 10, 2, tzinfo=UTC),
+        occurred_before=datetime(2025, 10, 6, tzinfo=UTC),
+    )

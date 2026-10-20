@@ -1,12 +1,13 @@
 """Slack: the allowlisted public and private channels of one user's workspace.
 
-credential ``{"token"}`` (a user or bot token); config ``{"channels": [channel ids],
-"since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD"}``, the date range in the same shape as
-Fireflies'. With ``since``, no message posted before that day (UTC) is read; with
-``until`` (on or after ``since``), none posted after that day, except replies in a thread
-started inside the range. Narrowing the config (a later ``since``, an earlier ``until``,
-a removed channel) deletes the items now outside it on the next sync
-(:meth:`SlackConnector.in_scope`).
+credential ``{"token"}``, a user token (a bot token is refused: it reads the bot's
+channels, not the person's); config ``{"channels": [channel ids], "since"?: "YYYY-MM-DD",
+"until"?: "YYYY-MM-DD"}``, the date range in the same shape as Fireflies'. With
+``since``, no message posted before that day (UTC) is read; with ``until`` (on or after
+``since``), nothing posted after that day is read, thread replies included (S5, owner
+2026-10-20): a thread started inside the range holds only the replies posted inside it.
+Narrowing the config (a later ``since``, an earlier ``until``, a removed channel) deletes
+the items now outside it on the next sync (:meth:`SlackConnector.scope`).
 
 Direct messages are never ingested (S3): ``D...`` ids and conversations Slack reports as
 ``is_im`` or ``is_mpim`` are refused by ``validate`` and again by ``sync``.
@@ -19,14 +20,22 @@ by its thread.
 Cursor::
 
     {"channels": {"C1": {"oldest": "1700000000.000100",
-                         "threads": {"1699990000.000200": "1700000100.000300"}}}}
+                         "threads": {"1699990000.000200": "1700000100.000300"},
+                         "messages": ["1699990500.000400"],
+                         "walk": {...}}}}
 
 ``oldest`` is the newest top-level message seen. Replies do not change their parent's
 position in ``conversations.history``, so each sync re-reads ``THREAD_LOOKBACK`` before
 ``oldest`` and refetches a thread whose ``latest_reply`` moved past the one in
-``threads``.
+``threads``. ``threads`` and ``messages`` hold what was pulled in within that window: one
+that the window no longer lists was deleted in Slack, and is deleted here too.
+
+History is read newest first, one page at a time, with a checkpoint after each page:
+``walk`` (the window being read, the newest message of it, the oldest one handled so far
+and Slack's cursor for the next page) lets an interrupted sync resume inside a channel.
 """
 
+import copy
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -42,8 +51,9 @@ from oracle.sources.base import (
     ConnectorForbidden,
     ConnectorRateLimited,
     CursorCheckpoint,
+    ItemDelete,
     ItemUpsert,
-    StoredItem,
+    Scope,
     SyncEvent,
     register,
 )
@@ -71,6 +81,10 @@ FIRST_DAY = date(2000, 1, 1)
 LAST_DAY = date(2100, 12, 31)
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TITLE_LENGTH = 80
+BOT_TOKEN = (
+    "This Slack connection holds a bot token, which reads the bot's channels rather than "
+    "yours: reconnect Slack with your own sign-in or a user token (xoxp-)"
+)
 
 AUTH_ERRORS = {
     "invalid_auth",
@@ -344,23 +358,44 @@ class SlackConnector:
         async with httpx.AsyncClient(timeout=30) as client:
             yield _Slack(client, token)
 
-    def in_scope(self, config: dict[str, Any], item: StoredItem) -> bool:
-        """Still selected: in an allowlisted channel and posted inside the date range (a
-        thread by its first message: replies after ``until`` stay with it)."""
-        channel, _, ts = item.external_id.partition(":")
-        if channel not in _channels(config):
-            return False
+    def check_config(self, config: dict[str, Any]) -> None:
+        """The rules a saved config must still meet (the channel cap, the dates)."""
+        _channels(config)
+        _since(config)
+        _until(config)
+
+    def scope(self, config: dict[str, Any]) -> Scope:
+        """Still selected: in an allowlisted channel, started inside the date range (a
+        thread by its first message; its replies after ``until`` are clipped when it is
+        read again)."""
         since, until = _since(config), _until(config)
-        if not ts:
-            return True
-        return (since is None or float(ts) >= since) and (until is None or float(ts) < until)
+        return Scope(
+            groups=frozenset(_channels(config)),
+            occurred_from=None if since is None else datetime.fromtimestamp(since, UTC),
+            occurred_before=None if until is None else datetime.fromtimestamp(until, UTC),
+        )
+
+    def rescope_cursor(
+        self, old_cursor: dict[str, Any] | None, new_config: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """A new range or channel list: read every channel again from the start (unchanged
+        content writes no new version; threads are clipped to the new ``until``)."""
+        return None
+
+    async def _person(self, slack: _Slack) -> dict[str, Any]:
+        """``auth.test``, refusing a bot token (``bot_id`` is set for bots, whatever the
+        token's prefix: rotated ones start ``xoxe.xoxb-``)."""
+        identity = await slack.call("auth.test")
+        if identity.get("bot_id"):
+            raise ConnectorConfigError(BOT_TOKEN)
+        return identity
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         channels = _channels(config)
         _since(config)
         _until(config)
         async with self._session(credential) as slack:
-            await slack.call("auth.test")
+            await self._person(slack)
             listed = await slack.listed(set(channels)) if len(channels) >= BATCH_FROM else {}
             for channel in channels:
                 if channel in listed:
@@ -377,10 +412,12 @@ class SlackConnector:
         channels = _channels(config)
         since, until = _since(config), _until(config)
         state: dict[str, Any] = {
-            "channels": {k: dict(v) for k, v in ((cursor or {}).get("channels") or {}).items()}
+            "channels": {
+                k: copy.deepcopy(v) for k, v in ((cursor or {}).get("channels") or {}).items()
+            }
         }
         async with self._session(credential) as slack:
-            base = (await slack.call("auth.test")).get("url") or ""
+            base = (await self._person(slack)).get("url") or ""
             if base and not base.endswith("/"):
                 base += "/"
             for channel in channels:
@@ -406,47 +443,120 @@ class SlackConnector:
         previous = state["channels"].get(channel) or {}
         oldest: str | None = previous.get("oldest")
         threads: dict[str, str] = dict(previous.get("threads") or {})
+        # Cursors from before deletes were tracked list no plain messages: those count
+        # as known when older than ``oldest``.
+        tracked = "messages" in previous
+        messages: set[str] = set(previous.get("messages") or [])
+        walk: dict[str, Any] | None = previous.get("walk")
+
+        if walk is None:
+            window_from = float(_ts_shift(oldest, THREAD_LOOKBACK)) if oldest else None
+            if since is not None and (window_from or 0) < since:
+                window_from = since
+            walk = {
+                "from": None if window_from is None else f"{window_from:.6f}",
+                # Slack's ``latest`` is exclusive. Once the range is behind the newest
+                # message the window only re-reads the threads inside it, for new replies.
+                "latest": None if until is None else f"{until:.6f}",
+                "high": None,
+                "low": None,
+                "next": None,
+            }
+
+        def known(ts: str) -> bool:
+            if ts in messages or ts in threads:
+                return True
+            return not tracked and oldest is not None and float(ts) <= float(oldest)
+
+        def save() -> CursorCheckpoint:
+            state["channels"][channel] = {
+                **({"oldest": oldest} if oldest is not None else {}),
+                "threads": dict(threads),
+                "messages": sorted(messages, key=float),
+                **({"walk": dict(walk)} if walk is not None else {}),
+            }
+            return CursorCheckpoint(_copy(state))
 
         params: dict[str, Any] = {"channel": channel}
-        if oldest:
-            params["oldest"] = _ts_shift(oldest, THREAD_LOOKBACK)
-        if since is not None and float(params.get("oldest") or 0) < since:
-            params["oldest"] = f"{since:.6f}"
-        if until is not None:
-            # Slack's ``latest`` is exclusive. Once the range is behind the newest message
-            # this window only re-reads the threads inside it, for new replies.
-            params["latest"] = f"{until:.6f}"
-        messages = [m async for m in slack.paged("conversations.history", "messages", **params)]
-        messages = sorted(
-            (
-                m
-                for m in messages
-                if _keep(m)
-                and (since is None or float(m["ts"]) >= since)
-                and (until is None or float(m["ts"]) < until)
-            ),
-            key=lambda m: float(m["ts"]),
-        )
+        if walk["from"] is not None:
+            params["oldest"] = walk["from"]
+        if walk["latest"] is not None:
+            params["latest"] = walk["latest"]
+        while True:
+            page = await slack.call(
+                "conversations.history",
+                limit=PAGE_SIZE,
+                **params,
+                **({"cursor": walk["next"]} if walk["next"] else {}),
+            )
+            listed = [m for m in page.get("messages") or [] if m.get("ts")]
+            next_cursor = (page.get("response_metadata") or {}).get("next_cursor") or None
+            # This page covers [its oldest message, the previous page's oldest) of the
+            # window; the last page reaches down to the window's start.
+            top = walk["low"] or walk["latest"]
+            bottom = walk["from"] if next_cursor is None else None
+            if next_cursor is not None and listed:
+                bottom = min((m["ts"] for m in listed), key=float)
+            kept = sorted(
+                (
+                    m
+                    for m in listed
+                    if _keep(m)
+                    and (since is None or float(m["ts"]) >= since)
+                    and (until is None or float(m["ts"]) < until)
+                ),
+                key=lambda m: float(m["ts"]),
+            )
+            for message in kept:
+                ts = message["ts"]
+                latest_reply = message.get("latest_reply")
+                if message.get("reply_count") and latest_reply:
+                    marker = _clip(latest_reply, until)
+                    if not known(ts) or threads.get(ts) != marker:
+                        yield await self._thread(slack, base, channel, name, acl, message, until)
+                    threads[ts] = marker
+                    messages.discard(ts)
+                elif message.get("subtype") != "tombstone":
+                    if not known(ts):
+                        yield await self._message(slack, base, channel, name, acl, message)
+                    messages.add(ts)
+                if walk["high"] is None or float(ts) > float(walk["high"]):
+                    walk["high"] = ts
 
-        newest = oldest
-        for message in messages:
-            ts = message["ts"]
-            is_new = oldest is None or float(ts) > float(oldest)
-            latest_reply = message.get("latest_reply")
-            if message.get("reply_count") and latest_reply:
-                if is_new or threads.get(ts) != latest_reply:
-                    yield await self._thread(slack, base, channel, name, acl, message)
-                threads[ts] = latest_reply
-            elif is_new and message.get("subtype") != "tombstone":
-                yield await self._message(slack, base, channel, name, acl, message)
-            if newest is None or float(ts) > float(newest):
-                newest = ts
+            # Pulled in before, inside what this page covers, and no longer listed:
+            # deleted in Slack.
+            present = {m["ts"] for m in listed}
+            for ts in sorted(set(messages) | set(threads), key=float):
+                inside = (bottom is None or float(ts) >= float(bottom)) and (
+                    top is None or float(ts) < float(top)
+                )
+                if inside and (bottom is not None or next_cursor is None) and ts not in present:
+                    messages.discard(ts)
+                    threads.pop(ts, None)
+                    yield ItemDelete(external_id=f"{channel}:{ts}")
 
-        if newest is not None:
-            horizon = float(newest) - THREAD_LOOKBACK
-            threads = {ts: r for ts, r in threads.items() if float(ts) >= horizon}
-            state["channels"][channel] = {"oldest": newest, "threads": threads}
-            yield CursorCheckpoint(_copy(state))
+            if listed:
+                low = min((m["ts"] for m in listed), key=float)
+                if walk["low"] is None or float(low) < float(walk["low"]):
+                    walk["low"] = low
+            walk["next"] = next_cursor
+            # Forget what falls behind the lookback: later syncs never read back that far
+            # (and a first sync of a long channel keeps a small cursor).
+            newest = max((float(t) for t in (oldest, walk["high"]) if t), default=None)
+            if newest is not None:
+                horizon = newest - THREAD_LOOKBACK
+                threads = {t: r for t, r in threads.items() if float(t) >= horizon}
+                messages = {t for t in messages if float(t) >= horizon}
+            if next_cursor is None:
+                break
+            yield save()
+
+        # The window is read: move ``oldest`` up to the newest message in it.
+        if walk["high"] is not None and (oldest is None or float(walk["high"]) > float(oldest)):
+            oldest = walk["high"]
+        walk = None
+        tracked = True
+        yield save()
 
     async def _message(
         self, slack: _Slack, base: str, channel: str, name: str, acl: dict, message: dict
@@ -467,12 +577,24 @@ class SlackConnector:
         )
 
     async def _thread(
-        self, slack: _Slack, base: str, channel: str, name: str, acl: dict, parent: dict
+        self,
+        slack: _Slack,
+        base: str,
+        channel: str,
+        name: str,
+        acl: dict,
+        parent: dict,
+        until: float | None = None,
     ) -> ItemUpsert:
         ts = parent["ts"]
+        bound = {} if until is None else {"latest": f"{until:.6f}"}
         replies = [
             m
-            async for m in slack.paged("conversations.replies", "messages", channel=channel, ts=ts)
+            async for m in slack.paged(
+                "conversations.replies", "messages", channel=channel, ts=ts, **bound
+            )
+            # Nothing posted after the range, replies included (S5, owner 2026-10-20).
+            if m.get("ts") and (until is None or float(m["ts"]) < until)
         ]
         if not any(m.get("ts") == ts for m in replies):
             replies.insert(0, parent)
@@ -498,13 +620,16 @@ class SlackConnector:
         )
 
 
+def _clip(latest_reply: str, until: float | None) -> str:
+    """What a thread's ``latest_reply`` is remembered as: replies after ``until`` are
+    never read, so they must not make the thread fetched again."""
+    if until is not None and float(latest_reply) >= until:
+        return f"{until:.6f}"
+    return latest_reply
+
+
 def _copy(state: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "channels": {
-            c: {"oldest": s["oldest"], "threads": dict(s.get("threads") or {})}
-            for c, s in state["channels"].items()
-        }
-    }
+    return copy.deepcopy(state)
 
 
 register(SlackConnector())

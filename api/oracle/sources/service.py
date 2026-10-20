@@ -290,10 +290,11 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         await _validate(db, source.kind, config, conn)
         source.connection_id = connection_id
         source.config = config
-        # A new allowlist or account: sync from the start. Unchanged content writes no
-        # new versions, so a full pass is cheap in storage.
-        source.cursor = None
-        if source.status == "error":
+        # The cursor stays: the next sync sees the selection changed (its fingerprint,
+        # oracle.sources.sync), deletes what fell outside it and asks the connector how
+        # much of the cursor still holds (rescope_cursor). A sync running now keeps none
+        # of what it reads from here on (its cursor saves are conditional).
+        if source.status in ("error", "needs_attention"):
             source.status = "active"
             source.last_error = None
     if "name" in changes and changes["name"] is not None:

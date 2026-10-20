@@ -30,6 +30,8 @@ class SlackWorld:
         self.names: dict[str, str] = {}
         # Methods answered with a 429.
         self.limited: set[str] = set()
+        # Method -> how many more calls succeed before it answers 429.
+        self.limit_after: dict[str, int] = {}
         self.calls: list[tuple[str, dict[str, str]]] = []
 
     def info(self, cid: str) -> dict[str, Any]:
@@ -44,6 +46,10 @@ class SlackWorld:
         method = request.url.path.rsplit("/", 1)[-1]
         params = dict(request.url.params)
         self.calls.append((method, params))
+        if method in self.limit_after:
+            if self.limit_after[method] <= 0:
+                return httpx.Response(429, headers={"Retry-After": "30"}, json={"ok": False})
+            self.limit_after[method] -= 1
         if method in self.limited:
             return httpx.Response(429, headers={"Retry-After": "30"}, json={"ok": False})
         if method == "auth.test":
@@ -69,7 +75,15 @@ class SlackWorld:
             messages = [
                 m for m in self.channels[params["channel"]] if oldest <= float(m["ts"]) < latest
             ]
-            return self.ok(messages=list(reversed(messages)), response_metadata={})
+            # Newest first, ``limit`` a page, the offset as Slack's cursor.
+            messages.sort(key=lambda m: float(m["ts"]), reverse=True)
+            start, limit = int(params.get("cursor") or 0), int(params.get("limit") or 100)
+            more = start + limit < len(messages)
+            return self.ok(
+                messages=messages[start : start + limit],
+                has_more=more,
+                response_metadata={"next_cursor": str(start + limit) if more else ""},
+            )
         if method == "conversations.replies":
             return self.ok(messages=self.replies[params["ts"]], response_metadata={})
         if method == "users.info":

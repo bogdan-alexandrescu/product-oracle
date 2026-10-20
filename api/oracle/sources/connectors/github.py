@@ -12,8 +12,12 @@ The cursor keeps one entry per repo (keyed by the lowercased ``owner/name``):
 - ``issues_since``: the ``updated_at`` of the newest issue or pull request seen;
 - ``releases`` / ``milestones``: the ids seen, so removed ones are deleted.
 
-A config change resets the cursor; the next sync first deletes the items of repos and
-kinds no longer selected (:meth:`GithubConnector.in_scope`).
+After a config change the next sync first deletes the items of repos and kinds no longer
+selected (:meth:`GithubConnector.scope`), then resumes from
+:meth:`GithubConnector.rescope_cursor`: each kept repo keeps ``files``, ``releases`` and
+``milestones`` (so what was deleted upstream meanwhile is still noticed) but loses
+``tree_sha`` and ``issues_since``, and its files are fetched again (``refetch``), so
+everything is re-read under the new selection.
 """
 
 import base64
@@ -38,7 +42,7 @@ from oracle.sources.base import (
     CursorCheckpoint,
     ItemDelete,
     ItemUpsert,
-    StoredItem,
+    Scope,
     SyncEvent,
     register,
 )
@@ -63,6 +67,8 @@ MAX_FILE_BYTES = 1_000_000
 _REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_-]*)/[A-Za-z0-9._-]+$")
 _README_RE = re.compile(r"^readme(\.[A-Za-z0-9]+)?$", re.IGNORECASE)
 _DOC_RE = re.compile(r"^docs/.+\.(md|markdown)$", re.IGNORECASE)
+# What a repo's cursor keeps when the selection changes (see rescope_cursor).
+_RESCOPE_KEEPS = ("files", "releases", "milestones")
 # Item kind -> the ``include`` entry that brings it in.
 _KIND_INCLUDE = {
     "readme": "readme",
@@ -340,12 +346,35 @@ class GithubConnector:
             raise ConnectorConfigError(f"{repo} was not found or is not readable with this token")
         return _Repo.from_api(repo.lower(), resp.json())
 
-    def in_scope(self, config: dict[str, Any], item: StoredItem) -> bool:
+    def check_config(self, config: dict[str, Any]) -> None:
+        """The rules a saved config must still meet (repo names, the repo cap)."""
+        _parse_config(config)
+
+    def scope(self, config: dict[str, Any]) -> Scope:
         """Still selected: from an allowlisted repo, of a kind still included."""
         repos, include = _parse_config(config)
-        repo = item.external_id.split(":", 1)[0]
-        wanted = _KIND_INCLUDE.get(item.kind)
-        return repo in {r.lower() for r in repos} and (wanted is None or wanted in include)
+        return Scope(
+            groups=frozenset(r.lower() for r in repos),
+            kinds=frozenset(kind for kind, wanted in _KIND_INCLUDE.items() if wanted in include),
+        )
+
+    def rescope_cursor(
+        self, old_cursor: dict[str, Any] | None, new_config: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Keep, per repo still selected, what deletes are compared against (files,
+        releases, milestones); drop what would skip re-reading (the tree, issues since)."""
+        repos, _ = _parse_config(new_config)
+        previous = (old_cursor or {}).get("repos") or {}
+        kept: dict[str, Any] = {}
+        for repo in repos:
+            entry = previous.get(repo.lower())
+            if not entry:
+                continue
+            entry = {k: copy.deepcopy(v) for k, v in entry.items() if k in _RESCOPE_KEEPS}
+            if entry.get("files"):
+                entry["refetch"] = True
+            kept[repo.lower()] = entry
+        return {"repos": kept} if kept else None
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         repos, _ = _parse_config(config)
@@ -411,8 +440,11 @@ class GithubConnector:
                     if kind:
                         wanted[entry["path"]] = (kind, entry["sha"], entry.get("size") or 0)
 
+        # After a selection change every file is read again (its item may have been
+        # deleted by the change); unchanged content writes no new version.
+        refetch = bool(state.get("refetch"))
         for path, (kind, sha, size) in sorted(wanted.items()):
-            if known.get(path) == sha or size > MAX_FILE_BYTES:
+            if (known.get(path) == sha and not refetch) or size > MAX_FILE_BYTES:
                 continue
             blob = (await api.get(f"/repos/{repo.full_name}/git/blobs/{sha}")).json()
             content = _decode_blob(blob)
@@ -437,6 +469,7 @@ class GithubConnector:
         for path in sorted(known.keys() - files.keys()):
             yield ItemDelete(external_id=f"{repo.key}:file:{path}")
         state["files"], state["tree_sha"], state["include"] = files, tree_sha, file_include
+        state.pop("refetch", None)
 
     async def _issues(
         self, api: _Api, repo: _Repo, include: set[str], state: dict[str, Any]

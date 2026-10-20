@@ -10,10 +10,21 @@ A connector is stateless and does no database work. The sync engine
 - :class:`CursorCheckpoint` is a resumable position: everything yielded before it is
   stored, then the cursor is saved, so an interrupted sync resumes from there.
 
-A connector may also define ``in_scope(config, item: StoredItem) -> bool``. On the first
-sync after the config changed (the cursor is reset then), the engine deletes the stored
-items it answers ``False`` for: narrowing a source (a later start date, a removed
-channel or repo) removes what now falls outside it (S5, owner 2026-10-19).
+Optional hooks a connector may define:
+
+- ``check_config(config)`` raises :class:`ConnectorConfigError` when a saved config breaks
+  a rule (one added after it was saved, say); the engine then marks the source as
+  needing attention instead of calling the provider;
+- ``scope(config) -> Scope`` says what the selection keeps. After the selection changed,
+  the engine deletes (soft: ``deleted_at``) the stored items outside it, in one SQL
+  statement: narrowing a source removes what now falls outside it (S5, owner 2026-10-19
+  and 2026-10-20);
+- ``rescope_cursor(old_cursor, new_config)`` returns the cursor to resume from after the
+  selection changed (``None``: from the start). Keep what upstream deletes are compared
+  against; drop what would skip re-reading.
+
+The engine notices a changed selection (config or connection) by a fingerprint it keeps
+in the saved cursor under :data:`SCOPE_KEY`; connectors never see that key.
 
 Connectors never yield direct messages (S3 Visibility); ``acl`` records who can see an
 item in the source.
@@ -94,15 +105,25 @@ class CursorCheckpoint:
 
 SyncEvent = ItemUpsert | ItemDelete | CursorCheckpoint
 
+# The key of the saved cursor holding the engine's fingerprint of the selection.
+SCOPE_KEY = "_scope"
+
 
 @dataclass(frozen=True)
-class StoredItem:
-    """What ``in_scope`` is shown of an item already pulled in."""
+class Scope:
+    """What a selection keeps. Every field that is set narrows it:
 
-    external_id: str
-    kind: str
-    occurred_at: datetime | None
-    acl: dict[str, Any] = field(default_factory=dict)
+    - ``groups``: the allowed values of the external id's part before the first ``:``
+      (a channel, a repo), compared case-insensitively;
+    - ``kinds``: the allowed item kinds;
+    - ``occurred_from`` / ``occurred_before``: the range (``before`` exclusive) an item's
+      ``occurred_at`` must fall in; items without a date stay.
+    """
+
+    groups: frozenset[str] | None = None
+    kinds: frozenset[str] | None = None
+    occurred_from: datetime | None = None
+    occurred_before: datetime | None = None
 
 
 @runtime_checkable

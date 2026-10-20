@@ -20,7 +20,7 @@ from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
 SOURCE_KINDS = ("upload", "github", "slack", "notion", "fireflies", "google_docs")
-SOURCE_STATUSES = ("active", "paused", "error")
+SOURCE_STATUSES = ("active", "paused", "error", "needs_attention")
 ITEM_KINDS = (
     "file",
     "page",

@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 SourceKind = Literal["upload", "github", "slack", "notion", "fireflies", "google_docs"]
-SourceStatus = Literal["active", "paused", "error"]
+SourceStatus = Literal["active", "paused", "error", "needs_attention"]
 
 
 class ORM(BaseModel):
@@ -61,8 +61,10 @@ class SourceKindOut(BaseModel):
 class SyncResult(BaseModel):
     source_id: uuid.UUID
     # completed: ran to the end; rate_limited: stopped cleanly, resumes from the saved
-    # cursor; error: the source is now in status error (see error).
-    outcome: Literal["completed", "rate_limited", "error"]
+    # cursor; error: the source is now in status error (see error); superseded: the
+    # source was edited while it ran, so what it read was dropped (sync again);
+    # needs_attention: the saved selection breaks a newer rule, edit the source (see error).
+    outcome: Literal["completed", "rate_limited", "error", "superseded", "needs_attention"]
     upserted: int = 0
     versions_written: int = 0
     deleted: int = 0

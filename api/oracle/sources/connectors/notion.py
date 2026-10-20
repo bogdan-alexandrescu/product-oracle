@@ -7,7 +7,9 @@ Each sync walks every root: child pages and the rows of child databases, recursi
 Fetching a page's blocks is the expensive part, so the cursor remembers, per page, the
 ``last_edited_time`` it was rendered at and the child pages and databases it links;
 an unchanged page is walked from that without fetching its blocks. A page that the walk
-no longer reaches (archived, unshared, moved out of the roots) is deleted.
+no longer reaches (archived, unshared, moved out of the roots) is deleted. After the
+roots change, :meth:`NotionConnector.rescope_cursor` keeps only the page ids, so pages
+outside the new roots are still deleted and every page is rendered again.
 
     {"pages": {"<page id>": {"edited": "...", "children": [...], "databases": [...]}}}
 """
@@ -447,6 +449,14 @@ class NotionConnector:
         if database is not None:
             return None if _gone(database) else ("database", database)
         return None
+
+    def rescope_cursor(
+        self, old_cursor: dict[str, Any] | None, new_config: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """New roots: keep the page ids pulled in (a page the new roots do not reach is
+        then deleted), but render every page again under its new root."""
+        pages = (old_cursor or {}).get("pages") or {}
+        return {"pages": {page_id: {} for page_id in pages}} if pages else None
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         roots = _parse_config(config)
