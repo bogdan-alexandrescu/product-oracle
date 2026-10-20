@@ -4317,6 +4317,7 @@
           "sources"
         ],
         "summary": "List Source Items",
+        "description": "The source's items at their current versions. A run never lists a deleted item\n(``include_deleted`` is ignored) and reads a shared item at the version released,\nits title as shared (S6, owner 2026-10-19).",
         "operationId": "list_source_items",
         "security": [
           {
@@ -4592,7 +4593,7 @@
           "snapshots"
         ],
         "summary": "List Snapshot Items",
-        "description": "The user's items as they were at the snapshot (each at its pinned version).",
+        "description": "The user's items as they were at the snapshot (each at its pinned version). A run\nreads a shared item at the version released whatever the snapshot, its title as\nshared, and nothing deleted upstream (S6, owner 2026-10-19).",
         "operationId": "list_snapshot_items",
         "security": [
           {

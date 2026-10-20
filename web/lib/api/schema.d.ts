@@ -1277,7 +1277,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Source Items */
+        /**
+         * List Source Items
+         * @description The source's items at their current versions. A run never lists a deleted item
+         *     (``include_deleted`` is ignored) and reads a shared item at the version released,
+         *     its title as shared (S6, owner 2026-10-19).
+         */
         get: operations["list_source_items"];
         put?: never;
         post?: never;
@@ -1352,7 +1357,9 @@ export interface paths {
         };
         /**
          * List Snapshot Items
-         * @description The user's items as they were at the snapshot (each at its pinned version).
+         * @description The user's items as they were at the snapshot (each at its pinned version). A run
+         *     reads a shared item at the version released whatever the snapshot, its title as
+         *     shared, and nothing deleted upstream (S6, owner 2026-10-19).
          */
         get: operations["list_snapshot_items"];
         put?: never;
