@@ -13,8 +13,9 @@ caller like member routes).
 """
 
 from collections.abc import Awaitable, Callable
+from typing import Annotated
 
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
@@ -65,10 +66,9 @@ async def recheck_caller(
 def require_role_now(min_role: Role) -> Callable[..., Awaitable[Principal]]:
     """:func:`require_role`, then :func:`recheck_caller` (gate shared) on the request's
     session: for a write whose handler does not take the gate exclusively itself."""
-    check_role = require_role(min_role)
+    checked = Annotated[Principal, Depends(require_role(min_role))]
 
-    async def check_role_now(principal: CurrentPrincipal, db: TenantDB) -> Principal:
-        await check_role(principal)
+    async def check_role_now(principal: checked, db: TenantDB) -> Principal:
         await recheck_caller(db, principal, min_role)
         return principal
 
