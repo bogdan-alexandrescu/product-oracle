@@ -4797,7 +4797,7 @@
           "connections"
         ],
         "summary": "List Fireflies Meetings",
-        "description": "Your meetings in Fireflies, newest first, a page at a time (search: in titles).",
+        "description": "Your meetings in Fireflies, newest first, a page at a time (search: in titles;\nfrom/to: whole days in UTC).",
         "operationId": "list_fireflies_meetings",
         "security": [
           {
@@ -4899,7 +4899,7 @@
             "description": "The connection cannot be used (reconnect it), or Fireflies refused"
           },
           "429": {
-            "description": "Fireflies is rate limiting the API key, or this connection has browsed too much for now; see Retry-After"
+            "description": "Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After"
           },
           "502": {
             "description": "Fireflies did not answer as expected"
@@ -4923,7 +4923,7 @@
           "connections"
         ],
         "summary": "List Fireflies Series",
-        "description": "Your meetings grouped into recurring series, with counts and the last date.",
+        "description": "Your meetings grouped into their calendar series, with counts and the last date\n(from/to: whole days in UTC). Meetings on no calendar are in no series.",
         "operationId": "list_fireflies_series",
         "security": [
           {
@@ -4997,7 +4997,7 @@
             "description": "The connection cannot be used (reconnect it), or Fireflies refused"
           },
           "429": {
-            "description": "Fireflies is rate limiting the API key, or this connection has browsed too much for now; see Retry-After"
+            "description": "Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After"
           },
           "502": {
             "description": "Fireflies did not answer as expected"
@@ -26782,7 +26782,14 @@
             "title": "Attendee Count"
           },
           "series_key": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Series Key"
           },
           "series_title": {
@@ -38092,7 +38099,8 @@
             "enum": [
               "completed",
               "rate_limited",
-              "error"
+              "error",
+              "superseded"
             ],
             "title": "Outcome"
           },

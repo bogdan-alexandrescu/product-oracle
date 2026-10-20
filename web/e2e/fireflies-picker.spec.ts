@@ -19,6 +19,9 @@ test("fireflies picker: all meetings in a date range", async ({ page }) => {
   const { form, picker } = await openAdd(page);
   const summary = picker.getByTestId("fireflies-summary");
   await expect(summary).toHaveText("All meetings");
+  // The API does not know the person's time zone: days are UTC days, and say so.
+  await expect(picker.getByTestId("fireflies-timezone")).toContainText(/^UTC/);
+  await expect(picker.getByTestId("fireflies-timezone")).toContainText("Oracle does not know your time zone");
   await picker.getByLabel("From").fill("2026-09-01");
   await expect(summary).toHaveText("All meetings since Sep 1");
   // Lists are only for choosing: nothing to browse while taking everything.
@@ -49,6 +52,9 @@ test("fireflies picker: series and single meetings, then edit", async ({ page })
   await expect(series).toContainText("AI agents sprint planning");
   // One-off meetings are not offered as series.
   await expect(series).not.toContainText("Customer interview");
+  // A series counts the meetings of its calendar event: the ad hoc session with the
+  // same title and organizer is on no calendar, so not one of them.
+  await expect(series.getByRole("listitem").filter({ hasText: "AI agents sprint planning" })).toContainText("4 ·");
   await series.getByLabel("AI agents sprint planning").check();
   await expect(summary).toHaveText("1 series");
 
@@ -59,6 +65,13 @@ test("fireflies picker: series and single meetings, then edit", async ({ page })
   const planning = meetings.getByLabel("AI agents sprint planning #14");
   await expect(planning).toBeChecked();
   await expect(planning).toBeDisabled();
+
+  await picker.getByLabel("Search meetings").fill("sprint planning");
+  await expect(meetings.getByRole("checkbox")).toHaveCount(5);
+  const adhoc = meetings.getByLabel("AI agents sprint planning", { exact: true });
+  await expect(adhoc).not.toBeChecked();
+  await expect(adhoc).toBeEnabled();
+  await expect(meetings.getByLabel("AI agents sprint planning #11")).toBeChecked();
 
   await picker.getByLabel("Search meetings").fill("customer");
   await expect(meetings.getByRole("checkbox")).toHaveCount(2);
@@ -121,11 +134,12 @@ test("fireflies picker: a title rule saved before the picker shows until saved a
   await expect(row.getByTestId("fireflies-included")).not.toContainText("Title rule");
 });
 
-test("fireflies picker: a rate limit reads as a retry message", async ({ page }) => {
+test("fireflies picker: the browsing budget reads as 'limit reached, try later'", async ({ page }) => {
   const { picker } = await openAdd(page);
   await picker.getByRole("button", { name: "Choose" }).click();
   await picker.getByLabel("Search meetings").fill("rate limit");
-  await expect(picker.getByRole("alert")).toContainText("Fireflies is rate limiting this API key. Try again in 30 seconds.");
+  await expect(picker.getByRole("alert")).toContainText("Fireflies limit reached, try later.");
+  await expect(picker.getByRole("alert")).toContainText("Try again in 5 hours.");
 });
 
 test("fireflies picker: phone layout stacks without side scroll", async ({ page }) => {

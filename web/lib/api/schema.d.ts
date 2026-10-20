@@ -1401,7 +1401,8 @@ export interface paths {
         };
         /**
          * List Fireflies Meetings
-         * @description Your meetings in Fireflies, newest first, a page at a time (search: in titles).
+         * @description Your meetings in Fireflies, newest first, a page at a time (search: in titles;
+         *     from/to: whole days in UTC).
          */
         get: operations["list_fireflies_meetings"];
         put?: never;
@@ -1421,7 +1422,8 @@ export interface paths {
         };
         /**
          * List Fireflies Series
-         * @description Your meetings grouped into recurring series, with counts and the last date.
+         * @description Your meetings grouped into their calendar series, with counts and the last date
+         *     (from/to: whole days in UTC). Meetings on no calendar are in no series.
          */
         get: operations["list_fireflies_series"];
         put?: never;
@@ -8112,7 +8114,7 @@ export interface components {
             /** Attendee Count */
             attendee_count: number;
             /** Series Key */
-            series_key: string;
+            series_key: string | null;
             /** Series Title */
             series_title: string;
         };
@@ -12125,7 +12127,7 @@ export interface components {
              * Outcome
              * @enum {string}
              */
-            outcome: "completed" | "rate_limited" | "error";
+            outcome: "completed" | "rate_limited" | "error" | "superseded";
             /**
              * Upserted
              * @default 0
@@ -16138,7 +16140,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Fireflies is rate limiting the API key, or this connection has browsed too much for now; see Retry-After */
+            /** @description Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -16200,7 +16202,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Fireflies is rate limiting the API key, or this connection has browsed too much for now; see Retry-After */
+            /** @description Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After */
             429: {
                 headers: {
                     [name: string]: unknown;

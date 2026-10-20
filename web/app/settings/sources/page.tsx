@@ -252,6 +252,8 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
       setNotice(`Synced: ${r.upserted} item(s) seen, ${r.versions_written} new version(s), ${r.deleted} deleted.`);
     } else if (r.outcome === "rate_limited") {
       setNotice("Rate limited: the next sync resumes where this one stopped.");
+    } else if (r.outcome === "superseded") {
+      setNotice("The source changed while it synced: the next sync starts over with the new choice.");
     }
   }
 

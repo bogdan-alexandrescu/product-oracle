@@ -1,7 +1,9 @@
 /**
  * Mock of the Fireflies browse endpoints (GET /v1/connections/{id}/fireflies/meetings
- * and /series): a fixed set of meetings, two recurring series among them, paged newest
- * first like the API. Searching "rate limit" answers 429, as Fireflies would.
+ * and /series): a fixed set of meetings, two calendar series among them, paged newest
+ * first like the API. Meetings on no calendar are in no series (series_key null), like
+ * the ad hoc planning session that shares the planning series' title and organizer.
+ * Searching "rate limit" answers 429, as the API does past its browsing budget.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -11,7 +13,7 @@ export const FIREFLIES_CONNECTION_ID = "c0000000-0000-4000-8000-000000000003";
 const PAGE = 12;
 
 const STANDUP = "cal:7kq2abc0def1ghi2jkl3mno4pq";
-const PLANNING = "title:ai agents sprint planning|lin@example.com";
+const PLANNING = "cal:plan5q9r8s7t6u";
 
 function at(day: string, time: string): string {
   return `${day}T${time}:00Z`;
@@ -56,7 +58,7 @@ function build(): Meeting[] {
       duration,
       organizer,
       attendee_count: attendees,
-      series_key: `title:${title.toLowerCase()}|${organizer}`,
+      series_key: null,
       series_title: title,
     });
   oneOff("K-acme", "Customer interview: Acme", "2026-10-14", "16:00", 42, "ada@example.com", 3);
@@ -64,6 +66,7 @@ function build(): Meeting[] {
   oneOff("PR-onb", "Product review: onboarding v2", "2026-10-09", "13:00", 60, "lin@example.com", 9);
   oneOff("PR-price", "Pricing workshop", "2026-09-22", "10:00", 90, "sam@example.com", 5);
   oneOff("OLD-kick", "Q3 kickoff", "2026-07-06", "10:00", 75, "ada@example.com", 14);
+  oneOff("SP-adhoc", "AI agents sprint planning", "2026-10-06", "17:00", 25, "lin@example.com", 3);
   return rows.sort((a, b) => (a.date! < b.date! ? 1 : -1));
 }
 
@@ -94,7 +97,11 @@ export function routeFirefliesBrowse(p: string[], q: URLSearchParams): Response 
   if (p[2] !== FIREFLIES_CONNECTION_ID) return json(404, { detail: "Fireflies connection not found" });
   const search = (q.get("search") ?? "").trim().toLowerCase();
   if (search === "rate limit") {
-    return json(429, { detail: "Fireflies is rate limiting this API key. Try again in 30 seconds." }, { "Retry-After": "30" });
+    return json(
+      429,
+      { detail: "Fireflies limit reached, try later. Browsing may make 25 Fireflies calls a day for this connection, so syncs keep the rest of your Fireflies quota. Try again in 5 hours." },
+      { "Retry-After": "18000" },
+    );
   }
   const rows = MEETINGS.filter((m) => inRange(m, q));
   if (p[4] === "meetings") {
@@ -106,6 +113,7 @@ export function routeFirefliesBrowse(p: string[], q: URLSearchParams): Response 
   if (p[4] === "series") {
     const groups = new Map<string, Schemas["FirefliesSeriesOut"]>();
     for (const m of rows) {
+      if (m.series_key == null) continue;
       const g = groups.get(m.series_key);
       if (g) g.meeting_count += 1;
       else groups.set(m.series_key, { key: m.series_key, title: m.series_title, meeting_count: 1, last_date: m.date, organizer: m.organizer });

@@ -214,7 +214,8 @@ export function FirefliesPicker({
   const pickedSeries = useMemo(() => new Set(value.series), [value.series]);
   const pickedMeetings = useMemo(() => new Set(value.meetings), [value.meetings]);
 
-  // Recurring series (2+ meetings), plus picked ones the list no longer shows.
+  // Calendar series with 2+ meetings, plus picked ones the list no longer shows. A
+  // meeting on no calendar is in no series: only picking it takes it.
   const seriesRows: Series[] = useMemo(() => {
     const listed = series.data?.series ?? [];
     const rows = listed.filter((s) => s.meeting_count > 1 || pickedSeries.has(s.key));
@@ -300,6 +301,12 @@ export function FirefliesPicker({
             />
             Ongoing
           </label>
+          <span className="flex h-9 items-center gap-1 text-sm text-text2" data-testid="fireflies-timezone">
+            UTC
+            <InfoTip label="time zone" align="end">
+              Dates are whole days in UTC, and meeting times are shown in UTC: Oracle does not know your time zone.
+            </InfoTip>
+          </span>
         </div>
       </div>
 
@@ -309,8 +316,9 @@ export function FirefliesPicker({
           {firefliesSummary(value)}
         </span>
         <InfoTip label="what a sync takes" align="end">
-          A series takes its past meetings and every future one: new meetings arrive on the next sync. A meeting you drop is
-          removed from the source on the next sync.
+          A series is a recurring calendar event: it takes its past meetings and every future one, and new meetings arrive on
+          the next sync. A meeting on no calendar is in no series; pick it on its own. A meeting you drop is removed from the
+          source on the next sync.
         </InfoTip>
       </div>
 
@@ -387,7 +395,7 @@ export function FirefliesPicker({
               {groups.map(([day, rows]) => (
                 <MeetingGroup key={day} heading={day ? dayHeading(rows[0].date!) : "Undated"} id={`${ids}-${day}`}>
                   {rows.map((m) => {
-                    const bySeries = pickedSeries.has(m.series_key);
+                    const bySeries = m.series_key != null && pickedSeries.has(m.series_key);
                     return (
                       <MeetingRow
                         key={m.id}
