@@ -3,7 +3,7 @@ the roadmap draft's import with provenance and PRD links, exports, the feedback 
 on a roadmap, roles, and MCP. Against Postgres with the FakeRuntime."""
 
 import uuid
-from datetime import UTC, date, datetime
+from datetime import date
 
 import pytest
 from sqlalchemy import select
@@ -14,7 +14,6 @@ from oracle.config import get_settings
 from oracle.docs.models import Document, DocumentVersion
 from oracle.export import render
 from oracle.review.models import FeedbackItem
-from oracle.roadmap.models import ScheduleBasis
 from oracle.runs import flows
 from oracle.runs.roadmap import check_items, doc_links
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
@@ -109,24 +108,21 @@ def runtime():
     set_runtime(None)
 
 
-async def verified_estimate(tenant_id: uuid.UUID, reference: str = "ENG-412") -> None:
-    """CR-11: a date needs a verified basis. ITEMS' Beta date rests on ENG-412."""
-    async with tenant_session(tenant_id) as s:
-        s.add(
-            ScheduleBasis(
-                kind="estimate",
-                reference=reference,
-                supports_date=date(2026, 11, 30),
-                verified_at=datetime.now(UTC),
-            )
-        )
-        await s.commit()
+async def verified_estimate(client, auth, reference: str = "ENG-412") -> None:
+    """CR-11, O4: a date needs a verified basis recorded for its PRD. ITEMS' Beta date
+    rests on ENG-412."""
+    resp = await client.post(
+        "/v1/schedule-bases",
+        json={"kind": "estimate", "reference": reference, "supports_date": "2026-11-30",
+              "prd": PRD},
+        headers=auth,
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
 
 
 @pytest.fixture
 async def owner():
     tenant_id, auth = await seed_auth()
-    await verified_estimate(tenant_id)
     return tenant_id, auth
 
 
@@ -139,7 +135,9 @@ async def as_user(tenant_id: uuid.UUID, role: str) -> dict[str, str]:
 
 
 async def approved_prd(client, auth, approve: bool = True) -> None:
+    """The PRD, with the ENG-412 estimate recorded for it, approved unless not."""
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
+    await verified_estimate(client, auth)
     if approve:
         resp = await client.post(f"/v1/documents/{PRD}/versions/1/approve", headers=auth)
         assert resp.status_code == 200, resp.text

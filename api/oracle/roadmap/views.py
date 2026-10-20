@@ -158,6 +158,8 @@ class _Context:
         self.docs: dict[uuid.UUID, Document] = {}
         self.versions: dict[uuid.UUID, DocumentVersion] = {}
         self.records: dict[tuple[uuid.UUID | None, str], list[TrackerRecord]] = {}
+        # Each item's milestone with its date re-checked now (items.live_milestones).
+        self.milestones: dict[uuid.UUID, Any] = {}
 
     @classmethod
     async def load(cls, db: AsyncSession, rows: list[RoadmapItem]) -> "_Context":
@@ -194,10 +196,14 @@ class _Context:
             ):
                 if r.item_key:
                     ctx.records.setdefault((r.track_id, r.item_key), []).append(r)
+        ctx.milestones = await items_mod.live_milestones(db, rows)
         return ctx
 
     def records_of(self, item: RoadmapItem) -> list[TrackerRecord]:
         return self.records.get((item.track_id, item.item_key), [])
+
+    def milestone_of(self, item: RoadmapItem) -> Any:
+        return self.milestones.get(item.id, item.milestone)
 
 
 def item_out(item: RoadmapItem, ctx: _Context, view: str = "full") -> RoadmapItemOut:
@@ -213,7 +219,7 @@ def item_out(item: RoadmapItem, ctx: _Context, view: str = "full") -> RoadmapIte
         title=item.title,
         outcome=item.outcome,
         horizon=item.horizon,  # type: ignore[arg-type]
-        milestone=item.milestone,
+        milestone=ctx.milestone_of(item),
         freshness=item.freshness,  # type: ignore[arg-type]
         stale_reasons=list(item.stale_reasons or []),
         stale_since=item.stale_since,
@@ -322,12 +328,14 @@ async def alignment(
         if r.item_key:
             by_key.setdefault(r.item_key, []).append(r)
     dated = await _dated_items(db, track_id)
+    live = await items_mod.live_milestones(db, rows)
     now = today()
     out_items = []
     counts = {"items": len(rows), "aligned": 0, "drift": 0, "untracked": 0, "done": 0}
     for item in rows:
         mine = by_key.get(item.item_key, [])
-        drift = tracker.drift_of(item, mine, tracker.milestone_date(item, dated), now)
+        when = tracker.milestone_date(item, dated, live[item.id])
+        drift = tracker.drift_of(item, mine, when, now)
         if not mine:
             state = "untracked"
         elif drift:
@@ -342,7 +350,7 @@ async def alignment(
                 item_key=item.item_key,
                 title=item.title,
                 horizon=item.horizon,  # type: ignore[arg-type]
-                milestone=item.milestone,
+                milestone=live[item.id],
                 alignment=state,  # type: ignore[arg-type]
                 tracker=[tracker.ref(r) for r in mine],
                 drift=drift,
@@ -408,7 +416,7 @@ async def milestones_of(db: AsyncSession, track_id: uuid.UUID) -> list[TrackMile
 
 
 async def _next_milestone(
-    db: AsyncSession, milestones: list[TrackMilestone], rows: list[RoadmapItem]
+    db: AsyncSession, milestones: list[TrackMilestone], rows: list[RoadmapItem], ctx: _Context
 ) -> NextMilestone | None:
     now = today()
     planned = [m for m in milestones if m.status == "planned"]
@@ -440,7 +448,7 @@ async def _next_milestone(
     # No track milestones: the items' own, earliest horizon first, dated before undated.
     named: dict[str, list[RoadmapItem]] = {}
     for i in rows:
-        name = (i.milestone or {}).get("name")
+        name = (ctx.milestone_of(i) or {}).get("name")
         if name:
             named.setdefault(name, []).append(i)
     if not named:
@@ -449,11 +457,11 @@ async def _next_milestone(
     def order(entry: tuple[str, list[RoadmapItem]]) -> tuple:
         name, members = entry
         horizon = min(HORIZON_ORDER[i.horizon] for i in members)
-        days = [d for i in members if (d := (i.milestone or {}).get("date"))]
+        days = [d for i in members if (d := (ctx.milestone_of(i) or {}).get("date"))]
         return (horizon, 0 if days else 1, min(days) if days else "", name)
 
     name, members = sorted(named.items(), key=order)[0]
-    days = sorted(d for i in members if (d := (i.milestone or {}).get("date")))
+    days = sorted(d for i in members if (d := (ctx.milestone_of(i) or {}).get("date")))
     horizon = min(members, key=lambda i: HORIZON_ORDER[i.horizon]).horizon
     return NextMilestone(
         name=name,
@@ -498,12 +506,14 @@ async def overview(db: AsyncSession, track: ProductTrack) -> TrackOverview:
     milestones = await milestones_of(db, track.id)
     dated = await _dated_items(db, track.id)
     now = today()
-    nxt = await _next_milestone(db, milestones, rows)
+    nxt = await _next_milestone(db, milestones, rows, ctx)
     next_keys: set[str] = set()
     if nxt is not None and nxt.milestone_id is not None:
         next_keys = set(next(m.item_keys for m in milestones if m.id == nxt.milestone_id) or [])
     elif nxt is not None:
-        next_keys = {i.item_key for i in rows if (i.milestone or {}).get("name") == nxt.name}
+        next_keys = {
+            i.item_key for i in rows if (ctx.milestone_of(i) or {}).get("name") == nxt.name
+        }
 
     counts = {k: 0 for k in ("items", "now", "next", "later", "at_risk", "blocked", "stale",
                              "slipping", "done")}  # fmt: skip
@@ -525,7 +535,8 @@ async def overview(db: AsyncSession, track: ProductTrack) -> TrackOverview:
         if item.freshness in ("potentially_stale", "under_review"):
             why = "; ".join(item.stale_reasons or []) or "its PRD trace changed"
             reasons.append({"kind": "stale", "detail": why})
-        item_drift = tracker.drift_of(item, records, tracker.milestone_date(item, dated), now)
+        when = tracker.milestone_date(item, dated, ctx.milestone_of(item))
+        item_drift = tracker.drift_of(item, records, when, now)
         drift += item_drift
         for d in item_drift:
             if d.kind in ("date_slip", "overdue", "cancelled"):

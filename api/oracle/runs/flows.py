@@ -532,6 +532,16 @@ def step_prompt(
     return "\n".join(lines)
 
 
+def basis_line(b: dict[str, Any]) -> str:
+    line = f"{b['reference']} ({b['kind']}) supports {b['supports_date']}"
+    if b.get("item_key"):
+        return f"{line}, for item {b['item_key']} only"
+    if b.get("tracker_key"):
+        keys = ", ".join(b.get("item_keys") or []) or "no item yet"
+        return f"{line}, for the items tracker issue {b['tracker_key']} is matched to ({keys})"
+    return line
+
+
 def source_lines(src: SourceContext) -> list[str]:
     """The prd_to_roadmap prompt's inputs: the PRD version, horizons, goals, priority
     order and dependency edges."""
@@ -546,12 +556,13 @@ def source_lines(src: SourceContext) -> list[str]:
         + ". Dated milestones only in now, and only from a source that gives a date or an "
         "estimate (O4).",
     ]
-    lines += ["", "Verified schedule bases (the only sources a milestone date may name):"]
+    lines += [
+        "",
+        "Verified schedule bases recorded for this PRD (the only sources a milestone date "
+        "may name, each only for the items it names):",
+    ]
     if src.schedule_bases:
-        lines += [
-            f"- {b['reference']} ({b['kind']}) supports {b['supports_date']}"
-            for b in src.schedule_bases
-        ]
+        lines += [f"- {basis_line(b)}" for b in src.schedule_bases]
     else:
         lines.append("- none: give no dates, only horizons")
     if src.goals:

@@ -147,11 +147,14 @@ async def records_for_track(db: AsyncSession, track_id: uuid.UUID | None) -> lis
     return list(rows)
 
 
-def milestone_date(item: RoadmapItem, dated: dict[str, date]) -> date | None:
-    """The earliest verified date the item must meet: its own milestone's, or a dated
-    track milestone's that lists it."""
+def milestone_date(
+    item: RoadmapItem, dated: dict[str, date], milestone: dict[str, Any] | None
+) -> date | None:
+    """The earliest verified date the item must meet: its own milestone's as re-checked
+    now (``milestone``, oracle.roadmap.items.live_milestones), or a dated track
+    milestone's that lists it."""
     days = [d for d in (dated.get(item.item_key),) if d is not None]
-    own = (item.milestone or {}).get("date")
+    own = (milestone or {}).get("date")
     if own:
         try:
             days.append(date.fromisoformat(own))

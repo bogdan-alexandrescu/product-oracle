@@ -336,9 +336,9 @@ async def test_carried_items_keep_a_date_only_while_its_basis_holds(client, owne
     pay = (await client.get(URL, headers=auth)).json()["items"][0]
     assert pay["freshness"] == "potentially_stale"
     assert pay["stale_reasons"] == ["the schedule basis ENG-412 was withdrawn"]
-    # Version 1 keeps its record (approved content is never rewritten) ...
-    assert pay["milestone"]["date"] == "2026-11-30"
-    # ... but a version carried forward does not inherit a date nothing supports.
+    # Version 1's row is never rewritten, but its date is withheld when read (O4) ...
+    assert pay["milestone"]["date"] is None and pay["milestone"]["refused_date"] == "2026-11-30"
+    # ... and a version carried forward does not inherit a date nothing supports.
     resp = await client.post(
         f"/v1/documents/{ROADMAP}/versions",
         content=ROADMAP_MD.replace("payment first", "payment now").encode(),

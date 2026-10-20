@@ -4399,9 +4399,11 @@ export interface paths {
         put?: never;
         /**
          * Create Schedule Basis
-         * @description Record a verified estimate, capacity figure or commitment supporting a date. The
-         *     approver recording it verifies it. From a tracker record, the record's own target
-         *     date must be that date.
+         * @description Record a verified estimate, capacity figure or commitment supporting a date for
+         *     one PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a
+         *     tracker issue is matched to (``tracker_key``). The approver recording it verifies it.
+         *     From a tracker record, the record's own target date must be that date, and the record
+         *     must be this PRD's.
          */
         post: operations["create_schedule_basis"];
         delete?: never;
@@ -11540,7 +11542,8 @@ export interface components {
         /**
          * ScheduleBasisCreate
          * @description A verified estimate, capacity figure or commitment. Recording it is the
-         *     verification: the approver says this source supports this date.
+         *     verification: the approver says this source supports this date, for this PRD's
+         *     roadmap items (O4).
          */
         ScheduleBasisCreate: {
             /**
@@ -11558,7 +11561,11 @@ export interface components {
             /** Detail */
             detail?: string | null;
             /** Prd */
-            prd?: string | null;
+            prd: string;
+            /** Item Key */
+            item_key?: string | null;
+            /** Tracker Key */
+            tracker_key?: string | null;
             /** Tracker Record Id */
             tracker_record_id?: string | null;
         };
@@ -11583,8 +11590,15 @@ export interface components {
             supports_date: string;
             /** Detail */
             detail: string | null;
-            /** Prd Document Id */
-            prd_document_id: string | null;
+            /**
+             * Prd Document Id
+             * Format: uuid
+             */
+            prd_document_id: string;
+            /** Item Key */
+            item_key: string | null;
+            /** Tracker Key */
+            tracker_key: string | null;
             /** Tracker Record Id */
             tracker_record_id: string | null;
             /**

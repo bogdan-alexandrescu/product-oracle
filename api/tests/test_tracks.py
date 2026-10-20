@@ -180,7 +180,8 @@ async def test_schedule_bases(client, owner):  # noqa: F811
     row = resp.json()
     assert row["status"] == "verified" and row["verified_by"] and row["prd_document_id"]
     listed = (await client.get("/v1/schedule-bases", params={"prd": PRD}, headers=viewer)).json()
-    assert [b["reference"] for b in listed] == ["Q1 launch"]
+    # Every basis belongs to a PRD: approved_prd recorded ENG-412 for this one.
+    assert [b["reference"] for b in listed] == ["Q1 launch", "ENG-412"]
 
     # From a tracker record: the record's own target date must agree.
     resp = await client.post(
@@ -406,7 +407,7 @@ async def test_track_routes_are_company_scoped(client, owner, runtime):  # noqa:
     b = (
         await client.post(
             "/v1/schedule-bases",
-            json={"kind": "estimate", "reference": "ENG-1", "supports_date": day},
+            json={"kind": "estimate", "reference": "ENG-1", "supports_date": day, "prd": PRD},
             headers=auth,
         )
     ).json()

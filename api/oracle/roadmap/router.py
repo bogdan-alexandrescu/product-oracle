@@ -244,10 +244,13 @@ async def list_schedule_bases(
 async def create_schedule_basis(
     body: ScheduleBasisCreate, principal: Approver, db: TenantDB
 ) -> ScheduleBasis:
-    """Record a verified estimate, capacity figure or commitment supporting a date. The
-    approver recording it verifies it. From a tracker record, the record's own target
-    date must be that date."""
-    prd_id = (await _document(db, body.prd, "prd")).id if body.prd else None
+    """Record a verified estimate, capacity figure or commitment supporting a date for
+    one PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a
+    tracker issue is matched to (``tracker_key``). The approver recording it verifies it.
+    From a tracker record, the record's own target date must be that date, and the record
+    must be this PRD's."""
+    prd = await _document(db, body.prd, "prd")
+    tracker_key = body.tracker_key.strip() if body.tracker_key else None
     if body.tracker_record_id is not None:
         record = await db.get(TrackerRecord, body.tracker_record_id)
         if record is None:
@@ -258,12 +261,25 @@ async def create_schedule_basis(
                 f"tracker record {record.external_ref} targets {record.target_date}, "
                 f"not {body.supports_date}",
             )
+        if tracker_key is not None and tracker_key != record.external_ref:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                f"tracker_key {tracker_key} is not the record's issue {record.external_ref}",
+            )
+        track = await db.get(ProductTrack, record.track_id) if record.track_id else None
+        if track is not None and track.prd_document_id != prd.id:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                f"tracker record {record.external_ref} belongs to another PRD's track",
+            )
     row = ScheduleBasis(
         kind=body.kind,
         reference=body.reference.strip(),
         supports_date=body.supports_date,
         detail=body.detail,
-        prd_document_id=prd_id,
+        prd_document_id=prd.id,
+        item_key=body.item_key.strip() if body.item_key else None,
+        tracker_key=tracker_key,
         tracker_record_id=body.tracker_record_id,
         status="verified",
         verified_by=principal.id,
@@ -277,7 +293,14 @@ async def create_schedule_basis(
         "schedule_basis.verified",
         "schedule_basis",
         row.id,
-        {"kind": row.kind, "reference": row.reference, "supports_date": str(row.supports_date)},
+        {
+            "kind": row.kind,
+            "reference": row.reference,
+            "supports_date": str(row.supports_date),
+            "prd": prd.slug,
+            "item_key": row.item_key,
+            "tracker_key": row.tracker_key,
+        },
     )
     await db.commit()
     await db.refresh(row)
@@ -552,7 +575,9 @@ async def create_track_milestone(
     schedule bases that support exactly that date (422 otherwise)."""
     track = await _track(db, track_id)
     try:
-        bases = await tracks.check_date(db, track, body.horizon, body.target_date, body.basis_ids)
+        bases = await tracks.check_date(
+            db, track, body.horizon, body.target_date, body.basis_ids, body.item_keys
+        )
     except tracks.TrackError as e:
         raise _fail(e) from e
     exists = await db.scalar(
@@ -618,9 +643,12 @@ async def update_milestone(
     horizon = fields.get("horizon", row.horizon)
     target = fields["target_date"] if "target_date" in fields else row.target_date
     basis_ids = fields["basis_ids"] if fields.get("basis_ids") is not None else row.basis_ids
+    item_keys = fields["item_keys"] if fields.get("item_keys") is not None else row.item_keys
     track = await _track(db, row.track_id)
     try:
-        basis_ids = await tracks.check_date(db, track, horizon, target, list(basis_ids or []))
+        basis_ids = await tracks.check_date(
+            db, track, horizon, target, list(basis_ids or []), list(item_keys or [])
+        )
     except tracks.TrackError as e:
         raise _fail(e) from e
     before = {"target_date": str(row.target_date) if row.target_date else None,

@@ -62,8 +62,11 @@ test("a dated milestone needs a verified basis that supports its date", async ()
   const refused = await call("POST", `tracks/${track.id}/milestones`, { name: "Beta", target_date: day });
   expect(refused.status).toBe(422);
   expect(refused.json.detail).toContain("never invents dates");
-  const basis = await call("POST", "schedule-bases", { kind: "estimate", reference: "ENG-1", supports_date: day });
+  // O4: a basis is recorded for the track's PRD; without one it is refused.
+  expect((await call("POST", "schedule-bases", { kind: "estimate", reference: "ENG-1", supports_date: day })).status).toBe(422);
+  const basis = await call("POST", "schedule-bases", { kind: "estimate", reference: "ENG-1", supports_date: day, prd: track.prd.slug });
   expect(basis.status).toBe(201);
+  expect(basis.json.prd_document_id).toBe(track.prd.id);
   const ok = await call("POST", `tracks/${track.id}/milestones`, { name: "Beta", target_date: day, basis_ids: [basis.json.id], item_keys: ["item-thresholds"] });
   expect(ok.status).toBe(201);
   const withdrawn = await call("POST", `schedule-bases/${basis.json.id}/withdraw`, { reason: "Re-estimated" });

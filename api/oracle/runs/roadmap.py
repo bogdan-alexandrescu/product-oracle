@@ -24,10 +24,10 @@
 :func:`check_items` lists every problem at once, so a reviewer (or a re-run) can fix
 the file in one pass. Order matters: an item comes after the items it depends on and is
 never in an earlier horizon than them; a milestone carries a date only in Now and only
-with the source of that date. When the caller passes the verified schedule bases
-(``date_bases``, oracle.roadmap.schedule), that source must name a basis that supports
-exactly that date: a date with no verified estimate, capacity or commitment behind it is
-refused (``unverified_date``).
+with the source of that date. When the caller passes the verified schedule bases of the
+source PRD (``date_bases``, oracle.roadmap.schedule), that source must name a basis that
+covers the item and supports exactly that date: a date with no verified estimate,
+capacity or commitment behind it is refused (``unverified_date``).
 
 The file is read by :func:`load_items_yaml` on every path (the run's checkpoint, a run's
 import, a person's import): it refuses YAML aliases and anchors (``yaml.safe_load``
@@ -322,11 +322,12 @@ def _check_milestone(
             )
             return
     source = _text(milestone.get("date_source"))
-    if date_bases is not None and source and not supporting(when, source, date_bases):
+    if date_bases is not None and source and not supporting(when, source, date_bases, item_id):
         out.add(
             "unverified_date",
-            f"item {item_id}: no verified estimate, capacity or commitment named in "
-            f"date_source ({source!r}) supports {when}; drop the date or record the basis",
+            f"item {item_id}: no verified estimate, capacity or commitment of this PRD (for "
+            f"this item) named in date_source ({source!r}) supports {when}; drop the date "
+            "or record the basis",
             item_id,
         )
 

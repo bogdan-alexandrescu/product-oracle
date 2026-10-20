@@ -195,9 +195,14 @@ async def check_date(
     horizon: str,
     target_date: date | None,
     basis_ids: list[uuid.UUID],
+    item_keys: list[str] | None = None,
 ) -> list[uuid.UUID]:
-    """A milestone date stands only on verified bases of this company that support
-    exactly that date, and only in Now (O4). Returns the bases kept."""
+    """A milestone date stands only on verified bases recorded for this track's PRD that
+    support exactly that date, and only in Now (O4). A basis limited to an item (or a
+    tracker issue's items) supports a milestone only of those items. Returns the bases
+    kept."""
+    from oracle.roadmap import schedule
+
     if target_date is None:
         return list(dict.fromkeys(basis_ids))
     if horizon != "now":
@@ -211,18 +216,26 @@ async def check_date(
     rows = {
         b.id: b for b in await db.scalars(select(ScheduleBasis).where(ScheduleBasis.id.in_(ids)))
     }
+    scopes = {b.id: b for b in await schedule.verified_bases(db, track.prd_document_id)}
+    keys = set(item_keys or [])
     for basis_id in ids:
         basis = rows.get(basis_id)
         if basis is None:
             raise Invalid(f"schedule basis {basis_id} is unknown")
         if basis.status != "verified":
             raise Invalid(f"schedule basis {basis.reference} was withdrawn")
-        if basis.prd_document_id not in (None, track.prd_document_id):
+        if basis.prd_document_id != track.prd_document_id:
             raise Invalid(f"schedule basis {basis.reference} belongs to another PRD")
         if basis.supports_date != target_date:
             raise Invalid(
                 f"schedule basis {basis.reference} supports {basis.supports_date}, "
                 f"not {target_date}"
+            )
+        scope = scopes[basis_id].item_keys
+        if scope is not None and not (keys and keys <= scope):
+            raise Invalid(
+                f"schedule basis {basis.reference} supports only "
+                f"{', '.join(sorted(scope)) or 'no item yet'}; list only those items"
             )
     return ids
 

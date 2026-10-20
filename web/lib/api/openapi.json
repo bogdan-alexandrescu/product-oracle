@@ -16244,7 +16244,7 @@
           "roadmaps"
         ],
         "summary": "Create Schedule Basis",
-        "description": "Record a verified estimate, capacity figure or commitment supporting a date. The\napprover recording it verifies it. From a tracker record, the record's own target\ndate must be that date.",
+        "description": "Record a verified estimate, capacity figure or commitment supporting a date for\none PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a\ntracker issue is matched to (``tracker_key``). The approver recording it verifies it.\nFrom a tracker record, the record's own target date must be that date, and the record\nmust be this PRD's.",
         "operationId": "create_schedule_basis",
         "security": [
           {
@@ -36753,15 +36753,38 @@
             "title": "Detail"
           },
           "prd": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Prd"
+          },
+          "item_key": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1,
+                "pattern": "\\S"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Prd"
+            "title": "Item Key"
+          },
+          "tracker_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Key"
           },
           "tracker_record_id": {
             "anyOf": [
@@ -36781,10 +36804,11 @@
         "required": [
           "kind",
           "reference",
-          "supports_date"
+          "supports_date",
+          "prd"
         ],
         "title": "ScheduleBasisCreate",
-        "description": "A verified estimate, capacity figure or commitment. Recording it is the\nverification: the approver says this source supports this date."
+        "description": "A verified estimate, capacity figure or commitment. Recording it is the\nverification: the approver says this source supports this date, for this PRD's\nroadmap items (O4)."
       },
       "ScheduleBasisOut": {
         "properties": {
@@ -36823,16 +36847,31 @@
             "title": "Detail"
           },
           "prd_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Prd Document Id"
+          },
+          "item_key": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "uuid"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Prd Document Id"
+            "title": "Item Key"
+          },
+          "tracker_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Key"
           },
           "tracker_record_id": {
             "anyOf": [
@@ -36909,6 +36948,8 @@
           "supports_date",
           "detail",
           "prd_document_id",
+          "item_key",
+          "tracker_key",
           "tracker_record_id",
           "status",
           "verified_by",

@@ -24,8 +24,9 @@ content hash), and through the trace lane's section links and the baseline graph
 
 ``trace`` records how each link was made (``declared``, ``section_link``, ``key_match``,
 ``graph``), so a reviewer can see why an item claims a requirement. A milestone date is
-kept only when a verified schedule basis supports it (oracle.roadmap.schedule); otherwise
-the item keeps the milestone's name and records the refused date.
+kept only in Now and only when a verified schedule basis of the item's PRD supports it
+(oracle.roadmap.schedule); otherwise the item keeps the milestone's name and records the
+refused date. Read views re-check the date (:func:`live_milestones`).
 """
 
 import json
@@ -316,7 +317,9 @@ async def derive_trace(
 # --- importing ---------------------------------------------------------------------------
 
 
-def _milestone(raw: Any, bases: list[schedule.Basis], result: ImportResult, key: str) -> Any:
+def _milestone(
+    raw: Any, bases: list[schedule.Basis], result: ImportResult, key: str, horizon: str | None
+) -> Any:
     if raw is None:
         return None
     if isinstance(raw, str):
@@ -333,8 +336,14 @@ def _milestone(raw: Any, bases: list[schedule.Basis], result: ImportResult, key:
     if when is None:
         return out
     day = schedule.as_date(when)
-    support = schedule.supporting(when, out["date_source"], bases)
-    if day is not None and support:
+    support = schedule.supporting(when, out["date_source"], bases, key)
+    if horizon != "now":
+        # Dated milestones only in Now (O4): the date is dropped; the check recorded
+        # the date_outside_now problem.
+        out["refused_date"] = str(when)
+        out["refused"] = schedule.OUTSIDE_NOW
+        result.refused_dates.append(key)
+    elif day is not None and support:
         out["date"] = day.isoformat()
         out["basis_ids"] = [str(b.id) for b in support]
     else:
@@ -431,7 +440,7 @@ async def import_items(
             depends_on=[
                 str(d) for d in raw.get("depends_on") or [] if not isinstance(d, dict | list)
             ],
-            milestone=_milestone(raw.get("milestone"), bases, result, key),
+            milestone=_milestone(raw.get("milestone"), bases, result, key, horizon),
             priority=json_safe(raw["priority"]) if isinstance(raw.get("priority"), dict) else None,
             confidence=None if confidence is None else str(confidence),
             **derived,
@@ -474,19 +483,38 @@ COPIED = (
 )
 
 
-def recheck_date(milestone: dict[str, Any] | None, bases: list[schedule.Basis]) -> Any:
-    """A carried milestone keeps its date only while a verified basis still supports it."""
+def recheck_date(
+    milestone: dict[str, Any] | None,
+    bases: list[schedule.Basis],
+    item_key: str | None = None,
+    horizon: str | None = "now",
+) -> Any:
+    """A milestone keeps its date only while a verified basis of the item's PRD (and in
+    its scope) still supports it, and only in Now. ``bases``: the PRD's verified bases."""
     if not milestone or not milestone.get("date"):
         return milestone
-    support = schedule.supporting(milestone["date"], milestone.get("date_source"), bases)
-    if support:
+    support = schedule.supporting(milestone["date"], milestone.get("date_source"), bases, item_key)
+    if horizon == "now" and support:
         return {**milestone, "basis_ids": [str(b.id) for b in support]}
     return {
         **milestone,
         "date": None,
         "basis_ids": [],
         "refused_date": milestone["date"],
-        "refused": schedule.UNVERIFIED,
+        "refused": schedule.UNVERIFIED if horizon == "now" else schedule.OUTSIDE_NOW,
+    }
+
+
+async def live_milestones(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, Any]:
+    """Each item's milestone as it stands now: its date re-checked against its own PRD's
+    verified bases (a withdrawn or out-of-scope basis supports nothing). Read-only: the
+    rows are not changed."""
+    bases: dict[uuid.UUID | None, list[schedule.Basis]] = {}
+    for prd in {r.prd_document_id for r in rows if (r.milestone or {}).get("date")}:
+        bases[prd] = await schedule.verified_bases(db, prd)
+    return {
+        r.id: recheck_date(r.milestone, bases.get(r.prd_document_id, []), r.item_key, r.horizon)
+        for r in rows
     }
 
 
@@ -525,7 +553,9 @@ async def carry_forward(db: AsyncSession, version: DocumentVersion) -> int:
         db.add(
             RoadmapItem(
                 **{c: getattr(old, c) for c in COPIED},
-                milestone=recheck_date(old.milestone, bases[old.prd_document_id]),
+                milestone=recheck_date(
+                    old.milestone, bases[old.prd_document_id], old.item_key, old.horizon
+                ),
                 roadmap_document_id=version.document_id,
                 roadmap_version_id=version.id,
                 note=f"carried from version {previous.number}",

@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import select
 
 from oracle.baseline.models import Edge, Entity
+from oracle.docs.models import Document
 from oracle.roadmap.models import ScheduleBasis
 from oracle.tenancy import tenant_session
 from oracle.v2.models import FeasibilityExperiment
@@ -69,11 +70,15 @@ async def basis(
     when: date,
     kind: str = "estimate",
     status: str = "verified",
+    prd: str = "checkout-redesign",
+    item_key: str | None = None,
 ) -> uuid.UUID:
+    """A schedule basis recorded for the PRD ``prd`` (a basis always has its PRD, O4)."""
     async with tenant_session(tenant_id) as s:
+        prd_id = await s.scalar(select(Document.id).where(Document.slug == prd))
         row = ScheduleBasis(
             kind=kind, reference=reference, supports_date=when, status=status,
-            verified_at=datetime.now(UTC),
+            verified_at=datetime.now(UTC), prd_document_id=prd_id, item_key=item_key,
         )  # fmt: skip
         s.add(row)
         await s.commit()

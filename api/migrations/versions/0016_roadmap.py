@@ -436,7 +436,9 @@ def upgrade() -> None:
         sa.Column("reference", sa.Text(), nullable=False),
         sa.Column("supports_date", sa.Date(), nullable=False),
         sa.Column("detail", sa.Text(), nullable=True),
-        sa.Column("prd_document_id", sa.Uuid(), nullable=True),
+        sa.Column("prd_document_id", sa.Uuid(), nullable=False),
+        sa.Column("item_key", sa.Text(), nullable=True),
+        sa.Column("tracker_key", sa.Text(), nullable=True),
         sa.Column("tracker_record_id", sa.Uuid(), nullable=True),
         sa.Column("status", sa.Text(), server_default="verified", nullable=False),
         sa.Column("verified_by", sa.Uuid(), nullable=True),
@@ -456,6 +458,9 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "status IN ('verified', 'withdrawn')", name=op.f("ck_schedule_bases_status")
+        ),
+        sa.CheckConstraint(
+            "item_key IS NULL OR tracker_key IS NULL", name=op.f("ck_schedule_bases_one_key")
         ),
         sa.ForeignKeyConstraint(
             ["prd_document_id"],

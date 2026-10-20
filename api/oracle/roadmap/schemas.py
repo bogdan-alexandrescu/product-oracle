@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from oracle.v2.schemas import Freshness
 
@@ -40,7 +40,8 @@ class DocumentRef(BaseModel):
 
 class ScheduleBasisCreate(BaseModel):
     """A verified estimate, capacity figure or commitment. Recording it is the
-    verification: the approver says this source supports this date."""
+    verification: the approver says this source supports this date, for this PRD's
+    roadmap items (O4)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -48,9 +49,19 @@ class ScheduleBasisCreate(BaseModel):
     reference: str = Field(min_length=1, max_length=200, pattern=r"\S")
     supports_date: date
     detail: str | None = Field(None, max_length=2000)
-    # Limit it to one PRD's roadmaps (slug or id); omitted: any.
-    prd: str | None = None
+    # The PRD (slug or id) whose roadmap items it supports: required.
+    prd: str = Field(min_length=1, max_length=200)
+    # Optionally only one item of that PRD's roadmap, or only the items one tracker
+    # issue is matched to (its tracker records' item_key); not both.
+    item_key: str | None = Field(None, min_length=1, max_length=200, pattern=r"\S")
+    tracker_key: str | None = Field(None, min_length=1, max_length=200, pattern=r"\S")
     tracker_record_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _one_key(self) -> "ScheduleBasisCreate":
+        if self.item_key is not None and self.tracker_key is not None:
+            raise ValueError("name an item_key or a tracker_key, not both")
+        return self
 
 
 class ScheduleBasisWithdraw(BaseModel):
@@ -65,7 +76,9 @@ class ScheduleBasisOut(ORM):
     reference: str
     supports_date: date
     detail: str | None
-    prd_document_id: uuid.UUID | None
+    prd_document_id: uuid.UUID
+    item_key: str | None
+    tracker_key: str | None
     tracker_record_id: uuid.UUID | None
     status: BasisStatus
     verified_by: uuid.UUID | None
@@ -79,7 +92,7 @@ class WithdrawOut(BaseModel):
     basis: ScheduleBasisOut
     # Milestones that lost the date this basis alone supported.
     undated_milestones: list[uuid.UUID]
-    # Roadmap items whose date rested on it, now potentially stale.
+    # Roadmap items whose date rested on it: potentially stale, and read without the date.
     stale_items: list[uuid.UUID]
 
 

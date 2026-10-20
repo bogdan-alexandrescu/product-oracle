@@ -83,14 +83,18 @@ class ScheduleBasis(TenantScoped, Base):
     """A verified estimate, capacity figure or commitment that supports a date (O4).
 
     ``reference`` is what a roadmap names in a milestone's ``date_source`` (a tracker
-    issue key, a capacity plan); ``supports_date`` is the date it supports. A person
-    with the approver role records and verifies it; a withdrawn basis supports nothing.
+    issue key, a capacity plan); ``supports_date`` is the date it supports. It is
+    recorded for one PRD (O4, owner 2026-10-19) and supports only that PRD's roadmap
+    items; naming an ``item_key`` or a ``tracker_key`` narrows it to that item, or to the
+    items that tracker issue is matched to. A person with the approver role records and
+    verifies it; a withdrawn basis supports nothing.
     """
 
     __tablename__ = "schedule_bases"
     __table_args__ = (
         CheckConstraint(_in("kind", BASIS_KINDS), name="kind"),
         CheckConstraint(_in("status", BASIS_STATUSES), name="status"),
+        CheckConstraint("item_key IS NULL OR tracker_key IS NULL", name="one_key"),
         Index("ix_schedule_bases_reference", "tenant_id", "reference"),
     )
 
@@ -98,8 +102,12 @@ class ScheduleBasis(TenantScoped, Base):
     reference: Mapped[str] = mapped_column(Text, nullable=False)
     supports_date: Mapped[date] = mapped_column(Date, nullable=False)
     detail: Mapped[str | None] = mapped_column(Text)
-    # Only for this PRD's roadmaps; null: any.
-    prd_document_id: Mapped[uuid.UUID | None] = _fk("documents")
+    # The PRD whose roadmap items it supports (never null: O4).
+    prd_document_id: Mapped[uuid.UUID] = _fk("documents", nullable=False)
+    # Optionally narrowed to one roadmap item key, or to one tracker issue key (the
+    # items its tracker records are matched to).
+    item_key: Mapped[str | None] = mapped_column(Text)
+    tracker_key: Mapped[str | None] = mapped_column(Text)
     # The tracker record it was read from, when it was.
     tracker_record_id: Mapped[uuid.UUID | None] = _fk("tracker_records", "SET NULL")
     status: Mapped[str] = mapped_column(

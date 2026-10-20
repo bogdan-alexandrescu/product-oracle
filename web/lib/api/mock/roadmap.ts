@@ -245,7 +245,7 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
   };
 }
 
-function checkDate(db: RoadmapDb, t: Track, horizon: string, date: string | null | undefined, basisIds: string[]): string | null {
+function checkDate(db: RoadmapDb, t: Track, horizon: string, date: string | null | undefined, basisIds: string[], itemKeys: string[] = []): string | null {
   if (!date) return null;
   if (horizon !== "now") return `dated milestones belong only in now (this one is in ${horizon})`;
   if (!basisIds.length) return UNVERIFIED;
@@ -253,8 +253,11 @@ function checkDate(db: RoadmapDb, t: Track, horizon: string, date: string | null
     const b = db.bases.find((x) => x.id === id);
     if (!b) return `schedule basis ${id} is unknown`;
     if (b.status !== "verified") return `schedule basis ${b.reference} was withdrawn`;
-    if (b.prd_document_id && b.prd_document_id !== t.prd_id) return `schedule basis ${b.reference} belongs to another PRD`;
+    if (b.prd_document_id !== t.prd_id) return `schedule basis ${b.reference} belongs to another PRD`;
     if (b.supports_date !== date) return `schedule basis ${b.reference} supports ${b.supports_date}, not ${date}`;
+    // O4: a basis limited to one item supports only a milestone of that item. (The mock
+    // does not resolve tracker_key scopes; the real API does.)
+    if (b.item_key && !(itemKeys.length && itemKeys.every((k) => k === b.item_key))) return `schedule basis ${b.reference} supports only ${b.item_key}; list only those items`;
   }
   return null;
 }
@@ -338,11 +341,14 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
     if (!p[2] && m === "POST") {
       if (!can("approver")) return forbidden();
       const b = await body<Schemas["ScheduleBasisCreate"]>();
-      const prd = b.prd ? findDoc(b.prd) : undefined;
-      if (b.prd && !prd) return notFound(`document '${b.prd}'`);
+      // O4: a basis is recorded for one PRD, optionally one item or one tracker issue.
+      if (!b.prd) return json(422, { detail: "prd: a schedule basis is recorded for one PRD" });
+      if (b.item_key && b.tracker_key) return json(422, { detail: "name an item_key or a tracker_key, not both" });
+      const prd = findDoc(b.prd);
+      if (!prd) return notFound(`document '${b.prd}'`);
       const row: Basis = {
         id: mockUuid(), kind: b.kind, reference: b.reference.trim(), supports_date: b.supports_date, detail: b.detail ?? null,
-        prd_document_id: prd?.id ?? null, tracker_record_id: b.tracker_record_id ?? null, status: "verified",
+        prd_document_id: prd.id, item_key: b.item_key ?? null, tracker_key: b.tracker_key ?? null, tracker_record_id: b.tracker_record_id ?? null, status: "verified",
         verified_by: ctx.userId, verified_at: now(), withdrawn_by: null, withdrawn_at: null, created_at: now(),
       };
       db.bases.push(row);
@@ -409,7 +415,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
     const horizon = b.horizon ?? row.horizon;
     const date = "target_date" in b ? b.target_date ?? null : row.target_date;
     const basisIds = b.basis_ids ?? row.basis_ids;
-    const problem = checkDate(db, findTrack(row.track_id)!, horizon, date, basisIds);
+    const problem = checkDate(db, findTrack(row.track_id)!, horizon, date, basisIds, b.item_keys ?? row.item_keys);
     if (problem) return json(422, { detail: problem });
     Object.assign(row, { horizon, target_date: date, basis_ids: basisIds, name: b.name ?? row.name, item_keys: b.item_keys ?? row.item_keys, status: b.status ?? row.status, lock_version: row.lock_version + 1, updated_at: now() });
     return json(200, row);
@@ -496,7 +502,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       if (!can("approver")) return forbidden();
       const b = await body<Schemas["MilestoneCreate"]>();
       const horizon = b.horizon ?? "now";
-      const problem = checkDate(db, t, horizon, b.target_date, b.basis_ids ?? []);
+      const problem = checkDate(db, t, horizon, b.target_date, b.basis_ids ?? [], b.item_keys ?? []);
       if (problem) return json(422, { detail: problem });
       if (db.milestones.some((x) => x.track_id === t.id && x.name === b.name)) return json(409, { detail: `the track already has a milestone '${b.name}'` });
       const row: Milestone = {
