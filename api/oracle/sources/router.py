@@ -37,6 +37,10 @@ from oracle.sources.schemas import (
 router = APIRouter(prefix="/v1", tags=["sources"])
 
 NOT_A_USER = "Sources belong to a user: sign in (API tokens do not act for a user yet)"
+READ_ONLY = (
+    "This sign-in can only read: approve the MCP client with oracle:write to add, edit, "
+    "sync or delete sources"
+)
 
 
 def _user(principal: Principal) -> uuid.UUID:
@@ -45,7 +49,18 @@ def _user(principal: Principal) -> uuid.UUID:
     return principal.user_id
 
 
+def _writer(principal: Principal) -> uuid.UUID:
+    """The user, for a route that changes their sources: refused for a read-only MCP
+    client (oracle:read), which reads as a viewer."""
+    user_id = _user(principal)
+    if principal.read_only:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY)
+    return user_id
+
+
 def _http(exc: Exception) -> HTTPException:
+    if isinstance(exc, service.BadRequestError):
+        return HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     if isinstance(exc, service.NotFoundError):
         return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
     if isinstance(exc, service.ConflictError | sync_engine.SyncRefused):
@@ -80,9 +95,12 @@ async def _one_out(db: TenantDB, source: Source) -> SourceOut:
     return _source_out(source, counts.get(source.id, 0), conn)
 
 
-async def _owned(db: TenantDB, principal: Principal, source_id: uuid.UUID) -> Source:
+async def _owned(
+    db: TenantDB, principal: Principal, source_id: uuid.UUID, *, write: bool = False
+) -> Source:
+    user_id = _writer(principal) if write else _user(principal)
     try:
-        return await service.get_source(db, _user(principal), source_id)
+        return await service.get_source(db, user_id, source_id)
     except service.NotFoundError as e:
         raise _http(e) from e
 
@@ -136,7 +154,7 @@ async def create_source(body: SourceCreate, principal: CurrentPrincipal, db: Ten
     try:
         source = await service.create_source(
             db,
-            _user(principal),
+            _writer(principal),
             kind=body.kind,
             name=body.name,
             connection_id=body.connection_id,
@@ -156,7 +174,7 @@ async def get_source(source_id: uuid.UUID, principal: CurrentPrincipal, db: Tena
 async def update_source(
     source_id: uuid.UUID, body: SourcePatch, principal: CurrentPrincipal, db: TenantDB
 ) -> SourceOut:
-    source = await _owned(db, principal, source_id)
+    source = await _owned(db, principal, source_id, write=True)
     try:
         source = await service.update_source(db, source, body.model_dump(exclude_unset=True))
     except _ERRORS as e:
@@ -168,7 +186,8 @@ async def update_source(
 async def delete_source(
     source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> Response:
-    await service.delete_source(db, await _owned(db, principal, source_id), actor=principal)
+    source = await _owned(db, principal, source_id, write=True)
+    await service.delete_source(db, source, actor=principal)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -176,7 +195,7 @@ async def delete_source(
 async def pause_source(
     source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> SourceOut:
-    source = await service.set_paused(db, await _owned(db, principal, source_id), True)
+    source = await service.set_paused(db, await _owned(db, principal, source_id, write=True), True)
     return await _one_out(db, source)
 
 
@@ -184,7 +203,7 @@ async def pause_source(
 async def resume_source(
     source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> SourceOut:
-    source = await service.set_paused(db, await _owned(db, principal, source_id), False)
+    source = await service.set_paused(db, await _owned(db, principal, source_id, write=True), False)
     return await _one_out(db, source)
 
 
@@ -201,7 +220,7 @@ async def sync_source(
 ) -> SyncResult:
     """Run the connector now. A rejected credential puts the source in status error;
     a rate limit stops cleanly and the next sync resumes from the saved cursor."""
-    source = await _owned(db, principal, source_id)
+    source = await _owned(db, principal, source_id, write=True)
     try:
         stats = await sync_engine.sync_source(db, source)
     except _ERRORS as e:
@@ -233,7 +252,7 @@ async def upload_files(
 ) -> UploadResult:
     """Add files to an upload source; each becomes an item of kind ``file``. A file
     with the name of an earlier one is a new version of it when its content changed."""
-    source = await _owned(db, principal, source_id)
+    source = await _owned(db, principal, source_id, write=True)
     if source.kind != "upload":
         raise HTTPException(status.HTTP_409_CONFLICT, "Only upload sources take files")
     if source.status == "paused":

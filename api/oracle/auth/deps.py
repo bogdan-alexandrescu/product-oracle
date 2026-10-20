@@ -33,6 +33,9 @@ class Principal:
     role: Role
     user_id: uuid.UUID | None = None
     token_id: uuid.UUID | None = None
+    # An MCP client approved with oracle:read only: it reads as the user and changes
+    # nothing of theirs, including what the role check would allow (their own sources).
+    read_only: bool = False
 
     @property
     def id(self) -> uuid.UUID:
