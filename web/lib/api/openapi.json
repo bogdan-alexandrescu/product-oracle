@@ -1227,6 +1227,7 @@
           "review"
         ],
         "summary": "Approve Version",
+        "description": "Approve (publish) a version. A PRD version is refused with a 409 naming the blocks\nwhen its readiness verdict for purpose ``publish`` is blocked, or when it is not the\nlatest version; nothing is recorded then.",
         "operationId": "approve_version",
         "security": [
           {
@@ -1266,6 +1267,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishBlockedOut"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "description": "Validation Error",
@@ -12792,7 +12803,7 @@
           "quality"
         ],
         "summary": "Get Document Readiness",
-        "description": "The soft readiness dashboard of a version, criterion by criterion (stores nothing).\n\nEvery registered readiness check runs live. Advisory criteria never block (T2);\n``blocked`` is true only when a hard check is critical. The latest model review and\nthe human ratings of the version are shown beside each criterion, with agreement.",
+        "description": "The soft readiness dashboard of a version, criterion by criterion (stores nothing).\n\nEvery registered readiness check runs live. Advisory criteria never block (T2);\n``blocked`` is true only when a hard check is critical. The latest model review and\nthe human ratings of the version are shown beside each criterion, with agreement.\n``purpose=publish`` asks the checks what approve (publish) asks them; the Publish\nscreen does.",
         "operationId": "get_document_readiness",
         "security": [
           {
@@ -12819,6 +12830,20 @@
             "schema": {
               "type": "integer",
               "title": "N"
+            }
+          },
+          {
+            "name": "purpose",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "advisory",
+                "publish"
+              ],
+              "type": "string",
+              "default": "advisory",
+              "title": "Purpose"
             }
           }
         ],
@@ -31432,6 +31457,57 @@
         ],
         "title": "ProviderOut"
       },
+      "PublishBlock": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "id",
+          "title",
+          "rationale"
+        ],
+        "title": "PublishBlock",
+        "description": "One reason a publish is refused."
+      },
+      "PublishBlockedOut": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "blocking": {
+            "items": {
+              "$ref": "#/components/schemas/PublishBlock"
+            },
+            "type": "array",
+            "title": "Blocking"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "blocking"
+        ],
+        "title": "PublishBlockedOut",
+        "description": "409 from approve: the PRD version may not be published (T2 publish gate, C5)."
+      },
       "PublishIn": {
         "properties": {
           "version": {
@@ -31714,6 +31790,15 @@
           "policy_note": {
             "type": "string",
             "title": "Policy Note"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "advisory",
+              "publish"
+            ],
+            "title": "Purpose",
+            "default": "advisory"
           },
           "evaluated_at": {
             "type": "string",

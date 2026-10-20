@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from oracle.readiness import Purpose
 from oracle.v2.schemas import FindingStatus, GapCategory
 
 # --- typed attrs the hard checks read on baseline entities ------------------------------
@@ -118,6 +119,8 @@ class ReadinessDashboard(BaseModel):
     # T2 (2026-10-19): advisory; only hard checks block.
     policy: Literal["advisory"] = "advisory"
     policy_note: str
+    # What the checks were asked for: the publish transaction asks for "publish".
+    purpose: Purpose = "advisory"
     evaluated_at: datetime
     blocked: bool
     # Keys of the hard checks that are critical.

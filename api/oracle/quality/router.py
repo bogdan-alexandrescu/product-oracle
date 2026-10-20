@@ -37,6 +37,7 @@ from oracle.quality.schemas import (
     OutcomeStatus,
     ReadinessDashboard,
 )
+from oracle.readiness import Purpose
 from oracle.v2.schemas import EvaluationReportDetail
 
 criteria.register()
@@ -63,14 +64,18 @@ async def list_quality_criteria() -> list[CriterionInfo]:
 
 
 @router.get(VERSION + "/readiness", response_model=ReadinessDashboard)
-async def get_document_readiness(doc: str, n: int, db: TenantDB) -> ReadinessDashboard:
+async def get_document_readiness(
+    doc: str, n: int, db: TenantDB, purpose: Purpose = "advisory"
+) -> ReadinessDashboard:
     """The soft readiness dashboard of a version, criterion by criterion (stores nothing).
 
     Every registered readiness check runs live. Advisory criteria never block (T2);
     ``blocked`` is true only when a hard check is critical. The latest model review and
     the human ratings of the version are shown beside each criterion, with agreement.
+    ``purpose=publish`` asks the checks what approve (publish) asks them; the Publish
+    screen does.
     """
-    return await _call(service.dashboard(db, doc, n))
+    return await _call(service.dashboard(db, doc, n, purpose))
 
 
 @router.post(VERSION + "/evaluations", response_model=EvaluationReportDetail, status_code=201)
