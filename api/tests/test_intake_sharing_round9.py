@@ -8,7 +8,9 @@
 
 Minors: a run never reads a frozen item it may no longer read through ``attach``;
 another user's item is scored by the version released, not by when it changed
-upstream; another user's item carries no current scalar acl field.
+upstream; another user's item carries no current scalar acl field; a run never cites
+its own deleted or unreleased item in an answer; a run's source list pages are full
+(what it may not read is left out before LIMIT/OFFSET).
 
 Synthetic placeholders only.
 """
