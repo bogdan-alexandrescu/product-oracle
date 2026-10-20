@@ -4,6 +4,9 @@ import { ADMIN, login, signOut } from "./helpers";
 
 const memberRow = (page: Page, email: string) => page.getByTestId("member-row").filter({ hasText: email });
 const tokenRow = (page: Page, name: string) => page.getByTestId("token-row").filter({ hasText: name });
+const dateFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" });
+/** "Jan 18, 2027": the date `days` from now, as the app shows it (the browser's time zone). */
+const inDays = (days: number) => dateFmt.format(new Date(Date.now() + days * 86_400_000));
 
 test("members: remove asks in an in-app dialog, then restore lets them sign in again", async ({ page }) => {
   let nativeDialog = false;
@@ -92,13 +95,21 @@ test("api tokens: every kind, filter by kind and member, revoke with confirm", a
   await page.goto("/settings/api-tokens");
   await expect(page.getByRole("heading", { level: 1, name: "API tokens" })).toBeVisible();
   const rows = page.getByTestId("token-row");
-  await expect(rows).toHaveCount(8);
+  await expect(rows).toHaveCount(9);
   for (const kind of ["personal", "service", "run", "mcp_client"]) {
     await expect(page.locator(`[data-testid="token-row"][data-kind="${kind}"]`).first()).toBeVisible();
   }
   await expect(tokenRow(page, "agent-track")).toContainText("admin@example.com");
   await expect(tokenRow(page, "ci-export")).toContainText("No one (company)");
   await expect(tokenRow(page, "release script")).toContainText("Revoked");
+  // Expired, not revoked: its own status, its expiry, and nothing to revoke.
+  const expired = tokenRow(page, "staging sync");
+  await expect(expired.locator('[data-state="expired"]')).toHaveText("Expired");
+  await expect(expired.getByTestId("token-expiry")).toHaveText("Expired Sep 29, 2026");
+  await expect(page.getByRole("button", { name: "Revoke staging sync" })).toHaveCount(0);
+  await expect(page.getByTestId("expired-count")).toHaveText("1 expired");
+  await expect(tokenRow(page, "agent-track").getByTestId("token-expiry")).toHaveText("Never expires");
+  await expect(tokenRow(page, "laptop cli").getByTestId("token-expiry")).toHaveText("Expires Dec 31, 2026");
 
   await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: "Run" }).click();
   await expect(rows).toHaveCount(1);
@@ -108,7 +119,7 @@ test("api tokens: every kind, filter by kind and member, revoke with confirm", a
   await expect(rows).toHaveCount(1);
   await expect(page).toHaveURL(/member=/);
   await page.getByLabel("Member").selectOption({ label: "Everyone" });
-  await expect(rows).toHaveCount(8);
+  await expect(rows).toHaveCount(9);
 
   await page.getByRole("button", { name: "Revoke agent-track" }).click();
   const dialog = page.getByRole("dialog", { name: "Revoke this token?" });
@@ -141,10 +152,14 @@ test("my account: from the user menu; a personal token's secret is shown once", 
   await expect(details).toContainText("Password");
 
   await page.getByLabel("Name").fill("laptop script");
+  // 90 days unless chosen otherwise.
+  const lifetime = page.getByRole("group", { name: "Expires after" });
+  await expect(lifetime.getByRole("button", { name: "90 days" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Create token" }).click();
   const secret = page.getByTestId("new-token-secret");
   await expect(secret).toHaveText(/^po_/);
   await expect(page.getByTestId("new-token")).toContainText("Shown once");
+  await expect(page.getByTestId("new-token-expiry")).toHaveText(`Expires ${inDays(90)}`);
   await expect(page.getByTestId("my-token-row").filter({ hasText: "laptop script" })).toContainText("oracle:read");
   const value = await secret.textContent();
 
@@ -158,6 +173,33 @@ test("my account: from the user menu; a personal token's secret is shown once", 
   await page.getByRole("button", { name: "Revoke laptop script" }).click();
   await page.getByRole("dialog", { name: "Revoke this token?" }).getByRole("button", { name: "Revoke" }).click();
   await expect(page.getByTestId("my-token-row").filter({ hasText: "laptop script" })).toContainText("Revoked");
+});
+
+test("my account: a token's expiry is chosen at creation; an expired one shows as Expired", async ({ page }) => {
+  await login(page);
+  await page.goto("/account");
+  const expired = page.getByTestId("my-token-row").filter({ hasText: "staging sync" });
+  await expect(expired.locator('[data-state="expired"]')).toHaveText("Expired");
+  await expect(expired.getByRole("button", { name: /Revoke/ })).toHaveCount(0);
+  await expect(page.getByTestId("my-token-row").filter({ hasText: "agent-track" })).toContainText("Never expires");
+  // Expired tokens do not count as live.
+  await expect(page.getByTestId("stat-tokens")).toContainText("1");
+
+  const lifetime = page.getByRole("group", { name: "Expires after" });
+  await expect(lifetime.getByRole("button")).toHaveText(["30 days", "90 days", "1 year", "Never"]);
+  await page.getByLabel("Name").fill("yearly export");
+  await lifetime.getByRole("button", { name: "1 year" }).click();
+  await expect(lifetime.getByRole("button", { name: "1 year" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Create token" }).click();
+  await expect(page.getByTestId("new-token-expiry")).toHaveText(`Expires ${inDays(365)}`);
+  const row = page.getByTestId("my-token-row").filter({ hasText: "yearly export" });
+  await expect(row.getByTestId("token-expiry")).toHaveText(`Expires ${inDays(365)}`);
+  await expect(row).toContainText("Active");
+
+  await page.getByLabel("Name").fill("forever");
+  await lifetime.getByRole("button", { name: "Never" }).click();
+  await page.getByRole("button", { name: "Create token" }).click();
+  await expect(page.getByTestId("new-token-expiry")).toHaveText("Never expires");
 });
 
 test("my account: revoke an MCP client", async ({ page }) => {
@@ -183,10 +225,21 @@ test("my account: change password", async ({ page }) => {
   await form.getByLabel("New password again").fill(fresh);
   await form.getByRole("button", { name: "Change password" }).click();
   await expect(form.getByRole("alert")).toContainText("not correct");
+  await expect(form).toContainText("revokes your personal API tokens, every MCP client you authorized");
+
 
   await form.getByLabel("Current password").fill(ADMIN.password);
   await form.getByRole("button", { name: "Change password" }).click();
   await expect(form.getByRole("status")).toContainText("Password changed");
+  // The approver's personal token went with the old password.
+  await expect(page.getByTestId("my-token-row").filter({ hasText: "laptop cli" })).toContainText("Revoked");
+
+  // The same password again is refused with the API's message.
+  await form.getByLabel("Current password").fill(fresh);
+  await form.getByLabel(/^New password ·/).fill(fresh);
+  await form.getByLabel("New password again").fill(fresh);
+  await form.getByRole("button", { name: "Change password" }).click();
+  await expect(form.getByRole("alert")).toContainText("Choose a new password, not your current one");
 
   await signOut(page);
   await page.getByLabel("Email").fill("approver@example.com");
@@ -198,14 +251,16 @@ test("my account: change password", async ({ page }) => {
   await expect(page).toHaveURL(/\/documents$/);
 });
 
-test("my account: sign out everywhere ends the session and every MCP client", async ({ page }) => {
+test("my account: sign out everywhere ends the session, personal tokens, MCP clients and run tokens", async ({ page }) => {
   await login(page);
   await page.goto("/account");
+  await expect(page.getByTestId("stat-tokens")).toContainText("1");
   await page.getByTestId("sign-out-everywhere").click();
   const dialog = page.getByRole("dialog", { name: "Sign out of every device?" });
   await expect(dialog).toContainText("this one too");
+  await expect(dialog).toContainText("Your personal API token is revoked");
   await expect(dialog).toContainText("Your MCP client loses");
-  await expect(dialog).toContainText("personal API tokens keep working");
+  await expect(dialog).toContainText("Runs you started that are still going lose their tokens; the runs go on");
   await dialog.getByRole("button", { name: "Sign out everywhere" }).click();
   await expect(page).toHaveURL(/\/login/);
   await page.goto("/account");
@@ -214,5 +269,9 @@ test("my account: sign out everywhere ends the session and every MCP client", as
   await login(page);
   await page.goto("/account");
   await expect(page.getByTestId("my-client-row").filter({ hasText: "Claude Desktop" })).toContainText("Revoked");
-  await expect(page.getByTestId("my-token-row").filter({ hasText: "agent-track" })).toContainText("Active");
+  await expect(page.getByTestId("my-token-row").filter({ hasText: "agent-track" })).toContainText("Revoked");
+  // Already expired: stays Expired, not Revoked.
+  await expect(page.getByTestId("my-token-row").filter({ hasText: "staging sync" })).toContainText("Expired");
+  await page.goto("/settings/api-tokens");
+  await expect(tokenRow(page, "Run · baseline to prd")).toContainText("Revoked");
 });

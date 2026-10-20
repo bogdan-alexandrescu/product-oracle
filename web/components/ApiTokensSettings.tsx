@@ -24,7 +24,7 @@ export const KIND_LABEL: Record<TokenKind, string> = {
   mcp_client: "MCP client",
 };
 const KIND_TIP: Record<TokenKind, string> = {
-  personal: "A member's API token (po_…): acts as them, capped by its scopes.",
+  personal: "A member's API token (po_…): acts as them, capped by its scopes; expires after 30, 90 or 365 days, or never.",
   service: "An API token for no one (po_…): acts with its own role.",
   run: "A run's short-lived token for its agents (ort_…): read and draft scopes, ends with the run.",
   mcp_client: "An MCP client a member authorized (OAuth, poa_…): acts as them, capped by its scopes.",
@@ -45,12 +45,35 @@ export function tokenState(t: Pick<ApiToken, "revoked_at" | "expires_at">): Toke
 export function TokenStatus({ t }: { t: Pick<ApiToken, "revoked_at" | "expires_at"> }) {
   const state = tokenState(t);
   const kind: ChipKind = state === "active" ? "pass" : "na";
-  const label = state === "active" ? "Active" : state === "revoked" ? `Revoked ${shortDate(t.revoked_at!)}` : "Expired";
   const title = state === "revoked" ? formatDateTime(t.revoked_at!) : state === "expired" ? formatDateTime(t.expires_at!) : undefined;
+  if (state === "expired") {
+    // Neutral like Revoked, told apart by a hollow dot: it lapsed, nobody revoked it.
+    return (
+      <Chip kind={kind} title={`Expired ${title}`} data-state={state}>
+        <span aria-hidden className="size-2 flex-none rounded-full border-[1.5px] border-current" />
+        Expired
+      </Chip>
+    );
+  }
   return (
     <Chip kind={kind} dot title={title} data-state={state}>
-      {label}
+      {state === "active" ? "Active" : `Revoked ${shortDate(t.revoked_at!)}`}
     </Chip>
+  );
+}
+
+/** "Expires Jan 18, 2027", "Expired Oct 1, 2026" or "Never expires". */
+export function expiryText(expiresAt?: string | null): string {
+  if (!expiresAt) return "Never expires";
+  return `${Date.parse(expiresAt) <= Date.now() ? "Expired" : "Expires"} ${formatDate(expiresAt)}`;
+}
+
+/** A credential's expiry in a table cell; a revoked one's expiry no longer matters. */
+export function Expiry({ t }: { t: Pick<ApiToken, "revoked_at" | "expires_at"> }) {
+  return (
+    <span className={`tnum ${t.revoked_at ? "text-text2" : "text-text"}`} title={t.expires_at ? formatDateTime(t.expires_at) : undefined} data-testid="token-expiry">
+      {expiryText(t.expires_at)}
+    </span>
   );
 }
 
@@ -159,7 +182,11 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
     {
       key: "name",
       header: "Name",
-      cell: (t) => <span className="min-w-0 truncate font-medium">{t.name}</span>,
+      cell: (t) => (
+        <span className="min-w-0 truncate font-medium" title={`${t.name} · created ${formatDate(t.created_at)}`}>
+          {t.name}
+        </span>
+      ),
     },
     {
       key: "kind",
@@ -175,8 +202,9 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
       cell: (t) => <span className={t.owner_email ? "" : "text-text2"}>{t.owner_email ?? "No one (company)"}</span>,
     },
     { key: "scopes", header: "Scopes", width: "15%", hideOnPhone: true, cell: (t) => <Scopes scopes={t.scopes} role={t.role} /> },
-    { key: "created", header: "Created", width: "110px", hideOnPhone: true, cell: (t) => when(t.created_at) },
     { key: "used", header: "Last used", width: "110px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
+    // Created is in the name's title: the expiry matters more on one line.
+    { key: "expires", header: "Expiry", width: "164px", cell: (t) => <Expiry t={t} /> },
     { key: "status", header: "Status", width: "150px", cell: (t) => <TokenStatus t={t} /> },
     {
       key: "action",
@@ -204,6 +232,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
 
   const active = rows?.filter((t) => tokenState(t) === "active").length;
   const revoked = rows?.filter((t) => t.revoked_at).length;
+  const expired = rows?.filter((t) => tokenState(t) === "expired").length;
   return (
     <Page>
       <PageHeader
@@ -216,6 +245,11 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
               </Chip>
             )}
             {!!revoked && <Chip kind="na">{revoked} revoked</Chip>}
+            {!!expired && (
+              <Chip kind="na" data-testid="expired-count">
+                {expired} expired
+              </Chip>
+            )}
             <InfoTip label="API tokens" align="start" side="bottom">
               Every credential that can call this company&apos;s Oracle; secrets are never shown after they are created.
               Removing a member revokes all of theirs.

@@ -44,8 +44,9 @@ const atLeast = (role: Role, min: Role) => ORDER.indexOf(role) >= ORDER.indexOf(
 
 /**
  * One credential of each kind and state: the seeded agent-track token (personal, as
- * oracle.seed makes it), a read-only personal token, a removed member's revoked token, a
- * service token, a run's token, and two MCP clients (one revoked).
+ * oracle.seed makes it, never expiring), a read-only personal token (90 days), an
+ * expired personal token, a removed member's revoked token, a service token, a run's
+ * token, and two MCP clients (one revoked).
  */
 export function seedAccount(members: Member[], uuid: () => string): AccountDb {
   const by = (email: string) => members.find((m) => m.email === email);
@@ -76,6 +77,15 @@ export function seedAccount(members: Member[], uuid: () => string): AccountDb {
       scopes: ["oracle:read"],
       created_at: "2026-10-02T14:00:00Z",
       last_used_at: "2026-10-19T16:12:00Z",
+      expires_at: "2026-12-31T14:00:00Z",
+    }),
+    // Expired, not revoked: listed as Expired and refused.
+    personal(admin, "staging sync", {
+      scopes: ["oracle:read"],
+      role: "viewer",
+      created_at: "2026-07-01T09:00:00Z",
+      last_used_at: "2026-09-28T18:30:00Z",
+      expires_at: "2026-09-29T09:00:00Z",
     }),
     personal(former, "release script", {
       created_at: "2026-09-20T10:00:00Z",
@@ -185,6 +195,15 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
   if (p[1] !== "me" || !p[2] || p[2] === "preferences") return null;
 
   const mine = (kind: TokenRow["kind"]) => db.tokens.filter((t) => t.user_id === me.id && t.kind === kind);
+  /** A password change and sign out everywhere revoke every live credential acting as me (AC1). */
+  const revokeMine = (at: string) => {
+    const revoke = (kind: TokenRow["kind"]) => {
+      const rows = mine(kind).filter(live);
+      for (const t of rows) t.revoked_at = at;
+      return rows.length;
+    };
+    return { api_tokens_revoked: revoke("personal"), mcp_clients_revoked: revoke("mcp_client"), runs_tokens_revoked: revoke("run") };
+  };
   if (p[2] === "account" && m === "GET") {
     const out: Schemas["MyAccountOut"] = {
       user_id: me.id,
@@ -217,16 +236,20 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
       failures.push(ctx.now());
       return json(400, { detail: "Your current password is not correct" });
     }
+    if (input.new_password === input.current_password) {
+      return json(400, { detail: "Choose a new password, not your current one" });
+    }
     db.passwords[me.email] = input.new_password;
     db.failures[me.email] = [];
+    revokeMine(ctx.now());
     return json(204);
   }
   if (p[2] === "sign-out-everywhere" && m === "POST") {
     const at = ctx.now();
-    const grants = mine("mcp_client").filter(live);
-    for (const g of grants) g.revoked_at = at;
+    const revoked = revokeMine(at);
     ctx.endSession();
-    return json(200, { sessions_valid_after: at, mcp_clients_revoked: grants.length });
+    const out: Schemas["SignedOutEverywhere"] = { sessions_valid_after: at, ...revoked };
+    return json(200, out);
   }
   if (p[2] === "tokens") {
     if (!p[3] && m === "GET") return json(200, mine("personal"));
@@ -237,6 +260,11 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
       if (!name || scopes.length === 0 || scopes.some((s) => !FULL.includes(s))) {
         return json(422, { detail: "A name and at least one scope are required" });
       }
+      const days = input.expires_in_days === undefined ? 90 : input.expires_in_days;
+      if (days !== null && ![30, 90, 365].includes(days)) {
+        return json(422, { detail: "expires_in_days is 30, 90, 365 or null" });
+      }
+      const created = ctx.now();
       const token: TokenRow = {
         id: ctx.uuid(),
         name,
@@ -245,10 +273,10 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
         user_id: me.id,
         owner_email: me.email,
         scopes,
-        created_at: ctx.now(),
+        created_at: created,
         last_used_at: null,
         revoked_at: null,
-        expires_at: null,
+        expires_at: days === null ? null : new Date(Date.parse(created) + days * 86_400_000).toISOString(),
         run_id: null,
         client_id: null,
       };

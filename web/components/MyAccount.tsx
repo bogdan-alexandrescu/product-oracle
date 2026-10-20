@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 
 import { ActedCell, SETTLING, useActed } from "@/components/account/acted";
 import { ConfirmDialog } from "@/components/account/ConfirmDialog";
-import { Scopes, TokenStatus, tokenState, when } from "@/components/ApiTokensSettings";
+import { Expiry, expiryText, Scopes, TokenStatus, tokenState, when } from "@/components/ApiTokensSettings";
 import { ROLE_LABEL } from "@/components/MembersSettings";
 import { Field, INPUT } from "@/app/settings/_components/fields";
 import { Button } from "@/components/ds/Button";
@@ -14,6 +14,7 @@ import { DataTable, type Column } from "@/components/ds/DataTable";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { Inspector, InspectorRow, InspectorSection } from "@/components/ds/Inspector";
 import { Notice, Page, PageHeader, Panel, Split } from "@/components/ds/Layout";
+import { SegmentedControl } from "@/components/ds/SegmentedControl";
 import { api, ApiError, unwrap, type ApiToken, type McpClient, type MyAccount as Account } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -22,6 +23,17 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 /** "Password" or "Google". */
 const methodLabel = (m: Account["sign_in_methods"][number]) => (m === "google" ? "Google" : "Password");
 type Scope = "oracle:read" | "oracle:write";
+/** A new personal token's lifetime: the API takes 30, 90 or 365 days, or null (never). */
+type Lifetime = "30" | "90" | "365" | "never";
+const LIFETIMES: { value: Lifetime; label: string }[] = [
+  { value: "30", label: "30 days" },
+  { value: "90", label: "90 days" },
+  { value: "365", label: "1 year" },
+  { value: "never", label: "Never" },
+];
+const lifetimeDays = (l: Lifetime) => (l === "never" ? null : (Number(l) as 30 | 90 | 365));
+/** What a password change and Sign out everywhere also revoke (AC1). */
+const REVOKES_TOO = "your personal API tokens, every MCP client you authorized and the tokens of runs you started that are still going (the runs go on)";
 
 /** My account: every signed-in member's own sign-in, password, personal tokens, MCP clients. */
 export function MyAccount() {
@@ -37,6 +49,7 @@ export function MyAccount() {
   const account = accountQ.data;
   const liveClients = clientsQ.data?.filter((c) => tokenState(c) === "active").length;
   const liveTokens = tokensQ.data?.filter((t) => tokenState(t) === "active").length;
+  const refreshCredentials = () => Promise.all([tokensQ.reload(), clientsQ.reload()]);
 
   async function signOutEverywhere() {
     setSigningOut(true);
@@ -84,7 +97,7 @@ export function MyAccount() {
         status={
           <InfoTip label="your account" align="start" side="bottom">
             How you sign in, your password, and the credentials that act as you: personal API tokens and the MCP clients
-            you authorized.
+            you authorized. Changing your password or signing out everywhere revokes them all.
           </InfoTip>
         }
         action={
@@ -95,7 +108,7 @@ export function MyAccount() {
       />
       <Split inspector={inspector}>
         {accountQ.error && <Notice tone="error">{accountQ.error}</Notice>}
-        {account && <PasswordPanel account={account} />}
+        {account && <PasswordPanel account={account} onChanged={refreshCredentials} />}
         <TokensPanel query={tokensQ} />
         <ClientsPanel query={clientsQ} />
       </Split>
@@ -115,11 +128,18 @@ export function MyAccount() {
           {
             icon: "lock",
             text:
+              liveTokens === 1
+                ? "Your personal API token is revoked."
+                : `Your ${liveTokens ?? 0} personal API tokens are revoked.`,
+          },
+          {
+            icon: "lock",
+            text:
               liveClients === 1
                 ? "Your MCP client loses its access and refresh tokens."
                 : `Your ${liveClients ?? 0} MCP clients lose their access and refresh tokens.`,
           },
-          { icon: "check", text: "Your personal API tokens keep working; revoke them one by one." },
+          { icon: "runs", text: "Runs you started that are still going lose their tokens; the runs go on." },
           ...(account?.sign_in_methods.includes("google")
             ? [{ icon: "user" as const, text: "Google sign-in can sign a browser in again on its next visit." }]
             : []),
@@ -140,7 +160,7 @@ function AccountDetails({ account }: { account: Account }) {
   );
 }
 
-function PasswordPanel({ account }: { account: Account }) {
+function PasswordPanel({ account, onChanged }: { account: Account; onChanged: () => void }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [again, setAgain] = useState("");
@@ -173,6 +193,7 @@ function PasswordPanel({ account }: { account: Account }) {
       setCurrent("");
       setNext("");
       setAgain("");
+      onChanged();
     } catch (err) {
       setError(err instanceof ApiError && err.status === 429 ? `Too many attempts. ${err.message}` : errorMessage(err));
     } finally {
@@ -216,6 +237,9 @@ function PasswordPanel({ account }: { account: Account }) {
           {short && <span className="text-sm text-warn">At least {min} characters</span>}
           {mismatch && <span className="text-sm text-warn">The two new passwords differ</span>}
         </div>
+        <p className="col-span-full text-sm text-text2" data-testid="password-revokes">
+          Changing it signs out every other session and revokes {REVOKES_TOO}.
+        </p>
         {error && (
           <div className="col-span-full">
             <Notice tone="error">{error}</Notice>
@@ -223,7 +247,10 @@ function PasswordPanel({ account }: { account: Account }) {
         )}
         {done && (
           <div className="col-span-full">
-            <Notice tone="pass">Password changed. Every other session was signed out.</Notice>
+            <Notice tone="pass">
+              Password changed. Every other session was signed out; your personal API tokens, MCP clients and the tokens of
+              your runs still going were revoked.
+            </Notice>
           </div>
         )}
       </form>
@@ -234,9 +261,10 @@ function PasswordPanel({ account }: { account: Account }) {
 function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>> }) {
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<Scope[]>(["oracle:read"]);
+  const [lifetime, setLifetime] = useState<Lifetime>("90");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<{ name: string; secret: string } | null>(null);
+  const [created, setCreated] = useState<{ name: string; secret: string; expiresAt?: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState<ApiToken | null>(null);
   const [revoking, setRevoking] = useState(false);
@@ -249,9 +277,9 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
     setPending(true);
     setError(null);
     try {
-      const out = await unwrap(api.POST("/v1/me/tokens", { body: { name: name.trim(), scopes } }));
+      const out = await unwrap(api.POST("/v1/me/tokens", { body: { name: name.trim(), scopes, expires_in_days: lifetimeDays(lifetime) } }));
       query.setData((prev) => [...(prev ?? []), out.token]);
-      setCreated({ name: out.token.name, secret: out.secret });
+      setCreated({ name: out.token.name, secret: out.secret, expiresAt: out.token.expires_at });
       setCopied(false);
       setName("");
     } catch (err) {
@@ -280,11 +308,20 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
   const toggle = (s: Scope) => setScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s].sort() as Scope[]));
   const rows = query.data ? [...query.data].reverse() : undefined;
   const columns: Column<ApiToken>[] = [
-    { key: "name", header: "Name", cell: (t) => <span className="truncate font-medium">{t.name}</span> },
-    { key: "scopes", header: "Scopes", width: "22%", hideOnPhone: true, cell: (t) => <Scopes scopes={t.scopes} /> },
-    { key: "created", header: "Created", width: "104px", hideOnPhone: true, cell: (t) => when(t.created_at) },
+    {
+      key: "name",
+      header: "Name",
+      cell: (t) => (
+        <span className="truncate font-medium" title={`${t.name} · created ${formatDate(t.created_at)}`}>
+          {t.name}
+        </span>
+      ),
+    },
+    { key: "scopes", header: "Scopes", width: "20%", hideOnPhone: true, cell: (t) => <Scopes scopes={t.scopes} /> },
     { key: "used", header: "Last used", width: "104px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
-    { key: "status", header: "Status", width: "140px", cell: (t) => <TokenStatus t={t} /> },
+    // Created is in the name's title: the expiry matters more on one line.
+    { key: "expires", header: "Expiry", width: "164px", cell: (t) => <Expiry t={t} /> },
+    { key: "status", header: "Status", width: "128px", cell: (t) => <TokenStatus t={t} /> },
     {
       key: "action",
       header: <span className="sr-only">Actions</span>,
@@ -317,7 +354,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
       tools={
         <InfoTip label="personal tokens" align="end">
           A personal token acts as you from scripts and agents. Read only acts as a viewer; with write it has your role.
-          The secret is shown once, when you create it.
+          The secret is shown once, when you create it. It expires after the time you choose; an expired token is refused.
         </InfoTip>
       }
     >
@@ -336,6 +373,10 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
             ))}
           </div>
         </fieldset>
+        <fieldset className="flex min-w-0 flex-col">
+          <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Expires after</legend>
+          <SegmentedControl label="Expires after" items={LIFETIMES} value={lifetime} onChange={setLifetime} />
+        </fieldset>
         <Button type="submit" variant="solid" icon="plus" disabled={pending || !name.trim() || scopes.length === 0}>
           {pending ? "Creating…" : "Create token"}
         </Button>
@@ -350,6 +391,9 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-accent-ink">{created.name}</span>
             <Chip kind="warn">Shown once</Chip>
+            <span className="text-sm text-text2" data-testid="new-token-expiry">
+              {expiryText(created.expiresAt)}
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <code data-testid="new-token-secret" className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 font-mono text-[13px] break-all text-text">
