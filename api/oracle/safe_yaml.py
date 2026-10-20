@@ -26,6 +26,7 @@ import contextvars
 import functools
 import math
 import re
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -109,6 +110,8 @@ class _LimitedComposer(Composer):
         if event.tag is not None:
             raise SafeYamlError(f"tags are not allowed (found {event.tag!r})", event.start_mark)
         self._nodes += 1
+        if not self._nodes % 128:
+            time.sleep(0)  # let other threads (the event loop) take the GIL
         if self._nodes > MAX_NODES:
             raise SafeYamlError(f"more than {MAX_NODES} values", event.start_mark)
         if isinstance(event, ScalarEvent):
@@ -136,6 +139,16 @@ def _check_scalar(event: ScalarEvent) -> None:
 
 
 class _LimitedConstructor(SafeConstructor):
+    def __init__(self) -> None:
+        super().__init__()
+        self._built = 0
+
+    def construct_object(self, node, deep=False):
+        self._built += 1
+        if not self._built % 128:
+            time.sleep(0)  # let other threads (the event loop) take the GIL
+        return super().construct_object(node, deep=deep)
+
     def construct_mapping(self, node, deep=False):
         if isinstance(node, MappingNode):
             seen: set[Any] = set()
