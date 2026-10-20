@@ -442,19 +442,18 @@ class GoogleDocsConnector:
             if not relist:
                 # Nothing under the picked folders or docs changed: report what the last
                 # listing found, read the picked docs not pulled in yet, keep the rest.
-                notes = list(cursor.get("notes") or [])
                 listing["changes"] = next_token
-                for note in notes:
-                    yield ItemUnavailable(**note)
+                recheck = [doc for doc in docs if doc not in known]
+                notes = [n for n in cursor.get("notes") or [] if n["external_id"] not in recheck]
                 current = {}
-                for doc in docs:
-                    if doc in known:
-                        continue
+                for doc in recheck:
                     file, reason = await self._picked(drive, doc)
                     if reason:
-                        yield ItemUnavailable(external_id=doc, reason=reason)
+                        notes.append({"external_id": doc, "reason": reason})
                     else:
                         current[doc] = file
+                for note in notes:
+                    yield ItemUnavailable(**note)
             else:
                 if folders:
                     # Read before listing, so what changes while it runs is seen next time.

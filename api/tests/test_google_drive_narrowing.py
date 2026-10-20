@@ -390,6 +390,25 @@ async def test_unchanged_folders_are_not_listed_again(tenant_id, drive):
     assert result["upserted"] == 1
 
 
+async def test_an_unreadable_picked_doc_is_reported_once_and_read_again_later(tenant_id, drive):
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    drive.doc(DOC_B, "B")
+    pat, source = await _setup(tenant_id, drive, {"folders": [FOLDER], "docs": [DOC_B]})
+    drive.unshare(DOC_B)
+    await _sync(pat, source)  # listed again: B is gone, reported and deleted
+    drive.unrelated_change()
+    drive.calls.clear()
+    result = await _sync(pat, source)
+    assert "files" not in drive.calls  # the folders were not listed again
+    assert [u["external_id"] for u in result["source"]["unavailable_items"]] == [DOC_B]
+
+    drive.gone.discard(DOC_B)  # shared again; Drive's log says nothing about it
+    result = await _sync(pat, source)
+    assert result["source"]["unavailable_items"] == []
+    assert await _live(tenant_id, source["id"]) == {IN_FOLDER, DOC_B}
+
+
 async def test_folders_are_listed_again_after_a_while(tenant_id, drive, monkeypatch):
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
