@@ -145,6 +145,9 @@ class DateMarkOut(BaseModel):
     label: str | None = None
     # The references of the bases that support it (or, withdrawn, that did).
     bases: list[str] = []
+    # Where it is written: the front matter title (``section_key`` is ""), a section's
+    # heading or its body.
+    where: Literal["title", "heading", "body"] = "body"
 
 
 class VersionOut(VersionSummary):

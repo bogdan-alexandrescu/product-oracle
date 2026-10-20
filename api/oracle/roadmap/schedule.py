@@ -87,15 +87,25 @@ async def bases_with_status(
     db: AsyncSession, prd_document_id: uuid.UUID | None, status: str
 ) -> list[Basis]:
     """The bases of this PRD in ``status`` (verified or withdrawn), with their scope."""
+    return (await bases_by_status(db, prd_document_id, (status,)))[status]
+
+
+async def bases_by_status(
+    db: AsyncSession, prd_document_id: uuid.UUID | None, statuses: Iterable[str]
+) -> dict[str, list[Basis]]:
+    """The bases of this PRD in each of ``statuses``, with their scope: one query for the
+    bases and at most one for the tracker records their tracker keys are matched to."""
     from oracle.roadmap.models import ProductTrack, TrackerRecord
 
+    statuses = tuple(statuses)
+    out: dict[str, list[Basis]] = {s: [] for s in statuses}
     if prd_document_id is None:
-        return []
+        return out
     rows = list(
         await db.scalars(
             select(ScheduleBasis)
             .where(
-                ScheduleBasis.status == status,
+                ScheduleBasis.status.in_(statuses),
                 ScheduleBasis.prd_document_id == prd_document_id,
             )
             .order_by(ScheduleBasis.supports_date, ScheduleBasis.reference)
@@ -117,14 +127,13 @@ async def bases_with_status(
             )
         ).all():
             matched.setdefault(ref, set()).add(key)
-    out = []
     for r in rows:
         scope: frozenset[str] | None = None
         if r.item_key:
             scope = frozenset({r.item_key})
         elif r.tracker_key:
             scope = frozenset(matched.get(r.tracker_key, ()))
-        out.append(
+        out[r.status].append(
             Basis(
                 r.id,
                 r.kind,

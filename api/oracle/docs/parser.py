@@ -31,6 +31,14 @@ CITATION_RE = re.compile(r"\[c:([^\]\s]+)\]")
 CITATION_STRIP_RE = re.compile(r"[ \t]*\[c:[^\]\s]+\]")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
+# The markers an export writes after a roadmap date that rests on no verified basis
+# (oracle.roadmap.doc_dates.annotate_markdown): dropped on import, so an exported body
+# imports as the text it was exported from.
+DATE_MARK_COMMENT_RE = re.compile(
+    r"[ \t]?(?:<!-- oracle: date (?:unverified|withdrawn) -->"
+    r"|# oracle: date (?:unverified|withdrawn)$)",
+    re.M,
+)
 # A draft is at most this large (POST /versions refuses a larger body with 413).
 MAX_DRAFT_BYTES = 1_000_000
 FRONT_MATTER_SCALAR_CHARS = 100_000
@@ -379,7 +387,7 @@ def parse_draft(markdown: str) -> ParsedDraft:
                 )
             ]
         )
-    text = normalize(markdown)
+    text = normalize(DATE_MARK_COMMENT_RE.sub("", markdown))
     problems: list[ImportProblem] = []
 
     yaml_text, body, offset = split_front_matter(text)

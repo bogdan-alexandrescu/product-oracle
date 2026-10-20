@@ -53,6 +53,7 @@ ROADMAP_MD = """\
 document: checkout-redesign-roadmap
 title: Checkout roadmap
 kind: roadmap
+prd: {document: checkout-redesign, version: 1}
 template: now-next-later
 template_version: "1"
 theme: roadmap-board

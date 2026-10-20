@@ -131,12 +131,17 @@ async def get_version(doc: str, n: int, db: TenantDB) -> VersionOut:
     responses={200: {"content": {"text/markdown": {"schema": {"type": "string"}}}}},
 )
 async def get_version_markdown(doc: str, n: int, db: TenantDB) -> PlainTextResponse:
+    """The version's markdown as stored; a roadmap's date that rests on no verified basis
+    now has ``<!-- oracle: date unverified -->`` (or ``date withdrawn``) after it, which
+    an import drops."""
     try:
         document = await service.get_document_or_404(db, doc)
         version = await service.get_version_row(db, document, n)
     except service.NotFoundError as exc:
         raise _not_found(exc) from exc
-    return PlainTextResponse(version.markdown, media_type="text/markdown; charset=utf-8")
+    # A roadmap's flagged dates carry an HTML comment after each (O4 'document dates').
+    markdown, _ = await service.version_markdown(db, version)
+    return PlainTextResponse(markdown, media_type="text/markdown; charset=utf-8")
 
 
 @router.get("/{doc}/diff", response_model=DiffOut)

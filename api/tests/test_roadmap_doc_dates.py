@@ -72,6 +72,8 @@ def test_dates_are_found_in_the_text_not_in_sources_links_or_horizons():
         ("2026-11-30", date(2026, 11, 30)),
         ("Dec 15, 2026", date(2026, 12, 15)),
         ("3rd January 2027", date(2027, 1, 3)),
+        # Round 4: a date a reader sees is a date, even after a key and a hyphen.
+        ("2026-11-30", date(2026, 11, 30)),
     ]
     md = with_line("See [the plan](https://example.com/2026-12-01/plan).")
     md = md.replace("- Beta date: ENG-412 estimate [c:c1]", "- Retrieved 2026-10-01 [c:c1]")
@@ -126,6 +128,10 @@ async def test_a_person_s_import_refuses_an_unverified_date(client, owner, runti
 async def test_a_manual_roadmap_without_a_prd_refuses_any_date(client, owner):  # noqa: F811
     _, auth = owner
     md = ROADMAP_MD.replace("document: checkout-redesign-roadmap", "document: loose-roadmap")
+    # No PRD of its own (no provenance, no track, no ``prd:``): a PRD its text links to
+    # is not its PRD.
+    md = md.replace("prd: {document: checkout-redesign, version: 1}\n", "")
+    assert "/documents/checkout-redesign/v/1" in md
     resp = await push(client, auth, md, "loose-roadmap")
     assert resp.status_code == 422 and _codes(resp) == ["unverified_date"]
     assert "none is known" in resp.json()["errors"][0]["message"]
@@ -159,9 +165,10 @@ async def test_a_run_s_import_marks_an_unverified_date(client, owner, runtime): 
     assert warnings[0]["section_keys"] == ["now-payment-step"]
     marks = {(m["text"], m["status"], m["label"]) for m in version["date_marks"]}
     assert marks == {("2026-11-30", "verified", None), ("2026-12-15", "unverified", "unverified")}
-    # The text is stored as written.
+    # The text is stored as written; the markdown carries a comment after the date.
     md = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
-    assert "GA on 2026-12-15." in md and "unverified" not in md
+    assert "GA on 2026-12-15 <!-- oracle: date unverified -->." in md
+    assert "2026-11-30 <!--" not in md
 
 
 # --------------------------------------------------------------------------- withdrawal
@@ -189,10 +196,13 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
     assert version["date_marks"] == [
         {"section_key": "now-payment-step", "text": "2026-11-30", "date": "2026-11-30",
-         "status": "withdrawn", "label": "date withdrawn", "bases": ["ENG-412"]}
+         "status": "withdrawn", "label": "date withdrawn", "bases": ["ENG-412"],
+         "where": "body"}
     ]  # fmt: skip
-    # The approved text is not rewritten.
-    assert (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text == before
+    # The approved text is not rewritten: the markdown carries a comment after the date,
+    # which an import drops.
+    after = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
+    assert after == before.replace("2026-11-30.", "2026-11-30 <!-- oracle: date withdrawn -->.")
     assert BETA in before
     # Exports: HTML (and the PDF built from it), the themed full and brief layers.
     url = f"{VERSIONS}/1/export"
@@ -205,9 +215,10 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
         e["html"] for s in deck["slides"] for e in s["expand"]
     )
     assert "2026-11-30 <strong>[date withdrawn]</strong>" in text
-    # The markdown export is the stored text (a copy for editing), unchanged.
+    # The markdown export is the stored text (a copy for editing) with the comment.
     md = (await client.get(url, params={"format": "md"}, headers=auth)).text
     assert "[date withdrawn]" not in md
+    assert "Beta by 2026-11-30 <!-- oracle: date withdrawn -->." in md
 
     # A new verified basis for the date: the marker goes.
     await record(client, auth, "ENG-412", "2026-11-30")
