@@ -22,6 +22,12 @@ export type FirefliesConfig = {
   labels?: Record<string, string>;
 };
 
+// The most a source picks, and the longest label kept (as the API checks them:
+// MAX_SERIES, MAX_MEETINGS and MAX_LABEL in oracle/sources/connectors/fireflies.py).
+export const MAX_SERIES = 200;
+export const MAX_MEETINGS = 2000;
+const MAX_LABEL = 500;
+
 function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim() !== "") : [];
 }
@@ -73,7 +79,9 @@ export function firefliesConfigToSave(c: FirefliesConfig): Record<string, unknow
 }
 
 export function firefliesReady(c: FirefliesConfig): boolean {
-  return c.mode === "all" || c.series.length + c.meetings.length > 0;
+  if (c.mode === "all") return true;
+  const picked = c.series.length + c.meetings.length;
+  return picked > 0 && c.series.length <= MAX_SERIES && c.meetings.length <= MAX_MEETINGS;
 }
 
 function shortDay(day: string): string {
@@ -237,6 +245,9 @@ export function FirefliesPicker({
   const listedIds = new Set(meetings.rows.map((m) => m.id));
   const earlier = query ? [] : value.meetings.filter((id) => !listedIds.has(id));
 
+  const seriesFull = value.series.length >= MAX_SERIES;
+  const meetingsFull = value.meetings.length >= MAX_MEETINGS;
+
   function toggleSeries(s: Series, on: boolean) {
     const nextSeries = on ? [...value.series, s.key] : value.series.filter((k) => k !== s.key);
     // A meeting picked on its own is covered once its series is picked.
@@ -244,14 +255,14 @@ export function FirefliesPicker({
     set({
       series: nextSeries,
       meetings: on ? value.meetings.filter((id) => !covered.has(id)) : value.meetings,
-      labels: { ...labels, [s.key]: s.title },
+      labels: { ...labels, [s.key]: s.title.slice(0, MAX_LABEL) },
     });
   }
 
   function toggleMeeting(m: { id: string; title: string }, on: boolean) {
     set({
       meetings: on ? [...value.meetings, m.id] : value.meetings.filter((id) => id !== m.id),
-      labels: { ...labels, [m.id]: m.title },
+      labels: { ...labels, [m.id]: m.title.slice(0, MAX_LABEL) },
     });
   }
 
@@ -339,6 +350,11 @@ export function FirefliesPicker({
             {series.error && <Notice tone="error">{series.error}</Notice>}
             {!series.data && !series.error && <span className="block h-11 animate-pulse rounded-button bg-surface2" aria-busy />}
             {series.data && seriesRows.length === 0 && <p className="px-1 text-[15px] text-text2">No recurring meetings</p>}
+            {seriesFull && (
+              <Notice testId="fireflies-series-cap">
+                {MAX_SERIES} series picked, the most a source takes: unpick one to pick another.
+              </Notice>
+            )}
             {seriesRows.length > 0 && (
               <ul className={LIST} aria-label="Series">
                 {seriesRows.map((s) => (
@@ -348,6 +364,7 @@ export function FirefliesPicker({
                         type="checkbox"
                         className={CHECK}
                         checked={pickedSeries.has(s.key)}
+                        disabled={seriesFull && !pickedSeries.has(s.key)}
                         onChange={(e) => toggleSeries(s, e.target.checked)}
                         aria-label={s.title}
                       />
@@ -379,6 +396,12 @@ export function FirefliesPicker({
               className={INPUT}
             />
             {meetings.error && <Notice tone="error">{meetings.error}</Notice>}
+            {meetingsFull && (
+              <Notice testId="fireflies-meetings-cap">
+                {MAX_MEETINGS.toLocaleString("en-US")} meetings picked, the most a source takes: unpick one, or pick its
+                series instead.
+              </Notice>
+            )}
             <div className={LIST} role="group" aria-label="Meetings" aria-busy={meetings.loading}>
               {earlier.length > 0 && (
                 <MeetingGroup heading="Picked earlier" id={`${ids}-earlier`}>
@@ -405,6 +428,7 @@ export function FirefliesPicker({
                           .join(" · ")}
                         checked={bySeries || pickedMeetings.has(m.id)}
                         bySeries={bySeries}
+                        full={meetingsFull && !pickedMeetings.has(m.id)}
                         onChange={(on) => toggleMeeting(m, on)}
                       />
                     );
@@ -446,12 +470,15 @@ function MeetingRow({
   meta,
   checked,
   bySeries = false,
+  full = false,
   onChange,
 }: {
   title: string;
   meta?: string;
   checked: boolean;
   bySeries?: boolean;
+  /** At the meetings cap: an unpicked meeting cannot be picked. */
+  full?: boolean;
   onChange: (on: boolean) => void;
 }) {
   return (
@@ -460,7 +487,7 @@ function MeetingRow({
         type="checkbox"
         className={CHECK}
         checked={checked}
-        disabled={bySeries}
+        disabled={bySeries || (full && !checked)}
         onChange={(e) => onChange(e.target.checked)}
         aria-label={title}
       />

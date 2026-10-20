@@ -525,7 +525,7 @@ async def test_a_full_pass_on_a_broken_answer_fails_and_deletes_nothing(response
         {"mode": "all", "date_to": True},
         {"mode": "all", "date_from": 1.5},
         {"from_date": False},
-        {"mode": "all", "labels": {f"m{i}": "Meeting" for i in range(1001)}},
+        {"mode": "all", "labels": {f"m{i}": "Meeting" for i in range(fireflies.MAX_LABELS + 1)}},
     ],
 )
 def test_out_of_range_or_mistyped_values_are_config_errors(config):

@@ -242,6 +242,8 @@ function FirefliesEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
         </InfoTip>
       </div>
     </form>
+  );
+}
 
 /** A Notion source whose connection is gone: its pages can only be picked through a connection. */
 function ReconnectNotion({ picked }: { picked: number }) {

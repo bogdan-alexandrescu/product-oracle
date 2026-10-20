@@ -182,3 +182,35 @@ test("fireflies picker: typing a date makes one request per list, not one per ke
   expect(made.filter((c) => c.startsWith("series"))).toEqual(["series?from=2026-09-01"]);
   expect(made.filter((c) => c.startsWith("meetings"))).toEqual(["meetings?from=2026-09-01"]);
 });
+
+test("fireflies picker: at the most series a source takes, no more can be picked", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/sources");
+  await expect(page.getByRole("listitem", { name: "Customer calls" })).toBeVisible();
+  // A source saved with 200 picked series (the API's MAX_SERIES).
+  await page.evaluate(() => {
+    const key = "po-mock-sources-v1";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    const calls = db.sources.find((s: { name: string }) => s.name === "Customer calls");
+    const series = Array.from({ length: 200 }, (_, i) => `cal:picked${i}`);
+    const labels = Object.fromEntries(series.map((k, i) => [k, `Picked series ${i}`]));
+    calls.config = { mode: "selected", series, meetings: [], labels };
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.reload();
+  const row = page.getByRole("listitem", { name: "Customer calls" });
+  await expect(row.getByTestId("fireflies-included")).toContainText("200 series");
+  await row.getByRole("button", { name: "More actions for Customer calls" }).click();
+  await row.getByRole("menuitem", { name: "Edit meetings" }).click();
+  const picker = row.getByTestId("fireflies-picker");
+  await expect(picker.getByTestId("fireflies-series-cap")).toContainText("200 series picked, the most a source takes");
+  const list = picker.getByRole("list", { name: "Series" });
+  await expect(list.getByLabel("AI Agents daily standup")).toBeDisabled();
+  await expect(list.getByLabel("AI Agents daily standup")).not.toBeChecked();
+  // Unpicking one frees a place (a picked series the list no longer shows then goes).
+  await list.getByLabel("Picked series 0", { exact: true }).click();
+  await expect(list.getByLabel("Picked series 0", { exact: true })).toHaveCount(0);
+  await expect(picker.getByTestId("fireflies-series-cap")).toHaveCount(0);
+  await expect(list.getByLabel("AI Agents daily standup")).toBeEnabled();
+  await expect(row.getByRole("button", { name: "Save meetings" })).toBeEnabled();
+});
