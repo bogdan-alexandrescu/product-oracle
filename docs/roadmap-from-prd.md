@@ -82,3 +82,33 @@ the same. The feedback loop keeps a roadmap's provenance on its next draft.
 
 `feedback_loop` works on PRDs and roadmaps: the next draft is the document's kind
 (`roadmap.md` for a roadmap, in the same template), imported as its next version.
+
+## Roadmap items, alignment and product tracks (CR-11)
+
+Lane `v2-roadmap` extends this flow without replacing it: the five roadmap templates, the
+two segments and checkpoints, the `roadmap_review` approval loop, brief/full, Present and
+every export work as before. What it adds (code in `api/oracle/roadmap/`, migration
+`0016_roadmap`, contract in
+[product-oracle-v2/05-artifact-contracts.md §8](product-oracle-v2/05-artifact-contracts.md)):
+
+- **Items as rows.** When `roadmap.md` is imported, the run's `roadmap_items.yaml` becomes
+  one `roadmap_items` row per item of that roadmap version, traced to the exact PRD
+  version, section (at its hash), feature, requirements and blockers, with validation
+  gates and economics. `GET /v1/roadmaps/{doc}/items` (`view=brief|full`).
+- **Optional item fields:** `feature`, `requirements`, `blockers` (baseline keys),
+  `validation_gates` (`[{name, criterion}]`) and `economics` (a mapping).
+- **Dates need a verified basis (O4).** A milestone date is accepted only when its
+  `date_source` names a verified schedule basis (`POST /v1/schedule-bases`: an estimate,
+  capacity figure or commitment an approver recorded) that supports exactly that date.
+  Otherwise `items_check` reports `unverified_date` (the run waits at its checkpoint, or
+  fails with the checkpoint off), and a stored item keeps the milestone's name but never
+  the date. The prompt lists the verified bases; with none, it asks for horizons only.
+- **Staleness.** A new PRD version that changes an item's section, or a change to its
+  feature, requirements or blockers, marks the item `potentially_stale` (with reasons and
+  the causing change). `POST /v1/roadmaps/{doc}/items/staleness` reviews or reconciles.
+- **Alignment.** `GET /v1/roadmaps/{doc}/alignment` compares items with engineering status
+  read back from a tracker (`POST /v1/tracker/records`), read-only. Two-way tracker sync
+  is off (`ORACLE_TRACKER_TWO_WAY_ENABLED`); a push is refused and nothing is written.
+- **Product tracks.** An accepted PRD starts a track (`/v1/tracks`), which follows its
+  roadmap: health, the next milestone, items at risk (blocked, stale, slipping) and drift.
+  `POST /v1/tracks/{id}/roadmap-run` drafts the next `prd_to_roadmap` run.

@@ -20,6 +20,7 @@ import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeQuality, seedQuality, type QualityDb } from "./quality";
+import { routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeTrace } from "./trace";
 import { routeV2, seedV2, type V2Db } from "./v2";
 
@@ -63,6 +64,8 @@ export interface Db {
   modules?: ModulesDb;
   /** Blocker strategies (./blockers.ts) on the v2 rows; absent in older saved data. */
   blockers?: BlockersDb;
+  /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
+  roadmap?: RoadmapDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -987,6 +990,20 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (blockers) return blockers;
   const v2 = routeV2(v2Db, req, p, q);
   if (v2) return v2;
+
+  // Roadmap alignment and product tracks (CR-11).
+  const roadmapCtx: RoadmapContext = { userId: me.id, role: me.role, documents: db.documents, versions: db.versions };
+  db.roadmap ??= seedRoadmap(roadmapCtx);
+  const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
+  if (roadmapRes) return roadmapRes;
+  if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
+    if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
+    const run = trackRunBody(roadmapCtx, db.roadmap, p[2]);
+    if (!run) return notFound("Track");
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    const forwarded = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(run), headers: { "Content-Type": "application/json" } });
+    return (await routeRuns({ ...runsContext(db), db: db.runs }, forwarded, ["v1", "runs"]))!;
+  }
 
   const handled = await laneF(db, req, p, m);
   if (handled) return handled;
