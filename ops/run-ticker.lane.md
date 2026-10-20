@@ -10,7 +10,7 @@ THE RUN TICKER for Product Oracle (decision W3 in docs/questions.md, owner 2026-
 Oracle's cloud runs only advance when something calls tick, and nothing does, because SwarmCloud never calls Oracle back. Build the endpoint that a Cloud Scheduler job calls every minute.
 
 1. `POST /internal/scheduler/tick`, outside /v1 and excluded from OpenAPI, so no MCP tool is generated (like the OAuth endpoints).
-2. Auth: `Authorization: Bearer <Google ID token>` only. Verify it yourself with PyJWT against Google's published certs (https://www.googleapis.com/oauth2/v3/certs, cached and refreshed, following how auth/iap.py fetches its keys):
+2. Auth: only a Google ID token, sent in the Authorization header with the bearer scheme. Verify it yourself with PyJWT against Google's published certs (https://www.googleapis.com/oauth2/v3/certs, cached and refreshed, following how auth/iap.py fetches its keys):
    - the RS256 signature;
    - issuer `accounts.google.com` or `https://accounts.google.com`;
    - audience equal to ORACLE_TICKER_AUDIENCE;
