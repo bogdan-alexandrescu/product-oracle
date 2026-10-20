@@ -87,7 +87,8 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
     assert script.get_revision("0014_quality").down_revision == "0013"
     assert script.get_revision("0014_usage_retry_at").down_revision == "0014_quality"
     assert script.get_revision("0014_trace").down_revision == "0014_usage_retry_at"
-    assert script.get_revision("0014_blockers_snapshot").down_revision == "0014_trace"
+    assert script.get_revision("0015_section_table_rows").down_revision == "0014_trace"
+    assert script.get_revision("0014_blockers_snapshot").down_revision == "0015_section_table_rows"
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):
