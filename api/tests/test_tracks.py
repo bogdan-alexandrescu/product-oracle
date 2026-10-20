@@ -440,3 +440,23 @@ async def test_track_routes_are_company_scoped(client, owner, runtime):  # noqa:
     )  # fmt: skip
     assert resp.status_code == 422
     assert (await client.get("/v1/tracker/records", headers=other)).json() == []
+
+
+async def test_patches_refuse_nulls_and_duplicate_names(client, owner, runtime):  # noqa: F811
+    _, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    track = await track_of(client, auth)
+    url = f"/v1/tracks/{track['id']}"
+    for field in ("status", "title"):
+        resp = await client.patch(url, json={"lock_version": 1, field: None}, headers=auth)
+        assert resp.status_code == 422, resp.text
+    ms = f"{url}/milestones"
+    ga = (await client.post(ms, json={"name": "GA", "horizon": "later"}, headers=auth)).json()
+    await client.post(ms, json={"name": "Beta"}, headers=auth)
+    patch = f"/v1/milestones/{ga['id']}"
+    for field in ("horizon", "name", "status"):
+        resp = await client.patch(patch, json={"lock_version": 1, field: None}, headers=auth)
+        assert resp.status_code == 422, (field, resp.text)
+    resp = await client.patch(patch, json={"lock_version": 1, "name": "Beta"}, headers=auth)
+    assert resp.status_code == 409

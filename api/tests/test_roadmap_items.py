@@ -272,3 +272,78 @@ async def test_items_need_a_roadmap_built_from_a_prd_version(client, owner):  # 
         f"/v1/roadmaps/{ROADMAP}/versions/1/items", json={"yaml": ITEMS}, headers=auth
     )
     assert resp.status_code == 422 and "built from no PRD version" in resp.json()["detail"]
+
+
+async def test_odd_yaml_values_never_abort_an_import(client, owner, runtime):  # noqa: F811
+    """Review fixes: a date inside economics or priority is stored as text; a malformed
+    optional field in a run's file leaves that field out and never aborts the roadmap
+    version's import."""
+    _, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    dated = ITEMS.replace(
+        "    prd_section: s-5-2\n",
+        "    prd_section: s-5-2\n    economics: {review_on: 2026-12-01}\n",
+    )
+    resp = await client.put(
+        f"/v1/roadmaps/{ROADMAP}/versions/1/items", json={"yaml": dated}, headers=auth
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["items"][1]["economics"]["declared"] == {"review_on": "2026-12-01"}
+
+    # A run whose items file has a malformed optional field: the checkpoint shows the
+    # problem, a reviewer approves anyway, and the roadmap version still imports.
+    bad = ITEMS.replace(
+        "    prd_section: s-5-2\n", "    prd_section: s-5-2\n    validation_gates: 3\n"
+    )
+    runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": bad})]
+    runtime.script["roadmap_draft"] = [
+        Outcome(artifacts={"roadmap.md": ROADMAP_MD.replace("payment first", "payment now")})
+    ]
+    run = await start(
+        client, auth,
+        await create(client, auth, source=PRD, knobs={"checkpoints": {"roadmap_review": False}}),
+    )  # fmt: skip
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    cp = next(c for c in run["checkpoints"] if c["status"] == "pending")
+    assert [p["code"] for p in cp["payload"]["items_check"]["problems"]] == [
+        "invalid_validation_gates"
+    ]
+    await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "approved"},
+        headers=auth,
+    )
+    await tick(client, auth)
+    assert (await get(client, auth, run["id"]))["status"] == "succeeded"
+    out = (await client.get(URL, headers=auth)).json()
+    assert out["roadmap"]["version"] == 2
+    assert [i["item_key"] for i in out["items"]] == ["payment-step", "shipping-step"]
+    assert out["items"][1]["validation_gates"] == []
+
+
+async def test_carried_items_keep_a_date_only_while_its_basis_holds(client, owner, runtime):  # noqa: F811
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    bases = (await client.get("/v1/schedule-bases", headers=auth)).json()
+    (eng,) = [b for b in bases if b["reference"] == "ENG-412"]
+    resp = await client.post(
+        f"/v1/schedule-bases/{eng['id']}/withdraw", json={"reason": "Re-estimated"}, headers=auth
+    )
+    assert resp.status_code == 200
+    pay = (await client.get(URL, headers=auth)).json()["items"][0]
+    assert pay["freshness"] == "potentially_stale"
+    assert pay["stale_reasons"] == ["the schedule basis ENG-412 was withdrawn"]
+    # Version 1 keeps its record (approved content is never rewritten) ...
+    assert pay["milestone"]["date"] == "2026-11-30"
+    # ... but a version carried forward does not inherit a date nothing supports.
+    resp = await client.post(
+        f"/v1/documents/{ROADMAP}/versions",
+        content=ROADMAP_MD.replace("payment first", "payment now").encode(),
+        headers={**auth, "Content-Type": "text/markdown"},
+    )
+    assert resp.status_code in (200, 201), resp.text
+    pay = (await client.get(URL, headers=auth)).json()["items"][0]
+    assert pay["milestone"]["date"] is None and pay["milestone"]["refused_date"] == "2026-11-30"

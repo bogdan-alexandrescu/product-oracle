@@ -139,20 +139,20 @@ async def test_review_and_reconcile(client, owner, runtime):  # noqa: F811
     )
     assert resp.status_code == 403
 
-    # Reconciled against the latest *approved* PRD version: v2 is a draft, so the item
-    # keeps v1 until v2 is approved.
+    # Reconciled against the latest *approved* PRD version: v2 is a draft, so v1.
     resp = await client.post(
         ACT, json={"action": "reconcile", "reason": "Shipping estimate still fits"}, headers=auth
     )
     assert resp.status_code == 200, resp.text
     ship = (await items(client, auth))["shipping-step"]
     assert ship["freshness"] == "reconciled" and ship["note"] == "Shipping estimate still fits"
-    assert ship["prd"]["document"]["version"] == 1
+    assert ship["prd"]["document"]["version"] == 1 and ship["prd"]["reconciled_version"] == 1
+    built_hash = ship["prd"]["section_hash"]
 
     assert (
         await client.post(f"/v1/documents/{PRD}/versions/2/approve", headers=auth)
     ).status_code == 200
-    # Stale again (as a later change would make it); reconciling now re-anchors on v2.
+    # Stale again (as a later change would make it); reconciling now records v2.
     async with tenant_session(tenant_id) as s:
         row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
         row.freshness = "potentially_stale"
@@ -162,6 +162,15 @@ async def test_review_and_reconcile(client, owner, runtime):  # noqa: F811
     )
     assert resp.status_code == 200, resp.text
     ship = (await items(client, auth))["shipping-step"]
-    assert ship["prd"]["document"]["version"] == 2 and ship["prd"]["section_hash"]
+    # The trace stays as built (v1, its hash); what it was reconciled against is v2.
+    assert ship["prd"]["document"]["version"] == 1 and ship["prd"]["section_hash"] == built_hash
+    assert ship["prd"]["reconciled_version"] == 2
+    assert ship["prd"]["reconciled_section_hash"] not in (None, built_hash)
     anchor = resp.json()["changed"][0]["anchor_before"]
-    assert anchor["prd_version_id"] and anchor["prd_section_hash"]
+    assert anchor["version_id"] and anchor["section_hash"]
+
+    # A v3 that leaves 5.2 as v2 has it does not make the item stale again.
+    v3 = prd_v2().replace("- First-time buyers on mobile.", "- First-time buyers on phones.")
+    assert v3 != prd_v2()
+    assert (await import_draft(client, auth, v3)).status_code == 201
+    assert (await items(client, auth))["shipping-step"]["freshness"] == "reconciled"
