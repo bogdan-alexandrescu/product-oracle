@@ -66,3 +66,8 @@ async def provider_error(
             status.HTTP_409_CONFLICT, f"{message[:1].upper()}{message[1:]}: reconnect it"
         )
     return HTTPException(status.HTTP_502_BAD_GATEWAY, f"{name} could not be read: {error}")
+
+
+def unreachable(name: str) -> HTTPException:
+    """The provider could not be reached, or answered something that is not JSON."""
+    return HTTPException(status.HTTP_502_BAD_GATEWAY, f"{name} could not be reached: try again")

@@ -9,11 +9,12 @@ from datetime import datetime
 from typing import Annotated, Any
 from urllib.parse import parse_qs, urlparse
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from oracle.auth.deps import TenantDB
-from oracle.connections.browse import open_connection, provider_error
+from oracle.connections.browse import open_connection, provider_error, unreachable
 from oracle.connections.router import ProviderHttp, UserPrincipal
 from oracle.sources.base import ConnectorError
 from oracle.sources.connectors.github import API_URL, PER_PAGE, _Api
@@ -113,4 +114,6 @@ async def list_github_repos(
                 break
     except ConnectorError as e:
         raise await provider_error(db, conn, "GitHub", e) from None
+    except (httpx.HTTPError, ValueError):
+        raise unreachable("GitHub") from None
     return GithubRepoPage(repos=found, next_cursor=str(page) if page else None)

@@ -188,3 +188,16 @@ async def test_provider_down_is_a_bad_gateway(client, alice, conn, github):
     github.status = 500
     resp = await client.get(url(conn), headers=alice.headers)
     assert resp.status_code == 502
+
+
+async def test_github_unreachable_is_a_bad_gateway(client, alice, conn):
+    def down(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route", request=request)
+
+    use_provider_http(down)
+    try:
+        resp = await client.get(url(conn), headers=alice.headers)
+    finally:
+        clear_provider_http()
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "GitHub could not be reached: try again"

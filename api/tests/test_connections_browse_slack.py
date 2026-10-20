@@ -208,3 +208,16 @@ async def test_inactive_connection(client, tenant_id, alice, slack):
     resp = await client.get(url(expired), headers=alice.headers)
     assert resp.status_code == 409
     assert slack.calls == []
+
+
+async def test_slack_unreachable_is_a_bad_gateway(client, alice, conn):
+    def down(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route", request=request)
+
+    use_provider_http(down)
+    try:
+        resp = await client.get(url(conn), headers=alice.headers)
+    finally:
+        clear_provider_http()
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "Slack could not be reached: try again"
