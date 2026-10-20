@@ -448,6 +448,7 @@ async def import_draft(
     Raises :class:`DraftError` (422), :class:`NotFoundError` (404, ``doc`` is an
     unknown id) or :class:`ImportConflictError` (409, lost a concurrent import race).
     """
+    # Off the event loop, time-capped: the draft is untrusted text (oracle.safe_yaml).
     draft = await parse_draft_async(markdown)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template

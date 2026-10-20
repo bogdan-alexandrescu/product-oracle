@@ -1,328 +1,358 @@
-"""The one YAML loader for text Oracle did not write (drafts' front matter, baseline.yaml,
-templates, a run's roadmap_items.yaml).
+"""YAML for untrusted text: drafts' front matter, baseline.yaml, template bodies, run files.
 
-``yaml.safe_load`` is safe from code execution but not from cost: an alias shares its
-node, so a few hundred bytes expand to gigabytes once copied to JSON; a YAML 1.1 base-60
-integer (``1:1:1...``) is quadratic to build; a few hundred ``[`` overflow the composer's
-recursion; Python refuses ``int()`` of more than 4,300 digits. :func:`load` refuses all of
-that before a node is built, as a :class:`SafeYamlError` and never any other exception:
+The stock ``yaml.safe_load`` constructs no Python objects but is not cheap: a YAML 1.1
+base-60 number (``n: 1:1:1:...``) is quadratic to build, a thousand ``[`` exhaust the
+recursion limit, and anchors expand into billions of nodes. :func:`load` is a
+``safe_load`` without those:
 
-- no aliases or anchors, no explicit tags;
-- implicit types: null, booleans, plain decimal integers and floats of a bounded length,
-  ISO dates and timestamps (no base-60, octal, hex, binary or ``_`` forms: those stay
-  strings, ``1:30`` is text); the YAML 1.1 words ``yes/no/on/off`` are booleans only when
-  the caller asks (``yaml11_booleans``), else strings;
-- duplicate mapping keys are refused (stock YAML keeps the last one silently);
-- caps on the text, each value, nesting depth and node count; NaN and infinities refused.
+* anchors and aliases, explicit tags (``!x``, ``!!binary``, ``!<...>``) and directives
+  (``%TAG``, ``%YAML``) are refused;
+* numbers are plain decimals only (``42``, ``-1.5``, ``2.5e+3``): base-60 (``1:30``),
+  hex, octal and ``1_000`` stay strings, as does ``1e5`` (no dot: a string in YAML 1.1
+  too); ``.nan``, ``.inf`` and values that overflow (``1.0e+999``) are refused, and so is
+  a number of more than 30 digits;
+* booleans are ``true``/``false`` only: ``yes``, ``no``, ``on`` and ``off`` stay strings;
+* duplicate keys and non-printable characters are refused;
+* the input is at most ``ORACLE_YAML_MAX_BYTES`` (1 MiB), nested at most 32 deep, with
+  at most 50,000 nodes and scalars of at most 256 KiB.
 
-:func:`run_parse` runs a parse (or any CPU-bound check of agent or user text) off the event
-loop, on a small dedicated pool, at most ``PARSE_SECONDS``: a bad file is a refusal, never
-a stalled event loop.
+Every failure, including a ``RecursionError``/``ValueError``/``OverflowError`` from
+inside the loader, is one :class:`SafeYamlError` (a ``yaml.YAMLError``) whose ``problem``
+says what is wrong and whose ``code`` names it for a problem list (``duplicate_key``,
+``too_large``...). :func:`run_parse` runs a parse on a small dedicated thread pool, so a
+slow one never blocks the event loop; :func:`run_parse_within` also gives up after
+``PARSE_SECONDS`` (a run's roadmap files, a draft), as a :class:`ParseTimeout`.
 """
 
 import asyncio
+import contextvars
+import functools
 import math
 import re
-import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import yaml
+from yaml.composer import Composer
+from yaml.constructor import SafeConstructor
+from yaml.events import AliasEvent, DocumentStartEvent, ScalarEvent
+from yaml.nodes import MappingNode
+from yaml.resolver import Resolver
 
-MAX_TEXT_CHARS = 1_000_000
-MAX_SCALAR_CHARS = 20_000
+try:  # libyaml's event parser: the same events, much faster than the pure-Python one.
+    from yaml.cyaml import CParser as _EventParser
+
+    _PARSER_BASES: tuple[type, ...] = (_EventParser,)
+except ImportError:  # pragma: no cover - PyYAML built without libyaml
+    from yaml.parser import Parser
+    from yaml.reader import Reader
+    from yaml.scanner import Scanner
+
+    _PARSER_BASES = (Reader, Scanner, Parser)
+
+DEFAULT_MAX_BYTES = 1024 * 1024
 MAX_DEPTH = 32
 MAX_NODES = 50_000
+MAX_SCALAR_CHARS = 256 * 1024
 MAX_DIGITS = 30
-# A parse runs on this pool, at most this long (the whole wait, queue included).
+# run_parse_within waits at most this long for a parse (the whole wait, queue included).
 PARSE_SECONDS = 5.0
-PARSE_WORKERS = 4
+
+# What YAML's reader accepts (tab, LF, CR and printable Unicode); anything else is refused,
+# in the input and in the value of an escaped ("\x00") double-quoted scalar.
+_NON_PRINTABLE = re.compile("[^\x09\x0a\x0d\x20-\x7e\x85\xa0-퟿-�\U00010000-\U0010ffff]")
+_INT = re.compile(r"^[-+]?(?:0|[1-9][0-9]*)$")
+# YAML 1.1's decimal float (a dot; an exponent has a sign), as yaml.safe_load reads it:
+# so whatever yaml.safe_dump wrote unquoted as a string (1e5) is still a string here.
+_FLOAT = re.compile(r"^[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+][0-9]+)?$")
+_SPECIAL_FLOAT = re.compile(r"^[-+]?\.(?:inf|Inf|INF|nan|NaN|NAN)$")
+_INT_TAG = "tag:yaml.org,2002:int"
+_FLOAT_TAG = "tag:yaml.org,2002:float"
 
 
-class SafeYamlError(ValueError):
-    """The YAML was refused: ``code`` names why, ``line`` is 1-based when known."""
-
-    def __init__(self, code: str, message: str, line: int | None = None) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.line = line
-
-
-class ParseTimeout(SafeYamlError):
-    def __init__(self, name: str, seconds: float) -> None:
-        super().__init__(
-            "too_slow", f"{name} took more than {seconds:g} s to read; keep it small and plain"
-        )
-
-
-_BOOL_CORE = r"true|True|TRUE|false|False|FALSE"
-_BOOL_11 = r"yes|Yes|YES|no|No|NO|on|On|ON|off|Off|OFF"
-_INT = re.compile(r"^[-+]?(?:0|[1-9][0-9]{0,17})$")
-_FLOAT = re.compile(
-    r"^(?:[-+]?(?:[0-9]{1,18}\.[0-9]{0,18}|\.[0-9]{1,18})(?:[eE][-+]?[0-9]{1,3})?"
-    r"|[-+]?[0-9]{1,18}[eE][-+]?[0-9]{1,3}"
-    r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"
-)
-_NULL = re.compile(r"^(?:~|null|Null|NULL|)$")
-_TIMESTAMP = re.compile(
-    r"^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}"
-    r"|[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:[Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}"
-    r"(?:\.[0-9]{0,9})?(?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::[0-9]{2})?))?)$"
-)
-# A plain scalar that looks like a number but has more digits than any count or score.
-_NUMBERISH = re.compile(
-    r"[-+]?[0-9][0-9_]*(?:\.[0-9_]*)?(?:[eE][-+]?[0-9]+)?|[-+]?[0-9][0-9_]*(?::[0-9_]+)+"
-)
-
-
-def _resolver(yaml11_booleans: bool) -> type[yaml.resolver.BaseResolver]:
-    class Resolver(yaml.resolver.BaseResolver):
-        pass
-
-    words = f"{_BOOL_CORE}|{_BOOL_11}" if yaml11_booleans else _BOOL_CORE
-    Resolver.add_implicit_resolver(
-        "tag:yaml.org,2002:bool",
-        re.compile(rf"^(?:{words})$"),
-        list("yYnNtTfFoO" if yaml11_booleans else "tTfF"),
-    )
-    Resolver.add_implicit_resolver("tag:yaml.org,2002:int", _INT, list("-+0123456789"))
-    Resolver.add_implicit_resolver("tag:yaml.org,2002:float", _FLOAT, list("-+0123456789."))
-    Resolver.add_implicit_resolver("tag:yaml.org,2002:null", _NULL, ["~", "n", "N", ""])
-    Resolver.add_implicit_resolver("tag:yaml.org,2002:timestamp", _TIMESTAMP, list("0123456789"))
-    return Resolver
-
-
-_RESOLVERS = {flag: _resolver(flag) for flag in (False, True)}
-
-
-def _loader_class(yaml11_booleans: bool) -> type:
-    resolver = _RESOLVERS[yaml11_booleans]
-
-    class Loader(
-        yaml.reader.Reader,
-        yaml.scanner.Scanner,
-        yaml.parser.Parser,
-        yaml.composer.Composer,
-        yaml.constructor.SafeConstructor,
-        resolver,
-    ):
-        """A safe loader without aliases, anchors, explicit tags or duplicate keys, with
-        a node budget and caps on value length and nesting depth, all checked before a
-        node is built."""
-
-        def __init__(self, stream: str, limits: "_Limits") -> None:
-            yaml.reader.Reader.__init__(self, stream)
-            yaml.scanner.Scanner.__init__(self)
-            yaml.parser.Parser.__init__(self)
-            yaml.composer.Composer.__init__(self)
-            yaml.constructor.SafeConstructor.__init__(self)
-            resolver.__init__(self)
-            self._limits = limits
-            self._nodes = 0
-            self._depth = 0
-
-        def compose_node(self, parent: Any, index: Any) -> Any:
-            lim = self._limits
-            event = self.peek_event()
-            line = event.start_mark.line + 1 + lim.line_offset
-            where = f"{line}:{event.start_mark.column + 1}"
-            if isinstance(event, yaml.AliasEvent) or getattr(event, "anchor", None):
-                raise SafeYamlError(
-                    "yaml_alias",
-                    f"{lim.name} uses a YAML anchor or alias ({where}); write each value "
-                    "out in full",
-                    line,
-                )
-            if getattr(event, "tag", None) not in (None, "!"):
-                raise SafeYamlError(
-                    "yaml_tag",
-                    f"{lim.name} uses the explicit YAML tag {event.tag} ({where}); write "
-                    "plain values",
-                    line,
-                )
-            self._nodes += 1
-            if self._nodes > lim.max_nodes:
-                raise SafeYamlError(
-                    "too_large", f"{lim.name} has more than {lim.max_nodes} YAML nodes", line
-                )
-            if isinstance(event, yaml.ScalarEvent):
-                _check_scalar(event.value, plain=event.implicit[0], where=where, lim=lim, line=line)
-                return super().compose_node(parent, index)
-            nested = isinstance(event, yaml.SequenceStartEvent | yaml.MappingStartEvent)
-            if nested:
-                self._depth += 1
-                if self._depth > lim.max_depth:
-                    raise SafeYamlError(
-                        "too_deep",
-                        f"{lim.name} nests lists or mappings more than {lim.max_depth} "
-                        f"levels deep ({where})",
-                        line,
-                    )
-            try:
-                return super().compose_node(parent, index)
-            finally:
-                if nested:
-                    self._depth -= 1
-
-        def construct_mapping(self, node: Any, deep: bool = False) -> Any:
-            if isinstance(node, yaml.MappingNode):
-                seen: set[Any] = set()
-                for key_node, _ in node.value:
-                    key = key_node.value if isinstance(key_node, yaml.ScalarNode) else None
-                    if key is None:
-                        continue
-                    ident = (key_node.tag, key)
-                    if ident in seen:
-                        line = key_node.start_mark.line + 1 + self._limits.line_offset
-                        raise SafeYamlError(
-                            "duplicate_key",
-                            f"{self._limits.name} has the key '{key}' twice in one mapping "
-                            f"(line {line}); write it once",
-                            line,
-                        )
-                    seen.add(ident)
-            return super().construct_mapping(node, deep=deep)
-
-    return Loader
-
-
-_LOADERS = {flag: _loader_class(flag) for flag in (False, True)}
-
-
-class _Limits:
-    __slots__ = ("name", "max_scalar_chars", "max_depth", "max_nodes", "line_offset")
+class SafeYamlError(yaml.YAMLError):
+    """Text :func:`load` refuses. ``problem`` says why; ``problem_mark`` (when known)
+    is where, 0-based like PyYAML's marks; ``code`` names the refusal for a problem list."""
 
     def __init__(
-        self, name: str, max_scalar_chars: int, max_depth: int, max_nodes: int, line_offset: int
-    ) -> None:
-        self.name = name
-        self.max_scalar_chars = max_scalar_chars
-        self.max_depth = max_depth
-        self.max_nodes = max_nodes
-        self.line_offset = line_offset
+        self,
+        problem: str,
+        mark: Any = None,
+        *,
+        show_mark: bool = True,
+        code: str = "invalid_yaml",
+    ):
+        self.problem = problem
+        self.code = code
+        self.problem_mark = mark
+        self._show_mark = show_mark
+        super().__init__(problem)
+
+    @property
+    def line(self) -> int | None:
+        """1-based line of the problem in the YAML text, when known."""
+        return self.problem_mark.line + 1 if self.problem_mark is not None else None
+
+    def __str__(self) -> str:
+        if self._show_mark and self.problem_mark is not None:
+            return (
+                f"{self.problem} (line {self.problem_mark.line + 1}, "
+                f"column {self.problem_mark.column + 1})"
+            )
+        return self.problem
 
 
-def _check_scalar(value: str, *, plain: bool, where: str, lim: _Limits, line: int) -> None:
-    if len(value) > lim.max_scalar_chars:
+class _LimitedComposer(Composer):
+    """Builds the node tree, refusing what :func:`load` refuses before it costs anything."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._depth = 0
+        self._nodes = 0
+
+    def compose_document(self):
+        event = self.peek_event()
+        if isinstance(event, DocumentStartEvent) and (event.version or event.tags):
+            raise SafeYamlError(
+                "YAML directives (%YAML, %TAG) are not allowed", event.start_mark, code="yaml_tag"
+            )
+        return super().compose_document()
+
+    def compose_node(self, parent, index):
+        event = self.peek_event()
+        if isinstance(event, AliasEvent) or event.anchor is not None:
+            raise SafeYamlError(
+                "anchors and aliases (&, *) are not allowed", event.start_mark, code="yaml_alias"
+            )
+        if event.tag is not None:
+            raise SafeYamlError(
+                f"tags are not allowed (found {event.tag!r})", event.start_mark, code="yaml_tag"
+            )
+        self._nodes += 1
+        if not self._nodes % 128:
+            time.sleep(0)  # let other threads (the event loop) take the GIL
+        if self._nodes > MAX_NODES:
+            raise SafeYamlError(f"more than {MAX_NODES} values", event.start_mark, code="too_large")
+        if isinstance(event, ScalarEvent):
+            _check_scalar(event)
+        else:
+            self._depth += 1
+            if self._depth > MAX_DEPTH:
+                raise SafeYamlError(
+                    f"nested more than {MAX_DEPTH} levels deep", event.start_mark, code="too_deep"
+                )
+        node = super().compose_node(parent, index)
+        if not isinstance(event, ScalarEvent):
+            self._depth -= 1
+        return node
+
+
+def _check_scalar(event: ScalarEvent) -> None:
+    value = event.value
+    if len(value) > MAX_SCALAR_CHARS:
         raise SafeYamlError(
-            "too_large",
-            f"{lim.name} has a value of {len(value)} characters ({where}), over "
-            f"{lim.max_scalar_chars}",
-            line,
+            f"a value is longer than {MAX_SCALAR_CHARS} characters",
+            event.start_mark,
+            code="too_large",
         )
-    if plain and _NUMBERISH.fullmatch(value) and sum(c.isdigit() for c in value) > MAX_DIGITS:
+    if _NON_PRINTABLE.search(value):
         raise SafeYamlError(
-            "invalid_number",
-            f"{lim.name} has a number with more than {MAX_DIGITS} digits ({where})",
-            line,
+            "a value contains a non-printable character", event.start_mark, code="non_printable"
+        )
+    if event.implicit[0] and _SPECIAL_FLOAT.match(value):
+        raise SafeYamlError(
+            f"{value} is not allowed: numbers must be finite",
+            event.start_mark,
+            code="non_finite_number",
         )
 
 
-def non_finite(data: Any, path: str = "") -> str | None:
-    """The path of the first NaN or infinite number in ``data``, if any."""
-    stack: list[tuple[Any, str]] = [(data, path)]
-    while stack:
-        value, at = stack.pop()
-        if isinstance(value, float) and not math.isfinite(value):
-            return at or "(top)"
-        if isinstance(value, dict):
-            stack.extend((v, f"{at}.{k}" if at else str(k)) for k, v in value.items())
-        elif isinstance(value, list):
-            stack.extend((v, f"{at}[{n}]") for n, v in enumerate(value))
-    return None
+class _LimitedConstructor(SafeConstructor):
+    def __init__(self) -> None:
+        super().__init__()
+        self._built = 0
+
+    def construct_object(self, node, deep=False):
+        self._built += 1
+        if not self._built % 128:
+            time.sleep(0)  # let other threads (the event loop) take the GIL
+        return super().construct_object(node, deep=deep)
+
+    def construct_mapping(self, node, deep=False):
+        if isinstance(node, MappingNode):
+            seen: set[Any] = set()
+            for key_node, _ in node.value:
+                key = self.construct_object(key_node, deep=True)
+                try:
+                    duplicate = key in seen
+                    seen.add(key)
+                except TypeError:
+                    continue  # unhashable: SafeConstructor reports it
+                if duplicate:
+                    raise SafeYamlError(
+                        f"duplicate key {repr(key)[:80]}", key_node.start_mark, code="duplicate_key"
+                    )
+        return super().construct_mapping(node, deep=deep)
+
+    def construct_yaml_int(self, node):
+        return int(_number_text(node))
+
+    def construct_yaml_float(self, node):
+        value = float(_number_text(node))
+        if not math.isfinite(value):
+            raise SafeYamlError(
+                f"{node.value} is out of range for a number",
+                node.start_mark,
+                code="non_finite_number",
+            )
+        return value
 
 
-def load(
-    text: str,
-    *,
-    name: str = "the YAML",
-    max_text_chars: int = MAX_TEXT_CHARS,
-    max_scalar_chars: int = MAX_SCALAR_CHARS,
-    max_depth: int = MAX_DEPTH,
-    max_nodes: int = MAX_NODES,
-    yaml11_booleans: bool = False,
-    line_offset: int = 0,
-) -> Any:
-    """Parse ``text`` the one safe way. Raises :class:`SafeYamlError` and nothing else: a
-    YAML error, and any other failure to read the text (a recursion, a number Python will
-    not convert, memory), is a refusal with its code. ``name`` starts every message;
-    ``line_offset`` is added to reported lines (front matter starts on line 2)."""
+def _number_text(node) -> str:
+    text = node.value
+    if sum(c.isdigit() for c in text) > MAX_DIGITS:
+        raise SafeYamlError(
+            f"a number has more than {MAX_DIGITS} digits", node.start_mark, code="invalid_number"
+        )
+    return text
+
+
+_LimitedConstructor.add_constructor(_INT_TAG, _LimitedConstructor.construct_yaml_int)
+_LimitedConstructor.add_constructor(_FLOAT_TAG, _LimitedConstructor.construct_yaml_float)
+
+
+class _LimitedResolver(Resolver):
+    """YAML 1.1's implicit types, narrowed: no yes/no/on/off, no base-60/hex/octal, no
+    merge (``<<``) or value (``=``) keys."""
+
+    yaml_implicit_resolvers: dict = {}
+
+
+_LimitedResolver.add_implicit_resolver(
+    "tag:yaml.org,2002:bool",
+    re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
+    list("tTfF"),
+)
+_LimitedResolver.add_implicit_resolver(_INT_TAG, _INT, list("-+0123456789"))
+_LimitedResolver.add_implicit_resolver(_FLOAT_TAG, _FLOAT, list("-+0123456789."))
+_LimitedResolver.add_implicit_resolver(
+    "tag:yaml.org,2002:null", re.compile(r"^(?:~|null|Null|NULL|)$"), ["~", "n", "N", ""]
+)
+# Dates and times, as yaml.safe_load reads them (front matter's retrieved_at, milestones).
+for _first, _resolvers in Resolver.yaml_implicit_resolvers.items():
+    for _tag, _regexp in _resolvers:
+        if _tag == "tag:yaml.org,2002:timestamp":
+            _LimitedResolver.yaml_implicit_resolvers.setdefault(_first, []).append((_tag, _regexp))
+
+
+class SafeYamlLoader(_LimitedComposer, *_PARSER_BASES, _LimitedConstructor, _LimitedResolver):
+    def __init__(self, stream: str):
+        # CParser(stream), or Reader(stream), Scanner(), Parser().
+        _PARSER_BASES[0].__init__(self, stream)
+        for base in _PARSER_BASES[1:]:  # pragma: no cover - pure-Python parser
+            base.__init__(self)
+        _LimitedComposer.__init__(self)
+        _LimitedConstructor.__init__(self)
+        _LimitedResolver.__init__(self)
+
+
+def max_bytes() -> int:
+    """The largest YAML text :func:`load` reads (``ORACLE_YAML_MAX_BYTES``)."""
+    from oracle.config import get_settings
+
+    return get_settings().yaml_max_bytes
+
+
+def load(text: str, *, limit: int | None = None) -> Any:
+    """Parse one YAML document from ``text``; raise :class:`SafeYamlError` on anything
+    unsafe or invalid. ``limit`` overrides the size cap in bytes (UTF-8)."""
+    cap = max_bytes() if limit is None else limit
     try:
-        if len(text) > max_text_chars:
-            raise SafeYamlError(
-                "too_large", f"{name} is {len(text)} characters, over {max_text_chars}"
-            )
-        # Before the YAML reader: an over-long unbroken token (the base-60 probe) is
-        # refused in one linear pass instead of being scanned character by character.
-        longest = max(map(len, text.split()), default=0)
-        if longest > max_scalar_chars:
-            raise SafeYamlError(
-                "too_large", f"{name} has a value of {longest} characters, over {max_scalar_chars}"
-            )
-        limits = _Limits(name, max_scalar_chars, max_depth, max_nodes, line_offset)
-        loader = _LOADERS[yaml11_booleans](text, limits)
-        try:
-            data = loader.get_single_data()
-        finally:
-            loader.dispose()
-        bad = non_finite(data)
-        if bad is not None:
-            raise SafeYamlError(
-                "non_finite_number",
-                f"{name} has NaN or an infinite number at {bad}; write a finite number",
-            )
-        return data
+        size = len(text.encode("utf-8"))
+    except UnicodeEncodeError:
+        raise SafeYamlError("the text is not valid Unicode") from None
+    if size > cap:
+        raise SafeYamlError(f"the YAML is larger than {cap} bytes ({size} bytes)", code="too_large")
+    bad = _NON_PRINTABLE.search(text)
+    if bad:
+        line = text.count("\n", 0, bad.start()) + 1
+        raise SafeYamlError(
+            f"non-printable character {bad.group()!r} on line {line} is not allowed",
+            code="non_printable",
+        )
+    loader = SafeYamlLoader(text)
+    try:
+        return loader.get_single_data()
     except SafeYamlError:
         raise
     except yaml.YAMLError as exc:
-        mark = getattr(exc, "problem_mark", None)
-        line = mark.line + 1 + line_offset if mark else None
-        raise SafeYamlError("invalid_yaml", f"{name} is not valid YAML: {exc}", line) from exc
-    except Exception as exc:  # noqa: BLE001 - untrusted text: every failure is a refusal
+        error = SafeYamlError(str(exc), show_mark=False)
+        error.problem_mark = getattr(exc, "problem_mark", None)
+        raise error from None
+    except RecursionError:
+        raise SafeYamlError(f"nested more than {MAX_DEPTH} levels deep", code="too_deep") from None
+    except (ValueError, OverflowError, TypeError, ArithmeticError) as exc:
+        raise SafeYamlError(f"a value could not be read: {str(exc)[:200]}") from None
+    except Exception as exc:  # noqa: BLE001 - one error type for every failure
         raise SafeYamlError(
-            "unreadable_yaml",
-            f"{name} could not be read ({type(exc).__name__}: {str(exc)[:200]})",
-        ) from exc
+            f"the YAML could not be read: {type(exc).__name__}", code="unreadable_yaml"
+        ) from None
+    finally:
+        loader.dispose()
 
 
 class NoAliasDumper(yaml.SafeDumper):
-    """A dumper that writes a shared value out in full each time: what Oracle exports must
-    load again through :func:`load`, which refuses aliases."""
+    """Writes a shared value out in full each time: what Oracle exports (baseline.yaml)
+    must load again through :func:`load`, which refuses aliases."""
 
     def ignore_aliases(self, data: Any) -> bool:
         return True
 
 
 def dump(data: Any, **kwargs: Any) -> str:
+    """``yaml.safe_dump`` without anchors or aliases."""
     return yaml.dump(data, Dumper=NoAliasDumper, **kwargs)
 
 
-# --- off the event loop ----------------------------------------------------------------
+# --- off the event loop -----------------------------------------------------------------
 
-_pool: ThreadPoolExecutor | None = None
-_pool_lock = threading.Lock()
-
-
-def _executor() -> ThreadPoolExecutor:
-    global _pool
-    with _pool_lock:
-        if _pool is None:
-            _pool = ThreadPoolExecutor(max_workers=PARSE_WORKERS, thread_name_prefix="oracle-parse")
-        return _pool
+_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="safe-yaml")
 
 
-async def run_parse[T](
-    fn: Callable[..., T], *args: Any, name: str = "the text", seconds: float | None = None
+async def run_parse[T](fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
+    """``fn(*args, **kwargs)`` on the parse pool (4 threads), so a slow parse of untrusted
+    text never stalls other requests. Exceptions propagate unchanged."""
+    ctx = contextvars.copy_context()
+    call = functools.partial(ctx.run, fn, *args, **kwargs)
+    return await asyncio.get_running_loop().run_in_executor(_EXECUTOR, call)
+
+
+class ParseTimeout(SafeYamlError):
+    """:func:`run_parse_within` gave up: the parse took longer than its time cap."""
+
+    def __init__(self, name: str, seconds: float) -> None:
+        super().__init__(
+            f"{name} took more than {seconds:g} s to read; keep it small and plain",
+            code="too_slow",
+        )
+
+
+async def run_parse_within[T](
+    fn: Callable[..., T],
+    /,
+    *args: Any,
+    name: str = "the text",
+    seconds: float | None = None,
+    **kwargs: Any,
 ) -> T:
-    """``fn(*args)`` on the parse pool, at most ``seconds`` (``PARSE_SECONDS``): the event
-    loop never waits on a parse. Raises :class:`ParseTimeout` when it takes longer; any
-    exception ``fn`` raises is re-raised as is."""
+    """:func:`run_parse`, waiting at most ``seconds`` (``PARSE_SECONDS``): a run's file or a
+    draft that is too slow to read is a refusal (:class:`ParseTimeout`, ``name`` starts its
+    message), never a stalled tick. The abandoned parse finishes on the pool; its cost is
+    bounded by :func:`load`'s caps."""
     limit = PARSE_SECONDS if seconds is None else seconds
-    loop = asyncio.get_running_loop()
-    future = loop.run_in_executor(_executor(), lambda: fn(*args))
     try:
-        return await asyncio.wait_for(future, timeout=limit)
+        return await asyncio.wait_for(run_parse(fn, *args, **kwargs), timeout=limit)
     except TimeoutError:
         raise ParseTimeout(name, limit) from None

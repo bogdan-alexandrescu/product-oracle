@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.docs import service
-from oracle.docs.parser import MAX_DRAFT_BYTES, DraftError
+from oracle.docs.parser import DraftError
 from oracle.docs.schemas import (
     DiffOut,
     DocumentKind,
@@ -22,7 +22,7 @@ from oracle.docs.schemas import (
     VersionOut,
     VersionSummary,
 )
-from oracle.http import read_capped
+from oracle.http import read_capped_body
 from oracle.jobs import service as jobs_service
 
 # Every route needs at least a viewer; importing a version needs an approver.
@@ -64,7 +64,7 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
     status_code=status.HTTP_201_CREATED,
     responses={
         200: {"model": VersionOut, "description": "Same content as an existing version"},
-        413: {"description": f"Body over {MAX_DRAFT_BYTES} bytes"},
+        413: {"description": "Draft larger than 1 MiB (ORACLE_MAX_BODY_BYTES)"},
         422: {"model": ImportErrorResponse, "description": "Draft rejected"},
     },
     openapi_extra={
@@ -77,9 +77,8 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
 async def import_version(
     doc: str, request: Request, principal: Approver, db: TenantDB
 ) -> VersionOut | JSONResponse:
-    """Import a draft (markdown + YAML front matter). Creates the document on first import.
-    A body over ``MAX_DRAFT_BYTES`` (1 MB) is refused with 413 before it is read in full."""
-    raw = await read_capped(request, MAX_DRAFT_BYTES)
+    """Import a draft (markdown + YAML front matter). Creates the document on first import."""
+    raw = await read_capped_body(request)
     try:
         markdown = raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -131,17 +130,12 @@ async def get_version(doc: str, n: int, db: TenantDB) -> VersionOut:
     responses={200: {"content": {"text/markdown": {"schema": {"type": "string"}}}}},
 )
 async def get_version_markdown(doc: str, n: int, db: TenantDB) -> PlainTextResponse:
-    """The version's markdown as stored; a roadmap's date that rests on no verified basis
-    now has ``<!-- oracle: date unverified -->`` (or ``date withdrawn``) after it, which
-    an import drops."""
     try:
         document = await service.get_document_or_404(db, doc)
         version = await service.get_version_row(db, document, n)
     except service.NotFoundError as exc:
         raise _not_found(exc) from exc
-    # A roadmap's flagged dates carry an HTML comment after each (O4 'document dates').
-    markdown, _ = await service.version_markdown(db, version)
-    return PlainTextResponse(markdown, media_type="text/markdown; charset=utf-8")
+    return PlainTextResponse(version.markdown, media_type="text/markdown; charset=utf-8")
 
 
 @router.get("/{doc}/diff", response_model=DiffOut)

@@ -304,6 +304,16 @@ body {
     --fade-r: 32px;
   }
 }
+/* Phone sheets (ds Sheet): every control is a 44 px touch target. */
+@utility touch-44 {
+  & :is(button, select, summary, input:not([type="checkbox"], [type="radio"]), a[data-testid="feedback-goto"]) {
+    min-height: 44px;
+  }
+  & a[data-testid="feedback-goto"] {
+    display: inline-flex;
+    align-items: center;
+  }
+}
 /* The rail sets --focus-ring to its sky (#7cc8f8); elsewhere the ring is the accent. */
 :focus-visible {
   outline: 2px solid var(--focus-ring, var(--accent));

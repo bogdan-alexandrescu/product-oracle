@@ -10,10 +10,11 @@ import { plainText } from "@/lib/markdown";
 import { mockUuid, seeded } from "./ids";
 import { enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
+import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
-import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
@@ -76,7 +77,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
 /**
  * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
  * new company (members only, no goals, documents, runs or questions); "large" as a big one
- * (30 goals, 50 more active runs, questions asked of the signed-in member).
+ * (30 goals, 50 more active runs, questions asked of the signed-in member); "suggestions" as the
+ * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
+ * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -180,6 +183,148 @@ function seedLarge(): Db {
   // Asked of someone else: not the signed-in member's to answer.
   const other = db.members.find((m) => m.id !== db.user_id)!;
   v2.questions.push({ ...model, id: uuid(), prompt: "Who owns the pricing page?", asked_to: other.id, created_at: model.created_at, updated_at: model.created_at });
+  return db;
+}
+
+/**
+ * The default company plus a PRD whose open feedback is three Oracle change requests on
+ * feature sections (none on the first section) and one item already addressed: what the
+ * Inbox's feedback row leads to.
+ */
+function seedSuggestions(): Db {
+  const db = seed();
+  const doc: DocumentRow = {
+    id: uuid(),
+    slug: FLEET_DOC.slug,
+    title: FLEET_DOC.title,
+    status: "in_review",
+    kind: "prd",
+    template: FLEET_DOC.template ?? null,
+    template_version: FLEET_DOC.template_version ?? null,
+    theme: null,
+    created_at: FLEET_DOC.versions[0].created_at,
+    updated_at: FLEET_DOC.versions.at(-1)!.created_at,
+  };
+  db.documents.push(doc);
+  for (const v of FLEET_DOC.versions) db.versions.push(buildVersion(doc, v));
+  const v1 = findVersion(db, doc, 1)!;
+  const v2 = findVersion(db, doc, 2)!;
+  addComment(db, v1, {
+    section_key: "problem",
+    anchor: { exact: "so many are out when the driver comes", prefix: "arrive, ", suffix: "." },
+    body: "How many first attempts fail today? Put the number in.",
+  }, { created_at: "2026-10-17T11:00:00Z" });
+  Object.assign(db.feedback.at(-1)!, {
+    status: "addressed",
+    addressed_in_version: 2,
+    resolution_note: "Added the failed first-attempt rate.",
+    updated_at: "2026-10-19T09:00:00Z",
+  });
+  const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
+  FLEET_SUGGESTIONS.forEach((x, i) => {
+    const created_at = `2026-10-19T10:0${i}:00Z`;
+    const f: FeedbackRow = {
+      id: uuid(),
+      document_id: doc.id,
+      raised_on_version: 2,
+      kind: "general",
+      comment_id: null,
+      section_review_id: null,
+      section_key: x.key,
+      summary: x.summary,
+      anchor: null,
+      verdict: null,
+      status: "open",
+      addressed_in_version: null,
+      resolution_note: null,
+      created_at,
+      updated_at: created_at,
+    };
+    db.feedback.push(f);
+    llm.suggestions.push({
+      id: uuid(),
+      document_id: doc.id,
+      feedback_item_id: f.id,
+      job_id: null,
+      version_number: v2.number,
+      classification: "change_request",
+      group_key: null,
+      duplicate_of: null,
+      kind: "section_text",
+      section_key: x.key,
+      text: x.text,
+      edited_text: null,
+      rationale: x.rationale,
+      pushback: null,
+      status: "open",
+      override_reason: null,
+      decided_by: null,
+      decided_at: null,
+      applied_in_version: null,
+      created_at,
+      updated_at: created_at,
+    });
+  });
+  return db;
+}
+
+/** The default seed plus one PRD of 100+ sections in nested chapters (./big-prd.ts). */
+function seedBigPrd(): Db {
+  const db = seed();
+  const row: DocumentRow = {
+    id: uuid(),
+    slug: BIG_PRD.slug,
+    title: BIG_PRD.title,
+    status: "in_review",
+    kind: "prd",
+    template: BIG_PRD.template ?? null,
+    template_version: BIG_PRD.template_version ?? null,
+    theme: null,
+    created_at: BIG_PRD.versions[0].created_at,
+    updated_at: BIG_PRD.versions[0].created_at,
+  };
+  db.documents.push(row);
+  const v = buildVersion(row, BIG_PRD.versions[0]);
+  db.versions.push(v);
+  const at = "2026-10-19T10:00:00Z";
+  for (const [key, r] of Object.entries(BIG_PRD_REVIEWS)) addReview(db, v, key, r, { created_at: at });
+  const comments = BIG_PRD_COMMENTS.map(([key, exact, text], i) => {
+    const plain = v.sections.find((s) => s.section_key === key)!.body_text;
+    const start = plain.indexOf(exact);
+    const anchor = { exact, prefix: plain.slice(Math.max(0, start - 32), start), suffix: plain.slice(start + exact.length, start + exact.length + 32) };
+    return addComment(db, v, { section_key: key, anchor, body: text }, { created_at: `2026-10-19T11:${String(10 + i).padStart(2, "0")}:00Z` });
+  });
+  const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
+  for (const s of BIG_PRD_SUGGESTIONS) {
+    const c = comments.find((x) => x.body === s.comment)!;
+    llm.suggestions.push({
+      id: uuid(),
+      document_id: row.id,
+      feedback_item_id: c.feedback_item_id!,
+      job_id: null,
+      version_number: 1,
+      classification: "change_request",
+      group_key: null,
+      duplicate_of: null,
+      kind: "section_text",
+      section_key: c.section_key,
+      text: s.text,
+      edited_text: null,
+      rationale: s.rationale,
+      pushback: null,
+      status: s.status,
+      override_reason: null,
+      decided_by: s.status === "open" ? null : db.user_id,
+      decided_at: s.status === "open" ? null : at,
+      applied_in_version: null,
+      created_at: at,
+      updated_at: at,
+    });
+    // Dismissed with "decline the feedback".
+    if (s.status === "dismissed") Object.assign(db.feedback.find((f) => f.id === c.feedback_item_id)!, { status: "declined", resolution_note: "Kept as written." });
+  }
+  // One resolved thread: Done.
+  comments.find((c) => c.body.startsWith("List the shortcuts"))!.resolved_at = at;
   return db;
 }
 
@@ -394,6 +539,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     userId: db.user_id,
     feedback: db.feedback,
     documents: db.documents,
+    suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     latestVersion: (id) => {
       const doc = db.documents.find((d) => d.id === id);
       const vs = doc ? docVersions(db, doc) : [];
@@ -478,7 +624,14 @@ function load(): Db {
     }
   }
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
-  const db = seeded("db", scenario === "empty" ? seedEmpty : scenario === "large" ? seedLarge : seed);
+  const db = seeded(
+    "db",
+    scenario === "empty" ? seedEmpty : scenario === "large" ? seedLarge : scenario === "suggestions"
+        ? seedSuggestions
+        : scenario === "big-prd"
+          ? seedBigPrd
+          : seed,
+  );
   save(db);
   return db;
 }
@@ -1066,7 +1219,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "feedback" && p[2] && m === "PATCH") {
     const f = db.feedback.find((x) => x.id === p[2]);
     if (!f) return notFound("Feedback item");
-    Object.assign(f, await body<Schemas["FeedbackPatch"]>(), { updated_at: now() });
+    const patch = await body<Schemas["FeedbackPatch"]>();
+    // As the API: reopening clears the version it was addressed in, unless one is given.
+    if (patch.status === "open" && !("addressed_in_version" in patch)) patch.addressed_in_version = null;
+    Object.assign(f, patch, { updated_at: now() });
     return json(200, f);
   }
 
@@ -1132,7 +1288,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       .filter((f) => f.document_id === doc.id)
       .filter((f) => !status || f.status === status)
       .filter((f) => !version || f.raised_on_version === Number(version))
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      // As the API: by the version raised on, then age.
+      .sort((a, b) => a.raised_on_version - b.raised_on_version || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
       .map((f) => withSuggestion(db.llm, f));
     return json(200, items);
   }

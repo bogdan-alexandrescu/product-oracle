@@ -23,12 +23,7 @@ from markdown_it import MarkdownIt
 
 from oracle import safe_yaml
 from oracle.docs import layers
-from oracle.docs.parser import (
-    CITATION_RE,
-    SECTION_ID_RE,
-    load_front_matter,
-    split_front_matter,
-)
+from oracle.docs.parser import CITATION_RE, SECTION_ID_RE, split_front_matter
 
 SOURCES_SECTION_ID = "sources"
 SOURCES_HEADING = "Sources and data points"
@@ -133,9 +128,9 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
         )
     elif yaml_text is not None:
         try:
-            fm = load_front_matter(yaml_text) or {}
+            fm = safe_yaml.load(yaml_text) or {}
         except safe_yaml.SafeYamlError as e:
-            problems.append(Problem("invalid_front_matter", e.message, e.line))
+            problems.append(Problem("invalid_front_matter", f"front matter is not valid YAML: {e}"))
             fm = {}
         if not isinstance(fm, dict):
             problems.append(Problem("invalid_front_matter", "front matter must be a mapping"))
@@ -244,10 +239,10 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
     # Roadmap layout blocks are read by the renderer: they must parse.
     for m in _LAYOUT_FENCE.finditer(rest):
         try:
-            safe_yaml.load(m.group(1), name="layout block")
+            safe_yaml.load(m.group(1))
         except safe_yaml.SafeYamlError as e:
             line = rest[: m.start()].count("\n") + 1 + offset
-            problems.append(Problem("invalid_layout", e.message, line))
+            problems.append(Problem("invalid_layout", f"layout block is not valid YAML: {e}", line))
     return result
 
 

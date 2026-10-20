@@ -130,31 +130,22 @@ async def export(db: AsyncSession, principal: Principal) -> str:
 # --- import ---------------------------------------------------------------------------------
 
 
-# baseline.yaml is a whole graph: larger caps than a draft's front matter.
-MAX_TEXT_CHARS = 10_000_000
-MAX_NODES = 1_000_000
-
-
 def _parse(text: str) -> dict[str, Any]:
-    """baseline.yaml through the one safe loader (:mod:`oracle.safe_yaml`). The YAML 1.1
-    booleans (``locked: yes``) still read as booleans here, as they always have."""
     try:
-        data = safe_yaml.load(
-            text,
-            name="baseline.yaml",
-            max_text_chars=MAX_TEXT_CHARS,
-            max_scalar_chars=100_000,
-            max_nodes=MAX_NODES,
-            yaml11_booleans=True,
-        )
+        data = safe_yaml.load(text)
     except safe_yaml.SafeYamlError as e:
-        code = "invalid_yaml" if e.code in ("invalid_yaml", "unreadable_yaml") else e.code
-        raise YamlInvalid([ImportIssue(code=code, message=e.message)]) from None
+        # Invalid or refused (oracle.safe_yaml): too large, too deep, anchors, tags...
+        raise YamlInvalid([ImportIssue(code="invalid_yaml", message=str(e))]) from None
     if data is None:
         data = {}
     if not isinstance(data, dict):
         raise YamlInvalid([ImportIssue(code="invalid_yaml", message="expected a mapping")])
     return data
+
+
+def _parse_and_validate(text: str) -> tuple[dict[str, Any], list[ImportIssue]]:
+    data = _parse(text)
+    return data, _validate(data)
 
 
 def _validate(data: dict[str, Any]) -> list[ImportIssue]:
@@ -305,11 +296,8 @@ async def import_yaml(
 ) -> YamlImportResult:
     """Merge ``text`` in. ``origin`` is ``import`` (a person's file) or ``agent`` (a run's
     baseline.yaml); either way locked items get proposals instead of changes."""
-    try:
-        data = await safe_yaml.run_parse(_parse, text, name="baseline.yaml")
-    except safe_yaml.ParseTimeout as e:
-        raise YamlInvalid([ImportIssue(code=e.code, message=e.message)]) from None
-    problems = _validate(data)
+    # Off the event loop: the file is untrusted text (oracle.safe_yaml bounds its cost).
+    data, problems = await safe_yaml.run_parse(_parse_and_validate, text)
     if problems:
         raise YamlInvalid(problems)
     writer = service.Writer(principal, origin, run_id=run_id, reason=reason)

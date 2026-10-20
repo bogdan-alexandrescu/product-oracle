@@ -19,6 +19,7 @@ from markdown_it.token import Token
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from oracle import safe_yaml
+from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.schemas import CitationSource, ImportProblem
 from oracle.review.schemas import Resolution
@@ -42,9 +43,6 @@ DATE_MARK_COMMENT_RE = re.compile(
 # The banner line a markdown export writes after the front matter
 # (oracle.export.render.render_markdown), dropped on import with the markers above.
 EXPORT_BANNER_RE = re.compile(r"^<!-- Product Oracle export: [^\n]*? -->\n", re.M)
-# A draft is at most this large (POST /versions refuses a larger body with 413).
-MAX_DRAFT_BYTES = 1_000_000
-FRONT_MATTER_SCALAR_CHARS = 100_000
 
 _md = MarkdownIt("commonmark", {"html": False}).enable("table")
 
@@ -184,15 +182,6 @@ def body_text(body_md: str) -> str:
     return "\n".join(blocks)
 
 
-def load_front_matter(yaml_text: str) -> Any:
-    """A draft's (or a template's) front matter through the one safe loader
-    (:mod:`oracle.safe_yaml`): no aliases, tags or duplicate keys, bounded size and
-    depth, ``yes``/``no`` stay strings. Its first line is line 2 of the file."""
-    return safe_yaml.load(
-        yaml_text, name="front matter", max_scalar_chars=FRONT_MATTER_SCALAR_CHARS, line_offset=1
-    )
-
-
 def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) -> dict[str, Any]:
     if yaml_text is None:
         problems.append(
@@ -204,10 +193,15 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
         )
         return {}
     try:
-        data = load_front_matter(yaml_text) or {}
+        data = safe_yaml.load(yaml_text) or {}
     except safe_yaml.SafeYamlError as exc:
+        # Invalid or refused (oracle.safe_yaml): too large, too deep, anchors, tags...
         problems.append(
-            ImportProblem(code="invalid_front_matter", message=exc.message, line=exc.line)
+            ImportProblem(
+                code="invalid_front_matter",
+                message=f"front matter is not valid YAML: {exc}",
+                line=exc.line + 1 if exc.line else None,
+            )
         )
         return {}
     if not isinstance(data, dict):
@@ -380,15 +374,11 @@ def parse_draft(markdown: str) -> ParsedDraft:
     """Parse and validate a draft. Raises :class:`DraftError` listing every problem.
 
     CPU-bound: async callers run it with :func:`parse_draft_async`."""
-    size = len(markdown.encode("utf-8", "replace"))
-    if size > MAX_DRAFT_BYTES:
+    # The request body is capped (413); a run's file is not, so the draft is too.
+    limit = get_settings().max_body_bytes
+    if len(markdown.encode("utf-8")) > limit:
         raise DraftError(
-            [
-                ImportProblem(
-                    code="too_large",
-                    message=f"the draft is {size} bytes, over {MAX_DRAFT_BYTES}",
-                )
-            ]
+            [ImportProblem(code="draft_too_large", message=f"draft is larger than {limit} bytes")]
         )
     text = normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
     problems: list[ImportProblem] = []
@@ -435,12 +425,12 @@ def parse_draft(markdown: str) -> ParsedDraft:
 
 
 async def parse_draft_async(markdown: str) -> ParsedDraft:
-    """:func:`parse_draft` on the parse pool (:func:`oracle.safe_yaml.run_parse`), at most
-    ``PARSE_SECONDS``: the event loop never parses a draft."""
+    """:func:`parse_draft` on the parse pool (:func:`oracle.safe_yaml.run_parse_within`), at
+    most ``PARSE_SECONDS``: the event loop never parses a draft (untrusted text)."""
     try:
-        return await safe_yaml.run_parse(parse_draft, markdown, name="the draft")
+        return await safe_yaml.run_parse_within(parse_draft, markdown, name="the draft")
     except safe_yaml.ParseTimeout as exc:
-        raise DraftError([ImportProblem(code="too_slow", message=exc.message)]) from exc
+        raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
 
 
 def is_uuid(value: str) -> bool:

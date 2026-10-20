@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # account; with it off Oracle makes no tracker writes and the read-only alignment
     # report is the path. No connector is built yet, so on still writes nothing (501).
     tracker_two_way_enabled: bool = False
+    # Untrusted YAML (drafts' front matter, baseline.yaml, run files) is refused above this
+    # many bytes (oracle.safe_yaml); request bodies that carry it are capped at
+    # max_body_bytes (413).
+    yaml_max_bytes: int = 1024 * 1024
+    max_body_bytes: int = 1024 * 1024
 
 
 @lru_cache

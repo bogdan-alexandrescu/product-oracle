@@ -209,20 +209,8 @@ async def validate_template(
     db: AsyncSession, body: str, required_sections: list[str] | None = None
 ) -> TemplateValidateOut:
     theme_keys = await _theme_keys(db)
-    try:
-        check = await safe_yaml.run_parse(
-            lambda: validation.check_template(body, theme_keys=theme_keys), name="the template"
-        )
-    except safe_yaml.ParseTimeout as exc:
-        return TemplateValidateOut(
-            valid=False,
-            problems=[Problem(code="too_slow", message=exc.message)],
-            warnings=[],
-            brief_sections=[],
-            section_keys=[],
-            suggested_theme=None,
-            suggest_when=None,
-        )
+    # Off the event loop: the body is untrusted text (oracle.safe_yaml bounds its cost).
+    check = await safe_yaml.run_parse(validation.check_template, body, theme_keys=theme_keys)
     problems = list(check.problems)
     if required_sections is not None:
         problems += validation.check_required_sections(required_sections, check)
@@ -243,7 +231,7 @@ async def _checked_version(
     result = await validate_template(db, body, required)
     if not result.valid:
         raise InvalidError(f"template rejected: {len(result.problems)} problem(s)", result.problems)
-    check = version_meta(body)
+    check = await safe_yaml.run_parse(version_meta, body)
     return body, required if required is not None else check.default_required_sections()
 
 

@@ -31,18 +31,13 @@ capacity or commitment behind it is refused (``unverified_date``).
 
 The file is agent output. It is read by :func:`load_items_yaml` on every path (the run's
 checkpoint, a run's import, a person's import), through the one safe loader
-(:mod:`oracle.safe_yaml`), which refuses, as an :class:`ItemsYamlError` and never any
-other exception: YAML aliases and anchors (``yaml.safe_load`` shares an alias's node, so
-a few hundred bytes can expand to gigabytes once copied to JSON or text); explicit tags;
-duplicate keys; numbers in any form but plain decimal (YAML 1.1 base-60 ``1:1:1...`` is
-quadratic to build, and Python refuses ``int()`` of more than 4,300 digits), NaN and
-infinities; values longer than ``MAX_SCALAR_CHARS``, nesting deeper than ``MAX_DEPTH`` (a
-few hundred ``[`` overflow the composer's recursion), more than ``MAX_NODES`` nodes, and a
-file larger than ``MAX_STORED_BYTES`` once parsed. The YAML 1.1 words
-``yes``/``no``/``on``/``off`` are strings, as in YAML 1.2 (a title ``NO`` stays ``NO``).
-Async callers use :func:`check_items_async`, which parses on the parse pool
-(:func:`oracle.safe_yaml.run_parse`), at most ``PARSE_SECONDS``: a bad file is a failed
-check, never a stalled event loop or a tick exception.
+(:func:`oracle.safe_yaml.load`: no anchors, aliases, tags or duplicate keys, plain
+decimal numbers only, ``yes``/``no`` stay strings, bounded size, depth and node count),
+plus one cap of its own: at most ``MAX_STORED_BYTES`` once parsed (it is stored as JSON).
+Every refusal is an :class:`ItemsYamlError`, never any other exception. Async callers use
+:func:`check_items_async`, which checks on the parse pool
+(:func:`oracle.safe_yaml.run_parse_within`), at most ``PARSE_SECONDS``: a bad file is a
+failed check, never a stalled event loop or a tick exception.
 """
 
 import json
@@ -60,16 +55,10 @@ REQUIRED = ("id", "title", "outcome", "horizon", "prd_section")
 # Optional trace fields: a key, or a list of keys, of baseline entities.
 KEY_LISTS = ("requirements", "blockers")
 
-# Caps on a parsed roadmap_items.yaml (oracle.roadmap.items stores it as JSON).
-MAX_NODES = 50_000
+# A parsed roadmap_items.yaml is at most this large as JSON (oracle.roadmap.items stores it).
 MAX_STORED_BYTES = 1_000_000
-# Caps on the file before and while it is parsed (agent output; the artifact cap is 1 MB).
-MAX_TEXT_CHARS = 1_000_000
-MAX_SCALAR_CHARS = 20_000
-MAX_DEPTH = 32
-MAX_DIGITS = 30
-# The parse and check run in a worker thread, never in the event loop, at most this long.
-PARSE_SECONDS = 5.0
+# The parse and check run on the parse pool, never in the event loop, at most this long.
+PARSE_SECONDS = safe_yaml.PARSE_SECONDS
 
 # A cross-document link to a document version's section, as the roadmap draft writes it
 # (oracle.runs.flows.prd_link): /documents/<slug>/v/<n>#<section>.
@@ -106,23 +95,14 @@ class ItemsYamlError(ValueError):
 
 def _parse(text: str) -> Any:
     try:
-        return safe_yaml.load(
-            text,
-            name="roadmap_items.yaml",
-            max_text_chars=MAX_TEXT_CHARS,
-            max_scalar_chars=MAX_SCALAR_CHARS,
-            max_depth=MAX_DEPTH,
-            max_nodes=MAX_NODES,
-        )
+        return safe_yaml.load(text)
     except safe_yaml.SafeYamlError as exc:
-        raise ItemsYamlError(exc.code, exc.message) from exc
+        raise ItemsYamlError(exc.code, f"roadmap_items.yaml is refused: {exc}") from exc
 
 
 def load_items_yaml(text: str) -> Any:
-    """Parse roadmap_items.yaml the one safe way (:func:`oracle.safe_yaml.load`): at most
-    ``MAX_TEXT_CHARS`` characters, ``MAX_NODES`` nodes, ``MAX_DEPTH`` levels,
-    ``MAX_SCALAR_CHARS`` per value and ``MAX_STORED_BYTES`` as JSON, finite numbers only,
-    no duplicate keys; ``yes``/``no``/``on``/``off`` stay strings. Raises
+    """Parse roadmap_items.yaml the one safe way (:func:`oracle.safe_yaml.load`), at most
+    ``MAX_STORED_BYTES`` as JSON. Raises
     :class:`ItemsYamlError` and nothing else: a YAML error, and any other failure to read
     the file (a recursion, a number Python will not convert, memory), is a refusal with
     its code."""
@@ -274,8 +254,8 @@ async def check_items_async(text: str, **kwargs: Any) -> ItemsCheck:
     (every company's requests and ticks) never waits on agent output. A check that takes
     longer, or fails in any way, is a problem, never an exception."""
     try:
-        return await safe_yaml.run_parse(
-            lambda: check_items(text, **kwargs), name="roadmap_items.yaml", seconds=PARSE_SECONDS
+        return await safe_yaml.run_parse_within(
+            check_items, text, name="roadmap_items.yaml", seconds=PARSE_SECONDS, **kwargs
         )
     except safe_yaml.ParseTimeout:
         out = ItemsCheck()
