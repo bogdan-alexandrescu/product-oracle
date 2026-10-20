@@ -19,12 +19,19 @@ Optional hooks a connector may define:
   the engine deletes (soft: ``deleted_at``) the stored items outside it, in one SQL
   statement: narrowing a source removes what now falls outside it (S5, owner 2026-10-19
   and 2026-10-20);
+- ``normalize_config(config)`` returns the config in one canonical form (ids stripped,
+  without repeats, sorted), so the same selection saved in another order is the same
+  selection; the service stores it normalised and the engine fingerprints it so;
 - ``rescope_cursor(old_cursor, new_config)`` returns the cursor to resume from after the
   selection changed (``None``: from the start). Keep what upstream deletes are compared
   against; drop what would skip re-reading.
 
 The engine notices a changed selection (config or connection) by a fingerprint it keeps
 in the saved cursor under :data:`SCOPE_KEY`; connectors never see that key.
+
+A connector whose class sets ``prunes = True`` also receives ``known``, an async callable
+returning the external ids of the source's stored (not deleted) items, so a full pass
+can delete what its config no longer selects and skip what is already stored.
 
 Connectors never yield direct messages (S3 Visibility); ``acl`` records who can see an
 item in the source.
@@ -63,8 +70,16 @@ class ConnectorAuthError(ConnectorError):
 
 class ConnectorForbidden(ConnectorAuthError):
     """The source refused one request (a 403, Slack's ``no_permission``) while the
-    credential itself may still be good. Syncs treat it as a rejection; browsing does
-    not mark the connection expired for it."""
+    credential itself may still be good. A sync fails the source (status ``error``) and
+    leaves the connection active; browsing does not mark the connection expired either.
+    Only a :class:`ConnectorAuthError` that is not this (a 401, a revoked key) expires
+    the connection."""
+
+
+class ConnectorNeedsAttention(ConnectorError):
+    """The source cannot be read as it is until its owner acts (a Slack connection
+    holding a bot token, say): the sync keeps what it stored up to its last checkpoint
+    and the source shows the message as needing attention. Stored items are kept."""
 
 
 class ConnectorRateLimited(ConnectorError):
@@ -103,7 +118,16 @@ class CursorCheckpoint:
     cursor: dict[str, Any]
 
 
-SyncEvent = ItemUpsert | ItemDelete | CursorCheckpoint
+@dataclass(frozen=True)
+class Attention:
+    """A part of the selection could not be read (a private channel the person left):
+    the sync goes on with the rest and ends with the source needing attention, showing
+    ``message``. Nothing of that part is deleted; its cursor state is kept."""
+
+    message: str
+
+
+SyncEvent = ItemUpsert | ItemDelete | CursorCheckpoint | Attention
 
 # The key of the saved cursor holding the engine's fingerprint of the selection.
 SCOPE_KEY = "_scope"

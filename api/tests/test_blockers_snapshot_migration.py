@@ -63,11 +63,14 @@ def test_the_migration_follows_0015_on_a_single_head():
     # 0014 chain (quality, usage_retry_at, trace).
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0015_section_table_rows"
-    # v2-roadmap (wave 2) chains 0016_roadmap on it; the sources needs-attention status
-    # follows that, the single head.
+    # v2-roadmap (wave 2) chains 0016_roadmap on it; the sources lane's needs-attention
+    # status and browse calls follow that, in merge order, on the single head.
     assert script.get_revision("0016_roadmap").down_revision == REVISION
     assert script.get_revision("0016_source_needs_attention").down_revision == "0016_roadmap"
-    assert script.get_heads() == ["0016_source_needs_attention"]
+    assert (
+        script.get_revision("0016_browse_calls").down_revision == "0016_source_needs_attention"
+    )
+    assert script.get_heads() == ["0016_browse_calls"]
 
 
 def _constraint(t, key: str, attrs: dict) -> uuid.UUID:

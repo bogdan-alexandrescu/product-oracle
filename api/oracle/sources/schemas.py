@@ -62,7 +62,8 @@ class SyncResult(BaseModel):
     source_id: uuid.UUID
     # completed: ran to the end; rate_limited: stopped cleanly, resumes from the saved
     # cursor; error: the source is now in status error (see error); superseded: the
-    # source was edited while it ran, so what it read was dropped (sync again);
+    # source's config or connection changed while it ran, so nothing it read after its
+    # last checkpoint was kept (sync again);
     # needs_attention: the saved selection breaks a newer rule, edit the source (see error).
     outcome: Literal["completed", "rate_limited", "error", "superseded", "needs_attention"]
     upserted: int = 0

@@ -27,6 +27,15 @@ import { Field, INPUT, SELECT_FIELD, TEXTAREA } from "../_components/fields";
 import type { PickerProps } from "./_browse-list";
 import { GithubPicker } from "./_github-picker";
 import { SlackPicker } from "./_slack-picker";
+import {
+  type FirefliesConfig,
+  FirefliesPicker,
+  firefliesConfigToSave,
+  firefliesReady,
+  firefliesSummary,
+  firefliesRange,
+  readFirefliesConfig,
+} from "./FirefliesPicker";
 import { NotionPicker, notionRoots } from "./NotionPicker";
 
 type Source = Schemas["SourceOut"];
@@ -34,13 +43,14 @@ type Kind = Source["kind"];
 type KindOption = Schemas["SourceKindOut"];
 
 // The config key holding each kind's allowlist (as its connector reads it), and what one
-// entry looks like. Notion's roots are ticked in the page picker, not typed.
-const ALLOWLIST: Record<Exclude<Kind, "upload">, { key: string; label: string; example: string }> = {
+// entry looks like. Notion's roots are ticked in the page picker, not typed; Fireflies
+// sources are picked in a browse panel instead (FirefliesPicker).
+type ListKind = Exclude<Kind, "upload" | "fireflies">;
+const ALLOWLIST: Record<ListKind, { key: string; label: string; example: string }> = {
   github: { key: "repos", label: "Repositories", example: "example-org/example-app" },
   slack: { key: "channels", label: "Channel ids", example: "C0123PRODUCT" },
   notion: { key: "roots", label: "Pages", example: "" },
   google_docs: { key: "folders", label: "Folder ids", example: "1AbC…" },
-  fireflies: { key: "meetings", label: "Meeting title filters", example: "Weekly product review" },
 };
 
 // Kinds chosen in a picker (browse, search, tick) rather than typed ids (S5).
@@ -62,6 +72,8 @@ const STATUS_LABEL: Record<Source["status"], string> = {
   error: "Error",
   needs_attention: "Needs attention",
 };
+
+const NEW_FIREFLIES: FirefliesConfig = { mode: "all", series: [], meetings: [], labels: {} };
 
 type RowNotice = { tone: "pass" | "warn"; text: string };
 
@@ -166,7 +178,7 @@ function Warn({ children }: { children: ReactNode }) {
 
 function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Source) => void }) {
   const id = useId();
-  const spec = ALLOWLIST[source.kind as Exclude<Kind, "upload">];
+  const spec = ALLOWLIST[source.kind as ListKind];
   const [text, setText] = useState(entries(source.config, spec.key).join("\n"));
   const Picker = PICKER[source.kind];
   const [picked, setPicked] = useState(source.config);
@@ -223,6 +235,44 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
   );
 }
 
+function FirefliesEditor({ source, onSaved }: { source: Source; onSaved: (s: Source) => void }) {
+  const initial = readFirefliesConfig(source.config);
+  const [value, setValue] = useState<FirefliesConfig>(initial.value);
+  const { act, error, busy } = useAction();
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const config = firefliesConfigToSave(value);
+    const saved = await act(() =>
+      unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config } })),
+    );
+    if (saved) onSaved(saved);
+  }
+
+  return (
+    <form
+      onSubmit={save}
+      aria-label={`Meetings of ${source.name}`}
+      className="mt-2.5 flex flex-col gap-3 rounded-button border border-line bg-surface2/40 p-3 max-[600px]:p-2.5"
+    >
+      {source.connection_id ? (
+        <FirefliesPicker connectionId={source.connection_id} value={value} onChange={setValue} titleRule={initial.titleRule} />
+      ) : (
+        <Warn>This source has no connection: reconnect Fireflies first.</Warn>
+      )}
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="flex items-center gap-2.5">
+        <Button type="submit" variant="solid" disabled={busy || !firefliesReady(value) || !source.connection_id}>
+          Save meetings
+        </Button>
+        <InfoTip label="saving meetings" align="start">
+          Saving syncs this source again: what is no longer included is removed, what is already stored is kept.
+        </InfoTip>
+      </div>
+    </form>
+  );
+}
+
 /** A Notion source whose connection is gone: its pages can only be picked through a connection. */
 function ReconnectNotion({ picked }: { picked: number }) {
   return (
@@ -266,7 +316,8 @@ function SourceRow({
   const fileRef = useRef<HTMLInputElement>(null);
   const { act, error, busy } = useAction();
   const path = { params: { path: { source_id: source.id } } };
-  const allowlist = source.kind === "upload" ? null : ALLOWLIST[source.kind];
+  const fireflies = source.kind === "fireflies" ? readFirefliesConfig(source.config) : null;
+  const allowlist = source.kind === "upload" || source.kind === "fireflies" ? null : ALLOWLIST[source.kind];
 
   async function syncNow() {
     setNotice(null);
@@ -386,6 +437,9 @@ function SourceRow({
               ...(allowlist
                 ? [{ label: editing ? "Close allowlist" : "Edit allowlist", onSelect: () => setEditing((v) => !v) }]
                 : []),
+              ...(fireflies
+                ? [{ label: editing ? "Close meetings" : "Edit meetings", onSelect: () => setEditing((v) => !v) }]
+                : []),
               { label: "Delete", onSelect: () => void remove(), danger: true },
             ]}
           />
@@ -394,6 +448,16 @@ function SourceRow({
       <div className="tnum mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-text2">
         <span>{source.item_count} item(s)</span>
         <span>{synced}</span>
+        {fireflies && (
+          <span className="flex min-w-0 max-w-full items-center gap-1.5" data-testid="fireflies-included">
+            <Label className="flex-none">{fireflies.titleRule ? "Title rule" : "Meetings"}</Label>
+            <span className="min-w-0 truncate text-text">
+              {fireflies.titleRule
+                ? [fireflies.titleRule.join(", "), firefliesRange(fireflies.value)].filter(Boolean).join(", ")
+                : firefliesSummary(fireflies.value)}
+            </span>
+          </span>
+        )}
         {allowlist && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
@@ -432,6 +496,16 @@ function SourceRow({
           {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
           {error && <Notice tone="error">{error}</Notice>}
         </div>
+      )}
+      {editing && fireflies && (
+        <FirefliesEditor
+          source={source}
+          onSaved={(s) => {
+            onChange(s);
+            setEditing(false);
+            setNotice("Meetings saved.");
+          }}
+        />
       )}
       {editing && allowlist && (
         <AllowlistEditor
@@ -477,11 +551,13 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   const [connection, setConnection] = useState("");
   const [allow, setAllow] = useState("");
   const [picked, setPicked] = useState<Record<string, unknown>>({});
+  const [meetings, setMeetings] = useState<FirefliesConfig>(NEW_FIREFLIES);
   const { act, error, busy } = useAction();
   const Picker = PICKER[kind];
   const option = kinds.find((k) => k.kind === kind);
   const usable = (option?.connections ?? []).filter((c) => c.status === "active");
-  const spec = kind === "upload" ? null : ALLOWLIST[kind];
+  const needsConnection = kind !== "upload";
+  const spec = kind === "upload" || kind === "fireflies" ? null : ALLOWLIST[kind];
   const connectionId = connection || usable[0]?.id || "";
 
   async function submit(e: FormEvent) {
@@ -489,8 +565,15 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
     const body: Schemas["SourceCreate"] = {
       kind,
       name: name.trim(),
-      connection_id: spec ? connectionId : null,
-      config: Picker ? picked : spec ? { [spec.key]: parseLines(allow) } : {},
+      connection_id: needsConnection ? connectionId : null,
+      config:
+        kind === "fireflies"
+          ? firefliesConfigToSave(meetings)
+          : Picker
+            ? picked
+            : spec
+              ? { [spec.key]: parseLines(allow) }
+              : {},
     };
     const s = await act(() => unwrap(api.POST("/v1/sources", { body })));
     if (s) {
@@ -498,11 +581,15 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       setName("");
       setAllow("");
       setPicked({});
+      setMeetings(NEW_FIREFLIES);
     }
   }
 
   const blocked =
-    !option?.connector_available || (spec !== null && usable.length === 0) || (kind === "notion" && notionRoots(picked).length === 0);
+    !option?.connector_available ||
+    (needsConnection && usable.length === 0) ||
+    (kind === "fireflies" && !firefliesReady(meetings)) ||
+    (kind === "notion" && notionRoots(picked).length === 0);
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source">
@@ -535,7 +622,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
           />
         </Field>
       </div>
-      {spec && usable.length > 0 && (
+      {needsConnection && usable.length > 0 && (
         <Field label="Connection">
           <select
             value={connectionId}
@@ -555,13 +642,16 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
         </Field>
       )}
       {!option?.connector_available && <Warn>The {KIND_LABEL[kind]} connector is not available yet.</Warn>}
-      {option?.connector_available && spec && usable.length === 0 && (
+      {option?.connector_available && needsConnection && usable.length === 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <Chip kind="warn">No {KIND_LABEL[kind]} account</Chip>
           <LinkButton href="/settings/connections" icon="link">
             Connect your account
           </LinkButton>
         </div>
+      )}
+      {kind === "fireflies" && option?.connector_available && usable.length > 0 && connectionId && (
+        <FirefliesPicker key={connectionId} connectionId={connectionId} value={meetings} onChange={setMeetings} />
       )}
       {Picker && usable.length > 0 && <Picker key={`${kind}:${connectionId}`} connectionId={connectionId} config={picked} onChange={setPicked} />}
       {!Picker && spec && usable.length > 0 && (

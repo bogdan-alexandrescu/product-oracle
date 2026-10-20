@@ -69,7 +69,10 @@ def test_0016_roadmap_follows_the_wave_1_head():
     assert script.get_revision(REVISION).down_revision == "0014_blockers_snapshot"
     # The sources lane's 0016 migrations chain on it at the sources integration.
     assert script.get_revision("0016_source_needs_attention").down_revision == REVISION
-    assert script.get_heads() == ["0016_source_needs_attention"]
+    assert script.get_revision("0016_browse_calls").down_revision == (
+        "0016_source_needs_attention"
+    )
+    assert script.get_heads() == ["0016_browse_calls"]
 
 
 def _event(tenant: uuid.UUID, subject: str) -> None:

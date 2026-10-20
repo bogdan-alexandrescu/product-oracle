@@ -113,16 +113,16 @@ async def _read_credential(db: AsyncSession, conn: Connection) -> dict[str, Any]
         raise InvalidError(f"{e}") from None
 
 
-async def mark_connection_rejected(db: AsyncSession, source: Source, error: str) -> None:
-    """A provider rejected the credential during a sync: mark the user's connection
-    expired with the error, so Settings > Connections offers Reconnect. Commits."""
-    if source.connection_id is None:
+async def mark_connection_rejected(
+    db: AsyncSession, connection_id: uuid.UUID | None, owner_id: uuid.UUID, error: str
+) -> None:
+    """A provider rejected the credential of ``connection_id`` (the one a sync used)
+    during a sync: mark the user's connection expired with the error, so Settings >
+    Connections offers Reconnect. Commits."""
+    if connection_id is None:
         return
     conn = await db.scalar(
-        select(Connection).where(
-            Connection.id == source.connection_id,
-            Connection.user_id == source.owner_user_id,
-        )
+        select(Connection).where(Connection.id == connection_id, Connection.user_id == owner_id)
     )
     if conn is not None:
         await connections.mark_failure(db, conn, "expired", error)
@@ -140,17 +140,17 @@ async def owned_connection(
 
 
 async def credential_for(
-    db: AsyncSession, source: Source
+    db: AsyncSession, source: Source, connection_id: uuid.UUID | None = None
 ) -> tuple[dict[str, Any] | None, Connection | None]:
-    """The decrypted credential of the source's connection (``None`` for uploads)."""
+    """The decrypted credential of the source's connection (``None`` for uploads), or of
+    ``connection_id`` when given (the connection a sync read when it started)."""
     if KIND_PROVIDER[source.kind] is None:
         return None, None
-    if source.connection_id is None:
+    connection_id = connection_id or source.connection_id
+    if connection_id is None:
         raise InvalidError("This source has no connection: pick one of your connections")
     try:
-        credential = await connections.get_credential(
-            db, source.connection_id, source.owner_user_id
-        )
+        credential = await connections.get_credential(db, connection_id, source.owner_user_id)
     except connections.ConnectionUnavailable as e:
         if e.status is None:
             raise NotFoundError("Connection not found") from None
@@ -266,6 +266,7 @@ async def create_source(
 ) -> Source:
     conn = await _check_connection(db, user_id, kind, connection_id)
     await _validate(db, kind, config, conn)
+    config = normalize_config(kind, config)
     source = Source(
         owner_user_id=user_id,
         connection_id=connection_id,
@@ -280,6 +281,8 @@ async def create_source(
 
 
 async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any]) -> Source:
+    if changes.get("config") is not None:
+        changes = {**changes, "config": normalize_config(source.kind, changes["config"])}
     reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
     reconfigure = changes.get("config") is not None and changes["config"] != source.config
     if reconnect or reconfigure:
@@ -288,12 +291,22 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
         # Validating reads the credential, which commits: change nothing before it.
         await _validate(db, source.kind, config, conn)
+        # The row was loaded when the request started (sessions do not expire on
+        # commit): a sync may have saved a cursor or a status since. Read it again,
+        # locked until the commit below, so every column written here is compared with
+        # what the database holds (an unchanged attribute is never written).
+        await db.refresh(source, with_for_update=True)
+        reconnect = connection_id != source.connection_id
+        if reconnect:
+            # Another connection may sign in to another account: its position in the
+            # old one means nothing. Start over (unchanged content writes no new version).
+            source.cursor = None
         source.connection_id = connection_id
         source.config = config
-        # The cursor stays: the next sync sees the selection changed (its fingerprint,
-        # oracle.sources.sync), deletes what fell outside it and asks the connector how
-        # much of the cursor still holds (rescope_cursor). A sync running now keeps none
-        # of what it reads from here on (its cursor saves are conditional).
+        # A config change keeps the cursor: the next sync sees the selection changed (its
+        # fingerprint, oracle.sources.sync), deletes what fell outside it and asks the
+        # connector how much of the cursor still holds (rescope_cursor). A sync running
+        # now keeps none of what it reads from here on (its writes are conditional).
         if source.status in ("error", "needs_attention"):
             source.status = "active"
             source.last_error = None
@@ -301,6 +314,18 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         source.name = changes["name"].strip()
     await _commit_unique(db)
     return source
+
+
+def normalize_config(kind: str, config: dict[str, Any]) -> dict[str, Any]:
+    """``config`` in the connector's canonical form (oracle.sources.base), as it is saved
+    and fingerprinted; unchanged when it does not parse (validating says why)."""
+    normalize = getattr(connector_for(kind), "normalize_config", None)
+    if normalize is None:
+        return config
+    try:
+        return normalize(config)
+    except base.ConnectorConfigError:
+        return config
 
 
 async def set_paused(db: AsyncSession, source: Source, paused: bool) -> Source:

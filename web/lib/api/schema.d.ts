@@ -1466,6 +1466,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{connection_id}/fireflies/meetings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fireflies Meetings
+         * @description Your meetings in Fireflies, newest first, a page at a time (search: in titles;
+         *     from/to: whole days in UTC).
+         */
+        get: operations["list_fireflies_meetings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/fireflies/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fireflies Series
+         * @description Your meetings grouped into their calendar series, with counts and the last date
+         *     (from/to: whole days in UTC). Meetings on no calendar are in no series.
+         */
+        get: operations["list_fireflies_series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/graph": {
         parameters: {
             query?: never;
@@ -8695,6 +8737,52 @@ export interface components {
             kind: string;
             /** Message */
             message: string;
+        };
+        /** FirefliesMeetingOut */
+        FirefliesMeetingOut: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date: string | null;
+            /** Duration */
+            duration: number | null;
+            /** Organizer */
+            organizer: string | null;
+            /** Attendee Count */
+            attendee_count: number;
+            /** Series Key */
+            series_key: string | null;
+            /** Series Title */
+            series_title: string;
+        };
+        /** FirefliesMeetingPage */
+        FirefliesMeetingPage: {
+            /** Meetings */
+            meetings: components["schemas"]["FirefliesMeetingOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** FirefliesSeriesList */
+        FirefliesSeriesList: {
+            /** Series */
+            series: components["schemas"]["FirefliesSeriesOut"][];
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** FirefliesSeriesOut */
+        FirefliesSeriesOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Meeting Count */
+            meeting_count: number;
+            /** Last Date */
+            last_date: string | null;
+            /** Organizer */
+            organizer: string | null;
         };
         /** FlowCatalog */
         FlowCatalog: {
@@ -17704,6 +17792,132 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_fireflies_meetings: {
+        parameters: {
+            query?: {
+                search?: string;
+                from?: string | null;
+                to?: string | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirefliesMeetingPage"];
+                };
+            };
+            /** @description Not one of your Fireflies connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection cannot be used (reconnect it), or Fireflies refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fireflies did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_fireflies_series: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirefliesSeriesList"];
+                };
+            };
+            /** @description Not one of your Fireflies connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection cannot be used (reconnect it), or Fireflies refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Fireflies limit reached, try later: Fireflies is rate limiting the API key, or this connection has browsed its daily share; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fireflies did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
