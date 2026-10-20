@@ -78,7 +78,10 @@ export function firefliesReady(c: FirefliesConfig): boolean {
 function shortDay(day: string): string {
   const d = new Date(`${day.slice(0, 10)}T00:00:00Z`);
   const sameYear = d.getUTCFullYear() === new Date().getUTCFullYear();
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC" });
+  // A no-break space keeps "Sep 1" on one line.
+  return d
+    .toLocaleDateString("en-US", { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC" })
+    .replace(" ", "\u00a0");
 }
 
 function rangeText(c: FirefliesConfig): string {
@@ -294,9 +297,9 @@ export function FirefliesPicker({
         </div>
       </div>
 
-      <div className="flex min-h-9 flex-wrap items-center gap-2 rounded-button bg-surface2 px-3 py-1.5">
-        <Label className="flex-none">Includes</Label>
-        <span className="tnum min-w-0 text-[15px] font-semibold" data-testid="fireflies-summary" aria-live="polite">
+      <div className="flex min-h-9 items-center gap-2 rounded-button bg-surface2 px-3 py-1.5">
+        <Label className="hidden flex-none @[520px]:inline">Includes</Label>
+        <span className="tnum min-w-0 flex-1 text-[15px] font-semibold" data-testid="fireflies-summary" aria-live="polite">
           {firefliesSummary(value)}
         </span>
         <InfoTip label="what a sync takes" align="end">
@@ -338,7 +341,10 @@ export function FirefliesPicker({
                         {s.title}
                       </span>
                       {s.meeting_count > 0 && (
-                        <span className="tnum flex-none text-sm text-text2">
+                        <span
+                          className="tnum flex-none text-sm text-text2"
+                          title={`${s.meeting_count} meetings${s.last_date ? `, last ${shortDay(s.last_date)}` : ""}`}
+                        >
                           {s.meeting_count} · {s.last_date ? shortDay(s.last_date) : "—"}
                         </span>
                       )}
@@ -445,7 +451,11 @@ function MeetingRow({
         aria-label={title}
       />
       <span className="min-w-0 flex-1 truncate text-[15px]">{title}</span>
-      {bySeries && <Chip kind="acc">Series</Chip>}
+      {bySeries && (
+        <span className="hidden flex-none @[520px]:inline-flex">
+          <Chip kind="acc">Series</Chip>
+        </span>
+      )}
       {meta && <span className="tnum flex-none text-sm text-text2">{meta}</span>}
     </label>
   );
