@@ -2,6 +2,8 @@
 
 A track is started:
 
+- when a PRD version is approved, which publishes it (T2: approving = publishing;
+  oracle.review.service.approve_version calls :func:`ensure_track`);
 - by the review lane's publish transaction, through ``oracle.changes`` (a
   ``document_version`` change with cause ``published``; :func:`on_published`);
 - when a roadmap's items are stored from an approved PRD version (a ``prd_to_roadmap``
@@ -92,6 +94,10 @@ async def ensure_track(
 ) -> tuple[ProductTrack, bool]:
     """The PRD's track, started from ``version`` (an approved version) when it has none;
     an existing track follows a later approved version. Returns (track, created)."""
+    if prd.kind != "prd":
+        raise Invalid(f"'{prd.slug}' is a {prd.kind}: only a PRD starts a track")
+    if version.document_id != prd.id:
+        raise Invalid(f"that version is not a version of '{prd.slug}'")
     if version.approved_at is None:
         raise Invalid(f"version {version.number} of '{prd.slug}' is not approved")
     # One track per PRD: concurrent starts (a publish and a person) wait on the PRD row.
@@ -141,7 +147,7 @@ async def track_for_roadmap(
     if prd_version is None:
         return None
     prd = await db.get(Document, prd_version.document_id)
-    if prd is None:
+    if prd is None or prd.kind != "prd":
         return None
     track = await track_of_prd(db, prd.id)
     if track is None and prd_version.approved_at is None:

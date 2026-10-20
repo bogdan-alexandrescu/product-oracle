@@ -41,7 +41,7 @@ from oracle.v2.models import FRESHNESS, _fk, _json, _lock_version, _texts, _upda
 
 HORIZONS = ("now", "next", "later")
 TRACK_STATUSES = ("active", "paused", "closed")
-# The monitor's verdict on a track (oracle.roadmap.monitor).
+# The monitor's verdict on a track (oracle.roadmap.views.monitor).
 TRACK_HEALTH = ("on_track", "at_risk", "off_track", "no_roadmap", "paused", "closed")
 MILESTONE_STATUSES = ("planned", "done", "dropped")
 BASIS_KINDS = ("estimate", "capacity", "commitment")

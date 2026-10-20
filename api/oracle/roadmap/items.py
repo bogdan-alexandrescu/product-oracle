@@ -31,6 +31,7 @@ refused date. Read views re-check the date (:func:`live_milestones`).
 
 import json
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -140,6 +141,32 @@ async def blockers_of(db: AsyncSession, target_ids: list[uuid.UUID]) -> list[Ent
         .order_by(Entity.key)
     )
     return list(dict.fromkeys(rows))
+
+
+async def blockers_by_target(
+    db: AsyncSession, target_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[Entity]]:
+    """:func:`blockers_of` for many targets in one query: target id -> its blockers."""
+    if not target_ids:
+        return {}
+    rows = await db.execute(
+        select(Edge.dst_id, Entity)
+        .join(Edge, Edge.src_id == Entity.id)
+        .where(
+            Edge.dst_id.in_(set(target_ids)),
+            Edge.type.in_(("affects", "blocks")),
+            Edge.status != "rejected",
+            Entity.type == "constraint",
+            Entity.status != "rejected",
+        )
+        .order_by(Entity.key)
+    )
+    out: dict[uuid.UUID, list[Entity]] = {}
+    for target, entity in rows.all():
+        found = out.setdefault(target, [])
+        if entity not in found:
+            found.append(entity)
+    return out
 
 
 async def _criteria_of(db: AsyncSession, requirement_ids: list[uuid.UUID]) -> list[Entity]:
@@ -518,9 +545,27 @@ async def live_milestones(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uui
     }
 
 
+# A key or title counts as named only as a whole: not inside a longer key ("pay" is not
+# named by "payment-step"). Keys run on letters, digits, "-", "_" and ".".
+_KEY_CHAR = r"A-Za-z0-9_.\-"
+
+
+def _whole(needle: str, text: str) -> bool:
+    needle = needle.strip()
+    if not needle:
+        return False
+    pattern = rf"(?<![{_KEY_CHAR}]){re.escape(needle)}(?![A-Za-z0-9_\-])"
+    return re.search(pattern, text, re.IGNORECASE) is not None
+
+
 def _named_in(item: RoadmapItem, markdown: str) -> bool:
-    low = markdown.lower()
-    return item.item_key.lower() in low or item.title.lower() in low
+    """Whether the version's text still names the item: its key exactly (as a word or
+    as a horizon anchor, ``{#now-<key>}``), or its title as a whole phrase."""
+    if _whole(item.item_key, markdown):
+        return True
+    if any(_whole(f"{h}-{item.item_key}", markdown) for h in HORIZONS):
+        return True
+    return _whole(item.title, markdown)
 
 
 async def carry_forward(db: AsyncSession, version: DocumentVersion) -> int:

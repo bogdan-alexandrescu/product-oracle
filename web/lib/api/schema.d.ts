@@ -4492,8 +4492,9 @@ export interface paths {
         put?: never;
         /**
          * Create Track
-         * @description Start the track of an accepted PRD (its latest approved version). A PRD has one
-         *     track: 409 when it already has one.
+         * @description Start the track of an accepted PRD (its latest approved version; approving a PRD
+         *     version starts it too). A PRD has one track: 409 when it already has one; 200 with
+         *     that track when a concurrent start made it first.
          */
         post: operations["create_track"];
         delete?: never;
@@ -13777,8 +13778,9 @@ export interface components {
         };
         /**
          * TrackerRecordsImport
-         * @description Engineering status as read from a tracker (an export, the CLI, an agent with read
-         *     access). Oracle stores it; it never writes back.
+         * @description Engineering status as read from a tracker, posted by an approver (an export, the
+         *     CLI, an MCP client acting for them; not a run's token). Oracle stores it; it never
+         *     writes back.
          */
         TrackerRecordsImport: {
             /**
@@ -22795,6 +22797,13 @@ export interface operations {
             };
         };
         responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Successful Response */
             201: {
                 headers: {

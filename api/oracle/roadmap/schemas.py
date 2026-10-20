@@ -244,8 +244,9 @@ class TrackerRecordIn(BaseModel):
 
 
 class TrackerRecordsImport(BaseModel):
-    """Engineering status as read from a tracker (an export, the CLI, an agent with read
-    access). Oracle stores it; it never writes back."""
+    """Engineering status as read from a tracker, posted by an approver (an export, the
+    CLI, an MCP client acting for them; not a run's token). Oracle stores it; it never
+    writes back."""
 
     model_config = ConfigDict(extra="forbid")
 

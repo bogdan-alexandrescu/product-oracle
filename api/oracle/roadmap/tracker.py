@@ -1,10 +1,11 @@
 """Engineering status from a tracker, read-only (E1, §11.1, CR-11).
 
 Oracle reads engineering's state back and compares it with the roadmap; it does not write
-to a tracker. Tracker records arrive through ``POST /v1/tracker/records`` (an export, the
-CLI, or an agent with read access to the tracker) and are upserted by tracker and issue
-key. The read-only alignment report (oracle.roadmap.views) is the path that works without
-write permission.
+to a tracker. Tracker records arrive through ``POST /v1/tracker/records`` from a person
+with the approver role (an export, the CLI, or an MCP client acting for that person) and
+are upserted by tracker and issue key. A SwarmCloud run's token reaches no roadmap route,
+so a run's agent cannot post them. The read-only alignment report (oracle.roadmap.views)
+is the path that works without write permission.
 
 The two-way connector (approved PRD -> epics and issues) stays behind a gate that is off
 (``ORACLE_TRACKER_TWO_WAY_ENABLED``). Even on, no connector is verified yet, so a push is
@@ -76,7 +77,16 @@ async def import_records(
     company's. The caller commits."""
     track_ids = {r.track_id for r in records if r.track_id}
     if track_ids:
-        known = set(await db.scalars(select(ProductTrack.id).where(ProductTrack.id.in_(track_ids))))
+        # The tracks' rows are locked (in id order) as a monitor or a PATCH locks them:
+        # the records and the monitoring that follows see one state of each track.
+        known = set(
+            await db.scalars(
+                select(ProductTrack.id)
+                .where(ProductTrack.id.in_(track_ids))
+                .order_by(ProductTrack.id)
+                .with_for_update()
+            )
+        )
         if unknown := track_ids - known:
             raise TrackerError(f"unknown track: {', '.join(sorted(map(str, unknown)))}")
     refs = [r.external_ref for r in records]

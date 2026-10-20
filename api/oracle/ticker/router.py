@@ -181,11 +181,15 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
         failures.add(tenant_id)
     try:
         # Product tracks (CR-11): an hourly deterministic check, no model call.
+        failed: list[uuid.UUID] = []
         async with tenant_session(tenant_id) as db:
-            await track_views.monitor_due(db)
+            await track_views.monitor_due(db, failed=failed)
             await db.commit()
+        if failed:
+            failures.add(tenant_id)
     except Exception:
         log.exception("run ticker: track monitoring failed for company %s", tenant_id)
+        failures.add(tenant_id)
 
 
 async def _run_jobs(

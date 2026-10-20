@@ -15,11 +15,12 @@ potentially stale) after the trace lane's ``trace.mark_stale``, and
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 
 from oracle import audit, changes
 from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.models import User
 from oracle.authz import require_role
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
@@ -396,10 +397,13 @@ async def list_tracks(
     return [await views.summary(db, t) for t in list(rows)]
 
 
-@router.post("/tracks", response_model=TrackOverview, status_code=201)
-async def create_track(body: TrackCreate, principal: Approver, db: TenantDB) -> TrackOverview:
-    """Start the track of an accepted PRD (its latest approved version). A PRD has one
-    track: 409 when it already has one."""
+@router.post("/tracks", response_model=TrackOverview, status_code=201, responses={200: {}})
+async def create_track(
+    body: TrackCreate, principal: Approver, db: TenantDB, response: Response
+) -> TrackOverview:
+    """Start the track of an accepted PRD (its latest approved version; approving a PRD
+    version starts it too). A PRD has one track: 409 when it already has one; 200 with
+    that track when a concurrent start made it first."""
     prd = await _document(db, body.prd, "prd")
     if await tracks.track_of_prd(db, prd.id) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, f"'{prd.slug}' already has a track")
@@ -409,7 +413,12 @@ async def create_track(body: TrackCreate, principal: Approver, db: TenantDB) -> 
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             f"'{prd.slug}' has no approved version: a track starts from an accepted PRD",
         )
-    track, _ = await tracks.ensure_track(db, prd, version, actor=principal, cause="started")
+    track, created = await tracks.ensure_track(db, prd, version, actor=principal, cause="started")
+    if not created:
+        # A concurrent start (a publish, another person) made it first: that one stands.
+        await db.commit()
+        response.status_code = status.HTTP_200_OK
+        return await views.overview(db, track)
     if body.title:
         track.title = body.title
     await db.commit()
@@ -436,6 +445,13 @@ async def update_track(
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, f"{', '.join(nulls)} cannot be cleared"
         )
+    if fields.get("owner_id") is not None:
+        member = await db.scalar(select(User.id).where(User.id == fields["owner_id"]))
+        if member is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                "owner_id is not a member of this company",
+            )
     before = {k: getattr(track, k) for k in fields}
     for k, v in fields.items():
         setattr(track, k, v)

@@ -8,11 +8,12 @@ call); model work for a track (re-deriving its roadmap) is a ``prd_to_roadmap`` 
 SwarmCloud (V2c, V2d).
 """
 
+import logging
 import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import changes
@@ -46,6 +47,8 @@ from oracle.roadmap.schemas import (
     TrackSummary,
 )
 from oracle.runs.flows import prd_link
+
+log = logging.getLogger(__name__)
 
 RESOLVED = ("resolved", "accepted_risk", "feasibility_only")
 HORIZON_ORDER = {"now": 0, "next": 1, "later": 2}
@@ -174,9 +177,17 @@ class _Context:
             ctx.entities = {
                 e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(ids)))
             }
+        # Live blockers of every item's feature and requirements: one query for all.
+        targets = {i.id: ([i.feature_id] if i.feature_id else []) + list(i.requirement_ids or [])
+                   for i in rows}  # fmt: skip
+        by_target = await items_mod.blockers_by_target(
+            db, [t for ts in targets.values() for t in ts]
+        )
         for i in rows:
-            targets = ([i.feature_id] if i.feature_id else []) + list(i.requirement_ids or [])
-            live = await items_mod.blockers_of(db, targets)
+            live = sorted(
+                {e.id: e for t in targets[i.id] for e in by_target.get(t, [])}.values(),
+                key=lambda e: e.key,
+            )
             stored = [ctx.entities[b] for b in i.blocker_ids or [] if b in ctx.entities]
             ctx.blockers[i.id] = list({e.id: e for e in [*stored, *live]}.values())
         version_ids = {v for i in rows for v in (i.prd_version_id, i.reconciled_version_id) if v}
@@ -654,8 +665,12 @@ async def monitor(
     return o, event_id, changed
 
 
-async def monitor_due(db: AsyncSession, *, limit: int = 20) -> int:
-    """The ticker's call: monitor active tracks not monitored within the hour."""
+async def monitor_due(
+    db: AsyncSession, *, limit: int = 20, failed: list[uuid.UUID] | None = None
+) -> int:
+    """The ticker's call: monitor active tracks not monitored within the hour. Each
+    track in its own savepoint: one that raises is logged, appended to ``failed`` and
+    skipped for the hour, and the others' checks stand. Returns the tracks monitored."""
     cutoff = datetime.now(UTC).timestamp() - MONITOR_EVERY_SECONDS
     rows = await db.scalars(
         select(ProductTrack)
@@ -669,6 +684,20 @@ async def monitor_due(db: AsyncSession, *, limit: int = 20) -> int:
     )
     done = 0
     for track in list(rows):
-        await monitor(db, track, "system")
+        track_id = track.id
+        try:
+            async with db.begin_nested():
+                await monitor(db, track, "system")
+        except Exception:  # noqa: BLE001 - logged; the company's other tracks go on
+            log.exception("track %s could not be monitored", track_id)
+            if failed is not None:
+                failed.append(track_id)
+            # Not again until the next hour.
+            await db.execute(
+                update(ProductTrack)
+                .where(ProductTrack.id == track_id)
+                .values(monitored_at=datetime.now(UTC))
+            )
+            continue
         done += 1
     return done
