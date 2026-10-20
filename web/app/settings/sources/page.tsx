@@ -503,7 +503,7 @@ function SourceRow({
           onSaved={(s) => {
             onChange(s);
             setEditing(false);
-            setNotice("Meetings saved.");
+            setNotice({ tone: "pass", text: "Meetings saved." });
           }}
         />
       )}
