@@ -129,8 +129,21 @@ while the entity and its edges still exist.
 potentially stale with an "… was deleted" reason, then nulls the reference and keeps
 `upstream_snapshot` (id, type, key, title, status) and `upstream_deleted_at`. The output
 stays potentially stale, lists the deleted entity (`upstream.deleted: true`), and can be
-reviewed or reconciled like any other. Section links to the deleted entity go with it. The
-dependencies on those sections are marked first and stay.
+reviewed or reconciled like any other. The dependencies on the sections that link it are
+marked first and stay.
+
+**Deleted links.** Deleting an entity or an edge (directly, over MCP, or by accepting a
+delete proposal) also deletes its evidence, and an entity its edges and their evidence.
+The section links that name the entity or cite that evidence are released before the
+delete as for removed evidence (`oracle.v2.links.release`): a link that keeps another
+target (another entity, other evidence, a source item) only drops the deleted one and
+keeps tracing the section to the rest; a link left with no target is deleted, and the
+change keeps what it was (`data.trace.links`). The sections whose links cite the deleted
+evidence are marked potentially stale ("cites evidence that was deleted"): for an entity
+through its `entity_deleted` change (`data.evidence_ids`), for an edge through an
+`evidence_deleted` change (subject `source_permission`, `data.evidence_ids` and
+`data.edge`) recorded only when a section link cites its evidence, whether or not the edge
+was confirmed. A YAML import never deletes: items not in the file are left alone.
 
 What the handler writes, and nothing else:
 
