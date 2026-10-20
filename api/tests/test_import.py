@@ -90,6 +90,23 @@ async def test_import_v1_persists_document_sections_and_citations(client):
         assert event.data["number"] == 1
 
 
+async def test_a_draft_citing_the_oracle_baseline_imports(client):
+    # source 'oracle': the citation's ref is free text naming the baseline item, kept as is.
+    tenant_id, auth = await seed_auth()
+    resp = await import_draft(client, auth, draft("prd_oracle_citations.md"), doc="example-prd")
+    assert resp.status_code == 201, resp.text
+    by_key = {c["cite_key"]: c for c in resp.json()["citations"]}
+    assert {k: c["source"] for k, c in by_key.items()} == {
+        "o-g1": "oracle",
+        "o-d-ship": "oracle",
+        "c1": "slack",
+    }
+    assert by_key["o-g1"]["ref"] == "baseline goal g1 (activation), locked"
+    async with tenant_session(tenant_id) as s:
+        stored = sorted(await s.scalars(select(Citation.source)))
+    assert stored == ["oracle", "oracle", "slack"]
+
+
 async def test_reads_list_and_markdown(client):
     _, auth = await seed_auth()
     text = draft("prd_v1.md")
