@@ -294,13 +294,28 @@ async def run_withheld(db: AsyncSession, principal: Principal | None) -> set[uui
     return set((await db.scalars(withheld_ids(principal.user_id).distinct())).all())
 
 
-def run_shared(principal: Principal | None) -> Select | None:
-    """SQL, (item_id, version_id): what a run reads in full text beyond its user's own
-    items, and the only version it reads of those (its user's own included) whatever
-    ``as_of`` it asks for. None for anyone but a run."""
+def ever_frozen() -> Select:
+    """SQL: the ids of every item a finding shared in full froze, as stored (deleted or
+    withheld since included): a run reads none of them as its user's own item."""
+    from oracle.intake.models import IntakeSharedItem
+
+    return select(IntakeSharedItem.item_id)
+
+
+def run_reads(intake_id: uuid.UUID | None = None) -> source_items.RunReads:
+    """A run's reads (``items.RunReads``): what findings shared in full released (of
+    ``intake_id`` only, if given), and every item ever frozen."""
+    return source_items.RunReads(released=readable_shared(intake_id), frozen=ever_frozen())
+
+
+def run_shared(principal: Principal | None) -> source_items.RunReads | None:
+    """What a run reads in full text beyond its user's own items, and the only version
+    it reads of those (its user's own included) whatever ``as_of`` it asks for; its
+    user's own items ever frozen are read through ``released`` only. None for anyone
+    but a run."""
     if principal is None or not principal.is_run:
         return None
-    return readable_shared()
+    return run_reads()
 
 
 async def run_include(db: AsyncSession, intake: ProductIntake) -> dict[uuid.UUID, uuid.UUID]:

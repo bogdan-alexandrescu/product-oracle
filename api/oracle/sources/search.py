@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import confidence
@@ -36,12 +36,12 @@ async def search(
     exclude: set[uuid.UUID] | None = None,
     include: set[uuid.UUID] | None = None,
     source_ids: list[uuid.UUID] | None = None,
-    also: Select | None = None,
+    also: items.RunReads | None = None,
 ) -> list[dict[str, Any]]:
     """``exclude``: items the caller may not read; ``include``: the only items the
-    caller may be shown; ``source_ids``: the only sources searched; ``also``: SQL of
-    (item_id, version_id), items the caller reads at that version only, whoever owns
-    them and whatever ``as_of`` says (a run's, S6). All applied in SQL, before
+    caller may be shown; ``source_ids``: the only sources searched; ``also``: a run's
+    reads (S6, ``items.RunReads``): shared items at the version released only, whoever
+    owns them and whatever ``as_of`` says, and nothing deleted upstream. All applied in SQL, before
     ranking and the limit, so what is left out never changes what is returned."""
     if include is not None and not include:
         return []

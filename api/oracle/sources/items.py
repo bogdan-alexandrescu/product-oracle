@@ -42,6 +42,18 @@ CONFIDENCE_SETTING = "confidence_weights"
 
 
 @dataclass(frozen=True)
+class RunReads:
+    """What a run reads of source items beyond its user's own current ones (S6, freeze
+    at sharing). ``released``: SQL of (item_id, version_id), items it reads at that
+    version only, whoever owns them and whatever ``as_of`` says. ``frozen``: SQL of
+    item ids, every item a finding shared in full ever froze (deleted or withheld since
+    included): never read as its user's own item, only through ``released``."""
+
+    released: Select
+    frozen: Select
+
+
+@dataclass(frozen=True)
 class ItemRow:
     item: SourceItem
     version: SourceItemVersion | None
@@ -103,17 +115,17 @@ def version_ids(
     user_id: uuid.UUID,
     as_of: datetime | None = None,
     txn_snapshot: str | None = None,
-    also: Select | None = None,
+    also: RunReads | None = None,
 ) -> Select:
     """Ids of the versions a read sees: current ones, or the pinned ones at ``as_of``
-    (and, given the pin's ``txn_snapshot``, committed when it was taken). ``also``:
-    SQL of (item_id, version_id), items a run reads at that version only (S6, freeze at
-    sharing): other users' items it may read too, and its user's own items a finding
-    shared in full released, whatever ``as_of`` says."""
+    (and, given the pin's ``txn_snapshot``, committed when it was taken). ``also``: a
+    run's reads (S6): its user's own items ever frozen by sharing are read only at the
+    version released (none, once deleted or withheld), other users' released items at
+    that version too, and nothing deleted upstream, whatever ``as_of`` says."""
     owned = SourceItem.source_id.in_(select(Source.id).where(Source.owner_user_id == user_id))
-    released = also.subquery() if also is not None else None
-    if released is not None:
-        owned = and_(owned, SourceItem.id.not_in(select(released.c.item_id)))
+    released = also.released.subquery() if also is not None else None
+    if also is not None:
+        owned = and_(owned, SourceItem.id.not_in(also.frozen), SourceItem.deleted_at.is_(None))
     if as_of is None:
         mine = select(SourceItem.current_version_id.label("id")).where(
             owned,

@@ -235,7 +235,7 @@ async def search_intake_evidence(
             limit=limit,
             include=include,
             source_ids=ev.source_ids_of(intake) or None,
-            also=ev.readable_shared(intake.id) if released is not None else None,
+            also=ev.run_reads(intake.id) if released is not None else None,
         )
     refs = await ev.refs(
         db,

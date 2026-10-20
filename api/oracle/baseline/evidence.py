@@ -73,7 +73,7 @@ async def _own_item(
 
         if item.deleted_at is not None:
             raise NotFoundError("Source item not found among your sources")
-        frozen = run_shared(principal).subquery()  # type: ignore[union-attr]
+        frozen = run_shared(principal).released.subquery()  # type: ignore[union-attr]
         released = await db.scalar(select(frozen.c.version_id).where(frozen.c.item_id == item_id))
         version_id = released or version_id
     version = await db.get(SourceItemVersion, version_id) if version_id else None

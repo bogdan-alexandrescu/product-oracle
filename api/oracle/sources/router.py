@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import func, or_, select
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.sources import items, service, store, uploads
@@ -57,9 +57,10 @@ async def _withheld(db: TenantDB, principal: Principal) -> set[uuid.UUID]:
     return await run_withheld(db, principal) or set()
 
 
-def _shared(principal: Principal) -> Select | None:
-    """SQL (item_id, version_id): what a run reads at the version a finding shared in
-    full released, its user's own items included (None for anyone else)."""
+def _shared(principal: Principal) -> items.RunReads | None:
+    """A run's reads (``items.RunReads``): what it reads at the version a finding shared
+    in full released, its user's own items included, and every item ever frozen, read
+    only that way (None for anyone else)."""
     from oracle.intake.evidence import run_shared
 
     return run_shared(principal)
@@ -307,10 +308,16 @@ async def get_source_item(
     if shared is not None:
         # A run reads a shared item at the version released only, never another
         # (S6, freeze at sharing), and nothing deleted upstream.
-        frozen = shared.subquery()
+        frozen = shared.released.subquery()
         released = await db.scalar(select(frozen.c.version_id).where(frozen.c.item_id == item_id))
     if released is not None:
         row = await items.item_row(db, item_id, released)
+    elif shared is not None and await db.scalar(
+        select(shared.frozen.where(shared.frozen.selected_columns[0] == item_id).exists())
+    ):
+        # Ever frozen, not readable now (deleted upstream or withheld): never read as
+        # the run's user's own item, as ``/v1/search`` never finds it.
+        row = None
     else:
         row = await items.owned_item(db, user_id, item_id)
         if row is not None and principal.is_run and row.item.deleted_at is not None:
