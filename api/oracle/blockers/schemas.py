@@ -89,8 +89,10 @@ class _BlockerFields(BaseModel):
 
 
 class BlockerCreate(_BlockerFields):
-    """A new blocker: either an existing constraint entity (``entity_id``) or a new one
-    (``key`` and ``statement``)."""
+    """A new blocker: either an existing constraint entity (``entity_id``; a
+    ``statement`` or ``detail`` given replaces its title or body) or a new one (``key``
+    and ``statement``). Promoting a constraint an intake answer suggested as a blocker
+    clears its ``attrs.proposed_blocker`` mark in the same write (B4)."""
 
     entity_id: uuid.UUID | None = None
     key: str | None = Field(None, pattern=KEY_PATTERN, max_length=100)

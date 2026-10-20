@@ -92,9 +92,15 @@ def _cite(t: uuid.UUID, v: uuid.UUID, key: str, source: str) -> None:
 def test_chains_on_the_refinement_batch_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0016_refinement_batch"
-    # The sources lane's 0016 migrations chain on it at the sources integration.
-    assert script.get_revision("0016_source_needs_attention").down_revision == REVISION
+    # 0018_runtime_features chains on it, 0019_citation_confidence on that and the intake
+    # lane's 0014_intake on that; one head.
     assert script.get_heads() == ["0017_item_provenance"]
+    assert script.get_revision("0018_runtime_features").down_revision == REVISION
+    assert script.get_revision("0019_citation_confidence").down_revision == "0018_runtime_features"
+    assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
+    # The sources lane's migrations chain after it: 0016_source_needs_attention,
+    # 0016_browse_calls, 0017_item_provenance.
+    assert script.get_revision("0016_source_needs_attention").down_revision == "0014_intake"
 
 
 def test_an_oracle_citation_inserts_after_upgrade(scratch_db):

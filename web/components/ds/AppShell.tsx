@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { resetMockData } from "@/lib/api/mock/server";
@@ -11,6 +11,7 @@ import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/li
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
 import { Mark } from "./Brand";
+import { ConfirmHost } from "./ConfirmDialog";
 import { initialsOf } from "./Figures";
 import { Icon, type IconName } from "./Icon";
 
@@ -32,7 +33,47 @@ const SETTINGS: Dest = { label: "Settings", href: "/settings/members", icon: "se
 /** Phone tab bar: Home, PRDs, Roadmap, Inbox, More. */
 const TABS = ["Home", "PRDs", "Roadmap", "Inbox"];
 
-function isActive(pathname: string, d: Dest): boolean {
+/*
+ * The destination a document belongs to (UI test finding E2): every kind's pages are
+ * /documents/<slug>/…, so the URL alone says PRDs. A document page names its list once it
+ * knows the document's kind (Roadmap for a roadmap), per slug; a slug's kind never changes,
+ * so later pages of the same document highlight the right item from their first paint.
+ */
+const documentHomes = new Map<string, string>();
+let documentHomesVersion = 0;
+const documentHomesListeners = new Set<() => void>();
+
+function subscribeDocumentHomes(listener: () => void) {
+  documentHomesListeners.add(listener);
+  return () => {
+    documentHomesListeners.delete(listener);
+  };
+}
+
+/** A document page says which destination it belongs to (`href`, e.g. "/roadmap"). */
+export function useDocumentDestination(slug: string | undefined, href: string | undefined) {
+  useLayoutEffect(() => {
+    if (!slug || !href || documentHomes.get(slug) === href) return;
+    documentHomes.set(slug, href);
+    documentHomesVersion += 1;
+    documentHomesListeners.forEach((listener) => listener());
+  }, [slug, href]);
+}
+
+/** The destination the open document page belongs to, once it has said so. */
+function useDocumentHome(pathname: string): string | undefined {
+  useSyncExternalStore(
+    subscribeDocumentHomes,
+    () => documentHomesVersion,
+    () => 0,
+  );
+  const slug = /^\/documents\/([^/]+)/.exec(pathname)?.[1];
+  return slug ? documentHomes.get(decodeURIComponent(slug)) : undefined;
+}
+
+function isActive(pathname: string, d: Dest, home?: string): boolean {
+  // A document page: the list its document belongs to.
+  if (home) return d.href === home;
   const base = d.match ?? d.href;
   // /sources (evidence search) lives under Settings › Sources.
   if (d === SETTINGS && pathname.startsWith("/sources")) return true;
@@ -216,8 +257,8 @@ const RAIL_SELECTED =
 const TAB_BAR =
   "before:absolute before:inset-x-2.5 before:-top-1.5 before:h-[3px] before:rounded-[2px] before:bg-rail-bar before:content-['']";
 
-function RailLink({ d, pathname, badge }: { d: Dest; pathname: string; badge?: number | null }) {
-  const active = isActive(pathname, d);
+function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; home?: string; badge?: number | null }) {
+  const active = isActive(pathname, d, home);
   return (
     <Link
       href={d.href}
@@ -239,6 +280,7 @@ function Navs() {
   // While /v1/me loads, keep the rail so a signed-in page never jumps.
   const shown = (loading || !!me) && !pathname.startsWith("/login") && !pathname.startsWith("/oauth");
   const inbox = useInboxCount(shown);
+  const home = useDocumentHome(pathname);
   const [more, setMore] = useState(false);
   // Close the More sheet on navigation.
   const [lastPath, setLastPath] = useState(pathname);
@@ -250,7 +292,7 @@ function Navs() {
 
   const tabDests = TABS.map((t) => DESTINATIONS.find((d) => d.label === t)!);
   const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), SETTINGS];
-  const moreActive = moreDests.some((d) => isActive(pathname, d));
+  const moreActive = moreDests.some((d) => isActive(pathname, d, home));
 
   return (
     <>
@@ -263,11 +305,11 @@ function Navs() {
           <Mark size={44} tone="sky" className="block" />
         </Link>
         {DESTINATIONS.map((d) => (
-          <RailLink key={d.href} d={d} pathname={pathname} badge={d.label === "Inbox" ? inbox : undefined} />
+          <RailLink key={d.href} d={d} pathname={pathname} home={home} badge={d.label === "Inbox" ? inbox : undefined} />
         ))}
         <span className="flex-1" />
         <span aria-hidden className="mb-1.5 h-px w-10 flex-none bg-rail-sep" />
-        <RailLink d={SETTINGS} pathname={pathname} />
+        <RailLink d={SETTINGS} pathname={pathname} home={home} />
         <UserMenu placement="rail" />
       </nav>
 
@@ -277,7 +319,7 @@ function Navs() {
         className="fixed inset-x-0 bottom-0 z-40 hidden h-[68px] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] pt-1.5 pb-2 max-[600px]:grid"
       >
         {tabDests.map((d) => {
-          const active = isActive(pathname, d) && !more;
+          const active = isActive(pathname, d, home) && !more;
           return (
             <Link
               key={d.href}
@@ -320,7 +362,7 @@ function Navs() {
               <li key={d.href}>
                 <Link
                   href={d.href}
-                  aria-current={isActive(pathname, d) ? "page" : undefined}
+                  aria-current={isActive(pathname, d, home) ? "page" : undefined}
                   className="flex flex-col items-center gap-1 rounded-xl py-2.5 text-sm font-medium text-text hover:bg-surface2 aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
                 >
                   <Icon name={d.icon} />
@@ -421,6 +463,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>
         {children}
       </main>
+      <ConfirmHost />
     </div>
   );
 }

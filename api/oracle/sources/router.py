@@ -1,7 +1,15 @@
 """Sources, sync, uploads, items, snapshots and search (Lane B1).
 
 Sources are owned (S3 revised): every route acts for the signed-in user, who sees and
-syncs only their own sources and items. Another user's source or item is a 404.
+syncs only their own sources and items. Another user's source or item is a 404. A run
+token acting for its user never reads raw an item behind one of the user's intake
+findings not shared in full (S6, ``oracle.intake.evidence.run_withheld``): the item is
+left out of every list, count and search, and is a 404. Any run also reads in full text
+the items a finding shared in full released (``oracle.intake.evidence.run_shared``, owner
+2026-10-19), whoever owns them, unless an intake withholds them or they were deleted
+upstream: ``/v1/source-items/{id}`` returns them and ``/v1/search`` finds them, as
+``/v1/intakes/{id}/evidence`` does, only ever at the version sharing released (freeze
+at sharing: what the finding cited when its author shared it).
 
 Changing a source (adding, editing, deleting, pausing, syncing, uploading) also needs a
 role that may change things (commenter or above): a viewer, or an MCP client granted
@@ -13,7 +21,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role
@@ -49,6 +57,22 @@ def _user(principal: Principal) -> uuid.UUID:
     return principal.user_id
 
 
+async def _withheld(db: TenantDB, principal: Principal) -> set[uuid.UUID]:
+    """Items a run token may not read raw (empty for anyone else)."""
+    from oracle.intake.evidence import run_withheld
+
+    return await run_withheld(db, principal) or set()
+
+
+def _shared(principal: Principal) -> items.RunReads | None:
+    """A run's reads (``items.RunReads``): what it reads at the version a finding shared
+    in full released, its user's own items included, and every item ever frozen, read
+    only that way (None for anyone else)."""
+    from oracle.intake.evidence import run_shared
+
+    return run_shared(principal)
+
+
 def _http(exc: Exception) -> HTTPException:
     if isinstance(exc, service.RateLimitedError):
         return HTTPException(
@@ -81,10 +105,10 @@ def _source_out(source: Source, count: int = 0) -> SourceOut:
     )
 
 
-async def _one_out(db: TenantDB, source: Source) -> SourceOut:
+async def _one_out(db: TenantDB, source: Source, principal: Principal) -> SourceOut:
     # Reload server-set columns (updated_at) the last flush expired.
     await db.refresh(source)
-    counts = await service.item_counts(db, [source.id])
+    counts = await service.item_counts(db, [source.id], await _withheld(db, principal))
     return _source_out(source, counts.get(source.id, 0))
 
 
@@ -101,7 +125,8 @@ async def _owned(db: TenantDB, principal: Principal, source_id: uuid.UUID) -> So
 @router.get("/sources", response_model=list[SourceOut])
 async def list_sources(principal: CurrentPrincipal, db: TenantDB) -> list[SourceOut]:
     sources = await service.list_sources(db, _user(principal))
-    counts = await service.item_counts(db, [s.id for s in sources])
+    # A run counts only what it may list (S6).
+    counts = await service.item_counts(db, [s.id for s in sources], await _withheld(db, principal))
     return [_source_out(s, counts.get(s.id, 0)) for s in sources]
 
 
@@ -151,7 +176,7 @@ async def create_source(body: SourceCreate, principal: SourceWriter, db: TenantD
 
 @router.get("/sources/{source_id}", response_model=SourceOut)
 async def get_source(source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB) -> SourceOut:
-    return await _one_out(db, await _owned(db, principal, source_id))
+    return await _one_out(db, await _owned(db, principal, source_id), principal)
 
 
 @router.patch(
@@ -167,7 +192,7 @@ async def update_source(
         source = await service.update_source(db, source, body.model_dump(exclude_unset=True))
     except _ERRORS as e:
         raise _http(e) from e
-    return await _one_out(db, source)
+    return await _one_out(db, source, principal)
 
 
 @router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -179,13 +204,13 @@ async def delete_source(source_id: uuid.UUID, principal: SourceWriter, db: Tenan
 @router.post("/sources/{source_id}/pause", response_model=SourceOut)
 async def pause_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SourceOut:
     source = await service.set_paused(db, await _owned(db, principal, source_id), True)
-    return await _one_out(db, source)
+    return await _one_out(db, source, principal)
 
 
 @router.post("/sources/{source_id}/resume", response_model=SourceOut)
 async def resume_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SourceOut:
     source = await service.set_paused(db, await _owned(db, principal, source_id), False)
-    return await _one_out(db, source)
+    return await _one_out(db, source, principal)
 
 
 @router.post(
@@ -213,7 +238,7 @@ async def sync_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantD
         checkpoints=stats.checkpoints,
         retry_after=stats.retry_after,
         error=stats.error,
-        source=await _one_out(db, source),
+        source=await _one_out(db, source, principal),
     )
 
 
@@ -255,9 +280,13 @@ async def upload_files(
 
     settings = await items.confidence_settings(db)
     ids = list(dict.fromkeys(item_ids))
-    rows = {r.item.id: r for r in await items.source_items(db, source, ids=ids, limit=len(ids))}
+    withheld = await _withheld(db, principal)
+    found = await items.source_items(db, source, ids=ids, limit=len(ids), exclude=withheld)
+    # A run reads a shared item as released, title included (S6, titles).
+    rows = {r.item.id: r for r in await items.as_released(db, found, _shared(principal))}
     return UploadResult(
-        items=[ItemOut(**items.item_out(rows[i], settings)) for i in ids],
+        # A run never reads back an item it may not read, even one it just rewrote.
+        items=[ItemOut(**items.item_out(rows[i], settings)) for i in ids if i in rows],
         unchanged=unchanged,
     )
 
@@ -274,10 +303,16 @@ async def list_source_items(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ItemOut]:
+    """The source's items at their current versions. A run never lists a deleted item
+    (``include_deleted`` is ignored) and reads a shared item at the version released,
+    its title as shared (S6, owner 2026-10-19)."""
     source = await _owned(db, principal, source_id)
+    shared = _shared(principal)
+    # Left out and read as released before paging, so a run's pages are full.
     rows = await items.source_items(
-        db, source, include_deleted=include_deleted, limit=limit, offset=offset
-    )
+        db, source, include_deleted=include_deleted and shared is None, limit=limit,
+        offset=offset, exclude=await _withheld(db, principal), also=shared,
+    )  # fmt: skip
     settings = await items.confidence_settings(db)
     return [ItemOut(**items.item_out(r, settings)) for r in rows]
 
@@ -286,13 +321,44 @@ async def list_source_items(
 async def get_source_item(
     item_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> ItemDetail:
-    row = await items.owned_item(db, _user(principal), item_id)
+    user_id = _user(principal)
+    shared = _shared(principal)
+    released = None
+    if shared is not None:
+        # A run reads a shared item at the version released only, never another
+        # (S6, freeze at sharing), and nothing deleted upstream.
+        frozen = shared.released.subquery()
+        released = await db.scalar(select(frozen.c.version_id).where(frozen.c.item_id == item_id))
+    if released is not None:
+        row = await items.item_row(db, item_id, released)
+    elif shared is not None and await db.scalar(
+        select(shared.frozen.where(shared.frozen.selected_columns[0] == item_id).exists())
+    ):
+        # Ever frozen, not readable now (deleted upstream or withheld): never read as
+        # the run's user's own item, as ``/v1/search`` never finds it.
+        row = None
+    else:
+        row = await items.owned_item(db, user_id, item_id)
+        if row is not None and principal.is_run and row.item.deleted_at is not None:
+            row = None
+        if row is not None and item_id in await _withheld(db, principal):
+            row = None
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
-    versions = await db.scalar(select(func.count()).where(SourceItemVersion.item_id == row.item.id))
+    versions = 1
+    if released is None:
+        versions = await db.scalar(
+            select(func.count()).where(SourceItemVersion.item_id == row.item.id)
+        )
+    foreign = released is not None and user_id != await db.scalar(
+        select(Source.owner_user_id).where(Source.id == row.item.source_id)
+    )
+    if released is not None:
+        # Its user's own item too reads as at release (S6, freeze at sharing).
+        row = items.ItemRow(row.item, row.version, row.source_kind, released=True)
     settings = await items.confidence_settings(db)
     return ItemDetail(
-        **items.item_out(row, settings),
+        **items.item_out(row, settings, foreign=foreign),
         content=row.version.content if row.version is not None else None,
         version_count=versions or 0,
     )
@@ -338,8 +404,22 @@ async def list_snapshots(principal: CurrentPrincipal, db: TenantDB) -> list[Snap
 
 
 async def _snapshot(db: TenantDB, principal: Principal, snapshot_id: uuid.UUID) -> Snapshot:
+    """A snapshot the user took, or the one a run they created is pinned to.
+
+    A run started from someone else's intake reads the intake's snapshot (S4), taken by
+    the intake's author; its creator (and the agents acting for them) may read it. The
+    items they see are still their own (AUD-9), never the author's."""
+    from oracle.runs.models import Run
+
+    user_id = _user(principal)
+    pinned_by_run = select(Run.snapshot_id).where(
+        Run.created_by == user_id, Run.snapshot_id.is_not(None)
+    )
     snapshot = await db.scalar(
-        select(Snapshot).where(Snapshot.id == snapshot_id, Snapshot.created_by == _user(principal))
+        select(Snapshot).where(
+            Snapshot.id == snapshot_id,
+            or_(Snapshot.created_by == user_id, Snapshot.id.in_(pinned_by_run)),
+        )
     )
     if snapshot is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
@@ -360,9 +440,16 @@ async def list_snapshot_items(
     db: TenantDB,
     source: uuid.UUID | None = None,
 ) -> list[ItemOut]:
-    """The user's items as they were at the snapshot (each at its pinned version)."""
+    """The user's items as they were at the snapshot (each at its pinned version). A run
+    reads a shared item at the version released whatever the snapshot, its title as
+    shared, and nothing deleted upstream (S6, owner 2026-10-19)."""
     snapshot = await _snapshot(db, principal, snapshot_id)
-    rows = await items.items_as_of(db, _user(principal), snapshot.as_of, source_id=source)
+    rows = await items.items_as_of(
+        db, _user(principal), snapshot.as_of, source_id=source,
+        txn_snapshot=snapshot.txn_snapshot, also=_shared(principal),
+    )  # fmt: skip
+    withheld = await _withheld(db, principal)
+    rows = [r for r in rows if r.item.id not in withheld]
     settings = await items.confidence_settings(db)
     return [ItemOut(**items.item_out(r, settings, now=snapshot.as_of)) for r in rows]
 
@@ -392,12 +479,15 @@ async def search_sources(
     as_of: datetime | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> SearchResults:
-    """Search the user's own items. Ranked by relevance x confidence weight; ``as_of``
-    searches the versions pinned at that time."""
+    """Search the user's own items (a run: also those a finding shared in full
+    released). Ranked by relevance x confidence weight; ``as_of`` searches the versions
+    pinned at that time, except a run's shared items: those are searched at the version
+    sharing released only, whatever ``as_of`` says (S6, freeze at sharing)."""
     user_id = _user(principal)
     if as_of is not None and as_of.tzinfo is None:
         as_of = as_of.replace(tzinfo=UTC)
     hits = await search_service.search(
-        db, user_id, q, kinds=_kinds(kinds), source_id=source, as_of=as_of, limit=limit
-    )
+        db, user_id, q, kinds=_kinds(kinds), source_id=source, as_of=as_of, limit=limit,
+        exclude=await _withheld(db, principal), also=_shared(principal),
+    )  # fmt: skip
     return SearchResults(query=q, as_of=as_of, hits=hits)  # type: ignore[arg-type]

@@ -7,6 +7,7 @@ from sqlalchemy import and_, false, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.sources.base import ItemDelete, ItemUpsert, Scope
+from oracle.sources.items import current_xid
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 
 
@@ -28,7 +29,8 @@ async def upsert_item(
     """Create or update an item; returns it and whether a new version was written.
 
     A version is written only when the content hash differs from the current one; it
-    copies the item's title at that moment.
+    copies the item's title and link at that moment (a rename alone changes the item
+    row, never a version: what a share froze stays as it was, S6).
     """
     item = await _item(db, source, event.external_id)
     if item is None:
@@ -43,6 +45,7 @@ async def upsert_item(
     item.occurred_at = event.occurred_at
     item.source_updated_at = event.source_updated_at
     item.deleted_at = None
+    item.deleted_xid = None
     # The item row must exist before a version can point at it.
     await db.flush()
 
@@ -60,6 +63,7 @@ async def upsert_item(
         id=uuid.uuid4(),
         item_id=item.id,
         title=event.title,
+        url=event.url,
         content=event.content,
         content_hash=digest,
         # Wall-clock time, not the transaction start: a long sync commits in steps and
@@ -79,6 +83,7 @@ async def delete_item(db: AsyncSession, source: Source, event: ItemDelete) -> bo
     if item is None or item.deleted_at is not None:
         return False
     item.deleted_at = func.clock_timestamp()
+    item.deleted_xid = current_xid()
     await db.flush()
     return True
 

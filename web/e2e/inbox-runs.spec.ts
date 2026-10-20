@@ -3,7 +3,12 @@ import { expect, test } from "@playwright/test";
 import { login, seedStuckRuns } from "./helpers";
 
 test("stuck runs and failed imports are rows of the Inbox, counted alike by the badge, Home and /inbox", async ({ page }) => {
-  page.on("dialog", (d) => void d.accept());
+  // Retry and Cancel again ask in the page (UI test finding E5), never in a browser dialog.
+  const native: string[] = [];
+  page.on("dialog", (d) => {
+    native.push(d.message());
+    void d.dismiss();
+  });
   await login(page);
   const overrunId = await seedStuckRuns(page);
 
@@ -47,12 +52,24 @@ test("stuck runs and failed imports are rows of the Inbox, counted alike by the 
   await page.goto("/inbox");
   await tabs.getByRole("tab", { name: /^Open/ }).click();
   await lookups.locator("tr[data-row]").filter({ hasText: "seg-1-a2" }).getByRole("button", { name: "Retry" }).click();
+  const retry = page.getByRole("alertdialog", { name: "Retry" });
+  await expect(retry).toContainText("This can start a paid duplicate run");
+  await retry.getByRole("button", { name: "Retry" }).click();
   await expect(lookups.locator("tr[data-row]")).toHaveCount(1);
   await page.getByTestId("inbox-imports").getByRole("button", { name: "Retry" }).click();
   await expect(page.getByTestId("inbox-imports")).toHaveCount(0);
   await expect(page.getByText("11 waiting").filter({ visible: true })).toBeVisible();
   await expect(badge).toHaveText("11");
   await expect(tabs.getByRole("tab", { name: /^Open/ })).toHaveText("Open11");
+  // Back first: nothing is cancelled.
   await lookups.getByRole("button", { name: "Cancel again" }).click();
+  const again = page.getByRole("alertdialog", { name: "Cancel again" });
+  await expect(again).toContainText("Cancel again? Oracle cancels this workflow again; nothing restarts.");
+  await again.getByRole("button", { name: "Back" }).click();
+  await expect(again).toHaveCount(0);
+  await expect(lookups.getByRole("button", { name: "Cancel again" })).toHaveCount(1);
+  await lookups.getByRole("button", { name: "Cancel again" }).click();
+  await again.getByRole("button", { name: "Cancel again" }).click();
   await expect(lookups.getByRole("button", { name: "Cancel again" })).toHaveCount(0);
+  expect(native).toEqual([]);
 });

@@ -78,10 +78,24 @@ test("settings › sources: add from my connections, upload files, delete", asyn
   ]);
   await expect(notes.getByRole("alert")).toContainText("only .md, .txt and .pdf files can be uploaded");
 
-  page.once("dialog", (d) => d.accept());
+  // Delete asks in the page (never a browser dialog); Back keeps the source.
+  const native: string[] = [];
+  page.on("dialog", (d) => {
+    native.push(d.message());
+    void d.dismiss();
+  });
+  const ask = page.getByRole("alertdialog", { name: "Delete" });
   await docs.getByRole("button", { name: "More actions for Docs repo" }).click();
   await docs.getByRole("menuitem", { name: "Delete" }).click();
+  await expect(ask).toContainText("Delete “Docs repo” and everything it pulled in?");
+  await ask.getByRole("button", { name: "Back" }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(page.getByRole("listitem", { name: "Docs repo" })).toHaveCount(1);
+  await docs.getByRole("button", { name: "More actions for Docs repo" }).click();
+  await docs.getByRole("menuitem", { name: "Delete" }).click();
+  await ask.getByRole("button", { name: "Delete" }).click();
   await expect(page.getByRole("listitem", { name: "Docs repo" })).toHaveCount(0);
+  expect(native).toEqual([]);
 });
 
 test("/sources: search ranks by confidence and explains the badge", async ({ page }) => {

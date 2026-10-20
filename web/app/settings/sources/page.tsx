@@ -6,6 +6,7 @@ import { KIND_LABEL } from "@/app/sources/_components/confidence";
 import {
   Button,
   Chip,
+  confirmInPage,
   Empty,
   Icon,
   InfoTip,
@@ -344,7 +345,7 @@ function SourceRow({
   }
 
   async function remove() {
-    if (!window.confirm(`Delete “${source.name}” and everything it pulled in?`)) return;
+    if (!(await confirmInPage({ destructive: true, action: "Delete", message: `Delete “${source.name}” and everything it pulled in?` }))) return;
     const ok = await act(() => unwrap(api.DELETE("/v1/sources/{source_id}", path)).then(() => true));
     if (ok) onDelete();
   }

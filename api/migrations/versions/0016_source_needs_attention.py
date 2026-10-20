@@ -5,7 +5,7 @@ accepted range) is no longer synced until its owner edits it; it shows as needin
 attention instead of failing every sync.
 
 Revision ID: 0016_source_needs_attention
-Revises: 0017_citation_source_oracle
+Revises: 0014_intake
 """
 
 from collections.abc import Sequence
@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0016_source_needs_attention"
-down_revision: str | None = "0017_citation_source_oracle"
+down_revision: str | None = "0014_intake"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

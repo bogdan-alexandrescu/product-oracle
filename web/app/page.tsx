@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
-export default function Home() {
-  redirect("/documents");
+/** The bare site URL opens Home, the rail's first destination (UI test finding E1). */
+export default function Root() {
+  redirect("/home");
 }

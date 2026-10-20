@@ -58,22 +58,22 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_the_migration_follows_0015_on_a_single_head():
+def test_the_migration_follows_0015_and_precedes_0014_intake():
     # Re-chained at the wave 1 integration: the blockers lane's 0014 comes after main's
     # 0014 chain (quality, usage_retry_at, trace).
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0015_section_table_rows"
     # v2-roadmap (wave 2) chains 0016_roadmap on it; 0016_refinement_batch (C1e) chains on
-    # that, and 0017_citation_source_oracle on that; the sources lane's needs-attention
-    # status and browse calls follow, in merge order, on the single head.
+    # that, 0017_citation_source_oracle on that, then 0018_runtime_features,
+    # 0019_citation_confidence and the intake lane's 0014_intake.
     assert script.get_heads() == ["0017_item_provenance"]
     assert script.get_revision("0016_roadmap").down_revision == REVISION
     assert script.get_revision("0016_refinement_batch").down_revision == "0016_roadmap"
     assert (
-        script.get_revision("0016_source_needs_attention").down_revision
-        == "0017_citation_source_oracle"
+        script.get_revision("0017_citation_source_oracle").down_revision == "0016_refinement_batch"
     )
-    assert script.get_revision("0016_browse_calls").down_revision == "0016_source_needs_attention"
+    assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
+    assert script.get_heads() == ["0017_item_provenance"]
 
 
 def _constraint(t, key: str, attrs: dict) -> uuid.UUID:

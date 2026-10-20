@@ -45,6 +45,7 @@ def _blocker_out(
     gate: BlockerGate,
     evidence_count: int,
     impacted: list[BlockerImpactRef],
+    confidence: float | None,
 ) -> BlockerOut:
     return BlockerOut(
         id=entity.id,
@@ -53,7 +54,7 @@ def _blocker_out(
         detail=entity.body,
         entity_status=entity.status,
         locked=entity.locked,
-        confidence=float(entity.confidence) if entity.confidence is not None else None,
+        confidence=confidence,
         evidence_count=evidence_count,
         type=spec.type,
         limit_kind=spec.limit_kind,
@@ -182,6 +183,13 @@ async def strategies(
                     gate,
                     len(evidence),
                     [impacted[i] for i in spec.impacted_entity_ids if i in impacted],
+                    # A run reads the entity's score as of its pin, as the entity
+                    # detail does (S6); people read the stored live one.
+                    baseline_evidence.as_read(
+                        principal,
+                        float(entity.confidence) if entity.confidence is not None else None,
+                        evidence,
+                    ),
                 ),
                 gate=gate,
                 evidence=evidence,
@@ -275,21 +283,24 @@ async def _evidence_refs(
         return {}
     rows = (
         await db.execute(
-            select(Evidence, SourceItem, Source)
+            select(Evidence, Source, SourceItem)
             .outerjoin(SourceItem, SourceItem.id == Evidence.source_item_id)
             .outerjoin(Source, Source.id == SourceItem.source_id)
             .where(Evidence.id.in_(ids))
         )
     ).all()
     out = {}
-    for ev, item, source in rows:
+    for ev, source, item in rows:
         kind = ev.kind or (source.kind if source is not None else None)
         if kind is None and ev.url:
             kind = "web"
         out[ev.id] = render.EvidenceRef(
             id=ev.id,
             source=render.CITATION_SOURCES.get(kind) if kind else None,
-            ref=ev.url or ev.ref or (item.url if item is not None else None),
+            # The link and ref copied when the evidence was attached, never the item's
+            # current link: a rename upstream (a Notion link carries the page title)
+            # never reaches readers (S6, links).
+            ref=ev.url or ev.ref,
             # The appendix shows what any user may see of evidence: never a private
             # item's title (AUD-9), only the excerpt, url and ref; 'source removed' when
             # the item was narrowed out or deleted upstream (S5).

@@ -56,7 +56,7 @@ EDGE_TYPES = (
 )
 NODE_STATUSES = ("proposed", "confirmed", "rejected")
 ORIGINS = ("user", "agent", "import")
-PROPOSAL_STATUSES = ("open", "accepted", "rejected")
+PROPOSAL_STATUSES = ("open", "accepted", "rejected", "withdrawn")
 CONFLICT_STATUSES = ("open", "resolved", "logged")
 # Evidence from a public link (owner, 2026-10-17): scored like these source kinds.
 LINK_KINDS = ("notion", "google_docs", "web")

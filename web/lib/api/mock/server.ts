@@ -23,6 +23,7 @@ import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from 
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { routeIntake } from "./intake";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { dateMarks, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeTrace } from "./trace";
@@ -149,6 +150,11 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
       title: c.title,
       excerpt: c.excerpt,
       retrieved_at: c.retrieved_at,
+      // A mock company has no source items: the writer's item id shows as given.
+      item_id: c.item ?? null,
+      confidence: c.confidence ?? null,
+      confidence_note: c.confidence_note ?? null,
+      low_confidence: c.low_confidence ?? false,
     })),
   };
 }
@@ -597,6 +603,10 @@ function importSections(
       title: c.title ?? "",
       excerpt: c.excerpt ?? "",
       retrieved_at: c.retrieved_at ?? "",
+      item: c.item_id ?? undefined,
+      confidence: c.confidence,
+      confidence_note: c.confidence_note ?? undefined,
+      low_confidence: c.low_confidence,
     })),
   });
   db.versions.push(v);
@@ -955,7 +965,11 @@ function versionMarkdown(doc: DocumentRow, v: VersionRow): string {
   const cites = v.citations
     .map(
       (c) =>
-        `  - id: ${c.cite_key}\n    source: ${c.source}\n    ref: ${c.ref}\n    title: ${JSON.stringify(c.title ?? "")}\n    excerpt: ${JSON.stringify(c.excerpt ?? "")}`,
+        `  - id: ${c.cite_key}\n    source: ${c.source}\n    ref: ${c.ref}\n    title: ${JSON.stringify(c.title ?? "")}\n    excerpt: ${JSON.stringify(c.excerpt ?? "")}` +
+        (c.item_id ? `\n    item: ${c.item_id}` : "") +
+        (c.confidence != null ? `\n    confidence: ${c.confidence}` : "") +
+        (c.confidence_note ? `\n    confidence_note: ${JSON.stringify(c.confidence_note)}` : "") +
+        (c.low_confidence ? "\n    low_confidence: true" : ""),
     )
     .join("\n");
   const head = `---\ndocument: ${doc.slug}\ntitle: ${doc.title}\n${v.snapshot ? `snapshot: ${v.snapshot}\n` : ""}citations:\n${cites || "  []"}\n---\n`;
@@ -1268,6 +1282,17 @@ async function route(db: Db, req: Request): Promise<Response> {
     q,
   );
   if (modules) return modules;
+  // Intake, gaps, questions and answers (CR-03) check roles themselves: commenters
+  // answer and propose, approvers decide, owners accept a critical risk.
+  if (["intakes", "gaps", "questions", "intake-proposals"].includes(p[1])) {
+    const createRun = (input: Schemas["RunCreate"]) => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const run = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(input) });
+      return routeRuns({ ...runsContext(db), db: db.runs }, run, ["v1", "runs"]).then((r) => r ?? notFound("Route"));
+    };
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun }, req, p, q);
+    if (intake) return intake;
+  }
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
@@ -1321,7 +1346,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
   const v2Db = ensureV2(db);
   // Blocker strategy routes (CR-04): writes on the v2 option, experiment and event rows.
-  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents };
+  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents, baseline: db.baseline };
   const blockers = await routeBlockers(blockerContext, ensureBlockers(db), req, p, q);
   if (blockers) return blockers;
   const v2 = routeV2(v2Db, req, p, q, me.id);

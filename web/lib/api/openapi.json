@@ -4927,6 +4927,7 @@
           "sources"
         ],
         "summary": "List Source Items",
+        "description": "The source's items at their current versions. A run never lists a deleted item\n(``include_deleted`` is ignored) and reads a shared item at the version released,\nits title as shared (S6, owner 2026-10-19).",
         "operationId": "list_source_items",
         "security": [
           {
@@ -5202,7 +5203,7 @@
           "snapshots"
         ],
         "summary": "List Snapshot Items",
-        "description": "The user's items as they were at the snapshot (each at its pinned version).",
+        "description": "The user's items as they were at the snapshot (each at its pinned version). A run\nreads a shared item at the version released whatever the snapshot, its title as\nshared, and nothing deleted upstream (S6, owner 2026-10-19).",
         "operationId": "list_snapshot_items",
         "security": [
           {
@@ -5276,7 +5277,7 @@
           "search"
         ],
         "summary": "Search Sources",
-        "description": "Search the user's own items. Ranked by relevance x confidence weight; ``as_of``\nsearches the versions pinned at that time.",
+        "description": "Search the user's own items (a run: also those a finding shared in full\nreleased). Ranked by relevance x confidence weight; ``as_of`` searches the versions\npinned at that time, except a run's shared items: those are searched at the version\nsharing released only, whatever ``as_of`` says (S6, freeze at sharing).",
         "operationId": "search_sources",
         "security": [
           {
@@ -9840,7 +9841,7 @@
           "runs"
         ],
         "summary": "Retry Draft Import",
-        "description": "Import a segment's draft again after its import at segment end was refused\n(``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).\nWhile the run waits at that segment's review: the review's approver role or above, and\nnothing is decided (the review stays open for a person). After the run finished with\nthe review approved past the refusal: owners only, while no version from the run\nexists; the run's checkpoints do not change. Imported, the run names the document and\nthe error is replaced by the import; refused again, by the new error (200 either way:\nread ``draft_import``). 409 when there is nothing to retry (imported already, a version\nfrom the run exists, no draft file, changes requested, the run cancelled or failed).\nAudited. Not the stopped advance of ``retry_import_run``.",
+        "description": "Import a segment's draft again after its import at segment end was refused\n(``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``,\nits problems ``draft_import.problems`` and their summary ``draft_import.summary``).\nWhile the run waits at that segment's review: the review's approver role or above, and\nnothing is decided (the review stays open for a person). After the run finished with\nthe review approved past the refusal: owners only, while no version from the run\nexists; the run's checkpoints do not change. Imported, the run names the document and\nthe error is replaced by the import; refused again, by the new error (200 either way:\nread ``draft_import``). 409 when there is nothing to retry (imported already, a version\nfrom the run exists, no draft file, changes requested, the run cancelled or failed).\nAudited. Not the stopped advance of ``retry_import_run``.",
         "operationId": "retry_draft_import",
         "security": [
           {
@@ -11085,6 +11086,54 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Create Intake",
+        "description": "New product idea: a short brief, pinned to a snapshot of your sources, analysed\ninto gaps; the first short batch of questions is asked.",
+        "operationId": "create_intake",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntakeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/intakes/{item_id}": {
@@ -11122,6 +11171,66 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProductIntakeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Update Intake",
+        "description": "Rename, archive or reopen (the author or an approver); link to a PRD (an approver;\nmoving an intake with an unresolved critical blocker off its PRD: an owner).",
+        "operationId": "update_intake",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntakePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeOut"
                 }
               }
             }
@@ -11202,6 +11311,7 @@
                     "under_investigation",
                     "asked",
                     "answered",
+                    "answered_pending_review",
                     "validated",
                     "deferred",
                     "accepted_risk"
@@ -11322,6 +11432,54 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Create Knowledge Gap",
+        "description": "Add a gap to an intake by hand; it is drafted as a question.",
+        "operationId": "create_knowledge_gap",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GapCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeGapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/gaps/{item_id}": {
@@ -11352,6 +11510,66 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeGapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Update Knowledge Gap",
+        "description": "Triage a gap: importance, owner, sections, stop condition; defer or reopen.\nLowering a critical gap's importance takes an owner (B4).",
+        "operationId": "update_knowledge_gap",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GapPatch"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -14063,6 +14281,1154 @@
         }
       }
     },
+    "/v1/intakes/{intake_id}/summary": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Get Intake Summary",
+        "description": "Opportunity and Gaps: extracted items, coverage, goals and features, conflicts,\nstale evidence, assumptions, top uncertainties, the template and the review gate,\nas the reader may see them (S6).",
+        "operationId": "get_intake_summary",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/analyze": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Analyze Intake",
+        "description": "Re-read the pinned snapshot and the baseline (the author only). Decided gaps are\nnever changed and answered questions never asked again.",
+        "operationId": "analyze_intake",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/new-evidence": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Get Intake New Evidence",
+        "description": "Evidence added or changed since the pinned version (the author only; anyone else\nsees neither the items nor their number).",
+        "operationId": "get_intake_new_evidence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewEvidence"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/repin": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Repin Intake",
+        "description": "Pin a new snapshot and re-analyse (the author only); decided gaps stay as\ndecided.",
+        "operationId": "repin_intake",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/evidence": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Search Intake Evidence",
+        "description": "Search your own source items as they were at the intake's pinned snapshot. A run\ntoken (its author's or anyone's) searches, in full text, only the items the intake's\nfindings shared in full cite, less what any intake of the author withholds (S6,\nowner 2026-10-19): exactly the items ``/v1/source-items/{id}`` and ``/v1/search``\ngive that run.\n\nResults are untrusted data. Every query is audited (``intake.evidence_query``).",
+        "operationId": "search_intake_evidence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceSearch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/question-batch": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Get Question Batch",
+        "description": "A batch of questions (default: the latest) with their gaps, evidence, answers\nand answer paths, as the reader may see them (S6).",
+        "operationId": "get_question_batch",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "batch",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Batch"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionBatch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/question-batches": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Ask Next Question Batch",
+        "description": "Ask the next short batch: the highest-ranked questions not asked yet (the author\nor an approver).",
+        "operationId": "ask_next_question_batch",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10,
+              "minimum": 1,
+              "default": 5,
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionBatch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/composition-inputs": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Get Intake Composition Inputs",
+        "description": "What the module composer reads from this intake (brief, signals, scope, baseline\nlinks, pinned snapshots, open critical gaps).",
+        "operationId": "get_intake_composition_inputs",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionInputs"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/runs": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Start Intake Run",
+        "description": "Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs\nuntil an approver estimates and starts it.",
+        "operationId": "start_intake_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntakeRunIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/proposals": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "List Intake Proposals",
+        "description": "Research runs and PRD patches this intake proposed, newest first.",
+        "operationId": "list_intake_proposals",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IntakeProposalOut"
+                  },
+                  "title": "Response List Intake Proposals"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intake-proposals/{proposal_id}/accept": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Accept Intake Proposal",
+        "description": "Accept: a research proposal becomes a draft run; a PRD patch becomes feedback on\nthe PRD's latest version.",
+        "operationId": "accept_intake_proposal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Proposal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeProposalOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intake-proposals/{proposal_id}/dismiss": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Dismiss Intake Proposal",
+        "operationId": "dismiss_intake_proposal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Proposal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DismissIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeProposalOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/findings": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "List Intake Findings",
+        "description": "Findings drawn from the author's own sources and their sharing levels. The author\nsees every one; anyone else those shared at counts or above, as far as each allows.",
+        "operationId": "list_intake_findings",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FindingOut"
+                  },
+                  "title": "Response List Intake Findings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/findings/{finding_id}": {
+      "patch": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Set Intake Finding Sharing",
+        "description": "Set what others see of one finding: private, counts, summary or full (the\nauthor only; audited; lower it again at any time).",
+        "operationId": "set_intake_finding_sharing",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SharingIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/findings/{finding_id}/summary": {
+      "put": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Set Intake Finding Summary",
+        "description": "Confirm Oracle's draft line for the summary level (no ``text``) or write your own\n(the author only, never a run; audited). Until then, the summary level shows others\nonly Oracle's fixed category line (S6).",
+        "operationId": "set_intake_finding_summary",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FindingSummaryIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intakes/{intake_id}/findings/sharing": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Set Intake Findings Sharing",
+        "description": "Set the sharing level of several findings at once (the author only; every change\nis audited).",
+        "operationId": "set_intake_findings_sharing",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SharingBulkIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FindingOut"
+                  },
+                  "title": "Response Set Intake Findings Sharing"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/gaps/{gap_id}/decisions": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Decide Knowledge Gap",
+        "description": "Accept an assumption or a risk, validate, or reject, with a rationale. On a\ncritical gap, accepting, validating it unanswered, or validating a hard blocker\nneeds an owner (B4).",
+        "operationId": "decide_knowledge_gap",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "gap_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Gap Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/gaps/{gap_id}/research": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Propose Gap Research",
+        "description": "Research this: propose a run that looks into the gap. Nothing runs until an\napprover accepts it and starts the run.",
+        "operationId": "propose_gap_research",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "gap_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Gap Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeProposalOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/questions/{question_id}/answers": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Answer Question",
+        "description": "Answer, or say \"I don't know\", defer, ask someone else, or \"Research this\". The\ngap updates; what the answer implies elsewhere is proposed, never applied. The\nquestion and gap come back as the reads show them to the caller (S6).",
+        "operationId": "answer_question",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/quality/criteria": {
       "get": {
         "tags": [
@@ -16448,7 +17814,7 @@
           "blockers"
         ],
         "summary": "Create Blocker",
-        "description": "Record a blocker: an existing constraint entity (``entity_id``), or a new one.",
+        "description": "Record a blocker: an existing constraint entity (``entity_id``), or a new one.\nPromoting a constraint an intake answer suggested as a blocker (its\n``attrs.proposed_blocker``, the \"suggested blocker\" mark, B4) clears that mark in the\nsame write; the form is pre-filled from the constraint and the mark.",
         "operationId": "create_blocker",
         "security": [
           {
@@ -19438,6 +20804,141 @@
         "title": "AlignmentReport",
         "description": "The roadmap against the tracker's state, read-only: the path that works without\ntracker write permission (E1)."
       },
+      "AnswerIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "answer",
+              "dont_know",
+              "defer",
+              "delegate",
+              "research"
+            ],
+            "title": "Kind"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "delegated_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delegated To"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Evidence Ids",
+            "default": []
+          },
+          "knowledge_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "user_decision",
+                  "verified_fact",
+                  "hypothesis"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "AnswerIn"
+      },
+      "AnswerResult": {
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/StakeholderAnswerOut"
+          },
+          "question": {
+            "$ref": "#/components/schemas/StakeholderQuestionOut"
+          },
+          "gap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KnowledgeGapOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/IntakeProposalOut"
+            },
+            "type": "array",
+            "title": "Proposals"
+          },
+          "baseline_proposal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Baseline Proposal Ids"
+          },
+          "change_event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Event Id"
+          },
+          "next_actions": {
+            "items": {
+              "$ref": "#/components/schemas/NextAction"
+            },
+            "type": "array",
+            "title": "Next Actions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer",
+          "question",
+          "gap",
+          "proposals",
+          "baseline_proposal_ids",
+          "change_event_id",
+          "next_actions"
+        ],
+        "title": "AnswerResult"
+      },
       "ApproveOut": {
         "properties": {
           "document_id": {
@@ -20504,6 +22005,41 @@
         "title": "Basis",
         "description": "One input that drove a decision: what was read, what it held, and how we know."
       },
+      "BatchState": {
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "asked": {
+            "type": "integer",
+            "title": "Asked"
+          },
+          "answered": {
+            "type": "integer",
+            "title": "Answered"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current",
+          "asked",
+          "answered",
+          "remaining"
+        ],
+        "title": "BatchState"
+      },
       "BlockerCitation": {
         "properties": {
           "id": {
@@ -20827,7 +22363,7 @@
           "type"
         ],
         "title": "BlockerCreate",
-        "description": "A new blocker: either an existing constraint entity (``entity_id``) or a new one\n(``key`` and ``statement``)."
+        "description": "A new blocker: either an existing constraint entity (``entity_id``; a\n``statement`` or ``detail`` given replaces its title or body) or a new one (``key``\nand ``statement``). Promoting a constraint an intake answer suggested as a blocker\nclears its ``attrs.proposed_blocker`` mark in the same write (B4)."
       },
       "BlockerDependency": {
         "properties": {
@@ -23682,6 +25218,47 @@
               }
             ],
             "title": "Retrieved At"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "confidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Note"
+          },
+          "low_confidence": {
+            "type": "boolean",
+            "title": "Low Confidence",
+            "default": false
           }
         },
         "type": "object",
@@ -23736,6 +25313,70 @@
           "value"
         ],
         "title": "ClaimIn"
+      },
+      "ClaimOut": {
+        "properties": {
+          "value": {
+            "title": "Value"
+          },
+          "source_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Kind"
+          },
+          "source_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Class"
+          },
+          "observed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed At"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "ClaimOut"
       },
       "ClaudeSweepSummary": {
         "properties": {
@@ -25040,6 +26681,30 @@
         ],
         "title": "ConflictOut"
       },
+      "ConflictRecommendation": {
+        "properties": {
+          "winner": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "ConflictRecommendation"
+      },
       "ConflictResolve": {
         "properties": {
           "claim": {
@@ -25070,6 +26735,91 @@
         },
         "type": "object",
         "title": "ConflictResolve"
+      },
+      "ConflictView": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "source",
+              "baseline"
+            ],
+            "title": "Kind"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimOut"
+            },
+            "type": "array",
+            "title": "Claims"
+          },
+          "recommendation": {
+            "$ref": "#/components/schemas/ConflictRecommendation"
+          },
+          "material": {
+            "type": "boolean",
+            "title": "Material"
+          },
+          "conflict_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflict Id"
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id"
+          },
+          "sharing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "counts",
+                  "summary",
+                  "full"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing"
+          },
+          "summary_only": {
+            "type": "boolean",
+            "title": "Summary Only",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "topic",
+          "claims",
+          "recommendation",
+          "material"
+        ],
+        "title": "ConflictView"
       },
       "ConnectionChoice": {
         "properties": {
@@ -25454,6 +27204,86 @@
         "title": "ConsoleAnswer",
         "description": "What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):\nan answer that does not count (its answerer is not an Oracle member with the\ncheckpoint's role), a counted change request the workflow had no revision step for,\nan answer Oracle could not read, or one it has not read yet (``unread``: SwarmCloud\nerrors, a 404 or a lagging record; read again on every tick)."
       },
+      "Coverage": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "customer_user",
+              "pain_evidence",
+              "goal_alignment",
+              "success_metric",
+              "differentiation",
+              "alternatives",
+              "constraints",
+              "blockers",
+              "economic_benefit",
+              "effort_cost",
+              "security_privacy",
+              "ownership",
+              "non_goals",
+              "release_rollout",
+              "evaluation_criteria",
+              "third_party_policy",
+              "configurability_scaling"
+            ],
+            "title": "Category"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "covered",
+              "partial",
+              "missing"
+            ],
+            "title": "State"
+          },
+          "knowledge_state": {
+            "type": "string",
+            "enum": [
+              "verified_fact",
+              "user_decision",
+              "ai_inference",
+              "hypothesis",
+              "unknown"
+            ],
+            "title": "Knowledge State"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "entity_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Entity Ids",
+            "default": []
+          },
+          "gap_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category",
+          "state",
+          "knowledge_state",
+          "reason"
+        ],
+        "title": "Coverage"
+      },
       "CriterionInfo": {
         "properties": {
           "key": {
@@ -25553,6 +27383,60 @@
         ],
         "title": "DateMarkOut",
         "description": "A date written in a roadmap's text, checked against its PRD's schedule bases now\n(O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next\nto the date (``unverified``, ``date withdrawn``); None for a verified date. The\ntext itself is never rewritten."
+      },
+      "DecisionIn": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "accept_assumption",
+              "accept_risk",
+              "validate",
+              "reject"
+            ],
+            "title": "Decision"
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Rationale"
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision",
+          "rationale"
+        ],
+        "title": "DecisionIn"
+      },
+      "DecisionResult": {
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/AssumptionDecisionOut"
+          },
+          "gap": {
+            "$ref": "#/components/schemas/KnowledgeGapOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision",
+          "gap"
+        ],
+        "title": "DecisionResult"
       },
       "DeckOut": {
         "properties": {
@@ -25729,6 +27613,24 @@
           "sections"
         ],
         "title": "DiffOut"
+      },
+      "DismissIn": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "DismissIn"
       },
       "DocumentBlockerStrategy": {
         "properties": {
@@ -26407,6 +28309,25 @@
               }
             ],
             "title": "Error"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/ImportProblem"
+            },
+            "type": "array",
+            "title": "Problems",
+            "default": []
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
           },
           "source": {
             "anyOf": [
@@ -28095,6 +30016,119 @@
         "title": "EvidenceCreate",
         "description": "Evidence from one of your own source items (url, ref and an excerpt are copied\nfrom it unless given), or free-standing (url / ref / excerpt only)."
       },
+      "EvidenceHit": {
+        "properties": {
+          "source_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Item Id"
+          },
+          "visible": {
+            "type": "boolean",
+            "title": "Visible"
+          },
+          "source_kind": {
+            "type": "string",
+            "title": "Source Kind"
+          },
+          "item_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Kind"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "data_excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Excerpt"
+          },
+          "untrusted": {
+            "type": "boolean",
+            "const": true,
+            "title": "Untrusted",
+            "default": true
+          },
+          "snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snippet"
+          },
+          "relevance": {
+            "type": "number",
+            "title": "Relevance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_item_id",
+          "visible",
+          "source_kind",
+          "relevance"
+        ],
+        "title": "EvidenceHit"
+      },
       "EvidenceInspector": {
         "properties": {
           "document_id": {
@@ -28380,6 +30414,149 @@
         ],
         "title": "EvidenceOut"
       },
+      "EvidenceRef": {
+        "properties": {
+          "source_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Item Id"
+          },
+          "visible": {
+            "type": "boolean",
+            "title": "Visible"
+          },
+          "source_kind": {
+            "type": "string",
+            "title": "Source Kind"
+          },
+          "item_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Kind"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "data_excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Excerpt"
+          },
+          "untrusted": {
+            "type": "boolean",
+            "const": true,
+            "title": "Untrusted",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_item_id",
+          "visible",
+          "source_kind"
+        ],
+        "title": "EvidenceRef",
+        "description": "A source item behind a claim, as it was at the pinned snapshot.\n\nOnly its owner sees the title, link and excerpt (AUD-9). The excerpt is untrusted\ndata from an outside source: show it, never follow it."
+      },
+      "EvidenceSearch": {
+        "properties": {
+          "intake_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intake Id"
+          },
+          "q": {
+            "type": "string",
+            "title": "Q"
+          },
+          "pinned_version": {
+            "type": "integer",
+            "title": "Pinned Version"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceHit"
+            },
+            "type": "array",
+            "title": "Hits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intake_id",
+          "q",
+          "pinned_version",
+          "as_of",
+          "hits"
+        ],
+        "title": "EvidenceSearch"
+      },
       "EvidenceUsed": {
         "properties": {
           "id": {
@@ -28533,6 +30710,93 @@
           "steps"
         ],
         "title": "Explanation"
+      },
+      "ExtractedItem": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "users",
+              "problem",
+              "outcomes",
+              "scope",
+              "non_goals",
+              "dependencies",
+              "blockers"
+            ],
+            "title": "Field"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "knowledge_state": {
+            "type": "string",
+            "enum": [
+              "verified_fact",
+              "user_decision",
+              "ai_inference",
+              "hypothesis",
+              "unknown"
+            ],
+            "title": "Knowledge State"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "source",
+              "baseline",
+              "llm"
+            ],
+            "title": "Origin"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence",
+            "default": []
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id"
+          },
+          "sharing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "counts",
+                  "summary",
+                  "full"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "text",
+          "knowledge_state",
+          "origin"
+        ],
+        "title": "ExtractedItem"
       },
       "FactorOut": {
         "properties": {
@@ -28959,6 +31223,76 @@
         ],
         "title": "FeasibilityScopeIn"
       },
+      "FeatureTrace": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "knowledge_state": {
+            "type": "string",
+            "enum": [
+              "verified_fact",
+              "user_decision",
+              "ai_inference",
+              "hypothesis",
+              "unknown"
+            ],
+            "title": "Knowledge State"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/GoalLink"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags",
+            "default": []
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "knowledge_state",
+          "rationale"
+        ],
+        "title": "FeatureTrace",
+        "description": "A feature the intake touches: from the baseline (``key``) or the brief."
+      },
       "FeedbackItemOut": {
         "properties": {
           "id": {
@@ -29261,6 +31595,186 @@
           "message"
         ],
         "title": "FieldProblem"
+      },
+      "FindingCount": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "item",
+              "gap",
+              "conflict",
+              "stale"
+            ],
+            "title": "Kind"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "count",
+          "label"
+        ],
+        "title": "FindingCount",
+        "description": "Findings shared as counts and categories only (S6)."
+      },
+      "FindingOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "item",
+              "gap",
+              "conflict",
+              "stale"
+            ],
+            "title": "Kind"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "model",
+              "rules"
+            ],
+            "title": "Origin"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "sharing": {
+            "type": "string",
+            "enum": [
+              "private",
+              "counts",
+              "summary",
+              "full"
+            ],
+            "title": "Sharing"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Confirmed"
+          },
+          "draft_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Summary"
+          },
+          "gap_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap Id"
+          },
+          "source_item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Source Item Ids",
+            "default": []
+          },
+          "unshared_item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Unshared Item Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "origin",
+          "sharing"
+        ],
+        "title": "FindingOut",
+        "description": "A finding drawn from the author's own sources and what others see of it (S6).\n\nThe author sees every finding. Anyone else sees those shared at \"counts\" or above:\nthe kind and category; from \"summary\" its line and the gap; at \"full\" the source\nitems it cites. ``summary``: the line the summary level shows, the one its author\nconfirmed or wrote, else Oracle's fixed category line. ``draft_summary``: Oracle's\ndraft, for the author only. At \"full\", others see the items it released when it was\nshared; ``unshared_item_ids`` (the author only): what it cites now that sharing did\nnot release (a later analysis added them; \"N new sources since you shared\", share\nit in full again to release them)."
+      },
+      "FindingSummaryIn": {
+        "properties": {
+          "text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 240
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "title": "FindingSummaryIn",
+        "description": "The line others see at the summary level: omit ``text`` to confirm Oracle's draft\nas it stands."
       },
       "FirefliesMeetingOut": {
         "properties": {
@@ -29629,6 +32143,208 @@
         ],
         "title": "FlowSegmentOut"
       },
+      "GapCreate": {
+        "properties": {
+          "intake_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intake Id"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "customer_user",
+              "pain_evidence",
+              "goal_alignment",
+              "success_metric",
+              "differentiation",
+              "alternatives",
+              "constraints",
+              "blockers",
+              "economic_benefit",
+              "effort_cost",
+              "security_privacy",
+              "ownership",
+              "non_goals",
+              "release_rollout",
+              "evaluation_criteria",
+              "third_party_policy",
+              "configurability_scaling"
+            ],
+            "title": "Category"
+          },
+          "statement": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Statement"
+          },
+          "importance": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Importance"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Section Keys",
+            "default": []
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intake_id",
+          "category",
+          "statement",
+          "importance"
+        ],
+        "title": "GapCreate"
+      },
+      "GapPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "importance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importance"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "unknown",
+                  "deferred"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "section_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Keys"
+          },
+          "stop_condition": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Condition"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "GapPatch"
+      },
+      "GateView": {
+        "properties": {
+          "open_critical": {
+            "type": "integer",
+            "title": "Open Critical"
+          },
+          "blocking_gap_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Blocking Gap Ids"
+          },
+          "gate": {
+            "type": "string",
+            "enum": [
+              "clear",
+              "blocked"
+            ],
+            "title": "Gate"
+          },
+          "private_blocking_gap_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Private Blocking Gap Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "open_critical",
+          "blocking_gap_ids",
+          "gate"
+        ],
+        "title": "GateView",
+        "description": "The review gate as everyone sees it. ``private_blocking_gap_ids``: for the author\nonly, their private critical blockers, which gate nothing until shared at counts or\nabove (S6)."
+      },
       "GithubRepoOut": {
         "properties": {
           "full_name": {
@@ -29725,6 +32441,56 @@
           "next_cursor"
         ],
         "title": "GithubRepoPage"
+      },
+      "GoalLink": {
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "knowledge_state": {
+            "type": "string",
+            "enum": [
+              "verified_fact",
+              "user_decision",
+              "ai_inference",
+              "hypothesis",
+              "unknown"
+            ],
+            "title": "Knowledge State"
+          },
+          "matched_on": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "feature"
+            ],
+            "title": "Matched On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_id",
+          "key",
+          "title",
+          "status",
+          "knowledge_state",
+          "matched_on"
+        ],
+        "title": "GoalLink"
       },
       "GoalTerm": {
         "properties": {
@@ -31518,6 +34284,546 @@
         "title": "IntakeAnalysis",
         "description": "What Oracle extracted from a brief (\u00a75 step 1), each item with its knowledge state."
       },
+      "IntakeCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "brief": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 20,
+            "title": "Brief"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Source Ids",
+            "default": []
+          },
+          "document": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document"
+          },
+          "ai_extraction": {
+            "type": "boolean",
+            "title": "Ai Extraction",
+            "default": true
+          },
+          "batch_size": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Batch Size",
+            "default": 5
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "brief"
+        ],
+        "title": "IntakeCreate"
+      },
+      "IntakeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "brief": {
+            "type": "string",
+            "title": "Brief"
+          },
+          "author_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Id"
+          },
+          "source_snapshot_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Source Snapshot Ids"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "analyzing",
+              "awaiting_answers",
+              "ready",
+              "converted",
+              "archived"
+            ],
+            "title": "Status"
+          },
+          "analysis": {
+            "$ref": "#/components/schemas/IntakeAnalysis"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Source Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "brief",
+          "source_snapshot_ids",
+          "status",
+          "analysis",
+          "lock_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "IntakeOut"
+      },
+      "IntakePatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "document": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "archived",
+                  "awaiting_answers"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "IntakePatch"
+      },
+      "IntakeProposalOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "intake_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intake Id"
+          },
+          "gap_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap Id"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
+          },
+          "answer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "research_run",
+              "prd_patch"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Detail"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "accepted",
+              "dismissed"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Result"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "intake_id",
+          "kind",
+          "title",
+          "detail",
+          "status",
+          "result",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "IntakeProposalOut"
+      },
+      "IntakeRunIn": {
+        "properties": {
+          "document": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document"
+          },
+          "knobs": {
+            "$ref": "#/components/schemas/KnobsIn",
+            "default": {
+              "depth": "standard",
+              "roles": {},
+              "checkpoints": {}
+            }
+          }
+        },
+        "type": "object",
+        "title": "IntakeRunIn"
+      },
+      "IntakeSummary": {
+        "properties": {
+          "intake": {
+            "$ref": "#/components/schemas/IntakeOut"
+          },
+          "pinned": {
+            "$ref": "#/components/schemas/Pinned"
+          },
+          "new_evidence": {
+            "$ref": "#/components/schemas/NewEvidence"
+          },
+          "extracted": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractedItem"
+            },
+            "type": "array",
+            "title": "Extracted"
+          },
+          "coverage": {
+            "items": {
+              "$ref": "#/components/schemas/Coverage"
+            },
+            "type": "array",
+            "title": "Coverage"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/GoalLink"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "missing_goals": {
+            "type": "boolean",
+            "title": "Missing Goals"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureTrace"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ConflictView"
+            },
+            "type": "array",
+            "title": "Conflicts"
+          },
+          "stale": {
+            "items": {
+              "$ref": "#/components/schemas/StaleEvidence"
+            },
+            "type": "array",
+            "title": "Stale"
+          },
+          "assumptions": {
+            "items": {
+              "$ref": "#/components/schemas/RankedGap"
+            },
+            "type": "array",
+            "title": "Assumptions"
+          },
+          "top_uncertainties": {
+            "items": {
+              "$ref": "#/components/schemas/RankedGap"
+            },
+            "type": "array",
+            "title": "Top Uncertainties"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/RankedGap"
+            },
+            "type": "array",
+            "title": "Gaps"
+          },
+          "next_actions": {
+            "items": {
+              "$ref": "#/components/schemas/NextAction"
+            },
+            "type": "array",
+            "title": "Next Actions"
+          },
+          "template": {
+            "$ref": "#/components/schemas/TemplateHint"
+          },
+          "readiness": {
+            "$ref": "#/components/schemas/GateView"
+          },
+          "batch": {
+            "$ref": "#/components/schemas/BatchState"
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/IntakeProposalOut"
+            },
+            "type": "array",
+            "title": "Proposals"
+          },
+          "shared_counts": {
+            "items": {
+              "$ref": "#/components/schemas/FindingCount"
+            },
+            "type": "array",
+            "title": "Shared Counts",
+            "default": []
+          },
+          "is_author": {
+            "type": "boolean",
+            "title": "Is Author",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "intake",
+          "pinned",
+          "new_evidence",
+          "extracted",
+          "coverage",
+          "goals",
+          "missing_goals",
+          "features",
+          "conflicts",
+          "stale",
+          "assumptions",
+          "top_uncertainties",
+          "gaps",
+          "next_actions",
+          "template",
+          "readiness",
+          "batch",
+          "proposals"
+        ],
+        "title": "IntakeSummary",
+        "description": "The Opportunity and Gaps summary, as the reader may see it (S6)."
+      },
       "InviteCreate": {
         "properties": {
           "email": {
@@ -32484,6 +35790,7 @@
               "under_investigation",
               "asked",
               "answered",
+              "answered_pending_review",
               "validated",
               "deferred",
               "accepted_risk"
@@ -33154,14 +36461,34 @@
               "reporting",
               "refinement",
               "quality_review",
-              "refinement_batch"
+              "refinement_batch",
+              "intake_analysis"
             ],
             "title": "Kind"
           },
           "document_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Document Id"
+          },
+          "intake_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Id"
           },
           "version_number": {
             "anyOf": [
@@ -33364,7 +36691,6 @@
         "required": [
           "id",
           "kind",
-          "document_id",
           "status",
           "attempts",
           "created_at"
@@ -34221,6 +37547,42 @@
         ],
         "title": "ModuleDefinitionOut"
       },
+      "ModuleHint": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "policy": {
+            "type": "string",
+            "enum": [
+              "required",
+              "conditional"
+            ],
+            "title": "Policy"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "gap_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Gap Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "policy",
+          "reason"
+        ],
+        "title": "ModuleHint"
+      },
       "ModulePolicyOut": {
         "properties": {
           "required": {
@@ -34466,6 +37828,164 @@
         ],
         "title": "MonitorOut"
       },
+      "NewEvidence": {
+        "properties": {
+          "since_version": {
+            "type": "integer",
+            "title": "Since Version"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "visible": {
+            "type": "boolean",
+            "title": "Visible"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NewEvidenceItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "since_version",
+          "count",
+          "visible"
+        ],
+        "title": "NewEvidence",
+        "description": "New evidence since the pinned version, shown before anything is redrafted."
+      },
+      "NewEvidenceItem": {
+        "properties": {
+          "source_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Item Id"
+          },
+          "visible": {
+            "type": "boolean",
+            "title": "Visible"
+          },
+          "source_kind": {
+            "type": "string",
+            "title": "Source Kind"
+          },
+          "item_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Kind"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "data_excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Excerpt"
+          },
+          "untrusted": {
+            "type": "boolean",
+            "const": true,
+            "title": "Untrusted",
+            "default": true
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "new",
+              "changed",
+              "deleted"
+            ],
+            "title": "Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_item_id",
+          "visible",
+          "source_kind",
+          "change"
+        ],
+        "title": "NewEvidenceItem"
+      },
       "NewSource": {
         "properties": {
           "title": {
@@ -34511,6 +38031,48 @@
           "added_at"
         ],
         "title": "NewSource"
+      },
+      "NextAction": {
+        "properties": {
+          "gap_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Gap Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "answer",
+              "research",
+              "delegate",
+              "accept_assumption",
+              "accept_risk",
+              "validate"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "gap_id",
+          "kind",
+          "label",
+          "role"
+        ],
+        "title": "NextAction"
       },
       "NextDraftApply": {
         "properties": {
@@ -35462,6 +39024,83 @@
           "modules"
         ],
         "title": "PackOut"
+      },
+      "Pinned": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/PinnedVersion"
+            },
+            "type": "array",
+            "title": "Versions",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "Pinned",
+        "description": "The snapshot the intake reads (\"version\" counts its pins from 1)."
+      },
+      "PinnedVersion": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "snapshot_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Snapshot Id"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "snapshot_id"
+        ],
+        "title": "PinnedVersion"
       },
       "PrdAnchor": {
         "properties": {
@@ -36620,6 +40259,99 @@
         ],
         "title": "PushbackSource"
       },
+      "QuestionBatch": {
+        "properties": {
+          "intake_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intake Id"
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionCard"
+            },
+            "type": "array",
+            "title": "Questions"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intake_id",
+          "batch",
+          "questions",
+          "remaining"
+        ],
+        "title": "QuestionBatch"
+      },
+      "QuestionCard": {
+        "properties": {
+          "question": {
+            "$ref": "#/components/schemas/StakeholderQuestionOut"
+          },
+          "gap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KnowledgeGapOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "answer_paths": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "answer",
+                "dont_know",
+                "defer",
+                "delegate",
+                "research"
+              ]
+            },
+            "type": "array",
+            "title": "Answer Paths"
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/StakeholderAnswerOut"
+            },
+            "type": "array",
+            "title": "Answers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "gap",
+          "evidence",
+          "answer_paths",
+          "answers"
+        ],
+        "title": "QuestionCard"
+      },
       "QuestionRef": {
         "properties": {
           "key": {
@@ -36738,6 +40470,276 @@
           "explanation"
         ],
         "title": "RankedFeature"
+      },
+      "RankedGap": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "intake_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "customer_user",
+              "pain_evidence",
+              "goal_alignment",
+              "success_metric",
+              "differentiation",
+              "alternatives",
+              "constraints",
+              "blockers",
+              "economic_benefit",
+              "effort_cost",
+              "security_privacy",
+              "ownership",
+              "non_goals",
+              "release_rollout",
+              "evaluation_criteria",
+              "third_party_policy",
+              "configurability_scaling"
+            ],
+            "title": "Category"
+          },
+          "statement": {
+            "type": "string",
+            "title": "Statement"
+          },
+          "impact": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "goals",
+                "feasibility",
+                "scope",
+                "economics",
+                "risks",
+                "module_selection"
+              ]
+            },
+            "type": "array",
+            "title": "Impact"
+          },
+          "importance": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Importance"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence Ids"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "knowledge_state": {
+            "type": "string",
+            "enum": [
+              "verified_fact",
+              "user_decision",
+              "ai_inference",
+              "hypothesis",
+              "unknown"
+            ],
+            "title": "Knowledge State"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "under_investigation",
+              "asked",
+              "answered",
+              "answered_pending_review",
+              "validated",
+              "deferred",
+              "accepted_risk"
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "related_modules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Related Modules"
+          },
+          "stop_condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Condition"
+          },
+          "entity_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Entity Ids"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "rank_reason": {
+            "type": "string",
+            "title": "Rank Reason"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence",
+            "default": []
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id"
+          },
+          "sharing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "counts",
+                  "summary",
+                  "full"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "statement",
+          "impact",
+          "importance",
+          "evidence_ids",
+          "knowledge_state",
+          "status",
+          "related_modules",
+          "entity_ids",
+          "section_keys",
+          "lock_version",
+          "created_at",
+          "updated_at",
+          "rank",
+          "score",
+          "rank_reason"
+        ],
+        "title": "RankedGap"
       },
       "RankingCounts": {
         "properties": {
@@ -39081,6 +43083,17 @@
             "title": "Can Retry Import",
             "default": false
           },
+          "draft_rejected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Rejected"
+          },
           "progress": {
             "anyOf": [
               {
@@ -39571,6 +43584,17 @@
             "type": "boolean",
             "title": "Can Retry Import",
             "default": false
+          },
+          "draft_rejected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Rejected"
           },
           "progress": {
             "anyOf": [
@@ -41228,6 +45252,68 @@
         ],
         "title": "SettingOut"
       },
+      "SharingBulkIn": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/SharingChange"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changes"
+        ],
+        "title": "SharingBulkIn"
+      },
+      "SharingChange": {
+        "properties": {
+          "finding_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Finding Id"
+          },
+          "sharing": {
+            "type": "string",
+            "enum": [
+              "private",
+              "counts",
+              "summary",
+              "full"
+            ],
+            "title": "Sharing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "finding_id",
+          "sharing"
+        ],
+        "title": "SharingChange"
+      },
+      "SharingIn": {
+        "properties": {
+          "sharing": {
+            "type": "string",
+            "enum": [
+              "private",
+              "counts",
+              "summary",
+              "full"
+            ],
+            "title": "Sharing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sharing"
+        ],
+        "title": "SharingIn"
+      },
       "SkippedSection": {
         "properties": {
           "section_key": {
@@ -42349,6 +46435,52 @@
         ],
         "title": "StakeholderQuestionOut"
       },
+      "StaleEvidence": {
+        "properties": {
+          "evidence": {
+            "$ref": "#/components/schemas/EvidenceRef"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id"
+          },
+          "sharing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "counts",
+                  "summary",
+                  "full"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "evidence",
+          "reason"
+        ],
+        "title": "StaleEvidence"
+      },
       "StaleOutputsPage": {
         "properties": {
           "items": {
@@ -43046,6 +47178,49 @@
           "body"
         ],
         "title": "TemplateCreate"
+      },
+      "TemplateHint": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleHint"
+            },
+            "type": "array",
+            "title": "Modules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "reason",
+          "modules"
+        ],
+        "title": "TemplateHint",
+        "description": "An existing PRD template (O1d picker) and module hints for the composer."
       },
       "TemplateModuleAssignmentOut": {
         "properties": {
