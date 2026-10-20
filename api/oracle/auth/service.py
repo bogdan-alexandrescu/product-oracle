@@ -26,9 +26,31 @@ PASSWORD_MIN_LENGTH = 12
 _hasher = PasswordHasher()
 
 # Domains no real person signs in from (RFC 2606, RFC 6761): example.com/.org/.net and
-# anything under them, and the .test, .invalid and .localhost names.
+# anything under them, and the .example, .test, .invalid and .localhost names.
 RESERVED_EMAIL_DOMAINS = ("example.com", "example.org", "example.net")
-RESERVED_EMAIL_TLDS = ("test", "invalid", "localhost")
+RESERVED_EMAIL_TLDS = ("example", "test", "invalid", "localhost")
+# Invisible characters a domain may hide (zero-width spaces and joiners, the BOM, soft
+# hyphen): IDNA drops or refuses them, a naive comparison would not.
+_INVISIBLE = dict.fromkeys(map(ord, "\u00ad\u200b\u200c\u200d\u2060\ufeff"))
+
+
+def _email_domain(email: str) -> str:
+    """The domain of ``email`` as DNS sees it: NFKC (full-width letters and dots become
+    ASCII), invisible characters dropped, lower case, each label IDNA-encoded (so a
+    Unicode look-alike is compared by its punycode, never by its letters)."""
+    import unicodedata
+
+    domain = unicodedata.normalize("NFKC", email.strip()).rsplit("@", 1)[-1]
+    domain = domain.translate(_INVISIBLE).lower()
+    # NFKC folds the ideographic and full-width full stops into ".", not this one.
+    domain = domain.replace("\uff61", ".").replace("\u3002", ".").strip(".")
+    labels = []
+    for label in domain.split("."):
+        try:
+            labels.append(label.encode("idna").decode("ascii") if label else label)
+        except UnicodeError:
+            labels.append(label)
+    return ".".join(labels)
 
 
 class ReservedEmailError(ValueError):
@@ -37,7 +59,7 @@ class ReservedEmailError(ValueError):
 
 def reserved_email(email: str) -> bool:
     """Whether ``email`` is at a reserved example domain."""
-    domain = email.strip().lower().rsplit("@", 1)[-1].rstrip(".")
+    domain = _email_domain(email)
     if any(domain == d or domain.endswith("." + d) for d in RESERVED_EMAIL_DOMAINS):
         return True
     return domain.rsplit(".", 1)[-1] in RESERVED_EMAIL_TLDS
@@ -48,7 +70,7 @@ def check_email_allowed(email: str) -> None:
     them (``allow_reserved_email_domains``: tests and the mock). Existing members are
     never checked: this guards creation only."""
     if reserved_email(email) and not get_settings().allow_reserved_email_domains:
-        domain = email.strip().lower().rsplit("@", 1)[-1]
+        domain = _email_domain(email)
         raise ReservedEmailError(
             f"{domain} is a reserved example domain; use the person's real email address"
         )
@@ -84,14 +106,18 @@ async def create_api_token(
     *,
     user_id: uuid.UUID | None = None,
     scope: str | None = None,
+    expires_at: datetime | None = None,
 ) -> tuple[ApiToken, str]:
     """Create a token in the session's tenant. Returns (row, raw token); show raw once.
 
     With ``user_id`` the token acts as that user (their role and their own data), capped
-    by ``scope`` when given (``oracle:read`` alone acts as a viewer).
+    by ``scope`` when given (``oracle:read`` alone acts as a viewer); it stops working at
+    ``expires_at`` when given.
     """
     raw = TOKEN_PREFIX + secrets.token_urlsafe(32)
-    token = ApiToken(name=name, token_hash=hash_token(raw), user_id=user_id, scope=scope)
+    token = ApiToken(
+        name=name, token_hash=hash_token(raw), user_id=user_id, scope=scope, expires_at=expires_at
+    )
     session.add(token)
     await session.flush()
     return token, raw
@@ -103,6 +129,11 @@ def token_role(user_role: str, scope: str | None) -> Role:
     if scope is None or "oracle:write" in scope.split():
         return user_role  # type: ignore[return-value]
     return "viewer"
+
+
+def token_expired(expires_at: datetime | None, now: datetime | None = None) -> bool:
+    """Whether a personal token with this expiry has expired (None: never expires)."""
+    return expires_at is not None and expires_at <= (now or datetime.now(UTC))
 
 
 def may_sign_in(user: User | None) -> bool:
@@ -126,11 +157,45 @@ async def authenticate_user(email: str, password: str) -> User | None:
     return None
 
 
+async def sign_in(email: str, password: str) -> tuple[User, str] | None:
+    """Check a password sign-in and stamp its session cookie, or ``None``.
+
+    The cookie is stamped with the member's row locked (``FOR NO KEY UPDATE``) and the
+    password re-checked against the hash read under that lock: a password change (or a
+    sign-out everywhere) locks the row too and reads its time after the lock, so a
+    session signed in with the old password while a change commits is always older than
+    the change's ``sessions_valid_after`` and never survives it. Records the sign-in."""
+    from oracle.audit import record
+    from oracle.auth.deps import Principal
+    from oracle.tenancy import tenant_session
+
+    found = await authenticate_user(email, password)
+    if found is None:
+        return None
+    async with tenant_session(found.tenant_id) as s:
+        user = await s.scalar(
+            select(User).where(User.id == found.id).with_for_update(key_share=True)
+        )
+        if not may_sign_in(user) or (
+            user.password_hash != found.password_hash
+            and not verify_password(user.password_hash, password)
+        ):
+            return None
+        cookie = make_session_cookie(user)
+        user.last_sign_in_at = datetime.now(UTC)
+        principal = Principal(
+            tenant_id=user.tenant_id, kind="user", role=user.role, user_id=user.id
+        )
+        await record(s, principal, "login", "user", user.id)
+        await s.commit()
+        return user, cookie
+
+
 async def resolve_api_token(raw: str) -> ApiToken | None:
     """Look up an active token by its raw value and record its use."""
     async with unscoped_session() as s:
         token = await s.scalar(select(ApiToken).where(ApiToken.token_hash == hash_token(raw)))
-        if token is None or token.revoked_at is not None:
+        if token is None or token.revoked_at is not None or token_expired(token.expires_at):
             return None
         token.last_used_at = datetime.now(UTC)
         await s.commit()
@@ -197,13 +262,15 @@ async def caller_refusal(session: AsyncSession, principal: "Principal", role: Ro
     if principal.token_id is not None:
         row = (
             await session.execute(
-                select(ApiToken.revoked_at, ApiToken.role, ApiToken.scope).where(
-                    ApiToken.id == principal.token_id
-                )
+                select(
+                    ApiToken.revoked_at, ApiToken.role, ApiToken.scope, ApiToken.expires_at
+                ).where(ApiToken.id == principal.token_id)
             )
         ).first()
         if row is None or row.revoked_at is not None:
             return "This API token was revoked"
+        if token_expired(row.expires_at):
+            return "This API token has expired"
         if principal.user_id is None and not has_role(row.role, role):
             return f"Requires the {role} role"
         if principal.user_id is not None and not has_role(token_role("owner", row.scope), role):

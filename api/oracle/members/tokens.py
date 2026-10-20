@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -52,6 +52,7 @@ def api_token_out(token: ApiToken, user: User | None) -> ApiTokenOut:
         created_at=token.created_at,
         last_used_at=token.last_used_at,
         revoked_at=token.revoked_at,
+        expires_at=token.expires_at,
     )
 
 
@@ -193,13 +194,17 @@ async def list_tokens(
 
 
 async def open_token_counts(session: AsyncSession) -> dict[uuid.UUID, int]:
-    """Per member: unrevoked personal API tokens plus live MCP grants."""
+    """Per member: unrevoked, unexpired personal API tokens plus live MCP grants."""
     from oracle.mcp.oauth.models import OAuthToken
 
     counts: dict[uuid.UUID, int] = {}
     personal = await session.execute(
         select(ApiToken.user_id, func.count())
-        .where(ApiToken.user_id.is_not(None), ApiToken.revoked_at.is_(None))
+        .where(
+            ApiToken.user_id.is_not(None),
+            ApiToken.revoked_at.is_(None),
+            or_(ApiToken.expires_at.is_(None), ApiToken.expires_at > func.now()),
+        )
         .group_by(ApiToken.user_id)
     )
     for user_id, n in personal.all():

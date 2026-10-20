@@ -1367,10 +1367,12 @@ export interface paths {
         put?: never;
         /**
          * Change Password
-         * @description Change your password (the current one, then a new one of at least
-         *     ``password_min_length`` characters). Every other session ends; this browser gets a
-         *     fresh one. Five wrong current passwords in 15 minutes lock changes for the rest of
-         *     the window.
+         * @description Change your password (the current one, then a new, different one of at least
+         *     ``password_min_length`` characters), from the signed-in browser only (a token or an
+         *     MCP client is refused). Every other session ends and this browser gets a fresh one;
+         *     your personal API tokens, the MCP clients you authorized and the run tokens of your
+         *     runs still going are revoked. Five wrong current passwords in 15 minutes lock changes
+         *     for the rest of the window.
          */
         post: operations["change_password"];
         delete?: never;
@@ -1390,10 +1392,11 @@ export interface paths {
         put?: never;
         /**
          * Sign Out Everywhere
-         * @description Sign out of every device: every session you signed in with ends, this one too,
-         *     and every MCP client you authorized loses its access and refresh tokens. Personal
-         *     API tokens keep working until you revoke them. With Google sign-in, Google signs
-         *     the browser in again on its next visit.
+         * @description Sign out of every device, from the signed-in browser only: every session you
+         *     signed in with ends, this one too; your personal API tokens, every MCP client you
+         *     authorized (access and refresh tokens) and the run tokens of the runs you started
+         *     that are still going are revoked (the runs go on, their agents can no longer call
+         *     Oracle). With Google sign-in, Google signs the browser in again on its next visit.
          */
         post: operations["sign_out_everywhere"];
         delete?: never;
@@ -1417,9 +1420,11 @@ export interface paths {
         put?: never;
         /**
          * Create Personal Token
-         * @description Create a personal API token that acts as you. ``oracle:read`` alone acts as a
-         *     viewer; with ``oracle:write`` it has your role. The secret is in this answer only:
-         *     copy it now, only its hash is kept.
+         * @description Create a personal API token that acts as you, from the signed-in browser only (a
+         *     token or an MCP client never mints one). ``oracle:read`` alone acts as a viewer;
+         *     with ``oracle:write`` it has your role. It expires after ``expires_in_days`` (30, 90
+         *     or 365; null: never), then is listed as expired and refused. The secret is in this
+         *     answer only: copy it now, only its hash is kept.
          */
         post: operations["create_personal_token"];
         delete?: never;
@@ -7944,6 +7949,11 @@ export interface components {
             name: string;
             /** Scopes */
             scopes: ("oracle:read" | "oracle:write")[];
+            /**
+             * Expires In Days
+             * @default 90
+             */
+            expires_in_days: (30 | 90 | 365) | null;
         };
         /**
          * PersonalTokenCreated
@@ -9695,8 +9705,8 @@ export interface components {
         /**
          * SignedOutEverywhere
          * @description Every session signed before ``sessions_valid_after`` is refused, this one too;
-         *     every MCP client's tokens, refresh tokens included, are revoked. Personal API tokens
-         *     are not sessions: they keep working until revoked.
+         *     every personal API token, every MCP client (refresh tokens included) and the run
+         *     tokens of the runs you started that are still going are revoked (AC1).
          */
         SignedOutEverywhere: {
             /**
@@ -9706,6 +9716,16 @@ export interface components {
             sessions_valid_after: string;
             /** Mcp Clients Revoked */
             mcp_clients_revoked: number;
+            /**
+             * Api Tokens Revoked
+             * @default 0
+             */
+            api_tokens_revoked: number;
+            /**
+             * Runs Tokens Revoked
+             * @default 0
+             */
+            runs_tokens_revoked: number;
         };
         /** SlideOut */
         SlideOut: {
@@ -13752,8 +13772,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The current password is not correct */
+            /** @description The current password is not correct, or the new one is it */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not from the signed-in browser (a token or an MCP client) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13802,6 +13829,13 @@ export interface operations {
                     "application/json": components["schemas"]["SignedOutEverywhere"];
                 };
             };
+            /** @description Not from the signed-in browser */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     list_my_tokens: {
@@ -13846,7 +13880,7 @@ export interface operations {
                     "application/json": components["schemas"]["PersonalTokenCreated"];
                 };
             };
-            /** @description More scopes than the calling credential has */
+            /** @description Not from the signed-in browser (a token or an MCP client) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -13877,6 +13911,13 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A read-only credential changes nothing */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13933,6 +13974,13 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A read-only credential changes nothing */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -10,6 +10,9 @@ from oracle.members.schemas import ApiTokenOut
 
 SignInMethod = Literal["password", "google"]
 PersonalScope = Literal["oracle:read", "oracle:write"]
+# A personal token's lifetime, chosen when it is created (AC1): 30 days, 90 days (the
+# default), a year, or never (null).
+TokenLifetime = Literal[30, 90, 365]
 
 
 class MyAccountOut(BaseModel):
@@ -38,6 +41,8 @@ class PersonalTokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     # oracle:read alone acts as a viewer; with oracle:write the token has your role.
     scopes: list[PersonalScope] = Field(min_length=1)
+    # Days until it expires: 30, 90 or 365; null never expires.
+    expires_in_days: TokenLifetime | None = 90
 
     @field_validator("name")
     @classmethod
@@ -72,8 +77,11 @@ class McpClientOut(BaseModel):
 
 class SignedOutEverywhere(BaseModel):
     """Every session signed before ``sessions_valid_after`` is refused, this one too;
-    every MCP client's tokens, refresh tokens included, are revoked. Personal API tokens
-    are not sessions: they keep working until revoked."""
+    every personal API token, every MCP client (refresh tokens included) and the run
+    tokens of the runs you started that are still going are revoked (AC1)."""
 
     sessions_valid_after: datetime
     mcp_clients_revoked: int
+    api_tokens_revoked: int = 0
+    # Runs whose tokens were revoked (the runs themselves go on).
+    runs_tokens_revoked: int = 0

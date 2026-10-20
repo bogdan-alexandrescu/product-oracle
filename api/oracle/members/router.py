@@ -9,7 +9,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import not_for_runs, require_role
 from oracle.connections.router import ProviderHttp
 from oracle.members import service, tokens
@@ -74,6 +74,7 @@ async def update_member(
 @router.post(
     "/members/{user_id}/disable",
     response_model=MemberOut,
+    dependencies=[Depends(same_origin)],
     responses={404: {"description": "No such member"}, 409: {"description": "The last owner"}},
 )
 async def disable_member(

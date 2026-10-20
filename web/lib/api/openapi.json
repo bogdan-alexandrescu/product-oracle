@@ -4677,7 +4677,7 @@
           "account"
         ],
         "summary": "Change Password",
-        "description": "Change your password (the current one, then a new one of at least\n``password_min_length`` characters). Every other session ends; this browser gets a\nfresh one. Five wrong current passwords in 15 minutes lock changes for the rest of\nthe window.",
+        "description": "Change your password (the current one, then a new, different one of at least\n``password_min_length`` characters), from the signed-in browser only (a token or an\nMCP client is refused). Every other session ends and this browser gets a fresh one;\nyour personal API tokens, the MCP clients you authorized and the run tokens of your\nruns still going are revoked. Five wrong current passwords in 15 minutes lock changes\nfor the rest of the window.",
         "operationId": "change_password",
         "requestBody": {
           "content": {
@@ -4694,7 +4694,10 @@
             "description": "Successful Response"
           },
           "400": {
-            "description": "The current password is not correct"
+            "description": "The current password is not correct, or the new one is it"
+          },
+          "403": {
+            "description": "Not from the signed-in browser (a token or an MCP client)"
           },
           "409": {
             "description": "You sign in with Google only: no password to change"
@@ -4729,7 +4732,7 @@
           "account"
         ],
         "summary": "Sign Out Everywhere",
-        "description": "Sign out of every device: every session you signed in with ends, this one too,\nand every MCP client you authorized loses its access and refresh tokens. Personal\nAPI tokens keep working until you revoke them. With Google sign-in, Google signs\nthe browser in again on its next visit.",
+        "description": "Sign out of every device, from the signed-in browser only: every session you\nsigned in with ends, this one too; your personal API tokens, every MCP client you\nauthorized (access and refresh tokens) and the run tokens of the runs you started\nthat are still going are revoked (the runs go on, their agents can no longer call\nOracle). With Google sign-in, Google signs the browser in again on its next visit.",
         "operationId": "sign_out_everywhere",
         "responses": {
           "200": {
@@ -4741,6 +4744,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Not from the signed-in browser"
           }
         },
         "security": [
@@ -4791,7 +4797,7 @@
           "account"
         ],
         "summary": "Create Personal Token",
-        "description": "Create a personal API token that acts as you. ``oracle:read`` alone acts as a\nviewer; with ``oracle:write`` it has your role. The secret is in this answer only:\ncopy it now, only its hash is kept.",
+        "description": "Create a personal API token that acts as you, from the signed-in browser only (a\ntoken or an MCP client never mints one). ``oracle:read`` alone acts as a viewer;\nwith ``oracle:write`` it has your role. It expires after ``expires_in_days`` (30, 90\nor 365; null: never), then is listed as expired and refused. The secret is in this\nanswer only: copy it now, only its hash is kept.",
         "operationId": "create_personal_token",
         "requestBody": {
           "content": {
@@ -4815,7 +4821,7 @@
             }
           },
           "403": {
-            "description": "More scopes than the calling credential has"
+            "description": "Not from the signed-in browser (a token or an MCP client)"
           },
           "422": {
             "description": "Validation Error",
@@ -4869,6 +4875,9 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "A read-only credential changes nothing"
           },
           "404": {
             "description": "Not one of your tokens"
@@ -4951,6 +4960,9 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "A read-only credential changes nothing"
           },
           "404": {
             "description": "Not one of your MCP clients"
@@ -25457,6 +25469,23 @@
             "type": "array",
             "minItems": 1,
             "title": "Scopes"
+          },
+          "expires_in_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  30,
+                  90,
+                  365
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires In Days",
+            "default": 90
           }
         },
         "type": "object",
@@ -30541,6 +30570,16 @@
           "mcp_clients_revoked": {
             "type": "integer",
             "title": "Mcp Clients Revoked"
+          },
+          "api_tokens_revoked": {
+            "type": "integer",
+            "title": "Api Tokens Revoked",
+            "default": 0
+          },
+          "runs_tokens_revoked": {
+            "type": "integer",
+            "title": "Runs Tokens Revoked",
+            "default": 0
           }
         },
         "type": "object",
@@ -30549,7 +30588,7 @@
           "mcp_clients_revoked"
         ],
         "title": "SignedOutEverywhere",
-        "description": "Every session signed before ``sessions_valid_after`` is refused, this one too;\nevery MCP client's tokens, refresh tokens included, are revoked. Personal API tokens\nare not sessions: they keep working until revoked."
+        "description": "Every session signed before ``sessions_valid_after`` is refused, this one too;\nevery personal API token, every MCP client (refresh tokens included) and the run\ntokens of the runs you started that are still going are revoked (AC1)."
       },
       "SlideOut": {
         "properties": {

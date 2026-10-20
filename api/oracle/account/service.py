@@ -62,14 +62,95 @@ async def _failures(session: AsyncSession, user: User, now: datetime) -> list[da
     )
 
 
+def browser_only(principal: "Principal", what: str) -> None:
+    """Creating a personal token, changing the password and signing out of every device
+    work only from the signed-in browser (AC1, owner 2026-10-20): never through an API
+    token or an MCP client, so a leaked credential can neither mint a longer-lived one
+    nor lock its person out."""
+    if principal.token_id is not None or principal.grant_id is not None:
+        raise MemberError(
+            "forbidden", f"{what} works only from the signed-in browser, not with a token"
+        )
+
+
+async def _writable(session: AsyncSession, principal: "Principal") -> None:
+    """A read-only credential (an ``oracle:read`` token or MCP client) makes no account
+    changes (AC1)."""
+    if "oracle:write" not in await caller_scopes(session, principal):
+        raise MemberError("forbidden", "This credential is read-only; it changes nothing")
+
+
+async def _account_gate(session: AsyncSession, principal: "Principal") -> None:
+    """The review gate for a change to the caller's own credentials, then the caller
+    re-read under it (a disable that commits first wins). Revoking a credential lapses
+    the approvals given through it, which publishes read: a member who may approve takes
+    the gate exclusively; anyone else gives no approvals, so takes it shared and never
+    stalls the company's publishes."""
+    from oracle.authz import has_role
+
+    role = await session.scalar(select(User.role).where(User.id == principal.user_id))
+    await _gate(
+        session, principal, shared=not has_role(role or "viewer", "approver"), role="viewer"
+    )
+
+
+async def _end_credentials(
+    session: AsyncSession, principal: "Principal", user: User, why: str
+) -> dict[str, list[str]]:
+    """Revoke every credential that acts for ``user`` besides a browser session (AC1):
+    their personal API tokens (approvals given through them lapse), every MCP client they
+    authorized (the whole family, refresh tokens included) and the run tokens of the runs
+    they started that are still going. The caller holds the gate."""
+    from oracle.runs.models import Run
+    from oracle.runs.service import FINAL
+    from oracle.runtokens import RunToken, revoke_run_tokens
+
+    api_tokens = list(
+        await session.scalars(
+            select(ApiToken.id).where(ApiToken.user_id == user.id, ApiToken.revoked_at.is_(None))
+        )
+    )
+    for token_id in api_tokens:
+        await revoke_api_token(session, principal, token_id, own=True, gated=True)
+    grants = [g for g in await tokens.grants(session, user_id=user.id) if g.revoked_at is None]
+    for grant in grants:
+        await tokens.revoke_grant(session, principal, grant, why)
+    runs = list(
+        await session.scalars(
+            select(Run.id)
+            .join(RunToken, RunToken.run_id == Run.id)
+            .where(
+                Run.created_by == user.id,
+                Run.status.not_in(FINAL),
+                RunToken.revoked_at.is_(None),
+            )
+            .distinct()
+        )
+    )
+    for run_id in runs:
+        await revoke_run_tokens(session, run_id)
+    await session.flush()
+    return {
+        "api_tokens": [str(i) for i in api_tokens],
+        "mcp_grants": [str(g.id) for g in grants],
+        "run_token_runs": [str(i) for i in runs],
+    }
+
+
 async def change_password(
     session: AsyncSession, principal: "Principal", current: str, new: str
-) -> User:
-    """Set a new password after checking the current one. Rate-limited per member (a
-    wrong current password counts; after PASSWORD_ATTEMPTS in PASSWORD_WINDOW every
-    attempt is refused until the oldest leaves the window). Every session signed so far
-    ends (``sessions_valid_after``); the caller gives this browser a fresh one."""
-    user = await _user(session, principal, lock=True)
+) -> tuple[User, dict[str, list[str]]]:
+    """Set a new password after checking the current one, from the signed-in browser
+    only. Rate-limited per member (a wrong current password counts; after
+    PASSWORD_ATTEMPTS in PASSWORD_WINDOW every attempt is refused until the oldest
+    leaves the window). Every session signed so far ends (``sessions_valid_after``), and
+    every other credential of theirs is revoked (:func:`_end_credentials`, AC1); the
+    caller gives this browser a fresh session.
+
+    The (slow) password check runs before the gate; under it the row is locked and must
+    still hold the hash that was checked, so two changes cannot both win."""
+    browser_only(principal, "Changing your password")
+    user = await _user(session, principal)
     if not user.password_sign_in:
         raise MemberError(
             "conflict", "You sign in with Google; there is no Oracle password to change"
@@ -79,16 +160,30 @@ async def change_password(
     if len(failures) >= PASSWORD_ATTEMPTS:
         wait = failures[-PASSWORD_ATTEMPTS] + PASSWORD_WINDOW - now
         raise RateLimited(max(1, int(wait.total_seconds()) + 1))
-    if not verify_password(user.password_hash, current):
+    checked = user.password_hash
+    if not verify_password(checked, current):
         await audit.record(session, principal, "password.change_failed", "user", user.id)
         # Kept although the request fails: it counts against the limit.
         await session.commit()
         raise MemberError("invalid_password", "Your current password is not correct")
+    if new == current:
+        raise MemberError("invalid_password", "Choose a new password, not your current one")
+    await _account_gate(session, principal)
+    user = await session.scalar(
+        select(User)
+        .where(User.id == principal.user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if user is None or user.password_hash != checked:
+        raise MemberError("conflict", "Your password was changed meanwhile; sign in again")
     user.password_hash = hash_password(new)
-    user.sessions_valid_after = now
+    # Read after the row lock: a sign-in holding it stamped its cookie before this.
+    user.sessions_valid_after = datetime.now(UTC)
     await session.flush()
-    await audit.record(session, principal, "password.change", "user", user.id)
-    return user
+    revoked = await _end_credentials(session, principal, user, "password changed")
+    await audit.record(session, principal, "password.change", "user", user.id, revoked)
+    return user, revoked
 
 
 async def caller_scopes(session: AsyncSession, principal: "Principal") -> set[str]:
@@ -106,17 +201,22 @@ async def caller_scopes(session: AsyncSession, principal: "Principal") -> set[st
 
 
 async def create_personal_token(
-    session: AsyncSession, principal: "Principal", name: str, scopes: list[str]
+    session: AsyncSession,
+    principal: "Principal",
+    name: str,
+    scopes: list[str],
+    expires_in_days: int | None,
 ) -> tuple[ApiToken, str]:
-    """A new personal API token acting as the caller, capped by ``scopes``. A token or
-    an MCP client may only create one with scopes it holds itself."""
-    wanted = set(scopes)
-    if not wanted <= await caller_scopes(session, principal):
-        raise MemberError(
-            "forbidden", "This credential cannot create a token with more scopes than it has"
-        )
+    """A new personal API token acting as the caller, capped by ``scopes``, expiring
+    after ``expires_in_days`` (None: never). From the signed-in browser only (AC1), so a
+    token never mints another; the caller is re-read under the gate, so a token minted
+    while a disable commits cannot outlive it."""
+    browser_only(principal, "Creating a personal API token")
+    await _gate(session, principal, shared=True, role="viewer")
+    wanted = sorted(set(scopes))
+    expires_at = datetime.now(UTC) + timedelta(days=expires_in_days) if expires_in_days else None
     token, raw = await create_api_token(
-        session, name, user_id=principal.user_id, scope=" ".join(sorted(wanted))
+        session, name, user_id=principal.user_id, scope=" ".join(wanted), expires_at=expires_at
     )
     await audit.record(
         session,
@@ -124,7 +224,12 @@ async def create_personal_token(
         "api_token.create",
         "api_token",
         token.id,
-        {"name": name, "scopes": sorted(wanted), "user_id": str(principal.user_id)},
+        {
+            "name": name,
+            "scopes": wanted,
+            "user_id": str(principal.user_id),
+            "expires_at": expires_at.isoformat() if expires_at else None,
+        },
     )
     return token, raw
 
@@ -134,7 +239,16 @@ async def my_tokens(session: AsyncSession, principal: "Principal"):
 
 
 async def revoke_my_token(session: AsyncSession, principal: "Principal", token_id: uuid.UUID):
-    return await revoke_api_token(session, principal, token_id, own=True)
+    """Revoke one of the caller's personal tokens. Looked up before the gate: another
+    member's token, or an unknown id, is a 404 that never waits on (or holds) it."""
+    await _writable(session, principal)
+    token = await session.get(ApiToken, token_id)
+    if token is None or token.user_id is None or token.user_id != principal.user_id:
+        raise MemberError("not_found", f"API token {token_id} not found")
+    if token.revoked_at is not None:
+        return token
+    await _account_gate(session, principal)
+    return await revoke_api_token(session, principal, token_id, own=True, gated=True)
 
 
 async def my_grants(session: AsyncSession, principal: "Principal") -> list[tokens.Grant]:
@@ -144,33 +258,31 @@ async def my_grants(session: AsyncSession, principal: "Principal") -> list[token
 async def revoke_my_grant(
     session: AsyncSession, principal: "Principal", grant_id: uuid.UUID
 ) -> None:
-    await _gate(session, principal, role="viewer")
+    await _writable(session, principal)
     found = await tokens.grants(session, grant_id=grant_id)
     if not found or found[0].user_id != principal.user_id:
         raise MemberError("not_found", f"MCP client grant {grant_id} not found")
+    if found[0].revoked_at is not None:
+        return
+    await _account_gate(session, principal)
+    found = await tokens.grants(session, grant_id=grant_id)
     await tokens.revoke_grant(session, principal, found[0], "revoked by its member")
 
 
 async def sign_out_everywhere(
     session: AsyncSession, principal: "Principal"
-) -> tuple[datetime, int]:
+) -> tuple[datetime, dict[str, list[str]]]:
     """End every session of the caller (the per-user session epoch,
-    ``sessions_valid_after``, checked on every request) and every MCP client's grant,
-    refresh tokens included. Personal API tokens stay: revoke them one by one."""
-    await _gate(session, principal, role="viewer")
+    ``sessions_valid_after``, checked on every request) and revoke every other
+    credential of theirs (:func:`_end_credentials`, AC1): personal API tokens, MCP
+    clients (refresh tokens included) and the run tokens of their runs still going.
+    From the signed-in browser only."""
+    browser_only(principal, "Signing out of every device")
+    await _account_gate(session, principal)
     user = await _user(session, principal, lock=True)
     at = datetime.now(UTC)
     user.sessions_valid_after = at
-    live = [g for g in await tokens.grants(session, user_id=user.id) if g.live]
-    for grant in live:
-        await tokens.revoke_grant(session, principal, grant, "signed out everywhere")
+    revoked = await _end_credentials(session, principal, user, "signed out everywhere")
     await session.flush()
-    await audit.record(
-        session,
-        principal,
-        "member.sign_out_everywhere",
-        "user",
-        user.id,
-        {"mcp_grants": [str(g.id) for g in live]},
-    )
-    return at, len(live)
+    await audit.record(session, principal, "member.sign_out_everywhere", "user", user.id, revoked)
+    return at, revoked

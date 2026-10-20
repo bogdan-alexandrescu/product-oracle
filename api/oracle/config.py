@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +32,17 @@ class Settings(BaseSettings):
     # (example.com/.org/.net, *.test, *.invalid, *.localhost). Off everywhere real, so a
     # seed or an invite can never create admin@example.com again (account management).
     allow_reserved_email_domains: bool = False
+
+    @model_validator(mode="after")
+    def _no_reserved_domains_in_production(self) -> "Settings":
+        # A deployment with secure cookies or Google sign-in is a real one: the switch
+        # meant for tests and the mock is refused there, so it cannot be left on.
+        if self.allow_reserved_email_domains and (self.cookie_secure or self.iap_audiences):
+            raise ValueError(
+                "ORACLE_ALLOW_RESERVED_EMAIL_DOMAINS is for tests and the mock only; it "
+                "cannot be set with ORACLE_COOKIE_SECURE or ORACLE_IAP_AUDIENCES"
+            )
+        return self
 
 
 @lru_cache

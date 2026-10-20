@@ -69,3 +69,6 @@ class ApiToken(TenantScoped, Base):
     # "oracle:write"): without oracle:write it acts as a viewer. None: every right of its
     # role (tokens made before scopes existed, and service tokens).
     scope: Mapped[str | None] = mapped_column(Text)
+    # A personal token stops working at this time (chosen when it is created: 30 days,
+    # 90 days, a year, or never: None). Expired tokens are listed as such and refused.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

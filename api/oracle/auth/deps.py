@@ -182,6 +182,48 @@ async def _get_principal(
 CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
 
 
+def _allowed_origins(request: Request) -> set[str]:
+    from urllib.parse import urlsplit
+
+    from oracle.mcp.oauth.service import oauth_settings
+
+    settings = get_settings()
+    hosts = {request.headers.get("host"), request.headers.get("x-forwarded-host")}
+    for url in (*settings.cors_origins, settings.app_url, oauth_settings().public_url):
+        if url:
+            hosts.add(urlsplit(url).netloc)
+    return {h.lower() for h in hosts if h}
+
+
+async def same_origin(request: Request) -> None:
+    """Refuse a cross-site request signed in by the browser's own credentials (403).
+
+    For a body-less POST that changes something (sign out everywhere, approve or resume
+    a run, disable a member): it has no JSON body, so the browser sends it cross-site
+    without a CORS preflight, and SameSite=Lax does not cover every case (a same-site
+    sibling host, IAP's own cookie). Checked only when the session cookie or Google
+    sign-in signs the request in: a bearer token is never sent by a browser on its own.
+    A browser sends ``Sec-Fetch-Site`` and ``Origin`` on such a request; a request with
+    neither is not a browser's, and passes."""
+    from urllib.parse import urlsplit
+
+    if request.headers.get("authorization"):
+        return
+    ambient = request.cookies.get(get_settings().session_cookie_name) or request.headers.get(
+        iap.ASSERTION_HEADER
+    )
+    if not ambient:
+        return
+    refused = HTTPException(status.HTTP_403_FORBIDDEN, "Cross-site request refused")
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        raise refused
+    origin = request.headers.get("origin")
+    if origin is None:
+        return
+    if origin == "null" or urlsplit(origin).netloc.lower() not in _allowed_origins(request):
+        raise refused
+
+
 async def get_db(principal: CurrentPrincipal) -> AsyncIterator[AsyncSession]:
     async with tenant_session(principal.tenant_id) as session:
         yield session

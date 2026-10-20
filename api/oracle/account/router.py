@@ -21,7 +21,7 @@ from oracle.account.schemas import (
     PersonalTokenCreated,
     SignedOutEverywhere,
 )
-from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
+from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB, same_origin
 from oracle.auth.models import User
 from oracle.auth.service import make_session_cookie
 from oracle.authz import not_for_runs
@@ -90,7 +90,8 @@ async def get_my_account(principal: Member, db: TenantDB) -> MyAccountOut:
     "/password",
     status_code=status.HTTP_204_NO_CONTENT,
     responses={
-        400: {"description": "The current password is not correct"},
+        400: {"description": "The current password is not correct, or the new one is it"},
+        403: {"description": "Not from the signed-in browser (a token or an MCP client)"},
         409: {"description": "You sign in with Google only: no password to change"},
         429: {"description": "Too many wrong attempts; see Retry-After"},
     },
@@ -98,11 +99,13 @@ async def get_my_account(principal: Member, db: TenantDB) -> MyAccountOut:
 async def change_password(
     body: PasswordChange, principal: Member, db: TenantDB, request: Request, response: Response
 ) -> None:
-    """Change your password (the current one, then a new one of at least
-    ``password_min_length`` characters). Every other session ends; this browser gets a
-    fresh one. Five wrong current passwords in 15 minutes lock changes for the rest of
-    the window."""
-    user = await _call(
+    """Change your password (the current one, then a new, different one of at least
+    ``password_min_length`` characters), from the signed-in browser only (a token or an
+    MCP client is refused). Every other session ends and this browser gets a fresh one;
+    your personal API tokens, the MCP clients you authorized and the run tokens of your
+    runs still going are revoked. Five wrong current passwords in 15 minutes lock changes
+    for the rest of the window."""
+    user, _ = await _call(
         service.change_password(db, principal, body.current_password, body.new_password)
     )
     await db.commit()
@@ -119,18 +122,29 @@ async def change_password(
         )
 
 
-@router.post("/sign-out-everywhere", response_model=SignedOutEverywhere)
+@router.post(
+    "/sign-out-everywhere",
+    response_model=SignedOutEverywhere,
+    dependencies=[Depends(same_origin)],
+    responses={403: {"description": "Not from the signed-in browser"}},
+)
 async def sign_out_everywhere(
     principal: Member, db: TenantDB, response: Response
 ) -> SignedOutEverywhere:
-    """Sign out of every device: every session you signed in with ends, this one too,
-    and every MCP client you authorized loses its access and refresh tokens. Personal
-    API tokens keep working until you revoke them. With Google sign-in, Google signs
-    the browser in again on its next visit."""
+    """Sign out of every device, from the signed-in browser only: every session you
+    signed in with ends, this one too; your personal API tokens, every MCP client you
+    authorized (access and refresh tokens) and the run tokens of the runs you started
+    that are still going are revoked (the runs go on, their agents can no longer call
+    Oracle). With Google sign-in, Google signs the browser in again on its next visit."""
     at, revoked = await _call(service.sign_out_everywhere(db, principal))
     await db.commit()
     response.delete_cookie(get_settings().session_cookie_name, path="/")
-    return SignedOutEverywhere(sessions_valid_after=at, mcp_clients_revoked=revoked)
+    return SignedOutEverywhere(
+        sessions_valid_after=at,
+        mcp_clients_revoked=len(revoked["mcp_grants"]),
+        api_tokens_revoked=len(revoked["api_tokens"]),
+        runs_tokens_revoked=len(revoked["run_token_runs"]),
+    )
 
 
 @router.get("/tokens", response_model=list[ApiTokenOut])
@@ -143,15 +157,19 @@ async def list_my_tokens(principal: Member, db: TenantDB) -> list[ApiTokenOut]:
     "/tokens",
     response_model=PersonalTokenCreated,
     status_code=status.HTTP_201_CREATED,
-    responses={403: {"description": "More scopes than the calling credential has"}},
+    responses={403: {"description": "Not from the signed-in browser (a token or an MCP client)"}},
 )
 async def create_personal_token(
     body: PersonalTokenCreate, principal: Member, db: TenantDB
 ) -> PersonalTokenCreated:
-    """Create a personal API token that acts as you. ``oracle:read`` alone acts as a
-    viewer; with ``oracle:write`` it has your role. The secret is in this answer only:
-    copy it now, only its hash is kept."""
-    token, raw = await _call(service.create_personal_token(db, principal, body.name, body.scopes))
+    """Create a personal API token that acts as you, from the signed-in browser only (a
+    token or an MCP client never mints one). ``oracle:read`` alone acts as a viewer;
+    with ``oracle:write`` it has your role. It expires after ``expires_in_days`` (30, 90
+    or 365; null: never), then is listed as expired and refused. The secret is in this
+    answer only: copy it now, only its hash is kept."""
+    token, raw = await _call(
+        service.create_personal_token(db, principal, body.name, body.scopes, body.expires_in_days)
+    )
     await db.commit()
     user = await db.get(User, principal.user_id)
     return PersonalTokenCreated(token=tokens.api_token_out(token, user), secret=raw)
@@ -160,7 +178,10 @@ async def create_personal_token(
 @router.delete(
     "/tokens/{token_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={404: {"description": "Not one of your tokens"}},
+    responses={
+        403: {"description": "A read-only credential changes nothing"},
+        404: {"description": "Not one of your tokens"},
+    },
 )
 async def revoke_my_token(token_id: uuid.UUID, principal: Member, db: TenantDB) -> None:
     """Revoke one of your personal API tokens. The approvals given through it lapse for
@@ -191,7 +212,10 @@ async def list_my_oauth_clients(principal: Member, db: TenantDB) -> list[McpClie
 @router.delete(
     "/oauth-clients/{grant_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={404: {"description": "Not one of your MCP clients"}},
+    responses={
+        403: {"description": "A read-only credential changes nothing"},
+        404: {"description": "Not one of your MCP clients"},
+    },
 )
 async def revoke_my_oauth_client(grant_id: uuid.UUID, principal: Member, db: TenantDB) -> None:
     """Revoke an MCP client you authorized: its access and refresh tokens stop working

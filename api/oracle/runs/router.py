@@ -13,7 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 
-from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
+from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB, same_origin
 from oracle.authz import require_role, require_role_now
 from oracle.claude_accounts.sweep import summarise_sweep
 from oracle.claude_accounts.sweep import sweep as sweep_claude_accounts
@@ -123,7 +123,7 @@ async def start_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> 
     return await service.read_run(db, run_id, principal)
 
 
-@router.post("/runs/{run_id}/approve", response_model=RunOut)
+@router.post("/runs/{run_id}/approve", response_model=RunOut, dependencies=[Depends(same_origin)])
 async def approve_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Approve the cost of a run awaiting approval and start it."""
     await _call(service.approve(db, principal, run_id))
@@ -131,7 +131,7 @@ async def approve_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> R
     return await service.read_run(db, run_id, principal)
 
 
-@router.post("/runs/{run_id}/resume", response_model=RunOut)
+@router.post("/runs/{run_id}/resume", response_model=RunOut, dependencies=[Depends(same_origin)])
 async def resume_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Resume a run paused on overrun; it may spend another half of its estimate."""
     await _call(service.resume(db, principal, run_id))
