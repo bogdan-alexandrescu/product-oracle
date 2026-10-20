@@ -39,9 +39,10 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   await expect(chip).toHaveAttribute("href", "#decide");
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Confirm the baseline");
   await expect(page.getByRole("complementary", { name: "Run" }).filter({ visible: true })).toContainText("Confirm the baseline");
-  await page.getByRole("link", { name: "Decide", exact: true }).click();
+  await page.getByRole("button", { name: "Decide", exact: true }).click();
   await expect(page).toHaveURL(/#decide$/);
   await expect(page.locator("#decide")).toBeInViewport();
+  await expect(page.locator("#decide")).toBeFocused();
 
   // The baseline's artifacts can be read before deciding.
   const baseline = page.getByTestId("segment-baseline");
@@ -128,15 +129,31 @@ test("new run over $50 waits for an owner's approval", async ({ page }) => {
  * Seeds the mock with a run waiting at its PRD review whose draft Oracle refused at segment
  * end (the import error on the segment and in the checkpoint's payload). Returns its id.
  */
-async function seedRejectedDraft(page: Page): Promise<string> {
-  return page.evaluate(() => {
+async function seedRejectedDraft(page: Page, withProblems = false): Promise<string> {
+  return page.evaluate((withProblems) => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
     type S = Record<string, unknown> & { seq: number; checkpoint: string };
     const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
     const id = "7a11c0de-0000-4000-8000-0000000000d1";
     const at = "2026-10-17T09:00:00Z";
-    const error = "prd.md was rejected: [invalid_citation] citation #1 (o-g1) is invalid: source";
+    let error = "prd.md was rejected: [invalid_citation] citation #1 (o-g1) is invalid: source";
+    // As the API stores a refusal (oracle.runs.rejection): 24 citations of source 'x', cited 102 times.
+    const problems: Record<string, unknown>[] = [];
+    let summary: string | null = null;
+    if (withProblems) {
+      for (let i = 1; i <= 24; i++) {
+        problems.push({ code: "invalid_citation", message: `citation #${i} (k${i}) is invalid: source 'x' isn't accepted`, section_key: null, cite_key: `k${i}`, line: null });
+      }
+      for (let s = 0; s < 34; s++) {
+        for (let j = 0; j < 3; j++) {
+          const key = `k${((s * 3 + j) % 24) + 1}`;
+          problems.push({ code: "unknown_citation", message: `[c:${key}] in section 's${s}' is not defined in front matter 'citations'`, section_key: `s${s}`, cite_key: key, line: 80 + s * 4 });
+        }
+      }
+      error = `prd.md was rejected: ${problems.map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
+      summary = "Oracle refused prd.md: 24 citations use source 'x', which isn't accepted; 102 references fail because of them.";
+    }
     const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "guest-checkout", document_id: null, created_at: at, started_at: at };
     const segments: S[] = run.segments;
     for (const s of segments) {
@@ -147,7 +164,7 @@ async function seedRejectedDraft(page: Page): Promise<string> {
         attempts: [{ attempt: 1, workflow_id: `mock-wf-rej-${s.seq}`, submitted_at: at, cost_usd: 1, note: null, state: "succeeded" }],
       });
     }
-    const draft = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, source: null, prd_links: null };
+    const draft = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems, summary, source: null, prd_links: null };
     Object.assign(segments[3], { artifacts: ["prd.md"], draft_import: draft });
     run.checkpoints = segments.map((s) => {
       const open = s.seq === 4;
@@ -161,7 +178,7 @@ async function seedRejectedDraft(page: Page): Promise<string> {
         decided_by: null,
         decided_at: open ? null : at,
         note: null,
-        payload: open ? { segment_seq: 4, segment: "prd_draft", attempt: 1, artifacts: ["prd.md"], import: { error } } : {},
+        payload: open ? { segment_seq: 4, segment: "prd_draft", attempt: 1, artifacts: ["prd.md"], import: { error, problems, summary } } : {},
         created_at: at,
         can_decide: open,
       };
@@ -171,7 +188,7 @@ async function seedRejectedDraft(page: Page): Promise<string> {
     db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Guest checkout PRD\n---\n\n# Guest checkout PRD {#title}\n";
     localStorage.setItem(key, JSON.stringify(db));
     return id;
-  });
+  }, withProblems);
 }
 
 test("a rejected draft: Retry import imports it, and the segment links the PRD", async ({ page }) => {
@@ -205,6 +222,79 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
 
   await prd.getByRole("link", { name: "guest-checkout v1" }).click();
   await expect(page).toHaveURL(/\/documents\/guest-checkout\/v\/1$/);
+});
+
+const SUMMARY = "Oracle refused prd.md: 24 citations use source 'x', which isn't accepted; 102 references fail because of them.";
+
+test("a rejected draft reads Draft rejected, with one summary line and every problem behind a disclosure", async ({ page }) => {
+  await login(page);
+  const id = await seedRejectedDraft(page, true);
+  await page.goto(`/runs/${id}`);
+  const prd = page.getByTestId("segment-prd_draft");
+  // The segment's state says the draft was refused, not Succeeded; the others did succeed.
+  await expect(prd.getByTestId("segment-state")).toHaveText("Draft rejected");
+  await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText("Succeeded");
+  // One plain line, grouped by cause, instead of the validator's 126 problems.
+  await expect(prd.getByTestId("draft-rejected-summary")).toHaveText(SUMMARY);
+  await expect(prd).not.toContainText("[unknown_citation]");
+  // The raw list is collapsed; opened, one problem per line.
+  const toggle = prd.getByRole("button", { name: "Show all 126 problems" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(prd.getByTestId("draft-problems")).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const list = prd.getByTestId("draft-problems");
+  await expect(list.getByRole("listitem")).toHaveCount(126);
+  await expect(list.getByRole("listitem").first()).toHaveText("citation #1 (k1) is invalid: source 'x' isn't accepted");
+  await expect(list.getByRole("listitem").nth(24)).toHaveText("Line 80: [c:k1] in section 's0' is not defined in front matter 'citations'");
+  await prd.getByRole("button", { name: "Hide the problems" }).click();
+  await expect(prd.getByTestId("draft-problems")).toHaveCount(0);
+
+  // The runs list says it too.
+  await page.getByTestId("nav-runs").click();
+  const row = page.getByTestId("run-row").filter({ hasText: "guest-checkout" });
+  await expect(row.getByTestId("run-draft-rejected")).toHaveText("Draft rejected");
+  await expect(row.getByTestId("run-draft-rejected")).toHaveAttribute("title", SUMMARY);
+  await expect(page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByTestId("run-draft-rejected")).toHaveCount(0);
+});
+
+test("a rejected draft: Send back to writer pre-fills Request changes with the summary", async ({ page }) => {
+  await login(page);
+  const id = await seedRejectedDraft(page, true);
+  await page.goto(`/runs/${id}`);
+  const prd = page.getByTestId("segment-prd_draft");
+  const review = prd.getByTestId("checkpoint-prd_review");
+  const note = review.getByLabel("Note for the agents");
+  await expect(note).toHaveValue("");
+  await prd.getByRole("button", { name: "Send back to writer" }).click();
+  // The Request changes flow, opened with the summary as its note, ready to edit.
+  await expect(note).toHaveValue(SUMMARY);
+  await expect(note).toBeFocused();
+  await expect(note).toBeInViewport();
+  await note.press("End");
+  await note.pressSequentially(" Use source 'oracle'.");
+  await expect(note).toHaveValue(`${SUMMARY} Use source 'oracle'.`);
+  // Nothing is sent until the person sends it.
+  await expect(status(page)).toHaveText("Waiting for review");
+  await review.getByRole("button", { name: "Request changes" }).click();
+  await expect(prd).toContainText("attempt 2");
+  await expect(status(page)).toHaveText("Running");
+});
+
+test("Decide scrolls to the decision panel and focuses it", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 520 });
+  await login(page);
+  const id = await seedRejectedDraft(page, true);
+  await page.goto(`/runs/${id}`);
+  const panel = page.getByTestId("segment-prd_draft").getByTestId("checkpoint-prd_review");
+  await expect(panel).not.toBeInViewport();
+  await page.getByRole("button", { name: "Decide", exact: true }).click();
+  await expect(panel).toBeInViewport();
+  await expect(panel).toBeFocused();
+  await expect(page).toHaveURL(/#decide$/);
+  // Its actions follow in tab order.
+  await page.keyboard.press("Tab");
+  await expect(panel.getByLabel("Note for the agents")).toBeFocused();
 });
 
 test("cancel a run", async ({ page }) => {
