@@ -242,8 +242,11 @@ export function assess(g: GoalView, history?: Point[]): Progress {
   if (left <= 0) return { state: "met", text: "Target met" };
   const distance = left / (TIME[t.unit]?.ms ?? 1);
   const unit = t.unit === "%" ? "pts" : t.unit;
-  const shown = `${t.currency || c.currency}${amount(distance, t.compact || c.compact)}`;
-  if (shown.replace(/^\D+/, "") === "0") return { state: "met", text: "Target met" };
+  let shown = `${t.currency || c.currency}${amount(distance, t.compact || c.compact)}`;
+  // Not met yet, however small the gap: a gap that rounds to 0 is shown to one significant digit.
+  if (Number(shown.replace(/^\D+/, "").replace(/[kMB]$/, "")) === 0) {
+    shown = `${t.currency || c.currency}${Number(distance.toPrecision(1))}`;
+  }
   return { state: "togo", text: `${shown}${unit ? ` ${unit}` : ""} to go`, distance, unit, amount: shown };
 }
 

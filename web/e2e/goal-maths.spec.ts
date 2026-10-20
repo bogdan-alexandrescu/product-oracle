@@ -102,6 +102,8 @@ test.describe("distance to go, met and direction", () => {
     ["Churn", "at most 8%", "8%", undefined, "Target met"],
     // Strict below/above is not met at equality.
     ["Churn", "below 8%", "8%", undefined, "Not below"],
+    ["Churn", "below 8%", "8.04%", undefined, "0.04 pts to go"],
+    ["Uptime", "100%", "99.96%", undefined, "0.04 pts to go"],
     ["Churn", "less than 5", "5", undefined, "Not below"],
     ["Signups", "above 40", "40", undefined, "Not above"],
     ["Signups", "> 100", "100", undefined, "Not above"],
