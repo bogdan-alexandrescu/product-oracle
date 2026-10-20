@@ -1,0 +1,17 @@
+id: tenant-config-leakage
+description: >
+  Tenant-configurability leakage: one customer's settings are written into the product's
+  requirements instead of being configuration.
+covers: [tenant_config_leakage]
+extends: good-prd
+document:
+  from: good-prd.md
+  replace:
+    scope: |
+      - Save, edit and delete up to five addresses per buyer.
+      - Hard-code the address format used by Tenant A for every buyer.
+      - Only for customer Tenant A: skip the postcode field.
+expected:
+  economics_scaling: warning
+rationale_contains:
+  economics_scaling: [configuration, hard-code]

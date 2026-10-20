@@ -8,6 +8,8 @@ READ_AREAS = {
     "read:sources": {"sources", "search", "snapshots"},
     # Intakes, the gap registry and the question ledger (oracle.intake) are baseline
     # knowledge; reading source text through an intake still needs read:sources.
+    # Blockers are baseline constraints (CR-04): their strategy, options, experiments
+    # and events read like the rest of the baseline.
     "read:baseline": {
         "baseline",
         "priorities",
@@ -16,6 +18,10 @@ READ_AREAS = {
         "questions",
         "answers",
         "assumption-decisions",
+        "blockers",
+        "blocker-options",
+        "feasibility-experiments",
+        "blocker-events",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }

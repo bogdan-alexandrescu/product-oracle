@@ -522,7 +522,10 @@ def _baseline_fields(
         "answer_id": str(row.id),
     }
     if gap.category in ("blockers", "third_party_policy"):
-        attrs["blocker"] = {
+        # Only the blocker routes write attrs.blocker (baseline.MANAGED_ATTRS, CR-04):
+        # the proposal suggests the strategy, and once the constraint is accepted an
+        # approver makes it a blocker there (POST /v1/blockers with its entity_id).
+        attrs["proposed_blocker"] = {
             "type": "unknown",
             "limit_kind": "policy" if gap.category == "third_party_policy" else "other",
             # The gap's importance as everyone reads it (importance_of, S6): a rule-made

@@ -1,4 +1,4 @@
-"""The three built-in job kinds. Each builds its prompt's JSON payload from the database,
+"""The built-in job kinds. Each builds its prompt's JSON payload from the database,
 makes one model call through ``ask`` and turns the answer into the job's output (and,
 for review comments, suggestions). The worker owns the call's accounting and the
 transaction; nothing here commits.
@@ -38,6 +38,7 @@ MAX_TOKENS = {
     "reporting": 4000,
     "refinement": 6000,
     "intake_analysis": 4000,
+    "quality_review": 4000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -593,11 +594,19 @@ async def intake_analysis(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, A
     return await intake_job.run(s, job, ask)
 
 
+async def quality_review(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """CR-08 light judging; it lives with the quality criteria it judges."""
+    from oracle.quality import judge
+
+    return await judge.run(s, job, ask, await _context(s, job))
+
+
 RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any]]]] = {
     "review_comments": review_comments,
     "reporting": reporting,
     "refinement": refinement,
     "intake_analysis": intake_analysis,
+    "quality_review": quality_review,
 }
 
 

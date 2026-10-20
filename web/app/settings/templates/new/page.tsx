@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-import { ProblemList, TEMPLATE_SKELETON, TemplateBodyEditor } from "@/components/TemplateBodyEditor";
-import { Button, ErrorNote, INPUT } from "@/components/ui";
+import { Field, INPUT } from "@/app/settings/_components/fields";
+import { Button, InfoTip, Notice, PageHeader, Panel } from "@/components/ds";
+import { ProblemList, TEMPLATE_SKELETON, TemplateBodyEditor, useTemplateCheck } from "@/components/TemplateBodyEditor";
 import { api } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
 import { errorMessage } from "@/lib/use-query";
@@ -20,6 +21,7 @@ export default function NewTemplatePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
+  const live = useTemplateCheck(body);
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -41,18 +43,50 @@ export default function NewTemplatePage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8">
-      <p className="mb-2 text-sm">
-        <Link href="/settings/templates" className="text-neutral-500 hover:text-neutral-900 hover:underline">
-          ← Templates
-        </Link>
-      </p>
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight text-neutral-900">New template</h1>
-      <form onSubmit={create} className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-neutral-700">Key</span>
+    <>
+      <PageHeader
+        back={
+          <Link href="/settings/templates" className="hover:text-text hover:underline">
+            ← Templates
+          </Link>
+        }
+        title="New template"
+        action={
+          <Button
+            type="submit"
+            form="new-template"
+            variant="primary"
+            icon="plus"
+            disabled={busy || live.pending || !live.data?.valid || !key || !name}
+          >
+            {busy ? "Creating…" : "Create template"}
+          </Button>
+        }
+      />
+      <form
+        id="new-template"
+        onSubmit={create}
+        className="grid grid-cols-[minmax(0,1fr)_380px] items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3"
+      >
+        <div className="flex min-w-0 flex-col gap-4 max-[1100px]:order-2 max-[600px]:gap-3">
+          {error && <Notice tone="error">{error}</Notice>}
+          {problems.length > 0 && <ProblemList problems={problems} testId="save-problems" />}
+          <Panel title="Markdown" bodyClassName="p-4 max-[600px]:p-3">
+            <TemplateBodyEditor value={body} onChange={setBody} live={live} />
+          </Panel>
+        </div>
+        <Panel title="Details" bodyClassName="flex flex-col gap-3 p-4 max-[600px]:p-3" className="max-[1100px]:order-1">
+          <Field
+            label="Key"
+            htmlFor="template-key"
+            tip={
+              <InfoTip label="allowed characters" align="start">
+                Lowercase letters, digits and hyphens. It cannot change later.
+              </InfoTip>
+            }
+          >
             <input
+              id="template-key"
               className={`${INPUT} font-mono`}
               value={key}
               onChange={(e) => setKey(e.target.value.toLowerCase())}
@@ -61,47 +95,37 @@ export default function NewTemplatePage() {
               title="Lowercase letters, digits and hyphens"
               required
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-neutral-700">Name</span>
+          </Field>
+          <Field label="Name">
             <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Launch brief" required />
-          </label>
-        </div>
-        <fieldset className="text-sm">
-          <legend className="mb-1 font-medium text-neutral-700">Kind</legend>
-          <div className="flex gap-4">
-            {(["prd", "roadmap"] as const).map((k) => (
-              <label key={k} className="inline-flex items-center gap-1.5">
-                <input type="radio" name="kind" checked={kind === k} onChange={() => setKind(k)} />
-                {k === "prd" ? "PRD" : "Roadmap"}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-neutral-700">Description</span>
-          <input
-            className={INPUT}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What this template is for"
-          />
-        </label>
-        <TemplateBodyEditor value={body} onChange={setBody}>
-          {({ check, pending }) => (
-            <div className="flex items-center gap-3">
-              <Button type="submit" variant="primary" disabled={busy || pending || !check?.valid || !key || !name}>
-                {busy ? "Creating…" : "Create template"}
-              </Button>
-              <span className="text-xs text-neutral-500">
-                Headings end with <code>{"{#id}"}</code>; the last section is <code>## Sources and data points {"{#sources}"}</code>.
-              </span>
+          </Field>
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Kind</legend>
+            <div className="flex gap-4 text-[15px]">
+              {(["prd", "roadmap"] as const).map((k) => (
+                <label key={k} className="inline-flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="kind"
+                    className="size-4 accent-[var(--accent)]"
+                    checked={kind === k}
+                    onChange={() => setKind(k)}
+                  />
+                  {k === "prd" ? "PRD" : "Roadmap"}
+                </label>
+              ))}
             </div>
-          )}
-        </TemplateBodyEditor>
-        {error && <ErrorNote>{error}</ErrorNote>}
-        {problems.length > 0 && <ProblemList problems={problems} testId="save-problems" />}
+          </fieldset>
+          <Field label="Description">
+            <input
+              className={INPUT}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What this template is for"
+            />
+          </Field>
+        </Panel>
       </form>
-    </div>
+    </>
   );
 }

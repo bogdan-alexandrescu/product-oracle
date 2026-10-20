@@ -2,8 +2,9 @@
 
 A job (``llm_jobs``) is one unit of work for Oracle's own model calls on a document:
 ``review_comments`` (classify, group, suggest, push back), ``reporting`` (resolution
-report and what changed) or ``refinement`` (a revised section). Jobs run one at a time
-per document, from ``oracle tick`` and the local background worker.
+report and what changed), ``refinement`` (a revised section) or ``quality_review`` (an
+advisory model view of the PRD quality criteria, :mod:`oracle.quality.judge`). Jobs run
+one at a time per document, from ``oracle tick`` and the local background worker.
 
 A suggestion (``llm_suggestions``) is what ``review_comments`` drafts for one feedback
 item. Nothing in it changes the document: an approver accepts, edits or dismisses it,
@@ -33,7 +34,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-JOB_KINDS = ("review_comments", "reporting", "refinement")
+# quality_review (CR-08): light judging of a PRD version, stored as labelled model output.
+JOB_KINDS = ("review_comments", "reporting", "refinement", "quality_review")
 # Jobs on a product intake (CR-03, migration 0014_intake): light extraction from a brief
 # and its pinned sources. They have no document; ``intake_id`` says whose they are.
 INTAKE_JOB_KINDS = ("intake_analysis",)

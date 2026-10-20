@@ -7,16 +7,21 @@ sources they own (S3 revised). Another user's source reads as "not found".
 import importlib
 import pkgutil
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import changes
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.sources import base
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
+from oracle.v2 import links
+
+if TYPE_CHECKING:
+    from oracle.auth.deps import Principal
 
 # Source kind -> the connection provider it syncs with. Uploads need no connection.
 KIND_PROVIDER: dict[str, str | None] = {
@@ -298,7 +303,27 @@ async def set_paused(db: AsyncSession, source: Source, paused: bool) -> Source:
     return source
 
 
-async def delete_source(db: AsyncSession, source: Source) -> None:
+async def delete_source(
+    db: AsyncSession, source: Source, *, actor: "Principal | str | None"
+) -> None:
+    """Delete a source and its items. Recorded first (v2 hook, oracle.trace): what the
+    items' evidence backs, and the section links citing the items, are marked potentially
+    stale while they still exist. Then a link citing an item keeps its other target (an
+    entity or evidence) and only drops the item; one left with no target is deleted."""
+    await changes.record_change(
+        db,
+        "source_permission",
+        cause="source_deleted",
+        actor=actor,
+        subject_id=source.id,
+        subject_ref=f"{source.kind} source",
+        # The name stays out: a source is private to its owner.
+        data={"source": {"id": str(source.id), "kind": source.kind}},
+    )
+    item_ids = (
+        await db.scalars(select(SourceItem.id).where(SourceItem.source_id == source.id))
+    ).all()
+    await links.release(db, source_item_ids=set(item_ids))
     await db.delete(source)
     await db.commit()
 

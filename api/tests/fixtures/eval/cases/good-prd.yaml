@@ -1,0 +1,66 @@
+id: good-prd
+description: >
+  A complete, traced PRD: a confirmed goal, a feature that serves it with fresh evidence,
+  testable acceptance criteria, quantified economics, a validation plan with a decision
+  threshold, an owner and an operations plan. The base most other cases change one thing in.
+covers: [good_section]
+document:
+  from: good-prd.md
+baseline:
+  entities:
+    - {ref: goal, type: goal, key: repeat-purchase, title: Raise repeat purchases, status: confirmed, attrs: {weight: 3, metric: repeat checkout completion}}
+    - {ref: feature, type: feature, key: saved-addresses, title: Saved addresses, status: confirmed, attrs: {effort: 3}}
+    - {ref: requirement, type: requirement, key: saved-address-picker, title: Pick a saved address at checkout, status: confirmed,
+       attrs: {policy: {area: privacy, critical: true, status: met}}}
+    - {ref: criterion, type: acceptance_criterion, key: address-step-time, title: Address step under 10 seconds at p90, status: confirmed}
+    - {ref: owner, type: person, key: checkout-lead, title: Checkout lead, status: confirmed}
+  edges:
+    - {ref: supports, src: feature, dst: goal, type: supports, attrs: {contribution: 3}, status: confirmed}
+    - {ref: part-of, src: requirement, dst: feature, type: part_of, status: confirmed}
+    - {ref: verifies, src: criterion, dst: requirement, type: verifies, status: confirmed}
+    - {ref: owned-by, src: feature, dst: owner, type: owned_by, status: confirmed}
+  evidence:
+    - {ref: funnel, entity: feature, excerpt: "21% of returning sessions abandon at the address step", confidence: 0.82, freshness: 0.9, age_days: 12}
+    - {ref: support-log, entity: feature, excerpt: "Address re-entry is the second most common complaint", confidence: 0.74, freshness: 0.8, age_days: 20}
+links:
+  - {section: problem, entity: feature, kind: evidences}
+  - {section: goals, entity: goal, kind: implements}
+  - {section: scope, entity: feature, kind: implements}
+  - {section: scope, entity: requirement, kind: implements}
+  - {section: acceptance, entity: criterion, kind: tests}
+blockers:
+  - ref: lookup-quota
+    key: lookup-rate-limit
+    title: Address lookup provider rate limit
+    blocker: {type: hard, limit_kind: capacity, severity: high, status: resolved}
+    third_party: {provider: Example address lookup, operation: address lookup, limit_kind: rate_capacity, supported: true}
+    links: [risks]
+    options:
+      - {title: Batch lookups within the published quota, approach: architecture, compliance: compliant, status: selected}
+      - {title: Cache recent lookups, approach: architecture, compliance: compliant, status: fallback}
+reviews:
+  - {section: problem, comment: "Clear problem statement."}
+expected:
+  problem_clarity: pass
+  goal_alignment: pass
+  evidence_provenance: pass
+  alternatives_tradeoffs: pass
+  blocker_feasibility: pass
+  scope_testability: pass
+  economics_scaling: pass
+  validation_plan: pass
+  ownership_readiness: pass
+  downstream_consistency: not_applicable
+  security_policy: pass
+  third_party_support: pass
+blocked: false
+human_ratings:
+  # Synthetic rater, for the comparison test only.
+  - rater: synthetic-rater-1
+    ratings: {problem_clarity: pass, goal_alignment: pass, scope_testability: pass, validation_plan: warning}
+model_output:
+  # A canned model answer (labelled model output; never ground truth).
+  criteria:
+    - {key: problem_clarity, status: pass, rationale: "The problem names the users and quantifies the drop-off."}
+    - {key: validation_plan, status: warning, rationale: "The pilot has no stated sample size."}
+    - {key: not_a_criterion, status: pass, rationale: "Dropped: unknown key."}

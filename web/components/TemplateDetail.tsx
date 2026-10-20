@@ -3,11 +3,25 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { ProblemList, TemplateBodyEditor, WarningList } from "@/components/TemplateBodyEditor";
-import { Badge, Button, ErrorNote, INPUT, Loading } from "@/components/ui";
+import {
+  Button,
+  Chip,
+  InfoTip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  Label,
+  Notice,
+  PageHeader,
+  Panel,
+  Split,
+} from "@/components/ds";
+import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
+import { ProblemList, TemplateBodyEditor, WarningList, useTemplateCheck } from "@/components/TemplateBodyEditor";
+import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type TemplateOut = Schemas["TemplateOut"];
@@ -15,6 +29,12 @@ type TemplateOut = Schemas["TemplateOut"];
 function message(e: unknown) {
   return e instanceof Error && e.message ? e.message : errorMessage(e);
 }
+
+const BACK = (
+  <Link href="/settings/templates" className="hover:text-text hover:underline">
+    ← Templates
+  </Link>
+);
 
 /** A template: its versions, an editor for the next version, details, archive / restore. */
 export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
@@ -29,27 +49,32 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
 
+  const latest = t?.versions[t.versions.length - 1];
+  const body = draft ?? latest?.body ?? "";
+  const live = useTemplateCheck(body, !!t);
+
   if (q.error) {
     return (
-      <div className="mx-auto max-w-5xl px-6 py-8">
-        <ErrorNote>{q.error}</ErrorNote>
-      </div>
+      <>
+        <PageHeader back={BACK} title="Template" />
+        <Notice tone="error">{q.error}</Notice>
+      </>
     );
   }
-  if (!t) {
+  if (!t || !latest) {
     return (
-      <div className="mx-auto max-w-5xl px-6 py-8">
+      <>
+        <PageHeader back={BACK} title="Template" />
         <Loading />
-      </div>
+      </>
     );
   }
 
-  const latest = t.versions[t.versions.length - 1];
   const shown = t.versions.find((v) => v.version === (viewed ?? latest.version)) ?? latest;
-  const body = draft ?? latest.body;
   const nameValue = name ?? t.name;
   const descriptionValue = description ?? t.description ?? "";
   const detailsChanged = nameValue.trim() !== t.name || (descriptionValue.trim() || null) !== (t.description ?? null);
+  const check = live.data;
 
   async function run(label: string, call: () => Promise<TemplateOut>, done: (t: TemplateOut) => string) {
     setBusy(label);
@@ -108,148 +133,177 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
       () => "Restored.",
     );
 
-  return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      <p className="mb-2 text-sm">
-        <Link href="/settings/templates" className="text-neutral-500 hover:text-neutral-900 hover:underline">
-          ← Templates
-        </Link>
-      </p>
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">{t.name}</h1>
-        <Badge tone="blue">{t.kind === "prd" ? "PRD" : "Roadmap"}</Badge>
-        {t.builtin && <Badge>Built-in</Badge>}
-        {t.archived_at && <Badge tone="amber">Archived</Badge>}
-        <div className="ml-auto">
-          {t.archived_at ? (
-            <Button onClick={restore} disabled={busy !== null}>
-              {busy === "restore" ? "Restoring…" : "Restore"}
-            </Button>
-          ) : (
-            <Button onClick={archive} disabled={busy !== null}>
-              {busy === "archive" ? "Archiving…" : "Archive"}
-            </Button>
+  const kindLabel = t.kind === "prd" ? "PRD" : "Roadmap";
+  const dirty = draft !== null && draft !== latest.body;
+
+  const inspector = (
+    <Inspector
+      eyebrow="Template"
+      title={t.name}
+      label="Template details"
+      chips={
+        <>
+          <Chip hero kind="acc">
+            {kindLabel}
+          </Chip>
+          {t.builtin && (
+            <Chip hero kind="na">
+              Built-in
+            </Chip>
           )}
-        </div>
-      </div>
-      <p className="mb-6 text-sm text-neutral-500">
-        <span className="font-mono">{t.key}</span> · latest <span data-testid="latest-version">v{t.latest_version}</span>
-        {t.suggested_theme && (
-          <>
-            {" "}
-            · suggests theme <span className="font-mono">{t.suggested_theme}</span>
-          </>
-        )}
-        {t.archived_at && ` · archived ${formatDateTime(t.archived_at)}`}
-      </p>
-
-      {notice && (
-        <p role="status" className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {notice}
-        </p>
-      )}
-      {error && (
-        <div className="mb-4 space-y-2">
-          <ErrorNote>{error}</ErrorNote>
-          {problems.length > 0 && <ProblemList problems={problems} testId="save-problems" />}
-        </div>
-      )}
-
-      <section aria-labelledby="details-heading" className="mb-8 rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 id="details-heading" className="mb-3 text-sm font-semibold text-neutral-700">
-          Details
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-[1fr_2fr]">
-          <label className="block text-sm">
-            <span className="mb-1 block text-neutral-600">Name</span>
+          {t.archived_at && (
+            <Chip hero kind="warn">
+              Archived
+            </Chip>
+          )}
+        </>
+      }
+      stats={[
+        { label: "Latest", value: `v${t.latest_version}` },
+        { label: "Versions", value: t.versions.length },
+        { label: "Sections", value: latest.required_sections.length },
+      ]}
+    >
+      <InspectorSection label="Details">
+        <div className="flex flex-col gap-3">
+          <Field label="Name">
             <input className={INPUT} value={nameValue} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-neutral-600">Description</span>
+          </Field>
+          <Field label="Description">
             <input className={INPUT} value={descriptionValue} onChange={(e) => setDescription(e.target.value)} />
-          </label>
+          </Field>
+          <div>
+            <Button onClick={saveDetails} disabled={!detailsChanged || !nameValue.trim() || busy !== null}>
+              {busy === "details" ? "Saving…" : "Save details"}
+            </Button>
+          </div>
         </div>
-        {latest.suggest_when && <p className="mt-2 text-xs text-neutral-500">Suggested when: {latest.suggest_when}</p>}
-        <div className="mt-3">
-          <Button size="sm" onClick={saveDetails} disabled={!detailsChanged || !nameValue.trim() || busy !== null}>
-            {busy === "details" ? "Saving…" : "Save details"}
+      </InspectorSection>
+      <InspectorSection label="Facts">
+        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
+        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.suggested_theme ?? "—"}</span>}>
+          Suggested theme
+        </InspectorRow>
+        <InspectorRow value={formatDate(t.created_at)}>Added</InspectorRow>
+        {t.archived_at && <InspectorRow value={formatDate(t.archived_at)}>Archived</InspectorRow>}
+        {latest.suggest_when && (
+          <div className="flex min-h-8 items-center gap-2.5">
+            <span className="flex-1">Suggested when</span>
+            <InfoTip label="Suggested when">{latest.suggest_when}</InfoTip>
+          </div>
+        )}
+      </InspectorSection>
+      <InspectorSection>
+        {t.archived_at ? (
+          <Button onClick={restore} disabled={busy !== null}>
+            {busy === "restore" ? "Restoring…" : "Restore"}
           </Button>
-        </div>
-      </section>
+        ) : (
+          <Button onClick={archive} disabled={busy !== null}>
+            {busy === "archive" ? "Archiving…" : "Archive"}
+          </Button>
+        )}
+      </InspectorSection>
+    </Inspector>
+  );
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section aria-labelledby="versions-heading" className="min-w-0">
-          <div className="mb-2 flex items-center gap-3">
-            <h2 id="versions-heading" className="text-sm font-semibold text-neutral-700">
-              Versions
-            </h2>
-            <select
-              aria-label="Version"
-              value={shown.version}
-              onChange={(e) => setViewed(Number(e.target.value))}
-              className="rounded-md border border-neutral-300 bg-white py-1 pr-7 pl-2 text-sm"
-            >
-              {[...t.versions].reverse().map((v) => (
-                <option key={v.version} value={v.version}>
-                  v{v.version} · {formatDateTime(v.created_at)}
-                  {v.version === latest.version ? " · latest" : ""}
-                </option>
-              ))}
-            </select>
-            {shown.version !== latest.version && (
-              <Button size="sm" variant="ghost" onClick={() => setDraft(shown.body)}>
-                Copy into editor
+  return (
+    <>
+      <PageHeader
+        back={BACK}
+        title={t.name}
+        status={
+          <>
+            <Chip kind="acc">{kindLabel}</Chip>
+            <Chip kind="acc" data-testid="latest-version">{`v${t.latest_version}`}</Chip>
+            {t.builtin && <Chip kind="na">Built-in</Chip>}
+            {t.archived_at && <Chip kind="warn">Archived</Chip>}
+          </>
+        }
+        action={
+          <>
+            {dirty && (
+              <Button variant="ghost" onClick={() => setDraft(null)}>
+                Discard changes
               </Button>
             )}
+            <Button
+              variant="primary"
+              icon="check"
+              onClick={saveVersion}
+              disabled={busy !== null || live.pending || !check?.valid || body === latest.body}
+            >
+              {busy === "version" ? "Saving…" : "Save as new version"}
+            </Button>
+          </>
+        }
+      />
+      <Split inspector={inspector}>
+        {(notice || error) && (
+          <div className="flex flex-col gap-2">
+            {notice && <Notice tone="pass">{notice}</Notice>}
+            {error && <Notice tone="error">{error}</Notice>}
+            {problems.length > 0 && <ProblemList problems={problems} testId="save-problems" />}
           </div>
-          <p className="mb-2 text-xs text-neutral-500">
-            Required sections: <span className="font-mono">{shown.required_sections.join(", ") || "none"}</span>
-            {" · "}Brief:{" "}
-            <span data-testid="version-brief" className="font-mono">
+        )}
+        <Panel title="Next version" bodyClassName="p-4 max-[600px]:p-3">
+          <TemplateBodyEditor value={body} onChange={setDraft} label="Template body" live={live} />
+        </Panel>
+        <Panel
+          title="Versions"
+          count={t.versions.length}
+          tools={
+            <>
+              {shown.version !== latest.version && (
+                <Button variant="ghost" onClick={() => setDraft(shown.body)}>
+                  Copy into editor
+                </Button>
+              )}
+              <select
+                aria-label="Version"
+                value={shown.version}
+                onChange={(e) => setViewed(Number(e.target.value))}
+                className={`${SELECT} tnum`}
+              >
+                {[...t.versions].reverse().map((v) => (
+                  <option key={v.version} value={v.version}>
+                    v{v.version} · {formatDateTime(v.created_at)}
+                    {v.version === latest.version ? " · latest" : ""}
+                  </option>
+                ))}
+              </select>
+            </>
+          }
+          bodyClassName="flex flex-col gap-3 p-4 max-[600px]:p-3"
+        >
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <Label>Required</Label>
+            <span className="min-w-0 font-mono text-[13px] break-words">{shown.required_sections.join(", ") || "none"}</span>
+            <Label className="ml-2">Brief</Label>
+            <span data-testid="version-brief" className="font-mono text-[13px]">
               {shown.brief_sections.join(", ") || "none"}
             </span>
-          </p>
+          </div>
           {shown.warnings.some((w) => w.code === "no_brief_sections") && (
-            <div className="mb-2 space-y-1 text-sm">
-              <p data-testid="version-no-brief" className="text-amber-900">
-                Saved before templates had to mark a brief. Documents drafted from it keep working; the next version must add
-                brief markers.
+            <div className="flex flex-col gap-1 text-sm">
+              <p data-testid="version-no-brief" className="flex items-center gap-2">
+                <Chip kind="warn">No brief markers</Chip>
+                <InfoTip label="no brief markers" align="start">
+                  Saved before templates had to mark a brief. Documents drafted from it keep working; the next version must
+                  add brief markers.
+                </InfoTip>
               </p>
               <WarningList warnings={shown.warnings} />
             </div>
           )}
           <pre
             data-testid="version-body"
-            className="max-h-[32rem] overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 font-mono text-[12px] leading-5 whitespace-pre-wrap text-neutral-800"
+            className="max-h-[32rem] overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-[13px] leading-5 whitespace-pre-wrap text-text"
           >
             {shown.body}
           </pre>
-        </section>
-
-        <section aria-labelledby="editor-heading" className="min-w-0">
-          <h2 id="editor-heading" className="mb-2 text-sm font-semibold text-neutral-700">
-            Next version
-          </h2>
-          <TemplateBodyEditor value={body} onChange={setDraft} label="Template body">
-            {({ check, pending }) => (
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="primary"
-                  onClick={saveVersion}
-                  disabled={busy !== null || pending || !check?.valid || body === latest.body}
-                >
-                  {busy === "version" ? "Saving…" : "Save as new version"}
-                </Button>
-                {draft !== null && draft !== latest.body && (
-                  <Button variant="ghost" onClick={() => setDraft(null)}>
-                    Discard changes
-                  </Button>
-                )}
-              </div>
-            )}
-          </TemplateBodyEditor>
-        </section>
-      </div>
-    </div>
+        </Panel>
+      </Split>
+    </>
   );
 }

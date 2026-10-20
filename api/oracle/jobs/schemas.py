@@ -6,9 +6,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from oracle.docs.schemas import WordOp
 
-JobKind = Literal["review_comments", "reporting", "refinement"]
+JobKind = Literal["review_comments", "reporting", "refinement", "quality_review"]
 # Every kind a job row may have: the document kinds and the intake's (oracle.intake.job).
-AnyJobKind = Literal["review_comments", "reporting", "refinement", "intake_analysis"]
+AnyJobKind = Literal[
+    "review_comments", "reporting", "refinement", "quality_review", "intake_analysis"
+]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 Classification = Literal["question", "change_request", "factual_correction", "approval", "other"]
 SuggestionKind = Literal["section_text", "answer", "none", "duplicate"]
@@ -67,6 +69,8 @@ class JobSettings(BaseModel):
     review_comments: bool = True
     reporting: bool = True
     refinement: bool = True
+    # Only ever queued by a person (POST .../quality-review), never on its own.
+    quality_review: bool = True
 
 
 class RefineIn(BaseModel):

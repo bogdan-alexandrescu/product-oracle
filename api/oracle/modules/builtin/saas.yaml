@@ -1,0 +1,285 @@
+# Built-in semantic modules for the SaaS and B2B products pack (saas.b2b, O1h). The pack
+# reuses the shared core of startup.standard and adds these modules: some REQUIRED for
+# every B2B SaaS PRD, some CONDITIONAL on the capability scope or signals, and some
+# OPTIONAL for an author to add.
+#
+# TEMPLATES ONLY: titles, instructions, typed fields, question prompts and evidence
+# expectations. No prewritten features, products, customers, brands, plans, integrations
+# or prices.
+
+- id: saas.buyer-user-roles
+  version: 1.0.0
+  title: Buyers, admins and users
+  description: Who buys, who administers and who uses the product, and what each needs from this work.
+  applies_to: [saas.b2b]
+  policy: required
+  depends_on: [users.jtbd]
+  display_order: 600
+  section_ids: [saas-buyer-user-roles]
+  brief_layer: false
+  fields:
+    - {key: economic_buyer, label: "Economic buyer and buying criteria", type: markdown, required: true}
+    - {key: admin_role, label: "Administrator needs", type: markdown}
+    - {key: end_user_role, label: "Day-to-day user needs", type: markdown, required: true}
+    - {key: role_conflicts, label: "Where buyer, admin and user needs differ", type: markdown}
+  question_prompts:
+    - key: buyer_vs_user
+      prompt: Who decides to buy, who sets it up, and who uses it every day?
+      category: customer_user
+      importance: critical
+      fills: [economic_buyer, admin_role, end_user_role]
+    - key: role_conflict
+      prompt: Where do the buyer's goals differ from what the daily user wants?
+      category: customer_user
+      importance: medium
+      fills: [role_conflicts]
+  instructions: >-
+    Separate the economic buyer, the administrator and the daily user, with the job and
+    buying or adoption criteria of each, using the company's own segment names. State
+    where their needs conflict. No invented customers or accounts.
+  evidence_expectations: {min_sources: 1, fields: [economic_buyer]}
+  required_review_role: approver
+
+- id: saas.onboarding-activation
+  version: 1.0.0
+  title: Onboarding and activation
+  description: The path from sign-up or contract to the first moment of value, and how it is measured.
+  applies_to: [saas.b2b]
+  policy: required
+  depends_on: [goals.outcomes, saas.buyer-user-roles]
+  display_order: 610
+  section_ids: [saas-activation]
+  brief_layer: false
+  fields:
+    - {key: activation_event, label: "Activation event", type: text, required: true}
+    - {key: onboarding_path, label: "Onboarding path by role", type: markdown, required: true}
+    - {key: time_to_value_target, label: "Time to value target", type: text}
+    - {key: drop_off_points, label: "Known drop-off points", type: markdown}
+  validators:
+    - {kind: required, field: activation_event}
+  question_prompts:
+    - key: activation
+      prompt: Which action shows a new account has reached real value, and how soon should it happen?
+      category: success_metric
+      importance: critical
+      fills: [activation_event, time_to_value_target]
+    - key: drop_off
+      prompt: Where do new accounts stall today, and what evidence shows it?
+      category: pain_evidence
+      importance: high
+      fills: [drop_off_points]
+  instructions: >-
+    Define the activation event, the onboarding path for each role, the time to value
+    target and the known drop-off points with their evidence. Distinguish self-serve from
+    assisted onboarding. No invented funnel numbers.
+  evidence_expectations: {min_sources: 1, fields: [drop_off_points]}
+  required_review_role: approver
+  outputs: [prd, acceptance_tests]
+  output_mappings:
+    acceptance_tests: [activation_event]
+
+- id: saas.admin-permissions
+  version: 1.0.0
+  title: Administration and permissions
+  description: Roles, permissions and admin controls account owners use to govern the product.
+  applies_to: [saas.b2b]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: role_permissions}
+      - {op: contains, path: scope.capabilities, value: admin_console}
+      - {op: gte, path: signals.account_role_count, value: 3}
+  depends_on: [saas.buyer-user-roles, requirements.nonfunctional]
+  display_order: 620
+  section_ids: [saas-admin-permissions]
+  brief_layer: false
+  fields:
+    - {key: roles, label: "Roles and permissions", type: markdown, required: true}
+    - {key: admin_controls, label: "Admin controls", type: markdown}
+    - {key: permission_tests, label: "Permission acceptance checks", type: markdown, required: true}
+  question_prompts:
+    - key: permissions
+      prompt: Which roles exist, and what may each see and change?
+      category: security_privacy
+      importance: high
+      fills: [roles]
+  instructions: >-
+    Define roles, the permission matrix, inheritance, default roles for new users and the
+    admin controls, with negative checks that prove a role cannot exceed its permissions.
+    No customer-specific roles.
+  required_review_role: approver
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [roles]
+    acceptance_tests: [permission_tests]
+
+- id: saas.integrations
+  version: 1.0.0
+  title: Integrations and API
+  description: The systems this work connects to, the public API and the contract each integration keeps.
+  applies_to: [saas.b2b]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: saas_integrations}
+      - {op: contains, path: scope.capabilities, value: public_api}
+      - {op: contains, path: scope.capabilities, value: webhooks}
+      - {op: gte, path: signals.integration_count, value: 1}
+  depends_on: [constraints.solutions]
+  display_order: 630
+  section_ids: [saas-integrations]
+  brief_layer: false
+  fields:
+    - {key: integration_targets, label: "Systems to integrate with and why", type: markdown, required: true}
+    - {key: api_contract, label: "API and event contract", type: markdown}
+    - {key: third_party_limits, label: "Third-party limits and terms", type: markdown}
+    - {key: versioning_policy, label: "Deprecation and versioning policy", type: markdown}
+  question_prompts:
+    - key: integrations
+      prompt: Which systems must this connect to for customers to adopt it, and which direction does data flow?
+      category: customer_user
+      importance: high
+      fills: [integration_targets]
+    - key: integration_limits
+      prompt: Which rate limits, permissions or partner terms apply to each integration?
+      category: third_party_policy
+      importance: high
+      fills: [third_party_limits]
+  instructions: >-
+    List integration targets by system class with the customer need behind each, the API
+    and event contract, authentication, rate limits, partner terms and the deprecation
+    policy. Third-party terms are sourced constraints. No vendor names.
+  evidence_expectations: {min_sources: 1, fields: [third_party_limits]}
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [api_contract]
+
+- id: saas.pricing-packaging
+  version: 1.0.0
+  title: Pricing and packaging
+  description: Which plans include this work, how it is priced and how it affects upgrades.
+  applies_to: [saas.b2b]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: plan_packaging}
+      - {op: contains, path: scope.capabilities, value: seat_pricing}
+      - {op: contains, path: scope.capabilities, value: self_serve_billing}
+  depends_on: [economics.value]
+  display_order: 640
+  section_ids: [saas-pricing-packaging]
+  brief_layer: false
+  fields:
+    - {key: packaging, label: "Plans that include it", type: markdown, required: true}
+    - {key: pricing_metric, label: "Pricing metric", type: text}
+    - {key: upgrade_path, label: "Upgrade, downgrade and limits", type: markdown}
+    - {key: existing_customers, label: "Effect on existing customers", type: markdown}
+  question_prompts:
+    - key: packaging
+      prompt: Which plans get this, and is it a reason to upgrade?
+      category: economic_benefit
+      importance: high
+      fills: [packaging, upgrade_path]
+    - key: grandfathering
+      prompt: What changes for existing customers on current plans?
+      category: release_rollout
+      importance: medium
+      fills: [existing_customers]
+  instructions: >-
+    State which plans include this work, the pricing metric, plan limits, upgrade and
+    downgrade behaviour and the effect on existing customers. Pricing decisions belong to
+    their owner; mark open ones as decisions needed. No invented prices or plan names.
+  required_review_role: approver
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [packaging]
+
+- id: saas.data-migration
+  version: 1.0.0
+  title: Data import and migration
+  description: How customers bring data in from current tools or older versions without loss.
+  applies_to: [saas.b2b]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: data_import}
+      - {op: contains, path: scope.capabilities, value: data_migration}
+  depends_on: [saas.onboarding-activation]
+  display_order: 650
+  section_ids: [saas-data-migration]
+  brief_layer: false
+  fields:
+    - {key: sources_in, label: "Data sources to migrate from", type: markdown, required: true}
+    - {key: mapping, label: "Mapping and transformation", type: markdown}
+    - {key: validation, label: "Migration validation and rollback", type: markdown, required: true}
+  question_prompts:
+    - key: migration
+      prompt: Where does a customer's data live today, and how do we prove nothing is lost in the move?
+      category: constraints
+      importance: high
+      fills: [sources_in, validation]
+  instructions: >-
+    Describe the data sources to migrate from by class, mapping and transformation,
+    validation, partial failures, rollback and who runs the migration. No vendor names.
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [mapping]
+    acceptance_tests: [validation]
+
+- id: saas.usage-analytics
+  version: 1.0.0
+  title: Usage analytics and account health
+  description: Which product usage is measured and how it signals account health to the team.
+  applies_to: [saas.b2b]
+  policy: optional
+  depends_on: [goals.outcomes]
+  display_order: 660
+  section_ids: [saas-usage-analytics]
+  brief_layer: false
+  fields:
+    - {key: tracked_events, label: "Events tracked", type: list, item_type: text, required: true}
+    - {key: health_signals, label: "Account health signals", type: markdown}
+    - {key: data_controls, label: "Customer data controls for analytics", type: markdown}
+  question_prompts:
+    - key: health
+      prompt: Which usage would tell us an account is healthy or at risk of churning?
+      category: success_metric
+      importance: medium
+      fills: [tracked_events, health_signals]
+  instructions: >-
+    List the events tracked, the account health signals derived from them and the
+    customer data controls that apply. Tie each event to an outcome metric. No invented
+    benchmarks.
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [tracked_events]
+
+- id: saas.expansion-retention
+  version: 1.0.0
+  title: Expansion and retention
+  description: How this work affects renewals, seat growth and churn.
+  applies_to: [saas.b2b]
+  policy: optional
+  depends_on: [economics.value]
+  display_order: 670
+  section_ids: [saas-expansion-retention]
+  brief_layer: false
+  fields:
+    - {key: retention_effect, label: "Expected effect on retention", type: markdown, required: true}
+    - {key: expansion_path, label: "Expansion path within an account", type: markdown}
+    - {key: renewal_risk, label: "Renewal risks addressed", type: markdown}
+  question_prompts:
+    - key: retention
+      prompt: Which churn or renewal risk does this address, and what evidence links them?
+      category: economic_benefit
+      importance: medium
+      fills: [retention_effect, renewal_risk]
+  instructions: >-
+    Explain the expected effect on retention and expansion with the evidence behind it,
+    the expansion path inside an account and the renewal risks addressed. Use confirmed
+    figures or mark assumptions. No invented rates.
+  evidence_expectations: {min_sources: 1, fields: [retention_effect]}

@@ -51,8 +51,10 @@ def test_v1_sections_and_citations():
     goal = by_key["goal-trace"]
     assert goal.body_md.endswith("purchase [c:c1].")
     assert goal.body_text == ("Serves G1 (activation): more first-time buyers complete a purchase.")
-    assert "|" not in by_key["metrics"].body_text
-    assert "Checkout completion" in by_key["metrics"].body_text
+    # A table keeps its rows: cells joined by " | ", one row per line, no separator row.
+    assert by_key["metrics"].body_text == (
+        "Metric | Baseline | Target\nCheckout completion | 52% | 60%"
+    )
 
 
 def test_v2_resolutions():
@@ -171,6 +173,31 @@ def test_front_matter_and_structure_problems(text, code):
 def test_body_text_strips_markdown_and_citations():
     md = "Some **bold** and `code` [c:c1], then a [link](https://example.com).\n\n- one\n- two"
     assert body_text(md) == "Some bold and code, then a link.\none\ntwo"
+
+
+def test_body_text_keeps_table_rows():
+    # A literal pipe inside a cell stays escaped, so " | " always separates cells.
+    md = (
+        "Targets [c:c1]:\n\n"
+        "| Metric | Baseline | Target |\n"
+        "|:-------|---------:|:------:|\n"
+        "| **Checkout** completion [c:c1] | 52% | `60%` |\n"
+        "| Empty cell |  | 5 |\n"
+        "| Escaped \\| pipe | 1 | 2 |\n\n"
+        "After the table."
+    )
+    assert body_text(md) == (
+        "Targets:\n"
+        "Metric | Baseline | Target\n"
+        "Checkout completion | 52% | 60%\n"
+        "Empty cell |  | 5\n"
+        "Escaped \\| pipe | 1 | 2\n"
+        "After the table."
+    )
+
+
+def test_body_text_of_header_only_table():
+    assert body_text("| A | B |\n|---|---|") == "A | B"
 
 
 def test_title_falls_back_to_first_heading():

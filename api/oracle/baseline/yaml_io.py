@@ -49,6 +49,15 @@ class YamlInvalid(Exception):
         self.problems = problems
 
 
+class YamlForbidden(YamlInvalid):
+    """A change the caller's role may not make (B4: archiving a blocker that still gates
+    publishing): a 403 with the refusal's own text, not a rejected file."""
+
+    def __init__(self, message: str, where: str):
+        super().__init__([ImportIssue(code="forbidden", message=message, where=where)])
+        self.message = message
+
+
 def _ref(e: Entity) -> str:
     return f"{e.type}:{e.key}"
 
@@ -289,6 +298,14 @@ async def import_yaml(
     if problems:
         raise YamlInvalid(problems)
     writer = service.Writer(principal, origin, run_id=run_id, reason=reason)
+    # One change event per subject kind for the whole file, not one per item.
+    async with service.batched_changes(db):
+        return await _merge(db, data, writer, principal)
+
+
+async def _merge(
+    db: AsyncSession, data: dict, writer: service.Writer, principal: Principal
+) -> YamlImportResult:
     own = await _own_item_ids(db, principal)
     result = YamlImportResult()
     by_ref: dict[str, Entity] = {_ref(e): e for e in (await db.scalars(select(Entity))).all()}
@@ -325,15 +342,20 @@ async def import_yaml(
                 entity = by_ref[ref] = write.entity
                 result.created += 1
             else:
-                # The file states the full attrs: keys it drops are removed.
+                # The file states the full attrs: keys it drops are removed, except the
+                # keys a module manages (a blocker's strategy), which a file leaving them
+                # out keeps; a file that changes one is refused.
                 attrs = doc.get("attrs") or {}
-                attrs_patch = {**dict.fromkeys(entity.attrs or {}), **attrs}
+                kept = [k for k in entity.attrs or {} if k not in service.MANAGED_ATTRS]
+                attrs_patch = {**dict.fromkeys(kept), **attrs}
                 changes = {"title": doc["title"], "body": doc.get("body"), "attrs": attrs_patch}
                 if status is not None:
                     changes["status"] = status
                 changed = bool(service._entity_changes(entity, changes))
                 write = await service.update_entity(db, writer, entity, changes)
                 _count(result, write, changed)
+        except service.ForbiddenError as e:
+            raise YamlForbidden(str(e), f"entities[{i}]") from None
         except service.BaselineError as e:
             raise YamlInvalid(
                 [ImportIssue(code="rejected", message=str(e), where=f"entities[{i}]")]
@@ -372,6 +394,8 @@ async def import_yaml(
                     changes.get("status", before[1]),
                 )
                 _count(result, write, after != before)
+        except service.ForbiddenError as e:
+            raise YamlForbidden(str(e), where) from None
         except service.BaselineError as e:
             raise YamlInvalid([ImportIssue(code="rejected", message=str(e), where=where)]) from None
         await _import_evidence(db, doc.get("evidence"), own, result, edge_id=edge.id)

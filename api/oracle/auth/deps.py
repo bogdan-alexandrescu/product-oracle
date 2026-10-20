@@ -14,6 +14,7 @@ from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBea
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth import iap, service
+from oracle.auth.jwks import KeysUnavailable
 from oracle.auth.models import Role, User
 from oracle.config import get_settings
 from oracle.tenancy import tenant_session
@@ -77,7 +78,7 @@ async def _iap_user(request: Request) -> User | None:
         claims = await iap.verify_assertion(assertion, audiences)
     except iap.InvalidAssertion:
         raise _unauthorized() from None
-    except iap.KeysUnavailable:
+    except KeysUnavailable:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Cannot verify the sign-in right now"
         ) from None

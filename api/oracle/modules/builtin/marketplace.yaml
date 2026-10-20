@@ -1,0 +1,296 @@
+# Built-in semantic modules for the Marketplace and e-commerce pack (marketplace.ecommerce,
+# O1h). The pack reuses the shared core of startup.standard and adds these modules: some
+# REQUIRED for every marketplace PRD, some CONDITIONAL on the capability scope or signals,
+# and some OPTIONAL for an author to add.
+#
+# TEMPLATES ONLY: titles, instructions, typed fields, question prompts and evidence
+# expectations. No prewritten features, products, brands, sellers, buyers, places or
+# amounts.
+
+- id: marketplace.two-sided-users
+  version: 1.0.0
+  title: Sides of the marketplace and their jobs
+  description: Who buys, who sells or supplies, and the job each side hires the marketplace for.
+  applies_to: [marketplace.ecommerce]
+  policy: required
+  depends_on: [users.jtbd]
+  display_order: 300
+  section_ids: [marketplace-sides]
+  brief_layer: false
+  fields:
+    - {key: demand_side, label: "Demand side and its jobs", type: markdown, required: true}
+    - {key: supply_side, label: "Supply side and its jobs", type: markdown, required: true}
+    - {key: side_conflicts, label: "Where the two sides want different things", type: markdown}
+    - {key: priority_side, label: "Side this work serves first", type: text}
+  validators:
+    - {kind: required, field: demand_side}
+    - {kind: required, field: supply_side}
+  question_prompts:
+    - key: sides
+      prompt: Who is on each side of the marketplace, and what job does each side need done?
+      category: customer_user
+      importance: critical
+      fills: [demand_side, supply_side]
+    - key: side_tension
+      prompt: Where do buyer and seller interests pull against each other, and which side does this work favour?
+      category: customer_user
+      importance: high
+      fills: [side_conflicts, priority_side]
+  instructions: >-
+    Describe each side of the marketplace as segments with jobs to be done, using the
+    company's own segment names from the baseline. State where the sides conflict and which
+    side this work serves first, with the reason. No invented buyers or sellers.
+  required_review_role: approver
+
+- id: marketplace.trust-safety
+  version: 1.0.0
+  title: Trust and safety
+  description: How both sides come to trust each other, and how bad actors and harmful listings are handled.
+  applies_to: [marketplace.ecommerce]
+  policy: required
+  depends_on: [marketplace.two-sided-users, risks.register]
+  display_order: 310
+  section_ids: [marketplace-trust-safety]
+  brief_layer: false
+  fields:
+    - {key: trust_signals, label: "Trust signals shown to each side", type: markdown, required: true}
+    - {key: abuse_vectors, label: "Abuse and fraud vectors", type: markdown, required: true}
+    - {key: enforcement, label: "Detection, review and enforcement", type: markdown, required: true}
+    - {key: dispute_resolution, label: "Dispute resolution between the sides", type: markdown}
+    - {key: safety_tests, label: "Trust and safety acceptance checks", type: markdown}
+  validators:
+    - {kind: required, field: enforcement}
+  question_prompts:
+    - key: abuse
+      prompt: How could a buyer or seller abuse this, and what happens when they try?
+      category: security_privacy
+      importance: critical
+      fills: [abuse_vectors, enforcement]
+    - key: disputes
+      prompt: When a transaction goes wrong between the two sides, who decides the outcome and how?
+      category: ownership
+      importance: high
+      fills: [dispute_resolution]
+  instructions: >-
+    Define the trust signals each side relies on, the abuse and fraud vectors this work
+    opens or closes, how they are detected, reviewed and enforced, and how disputes are
+    resolved. Keep prohibited-content rules and platform policies of third parties as
+    constraints with their sources. No customer-specific cases.
+  evidence_expectations: {min_sources: 1, fields: [abuse_vectors]}
+  required_review_role: approver
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [enforcement]
+    acceptance_tests: [safety_tests]
+
+- id: marketplace.unit-economics
+  version: 1.0.0
+  title: Take rate and unit economics
+  description: How the marketplace earns on each transaction and what each order costs to serve.
+  applies_to: [marketplace.ecommerce]
+  policy: required
+  depends_on: [economics.value]
+  display_order: 320
+  section_ids: [marketplace-unit-economics]
+  brief_layer: false
+  fields:
+    - {key: take_rate_model, label: "Take rate and fee model", type: markdown, required: true}
+    - {key: contribution_margin, label: "Contribution per order", type: markdown, required: true}
+    - {key: cost_drivers, label: "Cost drivers per order", type: list, item_type: text}
+    - {key: leakage_risk, label: "Risk of transactions moving off the marketplace", type: markdown}
+  validators:
+    - {kind: requires_evidence, field: contribution_margin}
+  question_prompts:
+    - key: economics
+      prompt: How does the marketplace earn on a transaction, and what does each order cost to serve?
+      category: economic_benefit
+      importance: critical
+      fills: [take_rate_model, contribution_margin]
+    - key: leakage
+      prompt: What would make buyers and sellers complete transactions outside the marketplace?
+      category: economic_benefit
+      importance: medium
+      fills: [leakage_risk]
+  instructions: >-
+    State the fee model and the contribution per order with the inputs behind it, the
+    cost drivers per order and the risk of disintermediation. Use confirmed figures from
+    the baseline or mark a value as an assumption. No invented prices or volumes.
+  evidence_expectations: {min_sources: 1, fields: [contribution_margin]}
+  required_review_role: approver
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [take_rate_model]
+
+- id: marketplace.payouts
+  version: 1.0.0
+  title: Payouts and split payments
+  description: How money collected from buyers reaches sellers, when, and with which holds and fees.
+  applies_to: [marketplace.ecommerce]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: seller_payouts}
+      - {op: contains, path: scope.capabilities, value: split_payments}
+      - {op: gte, path: signals.payout_recipient_count, value: 1}
+  depends_on: [marketplace.unit-economics]
+  display_order: 330
+  section_ids: [marketplace-payouts]
+  brief_layer: false
+  fields:
+    - {key: payout_flow, label: "Payout flow", type: markdown, required: true}
+    - {key: payout_timing, label: "Payout timing and holds", type: markdown, required: true}
+    - {key: refunds_reversals, label: "Refunds and reversals after payout", type: markdown}
+    - {key: payout_tests, label: "Payout acceptance checks", type: markdown}
+  question_prompts:
+    - key: payout_timing
+      prompt: When does a seller get paid, and what holds or reserves apply before then?
+      category: constraints
+      importance: high
+      fills: [payout_flow, payout_timing]
+    - key: reversals
+      prompt: What happens to a seller's payout when a buyer is refunded after the payout?
+      category: constraints
+      importance: high
+      fills: [refunds_reversals]
+  instructions: >-
+    Describe how collected funds are split and paid out, payout timing, holds and
+    reserves, fees, refunds and reversals after payout, and seller onboarding needed to be
+    paid. Payment provider rules are constraints with their sources. No invented amounts
+    or schedules.
+  evidence_expectations: {min_sources: 1, fields: [payout_timing]}
+  required_review_role: approver
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [payout_flow]
+    acceptance_tests: [payout_tests]
+
+- id: marketplace.fulfilment-logistics
+  version: 1.0.0
+  title: Fulfilment and logistics
+  description: How physical orders are packed, shipped, delivered and returned, and who is accountable.
+  applies_to: [marketplace.ecommerce]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: physical_fulfilment}
+      - {op: contains, path: scope.capabilities, value: shipping_logistics}
+      - {op: contains, path: scope.capabilities, value: returns_handling}
+  depends_on: [requirements.nonfunctional]
+  display_order: 340
+  section_ids: [marketplace-fulfilment]
+  brief_layer: false
+  fields:
+    - {key: fulfilment_model, label: "Fulfilment model and accountability", type: markdown, required: true}
+    - {key: delivery_promise, label: "Delivery promise and tracking", type: markdown}
+    - {key: returns, label: "Returns and exchanges", type: markdown}
+    - {key: exceptions, label: "Lost, late and damaged orders", type: markdown}
+  question_prompts:
+    - key: fulfilment_owner
+      prompt: Who packs, ships and delivers an order, and who is accountable when it arrives late or damaged?
+      category: ownership
+      importance: high
+      fills: [fulfilment_model, exceptions]
+    - key: returns
+      prompt: How does a buyer return an item, and who pays for the return?
+      category: constraints
+      importance: medium
+      fills: [returns]
+  instructions: >-
+    Define the fulfilment model, who is accountable at each step, the delivery promise
+    shown to buyers, tracking, returns and the handling of lost, late or damaged orders.
+    Carrier terms are constraints with their sources. No invented carriers or delivery
+    times.
+  outputs: [prd, engineering_spec]
+  output_mappings:
+    engineering_spec: [fulfilment_model]
+
+- id: marketplace.catalogue-quality
+  version: 1.0.0
+  title: Catalogue and listing quality
+  description: How listings are created, structured, checked and kept accurate and findable.
+  applies_to: [marketplace.ecommerce]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: catalogue_listings}
+      - {op: contains, path: scope.capabilities, value: listing_moderation}
+      - {op: gte, path: signals.listing_count, value: 1000}
+  depends_on: [marketplace.trust-safety]
+  display_order: 350
+  section_ids: [marketplace-catalogue]
+  brief_layer: false
+  fields:
+    - {key: listing_structure, label: "Listing structure and required attributes", type: markdown, required: true}
+    - {key: quality_rules, label: "Quality and accuracy rules", type: markdown, required: true}
+    - {key: discovery, label: "Search, ranking and discovery", type: markdown}
+    - {key: quality_metric, label: "Catalogue quality measure", type: text}
+  question_prompts:
+    - key: listing_quality
+      prompt: What makes a listing good enough to show, and what happens to one that is not?
+      category: evaluation_criteria
+      importance: high
+      fills: [quality_rules]
+    - key: findability
+      prompt: How do buyers find the right listing, and what decides its ranking?
+      category: customer_user
+      importance: medium
+      fills: [discovery]
+  instructions: >-
+    Define listing structure, required attributes, quality and accuracy rules, duplicate
+    handling, moderation and how ranking and discovery use listing quality. No prewritten
+    categories or listings.
+
+- id: marketplace.seller-tools
+  version: 1.0.0
+  title: Seller tools and operations
+  description: The tools sellers use to list, price, manage orders and understand their performance.
+  applies_to: [marketplace.ecommerce]
+  policy: optional
+  depends_on: [marketplace.two-sided-users]
+  display_order: 360
+  section_ids: [marketplace-seller-tools]
+  brief_layer: false
+  fields:
+    - {key: seller_tasks, label: "Seller tasks supported", type: markdown, required: true}
+    - {key: seller_reporting, label: "Seller reporting and insights", type: markdown}
+    - {key: seller_success_metric, label: "Seller success measure", type: text}
+  question_prompts:
+    - key: seller_effort
+      prompt: Which seller tasks take the most time today, and which does this work remove?
+      category: pain_evidence
+      importance: medium
+      fills: [seller_tasks]
+  instructions: >-
+    Describe the seller tasks supported, bulk operations, order management, reporting and
+    how seller success is measured. Ground pain points in evidence. No invented sellers.
+  evidence_expectations: {min_sources: 1, fields: [seller_tasks]}
+
+- id: marketplace.liquidity-growth
+  version: 1.0.0
+  title: Liquidity and cold start
+  description: How the marketplace reaches enough supply and demand to match reliably.
+  applies_to: [marketplace.ecommerce]
+  policy: optional
+  depends_on: [goals.outcomes]
+  display_order: 370
+  section_ids: [marketplace-liquidity]
+  brief_layer: false
+  fields:
+    - {key: liquidity_measure, label: "Liquidity measure", type: text, required: true}
+    - {key: constrained_side, label: "Constrained side", type: text}
+    - {key: growth_levers, label: "Levers to grow the constrained side", type: markdown}
+  question_prompts:
+    - key: liquidity
+      prompt: Which side is scarce today, and how would we know the marketplace matches reliably?
+      category: success_metric
+      importance: medium
+      fills: [liquidity_measure, constrained_side]
+  instructions: >-
+    Define how liquidity is measured, which side constrains it, and the levers this work
+    uses to grow it, by segment or area rather than overall. No invented targets.
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [growth_levers]

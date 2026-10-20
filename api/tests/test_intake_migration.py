@@ -49,9 +49,34 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_0014_intake_chains_on_the_foundation():
+def test_0014_intake_chains_after_mains_0014_lanes():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_revision("0014_intake").down_revision == "0013"
+    assert script.get_revision("0014_intake").down_revision == "0014_blockers_snapshot"
+    assert script.get_heads() == ["0014_intake"]
+
+
+def test_widened_checks_keep_other_lanes_values(scratch_db):
+    """The kind check is extended from what the database holds: 0014_quality's
+    ``quality_review`` survives the upgrade and the downgrade (round 10)."""
+    cfg = _cfg()
+    command.upgrade(cfg, "0014_blockers_snapshot")
+    t, doc = uuid.uuid4(), uuid.uuid4()
+    _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
+    _run(
+        "INSERT INTO documents (id, tenant_id, slug, title, status) "
+        "VALUES (:d, :t, 'legacy', 'Legacy', 'draft')",
+        d=doc,
+        t=t,
+    )
+    insert = (
+        "INSERT INTO llm_jobs (id, tenant_id, kind, document_id, status) "
+        "VALUES (gen_random_uuid(), :t, 'quality_review', :d, 'queued')"
+    )
+    command.upgrade(cfg, "0014_intake")
+    _run(insert, t=t, d=doc)
+    command.downgrade(cfg, "0014_blockers_snapshot")
+    _run(insert, t=t, d=doc)
+    assert _run("SELECT count(*) FROM llm_jobs WHERE kind = 'quality_review'") == [(2,)]
 
 
 def test_upgrade_keeps_document_jobs_and_downgrade_reverses(scratch_db):

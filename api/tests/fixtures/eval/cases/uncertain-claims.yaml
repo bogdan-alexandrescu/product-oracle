@@ -1,0 +1,18 @@
+id: uncertain-claims
+description: >
+  The only evidence behind the feature is weak (below the company's "low" confidence), one
+  of it is stale, and a high-importance gap is still a hypothesis. A warning, not a stop.
+covers: [uncertain_claims]
+extends: good-prd
+overrides:
+  evidence:
+    funnel: {confidence: 0.25, freshness: 0.15, age_days: 400}
+    support-log: {confidence: 0.3}
+add:
+  gaps:
+    - {category: pain_evidence, statement: "Is address re-entry the main reason returning buyers leave?", importance: high,
+       status: under_investigation, knowledge_state: hypothesis}
+expected:
+  evidence_provenance: warning
+rationale_contains:
+  evidence_provenance: [low confidence, stale, hypothesis]

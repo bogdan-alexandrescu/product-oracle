@@ -1,0 +1,24 @@
+id: blocker-no-mitigation
+description: >
+  A critical hard blocker with no workable mitigation: its only option is non-compliant and
+  rejected, and no feasibility experiment exists. The advisory blocker criterion is critical.
+  This lane registers no hard blocker check (the blockers lane owns "critical_blockers"),
+  so the quality checks alone do not block.
+covers: [blocker_no_mitigation]
+extends: good-prd
+remove: [lookup-quota]
+add:
+  blockers:
+    - ref: carrier-capacity
+      key: carrier-booking-capacity
+      title: Carrier booking API capacity
+      blocker: {type: hard, limit_kind: capacity, severity: critical, status: open}
+      links: [risks]
+      options:
+        - {title: Exceed the quota with many keys, approach: direct_remedy, compliance: non_compliant, status: rejected}
+expected:
+  blocker_feasibility: critical
+  third_party_support: not_applicable
+blocked: false
+rationale_contains:
+  blocker_feasibility: [carrier-booking-capacity, no workable mitigation]

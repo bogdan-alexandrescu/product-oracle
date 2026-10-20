@@ -84,6 +84,9 @@ class ExportVersion:
     all_sections: list[Section] = field(default_factory=list)
     # Provenance (O4b): the document version this one was built from.
     source: VersionSource | None = None
+    # v2 (§7, §16.9): each section's internal claim-to-source links, for the appendix
+    # only ({"key", "links": [{"claim", "label", "kind", "confidence"}]}).
+    evidence_links: list[dict] = field(default_factory=list)
 
     @property
     def source_label(self) -> str | None:
@@ -290,6 +293,9 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
 
         sources = await version_sources(db, [version.source_version_id])
         ev.source = sources.get(version.source_version_id)
+    from oracle.trace.evidence import appendix_links
+
+    ev.evidence_links = await appendix_links(db, version)
     await _resolve_theme(db, ev)
     return ev
 
@@ -299,7 +305,7 @@ async def _resolve_theme(db: AsyncSession, ev: ExportVersion) -> None:
     default for the document's kind, else the built-in default theme for the kind
     (clean-document for PRDs, roadmap-board for roadmaps). Archived themes and templates
     still resolve."""
-    from oracle.templates.builtins import DEFAULT_THEME_FOR_KIND, ensure_builtins
+    from oracle.templates.builtins import DEFAULT_THEME_FOR_KIND
     from oracle.templates.service import company_draft_defaults, version_meta
 
     document = ev.document
@@ -327,13 +333,10 @@ async def _resolve_theme(db: AsyncSession, ev: ExportVersion) -> None:
         if theme is not None:
             ev.theme, ev.theme_source = theme, source
             return
-    # Nothing chosen: the built-in default theme, seeding the built-ins if this company
-    # has never listed them.
+    # Nothing chosen: the built-in default theme (seeded at startup and company creation;
+    # an export reads, it never seeds).
     key = DEFAULT_THEME_FOR_KIND.get(document.kind, DEFAULT_THEME_FOR_KIND["prd"])
     theme = await db.scalar(select(Theme).where(Theme.key == key))
-    if theme is None and await ensure_builtins(db):
-        await db.commit()
-        theme = await db.scalar(select(Theme).where(Theme.key == key))
     if theme is not None:
         ev.theme, ev.theme_source = theme, "builtin_default"
 
@@ -472,6 +475,7 @@ def build_context(ev: ExportVersion) -> dict:
                 backref=f"ref-{number}-1" if notes.ref_counts.get(key) else None,
             )
         )
+    headings = {r.key: r.heading for r in sections}
     v = ev.version
     return {
         "title": ev.document.title,
@@ -485,6 +489,11 @@ def build_context(ev: ExportVersion) -> dict:
         "has_title_section": any(s.level == 1 for s in ev.sections),
         "sections": sections,
         "footnotes": footnotes,
+        "evidence_links": [
+            {"key": e["key"], "heading": headings[e["key"]], "links": e["links"]}
+            for e in ev.evidence_links
+            if e["key"] in headings
+        ],
         "css": Markup(stylesheet()),
         "layer": ev.layer,
         "layer_label": ev.layer_label,
@@ -710,6 +719,12 @@ def build_themed_context(ev: ExportVersion) -> dict:
                     ],
                 }
             )
+    # Evidence links by section (O1c: listed here, never in the body).
+    evidence_links = [
+        {"key": e["key"], "heading": headings[e["key"]], "links": e["links"]}
+        for e in ev.evidence_links
+        if e["key"] in headings
+    ]
     source_list = [
         RenderedFootnote(
             number=number,
@@ -765,6 +780,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "sources_intro": sources_intro,
         "sources_parts": sources_parts,
         "by_section": by_section,
+        "evidence_links": evidence_links,
         "source_list": source_list,
         "css": Markup(themed_stylesheet()),
         "token_css": Markup(token_css(tokens)),

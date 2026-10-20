@@ -341,7 +341,7 @@ async def test_counts_proposes_only_the_categorys_question(client, fake):
 
         intake = await s.get(ProductIntake, uuid.UUID(intake_id))
         expected = importance_of(intake, await s.get(KnowledgeGap, gap.id))
-    assert same.payload["fields"]["attrs"]["blocker"]["severity"] == expected
+    assert same.payload["fields"]["attrs"]["proposed_blocker"]["severity"] == expected
 
     # Back to counts: stripped again.
     await share(client, ctx, intake_id, str(gap.id), "counts")

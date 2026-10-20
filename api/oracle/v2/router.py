@@ -6,9 +6,10 @@ Every route needs the viewer role; the tenant-scoped session keeps each company 
 own rows, so another company's id is a 404.
 
 The routes are generated from :data:`RESOURCES`; each list takes the filters declared
-there plus ``limit`` and ``offset``, and returns rows newest first. A lane may register
-a reader's view of a resource (:func:`register_view`): rows the reader may not see are
-left out (a get is 404), and the rest are returned as the view shapes them. A lane that
+there plus ``limit`` and ``offset``, and returns rows newest first. A filter typed
+``Literal["me"]`` matches the signed-in user's id (``/questions?asked_to=me``). A lane may
+register a reader's view of a resource (:func:`register_view`): rows the reader may not see
+are left out (a get is 404), and the rest are returned as the view shapes them. A lane that
 hides rows also registers the SQL that leaves them out (:func:`register_hidden`), which a
 list applies before ``limit`` and ``offset``: pages never shift, so their size never
 tells the reader where a hidden row is. A lane whose readers see a value other than the
@@ -19,7 +20,7 @@ import inspect
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -162,7 +163,14 @@ RESOURCES: list[Resource] = [
         s.StakeholderQuestionOut,
         "stakeholder_questions",
         "stakeholder_question",
-        {"intake_id": U, "document_id": U, "gap_id": U, "status": s.QuestionStatus | None},
+        {
+            "intake_id": U,
+            "document_id": U,
+            "gap_id": U,
+            "status": s.QuestionStatus | None,
+            # Questions asked of the signed-in person: the Inbox's Questions group (I3).
+            "asked_to": Literal["me"] | None,
+        },
     ),
     Resource(
         "/answers",
@@ -295,7 +303,13 @@ def _list_endpoint(res: Resource) -> Callable[..., Any]:
     async def endpoint(db: TenantDB, principal: Principal, **params: Any) -> list[Any]:
         limit, offset = params.pop("limit"), params.pop("offset")
         stmt = select(res.model)
-        filters = {name: value for name, value in params.items() if value is not None}
+        filters: dict[str, Any] = {}
+        for name, value in params.items():
+            if value == "me":
+                # An API token that acts for no user: nothing is asked of it.
+                value = principal.user_id or uuid.UUID(int=0)
+            if value is not None:
+                filters[name] = value
         for name, value in filters.items():
             custom = FILTERS.get((res.path, name))
             if custom is not None:

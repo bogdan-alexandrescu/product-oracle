@@ -54,12 +54,18 @@ Security review fixes (same lane, same revision):
   link's slug carries the page's *current* title, so they get the id-only page link
   (none when the item's id is not a page id). Fail closed.
 
+Check constraints this revision widens (``llm_jobs.kind``, ``knowledge_gaps.status``,
+``proposals.status``) are extended from what the database holds, never rebuilt from a
+fixed list, so values other lanes' revisions added (``quality_review``) survive in either
+order; a downgrade removes only the values added here.
+
 The integrator re-chains this revision in merge order (waves.md).
 
 Revision ID: 0014_intake
-Revises: 0013
+Revises: 0014_blockers_snapshot
 """
 
+import re
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -67,20 +73,10 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0014_intake"
-down_revision: str | None = "0013"
+down_revision: str | None = "0014_blockers_snapshot"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-DOCUMENT_JOB_KINDS = "kind IN ('review_comments', 'reporting', 'refinement')"
-ALL_JOB_KINDS = "kind IN ('review_comments', 'reporting', 'refinement', 'intake_analysis')"
-GAP_STATUSES = (
-    "status IN ('unknown', 'under_investigation', 'asked', 'answered', 'validated', "
-    "'deferred', 'accepted_risk')"
-)
-GAP_STATUSES_REVIEW = (
-    "status IN ('unknown', 'under_investigation', 'asked', 'answered', "
-    "'answered_pending_review', 'validated', 'deferred', 'accepted_risk')"
-)
 # The rule-made statements at this revision, frozen (the backfill never follows code).
 RULE_STATEMENTS = {
     "customer_user": "The primary user or customer segment is not confirmed.",
@@ -103,10 +99,35 @@ RULE_STATEMENTS = {
     ),
     "configurability_scaling": "Expected scale and what must be configurable are not known.",
 }
-PROPOSAL_STATUSES = "status IN ('open', 'accepted', 'rejected')"
-PROPOSAL_STATUSES_WITHDRAWN = "status IN ('open', 'accepted', 'rejected', 'withdrawn')"
 XID = "(pg_current_xact_id()::text)::bigint"
 UUID_TEXT = "'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'"
+
+
+def _check_values(table: str, name: str) -> list[str]:
+    """The quoted values of an ``IN`` check as the database holds it, in order."""
+    definition = (
+        op.get_bind()
+        .execute(
+            sa.text(
+                "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+                "JOIN pg_class t ON t.oid = c.conrelid "
+                "WHERE t.relname = :table AND c.conname = :name"
+            ).bindparams(table=table, name=name)
+        )
+        .scalar_one()
+    )
+    return [v.replace("''", "'") for v in re.findall(r"'((?:[^']|'')*)'", definition)]
+
+
+def _widen_check(table: str, column: str, add: str = "", remove: str = "") -> None:
+    """Add or remove one value of ``ck_<table>_<column>``, keeping every other value."""
+    name = f"ck_{table}_{column}"
+    values = [v for v in _check_values(table, name) if v != remove]
+    if add and add not in values:
+        values.append(add)
+    listed = ", ".join("'" + v.replace("'", "''") + "'" for v in values)
+    op.drop_constraint(op.f(name), table, type_="check")
+    op.create_check_constraint(op.f(name), table, f"{column} IN ({listed})")
 
 
 def _obj(expr: str) -> str:
@@ -307,8 +328,7 @@ def upgrade() -> None:
         ["id"],
         ondelete="CASCADE",
     )
-    op.drop_constraint(op.f("ck_llm_jobs_kind"), "llm_jobs", type_="check")
-    op.create_check_constraint(op.f("ck_llm_jobs_kind"), "llm_jobs", ALL_JOB_KINDS)
+    _widen_check("llm_jobs", "kind", add="intake_analysis")
     op.create_check_constraint(
         op.f("ck_llm_jobs_subject"), "llm_jobs", "document_id IS NOT NULL OR intake_id IS NOT NULL"
     )
@@ -320,10 +340,7 @@ def upgrade() -> None:
     op.add_column("snapshots", sa.Column("txn_snapshot", sa.Text(), nullable=True))
     op.alter_column("snapshots", "txn_snapshot", server_default=sa.text(TXN_SNAPSHOT))
 
-    op.drop_constraint(op.f("ck_knowledge_gaps_status"), "knowledge_gaps", type_="check")
-    op.create_check_constraint(
-        op.f("ck_knowledge_gaps_status"), "knowledge_gaps", GAP_STATUSES_REVIEW
-    )
+    _widen_check("knowledge_gaps", "status", add="answered_pending_review")
 
     op.add_column("knowledge_gaps", sa.Column("rule_key", sa.Text(), nullable=True))
     for key, statement in RULE_STATEMENTS.items():
@@ -444,10 +461,7 @@ def upgrade() -> None:
     op.execute(FROZEN_BACKFILL)
     op.execute(SHARED_BACKFILL)
 
-    op.drop_constraint(op.f("ck_proposals_status"), "proposals", type_="check")
-    op.create_check_constraint(
-        op.f("ck_proposals_status"), "proposals", PROPOSAL_STATUSES_WITHDRAWN
-    )
+    _widen_check("proposals", "status", add="withdrawn")
 
     op.add_column("source_item_versions", sa.Column("url", sa.Text(), nullable=True))
     op.execute(VERSION_URL_BACKFILL)
@@ -457,8 +471,7 @@ def downgrade() -> None:
     op.drop_column("source_item_versions", "url")
     # A withdrawn proposal goes back to rejected (nobody may accept it).
     op.execute("UPDATE proposals SET status = 'rejected' WHERE status = 'withdrawn'")
-    op.drop_constraint(op.f("ck_proposals_status"), "proposals", type_="check")
-    op.create_check_constraint(op.f("ck_proposals_status"), "proposals", PROPOSAL_STATUSES)
+    _widen_check("proposals", "status", remove="withdrawn")
     op.drop_table("intake_shared_items")
     op.drop_table("intake_withheld_items")
     op.drop_index("ix_knowledge_gaps_legacy_importance", table_name="knowledge_gaps")
@@ -469,8 +482,7 @@ def downgrade() -> None:
     op.execute(
         "UPDATE knowledge_gaps SET status = 'answered' WHERE status = 'answered_pending_review'"
     )
-    op.drop_constraint(op.f("ck_knowledge_gaps_status"), "knowledge_gaps", type_="check")
-    op.create_check_constraint(op.f("ck_knowledge_gaps_status"), "knowledge_gaps", GAP_STATUSES)
+    _widen_check("knowledge_gaps", "status", remove="answered_pending_review")
     op.drop_column("snapshots", "txn_snapshot")
     op.drop_column("source_items", "deleted_xid")
     op.drop_column("source_item_versions", "xid")
@@ -478,8 +490,7 @@ def downgrade() -> None:
     # Intake jobs have no document: they go with the column.
     op.execute("DELETE FROM llm_jobs WHERE document_id IS NULL OR kind = 'intake_analysis'")
     op.drop_constraint(op.f("ck_llm_jobs_subject"), "llm_jobs", type_="check")
-    op.drop_constraint(op.f("ck_llm_jobs_kind"), "llm_jobs", type_="check")
-    op.create_check_constraint(op.f("ck_llm_jobs_kind"), "llm_jobs", DOCUMENT_JOB_KINDS)
+    _widen_check("llm_jobs", "kind", remove="intake_analysis")
     op.drop_constraint(
         op.f("fk_llm_jobs_intake_id_product_intakes"), "llm_jobs", type_="foreignkey"
     )

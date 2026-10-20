@@ -12,6 +12,7 @@ from oracle.export.pdf import page_count, pdf_available
 from oracle.templates.schemas import PrdAnswers, RoadmapAnswers
 from oracle.templates.service import recommend_prd, recommend_roadmap
 from oracle.tenancy import tenant_session
+from tests.conftest import seed_company
 from tests.test_priorities import _token
 
 requires_pdf = pytest.mark.skipif(
@@ -88,6 +89,7 @@ def test_roadmap_warnings():
 
 
 async def test_recommend_api_uses_baseline_goals_and_company_default(client, tenant_id):
+    await seed_company(tenant_id)
     viewer = await _token(tenant_id, "viewer")
     owner = await _token(tenant_id)
     resp = await client.post(
@@ -287,7 +289,7 @@ async def _import(client, h, doc="checkout", markdown=DRAFT) -> None:
 
 async def test_export_uses_template_theme_and_o1c_appendix(client, tenant_id):
     h = await _token(tenant_id)
-    await client.get("/v1/templates", headers=h)  # seeds oracle-default v2 and themes
+    await seed_company(tenant_id)  # oracle-default v2 and the themes
     await _import(client, h)
     resp = await client.get("/v1/documents/checkout/versions/1/export", headers=h)
     html = resp.text
@@ -313,6 +315,7 @@ async def test_export_uses_template_theme_and_o1c_appendix(client, tenant_id):
 async def test_document_theme_wins_and_unthemed_documents_get_the_builtin_default(
     client, tenant_id
 ):
+    await seed_company(tenant_id)
     h = await _token(tenant_id)
     await _import(
         client,

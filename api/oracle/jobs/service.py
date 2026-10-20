@@ -42,6 +42,7 @@ JOB_LABELS = {
     "reporting": "Reporting",
     "refinement": "Refinement",
     "intake_analysis": "Intake analysis",
+    "quality_review": "Quality review",
 }
 
 

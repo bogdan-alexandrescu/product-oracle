@@ -37,9 +37,10 @@ export function useAuthRedirect() {
 
 /**
  * Loads data with an API call, re-running when `key` changes. 401 sends the user
- * to the login page; other failures land in `error`.
+ * to the login page; other failures land in `error`. With `keepPrevious`, a new key keeps
+ * showing the last data (still `loading`) until its own arrives, so nothing blanks.
  */
-export function useQuery<T>(key: string, load: () => Promise<T>): Query<T> {
+export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious = false }: { keepPrevious?: boolean } = {}): Query<T> {
   const [state, setState] = useState<{ key: string; data?: T; error: string | null; loading: boolean }>({
     key,
     error: null,
@@ -75,7 +76,7 @@ export function useQuery<T>(key: string, load: () => Promise<T>): Query<T> {
 
   const stale = state.key !== key;
   return {
-    data: stale ? undefined : state.data,
+    data: stale && !keepPrevious ? undefined : state.data,
     error: stale ? null : state.error,
     loading: stale || state.loading,
     reload: run,

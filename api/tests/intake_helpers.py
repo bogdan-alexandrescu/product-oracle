@@ -6,6 +6,7 @@ Synthetic placeholders only.
 from typing import Any
 
 from tests.baseline_helpers import Ctx, make_ctx, make_item
+from tests.conftest import seed_company
 
 BRIEF = (
     "Returning buyers retype their shipping address at every checkout. "
@@ -48,6 +49,9 @@ async def create_intake(
     body.setdefault("title", "Saved addresses")
     body.setdefault("brief", BRIEF)
     body.setdefault("ai_extraction", False)
+    # The template hint reads the built-in templates, seeded at startup and when a
+    # company is created (reads never seed).
+    await seed_company(ctx.tenant_id)
     resp = await client.post("/v1/intakes", json=body, headers=ctx.as_(who))
     assert resp.status_code == expect, resp.text
     return resp.json()

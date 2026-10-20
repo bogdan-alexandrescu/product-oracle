@@ -14,11 +14,12 @@ everyone sees the snapshot too. Refreshing fetches it again and rescores.
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, changes
 from oracle.auth.deps import Principal
 from oracle.authz import has_role
 from oracle.baseline import public_links, scoring, service
@@ -34,6 +35,7 @@ from oracle.baseline.schemas import (
 )
 from oracle.baseline.service import ConflictError, ForbiddenError, InvalidError, NotFoundError
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
+from oracle.v2 import links
 
 EXCERPT_CHARS = 500
 
@@ -164,6 +166,21 @@ async def rescore_target(
     )
 
 
+def evidence_snapshot(ev: Evidence) -> dict[str, Any]:
+    """What removed evidence was, for the change that records its removal. The source
+    item stays out: it is private to its owner."""
+    return {
+        "id": str(ev.id),
+        "entity_id": str(ev.entity_id) if ev.entity_id else None,
+        "edge_id": str(ev.edge_id) if ev.edge_id else None,
+        "kind": ev.kind,
+        "url": ev.url,
+        "ref": ev.ref,
+        "excerpt": (ev.excerpt or "")[:EXCERPT_CHARS] or None,
+        "from_source_item": ev.source_item_id is not None,
+    }
+
+
 async def detach(db: AsyncSession, principal: Principal, evidence_id: uuid.UUID) -> None:
     ev = await db.get(Evidence, evidence_id)
     if ev is None:
@@ -182,6 +199,19 @@ async def detach(db: AsyncSession, principal: Principal, evidence_id: uuid.UUID)
         ev.id,
         {"url": ev.url, "ref": ev.ref, "excerpt": ev.excerpt},
     )
+    # v2 hook, before the delete: what rests on it, and the section links citing it, are
+    # found while it exists (oracle.trace). Then a link citing it keeps its other target
+    # (an entity or a source item) and only drops the evidence; one left with none goes.
+    await changes.record_change(
+        db,
+        "source_permission",
+        cause="evidence_deleted",
+        actor=principal,
+        subject_id=ev.id,
+        subject_ref=ev.ref or ev.url,
+        data={"evidence": [evidence_snapshot(ev)]},
+    )
+    await links.release(db, evidence_ids={ev.id})
     await db.delete(ev)
     await db.flush()
     await rescore_target(db, entity_id, edge_id)
