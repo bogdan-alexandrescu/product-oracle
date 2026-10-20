@@ -9,10 +9,19 @@ import pytest
 from oracle import safe_yaml
 from oracle.docs.parser import parse_draft
 from oracle.specs import contract
+from oracle.swarm import FakeRuntime, set_runtime
 from tests.specs_helpers import make_world
 from tests.test_specs_review2 import generated
 from tests.test_specs_review3 import _edit
 from tests.test_specs_review7 import _after_anchor
+
+@pytest.fixture
+def runtime():
+    fake = FakeRuntime()
+    set_runtime(fake)
+    yield fake
+    set_runtime(None)
+
 
 BASE = "---\ntitle: T\nkind: spec\n---\n\n# T {#spec}\n\nIntro.\n\n## R {#r}\n\nx\n"
 
@@ -68,6 +77,8 @@ async def test_an_edit_whose_markdown_parse_is_too_slow_is_refused(client, runti
 
     monkeypatch.setattr(contract._BLOCK_MD, "parse", slow)
     monkeypatch.setattr(safe_yaml, "PARSE_SECONDS", 0.2)
-    resp = await _edit(client, world, created, _after_anchor("Cache <b>rates</b> for five minutes."))
+    resp = await _edit(
+        client, world, created, _after_anchor("Cache <b>rates</b> for five minutes.")
+    )
     assert resp.status_code == 422, resp.text
     assert "too_slow" in resp.text
