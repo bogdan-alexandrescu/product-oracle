@@ -89,8 +89,8 @@ def _item(t: uuid.UUID) -> uuid.UUID:
         e=f"{u.hex}@example.com",
     )
     _run(
-        "INSERT INTO sources (id, tenant_id, owner_user_id, kind, name) "
-        "VALUES (:s, :t, :u, 'github', 'repo')",
+        "INSERT INTO sources (id, tenant_id, owner_user_id, kind, name, status) "
+        "VALUES (:s, :t, :u, 'github', 'repo', 'active')",
         s=s,
         t=t,
         u=u,

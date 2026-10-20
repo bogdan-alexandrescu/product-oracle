@@ -253,7 +253,7 @@ def test_citation_confidence_fields_parse():
 def test_citation_confidence_out_of_range_is_invalid(value):
     citations = f"citations:\n  - id: c1\n    source: web\n    ref: x\n    confidence: {value}\n"
     with pytest.raises(DraftError) as err:
-        parse_draft(_draft("# T {#t}\n\nA [c:c1].\n", citations))
+        parse_draft(_draft("# T {#t}\n\nA.\n", citations))
     assert _codes(err.value) == [("invalid_citation", None, "c1")]
     assert "confidence" in err.value.problems[0].message
 

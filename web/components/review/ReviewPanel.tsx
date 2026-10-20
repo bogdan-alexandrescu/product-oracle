@@ -5,12 +5,13 @@ import { useId, useState, type ComponentProps, type ReactNode } from "react";
 import { ResolutionPanel, type GoTo } from "@/components/FeedbackPanel";
 import { JobsPanel } from "@/components/JobsPanel";
 import { ReportsPanel } from "@/components/ReportsPanel";
+import { LowConfidence } from "@/components/CitationChip";
 import { Icon, Inspector, InspectorRow } from "@/components/ds";
 import { FeedbackList } from "@/components/review/FeedbackList";
 import { TabBar } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import type { VersionOut } from "@/lib/api/client";
-import { citationHref, formatDateTime, SOURCE_LABEL } from "@/lib/format";
+import { citationHref, citationSourceLabel, formatDateTime } from "@/lib/format";
 
 export type PanelTab = "feedback" | "sources" | "history";
 
@@ -145,7 +146,15 @@ function SourcesTab({ version }: { version: VersionOut }) {
             return (
               <li key={c.id} className="flex min-h-8 min-w-0 items-center gap-2.5 text-sm max-[639px]:min-h-11">
                 <span className="tnum w-5 flex-none text-right font-semibold text-text2">{i + 1}</span>
-                <span className="flex-none text-[13px] font-semibold text-text2">{SOURCE_LABEL[c.source]}</span>
+                {/* The writer's confidence beside the source, or its note when unscored (text). */}
+                <span
+                  title={citationSourceLabel(c)}
+                  className="max-w-[45%] min-w-0 flex-none truncate text-[13px] font-semibold text-text2"
+                  data-testid="source-label"
+                >
+                  {citationSourceLabel(c)}
+                </span>
+                {c.low_confidence && <LowConfidence />}
                 {href ? (
                   <a
                     href={href}
