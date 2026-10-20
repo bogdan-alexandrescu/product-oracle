@@ -388,6 +388,32 @@ def _summary(run: Run, refs: _Refs, waiting: Checkpoint | None) -> RunSummary:
         cancel_again=_cancel_again_ids(run),
         can_dismiss_overrun=_can_dismiss_overrun(run),
         searching=_searching(run),
+        import_failed=_import_failed_text(run, refs),
+        can_retry_import=_import_failed(run) is not None,
+    )
+
+
+def _import_failed(run: Run) -> dict[str, Any] | None:
+    """A resumed advance stopped at :data:`RESUME_TRIES` on a run that has not ended
+    (owners: Retry)."""
+    failed = (run.knobs or {}).get("import_failed")
+    return failed if isinstance(failed, dict) and run.status not in FINAL else None
+
+
+def _import_failed_text(run: Run, refs: "_Refs") -> str | None:
+    """The owners' Inbox item for :func:`_import_failed`: the error's class only, never
+    what the agents wrote."""
+    failed = _import_failed(run)
+    if failed is None:
+        return None
+    name = (refs.get(run.document_id) if run.document_id else None) or (run.knobs or {}).get(
+        "document_slug"
+    )
+    what = f"{name}" if name else f"the {_flow(run).title} run"
+    return (
+        f"Couldn't import {what}'s output: {failed.get('error')} on {failed.get('count')} "
+        "tries in a row, and Oracle stopped trying. Retry tries again; meanwhile Oracle "
+        "keeps reading the run's workflow and counting its cost."
     )
 
 
@@ -2443,29 +2469,92 @@ async def _advance(
     return True
 
 
-async def _resume_advance(
-    db: AsyncSession, run: Run, segments: list[RunSegment], stats: "_TickStats"
-) -> bool:
-    """An advance interrupted after its first commit (:func:`_advance` raised in an
-    import): advanced again now, with the wait it was opening a checkpoint on. True when
-    there was one."""
+# A resumed advance that raises this many times stops: its step fails, and an owner
+# retries it from the Inbox (:func:`retry_import`).
+RESUME_TRIES = 5
+
+
+def _resuming(run: Run, segments: list[RunSegment]) -> RunSegment | None:
+    """The segment whose advance was interrupted after its first commit (:func:`_advance`
+    raised in an import), to advance again: none once its step failed
+    (:data:`RESUME_TRIES`)."""
     if run.status != "running":
-        return False
-    for segment in segments:
-        art = _art(segment)
-        if segment.status != "succeeded" or _current_attempt(art, segment).get("advanced") != (
-            "opening"
-        ):
-            continue
-        opening = (run.knobs or {}).get("opening_wait")
-        wait = None
-        if isinstance(opening, dict) and opening.get("seq") == segment.seq:
-            wait = opening.get("wait")
-        log.warning("run %s: advancing %s again (interrupted)", run.id, segment.name)
-        if await _advance(db, run, segment, segments, wait=wait):
-            stats.advanced += 1
-        return True
-    return False
+        return None
+    return next(
+        (
+            s
+            for s in segments
+            if s.status == "succeeded" and _current_attempt(_art(s), s).get("advanced") == "opening"
+        ),
+        None,
+    )
+
+
+async def _resume_advance(
+    db: AsyncSession,
+    run: Run,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    stats: "_TickStats",
+) -> None:
+    """An advance interrupted after its first commit: advanced again now, with the wait
+    it was opening a checkpoint on (the imports are idempotent: a locked item's proposal
+    is the open one already there)."""
+    opening = (run.knobs or {}).get("opening_wait")
+    wait = None
+    if isinstance(opening, dict) and opening.get("seq") == segment.seq:
+        wait = opening.get("wait")
+    log.warning("run %s: advancing %s again (interrupted)", run.id, segment.name)
+    if await _advance(db, run, segment, segments, wait=wait):
+        stats.advanced += 1
+
+
+async def _resume_failed(
+    db: AsyncSession, run_id: uuid.UUID, seq: int, exc: Exception, stats: "_TickStats"
+) -> tuple[Run, list[RunSegment]]:
+    """A resumed advance raised: what it did is rolled back, and the failure is counted
+    on the segment's attempt (the error's class and when; never its message, which may
+    carry what the agents wrote). At :data:`RESUME_TRIES` it is tried no more: the step
+    fails, and owners see "Couldn't import" in the Inbox with Retry
+    (:func:`retry_import`). Returns the run and its segments as they are now, locked, for
+    the rest of the tick (the workflow is still read: its status, cost and the ceiling)."""
+    error = type(exc).__name__
+    log.warning("run %s: advancing segment %s again failed (%s)", run_id, seq, error, exc_info=exc)
+    await db.rollback()
+    run = await _get_run(db, run_id, lock=True)
+    segments = await _segments(db, run_id, fresh=True)
+    segment = next((s for s in segments if s.seq == seq), None)
+    if segment is None or _resuming(run, segments) is not segment:
+        return run, segments
+    art = _art(segment)
+    attempt = _current_attempt(art, segment)
+    count = int((attempt.get("resume_failures") or {}).get("count") or 0) + 1
+    now = _now().isoformat()
+    attempt["resume_failures"] = {"count": count, "error": error, "at": now}
+    stats.errors.append(
+        f"run {run_id}: importing {segment.name}'s output failed ({error}), "
+        f"try {count} of {RESUME_TRIES}"
+    )
+    if count >= RESUME_TRIES:
+        segment.status = "failed"
+        segment.error = (
+            f"Couldn't import its output: {error} on {count} tries in a row. Oracle stopped "
+            "trying; an owner can retry it from the Inbox."
+        )
+        _set_knob(run, "import_failed", {"seq": seq, "error": error, "count": count, "at": now})
+        await audit.record(
+            db,
+            None,
+            "run.import_failed",
+            "run",
+            run.id,
+            {"segment": segment.name, "error": error, "tries": count},
+        )
+    _set_art(segment, art)
+    await db.commit()
+    # The commit released the run's row lock: taken again, read as they are now.
+    run = await _get_run(db, run_id, lock=True)
+    return run, await _segments(db, run_id, fresh=True)
 
 
 async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str, Any]:
@@ -2524,7 +2613,18 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
         if (ceiling := _overrun(run)) is not None:
             await _pause_overrun(db, run, ceiling, stats)
             return
-    if await _resume_advance(db, run, segments, stats):
+    resuming = _resuming(run, segments)
+    if resuming is not None:
+        try:
+            await _resume_advance(db, run, resuming, segments, stats)
+            return
+        except Exception as exc:  # counted; the workflow is still read below
+            run, segments = await _resume_failed(db, run.id, resuming.seq, exc, stats)
+        wf = _live(run)
+        if wf is not None and not wf.get("cancel_pending") and run.status not in FINAL:
+            # Its status, cost and the ceiling, a wait's expiry and the workflow's end:
+            # read whatever the resume did.
+            await _tick_workflow(db, run, wf, segments, stats)
         return
     if wf is not None:
         await _tick_workflow(db, run, wf, segments, stats)
@@ -4759,6 +4859,45 @@ async def retry_lookup(db: AsyncSession, principal: Principal, run_id: uuid.UUID
     await db.commit()
 
 
+async def retry_import(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
+    """Retry from the Inbox's "Couldn't import" (owners only): the step whose resumed
+    advance stopped at :data:`RESUME_TRIES` is advanced again by the next tick, with its
+    count reset. Audited."""
+    if principal.role != "owner":
+        raise Forbidden("Only an owner can retry importing a run's output")
+    run = await _get_run(db, run_id, lock=True)
+    failed = _import_failed(run)
+    if failed is None:
+        raise RunError("nothing to retry: no import of this run has stopped")
+    segments = await _segments(db, run.id)
+    segment = next((s for s in segments if s.seq == failed.get("seq")), None)
+    art = _art(segment) if segment is not None else {}
+    attempt = _current_attempt(art, segment) if segment is not None else {}
+    if segment is None or segment.status != "failed" or attempt.get("advanced") != "opening":
+        _set_knob(run, "import_failed", None)
+        await db.commit()
+        raise RunError("nothing to retry: the run changed since its import stopped")
+    attempt.pop("resume_failures", None)
+    _note_art(
+        art,
+        f"An owner retried importing {segment.name}'s output (it failed with "
+        f"{failed.get('error')} on {failed.get('count')} tries in a row).",
+    )
+    _set_art(segment, art)
+    segment.status = "succeeded"
+    segment.error = None
+    _set_knob(run, "import_failed", None)
+    await audit.record(
+        db,
+        principal,
+        "run.import_retried",
+        "run",
+        run.id,
+        {"segment": segment.name, "error": failed.get("error"), "tries": failed.get("count")},
+    )
+    await db.commit()
+
+
 async def cancel_again(
     db: AsyncSession, principal: Principal, run_id: uuid.UUID, workflow_id: str
 ) -> None:
@@ -5216,12 +5355,30 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
     stuck_refs = await _refs(db, [*stuck_runs, *searching_runs])
     lookups = [_summary(r, stuck_refs, None) for r in stuck_runs]
     searches = [_summary(r, stuck_refs, None) for r in searching_runs]
+    # Owners only: a run's output Oracle stopped trying to import (Retry).
+    imports: list[RunSummary] = []
+    if owner:
+        failed_runs = [
+            r
+            for r in await db.scalars(
+                select(Run).where(Run.knobs.has_key("import_failed")).order_by(Run.created_at)
+            )
+            if _import_failed(r) is not None
+        ]
+        failed_refs = await _refs(db, failed_runs)
+        imports = [_summary(r, failed_refs, None) for r in failed_runs]
     return InboxOut(
         checkpoints=checkpoints,
         approvals=approvals,
         overruns=overruns,
         lookups=lookups,
         searches=searches,
+        imports=imports,
         feedback=feedback,
-        total=len(checkpoints) + len(approvals) + len(overruns) + len(lookups) + len(feedback),
+        total=len(checkpoints)
+        + len(approvals)
+        + len(overruns)
+        + len(lookups)
+        + len(imports)
+        + len(feedback),
     )

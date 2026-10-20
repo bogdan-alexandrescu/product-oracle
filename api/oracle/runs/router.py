@@ -198,6 +198,15 @@ async def retry_lookup_run(run_id: uuid.UUID, principal: Approver, db: TenantDB)
     return await service.read_run(db, run_id, principal)
 
 
+@router.post("/runs/{run_id}/retry-import", response_model=RunOut)
+async def retry_import_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) -> RunOut:
+    """Retry importing a step's output (Inbox: ``imports``, ``can_retry_import``): Oracle
+    stopped after its resumed advance failed 5 times in a row; the next tick tries again,
+    the count reset. Owners only; audited."""
+    await _call(service.retry_import(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
 @router.post("/runs/{run_id}/cancel-again", response_model=RunOut)
 async def cancel_again_run(
     run_id: uuid.UUID, body: CancelAgain, principal: Approver, db: TenantDB

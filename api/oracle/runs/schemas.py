@@ -303,6 +303,10 @@ class RunSummary(BaseModel):
     # Cancel past the lookup cap), to cancel them and count their cost if they landed,
     # and workflows it stopped cancelling, whose cost it reads until they end.
     searching: str | None = None
+    # Owners: Oracle stopped trying to import the output of a step whose advance kept
+    # failing (the error's class, never what the agents wrote); Retry tries again.
+    import_failed: str | None = None
+    can_retry_import: bool = False
 
 
 class CancelAgain(BaseModel):
@@ -400,6 +404,9 @@ class InboxOut(BaseModel):
     # Owners and the run's creator: runs looking for an earlier submission given up on
     # (RunSummary.searching); shown only, nothing to decide, not in ``total``.
     searches: list[RunSummary] = []
+    # Owners only: runs whose output Oracle stopped trying to import
+    # (RunSummary.import_failed), to Retry.
+    imports: list[RunSummary] = []
     # Approvers and owners: open feedback on documents they can approve.
     feedback: list[InboxDocument]
     total: int
