@@ -58,17 +58,18 @@ class _Superseded(Exception):
 class _Started:
     """What a sync works for: the source's config and connection when it started."""
 
+    source_id: Any
     config: dict[str, Any]
     connection_id: Any
 
 
-async def _hold(db: AsyncSession, source: Source, started: _Started) -> None:
+async def _hold(db: AsyncSession, started: _Started) -> None:
     """Lock the source's row until the next commit; raise :class:`_Superseded` when its
     config or connection is no longer the one the sync started with."""
     row = (
         await db.execute(
             select(Source.config, Source.connection_id)
-            .where(Source.id == source.id)
+            .where(Source.id == started.source_id)
             .with_for_update()
         )
     ).one_or_none()
@@ -113,7 +114,7 @@ async def _fail(
     await db.rollback()
     if started is not None:
         try:
-            await _hold(db, source, started)
+            await _hold(db, started)
         except _Superseded:
             return await _superseded(db, stats)
     source.status = "error"
@@ -153,7 +154,9 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     if problem:
         return await _fail(db, source, stats, problem)
 
-    started = _Started(config=dict(source.config), connection_id=source.connection_id)
+    started = _Started(
+        source_id=source.id, config=dict(source.config), connection_id=source.connection_id
+    )
     config = dict(source.config)
     cursor = dict(source.cursor) if source.cursor else None
     if source.kind == "google_docs":
@@ -177,7 +180,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
                     }
                 )
             elif isinstance(event, base.CursorCheckpoint):
-                await _hold(db, source, started)
+                await _hold(db, started)
                 source.cursor = dict(event.cursor)
                 await db.commit()
                 stats.checkpoints += 1
@@ -209,7 +212,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         )
 
     try:
-        await _hold(db, source, started)
+        await _hold(db, started)
     except _Superseded:
         return await _superseded(db, stats)
     source.status = "active"
