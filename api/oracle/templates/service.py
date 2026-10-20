@@ -20,7 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
@@ -208,7 +208,9 @@ async def _theme_keys(db: AsyncSession) -> set[str]:
 async def validate_template(
     db: AsyncSession, body: str, required_sections: list[str] | None = None
 ) -> TemplateValidateOut:
-    check = validation.check_template(body, theme_keys=await _theme_keys(db))
+    theme_keys = await _theme_keys(db)
+    # Off the event loop: the body is untrusted text (oracle.safe_yaml bounds its cost).
+    check = await safe_yaml.run_parse(validation.check_template, body, theme_keys=theme_keys)
     problems = list(check.problems)
     if required_sections is not None:
         problems += validation.check_required_sections(required_sections, check)
@@ -229,7 +231,7 @@ async def _checked_version(
     result = await validate_template(db, body, required)
     if not result.valid:
         raise InvalidError(f"template rejected: {len(result.problems)} problem(s)", result.problems)
-    check = version_meta(body)
+    check = await safe_yaml.run_parse(version_meta, body)
     return body, required if required is not None else check.default_required_sections()
 
 

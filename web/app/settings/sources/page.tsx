@@ -27,16 +27,18 @@ import { Field, INPUT, SELECT_FIELD, TEXTAREA } from "../_components/fields";
 import type { PickerProps } from "./_browse-list";
 import { GithubPicker } from "./_github-picker";
 import { SlackPicker } from "./_slack-picker";
+import { NotionPicker, notionRoots } from "./NotionPicker";
 
 type Source = Schemas["SourceOut"];
 type Kind = Source["kind"];
 type KindOption = Schemas["SourceKindOut"];
 
-// The config key holding each kind's allowlist, and what one entry looks like.
+// The config key holding each kind's allowlist (as its connector reads it), and what one
+// entry looks like. Notion's roots are ticked in the page picker, not typed.
 const ALLOWLIST: Record<Exclude<Kind, "upload">, { key: string; label: string; example: string }> = {
   github: { key: "repos", label: "Repositories", example: "example-org/example-app" },
   slack: { key: "channels", label: "Channel ids", example: "C0123PRODUCT" },
-  notion: { key: "pages", label: "Root page ids", example: "0123abcd…" },
+  notion: { key: "roots", label: "Pages", example: "" },
   google_docs: { key: "folders", label: "Folder ids", example: "1AbC…" },
   fireflies: { key: "meetings", label: "Meeting title filters", example: "Weekly product review" },
 };
@@ -45,6 +47,7 @@ const ALLOWLIST: Record<Exclude<Kind, "upload">, { key: string; label: string; e
 const PICKER: Partial<Record<Kind, ComponentType<PickerProps>>> = {
   slack: SlackPicker,
   github: GithubPicker,
+  notion: NotionSourcePicker,
 };
 
 const STATUS_KIND: Record<Source["status"], ChipKind> = {
@@ -128,6 +131,7 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
 }
 
 function entries(config: Record<string, unknown>, key: string): string[] {
+  if (key === "roots") return notionRoots(config);
   const value = config[key];
   return Array.isArray(value) ? value.map(String) : [];
 }
@@ -167,6 +171,7 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
   const Picker = PICKER[source.kind];
   const [picked, setPicked] = useState(source.config);
   const { act, error, busy } = useAction();
+  const notion = source.kind === "notion";
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -176,6 +181,8 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
     );
     if (saved) onSaved(saved);
   }
+
+  if (notion && !source.connection_id) return <ReconnectNotion picked={notionRoots(source.config).length} />;
 
   return (
     <form onSubmit={save} className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3">
@@ -203,16 +210,37 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
       )}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex items-center gap-1.5">
-        <Button type="submit" variant="solid" disabled={busy}>
+        <Button type="submit" variant="solid" disabled={busy || (notion && notionRoots(picked).length === 0)}>
           Save allowlist
         </Button>
-        {Picker && (
+        {Picker && !notion && (
           <InfoTip label="saving the allowlist" align="start">
             Saving a new allowlist syncs this source again from the start. What it no longer covers (a removed channel or repo, messages outside a narrower date range) is deleted on that sync.
           </InfoTip>
         )}
       </div>
     </form>
+  );
+}
+
+/** A Notion source whose connection is gone: its pages can only be picked through a connection. */
+function ReconnectNotion({ picked }: { picked: number }) {
+  return (
+    <div
+      className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3"
+      data-testid="notion-reconnect"
+    >
+      <Warn>Reconnect Notion to change pages.</Warn>
+      <p className="text-sm text-text2">
+        This source&rsquo;s Notion connection was removed. It keeps its {picked} picked{" "}
+        {picked === 1 ? "page" : "pages"}; changing them needs a Notion connection.
+      </p>
+      <div>
+        <LinkButton href="/settings/connections" icon="link">
+          Go to Connections
+        </LinkButton>
+      </div>
+    </div>
   );
 }
 
@@ -370,7 +398,7 @@ function SourceRow({
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
             <span className="min-w-0 truncate font-mono text-text" title={items.join(", ")}>
-              {items.length ? items.join(", ") : "none yet"}
+              {source.kind === "notion" ? `${items.length} picked` : items.length ? items.join(", ") : "none yet"}
             </span>
           </span>
         )}
@@ -419,6 +447,30 @@ function SourceRow({
   );
 }
 
+/** Notion in the PICKER registry: its roots, ticked in the page picker once there is a connection. */
+function NotionSourcePicker({ connectionId, config, onChange }: PickerProps) {
+  if (!connectionId) return null;
+  return (
+    <ChoosePages connectionId={connectionId} value={notionRoots(config)} onChange={(roots) => onChange({ ...config, roots })} />
+  );
+}
+
+/** The Notion page picker under its label: a source's roots, ticked rather than typed. */
+function ChoosePages(props: { connectionId: string; value: string[]; onChange: (roots: string[]) => void }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5" role="group" aria-label="Choose pages">
+      <span className="flex items-center gap-1.5">
+        <Label>Choose pages</Label>
+        <InfoTip label="choosing pages" align="start">
+          Tick the pages and databases to pull in; their sub-pages and databases come with them. Saving new picks syncs
+          the source again from the start.
+        </InfoTip>
+      </span>
+      <NotionPicker {...props} />
+    </div>
+  );
+}
+
 function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Source) => void }) {
   const [kind, setKind] = useState<Kind>("upload");
   const [name, setName] = useState("");
@@ -449,7 +501,8 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
     }
   }
 
-  const blocked = !option?.connector_available || (spec !== null && usable.length === 0);
+  const blocked =
+    !option?.connector_available || (spec !== null && usable.length === 0) || (kind === "notion" && notionRoots(picked).length === 0);
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source">

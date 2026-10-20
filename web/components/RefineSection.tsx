@@ -9,6 +9,7 @@ import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type LlmJob, type RefinementPreview } from "@/lib/api/client";
 import { JOB_STATUS_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
+import { sectionHref } from "@/lib/section-link";
 
 /**
  * An approver's "Refine section": Oracle revises this one section from the accepted
@@ -108,7 +109,7 @@ export function RefineSection({
         }),
       );
       reset();
-      router.push(`/documents/${doc}/v/${v.number}#s-${sectionKey}`);
+      router.push(sectionHref(doc, v.number, sectionKey));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not accept the revision.");
     } finally {

@@ -23,9 +23,9 @@ const savedView = (page: Page, view: "brief" | "full") =>
     .toBe(true);
 
 const sections = (page: Page) => page.getByTestId("document-sections").filter({ visible: true });
-/** The strip's items: the sections of the current mode (Brief or Full), in order. */
-const stripItems = (page: Page) => sectionStrip(page).locator("a[data-strip-key]");
-/** A strip item's text ends with its heading (a reviewed one starts with its verdict for screen readers). */
+/** The outline's names: the sections of the current mode (Brief or Full), in order. */
+const stripItems = (page: Page) => sectionStrip(page).getByTestId("outline-name");
+/** An outline name is its heading. */
 const headingsAre = (names: string[]) => names.map((h) => new RegExp(`${h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 
 test("brief: a document opens on its brief; Show full document switches, and the choice is remembered", async ({
@@ -49,7 +49,7 @@ test("brief: a document opens on its brief; Show full document switches, and the
 
   await page.getByRole("button", { name: "Show full document" }).click();
   await expect(sections(page)).toHaveAttribute("data-view", "full");
-  await expect(stripItems(page)).toHaveCount(20);
+  await expect(sectionStrip(page).getByTestId("chip-all")).toHaveText(/All\s*20/);
   await expect(stripItems(page).first()).toHaveText(/Saved carts PRD$/);
   await openSection(page, "feature-detail");
   await expect(section(page, "feature-detail").getByTestId("layer-badge").first()).toHaveText("Detail");

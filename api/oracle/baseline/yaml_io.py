@@ -36,6 +36,7 @@ import yaml
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import safe_yaml
 from oracle.auth.deps import Principal
 from oracle.baseline import scoring, service
 from oracle.baseline.models import EDGE_TYPES, ENTITY_TYPES, NODE_STATUSES, Edge, Entity, Evidence
@@ -148,14 +149,20 @@ async def export(db: AsyncSession, principal: Principal) -> str:
 
 def _parse(text: str) -> dict[str, Any]:
     try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as e:
+        data = safe_yaml.load(text)
+    except safe_yaml.SafeYamlError as e:
+        # Invalid or refused (oracle.safe_yaml): too large, too deep, anchors, tags...
         raise YamlInvalid([ImportIssue(code="invalid_yaml", message=str(e))]) from None
     if data is None:
         data = {}
     if not isinstance(data, dict):
         raise YamlInvalid([ImportIssue(code="invalid_yaml", message="expected a mapping")])
     return data
+
+
+def _parse_and_validate(text: str) -> tuple[dict[str, Any], list[ImportIssue]]:
+    data = _parse(text)
+    return data, _validate(data)
 
 
 def _validate(data: dict[str, Any]) -> list[ImportIssue]:
@@ -306,8 +313,8 @@ async def import_yaml(
 ) -> YamlImportResult:
     """Merge ``text`` in. ``origin`` is ``import`` (a person's file) or ``agent`` (a run's
     baseline.yaml); either way locked items get proposals instead of changes."""
-    data = _parse(text)
-    problems = _validate(data)
+    # Off the event loop: the file is untrusted text (oracle.safe_yaml bounds its cost).
+    data, problems = await safe_yaml.run_parse(_parse_and_validate, text)
     if problems:
         raise YamlInvalid(problems)
     writer = service.Writer(principal, origin, run_id=run_id, reason=reason)

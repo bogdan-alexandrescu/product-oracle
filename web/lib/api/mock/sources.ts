@@ -5,6 +5,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockUuid, seeded } from "./ids";
+import { MOCK_NOTION_CONNECTION_ID } from "./notion";
 
 type Source = Schemas["SourceOut"];
 type Item = Schemas["ItemOut"] & { content: string; source_name: string };
@@ -24,7 +25,7 @@ const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
     { id: "c0000000-0000-4000-8000-000000000003", account_label: "Partner workspace", status: "active" },
   ],
   github: [{ id: "c0000000-0000-4000-8000-000000000002", account_label: "example-org", status: "active" }],
-  notion: [],
+  notion: [{ id: MOCK_NOTION_CONNECTION_ID, account_label: "Example Notion", status: "active" }],
   fireflies: [],
   google: [],
 };
@@ -40,7 +41,7 @@ const AVAILABLE: Record<Source["kind"], boolean> = {
   upload: true,
   github: true,
   slack: true,
-  notion: false,
+  notion: true,
   fireflies: false,
   google_docs: false,
 };
@@ -193,9 +194,13 @@ function search(db: SourcesDb, q: URLSearchParams): Schemas["SearchResults"] {
 /**
  * The API's Slack config rules (oracle.sources.connectors.slack check_config), as the
  * connector words them: at most 100 channels, dates from 2000-01-01 to 2100-12-31, until
- * not before since. Other kinds pass.
+ * not before since; Notion needs a root. Other kinds pass.
  */
 function badConfig(kind: Source["kind"], config: Record<string, unknown>): string | null {
+  // As the real connector reads a Notion allowlist: "roots" only.
+  if (kind === "notion") {
+    return Array.isArray(config.roots) && config.roots.length ? null : "allowlist at least one root page or database";
+  }
   if (kind !== "slack") return null;
   const channels = config.channels;
   if (Array.isArray(channels) && channels.length > MAX_CHANNELS) return `allowlist at most ${MAX_CHANNELS} channels`;

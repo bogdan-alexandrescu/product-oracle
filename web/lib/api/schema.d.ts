@@ -932,6 +932,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{connection_id}/notion/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notion pages
+         * @description Lists the titles of every Notion page and database shared with Product Oracle
+         *     through this Notion connection, including pages that are in no source. Most recently
+         *     edited first (or by relevance with ``search``), 100 at a time, each with its parent.
+         *     Limited to 30 lists a minute per connection.
+         */
+        get: operations["list_notion_pages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/settings": {
         parameters: {
             query?: never;
@@ -8488,8 +8511,42 @@ export interface components {
             latest_version?: number | null;
             /** Open Count */
             open_count: number;
+            counts?: components["schemas"]["InboxFeedbackCounts"];
+            /** First Section Key */
+            first_section_key?: string | null;
             /** Items */
             items: components["schemas"]["InboxFeedbackItem"][];
+        };
+        /**
+         * InboxFeedbackCounts
+         * @description What a document's open items wait for; the five add up to ``open_count``.
+         */
+        InboxFeedbackCounts: {
+            /**
+             * Suggestions
+             * @default 0
+             */
+            suggestions: number;
+            /**
+             * Accepted
+             * @default 0
+             */
+            accepted: number;
+            /**
+             * Comments
+             * @default 0
+             */
+            comments: number;
+            /**
+             * Verdicts
+             * @default 0
+             */
+            verdicts: number;
+            /**
+             * Other
+             * @default 0
+             */
+            other: number;
         };
         /** InboxFeedbackItem */
         InboxFeedbackItem: {
@@ -8500,6 +8557,11 @@ export interface components {
             id: string;
             /** Summary */
             summary: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "comment" | "section_review" | "general";
             /** Section Key */
             section_key?: string | null;
             /** Raised On Version */
@@ -8509,6 +8571,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Suggestion Status */
+            suggestion_status?: ("open" | "accepted" | "dismissed" | "applied" | "superseded") | null;
         };
         /** InboxOut */
         InboxOut: {
@@ -9756,6 +9820,38 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+        };
+        /** NotionPageOut */
+        NotionPageOut: {
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "page" | "database";
+            /** Title */
+            title: string;
+            /** Icon */
+            icon: string | null;
+            /**
+             * Parent Type
+             * @enum {string}
+             */
+            parent_type: "workspace" | "page" | "database" | "block";
+            /** Parent Id */
+            parent_id: string | null;
+            /** Last Edited At */
+            last_edited_at: string | null;
+            /** Url */
+            url: string;
+        };
+        /** NotionPagesOut */
+        NotionPagesOut: {
+            /** Items */
+            items: components["schemas"]["NotionPageOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /** OAuthErrorOut */
         OAuthErrorOut: {
@@ -13693,6 +13789,13 @@ export interface operations {
                     "application/json": components["schemas"]["VersionOut"];
                 };
             };
+            /** @description Draft larger than 1 MiB (ORACLE_MAX_BODY_BYTES) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Draft rejected */
             422: {
                 headers: {
@@ -15255,6 +15358,68 @@ export interface operations {
             };
             /** @description GitHub is rate limiting, or this connection searched too often; retry after Retry-After seconds */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_notion_pages: {
+        parameters: {
+            query?: {
+                search?: string;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotionPagesOut"];
+                };
+            };
+            /** @description Not one of your connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a Notion connection, it needs reconnecting, or the integration lacks a capability */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too many lists, or Notion's rate limit; retry after ``Retry-After`` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Notion did not answer */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17445,6 +17610,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["YamlImportError"];
                 };
+            };
+            /** @description File larger than 1 MiB (ORACLE_MAX_BODY_BYTES) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description File rejected */
             422: {

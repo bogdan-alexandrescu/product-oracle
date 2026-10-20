@@ -5,6 +5,7 @@ import { CitationChip } from "@/components/CitationChip";
 import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut } from "@/lib/api/client";
 import type { Block, Inline } from "@/lib/markdown";
+import { sectionHash, sectionHref } from "@/lib/section-link";
 
 /** A highlighted span of a section's anchorable text. */
 export type Highlight = { start: number; end: number; id: string; kind: "comment" | "pending" };
@@ -45,10 +46,10 @@ const ignore = { [IGNORE_ATTR]: "" };
  */
 const DOC_LINK = /^\/documents\/([A-Za-z0-9][\w.-]*)\/v\/(\d+)(?:#([A-Za-z0-9][\w.:-]*))?$/;
 
-/** The app's path for a cross-document link: the version view, at the section (`#s-<key>`). */
+/** The app's path for a cross-document link: the version view, at the section. */
 function docLinkHref(href: string): string | null {
   const m = DOC_LINK.exec(href);
-  return m ? `/documents/${m[1]}/v/${m[2]}${m[3] ? `#s-${m[3]}` : ""}` : null;
+  return m ? sectionHref(m[1], Number(m[2]), m[3]) : null;
 }
 
 function label(nodes: Inline[]): string {
@@ -137,7 +138,7 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
         const target = n.href.slice(1);
         if (!ctx.expand?.keys.has(target)) {
           return (
-            <a key={k} href={`#s-${target}`}>
+            <a key={k} href={sectionHash(target)}>
               {renderInline(n.c, ctx, k)}
             </a>
           );

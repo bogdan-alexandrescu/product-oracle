@@ -26,6 +26,8 @@ export interface RunsContext {
   feedback: FeedbackRow[];
   documents: DocumentRow[];
   latestVersion: (documentId: string) => number | null;
+  /** The status of Oracle's live suggestion on a feedback item, if it has one. */
+  suggestionStatus?: (feedbackId: string) => Schemas["SuggestionOut"]["status"] | null;
   /** Section keys of a version (a roadmap's items check their PRD sections). */
   sectionKeys: (versionId: string) => string[];
   /** The approved version of a document a run reads (the one named, else the latest approved), or why not. */
@@ -335,6 +337,18 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   const feedback = [...byDoc.entries()].flatMap(([docId, items]) => {
     const d = ctx.documents.find((x) => x.id === docId);
     if (!d) return [];
+    const status = (f: FeedbackRow) => ctx.suggestionStatus?.(f.id) ?? null;
+    // As the API: what each open item waits for, and the first one in the review panel's order.
+    const counts = { suggestions: 0, accepted: 0, comments: 0, verdicts: 0, other: 0 };
+    for (const f of items) {
+      const s = status(f);
+      counts[
+        s === "open" ? "suggestions" : s === "accepted" ? "accepted" : f.kind === "comment" ? "comments" : f.kind === "section_review" ? "verdicts" : "other"
+      ]++;
+    }
+    const first = items
+      .filter((f) => f.section_key)
+      .sort((a, b) => a.raised_on_version - b.raised_on_version || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))[0];
     return [
       {
         document_id: d.id,
@@ -342,12 +356,16 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
         title: d.title,
         latest_version: ctx.latestVersion(d.id),
         open_count: items.length,
+        counts,
+        first_section_key: first?.section_key ?? null,
         items: items.slice(0, 5).map((f) => ({
           id: f.id,
           summary: f.summary,
+          kind: f.kind,
           section_key: f.section_key ?? null,
           raised_on_version: f.raised_on_version,
           created_at: f.created_at,
+          suggestion_status: status(f),
         })),
       },
     ];

@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # (oracle-ticker@<project>.iam.gserviceaccount.com). Either empty = off (404).
     ticker_audience: str = ""
     ticker_service_account: str = ""
+    # Untrusted YAML (drafts' front matter, baseline.yaml, run files) is refused above this
+    # many bytes (oracle.safe_yaml); request bodies that carry it are capped at
+    # max_body_bytes (413).
+    yaml_max_bytes: int = 1024 * 1024
+    max_body_bytes: int = 1024 * 1024
 
 
 @lru_cache

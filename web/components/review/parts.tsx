@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { Button, Chip, Icon, ScrollStrip, type ChipKind } from "@/components/ds";
+import { Button, Chip, Icon, StatusMark, type ChipKind, type MarkState } from "@/components/ds";
 import type { FeedbackStatus, LlmJob, Verdict } from "@/lib/api/client";
 import { JOB_STATUS_LABEL, STATUS_LABEL, VERDICT_LABEL } from "@/lib/format";
 
@@ -20,6 +20,17 @@ export const SELECT =
   "h-8 rounded-lg border border-line-strong bg-surface px-2 text-sm font-medium tracking-normal text-text";
 
 export const VERDICT_KIND: Record<Verdict, ChipKind> = { approved: "pass", changes_requested: "warn", rejected: "crit" };
+
+/** The mark a section's row shows: its verdict, or a lock once the version's review is closed. */
+export function sectionMark(verdict: Verdict | null | undefined, closed = false): MarkState {
+  if (closed) return "locked";
+  return verdict ?? "none";
+}
+
+/** A section's review state as a mark (shape and colour); never a ✓ unless approved. */
+export function SectionMark({ verdict, closed = false, size = 16 }: { verdict: Verdict | null | undefined; closed?: boolean; size?: 16 | 20 }) {
+  return <StatusMark state={sectionMark(verdict, closed)} size={size} />;
+}
 
 export function VerdictChip({ verdict }: { verdict: Verdict }) {
   return <Chip kind={VERDICT_KIND[verdict]}>{VERDICT_LABEL[verdict]}</Chip>;
@@ -99,12 +110,15 @@ export function TabBar<T extends string>({
   value,
   onChange,
   size = "md",
+  idFor,
 }: {
   label: string;
   tabs: { id: T; label: ReactNode; count?: number | null }[];
   value: T;
   onChange: (id: T) => void;
   size?: "sm" | "md";
+  /** Element ids for the tabs (`${id}-panel` is the tab panel's), so the panel is labelled by its tab. */
+  idFor?: (id: T) => string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const onKey = (e: KeyboardEvent) => {
@@ -115,15 +129,9 @@ export function TabBar<T extends string>({
     e.preventDefault();
     els[(at + (e.key === "ArrowRight" ? 1 : -1) + els.length) % els.length]?.focus();
   };
+  // The tabs wrap rather than scroll sideways (I3 PRD navigation: no sideways strips).
   return (
-    <ScrollStrip
-      ref={ref}
-      role="tablist"
-      aria-label={label}
-      onKeyDown={onKey}
-      className="max-w-full border-b border-line"
-      stripClassName="gap-1"
-    >
+    <div ref={ref} role="tablist" aria-label={label} onKeyDown={onKey} className="flex max-w-full flex-wrap gap-x-1 border-b border-line">
       {tabs.map((t) => {
         const on = t.id === value;
         return (
@@ -131,10 +139,12 @@ export function TabBar<T extends string>({
             key={t.id}
             role="tab"
             type="button"
+            id={idFor?.(t.id)}
             aria-selected={on}
+            aria-controls={on && idFor ? `${idFor(t.id)}-panel` : undefined}
             tabIndex={on ? 0 : -1}
             onClick={() => onChange(t.id)}
-            className={`-mb-px flex flex-none items-center gap-1.5 border-b-2 whitespace-nowrap ${
+            className={`-mb-px flex flex-none items-center gap-1.5 border-b-2 whitespace-nowrap max-[639px]:h-11 ${
               size === "sm" ? "h-9 px-2 text-sm" : "h-10 px-2 text-[15px]"
             } ${on ? "border-accent font-semibold text-text" : "border-transparent font-medium text-text2 hover:text-text"}`}
           >
@@ -145,7 +155,7 @@ export function TabBar<T extends string>({
           </button>
         );
       })}
-    </ScrollStrip>
+    </div>
   );
 }
 
