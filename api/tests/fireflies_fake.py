@@ -7,7 +7,7 @@ does: transcripts newest first, ``fromDate`` / ``toDate`` filters, ``keyword`` w
 
 import json
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -40,7 +40,6 @@ def meeting(
         "participants": participants if participants is not None else [organizer],
         "calendar_id": calendar_id,
     }
-
 
 
 @dataclass
@@ -129,7 +128,9 @@ SAMPLE = [
     ),
     meeting("S3", "AI agents daily standup ", "2026-10-12T09:00:00Z", calendar_id=STANDUP_CAL),
     meeting("P1", "AI agents sprint planning #11", "2026-09-30T14:00:00Z", organizer="lin@x.io"),
-    meeting("P2", "AI agents sprint planning - Oct 14", "2026-10-14T14:00:00Z", organizer="lin@x.io"),
+    meeting(
+        "P2", "AI agents sprint planning - Oct 14", "2026-10-14T14:00:00Z", organizer="lin@x.io"
+    ),
     meeting(
         "K1",
         "Customer interview: Acme",

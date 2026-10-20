@@ -10,6 +10,10 @@ A connector is stateless and does no database work. The sync engine
 - :class:`CursorCheckpoint` is a resumable position: everything yielded before it is
   stored, then the cursor is saved, so an interrupted sync resumes from there.
 
+A connector whose class sets ``prunes = True`` also receives ``known``, an async callable
+returning the external ids of the source's stored (not deleted) items, so a full pass
+can delete what its config no longer selects and skip what is already stored.
+
 Connectors never yield direct messages (S3 Visibility); ``acl`` records who can see an
 item in the source.
 

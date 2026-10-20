@@ -11,12 +11,13 @@ source, logged, or echoed in ``last_error`` (connector messages are redacted).
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.sources import base, service, store
-from oracle.sources.models import Source
+from oracle.sources.models import Source, SourceItem
 
 log = logging.getLogger(__name__)
 
@@ -73,8 +74,20 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         return await _fail(db, source, stats, "The connection was removed: pick another one")
 
     cursor = dict(source.cursor) if source.cursor else None
+    extra: dict[str, Any] = {}
+    if getattr(connector, "prunes", False):
+
+        async def known() -> set[str]:
+            rows = await db.scalars(
+                select(SourceItem.external_id).where(
+                    SourceItem.source_id == source.id, SourceItem.deleted_at.is_(None)
+                )
+            )
+            return set(rows)
+
+        extra["known"] = known
     try:
-        async for event in connector.sync(dict(source.config), credential, cursor):
+        async for event in connector.sync(dict(source.config), credential, cursor, **extra):
             if isinstance(event, base.ItemUpsert):
                 _, written = await store.upsert_item(db, source, event)
                 stats.upserted += 1

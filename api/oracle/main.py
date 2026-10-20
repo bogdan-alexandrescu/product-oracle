@@ -35,6 +35,7 @@ from oracle.priorities.router import router as priorities_router
 from oracle.quality.router import router as quality_router
 from oracle.review.router import router as review_router
 from oracle.runs.router import router as runs_router
+from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.router import router as sources_router
 from oracle.templates.router import router as templates_router
 from oracle.tenant_settings_api import router as settings_router
@@ -131,6 +132,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_router)
     app.include_router(claude_accounts_router)
     app.include_router(sources_router)
+    app.include_router(fireflies_browse_router)
     app.include_router(baseline_router)
     app.include_router(priorities_router)
     app.include_router(templates_router)

@@ -173,7 +173,12 @@ async def test_selected_series_and_meetings():
 
 async def test_date_range_applies_to_what_is_picked():
     fake = FakeFireflies(SAMPLE)
-    config = {"mode": "selected", "date_from": "2026-10-01", "series": [STANDUP], "meetings": ["O1"]}
+    config = {
+        "mode": "selected",
+        "date_from": "2026-10-01",
+        "series": [STANDUP],
+        "meetings": ["O1"],
+    }
     events = await collect(connector(fake), config)
     assert upserted(events) == ["S2", "S3"]
 

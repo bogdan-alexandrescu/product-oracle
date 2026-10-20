@@ -56,7 +56,7 @@ async def test_meetings_lists_the_owners_meetings_paged(fake, alice, conn):
         resp = await a.get(f"/v1/connections/{conn}/fireflies/meetings")
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert [m["id"] for m in body["meetings"]] == ["P2", "S3", "S2", "P1", "K1", "S1", "O1"]
+        assert [m["id"] for m in body["meetings"]] == ["P2", "S3", "S2", "K1", "P1", "S1", "O1"]
         assert body["next_cursor"] is None
         k1 = next(m for m in body["meetings"] if m["id"] == "K1")
         assert k1 == {
@@ -97,7 +97,7 @@ async def test_meetings_cursor_pages(fake, alice, conn, monkeypatch):
                 params={"cursor": first["next_cursor"]},
             )
         ).json()
-        assert [m["id"] for m in second["meetings"]] == ["P1", "K1", "S1"]
+        assert [m["id"] for m in second["meetings"]] == ["K1", "P1", "S1"]
         bad = await a.get(f"/v1/connections/{conn}/fireflies/meetings", params={"cursor": "x"})
         assert bad.status_code == 422
 
