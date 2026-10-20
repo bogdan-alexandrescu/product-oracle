@@ -21220,6 +21220,22 @@
               }
             ],
             "title": "Retrieved At"
+          },
+          "added": {
+            "type": "boolean",
+            "title": "Added",
+            "default": false
+          },
+          "state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Label"
           }
         },
         "type": "object",
@@ -35291,6 +35307,14 @@
               }
             ],
             "title": "Words"
+          },
+          "spec_states": {
+            "items": {
+              "$ref": "#/components/schemas/SpecPartState"
+            },
+            "type": "array",
+            "title": "Spec States",
+            "default": []
           }
         },
         "type": "object",

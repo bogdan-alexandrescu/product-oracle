@@ -589,9 +589,16 @@ async def diff(db: AsyncSession, doc: str, from_number: int, to_number: int) -> 
         (old_sections if s.version_id == old.id else new_sections).append(s)
     if old.id == new.id:
         new_sections = old_sections
+    sections = diff_sections(old_sections, new_sections)
+    new_states = await _spec_states(db, new, new_sections)
+    if new_states:
+        old_states = await _spec_states(db, old, old_sections)
+        for d in sections:
+            states = old_states if d.status == "removed" else new_states
+            d.spec_states = states.get(d.section_key, [])
     return DiffOut(
         document_id=document.id,
         from_version=from_number,
         to_version=to_number,
-        sections=diff_sections(old_sections, new_sections),
+        sections=sections,
     )

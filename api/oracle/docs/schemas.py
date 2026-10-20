@@ -100,6 +100,11 @@ class CitationOut(ORM):
     title: str | None = None
     excerpt: str | None = None
     retrieved_at: datetime | None = None
+    # E1 (owner, 2026-10-20): a citation an edit added to a spec version. Listed under
+    # 'Added sources' with ``state_label`` ('Proposed · added in an edit'), never in
+    # Oracle's Sources.
+    added: bool = False
+    state_label: str | None = None
 
 
 class SectionVerdict(ORM):
@@ -176,6 +181,9 @@ class SectionDiff(BaseModel):
     to_layer: Layer | None = None
     # Word-level ops over body_text (and heading); only for status == "changed".
     words: list[WordOp] | None = None
+    # E1: a spec section's states in the newer version (the older one for a removed
+    # section): an added section shows 'Proposed · added in an edit' in the diff too.
+    spec_states: list[SpecPartState] = []
 
 
 class DiffOut(BaseModel):

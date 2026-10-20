@@ -6062,6 +6062,13 @@ export interface components {
             excerpt?: string | null;
             /** Retrieved At */
             retrieved_at?: string | null;
+            /**
+             * Added
+             * @default false
+             */
+            added: boolean;
+            /** State Label */
+            state_label?: string | null;
         };
         /** ClaimIn */
         ClaimIn: {
@@ -11157,6 +11164,11 @@ export interface components {
             to_layer?: ("brief" | "detail") | null;
             /** Words */
             words?: components["schemas"]["WordOp"][] | null;
+            /**
+             * Spec States
+             * @default []
+             */
+            spec_states: components["schemas"]["SpecPartState"][];
         };
         /** SectionEvidence */
         SectionEvidence: {
