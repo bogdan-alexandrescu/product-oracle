@@ -221,3 +221,53 @@ def test_body_text_of_header_only_table():
 def test_title_falls_back_to_first_heading():
     parsed = parse_draft("---\ndocument: d\n---\n# From heading {#t}\n")
     assert parsed.title == "From heading"
+
+
+def test_citation_confidence_fields_parse():
+    # What a writer computed per citation is kept: the source item it read (on some),
+    # its confidence 0-1 (or null with a note saying why) and the low-confidence flag.
+    parsed = parse_draft(draft("prd_citation_confidence.md"))
+    by_id = {c.id: c for c in parsed.citations}
+    c1 = by_id["c1"]
+    assert c1.item == "3f1c2a4e-8b7d-4c1e-9a2b-5d6e7f809a1b"
+    assert (c1.confidence, c1.confidence_note, c1.low_confidence) == (
+        0.75,
+        "two sources agree; fresh",
+        False,
+    )
+    assert (by_id["c2"].confidence, by_id["c2"].low_confidence) == (0.3, True)
+    decision = by_id["o-d-ship"]
+    assert decision.item is None and decision.confidence is None
+    assert decision.confidence_note == "owner decision (confirmed, locked); not evidence-scored"
+    # A citation without them: no item, no confidence, not low.
+    c3 = by_id["c3"]
+    assert (c3.item, c3.confidence, c3.confidence_note, c3.low_confidence) == (
+        None,
+        None,
+        None,
+        False,
+    )
+
+
+@pytest.mark.parametrize("value", ["1.5", "-0.1", "nan", "high"])
+def test_citation_confidence_out_of_range_is_invalid(value):
+    citations = f"citations:\n  - id: c1\n    source: web\n    ref: x\n    confidence: {value}\n"
+    with pytest.raises(DraftError) as err:
+        parse_draft(_draft("# T {#t}\n\nA.\n", citations))
+    assert _codes(err.value) == [("invalid_citation", None, "c1")]
+    assert "confidence" in err.value.problems[0].message
+
+
+@pytest.mark.parametrize("value", ["0", "1", "0.0", "1.0"])
+def test_citation_confidence_bounds_are_inclusive(value):
+    citations = f"citations:\n  - id: c1\n    source: web\n    ref: x\n    confidence: {value}\n"
+    parsed = parse_draft(_draft("# T {#t}\n\nA [c:c1].\n", citations))
+    assert parsed.citations[0].confidence == float(value)
+
+
+def test_citation_item_that_is_not_a_uuid_still_parses():
+    # The item is checked against the company's sources on import (a warning there,
+    # never a refusal); the parser keeps whatever was written.
+    citations = "citations:\n  - id: c1\n    source: web\n    ref: x\n    item: not-a-uuid\n"
+    parsed = parse_draft(_draft("# T {#t}\n\nA [c:c1].\n", citations))
+    assert parsed.citations[0].item == "not-a-uuid"

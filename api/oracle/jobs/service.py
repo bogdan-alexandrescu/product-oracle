@@ -41,6 +41,7 @@ JOB_LABELS = {
     "review_comments": "Review comments",
     "reporting": "Reporting",
     "refinement": "Refinement",
+    "intake_analysis": "Intake analysis",
     "quality_review": "Quality review",
     "refinement_batch": "Refinement",
 }
@@ -287,8 +288,8 @@ async def retry(db: AsyncSession, principal: "Principal", job_id: uuid.UUID) -> 
         raise JobError(404, f"job {job_id} not found")
     if job.status not in ("failed", "cancelled"):
         raise JobError(409, f"a {job.status} job cannot be retried")
-    document = await db.get(Document, job.document_id)
-    if not enabled(document, job.kind):
+    document = await db.get(Document, job.document_id) if job.document_id else None
+    if document is not None and not enabled(document, job.kind):
         raise JobError(409, f"{JOB_LABELS[job.kind]} is turned off for this document")
     before = job.status
     job.status = "queued"

@@ -221,13 +221,18 @@ def is_staged(suggestion) -> bool:
 
 
 def feedback_state(status: str, suggestion) -> str:
-    """open / staged / declined / done, from the item's status and its live suggestion."""
+    """open / staged / declined / done, from the item's status and its live suggestion.
+
+    Staged first (owner, 2026-10-20): an accepted change carries into the next draft until
+    a draft applies it or someone discards it, whatever happened to its item since (closed
+    by a draft's resolutions, an approval or by hand). The build action counts the same
+    changes (``kinds.staged_suggestions``)."""
+    if is_staged(suggestion):
+        return "staged"
     if status == "declined":
         return "declined"
     if status != "open":
         return "done"
-    if is_staged(suggestion):
-        return "staged"
     if suggestion is not None and suggestion.status == "applied":
         return "done"
     return "open"

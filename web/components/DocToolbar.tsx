@@ -1,8 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { Icon } from "@/components/ds";
+import { Icon, useDocumentDestination } from "@/components/ds";
 import type { DocumentOut } from "@/lib/api/client";
 
 /** The list a document belongs to: Roadmap for roadmaps, PRDs for the rest. */
@@ -16,6 +18,8 @@ function home(doc?: DocumentOut) {
  */
 export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTitle?: boolean }) {
   const h = home(doc);
+  // The rail highlights the same list (Roadmap for a roadmap) once the kind is known.
+  useDocumentDestination(doc?.slug, doc ? h.href : undefined);
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
       <Link href={h.href} className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">

@@ -17,7 +17,7 @@ from typing import Any
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from oracle import safe_yaml
 from oracle.config import get_settings
@@ -63,6 +63,19 @@ class CitationIn(BaseModel):
     title: str | None = None
     excerpt: str | None = None
     retrieved_at: datetime | None = None
+    # What the writer computed for this citation (owner decision 2026-10-20). ``item`` is
+    # kept as written: the import checks it against the company's source items and drops
+    # one it does not have with a warning, never a refusal.
+    item: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    # Why there is no score, or how it was reached ("owner decision, locked").
+    confidence_note: str | None = None
+    low_confidence: bool = False
+
+    @field_validator("item", mode="before")
+    @classmethod
+    def _item_as_text(cls, value: Any) -> str | None:
+        return _optional_str(value)
 
 
 @dataclass
@@ -287,6 +300,14 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
     return _jsonable(data)
 
 
+def _citation_field(error: Any) -> str:
+    """What is wrong with one field of a citation: the field, and a source this Oracle does
+    not accept by name (the run page groups refused citations by it)."""
+    if tuple(error["loc"]) == ("source",) and error["type"] == "literal_error":
+        return f"source '{error['input']}' isn't accepted"
+    return ".".join(map(str, error["loc"]))
+
+
 def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn]:
     if raw is None:
         return []
@@ -304,7 +325,7 @@ def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn
                 {**item, "id": key} if isinstance(item, dict) else item
             )
         except ValidationError as exc:
-            fields = ", ".join(".".join(map(str, e["loc"])) for e in exc.errors())
+            fields = ", ".join(_citation_field(e) for e in exc.errors())
             problems.append(
                 ImportProblem(
                     code="invalid_citation",

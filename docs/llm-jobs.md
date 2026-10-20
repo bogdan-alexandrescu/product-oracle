@@ -89,6 +89,17 @@ through the normal importer. Locked (approved) sections are never changed: a rev
 suggestion for one becomes "nothing to change", and refining one is refused, as is
 accepting a refinement once a newer version exists.
 
+## Intake analysis
+
+`intake_analysis` (v2 lane `v2-intake`, migration `0014_intake`) runs light extraction
+for a product intake: it reads the brief and the author's pinned source items, and adds
+model inferences (users, outcomes, scope, ...) and open gaps to the intake. An intake has
+no document, so these jobs carry `intake_id` instead of `document_id`, run one at a time
+per intake, and are turned off per intake (`ai_extraction: false` on `POST
+/v1/intakes`). The brief and the source excerpts reach the model only as
+`untrusted_data`; what comes back is validated and labelled an AI inference. See
+[product-oracle-v2/03-discovery-and-quality.md](product-oracle-v2/03-discovery-and-quality.md).
+
 ## Prompts
 
 `api/oracle/jobs/prompts/<kind>.v<N>.md`, one system prompt per kind, versioned by file

@@ -41,6 +41,7 @@ __all__ = [
     "WorkflowSpec",
     "WorkflowStatus",
     "get_runtime",
+    "load_learned",
     "redact",
     "close_runtime",
     "set_runtime",
@@ -67,6 +68,16 @@ def set_runtime(runtime: AgentRuntime | None) -> None:
     """Replace the process-wide runtime (``None``: rebuild from settings on next use)."""
     global _runtime
     _runtime = runtime
+
+
+async def load_learned(runtime: AgentRuntime) -> None:
+    """Before a synchronous read of what the runtime can do (``can_reach_oracle``,
+    ``notes()``): read what every instance learned about its features (the database), so
+    a fresh process does not report a confirmed feature as unknown. A runtime that learns
+    nothing does nothing."""
+    load = getattr(runtime, "load_learned", None)
+    if load is not None:
+        await load()
 
 
 async def close_runtime() -> None:

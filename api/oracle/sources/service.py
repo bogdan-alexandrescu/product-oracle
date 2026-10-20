@@ -222,14 +222,21 @@ async def list_sources(db: AsyncSession, user_id: uuid.UUID) -> list[Source]:
     return list(rows)
 
 
-async def item_counts(db: AsyncSession, source_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+async def item_counts(
+    db: AsyncSession, source_ids: list[uuid.UUID], exclude: set[uuid.UUID] | None = None
+) -> dict[uuid.UUID, int]:
+    """Live items per source; ``exclude``: items the caller may not read (not counted,
+    so a count never tells how many are withheld)."""
     if not source_ids:
         return {}
-    rows = await db.execute(
+    stmt = (
         select(SourceItem.source_id, func.count())
         .where(SourceItem.source_id.in_(source_ids), SourceItem.deleted_at.is_(None))
         .group_by(SourceItem.source_id)
     )
+    if exclude:
+        stmt = stmt.where(SourceItem.id.not_in(exclude))
+    rows = await db.execute(stmt)
     return {sid: n for sid, n in rows.all()}
 
 

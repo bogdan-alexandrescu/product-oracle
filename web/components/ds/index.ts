@@ -1,9 +1,10 @@
 /** Product Oracle v2 design system (I3: B1 Split). See /design for every part in every state. */
-export { AppShell, DESTINATIONS } from "./AppShell";
+export { AppShell, DESTINATIONS, useDocumentDestination } from "./AppShell";
 export { Button, LinkButton, type ButtonVariant } from "./Button";
 export { FaviconMark, Mark, Wordmark } from "./Brand";
 export { Bars, Meter, Ring, Sparkline, type RingTone } from "./Charts";
 export { Chip, GoalTag, type ChipKind } from "./Chip";
+export { ConfirmHost, confirmInPage, useFocusTrap, type ConfirmAsk } from "./ConfirmDialog";
 export { DataTable, type Column } from "./DataTable";
 export { Avatar, CostFigure, initialsOf, KpiStrip, Numeral, ToGo, type Kpi } from "./Figures";
 export { Icon, type IconName } from "./Icon";

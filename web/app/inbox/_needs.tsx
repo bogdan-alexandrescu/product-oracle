@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { Button, Chip, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
+import { Button, Chip, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { BUILD_PARAM } from "@/components/NextDraft";
@@ -508,8 +508,8 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         {r.can_retry && (
           <Button
             disabled={busy !== null}
-            onClick={() => {
-              if (window.confirm(RETRY_CONFIRM)) {
+            onClick={async () => {
+              if (await confirmInPage({ action: "Retry", message: RETRY_CONFIRM })) {
                 void act(`retry-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry", path(r.id))));
               }
             }}
@@ -520,8 +520,8 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         {r.can_stop_cancelling && (
           <Button
             disabled={busy !== null}
-            onClick={() => {
-              if (window.confirm(STOP_CANCELLING_CONFIRM)) {
+            onClick={async () => {
+              if (await confirmInPage({ destructive: true, action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
                 void act(`stop-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path(r.id))));
               }
             }}
@@ -541,8 +541,8 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
           <Button
             key={wid}
             disabled={busy !== null}
-            onClick={() => {
-              if (window.confirm(CANCEL_AGAIN_CONFIRM)) {
+            onClick={async () => {
+              if (await confirmInPage({ destructive: true, action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
                 void act(`again-${r.id}-${wid}`, () =>
                   unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path(r.id), body: { workflow_id: wid } })),
                 );

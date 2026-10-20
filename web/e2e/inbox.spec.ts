@@ -37,6 +37,7 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   await checkpoints.getByRole("link", { name: "Decide" }).first().click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+#decide$/);
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Waiting");
+  await expect(page.locator("#decide")).toBeFocused();
 });
 
 test("inbox: cancel a run paused on overrun", async ({ page }) => {

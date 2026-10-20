@@ -79,7 +79,9 @@ return once Oracle has read an answer that counts. The hold is decided just befo
 run token's write runs (never for a read, initialize or tools/list): Oracle's records are
 read and released first, then a review step no checkpoint stands for yet is read from
 SwarmCloud (:func:`run_token_hold`; one read shared by concurrent writes, bounded by
-``HOLD_READ_SECONDS``; reached in any state, not listed or not read, it holds; a
+``HOLD_READ_SECONDS``; reached once the step it depends on succeeded, whatever its own
+row says, and in any state but parked on that unfinished step, not listed or not read,
+it holds; a
 read-only answer is reused for up to 5 seconds, 'may write' never; a request joining a
 read in flight shares only a read-only answer, and on 'may write' reads for itself).
 A lost submission holds its token until it is resolved. Agents are told a fixed reason. An
@@ -138,7 +140,7 @@ from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import schedule
-from oracle.runs import flows, roadmap, workflow
+from oracle.runs import flows, rejection, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -181,6 +183,7 @@ from oracle.swarm import (
     WorkflowSpec,
     WorkflowStatus,
     get_runtime,
+    load_learned,
     redact,
 )
 from oracle.swarm.runtime import MERGE, NOT_YET, not_reached
@@ -205,7 +208,18 @@ FINAL = ("succeeded", "failed", "cancelled")
 DECIDED = ("approved", "changes_requested")
 ACTIVE = ("running", "awaiting_checkpoint", "paused_overrun")
 # Run knobs Oracle sets (not the user's knobs): kept when a draft's knobs change.
-ORACLE_KNOBS = ("document_slug", "source_version_id", "template", "template_version", "theme")
+ORACLE_KNOBS = (
+    "document_slug",
+    "source_version_id",
+    "template",
+    "template_version",
+    "theme",
+    # A run started from a product intake (oracle.intake): the intake, the snapshot it
+    # pinned (the run reads that one, S4) and, for research, the gaps to look into.
+    "intake_id",
+    "intake_snapshot_id",
+    "intake_gap_ids",
+)
 ITEMS_FILE = "roadmap_items.yaml"
 
 
@@ -435,7 +449,18 @@ def _summary(
         import_failed=_import_failed_text(run, refs),
         can_retry_import=_import_failed(run) is not None,
         progress=_progress(run, segments) if segments is not None else None,
+        draft_rejected=_draft_rejected(segments) if segments is not None else None,
     )
+
+
+def _draft_rejected(segments: list[RunSegment]) -> str | None:
+    """The summary of a draft the run's segments left that Oracle refused to import (the
+    runs list's "Draft rejected"), else None."""
+    for s in segments:
+        imp = (s.artifacts or {}).get("import")
+        if isinstance(imp, dict) and imp.get("error"):
+            return imp.get("summary") or imp["error"]
+    return None
 
 
 def _import_failed(run: Run) -> dict[str, Any] | None:
@@ -675,6 +700,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             if n not in notes:
                 notes.append(n)
     if run.status == "draft" or not segments or not any(s.swarm_workflow_id for s in segments):
+        await load_learned(runtime)
         notes += [n for n in runtime.notes() if n not in notes]
     return RunOut(
         **_summary(run, refs, waiting, segments).model_dump(),
@@ -766,7 +792,10 @@ HOLD_READ_SECONDS = 3.0
 HOLD_CACHE_SECONDS = 5.0
 _hold_clock = time.monotonic
 
-_HoldKey = tuple[uuid.UUID, str, tuple[str, ...]]
+# Run, workflow, and each review step no checkpoint stands for yet with the step it
+# depends on (None: not known, so it holds).
+_Reviews = tuple[tuple[str, str | None], ...]
+_HoldKey = tuple[uuid.UUID, str, _Reviews]
 _hold_cache: dict[_HoldKey, tuple[float, str]] = {}
 _hold_reads: dict[_HoldKey, "asyncio.Task[str | None]"] = {}
 
@@ -775,12 +804,25 @@ _hold_reads: dict[_HoldKey, "asyncio.Task[str | None]"] = {}
 class _HoldPlan:
     """What Oracle's records say of a run token's hold: held (``reason``, and the
     ``detail`` logged for it), or decided by a live read of workflow ``workflow_id``:
-    its review steps no checkpoint stands for yet (``reviews``)."""
+    its review steps no checkpoint stands for yet, each with the step it depends on
+    (``reviews``)."""
 
     reason: str | None = None
     detail: str | None = None
     workflow_id: str | None = None
-    reviews: tuple[str, ...] = ()
+    reviews: _Reviews = ()
+
+
+def _review_predecessors(entry: dict[str, Any]) -> list[tuple[str, str | None]]:
+    """A segment's review steps, each with the step it depends on in Oracle's own plan
+    (:func:`workflow.build_plan`): the segment's last work step for the first round, the
+    previous round's revise step after it. None when Oracle's record does not say."""
+    work = entry.get("work") or []
+    before = [work[-1] if work else None, *(entry.get("revises") or [])]
+    return [
+        (str(r), before[i] if i < len(before) else None)
+        for i, r in enumerate(entry.get("reviews") or [])
+    ]
 
 
 async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
@@ -809,8 +851,8 @@ async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
         for c in checkpoints
         if ((c.payload or {}).get("wait") or {}).get("workflow_id") == wf.get("id")
     }
-    reviews = [r for e in wf.get("segments") or [] for r in e.get("reviews") or []]
-    unknown = tuple(r for r in reviews if r not in known)
+    reviews = [p for e in wf.get("segments") or [] for p in _review_predecessors(e)]
+    unknown = tuple(p for p in reviews if p[0] not in known)
     if not unknown or not wf.get("id"):
         return _HoldPlan()
     return _HoldPlan(workflow_id=wf["id"], reviews=unknown)
@@ -818,7 +860,8 @@ async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
 
 async def _read_hold(key: _HoldKey) -> str | None:
     """One live read of a workflow's status: whether it reached a review step no
-    checkpoint stands for yet (not :func:`not_reached`, or not listed).
+    checkpoint stands for yet (not :func:`not_reached` given the step it depends on in
+    the same read, or not listed).
     Bounded by :data:`HOLD_READ_SECONDS`; a read-only answer
     is kept for :data:`HOLD_CACHE_SECONDS`."""
     run_id, workflow_id, reviews = key
@@ -835,16 +878,19 @@ async def _read_hold(key: _HoldKey) -> str | None:
         )
         held = HOLD_UNKNOWN
     else:
-        for review in reviews:
+        for review, after in reviews:
             step = status.step(review)
-            if step is None or not not_reached(step):
+            before = status.step(after) if after else None
+            if step is None or not not_reached(step, before):
                 log.info(
-                    "run %s: token read-only, step %s of %s is %s (park reason %s)",
+                    "run %s: token read-only, step %s of %s is %s (park reason %s, after %s: %s)",
                     run_id,
                     review,
                     workflow_id,
                     step.state if step else "not listed",
                     step.park_reason if step else None,
+                    after,
+                    before.state if before else "not listed",
                 )
                 held = HOLD_DECISION
                 break
@@ -868,7 +914,7 @@ def _cached_hold(key: _HoldKey) -> str | None:
     return cached[1] if cached is not None else None
 
 
-async def _live_hold(run_id: uuid.UUID, workflow_id: str, reviews: tuple[str, ...]) -> str | None:
+async def _live_hold(run_id: uuid.UUID, workflow_id: str, reviews: _Reviews) -> str | None:
     """The live read's answer: a read-only one from the last 5 seconds, else a read.
 
     W5, shared status checks (owner, 2026-10-20): a request that starts a read uses its
@@ -910,7 +956,9 @@ async def token_hold(db: AsyncSession, run_id: uuid.UUID, *, live: bool = True) 
 
     From the moment the workflow reaches the wait, not from Oracle's next look at it: a
     review step of the live workflow that no checkpoint stands for yet is read from
-    SwarmCloud, and reached in any state (or not listed, or not read) it holds.
+    SwarmCloud, and reached (once the step it depends on succeeded, whatever its own row
+    says; in any state but parked on that unfinished step; not listed, or not read) it
+    holds.
     ``live`` False: from what Oracle recorded only (the run's page). A write checks it
     with :func:`run_token_hold`, which releases the database before SwarmCloud is read."""
     plan = await _hold_plan(db, run_id)
@@ -1182,7 +1230,16 @@ async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> No
     run.estimate_usd = None
 
 
-async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) -> uuid.UUID:
+async def create_run(
+    db: AsyncSession,
+    principal: Principal,
+    body: RunCreate,
+    *,
+    oracle_knobs: dict[str, Any] | None = None,
+    commit: bool = True,
+) -> uuid.UUID:
+    """A draft run. ``oracle_knobs``: knobs Oracle sets (``ORACLE_KNOBS``), e.g. the
+    intake a run starts from; ``commit=False`` leaves the commit to the caller."""
     flow = flows.FLOWS[body.flow]
     knobs = _resolve_knobs(flow, body.knobs)
     document_id, oracle = await _resolve_inputs(
@@ -1190,10 +1247,11 @@ async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) ->
         flow,
         _Inputs(body.document, body.source, body.source_version, body.template, body.theme),
     )
+    extra = {k: v for k, v in (oracle_knobs or {}).items() if k in ORACLE_KNOBS}
     run = Run(
         flow=flow.key,
         status="draft",
-        knobs={**knobs.as_json(), **oracle},
+        knobs={**knobs.as_json(), **oracle, **extra},
         document_id=document_id,
         created_by=principal.id,
     )
@@ -1203,8 +1261,11 @@ async def create_run(db: AsyncSession, principal: Principal, body: RunCreate) ->
     details: dict[str, Any] = {"flow": flow.key}
     if oracle.get("source_version_id"):
         details["source_version_id"] = oracle["source_version_id"]
+    if extra.get("intake_id"):
+        details["intake_id"] = extra["intake_id"]
     await audit.record(db, principal, "run.created", "run", run.id, details)
-    await db.commit()
+    if commit:
+        await db.commit()
     return run.id
 
 
@@ -1245,7 +1306,9 @@ async def update_run(
         for k in ("document", "source_version", "template", "theme"):
             if getattr(body, k) is not None:
                 setattr(current, k, getattr(body, k))
+        intake = {k: v for k, v in oracle.items() if k.startswith("intake_")}
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
+        oracle.update(intake)
     run.knobs = {**stored, **oracle}
     await _reset_segments(db, run, flow)
     await audit.record(db, principal, "run.updated", "run", run.id, {})
@@ -1305,14 +1368,17 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
             f"the estimate (${run.estimate_usd:.2f}) is over the budget "
             f"(${knobs.budget_usd:.2f}): lower the depth or roles, or raise the budget"
         )
-    # The sources the run reads are pinned now, for the user who created it.
-    snapshot = Snapshot(
-        label=f"Run {str(run.id)[:8]} ({_flow(run).title})",
-        as_of=_now(),
-        created_by=run.created_by,
-    )
-    db.add(snapshot)
-    await db.flush()
+    # The sources the run reads are pinned now, for the user who created it; a run
+    # started from an intake reads the snapshot the intake pinned (S4).
+    snapshot = await _intake_snapshot(db, run)
+    if snapshot is None:
+        snapshot = Snapshot(
+            label=f"Run {str(run.id)[:8]} ({_flow(run).title})",
+            as_of=_now(),
+            created_by=run.created_by,
+        )
+        db.add(snapshot)
+        await db.flush()
     run.snapshot_id = snapshot.id
     if run.estimate_usd > flows.APPROVAL_THRESHOLD_USD:
         run.status = "awaiting_approval"
@@ -1324,6 +1390,16 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     await audit.record(db, principal, "run.started", "run", run.id, {})
     await _launch(db, run)
     await db.commit()  # the router submits it (submit_queued), outside the gate
+
+
+async def _intake_snapshot(db: AsyncSession, run: Run) -> Snapshot | None:
+    raw = (run.knobs or {}).get("intake_snapshot_id")
+    if not raw:
+        return None
+    try:
+        return await db.get(Snapshot, uuid.UUID(str(raw)))
+    except ValueError:
+        return None
 
 
 async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
@@ -1437,6 +1513,8 @@ async def _prompt_context(
         kind=kind,
         source=source,
         roadmap=roadmap_ctx,
+        intake_id=run.knobs.get("intake_id"),
+        intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
     )
 
 
@@ -2810,7 +2888,13 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             )
         except DraftError as exc:
             problems = "; ".join(f"[{p.code}] {p.message}" for p in exc.problems)
-            return {"error": f"{name} was rejected: {problems}"}
+            # The string stays (older readers); the run page, the Inbox and MCP read the
+            # problems and their summary.
+            return {
+                "error": f"{name} was rejected: {problems}",
+                "problems": [p.model_dump(mode="json") for p in exc.problems],
+                "summary": rejection.summary(name, exc.problems),
+            }
         except (docs_service.NotFoundError, docs_service.ImportConflictError) as exc:
             return {"error": f"{name} was not imported: {exc}"}
         if not result.created and source_id and result.version.source is None:

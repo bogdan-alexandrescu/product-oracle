@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from oracle.docs.schemas import DocumentKind, VersionSource
+from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
 from oracle.review.schemas import FeedbackKind
 
@@ -165,6 +165,10 @@ class DraftImport(BaseModel):
     created: bool | None = None
     warnings: list[str] = []
     error: str | None = None
+    # A refused draft (owner, 2026-10-20): the parser's problems, and one plain line
+    # grouped by cause (oracle.runs.rejection), the same on the run page, Inbox and MCP.
+    problems: list[ImportProblem] = []
+    summary: str | None = None
     # Provenance recorded on the version (a roadmap's PRD version).
     source: VersionSource | None = None
     prd_links: PrdLinks | None = None
@@ -324,6 +328,9 @@ class RunSummary(BaseModel):
     # failing (the error's class, never what the agents wrote); Retry tries again.
     import_failed: str | None = None
     can_retry_import: bool = False
+    # A draft one of its segments left that Oracle refused to import: its summary
+    # (``segments[].draft_import.summary``, else the error). Set where ``progress`` is.
+    draft_rejected: str | None = None
     # Set by GET /v1/runs and GET /v1/runs/{id}; None where a summary is embedded (inbox).
     progress: RunProgress | None = None
 

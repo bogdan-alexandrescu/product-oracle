@@ -2,9 +2,19 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
+import { Chip } from "@/components/ds";
 import type { CitationOut } from "@/lib/api/client";
 import { IGNORE_ATTR } from "@/lib/anchor";
-import { citationHref, formatDate, SOURCE_LABEL } from "@/lib/format";
+import { citationConfidence, citationHref, citationSourceLabel, formatDate, SOURCE_LABEL } from "@/lib/format";
+
+/** The app's low-confidence chip, on a citation its writer marked low confidence. */
+export function LowConfidence() {
+  return (
+    <Chip kind="warn" title="The writer marked this source low confidence" className="flex-none" data-testid="low-confidence">
+      Low confidence
+    </Chip>
+  );
+}
 
 /**
  * Inline citation: shows the source; hover or focus previews title and excerpt,
@@ -17,6 +27,7 @@ export function CitationChip({ citeKey, citation, number }: { citeKey: string; c
   const cardId = useId();
   const open = hover || pinned;
   const href = citation ? citationHref(citation) : null;
+  const confidence = citation ? citationConfidence(citation) : null;
 
   useEffect(() => {
     if (!pinned) return;
@@ -54,7 +65,13 @@ export function CitationChip({ citeKey, citation, number }: { citeKey: string; c
         className="cite-chip"
         aria-expanded={open}
         aria-describedby={open ? cardId : undefined}
-        aria-label={`Citation ${number ?? ""}: ${SOURCE_LABEL[citation.source]}, ${citation.title ?? citation.ref}`}
+        aria-label={[
+          `Citation ${number ?? ""}: ${SOURCE_LABEL[citation.source]}`,
+          citation.title ?? citation.ref,
+          [citation.low_confidence && "low confidence", confidence].filter(Boolean).join(" "),
+        ]
+          .filter(Boolean)
+          .join(", ")}
         data-testid={`cite-${citeKey}`}
         onClick={() => setPinned((p) => !p)}
         onFocus={() => setHover(true)}
@@ -70,10 +87,16 @@ export function CitationChip({ citeKey, citation, number }: { citeKey: string; c
           className="absolute top-full left-0 z-30 block w-80 max-w-[calc(100vw-24px)] pt-1 text-left text-sm leading-5 font-normal text-text"
         >
           <span className="block rounded-panel border border-line bg-surface p-3 shadow-tip">
-            <span className="mb-1 block text-[13px] font-semibold tracking-[0.02em] text-text2">
-              {SOURCE_LABEL[citation.source]}
+            <span className="mb-1 block text-[13px] font-semibold tracking-[0.02em] text-text2" data-testid="cite-source">
+              {/* The writer's confidence beside the source, or its note when unscored (text). */}
+              {citationSourceLabel(citation)}
               {citation.retrieved_at && ` · retrieved ${formatDate(citation.retrieved_at)}`}
             </span>
+            {citation.low_confidence && (
+              <span className="mb-1 block">
+                <LowConfidence />
+              </span>
+            )}
             <span className="block font-semibold">{citation.title ?? citation.ref}</span>
             {citation.excerpt && (
               <span className="mt-2 block border-l-[3px] border-accent-mid pl-2 text-text2">“{citation.excerpt}”</span>

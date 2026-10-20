@@ -3,8 +3,10 @@
 Viewers read jobs, suggestions and reports; approvers queue, retry and cancel jobs,
 accept, edit and dismiss suggestions, and refine sections; owners turn job kinds on or
 off per document. Approvers build the next draft from the staged changes (C1e) in one
-job, preview it, apply it as one version or discard it. Logic lives in
-:mod:`oracle.jobs.service` and :mod:`oracle.jobs.next_draft`; each handler commits once.
+job, preview it, apply it as one version or discard it. An intake job's output (what it
+read and wrote from the author's sources) is shown to the intake's author only (S6).
+Logic lives in :mod:`oracle.jobs.service` and :mod:`oracle.jobs.next_draft`; each
+handler commits once.
 """
 
 import uuid
@@ -18,6 +20,7 @@ from markupsafe import escape
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role, require_role_now
 from oracle.docs.schemas import VersionOut
+from oracle.intake import sharing
 from oracle.jobs import next_draft, service
 from oracle.jobs.schemas import (
     JobCreate,
@@ -37,9 +40,11 @@ from oracle.jobs.schemas import (
     SuggestionStatus,
     VersionReports,
 )
+from oracle.v2.models import ProductIntake
 
 router = APIRouter(prefix="/v1", tags=["llm-jobs"], dependencies=[Depends(require_role("viewer"))])
 Approver = Annotated[Principal, Depends(require_role("approver"))]
+Viewer = Annotated[Principal, Depends(require_role("viewer"))]
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]
@@ -52,6 +57,19 @@ async def _call[T](op: Awaitable[T]) -> T:
         return await op
     except service.JobError as e:
         raise HTTPException(e.status, str(e)) from e
+
+
+async def _shown(db: TenantDB, principal: Principal, job) -> LlmJobOut:
+    """The job as the caller may see it: an intake job's output counts how many items
+    and gaps it drew from the author's sources, and its usage (tokens, cost) how much
+    it read and wrote from them, so only the author sees either (S6)."""
+    out = await service.job_out(db, job)
+    if out.intake_id is not None:
+        intake = await db.get(ProductIntake, out.intake_id)
+        if intake is None or not sharing.is_author(principal, intake):
+            out.output = None
+            out.input_tokens = out.output_tokens = out.cost_usd = None
+    return out
 
 
 # --- jobs -----------------------------------------------------------------------------
@@ -89,22 +107,22 @@ async def put_llm_job_settings(
 
 
 @router.get("/llm-jobs/{job_id}", response_model=LlmJobOut)
-async def get_llm_job(job_id: uuid.UUID, db: TenantDB) -> LlmJobOut:
-    return await service.job_out(db, await _call(service.get_job(db, job_id)))
+async def get_llm_job(job_id: uuid.UUID, principal: Viewer, db: TenantDB) -> LlmJobOut:
+    return await _shown(db, principal, await _call(service.get_job(db, job_id)))
 
 
 @router.post("/llm-jobs/{job_id}/cancel", response_model=LlmJobOut)
 async def cancel_llm_job(job_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> LlmJobOut:
     job = await _call(service.cancel(db, principal, job_id))
     await db.commit()
-    return await service.job_out(db, job)
+    return await _shown(db, principal, job)
 
 
 @router.post("/llm-jobs/{job_id}/retry", response_model=LlmJobOut)
 async def retry_llm_job(job_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> LlmJobOut:
     job = await _call(service.retry(db, principal, job_id))
     await db.commit()
-    return await service.job_out(db, job)
+    return await _shown(db, principal, job)
 
 
 # --- refinement -----------------------------------------------------------------------
