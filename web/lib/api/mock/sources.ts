@@ -23,7 +23,15 @@ const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
   github: [{ id: "c0000000-0000-4000-8000-000000000002", account_label: "example-org", status: "active" }],
   notion: [],
   fireflies: [],
-  google: [],
+  google: [
+    { id: "c0000000-0000-4000-8000-000000000003", account_label: "pat@example.com", status: "active", reconnect_reason: null },
+    {
+      id: "c0000000-0000-4000-8000-000000000004",
+      account_label: "old-drive@example.com",
+      status: "active",
+      reconnect_reason: "Reconnect to choose files",
+    },
+  ],
 };
 const PROVIDER: Record<Source["kind"], string | null> = {
   upload: null,
@@ -39,7 +47,7 @@ const AVAILABLE: Record<Source["kind"], boolean> = {
   slack: true,
   notion: false,
   fireflies: false,
-  google_docs: false,
+  google_docs: true,
 };
 // Source factor per kind, as in oracle.confidence DEFAULTS.
 const SOURCE_FACTOR: Record<string, number> = { github: 0.85, upload: 0.7, notion: 0.7, slack: 0.5 };
@@ -86,6 +94,47 @@ function seed(): SourcesDb {
     item_count: 1,
     connector_available: true,
   };
+  // Google Docs picked in the Drive picker; one was unshared since.
+  const docs: Source = {
+    id: "50000000-0000-4000-8000-000000000003",
+    kind: "google_docs",
+    name: "Product docs",
+    connection_id: CONNECTIONS.google[0].id,
+    config: {
+      docs: ["1DocPricingExample", "1DocActivationExample", "1DocInterviewsExample"],
+      names: {
+        "1DocPricingExample": "Pricing strategy",
+        "1DocActivationExample": "Activation v2 PRD",
+        "1DocInterviewsExample": "Customer interviews Q3",
+      },
+    },
+    status: "active",
+    last_error: null,
+    last_synced_at: "2026-10-19T08:00:00Z",
+    created_at: "2026-10-19T07:00:00Z",
+    updated_at: "2026-10-19T08:00:00Z",
+    item_count: 2,
+    connector_available: true,
+    unavailable_items: [{ external_id: "1DocInterviewsExample", reason: "No access: removed, or no longer shared with you" }],
+    reconnect_reason: null,
+  };
+  // A folder allowlist from before the picker, on a drive.readonly connection.
+  const folders: Source = {
+    id: "50000000-0000-4000-8000-000000000004",
+    kind: "google_docs",
+    name: "Drive folders",
+    connection_id: CONNECTIONS.google[1].id,
+    config: { folders: ["1FolderProductExample"] },
+    status: "active",
+    last_error: null,
+    last_synced_at: "2026-10-12T08:00:00Z",
+    created_at: "2026-10-01T09:00:00Z",
+    updated_at: "2026-10-12T08:00:00Z",
+    item_count: 0,
+    connector_available: true,
+    unavailable_items: [],
+    reconnect_reason: "Reconnect to choose files",
+  };
   const item = (source: Source, external_id: string, kind: string, title: string, content: string, freshness: number): Item => ({
     id: uuid(),
     source_id: source.id,
@@ -106,11 +155,13 @@ function seed(): SourcesDb {
     content,
   });
   return {
-    sources: [chat, repo],
+    sources: [chat, repo, docs, folders],
     items: [
       item(repo, "readme", "readme", "README", "The onboarding checklist guides new accounts through setup in five steps.", 0.95),
       item(chat, "m1", "message", "Customer question", "Customers keep asking whether the onboarding checklist can be skipped.", 0.4),
       item(chat, "m2", "message", "Pricing thread", "Annual pricing gets a discount for teams above ten seats.", 0.9),
+      item(docs, "1DocPricingExample", "doc", "Pricing strategy", "Annual plans get two months free.", 0.9),
+      item(docs, "1DocActivationExample", "doc", "Activation v2 PRD", "New accounts finish setup in under 3 minutes.", 0.8),
     ],
     snapshots: [],
   };
@@ -197,6 +248,10 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (m === "GET") return json(200, db.sources.map((s) => counted(db, s)));
     const body = (await req.json()) as Schemas["SourceCreate"];
     if (!AVAILABLE[body.kind]) return json(422, { detail: "connector not available yet" });
+    const choice = Object.values(CONNECTIONS).flat().find((c) => c.id === body.connection_id);
+    if (body.kind === "google_docs" && choice?.reconnect_reason && body.config?.docs) {
+      return json(422, { detail: "Reconnect to choose files: this Google connection cannot read Drive files" });
+    }
     if (db.sources.some((s) => s.name === body.name.trim())) {
       return json(409, { detail: "You already have a source with this name" });
     }
@@ -213,6 +268,8 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       updated_at: now(),
       item_count: 0,
       connector_available: true,
+      unavailable_items: [],
+      reconnect_reason: body.kind === "google_docs" ? (choice?.reconnect_reason ?? null) : null,
     };
     db.sources.push(s);
     return json(201, s);
@@ -241,7 +298,14 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (m === "PATCH") {
       const patch = (await req.json()) as Schemas["SourcePatch"];
       if (patch.name) s.name = patch.name;
-      if (patch.config) s.config = patch.config;
+      if (patch.config) {
+        s.config = patch.config;
+        s.unavailable_items = [];
+        if (s.kind === "google_docs" && !("folders" in patch.config)) {
+          const choice = Object.values(CONNECTIONS).flat().find((c) => c.id === s.connection_id);
+          s.reconnect_reason = choice?.reconnect_reason ?? null;
+        }
+      }
       s.updated_at = now();
     }
     return json(200, counted(db, s));

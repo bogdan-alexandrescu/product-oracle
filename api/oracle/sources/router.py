@@ -12,6 +12,8 @@ from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile,
 from sqlalchemy import func, select
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
+from oracle.connections.models import Connection
+from oracle.connections.providers import reconnect_reason
 from oracle.sources import items, service, store, uploads
 from oracle.sources import search as search_service
 from oracle.sources import sync as sync_engine
@@ -28,6 +30,7 @@ from oracle.sources.schemas import (
     SourceOut,
     SourcePatch,
     SyncResult,
+    UnavailableItem,
     UploadResult,
 )
 
@@ -58,11 +61,12 @@ _ERRORS = (
 )
 
 
-def _source_out(source: Source, count: int = 0) -> SourceOut:
+def _source_out(source: Source, count: int = 0, conn: Connection | None = None) -> SourceOut:
     return SourceOut.model_validate(source).model_copy(
         update={
             "item_count": count,
             "connector_available": service.connector_available(source.kind),
+            "reconnect_reason": service.source_reconnect_reason(source, conn),
         }
     )
 
@@ -71,7 +75,9 @@ async def _one_out(db: TenantDB, source: Source) -> SourceOut:
     # Reload server-set columns (updated_at) the last flush expired.
     await db.refresh(source)
     counts = await service.item_counts(db, [source.id])
-    return _source_out(source, counts.get(source.id, 0))
+    conns = await service.connections_by_id(db, source.owner_user_id, [source.connection_id])
+    conn = conns.get(source.connection_id) if source.connection_id else None
+    return _source_out(source, counts.get(source.id, 0), conn)
 
 
 async def _owned(db: TenantDB, principal: Principal, source_id: uuid.UUID) -> Source:
@@ -88,7 +94,13 @@ async def _owned(db: TenantDB, principal: Principal, source_id: uuid.UUID) -> So
 async def list_sources(principal: CurrentPrincipal, db: TenantDB) -> list[SourceOut]:
     sources = await service.list_sources(db, _user(principal))
     counts = await service.item_counts(db, [s.id for s in sources])
-    return [_source_out(s, counts.get(s.id, 0)) for s in sources]
+    conns = await service.connections_by_id(
+        db, _user(principal), [s.connection_id for s in sources]
+    )
+    return [
+        _source_out(s, counts.get(s.id, 0), conns.get(s.connection_id) if s.connection_id else None)
+        for s in sources
+    ]
 
 
 @router.get("/sources/kinds", response_model=list[SourceKindOut])
@@ -106,7 +118,12 @@ async def list_source_kinds(principal: CurrentPrincipal, db: TenantDB) -> list[S
                 provider=provider,
                 connector_available=service.connector_available(kind),
                 connections=[
-                    ConnectionChoice(id=c.id, account_label=c.account_label, status=c.status)
+                    ConnectionChoice(
+                        id=c.id,
+                        account_label=c.account_label,
+                        status=c.status,
+                        reconnect_reason=reconnect_reason(c.provider, list(c.scopes or [])),
+                    )
                     for c in conns
                 ],
             )
@@ -127,7 +144,7 @@ async def create_source(body: SourceCreate, principal: CurrentPrincipal, db: Ten
         )
     except _ERRORS as e:
         raise _http(e) from e
-    return _source_out(source)
+    return await _one_out(db, source)
 
 
 @router.get("/sources/{source_id}", response_model=SourceOut)
@@ -198,6 +215,7 @@ async def sync_source(
         checkpoints=stats.checkpoints,
         retry_after=stats.retry_after,
         error=stats.error,
+        unavailable=[UnavailableItem(**u) for u in stats.unavailable],
         source=await _one_out(db, source),
     )
 

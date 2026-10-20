@@ -16,6 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import changes
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
+from oracle.connections.providers import (
+    DRIVE_FILE,
+    DRIVE_READONLY,
+    RECONNECT_TO_CHOOSE_FILES,
+    reconnect_reason,
+)
 from oracle.sources import base
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
 from oracle.v2 import links
@@ -150,6 +156,47 @@ async def credential_for(
     return _connector_credential(credential), conn
 
 
+def scope_problem(kind: str, config: dict[str, Any], conn: Connection | None) -> str | None:
+    """Why the connection's grant cannot read this source's allowlist, before calling
+    the provider. Google: picked files need drive.file (or the old drive.readonly);
+    folders are read through drive.readonly only, since drive.file does not open a
+    picked folder's children. Unknown scopes (an older pasted token) are not judged."""
+    if kind != "google_docs" or conn is None or not conn.scopes:
+        return None
+    scopes = set(conn.scopes)
+    if config.get("folders") and DRIVE_READONLY not in scopes:
+        return (
+            f"{RECONNECT_TO_CHOOSE_FILES}: Oracle can no longer read whole folders; "
+            "choose the files from Drive instead"
+        )
+    if config.get("docs") and not scopes & {DRIVE_FILE, DRIVE_READONLY}:
+        return f"{RECONNECT_TO_CHOOSE_FILES}: this Google connection cannot read Drive files"
+    return None
+
+
+def source_reconnect_reason(source: Source, conn: Connection | None) -> str | None:
+    """What the Sources page shows next to a source whose connection should be signed
+    in again (a Google grant from before the Drive picker), or whose legacy folder
+    allowlist the connection can no longer read."""
+    if conn is None or KIND_PROVIDER.get(source.kind) != conn.provider:
+        return None
+    if scope_problem(source.kind, dict(source.config or {}), conn):
+        return RECONNECT_TO_CHOOSE_FILES
+    return reconnect_reason(conn.provider, list(conn.scopes or []))
+
+
+async def connections_by_id(
+    db: AsyncSession, user_id: uuid.UUID, ids: list[uuid.UUID | None]
+) -> dict[uuid.UUID, Connection]:
+    wanted = [i for i in ids if i is not None]
+    if not wanted:
+        return {}
+    rows = await db.scalars(
+        select(Connection).where(Connection.user_id == user_id, Connection.id.in_(wanted))
+    )
+    return {c.id: c for c in rows}
+
+
 async def _check_connection(
     db: AsyncSession, user_id: uuid.UUID, kind: str, connection_id: uuid.UUID | None
 ) -> Connection | None:
@@ -178,6 +225,9 @@ async def _validate(
     connector = connector_for(kind)
     if connector is None:
         raise InvalidError(CONNECTOR_UNAVAILABLE)
+    problem = scope_problem(kind, config, conn)
+    if problem:
+        raise InvalidError(problem)
     credential = await _read_credential(db, conn) if conn is not None else None
     try:
         await connector.validate(config, credential)
@@ -277,6 +327,7 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         # A new allowlist or account: sync from the start. Unchanged content writes no
         # new versions, so a full pass is cheap in storage.
         source.cursor = None
+        source.unavailable_items = []
         if source.status == "error":
             source.status = "active"
             source.last_error = None

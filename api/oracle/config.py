@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +34,12 @@ class Settings(BaseSettings):
     # (oracle-ticker@<project>.iam.gserviceaccount.com). Either empty = off (404).
     ticker_audience: str = ""
     ticker_service_account: str = ""
+    # Google's Drive picker (Settings > Sources, Google Docs): the Cloud project number
+    # of Oracle's Google OAuth client, and a browser API key restricted to Oracle's web
+    # origin and the Picker API. The key is public by design (the browser sends it to
+    # Google) but is never logged. Either empty: the picker is off (404).
+    google_picker_app_id: str = ""
+    google_picker_api_key: SecretStr = SecretStr("")
 
 
 @lru_cache

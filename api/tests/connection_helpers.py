@@ -70,6 +70,7 @@ async def add_connection(
     status: str = "active",
     expires_at=None,
     label: str = "example",
+    scopes: list[str] | None = None,
 ) -> Connection:
     async with tenant_session(tenant_id) as s:
         conn = Connection(
@@ -80,7 +81,7 @@ async def add_connection(
             account_label=label,
             ciphertext=crypto.encrypt(json.dumps(bundle or {"access_token": "tok"}).encode()),
             key_version=crypto.KEY_VERSION,
-            scopes=[],
+            scopes=scopes or [],
             status=status,
             expires_at=expires_at,
         )

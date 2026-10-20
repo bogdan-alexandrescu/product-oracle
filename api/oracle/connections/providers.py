@@ -188,6 +188,26 @@ async def identify_fireflies(client: httpx.AsyncClient, token: str) -> Identity:
 
 # --- Google -------------------------------------------------------------------------
 
+# Oracle reads only the files each person picks in Google's Drive picker (S5,
+# 2026-10-19). drive.readonly is what connections made before that were granted; it
+# keeps legacy folder sources working until the person reconnects.
+DRIVE_FILE = "https://www.googleapis.com/auth/drive.file"
+DRIVE_READONLY = "https://www.googleapis.com/auth/drive.readonly"
+RECONNECT_TO_CHOOSE_FILES = "Reconnect to choose files"
+
+
+async def _google_scopes(client: httpx.AsyncClient, token: str) -> list[str]:
+    """The scopes granted to an access token, or [] when Google does not say."""
+    try:
+        resp = await client.get(
+            "https://oauth2.googleapis.com/tokeninfo", params={"access_token": token}
+        )
+    except httpx.HTTPError:
+        return []
+    if resp.status_code != 200:
+        return []
+    return [s for s in str(resp.json().get("scope") or "").split() if s]
+
 
 async def identify_google(client: httpx.AsyncClient, token: str) -> Identity:
     resp = await _get(
@@ -198,7 +218,19 @@ async def identify_google(client: httpx.AsyncClient, token: str) -> Identity:
     )
     _check(resp, "Google")
     data = resp.json()
-    return Identity(account_id=data["sub"], label=data.get("email") or data["sub"])
+    return Identity(
+        account_id=data["sub"],
+        label=data.get("email") or data["sub"],
+        scopes=await _google_scopes(client, token),
+    )
+
+
+def reconnect_reason(provider: str, scopes: list[str] | None) -> str | None:
+    """Why a working connection should be reconnected: a Google grant without
+    drive.file cannot read files picked in the Drive picker."""
+    if provider == "google" and DRIVE_FILE not in (scopes or []):
+        return RECONNECT_TO_CHOOSE_FILES
+    return None
 
 
 # --- Registry -----------------------------------------------------------------------
@@ -275,11 +307,7 @@ PROVIDERS: dict[str, Provider] = {
             oauth=OAuthMeta(
                 authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
                 token_url="https://oauth2.googleapis.com/token",
-                scopes=[
-                    "openid",
-                    "email",
-                    "https://www.googleapis.com/auth/drive.readonly",
-                ],
+                scopes=["openid", "email", DRIVE_FILE],
                 authorize_params={"access_type": "offline", "prompt": "consent"},
             ),
         ),

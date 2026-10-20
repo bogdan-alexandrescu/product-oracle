@@ -1,8 +1,21 @@
-"""Google Docs: the Docs in one user's allowlisted Drive folders, plus single docs.
+"""Google Docs: the Docs one user picked in Google's Drive picker (drive.file).
 
 credential: the Google connection's OAuth bundle ``{"access_token", ...}`` (the connections
 lane refreshes it; a rejected token raises :class:`ConnectorAuthError`).
-config ``{"folders": [folder ids], "docs": [file ids]}``; folders are read recursively.
+config ``{"docs": [file ids], "names": {file id: name}}``: the files the person picked
+(S5, 2026-10-19). ``names`` is only what the Sources page shows before the first sync.
+
+Under ``drive.file`` Oracle can open only the files the person picked (or created with
+Oracle): picking a folder grants that folder, not the files in it, and Drive answers
+404 for a file that was never picked. So the picker offers folders to browse into, not
+to pick, and this connector lists no folder for a ``docs`` allowlist.
+
+Legacy ``{"folders": [folder ids]}`` configs (read recursively) still work while the
+connection holds the old ``drive.readonly`` grant; ``oracle.sources.service`` refuses
+them with "Reconnect to choose files" once it does not.
+
+A picked doc Oracle cannot read any more (unshared, access removed, trashed, not a Google
+Doc) is reported with :class:`ItemUnavailable`, one per doc; the rest still sync.
 
 Each Google Doc becomes one ``doc`` item exported as Markdown, or as plain text when
 Drive cannot export it as Markdown. ``acl`` is the file's sharing summary (owners,
@@ -13,9 +26,9 @@ Cursor::
     {"modified_since": "2026-10-01T09:00:00.000Z",
      "files": {"<file id>": "2026-10-01T09:00:00.000Z"}}
 
-Every sync lists the folders (metadata only) and exports a doc only when its
-``modifiedTime`` moved past the one in ``files``. A doc in ``files`` that is trashed,
-deleted, or no longer in an allowlisted folder yields :class:`ItemDelete`.
+Every sync reads the picked docs' metadata (and lists legacy folders) and exports a doc
+only when its ``modifiedTime`` moved past the one in ``files``. A doc in ``files`` that
+is trashed, deleted, unreadable or no longer allowlisted yields :class:`ItemDelete`.
 """
 
 from collections.abc import AsyncIterator
@@ -32,6 +45,7 @@ from oracle.sources.base import (
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemDelete,
+    ItemUnavailable,
     ItemUpsert,
     SyncEvent,
     register,
@@ -41,7 +55,7 @@ DRIVE_URL = "https://www.googleapis.com/drive/v3/"
 OAUTH = {
     "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
     "token_url": "https://oauth2.googleapis.com/token",
-    "scopes": ["https://www.googleapis.com/auth/drive.readonly"],
+    "scopes": ["https://www.googleapis.com/auth/drive.file"],
 }
 DOC_MIME = "application/vnd.google-apps.document"
 FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -56,6 +70,13 @@ RATE_REASONS = {"rateLimitExceeded", "userRateLimitExceeded"}
 # Export refusals that plain text may still get past.
 EXPORT_REASONS = {"badRequest", "exportSizeLimitExceeded", "cannotExportFile", "invalid"}
 LIST_PARAMS = {"supportsAllDrives": "true", "includeItemsFromAllDrives": "true"}
+# What the Sources page shows next to a picked doc Oracle cannot read.
+NO_ACCESS = "No access: removed, or no longer shared with you"
+NOT_PICKED = "Not picked: choose it again from Drive"
+TRASHED = "In the trash"
+NOT_A_DOC = "Not a Google Doc"
+# 403 reasons meaning this one file cannot be read (others fail the sync).
+FILE_DENIED = {"insufficientFilePermissions", "cannotDownloadFile", "forbidden"}
 
 
 def _ids(config: dict[str, Any], key: str) -> list[str]:
@@ -67,6 +88,9 @@ def _ids(config: dict[str, Any], key: str) -> list[str]:
 
 def _options(config: dict[str, Any]) -> tuple[list[str], list[str]]:
     folders, docs = _ids(config, "folders"), _ids(config, "docs")
+    names = config.get("names") or {}
+    if not isinstance(names, dict) or not all(isinstance(v, str) for v in names.values()):
+        raise ConnectorConfigError("names must map Drive ids to file names")
     if not folders and not docs:
         raise ConnectorConfigError("allowlist at least one folder or doc")
     return folders, docs
@@ -110,6 +134,17 @@ class _Error(ConnectorError):
         super().__init__(f"Google Drive: HTTP {status} {reason} {message}".strip())
         self.status = status
         self.reason = reason
+
+
+def _unreadable(e: "_Error") -> str | None:
+    """The per-item reason when Drive refuses one file, else None (a real failure)."""
+    if e.status == 404:
+        return NO_ACCESS
+    if e.status == 403 and e.reason == "appNotAuthorizedToFile":
+        return NOT_PICKED
+    if e.status == 403 and e.reason in FILE_DENIED:
+        return NO_ACCESS
+    return None
 
 
 class _Drive:
@@ -239,16 +274,32 @@ class GoogleDocsConnector:
                         stack.append(file["id"])
                     elif not file.get("trashed"):
                         current[file["id"]] = file
+            unavailable: dict[str, str] = {}
             for doc in docs:
                 if doc in current:
                     continue
-                file = await drive.file(doc)
-                if file and not file.get("trashed") and file.get("mimeType") == DOC_MIME:
+                try:
+                    file = await drive.file(doc)
+                except _Error as e:
+                    reason = _unreadable(e)
+                    if reason is None:
+                        raise
+                    unavailable[doc] = reason
+                    continue
+                if file is None:
+                    unavailable[doc] = NO_ACCESS
+                elif file.get("trashed"):
+                    unavailable[doc] = TRASHED
+                elif file.get("mimeType") != DOC_MIME:
+                    unavailable[doc] = NOT_A_DOC
+                else:
                     current[doc] = file
 
             for file_id in sorted(set(known) - set(current)):
                 yield ItemDelete(external_id=file_id)
                 del known[file_id]
+            for file_id, reason in unavailable.items():
+                yield ItemUnavailable(external_id=file_id, reason=reason)
 
             # Oldest change first, so each checkpoint covers everything before it.
             changed = sorted(
@@ -256,7 +307,15 @@ class GoogleDocsConnector:
                 key=lambda f: f.get("modifiedTime") or "",
             )
             for file in changed:
-                content = await drive.export(file["id"])
+                try:
+                    content = await drive.export(file["id"])
+                except _Error as e:
+                    reason = _unreadable(e)
+                    if reason is None:
+                        raise
+                    # Not recorded in the cursor: the next sync tries it again.
+                    yield ItemUnavailable(external_id=file["id"], reason=reason)
+                    continue
                 yield self._item(file, content)
                 known[file["id"]] = file.get("modifiedTime") or ""
                 if (file.get("modifiedTime") or "") > (modified_since or ""):

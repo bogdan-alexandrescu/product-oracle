@@ -7,6 +7,8 @@ A connector is stateless and does no database work. The sync engine
 - :class:`ItemUpsert` creates or updates an item (a new version only when the
   content changes);
 - :class:`ItemDelete` marks an item deleted;
+- :class:`ItemUnavailable` reports one allowlisted item the connector cannot read
+  (unshared, access removed); the rest of the source still syncs;
 - :class:`CursorCheckpoint` is a resumable position: everything yielded before it is
   stored, then the cursor is saved, so an interrupted sync resumes from there.
 
@@ -77,11 +79,20 @@ class ItemDelete:
 
 
 @dataclass(frozen=True)
+class ItemUnavailable:
+    """An allowlisted item that cannot be read now. Shown on the source, per item."""
+
+    external_id: str
+    # One short line for the owner, e.g. "No access: removed, or no longer shared".
+    reason: str
+
+
+@dataclass(frozen=True)
 class CursorCheckpoint:
     cursor: dict[str, Any]
 
 
-SyncEvent = ItemUpsert | ItemDelete | CursorCheckpoint
+SyncEvent = ItemUpsert | ItemDelete | ItemUnavailable | CursorCheckpoint
 
 
 @runtime_checkable

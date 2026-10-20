@@ -12,6 +12,7 @@ from oracle.sources.base import (
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemDelete,
+    ItemUnavailable,
     ItemUpsert,
     get_connector,
 )
@@ -109,7 +110,8 @@ async def collect(conn, config, cursor=None):
 def test_registered_with_oauth_metadata():
     assert isinstance(get_connector("google_docs"), GoogleDocsConnector)
     assert google_docs.OAUTH["token_url"] == "https://oauth2.googleapis.com/token"
-    assert google_docs.OAUTH["scopes"] == ["https://www.googleapis.com/auth/drive.readonly"]
+    # Picked files only (S5, 2026-10-19); legacy folder sources need drive.readonly.
+    assert google_docs.OAUTH["scopes"] == ["https://www.googleapis.com/auth/drive.file"]
 
 
 async def test_validate():
@@ -266,3 +268,66 @@ async def test_rate_limited(response):
     with pytest.raises(ConnectorRateLimited) as raised:
         await collect(connector(fake), CONFIG)
     assert raised.value.retry_after == 12
+
+
+# --- drive.file: the files each person picked ----------------------------------------
+
+PICKED = {
+    "docs": ["1DocListedExample", "1DocPrdExample"],
+    "names": {"1DocListedExample": "Pricing strategy", "1DocPrdExample": "Onboarding v2 PRD"},
+}
+
+
+async def test_picked_docs_sync_without_listing_any_folder():
+    fake = FakeDrive()
+    await connector(fake).validate(PICKED, CREDENTIAL)
+    events = await collect(connector(fake), PICKED)
+    items = [e for e in events if isinstance(e, ItemUpsert)]
+    assert [i.external_id for i in items] == ["1DocListedExample", "1DocPrdExample"]
+    assert items[1].title == "Onboarding v2 PRD"
+    # drive.file cannot list folders: only the picked files are read.
+    assert not [c for c in fake.calls if c.startswith("list:")]
+    assert not [e for e in events if isinstance(e, ItemUnavailable)]
+
+
+async def test_unreadable_picked_docs_are_reported_per_item():
+    cursor = {
+        "modified_since": None,
+        "files": {"1DocUnsharedExample": "2026-09-01T00:00:00.000Z"},
+    }
+    config = {"docs": ["1DocListedExample", "1DocUnsharedExample", "1DocPrdExample"]}
+    fake = FakeDrive({"file:1DocPrdExample": error("error_403_app_not_authorized", 403)})
+    events = await collect(connector(fake), config, cursor)
+
+    unavailable = {e.external_id: e.reason for e in events if isinstance(e, ItemUnavailable)}
+    assert set(unavailable) == {"1DocUnsharedExample", "1DocPrdExample"}
+    assert unavailable["1DocUnsharedExample"].startswith("No access")
+    assert unavailable["1DocPrdExample"].startswith("Not picked")
+    # What can be read is still synced; the unshared doc's item is removed.
+    assert [e.external_id for e in events if isinstance(e, ItemUpsert)] == ["1DocListedExample"]
+    assert ItemDelete("1DocUnsharedExample") in events
+    assert set(events[-1].cursor["files"]) == {"1DocListedExample"}
+
+
+async def test_export_refused_for_one_doc_is_reported_per_item():
+    refused = error("error_403_insufficient", 403)
+    fake = FakeDrive(
+        {
+            "export:1DocListedExample:text/markdown": refused,
+            "export:1DocListedExample:text/plain": refused,
+        }
+    )
+    events = await collect(connector(fake), PICKED)
+    assert [e.external_id for e in events if isinstance(e, ItemUpsert)] == ["1DocPrdExample"]
+    (gone,) = [e for e in events if isinstance(e, ItemUnavailable)]
+    assert gone.external_id == "1DocListedExample" and gone.reason.startswith("No access")
+    # Not recorded as synced, so the next sync tries it again.
+    assert set(events[-1].cursor["files"]) == {"1DocPrdExample"}
+
+
+def test_names_must_be_a_map_of_strings():
+    from oracle.sources.base import ConnectorConfigError
+    from oracle.sources.connectors.google_docs import _options
+
+    with pytest.raises(ConnectorConfigError, match="names"):
+        _options({"docs": ["1Doc"], "names": ["x"]})

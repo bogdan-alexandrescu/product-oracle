@@ -242,9 +242,15 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
         {c.scopes.length > 0 && (
           <InfoTip label={`${name} scopes`}>Scopes: {c.scopes.join(", ")}</InfoTip>
         )}
+        {c.reconnect_reason && (
+          <InfoTip label={`why reconnect ${name}`}>
+            Oracle now reads only the Google Docs you choose from Drive. Reconnect once, then choose the files on
+            Sources.
+          </InfoTip>
+        )}
         <span className="flex flex-none items-center gap-1">
-          <Button onClick={reconnect} disabled={pending}>
-            Reconnect
+          <Button onClick={reconnect} disabled={pending} variant={c.reconnect_reason ? "solid" : undefined}>
+            {c.reconnect_reason ?? "Reconnect"}
           </Button>
           {confirming ? (
             <>

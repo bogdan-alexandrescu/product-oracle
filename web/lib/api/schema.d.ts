@@ -790,6 +790,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/google/picker-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Google Picker Config
+         * @description Client id, Cloud project number and browser API key for Google's Drive picker.
+         *     Never the client secret or anyone's token.
+         */
+        get: operations["google_picker_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connections/{provider}/token": {
         parameters: {
             query?: never;
@@ -6503,6 +6524,8 @@ export interface components {
             account_label: string | null;
             /** Status */
             status: string;
+            /** Reconnect Reason */
+            reconnect_reason?: string | null;
         };
         /** ConnectionOut */
         ConnectionOut: {
@@ -6545,6 +6568,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Reconnect Reason */
+            reconnect_reason?: string | null;
         };
         /** ConsentDecisionIn */
         ConsentDecisionIn: {
@@ -9575,6 +9600,18 @@ export interface components {
             modules: components["schemas"]["PackModuleOut"][];
         };
         /**
+         * PickerConfigOut
+         * @description What the browser needs to open Google's Drive picker. All of it is public.
+         */
+        PickerConfigOut: {
+            /** Client Id */
+            client_id: string;
+            /** App Id */
+            app_id: string;
+            /** Developer Key */
+            developer_key: string;
+        };
+        /**
          * PrdAnswers
          * @description At most four questions (docs/research/prd-formats.md, template picker).
          */
@@ -11326,6 +11363,10 @@ export interface components {
              * @default true
              */
             connector_available: boolean;
+            /** Unavailable Items */
+            unavailable_items?: components["schemas"]["UnavailableItem"][];
+            /** Reconnect Reason */
+            reconnect_reason?: string | null;
         };
         /** SourcePatch */
         SourcePatch: {
@@ -11681,6 +11722,8 @@ export interface components {
             retry_after?: number | null;
             /** Error */
             error?: string | null;
+            /** Unavailable */
+            unavailable?: components["schemas"]["UnavailableItem"][];
             source: components["schemas"]["SourceOut"];
         };
         /** TemplateCreate */
@@ -12594,6 +12637,13 @@ export interface components {
             section_key?: string | null;
             /** Entity Id */
             entity_id?: string | null;
+        };
+        /** UnavailableItem */
+        UnavailableItem: {
+            /** External Id */
+            external_id: string;
+            /** Reason */
+            reason: string;
         };
         /** UploadResult */
         UploadResult: {
@@ -14461,6 +14511,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProviderOut"][];
                 };
+            };
+        };
+    };
+    google_picker_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickerConfigOut"];
+                };
+            };
+            /** @description The Drive picker is not configured */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

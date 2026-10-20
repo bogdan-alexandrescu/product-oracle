@@ -27,6 +27,11 @@ class SourcePatch(BaseModel):
     config: dict[str, Any] | None = None
 
 
+class UnavailableItem(BaseModel):
+    external_id: str
+    reason: str
+
+
 class SourceOut(ORM):
     id: uuid.UUID
     kind: SourceKind
@@ -41,12 +46,19 @@ class SourceOut(ORM):
     item_count: int = 0
     # False while no connector is registered for the kind (sync answers 422).
     connector_available: bool = True
+    # Allowlisted items the last completed sync could not read (unshared, removed).
+    unavailable_items: list[UnavailableItem] = Field(default_factory=list)
+    # Set when the source's connection should be signed in again, e.g. a Google
+    # connection from before the Drive picker: "Reconnect to choose files".
+    reconnect_reason: str | None = None
 
 
 class ConnectionChoice(BaseModel):
     id: uuid.UUID
     account_label: str | None
     status: str
+    # "Reconnect to choose files" for a Google connection without drive.file.
+    reconnect_reason: str | None = None
 
 
 class SourceKindOut(BaseModel):
@@ -69,6 +81,8 @@ class SyncResult(BaseModel):
     checkpoints: int = 0
     retry_after: float | None = None
     error: str | None = None
+    # Items this sync could not read; the rest of the source synced.
+    unavailable: list[UnavailableItem] = Field(default_factory=list)
     source: SourceOut
 
 

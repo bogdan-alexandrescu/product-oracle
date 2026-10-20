@@ -2765,6 +2765,39 @@
         ]
       }
     },
+    "/v1/connections/google/picker-config": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Google Picker Config",
+        "description": "Client id, Cloud project number and browser API key for Google's Drive picker.\nNever the client secret or anyone's token.",
+        "operationId": "google_picker_config",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PickerConfigOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The Drive picker is not configured"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/connections/{provider}/token": {
       "post": {
         "tags": [
@@ -22146,6 +22179,17 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "reconnect_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconnect Reason"
           }
         },
         "type": "object",
@@ -22251,6 +22295,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "reconnect_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconnect Reason"
           }
         },
         "type": "object",
@@ -30531,6 +30586,30 @@
         ],
         "title": "PackOut"
       },
+      "PickerConfigOut": {
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "app_id": {
+            "type": "string",
+            "title": "App Id"
+          },
+          "developer_key": {
+            "type": "string",
+            "title": "Developer Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_id",
+          "app_id",
+          "developer_key"
+        ],
+        "title": "PickerConfigOut",
+        "description": "What the browser needs to open Google's Drive picker. All of it is public."
+      },
       "PrdAnswers": {
         "properties": {
           "decision": {
@@ -35781,6 +35860,24 @@
             "type": "boolean",
             "title": "Connector Available",
             "default": true
+          },
+          "unavailable_items": {
+            "items": {
+              "$ref": "#/components/schemas/UnavailableItem"
+            },
+            "type": "array",
+            "title": "Unavailable Items"
+          },
+          "reconnect_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconnect Reason"
           }
         },
         "type": "object",
@@ -36864,6 +36961,13 @@
               }
             ],
             "title": "Error"
+          },
+          "unavailable": {
+            "items": {
+              "$ref": "#/components/schemas/UnavailableItem"
+            },
+            "type": "array",
+            "title": "Unavailable"
           },
           "source": {
             "$ref": "#/components/schemas/SourceOut"
@@ -39408,6 +39512,24 @@
         "type": "object",
         "title": "TraceUpstreamRef",
         "description": "A dependency's upstream: a document version (a section of it, or all of it), or a\nbaseline entity."
+      },
+      "UnavailableItem": {
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "external_id",
+          "reason"
+        ],
+        "title": "UnavailableItem"
       },
       "UploadResult": {
         "properties": {

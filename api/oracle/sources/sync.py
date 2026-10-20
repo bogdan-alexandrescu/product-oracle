@@ -10,7 +10,7 @@ source, logged, or echoed in ``last_error`` (connector messages are redacted).
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,8 @@ class SyncStats:
     checkpoints: int = 0
     retry_after: float | None = None
     error: str | None = None
+    # Items the connector could not read (base.ItemUnavailable), in the order reported.
+    unavailable: list[dict[str, str]] = field(default_factory=list)
 
 
 class SyncRefused(Exception):
@@ -66,11 +68,14 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
 
     stats = SyncStats()
     try:
-        credential, _ = await service.credential_for(db, source)
+        credential, conn = await service.credential_for(db, source)
     except service.InvalidError as e:
         return await _fail(db, source, stats, str(e))
     except service.NotFoundError:
         return await _fail(db, source, stats, "The connection was removed: pick another one")
+    problem = service.scope_problem(source.kind, dict(source.config), conn)
+    if problem:
+        return await _fail(db, source, stats, problem)
 
     cursor = dict(source.cursor) if source.cursor else None
     try:
@@ -81,6 +86,10 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
                 stats.versions_written += int(written)
             elif isinstance(event, base.ItemDelete):
                 stats.deleted += int(await store.delete_item(db, source, event))
+            elif isinstance(event, base.ItemUnavailable):
+                stats.unavailable.append(
+                    {"external_id": event.external_id, "reason": event.reason[:300]}
+                )
             elif isinstance(event, base.CursorCheckpoint):
                 source.cursor = dict(event.cursor)
                 await db.commit()
@@ -110,6 +119,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
 
     source.status = "active"
     source.last_error = None
+    source.unavailable_items = list(stats.unavailable)
     source.last_synced_at = func.now()
     await db.commit()
     return stats
