@@ -129,6 +129,21 @@ async def gate_lock(db: AsyncSession, *, shared: bool) -> None:
     )
 
 
+async def try_gate_lock(db: AsyncSession, *, shared: bool) -> bool:
+    """:func:`gate_lock` without waiting: True when taken. For a transaction that already
+    holds a run's row lock (a lock taken after the gate elsewhere): it polls instead of
+    waiting in the queue, so it never waits on a holder that waits on its row."""
+    from oracle.tenancy import current_tenant
+
+    fn = "pg_try_advisory_xact_lock_shared" if shared else "pg_try_advisory_xact_lock"
+    return bool(
+        await db.scalar(
+            text(f"SELECT {fn}(hashtextextended(:k, 0))"),
+            {"k": f"oracle-review-gate:{current_tenant(db)}"},
+        )
+    )
+
+
 async def lock_document(db: AsyncSession, document_id: uuid.UUID) -> Document | None:
     """The document's row lock: the publish lock section verdicts, approvals and policy
     changes take too, so none of them commits while a publish renders."""
@@ -225,7 +240,9 @@ def _as_uuid(value: str | None) -> uuid.UUID | None:
     ``uuid:``, ``urn:uuid:``, any case), or None."""
     if not value:
         return None
-    digits = re.sub(_UUID_NOISE, "", str(value).strip(_UUID_TRIM), flags=re.I).lower()
+    # ASCII-only case folding: with Unicode folding "uuıd:" (a dotless ı) or "urn:İ"
+    # would be noise here and not in the SQL (oracle_hex32), so the two would disagree.
+    digits = re.sub(_UUID_NOISE, "", str(value).strip(_UUID_TRIM), flags=re.I | re.A).lower()
     return uuid.UUID(hex=digits) if _HEX32.fullmatch(digits) else None
 
 

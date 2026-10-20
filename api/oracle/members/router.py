@@ -64,8 +64,9 @@ async def update_member(
     after the change commits, and by the tick."""
     user = await _call(service.set_role(db, principal, user_id, body.role))
     await db.commit()
+    out = MemberOut.model_validate(user)
     await service.run_follow_ups(db, principal, http, member_id=user.id)
-    return MemberOut.model_validate(user)
+    return out
 
 
 @router.post(
@@ -87,9 +88,10 @@ async def disable_member(
     no-op for a disabled member."""
     user = await _call(service.disable_member(db, principal, user_id))
     await db.commit()
+    out = MemberOut.model_validate(user)
     # The provider and runtime calls it owes, outside the review gate (retried by the tick).
     await service.after_disable(db, principal, user.id, http)
-    return MemberOut.model_validate(user)
+    return out
 
 
 @router.post(

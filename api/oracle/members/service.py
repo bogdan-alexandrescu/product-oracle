@@ -134,11 +134,10 @@ async def set_role(
         # no longer allows them (C2, owner 2026-10-19/20).
         via = {"via": "member.role", "member_id": str(user.id), "role": role}
         voided = await recheck_member_runs(session, principal, user.id, via)
-        if voided:
+        if any(voided.values()):
             await audit.record(
                 session, principal, "member.role_voids", "user", user.id,
-                {"runs": [str(r) for r in voided["runs"]],
-                 "deferred": [str(r) for r in voided["deferred"]]},
+                {k: [str(i) for i in v] for k, v in voided.items()},
             )  # fmt: skip
     # Review gates read approvers' current roles; the change event tells every lane.
     await changes.record_change(
@@ -890,7 +889,12 @@ async def _follow_up(
     from oracle.runs.models import RunSegment
     from oracle.swarm import RuntimeUnavailable, get_runtime
 
-    segment = await session.get(RunSegment, row.target_id)
+    # Read as it is now (the session may hold an older copy).
+    segment = await session.scalar(
+        select(RunSegment)
+        .where(RunSegment.id == row.target_id)
+        .execution_options(populate_existing=True)
+    )
     if segment is not None and segment.status in ("pending", "running"):
         # Re-queued (or running again) since its workflow was cancelled: its error is
         # its own now (a queued submission's marker), not this cancel's.

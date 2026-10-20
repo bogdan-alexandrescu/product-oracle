@@ -34,6 +34,7 @@ import yaml
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import bounded_yaml
 from oracle.auth.deps import Principal
 from oracle.baseline import scoring, service
 from oracle.baseline.models import EDGE_TYPES, ENTITY_TYPES, NODE_STATUSES, Edge, Entity, Evidence
@@ -130,10 +131,18 @@ async def export(db: AsyncSession, principal: Principal) -> str:
 # --- import ---------------------------------------------------------------------------------
 
 
+# A baseline is larger than a roadmap's items file: the text and node budgets are
+# raised; aliases, anchors, tags, value length and nesting keep oracle.bounded_yaml's caps.
+MAX_IMPORT_CHARS = 5_000_000
+MAX_IMPORT_NODES = 250_000
+
+
 def _parse(text: str) -> dict[str, Any]:
     try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as e:
+        data = bounded_yaml.load(
+            text, name="the baseline YAML", max_chars=MAX_IMPORT_CHARS, max_nodes=MAX_IMPORT_NODES
+        )
+    except bounded_yaml.BoundedYamlError as e:
         raise YamlInvalid([ImportIssue(code="invalid_yaml", message=str(e))]) from None
     if data is None:
         data = {}

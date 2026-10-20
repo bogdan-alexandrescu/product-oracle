@@ -2151,7 +2151,12 @@ async def submit_queued(
        A refusal SwarmCloud's answer proves leaves the segment waiting for the next
        tick; any other failure is a lost submission (:func:`_refused_for_sure`). If the
        run changed meanwhile (cancelled, its approval or decision voided), what the pass
-       started is cancelled and its spend read (``searches``)."""
+       started is cancelled and its spend read (``searches``).
+
+    A ``budget`` already spent (under a second) claims nothing and mints nothing: the
+    next tick submits it."""
+    if budget is not None and budget < 1.0:
+        return
     run, segments = await _locked(db, run_id)
     segment = next((s for s in segments if _waiting(s)), None)
     if run is None or run.status != "running" or segment is None or _claimed(segment):
@@ -2192,7 +2197,7 @@ async def submit_queued(
     segment_id = segment.id
     await db.commit()
 
-    seconds = SUBMIT_SECONDS if budget is None else max(1.0, min(SUBMIT_SECONDS, budget))
+    seconds = SUBMIT_SECONDS if budget is None else min(SUBMIT_SECONDS, budget)
     try:
         async with asyncio.timeout(seconds):
             out = await _attempt(db, run_id, segment_id, claim["id"])
@@ -5161,6 +5166,35 @@ async def decide_checkpoint(
     await _commit_decision(db, principal, role, run.id, cp.id, touched=touched)
 
 
+# How long a decision that holds its run's row waits for the review gate (polling, never
+# queued: the gate comes before a run's row everywhere else).
+GATE_WAIT_SECONDS = 5.0
+
+
+class _GateBusy(Unavailable):
+    def __init__(self) -> None:
+        super().__init__(
+            "Oracle could not record the decision: the review gate stayed busy (a member "
+            "change, or a cancel of this run); decide again"
+        )
+
+
+async def _standing_after_row(db: AsyncSession, principal: Principal, role: str) -> str | None:
+    """:func:`_standing` for a transaction holding a run's row lock: the review gate is
+    taken by polling for up to :data:`GATE_WAIT_SECONDS` (a holder of the gate may be
+    waiting on that row: a cancel); not taken, :class:`_GateBusy`."""
+    from oracle.auth.service import caller_refusal
+    from oracle.review import publish
+
+    loop = asyncio.get_running_loop()
+    until = loop.time() + GATE_WAIT_SECONDS
+    while not await publish.try_gate_lock(db, shared=True):
+        if loop.time() >= until:
+            raise _GateBusy()
+        await asyncio.sleep(0.05)
+    return await caller_refusal(db, principal, role)  # type: ignore[arg-type]
+
+
 async def _commit_decision(
     db: AsyncSession,
     principal: Principal,
@@ -5174,11 +5208,19 @@ async def _commit_decision(
     now: the calls it made took time). Refused: nothing of the decision is kept; when it
     may have reached SwarmCloud already (``touched``: an answer posted, a cancel made),
     the run's workflow is cancelled by the tick (its cost read) and the checkpoint waits
-    for a decision again."""
-    refusal = await _standing(db, principal, role)
-    if refusal is None:
-        await db.commit()
-        return
+    for a decision again. The gate is taken after the run's row here (the decision's
+    calls ran under it), so it is polled for, never queued for (:func:`_standing_after_row`):
+    busy too long, the decision is not recorded either ("decide again")."""
+    try:
+        refusal = await _standing_after_row(db, principal, role)
+    except _GateBusy as busy:
+        refusal = None
+        failure: Exception | None = busy
+    else:
+        failure = None
+        if refusal is None:
+            await db.commit()
+            return
     await db.rollback()
     if touched:
         run = await _get_run(db, run_id, lock=True)
@@ -5196,9 +5238,10 @@ async def _commit_decision(
             if target is not None or segments:
                 _note(
                     target or segments[0],
-                    "A checkpoint decision reached SwarmCloud from someone who no longer "
-                    "held the role for it when it was recorded: Oracle cancels the workflow, "
-                    "and the checkpoint waits for a decision again.",
+                    "A checkpoint decision reached SwarmCloud but Oracle could not record "
+                    "it (its decider no longer held the role for it, or the review gate "
+                    "stayed busy): Oracle cancels the workflow, and the checkpoint waits for "
+                    "a decision again.",
                 )
             await audit.record(
                 db, None, "checkpoint.decision_voided", "checkpoint", checkpoint_id,
@@ -5206,7 +5249,9 @@ async def _commit_decision(
                  "via": "decision.recheck"},
             )  # fmt: skip
             await db.commit()
-    raise Forbidden(refusal)
+    if failure is not None:
+        raise failure
+    raise Forbidden(refusal or "")
 
 
 class _PostNotFound(Unavailable):
@@ -6055,7 +6100,11 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
             ids.append(found[key])  # type: ignore[arg-type]
     done = {i: await _cancel_call({"id": i}) for i in dict.fromkeys(ids)}
 
-    # Under the gate and the lock, as the run and the caller are now.
+    # Under the gate (exclusively: the run's tokens are revoked here, and a request on a
+    # run token re-reads it under the gate) and the lock, as the run and the caller are now.
+    from oracle.review import publish
+
+    await publish.gate_lock(db, shared=False)
     if not await _manage_now(db, principal, created_by):
         raise Forbidden("Only an owner or the approver who created the run can cancel it")
     run = await _get_run(db, run_id, lock=True)

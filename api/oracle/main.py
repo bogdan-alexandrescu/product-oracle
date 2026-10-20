@@ -18,6 +18,7 @@ from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
+from oracle.http import BodyLimit
 from oracle.jobs.router import router as llm_jobs_router
 from oracle.jobs.worker import (
     JOB_OVERHEAD_SECONDS,
@@ -103,6 +104,8 @@ def create_app() -> FastAPI:
         # operationId = function name, so generated clients get readable names.
         generate_unique_id_function=lambda route: route.name,
     )
+    # Inside CORS, so a 413 still carries the CORS headers the browser needs to read it.
+    app.add_middleware(BodyLimit)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
