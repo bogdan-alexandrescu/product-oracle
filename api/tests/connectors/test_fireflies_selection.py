@@ -124,6 +124,70 @@ def test_series_key_prefers_the_calendar_event_and_strips_the_instance_suffix():
     assert series_key(other) == "title:ai agents sprint planning|z@x.io"
 
 
+@pytest.mark.parametrize(
+    "calendar_id",
+    [
+        "abc123def",
+        "abc123def_20261022T160000Z",
+        "abc123def_R20261021T160000",
+        "abc123def_R20261021T160000_20261022T160000Z",
+        "abc123def_R20261021T160000_20261022T160000Z@google.com",
+        "abc123def@google.com",
+    ],
+)
+def test_a_split_google_series_keeps_its_key(calendar_id):
+    """Google's 'this and following' split gives the rest of the series the id
+    <id>_R<start>; its instances add _<start>Z."""
+    entry = meeting("X", "Standup", "2026-10-22T16:00:00Z", calendar_id=calendar_id)
+    assert series_key(entry) == "cal:abc123def"
+
+
+async def test_a_split_series_keeps_taking_new_meetings():
+    fake = FakeFireflies(
+        [meeting("A1", "Standup", "2026-10-01T16:00:00Z", calendar_id="abc123def")]
+    )
+    conn = connector(fake)
+    config = {"mode": "selected", "series": ["cal:abc123def"]}
+    first = await collect(conn, config)
+    cursor = next(e for e in reversed(first) if isinstance(e, CursorCheckpoint)).cursor
+    fake.meetings.append(
+        meeting(
+            "A2",
+            "Standup",
+            "2026-10-22T16:00:00Z",
+            calendar_id="abc123def_R20261021T160000_20261022T160000Z",
+        )
+    )
+    second = await collect(conn, config, cursor)
+    assert upserted(second) == ["A2"]
+
+
+async def test_a_picked_series_also_matches_by_title_and_organizer():
+    """When the calendar id changes in a way the key cannot follow (a series moved to
+    another calendar, a provider with other ids), the series still matches by its
+    normalised title and organizer."""
+    fake = FakeFireflies(
+        [
+            meeting("A1", "Standup #1", "2026-10-01T16:00:00Z", calendar_id="abc123def"),
+            meeting("A2", "Standup #2", "2026-10-08T16:00:00Z", calendar_id="zzz-moved"),
+            meeting("A3", "Standup #3", "2026-10-15T16:00:00Z"),
+            # Same title, another organizer: another series.
+            meeting("B1", "Standup", "2026-10-09T16:00:00Z", organizer="z@x.io"),
+        ]
+    )
+    conn = connector(fake)
+    config = {"mode": "selected", "series": ["cal:abc123def"]}
+    first = await collect(conn, config)
+    assert upserted(first) == ["A1", "A2", "A3"]
+    cursor = next(e for e in reversed(first) if isinstance(e, CursorCheckpoint)).cursor
+    # Remembered, so a later sync that no longer lists A1 still knows the title.
+    fake.meetings.append(
+        meeting("A4", "Standup #4", "2026-10-22T16:00:00Z", calendar_id="other-cal-id")
+    )
+    second = await collect(conn, config, cursor)
+    assert upserted(second) == ["A4"]
+
+
 # --- Config -------------------------------------------------------------------------
 
 
@@ -247,7 +311,12 @@ async def test_a_full_pass_deletes_what_is_no_longer_picked_and_skips_what_is_st
     assert fake.detail_ids() == ["S3"]
     assert upserted(events) == ["S3"]
     assert events[-1] == CursorCheckpoint(
-        {"since": "2026-10-12T09:00:00Z", "recent": {"S3": "2026-10-12T09:00:00Z"}}
+        {
+            "since": "2026-10-12T09:00:00Z",
+            "recent": {"S3": "2026-10-12T09:00:00Z"},
+            # The series' title key, should its calendar id change.
+            "aliases": ["title:ai agents daily standup|ada@example.com"],
+        }
     )
 
 

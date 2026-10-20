@@ -17,7 +17,8 @@ Configs saved before the picker still work and read as a *title rule*: a config 
 
 A series is keyed by the transcript's ``calendar_id`` (the calendar provider's event id,
 https://docs.fireflies.ai/schema/transcript; ``cal:<id>``, a Google instance suffix
-``_YYYYMMDDTHHMMSSZ`` removed) and, for meetings without one, by the normalised title and
+``_YYYYMMDDTHHMMSSZ``, a 'this and following' split ``_R<start>`` and ``@google.com``
+removed) and, for meetings without one, by the normalised title and
 organizer (``title:<title>|<organizer>``).
 
 Each transcript becomes one ``transcript`` item: the summary (overview, action items,
@@ -25,11 +26,16 @@ keywords) followed by the sentences as ``speaker: text``. Participants are the `
 
 Cursor::
 
-    {"since": "2026-10-01T09:00:00Z", "recent": {"id1": "2026-10-01T09:00:00Z"}}
+    {"since": "2026-10-01T09:00:00Z", "recent": {"id1": "2026-10-01T09:00:00Z"},
+     "aliases": ["title:standup|ada@example.com"]}
 
 ``since`` is the date of the newest transcript synced. Fireflies can finish processing
 an earlier meeting after a later one, so a sync reads back ``OVERLAP`` before ``since``
 and skips the ids in ``recent`` (those synced within that window, with their dates).
+
+``aliases`` are the title keys of meetings seen in a picked calendar series: a meeting
+whose calendar id changed (or that has none) still matches the series by its title and
+organizer.
 
 A pass without ``since`` (a new source, or one whose config changed) lists the whole date
 range: stored items no longer picked are deleted, stored items still picked are not
@@ -159,8 +165,13 @@ MAX_TITLE = 200
 # Every trailing date or number after a space or separator, in one anchored match:
 # " - Oct 14", " #12", " (10/14) #3".
 _SUFFIXES = re.compile(rf"(?:(?:\s*[-\u2013\u2014:|,]\s*|\s+)\(?{_DATED}\)?)+\s*$", re.IGNORECASE)
-# Google Calendar instance ids are the recurring event's id plus the instance start.
-_INSTANCE = re.compile(r"_\d{8}(?:T\d{6}Z?)?$")
+# Google Calendar instance ids are the recurring event's id plus the instance start
+# (_YYYYMMDDTHHMMSSZ); 'this and following' splits the series into <id>_R<start>, whose
+# instances add their own start. Either may end in "@google.com".
+_INSTANCE = re.compile(r"(?:_R\d{8}(?:T\d{6}Z?)?)?(?:_\d{8}(?:T\d{6}Z?)?)?$")
+_GOOGLE_DOMAIN = re.compile(r"@google\.com$", re.IGNORECASE)
+# Title keys remembered for the picked calendar series (see Selection.matches).
+MAX_ALIASES = 1000
 
 
 def series_title(title: str | None) -> str:
@@ -177,14 +188,20 @@ def normalise_title(title: str | None) -> str:
     return series_title(title).lower()
 
 
+def title_key(entry: dict[str, Any]) -> str:
+    """The series key of a transcript by its normalised title and organizer."""
+    organizer = str(entry.get("organizer_email") or "").strip().lower()
+    return f"title:{normalise_title(entry.get('title'))}|{organizer}"
+
+
 def series_key(entry: dict[str, Any]) -> str:
     """The recurring series a transcript belongs to: its calendar event, else its
     normalised title and organizer."""
-    calendar = str(entry.get("calendar_id") or "").strip()
+    calendar = _GOOGLE_DOMAIN.sub("", str(entry.get("calendar_id") or "").strip())
+    calendar = _INSTANCE.sub("", calendar) or calendar
     if calendar:
-        return f"cal:{_INSTANCE.sub('', calendar)}"
-    organizer = str(entry.get("organizer_email") or "").strip().lower()
-    return f"title:{normalise_title(entry.get('title'))}|{organizer}"
+        return f"cal:{calendar}"
+    return title_key(entry)
 
 
 # --- Config -------------------------------------------------------------------------
@@ -202,7 +219,13 @@ class Selection:
     titles: tuple[str, ...] = ()
     legacy: bool = False
 
-    def matches(self, entry: dict[str, Any], when: datetime | None) -> bool:
+    def matches(
+        self, entry: dict[str, Any], when: datetime | None, aliases: frozenset[str] = frozenset()
+    ) -> bool:
+        """Whether the selection takes this transcript. A picked series also matches by
+        title and organizer: the series' own title key, or ``aliases``, the title keys
+        of the meetings seen in a picked calendar series (so a series whose calendar id
+        changes keeps matching)."""
         if when is not None:
             if self.date_from and when < self.date_from:
                 return False
@@ -214,7 +237,10 @@ class Selection:
                 return False
         if self.mode == "all":
             return True
-        return entry.get("id") in self.meetings or series_key(entry) in self.series
+        if entry.get("id") in self.meetings or series_key(entry) in self.series:
+            return True
+        by_title = title_key(entry)
+        return by_title in self.series or by_title in aliases
 
 
 def selection(config: dict[str, Any]) -> Selection:
@@ -425,6 +451,15 @@ class _Fireflies:
         return body.get("data") or {}
 
 
+def _cursor(since: datetime | None, recent: dict[str, str], aliases: set[str]) -> dict[str, Any]:
+    cursor: dict[str, Any] = {"recent": dict(recent)}
+    if since is not None:
+        cursor = {"since": _iso(since), **cursor}
+    if aliases:
+        cursor["aliases"] = sorted(aliases)
+    return cursor
+
+
 class FirefliesConnector:
     kind = "fireflies"
     # sync takes ``known``: see oracle.sources.base.Connector.
@@ -473,6 +508,7 @@ class FirefliesConnector:
         picked = selection(config)
         since = _parse_date((cursor or {}).get("since"))
         recent: dict[str, str] = dict((cursor or {}).get("recent") or {})
+        aliases = {a for a in (cursor or {}).get("aliases") or [] if isinstance(a, str)}
         stop = since - OVERLAP if since else picked.date_from
         if since and picked.date_from and picked.date_from > stop:
             stop = picked.date_from
@@ -486,8 +522,7 @@ class FirefliesConnector:
             if picked.date_to_end:
                 variables["toDate"] = _iso(picked.date_to_end - timedelta(milliseconds=1))
             # Newest first: page until a transcript is older than the stop date.
-            matched: set[str] = set()
-            pending: list[tuple[datetime, dict[str, Any], bool]] = []
+            listed: list[tuple[datetime | None, dict[str, Any]]] = []
             done = False
             async for page in self._pages(fireflies, variables):
                 for entry in page:
@@ -495,15 +530,23 @@ class FirefliesConnector:
                     if stop and when and when < stop:
                         done = True
                         break
-                    if not picked.matches(entry, when):
-                        continue
-                    matched.add(entry["id"])
-                    if entry["id"] in recent:
-                        continue
-                    fetch = stored is None or entry["id"] not in stored
-                    pending.append((when or datetime.min.replace(tzinfo=UTC), entry, fetch))
+                    listed.append((when, entry))
+                    if series_key(entry) in picked.series and len(aliases) < MAX_ALIASES:
+                        aliases.add(title_key(entry))
                 if done:
                     break
+
+            learned = frozenset(aliases)
+            matched: set[str] = set()
+            pending: list[tuple[datetime, dict[str, Any], bool]] = []
+            for when, entry in listed:
+                if not picked.matches(entry, when, learned):
+                    continue
+                matched.add(entry["id"])
+                if entry["id"] in recent:
+                    continue
+                fetch = stored is None or entry["id"] not in stored
+                pending.append((when or datetime.min.replace(tzinfo=UTC), entry, fetch))
 
             changed = False
             for external_id in sorted((stored or set()) - matched):
@@ -526,13 +569,10 @@ class FirefliesConnector:
                 recent = {i: d for i, d in recent.items() if _parse_date(d) >= horizon}
                 changed = True
                 if fetch:
-                    yield CursorCheckpoint({"since": _iso(newest), "recent": dict(recent)})
+                    yield CursorCheckpoint(_cursor(newest, recent, aliases))
                     changed = False
-            if changed:
-                cursor_out: dict[str, Any] = {"recent": dict(recent)}
-                if newest is not None:
-                    cursor_out = {"since": _iso(newest), **cursor_out}
-                yield CursorCheckpoint(cursor_out)
+            if changed or sorted(aliases) != sorted((cursor or {}).get("aliases") or []):
+                yield CursorCheckpoint(_cursor(newest, recent, aliases))
 
     async def browse_meetings(
         self,
