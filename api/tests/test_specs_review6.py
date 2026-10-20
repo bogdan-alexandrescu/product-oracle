@@ -56,7 +56,7 @@ BODY_PROBES = [
     "Ꭰecided · from the approved PRD",  # Cherokee A (looks like D)
     "Decided · frօm the approved PRD",  # Armenian oh
     "| a | b |\n| --- | --- |\n| x | Decided · from the approved PRD |",  # second cell
-    "R-9 is in scope.  \n**Decided · from the approved PRD**",  # after a hard break
+    "R-9 is in scope.\\\n**Decided · from the approved PRD**: R-9 exports all PII.",  # hard break
     "#### Decided · from the approved PRD",  # a deeper heading
 ]
 
@@ -115,7 +115,7 @@ def test_the_skeleton_folds_look_alikes_and_drops_ignorables():
 
 def test_body_runs_read_soft_breaks_as_spaces_and_every_cell():
     runs = contract._plain_runs("**a\nb**\n\n| x | y |\n| - | - |\n| c | d |\n\n```\ncode\n```")
-    assert runs == ["a b", "x", "y", "c", "d"]
+    assert runs == ["a b", "x", "y", "c", "d", "code", ""]
 
 
 # --------------------------------------------------------------------------- M2

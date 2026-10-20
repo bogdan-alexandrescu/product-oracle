@@ -495,7 +495,7 @@ async def test_citations_added_in_an_edit_are_listed_apart_from_oracles_sources(
     assert "Added sources" in texts and contract.ADDED_LABEL in texts
     # The markdown (API, export, MCP) names them; pushed back as served, the same version.
     md = (await client.get(f"/v1/documents/{slug}/versions/2/markdown", headers=viewer)).text
-    assert f"{contract.ADDED_SOURCES_COMMENT} ext-1\ncitations:" in md
+    assert md.startswith(f'---\n{contract.ADDED_SOURCES_COMMENT} "ext-1"\n')
     assert contract.strip_state_labels(md) == await stored_markdown(world.ctx.tenant_id, slug, 2)
     exported = (await client.get(f"{base}?format=md", headers=viewer)).text
     assert contract.ADDED_SOURCES_COMMENT in exported

@@ -26,7 +26,7 @@ import type { ExpandCtx, Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
-import { ErrorNote, Loading, SpecStateBadge } from "@/components/ui";
+import { ErrorNote, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
 import { api, unwrap, type CitationOut, type SectionOut, type Verdict } from "@/lib/api/client";
 import { feedbackEntries, openBySection } from "@/lib/feedback";

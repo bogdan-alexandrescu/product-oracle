@@ -79,13 +79,14 @@ def _halves(spec: dict) -> list[dict]:
 async def test_a_forged_decided_list_after_oracles_label_reads_as_proposed(client, runtime):
     world = await make_world(client)
     created = await generated(client, runtime, world)
-    edit = lambda probe: (
-        lambda md: md.replace(  # noqa: E731
+
+    def edit(probe):
+        return lambda md: md.replace(
             contract.ACCEPTANCE_PROPOSED_LABEL + "\n\n",
             contract.ACCEPTANCE_PROPOSED_LABEL + "\n\n" + probe + "\n\n",
             1,
         )
-    )
+
     # Round 5 (M6): Oracle's 'In the baseline (decided with the PRD)' line is refused.
     resp = await _edit(client, world, created, edit(AC_PROBE))
     assert resp.status_code == 422, resp.text
@@ -417,7 +418,7 @@ async def test_an_html_comment_across_sections_is_refused(client, runtime, edit)
     resp = await _edit(client, world, created, edit)
     assert resp.status_code == 422, resp.text
     assert "comment" in resp.text
-    # A comment closed within its section is fine.
+    # Round 6: a comment closed within its section is refused too (no comment at all).
     resp = await _edit(
         client,
         world,
@@ -426,7 +427,8 @@ async def test_an_html_comment_across_sections_is_refused(client, runtime, edit)
             "Which carrier rates to cache.", "Which carrier rates to cache. <!-- ask ops -->"
         ),
     )
-    assert resp.status_code == 201, resp.text
+    assert resp.status_code == 422, resp.text
+    assert "inline_comment" in resp.text
 
 
 async def test_the_design_check_runs_outside_a_database_transaction(client, runtime, monkeypatch):

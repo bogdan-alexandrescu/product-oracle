@@ -267,7 +267,7 @@ def _agent_bodies(text: str, problems: list[Problem]) -> dict[str, str]:
 _INLINE_SPECIAL = re.compile(r"([\\`*_\[\]<>#|~!&{}])")
 # What could still open a block at the start of the line: a list item, a thematic break or
 # a setext underline ('-', '+', '='), or an ordered list item ('1.', '1)').
-_BLOCK_START = re.compile(r"^(?:[-+=]|(\d{1,9})([.)]))")
+_BLOCK_START = re.compile(r"^(?:[-+=](?=[-+=\s]|$)|(\d{1,9})([.)])(?=\s|$))")
 
 
 def escape_inline(text: str) -> str:
@@ -749,7 +749,7 @@ _IGNORABLE = re.compile(
     "[\u034f\u115f\u1160\u17b4\u17b5\u180b-\u180f\u3164\ufe00-\ufe0f\uffa0\U000e0000-\U000e0fff]"
 )
 # After the table: letters that still read alike (I, l, 1, |; O, 0).
-_ALIKE = str.maketrans({"l": "i", "1": "i", "|": "i", "0": "o"})
+_ALIKE = str.maketrans({"l": "i", "1": "i", "0": "o"})
 
 
 def _visible(text: str) -> str:
@@ -832,9 +832,11 @@ def _takes_label(text: str, anywhere: bool) -> bool:
 def _plain_runs(body: str) -> list[str]:
     """The rendered text of a body, block by block (a paragraph, a heading, every table
     cell, a list item's paragraph): soft breaks read as spaces, a hard break starts a
-    run of its own; code blocks are left out, inline HTML renders as nothing."""
+    run of its own, inline HTML renders as nothing; each line of a code block is a run."""
     runs: list[str] = []
     for tok in _HTML_MD.parse(body):
+        if tok.type in ("fence", "code_block"):
+            runs += tok.content.split("\n")
         if tok.type != "inline":
             continue
         run: list[str] = []
