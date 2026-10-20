@@ -658,7 +658,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       }
       head={
         version && (
-          <dl className="mt-2.5 flex flex-wrap gap-x-7 gap-y-2">
+          <dl className="mt-2.5 grid grid-cols-2 gap-x-7 gap-y-2">
             {(
               [
                 ["Reviewed", `${reviewedCount}/${version.sections.length}`, "stat-reviewed"],

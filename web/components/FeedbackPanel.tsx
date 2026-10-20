@@ -39,9 +39,9 @@ function SectionLink({ item, doc, current, goTo }: { item: FeedbackItem; doc: st
         e.preventDefault();
         goTo!.open(key);
       }}
-      className="inline-flex h-8 min-w-0 items-center truncate font-mono text-[13px] font-medium text-accent-ink hover:underline"
+      className="inline-flex h-7 min-w-0 items-center gap-1 truncate text-sm font-semibold text-accent-ink hover:underline"
     >
-      Go to §{key}
+      Go to <span className="font-mono text-[13px] font-medium">§{key}</span>
       {n !== current && ` (v${n})`}
     </Link>
   );
@@ -177,14 +177,8 @@ function Row({
       data-feedback-id={item.id}
       data-status={item.status}
     >
-      {(item.section_key || actions) && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-          {item.section_key && <SectionLink item={item} doc={doc} current={current} goTo={goTo} />}
-          {actions && <span className="ml-auto flex flex-wrap justify-end gap-1.5">{actions}</span>}
-        </div>
-      )}
-      {form}
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {item.section_key && <SectionLink item={item} doc={doc} current={current} goTo={goTo} />}
         <FeedbackStatusChip status={item.status} />
         {item.verdict ? <VerdictChip verdict={item.verdict} /> : <Chip kind="line">{item.kind === "comment" ? "Comment" : "General"}</Chip>}
         <span className="tnum ml-auto text-[13px] text-text2">
@@ -192,6 +186,12 @@ function Row({
           {item.addressed_in_version != null && ` · addressed in v${item.addressed_in_version}`}
         </span>
       </div>
+      {actions && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="feedback-actions">
+          {actions}
+        </div>
+      )}
+      {form}
       <p className="mt-1.5 text-[15px] leading-[22px] text-text">{item.summary}</p>
       {item.anchor && <Quote>{item.anchor.exact}</Quote>}
       {item.resolution_note && (
@@ -254,13 +254,12 @@ export function FeedbackPanel({
     if (!el) return;
     const box = el.closest<HTMLElement>("[role=tabpanel]");
     if (box && box.scrollHeight > box.clientHeight + 1 && getComputedStyle(box).overflowY !== "visible") {
-      box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - 8;
-      if (box.getBoundingClientRect().bottom > window.innerHeight || box.getBoundingClientRect().top < 0) {
-        box.scrollIntoView({ block: "nearest" });
-      }
-    } else {
-      el.scrollIntoView({ block: "start" });
+      // The panel scrolls inside itself (wide screens): bring the item up when its actions are below the fold.
+      const offset = el.getBoundingClientRect().top - box.getBoundingClientRect().top;
+      if (offset > box.clientHeight - 120) box.scrollTop += offset - 8;
     }
+    const top = el.getBoundingClientRect().top;
+    if (top < 0 || top > window.innerHeight * 0.6) el.scrollIntoView({ block: "start" });
     onFocused?.();
   }, [focus, ready, onFocused]);
 

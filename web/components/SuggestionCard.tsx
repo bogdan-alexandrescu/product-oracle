@@ -226,15 +226,15 @@ export function SuggestionCard({
             {s.kind === "answer" ? "Suggested answer" : `Proposed text for #${s.section_key}`}
             {s.edited_text && " (edited)"}
           </p>
-          <p
-            className={`mt-1 rounded-lg border border-line bg-surface px-2.5 py-2 text-sm leading-5 whitespace-pre-wrap text-text ${
-              collapsed ? "line-clamp-4" : ""
-            }`}
-            data-testid="suggestion-text"
-            data-collapsed={long ? String(collapsed) : undefined}
-          >
-            {shown}
-          </p>
+          <div className="mt-1 rounded-lg border border-line bg-surface px-2.5 py-2">
+            <p
+              className={`text-sm leading-5 whitespace-pre-wrap text-text ${collapsed ? "line-clamp-4" : ""}`}
+              data-testid="suggestion-text"
+              data-collapsed={long ? String(collapsed) : undefined}
+            >
+              {collapsed ? shown.replace(/\n\s*\n/g, "\n") : shown}
+            </p>
+          </div>
           {long && (
             <button
               type="button"

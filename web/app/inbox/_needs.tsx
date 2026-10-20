@@ -72,7 +72,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
 
 /** Home's narrower lines: no run id, one action each. */
 export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.filter((c) => c.key !== "run").map((c) =>
-  c.key === "kind" ? { ...c, width: "164px" } : c.key === "context" ? { ...c, width: "24%" } : c.key === "act" ? { ...c, width: "176px" } : c,
+  c.key === "kind" ? { ...c, width: "164px" } : c.key === "context" ? { ...c, width: "24%" } : c.key === "act" ? { ...c, width: "200px" } : c,
 );
 
 export function NeedTable({
