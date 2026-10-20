@@ -194,7 +194,10 @@ async def test_attach_without_ref_stores_the_frozen_title(client, fake):  # noqa
     assert resp.json()["ref"] == TITLE_A
     assert resp.json()["excerpt"] == EXCERPT_A[:500]
     # Whoever reads the evidence, the author's run included, sees the title as shared.
-    for headers in (as_run_of(ctx, "author"), ctx.as_("approver")):
-        resp = await client.get(url, headers=headers)
+    for headers in (as_run_of(ctx, "author"), ctx.as_("author"), ctx.as_("approver")):
+        resp = await client.get(f"/v1/baseline/entities/{feat['id']}", headers=headers)
         assert resp.status_code == 200, resp.text
         assert RENAMED not in resp.text
+        assert [e["ref"] for e in resp.json()["evidence"]] == [TITLE_A, TITLE_A]
+    shown = await client.get(f"/v1/baseline/entities/{feat['id']}", headers=ctx.as_("author"))
+    assert {e["source_item"]["title"] for e in shown.json()["evidence"]} == {TITLE_A}

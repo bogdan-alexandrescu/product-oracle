@@ -266,10 +266,9 @@ async def upload_files(
     settings = await items.confidence_settings(db)
     ids = list(dict.fromkeys(item_ids))
     withheld = await _withheld(db, principal)
-    rows = {
-        r.item.id: r
-        for r in await items.source_items(db, source, ids=ids, limit=len(ids), exclude=withheld)
-    }
+    found = await items.source_items(db, source, ids=ids, limit=len(ids), exclude=withheld)
+    # A run reads a shared item as released, title included (S6, titles).
+    rows = {r.item.id: r for r in await items.as_released(db, found, _shared(principal))}
     return UploadResult(
         # A run never reads back an item it may not read, even one it just rewrote.
         items=[ItemOut(**items.item_out(rows[i], settings)) for i in ids if i in rows],
@@ -289,11 +288,16 @@ async def list_source_items(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ItemOut]:
+    """The source's items at their current versions. A run never lists a deleted item
+    (``include_deleted`` is ignored) and reads a shared item at the version released,
+    its title as shared (S6, owner 2026-10-19)."""
     source = await _owned(db, principal, source_id)
+    shared = _shared(principal)
     rows = await items.source_items(
-        db, source, include_deleted=include_deleted, limit=limit, offset=offset,
-        exclude=await _withheld(db, principal),
+        db, source, include_deleted=include_deleted and shared is None, limit=limit,
+        offset=offset, exclude=await _withheld(db, principal),
     )  # fmt: skip
+    rows = await items.as_released(db, rows, shared)
     settings = await items.confidence_settings(db)
     return [ItemOut(**items.item_out(r, settings)) for r in rows]
 
@@ -415,11 +419,14 @@ async def list_snapshot_items(
     db: TenantDB,
     source: uuid.UUID | None = None,
 ) -> list[ItemOut]:
-    """The user's items as they were at the snapshot (each at its pinned version)."""
+    """The user's items as they were at the snapshot (each at its pinned version). A run
+    reads a shared item at the version released whatever the snapshot, its title as
+    shared, and nothing deleted upstream (S6, owner 2026-10-19)."""
     snapshot = await _snapshot(db, principal, snapshot_id)
     rows = await items.items_as_of(
-        db, _user(principal), snapshot.as_of, source_id=source, txn_snapshot=snapshot.txn_snapshot
-    )
+        db, _user(principal), snapshot.as_of, source_id=source,
+        txn_snapshot=snapshot.txn_snapshot, also=_shared(principal),
+    )  # fmt: skip
     withheld = await _withheld(db, principal)
     rows = [r for r in rows if r.item.id not in withheld]
     settings = await items.confidence_settings(db)

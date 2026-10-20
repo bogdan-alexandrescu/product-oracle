@@ -157,9 +157,12 @@ async def items_as_of(
     *,
     source_id: uuid.UUID | None = None,
     txn_snapshot: str | None = None,
+    also: RunReads | None = None,
 ) -> list[ItemRow]:
-    """The user's items as they were at ``as_of`` (one row per item, its pinned version)."""
-    pinned = version_ids(user_id, as_of, txn_snapshot).subquery()
+    """The user's items as they were at ``as_of`` (one row per item, its pinned version).
+    ``also``: a run's reads (``version_ids``): its user's items ever frozen at the
+    version released only, and none deleted upstream."""
+    pinned = version_ids(user_id, as_of, txn_snapshot, also).subquery()
     stmt = (
         select(SourceItem, SourceItemVersion, Source.kind)
         .join(SourceItemVersion, SourceItemVersion.item_id == SourceItem.id)
@@ -169,8 +172,51 @@ async def items_as_of(
     )
     if source_id is not None:
         stmt = stmt.where(SourceItem.source_id == source_id)
+    if also is not None:
+        # The user's own items only: other users' released items are not theirs to list.
+        stmt = stmt.where(Source.owner_user_id == user_id)
     rows = await session.execute(stmt)
     return [ItemRow(item, version, kind) for item, version, kind in rows.all()]
+
+
+async def as_released(
+    session: AsyncSession, rows: list[ItemRow], also: RunReads | None
+) -> list[ItemRow]:
+    """``rows`` as a run reads them (S6, freeze at sharing; titles, owner 2026-10-19):
+    an item ever frozen at the version released (its title and text as shared), or
+    left out if none is readable now; nothing deleted upstream. ``also`` None: as is."""
+    if also is None or not rows:
+        return rows
+    ids = [r.item.id for r in rows]
+    frozen_col = also.frozen.selected_columns[0]
+    frozen = set((await session.scalars(also.frozen.where(frozen_col.in_(ids)))).all())
+    released = also.released.subquery()
+    pairs = dict(
+        (
+            await session.execute(
+                select(released.c.item_id, released.c.version_id).where(
+                    released.c.item_id.in_(frozen)
+                )
+            )
+        ).all()
+    )
+    versions = {
+        v.id: v
+        for v in await session.scalars(
+            select(SourceItemVersion).where(SourceItemVersion.id.in_(set(pairs.values())))
+        )
+    }
+    out = []
+    for row in rows:
+        if row.item.deleted_at is not None:
+            continue
+        if row.item.id in frozen:
+            version = versions.get(pairs.get(row.item.id))  # type: ignore[arg-type]
+            if version is None:
+                continue
+            row = ItemRow(row.item, version, row.source_kind)
+        out.append(row)
+    return out
 
 
 async def source_items(

@@ -101,7 +101,9 @@ async def attach(
         item, source, version = await _own_item(db, principal, data.source_item_id)
         ev.source_item_id = item.id
         ev.url = data.url or item.url
-        ev.ref = data.ref or item.title or item.external_id
+        # The title as read (a run: as shared, S6), never the item's current one: a
+        # rename upstream never reaches evidence people read.
+        ev.ref = data.ref or (version.title if version is not None else None) or item.external_id
         if not data.excerpt and version is not None:
             ev.excerpt = version.content[:EXCERPT_CHARS]
         ev.retrieved_at = data.retrieved_at or (version.fetched_at if version else None)
@@ -364,7 +366,9 @@ async def present(
                     source_id=source.id,
                     source_kind=source.kind,
                     kind=item.kind,
-                    title=item.title,
+                    # The stored ref (the title as attached), never the item's current
+                    # title (S6, titles).
+                    title=r.ref,
                     url=item.url,
                 )
                 if mine
