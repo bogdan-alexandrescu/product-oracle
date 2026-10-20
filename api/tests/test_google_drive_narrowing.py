@@ -11,8 +11,12 @@ from sqlalchemy import select
 
 from oracle.connections.providers import DRIVE_READONLY
 from oracle.sources import base, service
-from oracle.sources.connectors.google_docs import DOC_MIME, DRIVE_URL, FOLDER_MIME
-from oracle.sources.connectors.google_docs import GoogleDocsConnector
+from oracle.sources.connectors.google_docs import (
+    DOC_MIME,
+    DRIVE_URL,
+    FOLDER_MIME,
+    GoogleDocsConnector,
+)
 from oracle.sources.models import Source, SourceItem
 from oracle.tenancy import tenant_session
 from tests.connection_helpers import make_person

@@ -324,9 +324,7 @@ async def _narrowed_cursor(db: AsyncSession, source: Source) -> dict[str, Any] |
     again). Other kinds sync from the start."""
     if source.kind != "google_docs":
         return None
-    known = {
-        str(k): str(v) for k, v in ((source.cursor or {}).get("files") or {}).items()
-    }
+    known = {str(k): str(v) for k, v in ((source.cursor or {}).get("files") or {}).items()}
     live = await db.scalars(
         select(SourceItem.external_id).where(
             SourceItem.source_id == source.id, SourceItem.deleted_at.is_(None)
