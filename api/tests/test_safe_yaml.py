@@ -268,13 +268,22 @@ async def test_push_draft_refuses_probes(tenant_id):
         for name in ("deep_sequence", "billion_laughs", "overflow"):
             pushed = await c.call_tool(
                 "push_draft",
-                {"doc": "checkout-redesign", "markdown": with_front_matter(REFUSED[name][0])},
+                {
+                    "doc": "checkout-redesign",
+                    "markdown": with_front_matter(REFUSED[name][0]),
+                    "base_version": 0,
+                },
             )
             assert pushed.is_error
             assert text_of(pushed).startswith("HTTP 422")
             assert "invalid_front_matter" in text_of(pushed)
         pushed = await c.call_tool(
-            "push_draft", {"doc": "checkout-redesign", "markdown": with_front_matter(BASE60_1M)}
+            "push_draft",
+            {
+                "doc": "checkout-redesign",
+                "markdown": with_front_matter(BASE60_1M),
+                "base_version": 0,
+            },
         )
         assert pushed.is_error and text_of(pushed).startswith("HTTP 413")
 
