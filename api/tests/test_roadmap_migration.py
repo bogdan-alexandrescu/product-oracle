@@ -117,3 +117,67 @@ def test_upgrade_adds_tables_and_the_subject_and_downgrade_reverses(scratch_db):
     assert _run("SELECT count(*) FROM change_events WHERE subject_kind = 'product_track'") == [(0,)]
     assert _run("SELECT slug FROM documents") == [("example-roadmap",)]
     command.upgrade(cfg, REVISION)
+
+
+def _subjects() -> set[str]:
+    (row,) = _run(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+        "WHERE conname = 'ck_change_events_subject_kind'"
+    )
+    import re
+
+    return set(re.findall(r"'([^']*)'", row[0]))
+
+
+def _allow_member() -> None:
+    """What another lane's migration (PR #69's 0014_review) does: one more subject."""
+    values = ", ".join(f"'{v}'" for v in sorted(_subjects() | {"member"}))
+    _run("ALTER TABLE change_events DROP CONSTRAINT ck_change_events_subject_kind")
+    _run(
+        "ALTER TABLE change_events ADD CONSTRAINT ck_change_events_subject_kind "
+        f"CHECK (subject_kind IN ({values}))"
+    )
+
+
+def test_the_subject_check_keeps_other_lanes_values(scratch_db):
+    """0016 adds only product_track to whatever the check holds at upgrade time and
+    removes only product_track at downgrade: another lane's subject survives both."""
+    cfg = _cfg()
+    command.upgrade(cfg, "0014_blockers_snapshot")
+    tenant = uuid.uuid4()
+    _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
+    before = _subjects()
+    _allow_member()
+    _event(tenant, "member")
+
+    command.upgrade(cfg, REVISION)
+    assert _subjects() == before | {"member", "product_track"}
+    _event(tenant, "member")
+    _event(tenant, "product_track")
+
+    command.downgrade(cfg, "0014_blockers_snapshot")
+    assert _subjects() == before | {"member"}
+    _event(tenant, "member")
+    with pytest.raises(IntegrityError):
+        _event(tenant, "product_track")
+
+    # The other order: the other lane's value lands after 0016, then 0016 is undone.
+    _run("DELETE FROM change_events WHERE subject_kind = 'member'")
+    _run("ALTER TABLE change_events DROP CONSTRAINT ck_change_events_subject_kind")
+    _run(
+        "ALTER TABLE change_events ADD CONSTRAINT ck_change_events_subject_kind "
+        "CHECK (subject_kind IN (" + ", ".join(f"'{v}'" for v in sorted(before)) + "))"
+    )
+    command.upgrade(cfg, REVISION)
+    _allow_member()
+    command.downgrade(cfg, "0014_blockers_snapshot")
+    assert _subjects() == before | {"member"}
+    command.upgrade(cfg, REVISION)
+    assert _subjects() == before | {"member", "product_track"}
+
+
+def test_the_model_lists_every_subject_the_migrated_check_allows(scratch_db):
+    from oracle.v2.models import CHANGE_SUBJECTS
+
+    command.upgrade(_cfg(), REVISION)
+    assert _subjects() == set(CHANGE_SUBJECTS)

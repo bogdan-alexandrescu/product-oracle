@@ -2,7 +2,8 @@
 
 Additive only. New tables: ``product_tracks``, ``track_milestones``, ``schedule_bases``,
 ``tracker_records`` and ``roadmap_items`` (oracle.roadmap.models). ``change_events``
-accepts one more subject, ``product_track`` (a track's monitoring). Existing roadmap
+accepts one more subject, ``product_track`` (a track's monitoring), added to the subjects
+the check allows at upgrade time and removed alone at downgrade. Existing roadmap
 documents and versions are untouched: a version imported before this has no items until a
 run or a person imports them.
 
@@ -18,28 +19,22 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from oracle.migration_checks import add_check_values, remove_check_values
+
 revision: str = "0016_roadmap"
 down_revision: str | None = "0014_blockers_snapshot"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-SUBJECTS_BEFORE = (
-    "'document_section', 'requirement', 'decision', 'source_permission', "
-    "'blocker_status', 'composition_revision', 'document_version', 'entity', "
-    "'artifact_version'"
-)
-SUBJECTS_AFTER = SUBJECTS_BEFORE + ", 'product_track'"
-
-
-def _subjects(values: str) -> None:
-    op.drop_constraint(op.f("ck_change_events_subject_kind"), "change_events", type_="check")
-    op.create_check_constraint(
-        op.f("ck_change_events_subject_kind"), "change_events", f"subject_kind IN ({values})"
-    )
+# Only this lane's subject: the check keeps whatever other lanes' migrations added
+# (oracle.migration_checks reads it from pg_constraint). oracle.v2.models.CHANGE_SUBJECTS
+# stays the one list of every subject.
+SUBJECTS = ("product_track",)
+SUBJECT_CHECK = ("change_events", "ck_change_events_subject_kind", "subject_kind")
 
 
 def upgrade() -> None:
-    _subjects(SUBJECTS_AFTER)
+    add_check_values(*SUBJECT_CHECK, SUBJECTS)
     op.create_table(
         "product_tracks",
         sa.Column("prd_document_id", sa.Uuid(), nullable=False),
@@ -504,7 +499,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DELETE FROM change_events WHERE subject_kind = 'product_track'")
-    _subjects(SUBJECTS_BEFORE)
+    remove_check_values(*SUBJECT_CHECK, SUBJECTS)
     op.drop_index(op.f("ix_schedule_bases_tracker_record_id"), table_name="schedule_bases")
     op.drop_index(op.f("ix_schedule_bases_tenant_id"), table_name="schedule_bases")
     op.drop_index("ix_schedule_bases_reference", table_name="schedule_bases")
