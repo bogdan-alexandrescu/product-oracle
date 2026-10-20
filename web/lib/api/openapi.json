@@ -27532,6 +27532,20 @@
             "type": "integer",
             "title": "Open Count"
           },
+          "counts": {
+            "$ref": "#/components/schemas/InboxFeedbackCounts"
+          },
+          "first_section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Section Key"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/InboxFeedbackItem"
@@ -27550,6 +27564,38 @@
         ],
         "title": "InboxDocument"
       },
+      "InboxFeedbackCounts": {
+        "properties": {
+          "suggestions": {
+            "type": "integer",
+            "title": "Suggestions",
+            "default": 0
+          },
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted",
+            "default": 0
+          },
+          "comments": {
+            "type": "integer",
+            "title": "Comments",
+            "default": 0
+          },
+          "verdicts": {
+            "type": "integer",
+            "title": "Verdicts",
+            "default": 0
+          },
+          "other": {
+            "type": "integer",
+            "title": "Other",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "InboxFeedbackCounts",
+        "description": "What a document's open items wait for; the five add up to ``open_count``."
+      },
       "InboxFeedbackItem": {
         "properties": {
           "id": {
@@ -27560,6 +27606,15 @@
           "summary": {
             "type": "string",
             "title": "Summary"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "comment",
+              "section_review",
+              "general"
+            ],
+            "title": "Kind"
           },
           "section_key": {
             "anyOf": [
@@ -27580,12 +27635,31 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "suggestion_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "accepted",
+                  "dismissed",
+                  "applied",
+                  "superseded"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Status"
           }
         },
         "type": "object",
         "required": [
           "id",
           "summary",
+          "kind",
           "raised_on_version",
           "created_at"
         ],
