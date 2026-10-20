@@ -1259,7 +1259,20 @@ async def _advance(
         art["baseline_import"] = baseline_import
     items_check: dict[str, Any] | None = None
     if ITEMS_FILE in sdef.outputs:
-        items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+        try:
+            items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+        except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
+            log.exception("checking %s of run %s failed", ITEMS_FILE, run.id)
+            items_check = {
+                "items": 0,
+                "by_horizon": {},
+                "problems": [
+                    {
+                        "code": "unreadable_yaml",
+                        "message": f"{ITEMS_FILE} could not be checked ({type(exc).__name__})",
+                    }
+                ],
+            }
         art["items_check"] = items_check
     if sdef.imports_draft:
         kind = await _target_kind(db, run)
@@ -1348,9 +1361,11 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
             )
     # CR-11: a date only with a verified estimate, capacity or commitment behind it.
     bases = await schedule.verified_bases(db, prd_id)
-    return roadmap.check_items(
+    # In a worker thread with a time cap: agent output never holds the event loop.
+    check = await roadmap.check_items_async(
         text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
-    ).as_json()
+    )
+    return check.as_json()
 
 
 # --------------------------------------------------------------------------- tick

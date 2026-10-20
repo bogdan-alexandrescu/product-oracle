@@ -410,7 +410,7 @@ async def import_items(
             )
         )
     bases = await schedule.verified_bases(db, prd_doc.id if prd_doc else None)
-    check = items_file.check_items(
+    check = await items_file.check_items_async(
         text,
         prd_slug=prd_doc.slug if prd_doc else None,
         prd_version=prd_version.number if prd_version else None,
@@ -651,7 +651,7 @@ async def on_roadmap_version(
             found = await run_items_file(db, document)
             if found is not None:
                 text, run = found
-                items_file.load_items_yaml(text)
+                # Parsed once, by import_items (a refused file stores no items).
                 await import_items(db, version, text, run_id=run.id)
             else:
                 await carry_forward(db, version)
