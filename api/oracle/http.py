@@ -1,7 +1,6 @@
 from fastapi import HTTPException, Request, status
 
-# The largest request body a route reading it raw (a YAML graph, a markdown draft) takes.
-MAX_BODY_BYTES = 20 * 1024 * 1024
+from oracle.config import get_settings
 
 
 def not_implemented(lane: str) -> HTTPException:
@@ -9,20 +8,21 @@ def not_implemented(lane: str) -> HTTPException:
     return HTTPException(status.HTTP_501_NOT_IMPLEMENTED, f"Not implemented yet (lane {lane})")
 
 
-async def read_body(request: Request) -> bytes:
-    """The request's body, refused (413) past :data:`MAX_BODY_BYTES` as it is read, not
-    after. A route calls it before it takes the review gate: a slow client never holds
-    the gate while its body arrives."""
+async def read_capped_body(request: Request, limit: int | None = None) -> bytes:
+    """The request body, read in chunks and refused (413) past ``limit`` bytes
+    (``ORACLE_MAX_BODY_BYTES``, 1 MiB): an untrusted body is never buffered whole."""
+    cap = get_settings().max_body_bytes if limit is None else limit
     too_large = HTTPException(
-        413,
-        f"body larger than {MAX_BODY_BYTES // (1024 * 1024) or 1} MB",
+        status.HTTP_413_CONTENT_TOO_LARGE, f"request body is larger than {cap} bytes"
     )
-    length = request.headers.get("content-length")
-    if length and length.isdigit() and int(length) > MAX_BODY_BYTES:
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > cap:
         raise too_large
-    body = bytearray()
+    chunks: list[bytes] = []
+    size = 0
     async for chunk in request.stream():
-        body += chunk
-        if len(body) > MAX_BODY_BYTES:
+        size += len(chunk)
+        if size > cap:
             raise too_large
-    return bytes(body)
+        chunks.append(chunk)
+    return b"".join(chunks)

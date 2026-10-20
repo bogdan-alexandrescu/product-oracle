@@ -1,0 +1,769 @@
+{
+  "_note": "Synthetic data for the I3 design proposals. Every proposal draws THESE numbers, so the ten can be compared fairly. Quillfield is fictional: software for independent vet clinics.",
+  "company": "Quillfield",
+  "viewer": {
+    "name": "Maya K.",
+    "initials": "MK",
+    "role": "owner"
+  },
+  "people": {
+    "ines": "Ines R. (engineering lead)",
+    "tomas": "Tomas B. (customer success)"
+  },
+  "goals": [
+    {
+      "id": "G1",
+      "name": "Net revenue retention",
+      "target_text": "92%",
+      "current": 87,
+      "target": 92,
+      "unit": "%",
+      "better": "up",
+      "trend_6m": [
+        84,
+        85,
+        85,
+        86,
+        86,
+        87
+      ],
+      "status": "confirmed",
+      "confidence": 0.84,
+      "evidence": 23,
+      "owner": "Ines R."
+    },
+    {
+      "id": "G2",
+      "name": "Front-desk minutes per appointment",
+      "target_text": "3 min",
+      "current": 4.6,
+      "target": 3,
+      "baseline": 6,
+      "unit": "min",
+      "better": "down",
+      "trend_6m": [
+        6.0,
+        5.6,
+        5.3,
+        5.0,
+        4.8,
+        4.6
+      ],
+      "status": "confirmed",
+      "confidence": 0.66,
+      "evidence": 31,
+      "owner": "Tomas B."
+    },
+    {
+      "id": "G3",
+      "name": "Paying UK clinics",
+      "target_text": "400 by end of 2027",
+      "current": 236,
+      "target": 400,
+      "unit": "clinics",
+      "better": "up",
+      "trend_6m": [
+        180,
+        192,
+        205,
+        214,
+        226,
+        236
+      ],
+      "status": "confirmed",
+      "confidence": 0.58,
+      "evidence": 19,
+      "owner": "Ines R."
+    },
+    {
+      "id": "G4",
+      "name": "Support tickets per clinic per month",
+      "target_text": "under 1.5",
+      "current": 1.9,
+      "target": 1.5,
+      "unit": "tickets",
+      "better": "down",
+      "trend_6m": [
+        2.3,
+        2.2,
+        2.1,
+        2.0,
+        1.9,
+        1.9
+      ],
+      "status": "proposed",
+      "confidence": 0.34,
+      "evidence": 4,
+      "owner": null
+    }
+  ],
+  "features": [
+    {
+      "name": "Automated reminder SMS",
+      "state": "shipped",
+      "serves": {
+        "G1": 0.78,
+        "G2": 0.57
+      }
+    },
+    {
+      "name": "Stock reorder suggestions",
+      "state": "proposed",
+      "serves": {
+        "G1": 0.31
+      }
+    },
+    {
+      "name": "Online booking widget",
+      "state": "shipped",
+      "serves": {
+        "G2": 0.88,
+        "G3": 0.7
+      }
+    },
+    {
+      "name": "Check-in from the waiting room",
+      "state": "in build",
+      "serves": {
+        "G2": 0.61
+      }
+    },
+    {
+      "name": "Multi-site dashboard",
+      "state": "planned",
+      "serves": {
+        "G3": 0.64
+      }
+    },
+    {
+      "name": "Legacy fax import",
+      "state": "shipped",
+      "serves": {},
+      "flag": "serves no goal; 3 tickets in 12 months"
+    }
+  ],
+  "prds": [
+    {
+      "name": "Online deposits at booking",
+      "version": "v3",
+      "state": "in review",
+      "journey_stage": "Review",
+      "journey_index": 8,
+      "blockers": 2,
+      "serves": [
+        "G1",
+        "G3"
+      ],
+      "is_track": false
+    },
+    {
+      "name": "Multi-site dashboard",
+      "version": "v2",
+      "state": "published",
+      "is_track": true
+    },
+    {
+      "name": "Check-in from the waiting room",
+      "version": "v1",
+      "state": "published",
+      "is_track": true
+    }
+  ],
+  "journey_steps": [
+    "Idea",
+    "Sources",
+    "Gaps",
+    "Composition",
+    "Research",
+    "Blockers",
+    "Draft run",
+    "Review",
+    "Publish"
+  ],
+  "tracks": [
+    {
+      "name": "Multi-site dashboard",
+      "status": "on track",
+      "now_milestone": "M1 Site switcher",
+      "done": 6,
+      "total": 9,
+      "at_risk": 0,
+      "slipped": 0,
+      "serves": [
+        "G3"
+      ]
+    },
+    {
+      "name": "Check-in from the waiting room",
+      "status": "drifting",
+      "now_milestone": "Check-in v1.1",
+      "done": 4,
+      "total": 7,
+      "at_risk": 1,
+      "at_risk_item": "SMS arrival link",
+      "slipped": 2,
+      "serves": [
+        "G2"
+      ]
+    }
+  ],
+  "needs_you": {
+    "decisions": [
+      {
+        "kind": "Checkpoint",
+        "title": "Approve priority order",
+        "context": "Online deposits \u00b7 run 0412",
+        "age": "12m"
+      },
+      {
+        "kind": "Cost approval",
+        "title": "Start roadmap run",
+        "context": "Multi-site dashboard \u00b7 run 0413",
+        "age": "1h",
+        "cost": "$64.00 estimate"
+      },
+      {
+        "kind": "Overrun",
+        "title": "Resume or cancel",
+        "context": "Check-in \u00b7 run 0414",
+        "age": "3h",
+        "cost": "$27.60 of $18.00"
+      }
+    ],
+    "reviews": [
+      {
+        "kind": "Approval",
+        "title": "Functional requirements r4",
+        "context": "Online deposits v3",
+        "age": "2h"
+      },
+      {
+        "kind": "Comments",
+        "title": "3 comments to resolve",
+        "context": "Online deposits v3",
+        "age": "3h"
+      }
+    ],
+    "questions": [
+      {
+        "kind": "Interview",
+        "title": "No-show rate worth solving?",
+        "context": "Online deposits",
+        "age": "20m"
+      },
+      {
+        "kind": "Asked you",
+        "title": "Same-day cancellation refund?",
+        "from": "Tomas B.",
+        "context": "Online deposits",
+        "age": "1d"
+      }
+    ]
+  },
+  "requests": {
+    "open": 41,
+    "new_this_week": 9,
+    "unreviewed": 3,
+    "qualified": 24,
+    "disqualified": 6,
+    "merged_duplicates": 8,
+    "weekly_new_8w": [
+      4,
+      6,
+      5,
+      7,
+      6,
+      8,
+      7,
+      9
+    ],
+    "by_source": {
+      "Support": 18,
+      "Sales": 11,
+      "Slack": 7,
+      "Interviews": 5
+    },
+    "themes": [
+      {
+        "name": "Deposits and no-shows",
+        "count": 14,
+        "goal": "G1",
+        "prd": "Online deposits at booking"
+      },
+      {
+        "name": "Multi-site reporting",
+        "count": 9,
+        "goal": "G3",
+        "prd": "Multi-site dashboard"
+      },
+      {
+        "name": "Faster check-in",
+        "count": 8,
+        "goal": "G2",
+        "prd": "Check-in from the waiting room"
+      },
+      {
+        "name": "Stock and inventory",
+        "count": 5,
+        "goal": "G1",
+        "prd": null
+      },
+      {
+        "name": "Fax import",
+        "count": 2,
+        "goal": null,
+        "prd": null
+      }
+    ],
+    "rows": [
+      {
+        "title": "Take a deposit when booking new clients",
+        "source": "Sales",
+        "mentions": 6,
+        "goal": "G1",
+        "state": "Qualified",
+        "linked": "Online deposits at booking"
+      },
+      {
+        "title": "Charge no-show fee automatically",
+        "source": "Support",
+        "mentions": 5,
+        "goal": "G1",
+        "state": "Merged",
+        "merged_into": "Take a deposit when booking new clients"
+      },
+      {
+        "title": "Compare sites side by side",
+        "source": "Interviews",
+        "mentions": 4,
+        "goal": "G3",
+        "state": "Qualified",
+        "linked": "Multi-site dashboard"
+      },
+      {
+        "title": "Text clients when the vet is ready",
+        "source": "Slack",
+        "mentions": 3,
+        "goal": "G2",
+        "state": "New"
+      },
+      {
+        "title": "Kiosk mode for check-in",
+        "source": "Support",
+        "mentions": 3,
+        "goal": "G2",
+        "state": "New"
+      },
+      {
+        "title": "Reorder vaccines automatically",
+        "source": "Sales",
+        "mentions": 2,
+        "goal": "G1",
+        "state": "New"
+      },
+      {
+        "title": "Import faxed referrals",
+        "source": "Support",
+        "mentions": 2,
+        "goal": null,
+        "state": "Disqualified",
+        "reason": "No goal"
+      },
+      {
+        "title": "Dark mode for the front desk",
+        "source": "Slack",
+        "mentions": 1,
+        "goal": null,
+        "state": "Disqualified",
+        "reason": "Out of scope"
+      }
+    ]
+  },
+  "prd_review": {
+    "prd": "Online deposits at booking",
+    "version": "v3",
+    "versions": [
+      "v1",
+      "v2",
+      "v3"
+    ],
+    "view": "Full",
+    "sections": [
+      {
+        "name": "Problem",
+        "status": "approved"
+      },
+      {
+        "name": "Goals",
+        "status": "approved"
+      },
+      {
+        "name": "Users",
+        "status": "approved"
+      },
+      {
+        "name": "Functional requirements",
+        "status": "in review",
+        "revision": "r4",
+        "current": true
+      },
+      {
+        "name": "Non-functional",
+        "status": "approved"
+      },
+      {
+        "name": "Rollout",
+        "status": "draft"
+      },
+      {
+        "name": "Risks",
+        "status": "draft"
+      },
+      {
+        "name": "Open questions",
+        "status": "draft"
+      }
+    ],
+    "reviewers": [
+      {
+        "name": "Ines R.",
+        "verdict": "approved"
+      },
+      {
+        "name": "Tomas B.",
+        "verdict": "changes requested"
+      },
+      {
+        "name": "Maya K.",
+        "verdict": "pending"
+      }
+    ],
+    "claim": {
+      "text": "38% of no-shows are first-time clients.",
+      "confidence": 0.81,
+      "evidence": [
+        {
+          "source": "Support tickets",
+          "count": 12
+        },
+        {
+          "source": "Booking export",
+          "count": 1
+        },
+        {
+          "source": "Interview: Harbourside clinic",
+          "count": 1
+        }
+      ]
+    },
+    "requirements": [
+      "FR-1 New clients pay a deposit when they book online.",
+      "FR-2 The clinic sets the deposit amount per appointment type.",
+      "FR-3 Deposits are refunded automatically when the client cancels 24 hours or more ahead.",
+      "FR-4 The deposit is applied to the final invoice."
+    ],
+    "suggestions": [
+      {
+        "by": "Tomas B.",
+        "text": "Let clinics waive the deposit for returning clients.",
+        "state": "open"
+      },
+      {
+        "by": "Oracle critic",
+        "text": "FR-3 does not say what happens for same-day cancellations.",
+        "state": "open"
+      },
+      {
+        "by": "Ines R.",
+        "text": "Name the payment provider.",
+        "state": "rejected",
+        "reason": "Implementation detail"
+      },
+      {
+        "by": "Oracle critic",
+        "text": "Add FR-4: apply the deposit to the invoice.",
+        "state": "accepted"
+      }
+    ],
+    "composition": {
+      "pack": "SaaS and B2B products",
+      "mandatory": 6,
+      "optional_on": 2,
+      "optional_off": 1
+    },
+    "blockers": [
+      "Same-day refund rule unanswered (critical gap)",
+      "Goals section cites G4, still proposed"
+    ]
+  },
+  "roadmap": {
+    "from": "Priority snapshot P-7 \u00b7 16 Oct",
+    "now": [
+      {
+        "track": "Multi-site dashboard",
+        "milestone": "M1 Site switcher",
+        "state": "on track"
+      },
+      {
+        "track": "Check-in from the waiting room",
+        "milestone": "Check-in v1.1",
+        "state": "at risk",
+        "at_risk_item": "SMS arrival link"
+      }
+    ],
+    "next": [
+      {
+        "track": "Multi-site dashboard",
+        "milestone": "M2 Group reporting"
+      },
+      {
+        "track": "Check-in from the waiting room",
+        "milestone": "Check-in v1.2 kiosk mode",
+        "slipped_from": "Now"
+      }
+    ],
+    "later": [
+      {
+        "track": "Multi-site dashboard",
+        "milestone": "M3 Consolidated billing"
+      }
+    ],
+    "pending": [
+      {
+        "prd": "Online deposits at booking",
+        "note": "joins after publish"
+      }
+    ]
+  },
+  "goal_progress_display": "distance to go in the goal's own unit (I3 round 2): G1 5 pts to go, G2 1.6 min to go, G3 164 to go, G4 0.4 to go",
+  "baseline": {
+    "snapshot": "14 Oct",
+    "sources": 6,
+    "confirmed_goals": 3,
+    "goals": 4,
+    "features_traced": 5,
+    "features": 6,
+    "evidence_items": 86,
+    "low_confidence_links": 2,
+    "flagged": 1,
+    "conflicts": 2,
+    "proposals": 3
+  },
+  "priorities": {
+    "snapshot": "P-7 \u00b7 16 Oct",
+    "order": [
+      {
+        "rank": 1,
+        "feature": "SMS arrival link",
+        "goal": "G2",
+        "fit": "high",
+        "confidence": 0.61,
+        "effort": "S",
+        "milestone": "Check-in v1.1",
+        "horizon": "Now"
+      },
+      {
+        "rank": 2,
+        "feature": "Site switcher",
+        "goal": "G3",
+        "fit": "high",
+        "confidence": 0.64,
+        "effort": "M",
+        "milestone": "M1 Site switcher",
+        "horizon": "Now"
+      },
+      {
+        "rank": 3,
+        "feature": "Deposit at booking for new clients",
+        "goal": "G1",
+        "fit": "high",
+        "confidence": 0.81,
+        "effort": "M",
+        "milestone": "after publish",
+        "horizon": "Pending"
+      },
+      {
+        "rank": 4,
+        "feature": "Automatic refund at 24 h",
+        "goal": "G1",
+        "fit": "medium",
+        "confidence": 0.7,
+        "effort": "S",
+        "milestone": "after publish",
+        "horizon": "Pending"
+      },
+      {
+        "rank": 5,
+        "feature": "Group reporting",
+        "goal": "G3",
+        "fit": "medium",
+        "confidence": 0.55,
+        "effort": "L",
+        "milestone": "M2 Group reporting",
+        "horizon": "Next"
+      },
+      {
+        "rank": 6,
+        "feature": "Kiosk mode for check-in",
+        "goal": "G2",
+        "fit": "medium",
+        "confidence": 0.48,
+        "effort": "M",
+        "milestone": "Check-in v1.2 kiosk mode",
+        "horizon": "Next"
+      },
+      {
+        "rank": 7,
+        "feature": "Stock reorder suggestions",
+        "goal": "G1",
+        "fit": "low",
+        "confidence": 0.31,
+        "effort": "M",
+        "milestone": null,
+        "horizon": "Unplanned"
+      }
+    ]
+  },
+  "runs": [
+    {
+      "id": "0412",
+      "for": "Online deposits at booking",
+      "flow": "Baseline \u2192 PRD",
+      "depth": "standard",
+      "state": "waiting for review",
+      "cost": "$18.40 of $22.00 estimate",
+      "segments": [
+        {
+          "n": 1,
+          "name": "Baseline proposal",
+          "roles": [
+            "researcher",
+            "analyst"
+          ],
+          "state": "succeeded",
+          "checkpoint": "approved by Maya K."
+        },
+        {
+          "n": 2,
+          "name": "Feature set, dependencies and design",
+          "roles": [
+            "analyst",
+            "architect"
+          ],
+          "state": "succeeded",
+          "checkpoint": "approved by Ines R."
+        },
+        {
+          "n": 3,
+          "name": "Priority order",
+          "roles": [
+            "prioritizer"
+          ],
+          "state": "succeeded",
+          "checkpoint": "waiting: approver or above",
+          "items": [
+            "Deposit at booking for new clients (G1)",
+            "Automatic refund at 24 h (G1)",
+            "Waive or refund from the appointment (G1)"
+          ]
+        },
+        {
+          "n": 4,
+          "name": "PRD draft",
+          "roles": [
+            "writer",
+            "critic"
+          ],
+          "state": "pending",
+          "checkpoint": "stops for PRD review"
+        }
+      ]
+    },
+    {
+      "id": "0413",
+      "for": "Multi-site dashboard",
+      "flow": "Roadmap",
+      "state": "waiting for cost approval",
+      "cost": "$64.00 estimate"
+    },
+    {
+      "id": "0414",
+      "for": "Check-in from the waiting room",
+      "flow": "Feedback loop",
+      "state": "paused on overrun",
+      "cost": "$27.60 of $18.00"
+    }
+  ],
+  "publish": {
+    "prd": "Online deposits at booking v3",
+    "blocks": [
+      "Same-day refund rule unanswered (critical gap)",
+      "Goals section cites G4, still proposed"
+    ],
+    "hard_checks": [
+      {
+        "name": "Composition confirmed",
+        "state": "pass"
+      },
+      {
+        "name": "Mandatory sections approved",
+        "state": "fail",
+        "detail": "4 of 8"
+      },
+      {
+        "name": "Critical gaps resolved",
+        "state": "fail",
+        "detail": "1 open"
+      },
+      {
+        "name": "Latest version",
+        "state": "pass"
+      }
+    ],
+    "advisory": {
+      "note": "T2: ten advisory readiness criteria; take their names from docs/product-oracle-v2/build-prompt.md",
+      "pass": 7,
+      "warn": 2,
+      "fail": 1
+    },
+    "records": [
+      "version v3 frozen with its evidence",
+      "publish event with approvers",
+      "product track created: Online deposits at booking"
+    ],
+    "risk_acceptance": "owners only (B4); an approver sees: Only an owner can accept this risk"
+  },
+  "idea_interview": {
+    "idea": "Online deposits at booking",
+    "step": "Gaps",
+    "asked_by": "Oracle",
+    "turns": [
+      {
+        "q": "Which clinics lose the most to no-shows?",
+        "a": "Single-vet clinics with online booking.",
+        "by": "Maya K."
+      },
+      {
+        "q": "Do clinics already take deposits by phone?",
+        "a": "Some, by card on file.",
+        "by": "Maya K."
+      },
+      {
+        "q": "What no-show rate makes deposits worth building?",
+        "a": null,
+        "waiting": true
+      }
+    ],
+    "quick_replies": [
+      "I don't know",
+      "Defer",
+      "Ask someone",
+      "Research this"
+    ],
+    "gaps": {
+      "open": 3,
+      "answered": 5,
+      "critical": 1
+    }
+  }
+}

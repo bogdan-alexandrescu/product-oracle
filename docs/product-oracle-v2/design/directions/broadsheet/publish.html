@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Broadsheet · publish</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#f6f1e8;--surface:#fffcf6;--surface2:#efe7da;--sunken:#e6dccb;--border:#dccfbb;--border-strong:#b5a48c;--text:#1f1a15;--text2:#4b4036;--text3:#675a4c;--accent:#9c3b1b;--accent-hover:#7f2f14;--on-accent:#fffcf6;--accent-soft:#f6e2d6;--accent-soft-text:#7a2e13;--focus:#9c3b1b;--highlight:#f7e3a1;--highlight-text:#1f1a15;--pass:#2b6332;--pass-bg:#e3eed8;--warn:#835000;--warn-bg:#f6e8c8;--crit:#a02a1c;--crit-bg:#f7e0d9;--na:#5a5047;--na-bg:#ebe3d6;--info:#2c5877;--info-bg:#e0e9ee;--nav-bg:#f6f1e8;--nav-text:#4b4036;--nav-active-bg:#f6f1e8;--nav-active-text:#1f1a15;--scrim:rgba(40,30,20,.5);color-scheme:light}
+@media (prefers-color-scheme: dark){:root{--bg:#1b1714;--surface:#231e1a;--surface2:#2c2621;--sunken:#14110e;--border:#3d352d;--border-strong:#5e5246;--text:#f2ebe1;--text2:#d2c6b6;--text3:#ab9d8b;--accent:#ec8a62;--accent-hover:#f3a283;--on-accent:#1b1714;--accent-soft:#3b261c;--accent-soft-text:#f6bfa6;--focus:#ec8a62;--highlight:#4d3d17;--highlight-text:#fbeec7;--pass:#9fd08f;--pass-bg:#1f2a1b;--warn:#e8b765;--warn-bg:#30271a;--crit:#f39886;--crit-bg:#3a1e18;--na:#bfb3a4;--na-bg:#2c2621;--info:#9cc3df;--info-bg:#1d2a33;--nav-bg:#1b1714;--nav-text:#d2c6b6;--nav-active-bg:#1b1714;--nav-active-text:#ffffff;--scrim:rgba(0,0,0,.62);color-scheme:dark}}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+::placeholder{color:var(--text3);opacity:1}
+h1,h2,h3,h4,p,ul,ol,dl,dd,figure{margin:0}
+ul,ol{padding:0;list-style:none}
+a{color:inherit;text-decoration:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.num{font-variant-numeric:tabular-nums}
+
+body{font:15px/23px 'Instrument Sans', system-ui, sans-serif}
+.serif{font-family:'Newsreader', Georgia, serif}
+.mast{display:flex;align-items:center;gap:28px;height:60px;padding:0 40px;border-bottom:1px solid var(--text)}
+.mast .brand{font:600 21px/1 'Newsreader', Georgia, serif;letter-spacing:-.01em;white-space:nowrap}
+.mast .brand em{font-style:italic;font-weight:400;color:var(--accent)}
+.mast nav{display:flex;gap:4px;align-self:stretch}
+.mast nav a{display:flex;align-items:center;gap:6px;padding:0 12px;color:var(--nav-text);border-bottom:3px solid transparent;margin-bottom:-1px}
+.mast nav a[aria-current]{color:var(--nav-active-text);font-weight:600;border-color:var(--accent)}
+.mast nav .count{font-size:12px;line-height:20px;font-weight:600;min-width:20px;height:20px;border-radius:10px;background:var(--accent);color:var(--on-accent);display:inline-grid;place-items:center;padding:0 6px}
+.mast .right{margin-left:auto;display:flex;gap:20px;align-items:center;color:var(--text2);font-size:14px;white-space:nowrap}
+.mast .right button{background:none;border:0;padding:0;color:var(--text2)}
+.mast .mmenu{display:none}
+.wrap{max-width:1360px;margin:0 auto;padding:24px 40px 20px}
+.kicker{font:600 12px/16px 'Instrument Sans', system-ui, sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+h1.t{font:500 36px/42px 'Newsreader', Georgia, serif;letter-spacing:-.01em;margin-top:4px}
+.lede{font:400 18px/28px 'Newsreader', Georgia, serif;color:var(--text2);max-width:780px;margin-top:6px}
+.lede b{color:var(--text);font-weight:600}
+.btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:4px;border:1px solid var(--border-strong);background:transparent;color:var(--text);font-weight:500;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.sm{height:32px;padding:0 12px;font-size:14px}
+.btn.link{border:0;padding:0;height:auto;color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.btn[disabled]{background:var(--surface2);color:var(--text3);border-color:var(--border);cursor:not-allowed}
+.hdr{display:flex;align-items:flex-end;gap:24px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+.hdr .act{margin-left:auto;display:flex;gap:12px}
+.tabs{display:flex;gap:24px;margin-top:16px;font-size:14px}
+.tabs span{color:var(--text2);padding-bottom:6px;white-space:nowrap}
+.tabs span[aria-selected=true]{color:var(--text);font-weight:600;border-bottom:2px solid var(--text)}
+.tabs i{font-style:normal;color:var(--text3);margin-left:4px}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:500;line-height:18px;padding:2px 10px;border-radius:999px;white-space:nowrap}
+.pill .ic{width:13px;height:13px}
+.p-pass{background:var(--pass-bg);color:var(--pass)}.p-warn{background:var(--warn-bg);color:var(--warn)}
+.p-crit{background:var(--crit-bg);color:var(--crit)}.p-na{background:var(--na-bg);color:var(--na)}.p-info{background:var(--info-bg);color:var(--info)}
+.cap{font:600 12px/16px 'Instrument Sans', system-ui, sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+/* baseline */
+.goals{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:20px;border-top:1px solid var(--text)}
+.goal{padding:16px 22px 8px;border-left:1px solid var(--border)}
+.goal:first-child{border-left:0;padding-left:0}
+.goal:last-child{padding-right:0}
+.goal .gid{display:flex;justify-content:space-between;align-items:center}
+.goal h2{font:500 21px/27px 'Newsreader', Georgia, serif;margin:8px 0 6px;min-height:81px}
+.goal .tgt{font-size:14px;color:var(--text2)}
+.goal .fig{display:flex;align-items:baseline;gap:10px;margin:14px 0 4px;padding-top:12px;border-top:1px solid var(--border)}
+.goal .fig b{font:500 30px/34px 'Newsreader', Georgia, serif}
+.goal .fig span{font-size:13px;color:var(--text2)}
+.goal .meta{font-size:13px;color:var(--text2)}
+.goal ul{margin-top:14px;border-top:1px solid var(--border)}
+.goal li{padding:9px 0;border-bottom:1px solid var(--border);font-size:14px;line-height:20px}
+.goal li .r{display:flex;justify-content:space-between;color:var(--text2);font-size:13px;margin-top:3px}
+.goal .none{font-size:14px;color:var(--text2);font-style:italic;font-family:'Newsreader', Georgia, serif;padding-top:10px}
+.lv-low{color:var(--crit)}.lv-med{color:var(--warn)}.lv-high{color:var(--pass)}
+.dots{display:inline-flex;gap:3px;vertical-align:middle;margin-right:6px}
+.dots i{width:7px;height:7px;border-radius:50%;border:1.5px solid currentColor}
+.dots i.on{background:currentColor}
+.margin{margin-top:18px;display:flex;gap:14px;align-items:baseline;padding:12px 16px;background:var(--crit-bg);border-radius:4px}
+.margin .cap{color:var(--crit)}
+.margin p{font:italic 400 17px/26px 'Newsreader', Georgia, serif;color:var(--text)}
+/* idea gaps */
+.memo{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:48px;margin-top:18px}
+.brief{font:italic 400 22px/31px 'Newsreader', Georgia, serif;padding-left:18px;border-left:3px solid var(--accent)}
+.brief small{display:block;font:400 13px/18px 'Instrument Sans', system-ui, sans-serif;font-style:normal;color:var(--text2);margin-top:4px}
+.view{font:400 18px/28px 'Newsreader', Georgia, serif;margin-top:16px}
+.view b{font-family:'Instrument Sans', system-ui, sans-serif;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-right:8px}
+.mcols{display:grid;grid-template-columns:1fr 1fr;gap:0 36px;margin-top:16px}
+.blk{padding:12px 0;border-top:1px solid var(--border)}
+.blk h2{font:500 19px/25px 'Newsreader', Georgia, serif;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.blk p,.blk li{font-size:14px;line-height:21px}
+.blk .s{color:var(--text2)}
+.blk li{padding:3px 0;display:flex;gap:10px;align-items:baseline}
+.blk li .grow{flex:1}
+.versus{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:4px 0}
+.versus b{font:600 13px 'Instrument Sans', system-ui, sans-serif;color:var(--text3)}
+.unc li{align-items:baseline}
+.unc .n{font:500 24px/24px 'Newsreader', Georgia, serif;color:var(--accent);width:18px}
+.qs{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 20px;align-self:start}
+.qs h2{font:500 22px/28px 'Newsreader', Georgia, serif}
+.qs .sub{font-size:13px;color:var(--text2);margin-bottom:6px}
+.q{padding:10px 0;border-top:1px solid var(--border)}
+.q .qq{font:500 17px/24px 'Newsreader', Georgia, serif}
+.q .why{font-size:13px;line-height:19px;color:var(--text2);margin:2px 0 8px}
+.q textarea{width:100%;height:60px;resize:none;border:1px solid var(--border-strong);border-radius:4px;background:var(--bg);padding:8px 10px;font-size:14px;line-height:20px}
+.opts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:13px}
+.opts button{background:none;border:0;padding:0;color:var(--text2);text-decoration:underline;text-decoration-color:var(--border-strong);text-underline-offset:3px}
+.opts button[aria-pressed=true]{color:var(--accent-soft-text);background:var(--accent-soft);text-decoration:none;padding:1px 8px;border-radius:999px;font-weight:600}
+.qs .foot{display:flex;align-items:center;gap:12px;padding-top:14px;border-top:1px solid var(--border)}
+.qs .foot span{font-size:13px;color:var(--text2);flex:1}
+/* prd review */
+.doctop{display:flex;align-items:center;gap:16px;padding:14px 40px;border-bottom:1px solid var(--border)}
+.doctop .tt{font:500 20px/26px 'Newsreader', Georgia, serif}
+.doctop .tt span{color:var(--text3);font:400 15px 'Instrument Sans', system-ui, sans-serif;margin-left:8px}
+.doctop .sp{flex:1}
+.toggle{display:inline-flex;border:1px solid var(--border-strong);border-radius:999px;padding:2px}
+.toggle button{border:0;background:none;padding:4px 14px;border-radius:999px;font-size:14px;color:var(--text2)}
+.toggle button[aria-pressed=true]{background:var(--text);color:var(--bg);font-weight:600}
+.rv{display:grid;grid-template-columns:minmax(0,1fr) 380px;min-height:calc(100vh - 140px)}
+.paper{padding:18px 40px 24px;display:grid;align-content:start;grid-template-columns:minmax(0,600px) 340px;gap:0 32px;justify-content:center}
+.paper>*{grid-column:1}
+.status{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:13px;color:var(--text2)}
+.status b{color:var(--text);font-weight:600}
+.paper h1{font:500 34px/40px 'Newsreader', Georgia, serif;margin:4px 0 8px}
+.vbar{display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:18px;font-size:14px}
+.vbar .note{margin-left:auto;color:var(--text2);font-size:13px}
+.prose{font:400 18px/27px 'Newsreader', Georgia, serif}
+.prose p{margin-bottom:14px}
+.prose ol{counter-reset:none}
+.prose ol>li{display:grid;grid-template-columns:52px 1fr;padding:6px 0}
+.prose .rid{font:600 13px/27px 'Instrument Sans', system-ui, sans-serif;color:var(--text3)}
+.claim{background:var(--highlight);color:var(--highlight-text);box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:1px 2px;border-radius:2px}
+.prose ol>li{position:relative}
+.sidenote{position:absolute;left:calc(100% + 32px);top:-2px;width:340px;font-family:'Instrument Sans', system-ui, sans-serif;border-left:2px solid var(--accent);padding:2px 0 2px 16px;font-size:13px;line-height:19px}
+.sidenote h3{font:600 12px/16px 'Instrument Sans', system-ui, sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);display:flex;justify-content:space-between;align-items:center}
+.sidenote h3 button{background:none;border:0;padding:0;color:var(--text2);display:flex}
+.sidenote .cl{font:italic 400 16px/22px 'Newsreader', Georgia, serif;margin:6px 0 8px}
+.sidenote li{padding:5px 0;border-top:1px solid var(--border)}
+.sidenote li b{display:block;font-weight:600;color:var(--text)}
+.sidenote .s{color:var(--text2)}
+.sidenote .cf{margin-top:8px;padding:8px 10px;background:var(--warn-bg);color:var(--text);border-radius:4px}
+.sidenote .cf b{color:var(--warn)}
+.comp{border-left:1px solid var(--border);background:var(--surface);padding:22px 24px}
+.comp h2{font:500 22px/28px 'Newsreader', Georgia, serif}
+.comp .rev{font-size:13px;color:var(--text2);margin:2px 0 12px}
+.comp li{padding:9px 0;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:14px;line-height:20px}
+.comp li .w{grid-column:1/-1;color:var(--text2);font-size:13px;line-height:18px}
+.comp li .m{grid-column:1/-1;color:var(--warn);font-size:13px;line-height:18px}
+.comp li.omit>span:first-child{color:var(--text2);text-decoration:line-through}
+.comp .facts{font-size:13px;line-height:19px;color:var(--text2);border-top:1px solid var(--border);padding-top:10px}
+.comp .facts b{color:var(--text);font-weight:600}
+.comp .btn{margin-top:14px}
+.contents{display:none}
+/* runs inbox */
+.ri{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:48px}
+.costline{display:flex;gap:40px;align-items:flex-end;margin:12px 0 6px}
+.costline div{font-size:13px;color:var(--text2)}
+.costline b{display:block;font:500 26px/30px 'Newsreader', Georgia, serif;color:var(--text)}
+.costline p{margin-left:auto;max-width:300px;font:italic 16px/23px 'Newsreader', Georgia, serif;color:var(--text2);text-align:right}
+.track{position:relative;height:10px;background:var(--sunken);border-radius:5px;margin:6px 0 30px}
+.track i{position:absolute;inset:0 auto 0 0;background:var(--text);border-radius:5px}
+.track span{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--text2)}
+.track span.c{background:var(--crit)}
+.track em{position:absolute;top:16px;transform:translateX(-50%);font-style:normal;font-size:12px;color:var(--text2);white-space:nowrap}
+.tl{border-top:1px solid var(--text)}
+.tl>li{display:grid;grid-template-columns:44px 1fr auto;gap:0 16px;padding:8px 0;border-bottom:1px solid var(--border)}
+.tl .n{font:500 26px/28px 'Newsreader', Georgia, serif;color:var(--text3)}
+.tl .tt{font:500 19px/26px 'Newsreader', Georgia, serif}
+.tl .roles{font-size:13px;color:var(--text2)}
+.tl .money{text-align:right;font-size:14px;white-space:nowrap}
+.tl .money small{display:block;color:var(--text2);font-size:13px}
+.tl .cpl{grid-column:2/-1;font-size:14px;color:var(--text2);display:flex;gap:8px;align-items:center}
+.tl .wait{grid-column:2/-1;margin-top:6px;background:var(--surface);border:1px solid var(--warn);border-radius:6px;padding:10px 16px 12px}
+.wait h3{font:500 19px/25px 'Newsreader', Georgia, serif;display:flex;gap:10px;align-items:center}
+.wait .s{font-size:13px;color:var(--text2)}
+.wait ol{margin:6px 0;font-size:14px}
+.wait ol li{display:flex;gap:10px;padding:3px 0;border-top:1px solid var(--border)}
+.wait ol li span:last-child{margin-left:auto;color:var(--text2)}
+.wait textarea{width:100%;height:36px;resize:none;border:1px solid var(--border-strong);border-radius:4px;background:var(--bg);padding:8px 10px}
+.wait .a{display:flex;gap:12px;margin-top:10px}
+.inb h2{font:500 26px/32px 'Newsreader', Georgia, serif;padding-bottom:6px;border-bottom:1px solid var(--text)}
+.inb h3{display:flex;justify-content:space-between;margin-top:14px}
+.inb li{padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px}
+.inb li[aria-current]{background:var(--accent-soft);border-radius:4px;border-bottom-color:transparent}
+.inb li b{display:flex;justify-content:space-between;font-weight:600;gap:8px}
+.inb li b span{font-weight:400;color:var(--text2);font-size:13px;white-space:nowrap}
+.inb li[aria-current] b span,.inb li[aria-current] .s{color:var(--accent-soft-text)}
+.inb .s{color:var(--text2);font-size:13px}
+.inb .empty{font:italic 15px 'Newsreader', Georgia, serif;color:var(--text2);padding:6px 0}
+/* publish */
+.scrim{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center}
+.sheet{width:1040px;background:var(--surface);border-radius:8px;box-shadow:0 24px 60px rgba(40,25,10,.25);padding:26px 32px 22px}
+.sheet .top{display:flex;align-items:flex-start;gap:16px}
+.sheet h2{font:500 30px/36px 'Newsreader', Georgia, serif}
+.sheet .top button.x{margin-left:auto;background:none;border:0;color:var(--text2);padding:4px;display:flex}
+.sheet .intro{font:400 17px/26px 'Newsreader', Georgia, serif;color:var(--text2);margin:4px 0 16px}
+.sheet .grid{display:grid;grid-template-columns:1fr 1fr;gap:36px}
+.blocks{border-top:3px solid var(--crit)}
+.blocks li{padding:12px 0;border-bottom:1px solid var(--border);display:grid;grid-template-columns:22px 1fr;gap:2px 10px}
+.blocks .ic{color:var(--crit);margin-top:3px}
+.blocks b{font:500 18px/24px 'Newsreader', Georgia, serif}
+.blocks .k{font:600 12px/16px 'Instrument Sans', system-ui, sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--crit)}
+.blocks p{grid-column:2;font-size:14px;line-height:20px;color:var(--text2)}
+.recs{margin-top:16px;font-size:14px;line-height:22px;display:grid;grid-template-columns:auto 1fr;gap:0 16px}
+.recs dt{color:var(--text2)}
+.crit-list{border-top:3px solid var(--text)}
+.crit-list li{display:grid;grid-template-columns:20px 1fr auto;gap:0 10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:14px;line-height:20px;align-items:start}
+.crit-list li .ic{margin-top:2px}
+.crit-list li p{grid-column:2/-1;font-size:13px;line-height:18px;color:var(--text2)}
+.c-pass{color:var(--pass)}.c-warning{color:var(--warn)}.c-critical{color:var(--crit)}.c-na{color:var(--na)}
+.hp{font-size:14px;color:var(--text2);margin-top:12px;display:flex;gap:8px;align-items:center}
+.hp .ic{color:var(--pass)}
+.sheet footer{display:flex;align-items:center;gap:12px;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.sheet footer .why{margin-right:auto;font:italic 17px 'Newsreader', Georgia, serif;color:var(--crit)}
+.dim{filter:saturate(.7)}
+@media (max-width:720px){
+  .mast{padding:0 16px;height:56px;gap:12px}
+  .mast nav,.mast .right{display:none}
+  .mast .mmenu{display:inline-flex;margin-left:auto}
+  .wrap{padding:20px 16px 28px}
+  h1.t{font-size:30px;line-height:36px}
+  .lede{font-size:17px;line-height:26px}
+  .memo{display:block}
+  .mcols{display:block}
+  .qs{margin-top:20px;padding:16px}
+  .opts{gap:8px 14px}
+  .brief{font-size:20px;line-height:28px}
+  .doctop{padding:12px 16px;flex-wrap:wrap;gap:10px}
+  .doctop .sp{display:none}
+  .doctop .tt{width:100%}
+  .rv{display:block}
+  .paper{display:block;padding:18px 16px 24px}
+  .paper h1{font-size:28px;line-height:34px}
+  .vbar{flex-wrap:wrap}
+  .vbar .note{margin-left:0;width:100%}
+  .prose{font-size:17px;line-height:27px}
+  .prose ol>li{grid-template-columns:44px 1fr}
+  .sidenote{position:static;width:auto;grid-column:1/-1;margin:8px 0 6px;background:var(--surface);padding:10px 12px}
+  .comp{border-left:0;border-top:1px solid var(--text);padding:18px 16px}
+  .contents{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text2);margin-bottom:6px}
+}
+
+</style>
+</head>
+<body class="">
+<div class="dim" aria-hidden="true" inert><header class="mast"><span class="brand">Product <em>Oracle</em></span>
+<nav aria-label="Oracle"><a href="#">Baseline</a><a href="#">Runs</a><a href="#" aria-current="page">PRDs</a><a href="#">Priorities</a><a href="#">Roadmap</a><a href="#">Inbox<span class="count">4</span></a></nav>
+<div class="right"><a href="#">Settings</a><span>maya.k@quillfield.example</span><button type="button">Sign out</button></div>
+<button class="btn sm mmenu" type="button"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>Menu</button></header>
+<div class="doctop"><span class="tt">Online deposits at booking<span>v3 · Startup standard · 1.4</span></span><span class="sp"></span>
+  <div class="toggle" role="group" aria-label="Layer"><button aria-pressed="false">Brief</button><button aria-pressed="true">Full</button></div>
+  <button class="btn sm" type="button">Compare versions</button><button class="btn sm" type="button">Present</button><button class="btn sm" type="button">Export</button><button class="btn sm primary" type="button">Publish…</button></div>
+  <div class="rv"><article class="paper">
+    <div class="contents"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 1.5h8v13H4z"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>Section 5 of 8 · <a href="#" class="btn link">Contents</a></div>
+    <div class="status"><span class="pill p-crit"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg>Changes requested</span><span>Revision <b>r4</b> (was r3)</span><span>Due <b>24 Oct</b></span><span>Owner <b>Tomas B.</b></span><span>Reviewers <b>Ines R., Dev L.</b></span></div>
+    <h1>Functional requirements</h1>
+    <div class="vbar"><button class="btn sm" type="button">Approve</button><button class="btn sm" type="button">Request changes</button><button class="btn sm" type="button">Reject</button><span class="note">3 comments · the r3 approval is stale</span></div>
+    <div class="prose"><p>A pet owner booking a first appointment online pays a refundable deposit before the slot is held. Regular clients skip the deposit unless the clinic turns it on for them.</p><ol><li><span class="rid">FR-1</span><span>The booking widget asks for a deposit when the clinic has deposits on and the client is new.</span></li><li><span class="rid">FR-2</span><span><mark class="claim">No-shows cost a typical clinic about 9% of booked slots</mark>, so the deposit defaults to £15.</span><aside class="sidenote" data-overhang aria-label="Evidence inspector"><h3>Evidence for the marked claim<button type="button" aria-label="Close inspector"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></h3>
+    <p class="s" style="margin-top:4px"><span class="lv-med"><span class="dots" aria-hidden="true"><i class="on"></i><i class="on"></i><i class=""></i></span>Medium 63%</span> confidence</p>
+    <ul><li><b>9.1% of slots</b><span class="s">Sep 2026 · Booking export, 58 clinics (upload)</span></li><li><b>7–12% reported</b><span class="s">Jul 2026 · Churn survey, question 14 (upload)</span></li><li><b>&quot;Every Monday we lose three slots&quot;</b><span class="s">Aug 2026 · Slack #support thread</span></li></ul>
+    <p class="cf"><b>Disagrees:</b> Sales call notes estimate 4%; older (Mar 2026) and from 2 clinics.</p><p class="s" style="margin-top:6px">In Sources and data points › Functional requirements › FR-2</p></aside></li><li><span class="rid">FR-3</span><span>A deposit is refunded automatically when the owner cancels at least 24 hours before the slot.</span></li><li><span class="rid">FR-4</span><span>Front-desk staff can waive or refund a deposit from the appointment, with a reason.</span></li></ol></div>
+  </article>
+  <aside class="comp" aria-label="Composition inspector"><h2>Composition</h2><p class="rev">Composition rev 3 · confirmed by Ines R.</p>
+    <ul><li class=""><span>Executive decision</span><span class="pill p-info">Mandatory</span><span class="w">Company policy</span></li><li class=""><span>Goals and success metrics</span><span class="pill p-info">Mandatory</span><span class="w">Company policy</span></li><li class=""><span>Functional requirements</span><span class="pill p-info">Mandatory</span><span class="w">Company policy</span></li><li class=""><span>Also included</span><span class="pill p-info">Mandatory</span><span class="w">Opportunity and problem · Users and jobs · Risks · Sources and data points</span></li><li class=""><span>Constraints and blockers</span><span class="pill p-warn">Suggested</span><span class="w">2 blocking uncertainties from Gaps</span></li><li class=""><span>Unit economics</span><span class="pill p-warn">Suggested</span><span class="w">Not in v3 yet · assumes a deposit ≤ £20</span><span class="m">Missing: Processor fee per transaction</span></li><li class=""><span>Multi-tenant configuration</span><span class="pill p-na">Optional</span><span class="w">Not in v3 · clinics turn deposits on per site</span></li><li class="omit"><span>AI evaluation</span><span class="pill p-na">Omitted</span><span class="w">No AI behaviour in scope</span></li></ul>
+    <p class="facts"><b>Depends:</b> Unit economics depends on Goals and success metrics. <b>Conflicts:</b> None.</p>
+    <button class="btn sm" type="button">Change composition</button></aside></div></div>
+<div class="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pt">
+  <div class="top"><div><div class="kicker">Publish · Brief and Full</div><h2 id="pt">Publish Online deposits at booking, v3</h2></div><button class="x" type="button" aria-label="Close"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <p class="intro">Two things block this publish. Everything else is advice: Oracle flags it, the decider chooses.</p>
+  <div class="grid"><section>
+    <div class="cap" style="margin-bottom:6px;color:var(--crit)">What blocks</div>
+    <ul class="blocks"><li><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg><span><span class="k">Review invariant</span><br><b>Stale approval: Functional requirements</b></span><p>Approved at r3; r4 changed FR-2 and FR-4. Needs Ines R. to approve r4.</p></li><li><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg><span><span class="k">Blocker policy</span><br><b>Hard blocker unresolved: payment provider coverage</b></span><p>No mitigation accepted for clinics without a supported processor.</p></li></ul>
+    <p class="hp"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg>Required sections present · Source permissions still valid · Security and policy checks: pass</p>
+    <dl class="recs"><dt>Version</dt><dd>v3 (immutable once published)</dd><dt>Template and composition</dt><dd>Startup standard 1.4 · composition rev 3</dd><dt>Decider</dt><dd>Ines R. (approver)</dd><dt>Appendix</dt><dd>Sources and data points, 41 items</dd></dl>
+  </section><section>
+    <div class="cap" style="margin-bottom:6px">Readiness · advisory, never blocks on its own</div>
+    <ul class="crit-list"><li><span class="c-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg></span><span>Problem and user clarity</span><span class="pill p-pass">Pass</span></li><li><span class="c-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg></span><span>Business goal alignment</span><span class="pill p-pass">Pass</span></li><li><span class="c-warning"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.2M8 11.6v.1"/></svg></span><span>Evidence and provenance</span><span class="pill p-warn">Warning</span><p>FR-2 rests on one export; sales notes disagree.</p></li><li><span class="c-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg></span><span>Alternatives and trade-offs</span><span class="pill p-pass">Pass</span></li><li><span class="c-critical"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg></span><span>Blocker and feasibility resolution</span><span class="pill p-crit">Critical</span><p>The payment provider blocker, listed under What blocks.</p></li><li><span class="c-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg></span><span>Scope and testable requirements</span><span class="pill p-pass">Pass</span></li><li><span class="c-critical"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg></span><span>Economic and scaling assumptions</span><span class="pill p-crit">Critical</span><p>Processor fee per deposit unknown. Advisory.</p></li><li><span class="c-warning"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.2M8 11.6v.1"/></svg></span><span>Validation plan and thresholds</span><span class="pill p-warn">Warning</span><p>No-show threshold not set (question 3 deferred).</p></li><li><span class="c-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg></span><span>Ownership and review</span><span class="pill p-pass">Pass</span></li><li><span class="c-na"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5 8h6"/></svg></span><span>Downstream design consistency</span><span class="pill p-na">Not applicable</span><p>No specs or wireframes yet.</p></li></ul>
+  </section></div>
+  <footer><span class="why">Resolve both blocks to publish.</span><button class="btn" type="button">Cancel</button><button class="btn primary" type="button" disabled>Publish v3</button></footer>
+</div></div>
+</body>
+</html>

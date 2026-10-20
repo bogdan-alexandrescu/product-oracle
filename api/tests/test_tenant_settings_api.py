@@ -40,6 +40,8 @@ async def test_defaults_and_unknown_keys(client, owner):
         },
         # v2-review: only the latest version of a document is published.
         "publish_latest_only": True,
+        "blocker_risk_acceptance_role": "owner",
+        "blocker_risk_review_max_days": 90,
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404

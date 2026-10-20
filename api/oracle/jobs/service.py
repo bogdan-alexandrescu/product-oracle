@@ -41,6 +41,7 @@ JOB_LABELS = {
     "review_comments": "Review comments",
     "reporting": "Reporting",
     "refinement": "Refinement",
+    "quality_review": "Quality review",
 }
 
 

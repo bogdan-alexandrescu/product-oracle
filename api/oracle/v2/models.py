@@ -614,6 +614,8 @@ class DocumentSectionLink(TenantScoped, Base):
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     entity_id: Mapped[uuid.UUID | None] = _fk("entities")
     evidence_id: Mapped[uuid.UUID | None] = _fk("evidence")
+    # SET NULL: a link keeps its other targets when its source item goes. The delete paths
+    # delete a link that would be left with no target first (oracle.v2.links).
     source_item_id: Mapped[uuid.UUID | None] = _fk("source_items", "SET NULL")
     precision: Mapped[str] = mapped_column(Text, nullable=False, server_default="section")
     # The claim, for precision "claim" (the exact words it supports).
@@ -626,6 +628,8 @@ class ArtifactDependency(TenantScoped, Base):
 
     Downstream is an artifact version or a document version (roadmaps are documents).
     Upstream is a document section (at a hash), an entity, or a whole document version.
+    An upstream entity that is deleted leaves the row in place (0014_trace): the
+    reference is nulled and ``upstream_snapshot`` keeps what it pointed at.
     """
 
     __tablename__ = "artifact_dependencies"
@@ -635,7 +639,8 @@ class ArtifactDependency(TenantScoped, Base):
             "(artifact_version_id IS NULL) <> (document_version_id IS NULL)", name="downstream"
         ),
         CheckConstraint(
-            "upstream_version_id IS NOT NULL OR upstream_entity_id IS NOT NULL",
+            "upstream_version_id IS NOT NULL OR upstream_entity_id IS NOT NULL"
+            " OR upstream_snapshot IS NOT NULL",
             name="upstream",
         ),
         Index("ix_artifact_dependencies_freshness", "tenant_id", "freshness"),
@@ -647,7 +652,10 @@ class ArtifactDependency(TenantScoped, Base):
     # With upstream_version_id: the section it depends on; null: the whole version.
     upstream_section_key: Mapped[str | None] = mapped_column(Text)
     upstream_section_hash: Mapped[str | None] = mapped_column(Text)
-    upstream_entity_id: Mapped[uuid.UUID | None] = _fk("entities")
+    upstream_entity_id: Mapped[uuid.UUID | None] = _fk("entities", "SET NULL")
+    # The upstream entity as it was when it was deleted ({id, type, key, title, status}).
+    upstream_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    upstream_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     composition_revision: Mapped[int | None] = mapped_column(Integer)
     freshness: Mapped[str] = mapped_column(
         Text, nullable=False, default="fresh", server_default="fresh"

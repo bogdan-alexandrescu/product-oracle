@@ -1,0 +1,14 @@
+id: failed-security-requirement
+description: >
+  A critical privacy requirement linked to the PRD has failed its check. Failed critical
+  security or policy requirements are a hard check (T2), so this blocks a publish.
+covers: [failed_security_policy]
+extends: good-prd
+overrides:
+  entities:
+    requirement: {attrs: {policy: {area: privacy, critical: true, status: failed, note: "Addresses are stored unencrypted"}}}
+expected:
+  security_policy: critical
+blocked: true
+rationale_contains:
+  security_policy: [saved-address-picker, failed]

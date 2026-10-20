@@ -10,6 +10,9 @@ import os
 import uuid
 from pathlib import Path
 
+# CI sets this; without it the tests try a local Postgres and, if none answers, the
+# database-backed tests are skipped (DB-free ones, e.g. tests/connectors, still run).
+_EXPLICIT_DATABASE = "ORACLE_TEST_DATABASE_URL" in os.environ
 BASE_TEST_DATABASE_URL = os.environ.get(
     "ORACLE_TEST_DATABASE_URL",
     "postgresql+asyncpg://oracle:oracle@localhost:5432/oracle_test",
@@ -71,7 +74,12 @@ def run_migrations(url: str) -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def migrated_db() -> None:
-    asyncio.run(_reset_schema(TEST_DATABASE_URL))
+    try:
+        asyncio.run(_reset_schema(TEST_DATABASE_URL))
+    except OSError as e:
+        if _EXPLICIT_DATABASE:
+            raise
+        pytest.skip(f"no Postgres at the default test URL ({e}); set ORACLE_TEST_DATABASE_URL")
     run_migrations(TEST_DATABASE_URL)
 
 
@@ -89,6 +97,16 @@ async def make_tenant(name: str = "Example Co") -> uuid.UUID:
         s.add(tenant)
         await s.commit()
         return tenant.id
+
+
+async def seed_company(tenant_id: uuid.UUID) -> None:
+    """Seed a company's built-in templates and themes, as startup and company creation
+    do (reads never seed)."""
+    from oracle.templates.builtins import ensure_builtins
+
+    async with tenant_session(tenant_id) as s:
+        await ensure_builtins(s)
+        await s.commit()
 
 
 @pytest.fixture

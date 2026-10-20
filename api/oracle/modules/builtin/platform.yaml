@@ -1,0 +1,458 @@
+# Built-in semantic modules specialised for Pack B (Multi-tenant AI Agent Platform). All
+# are CONDITIONAL: a platform PRD includes one only when the capability scope or company
+# policy calls for it (build prompt §4.4).
+#
+# This pack describes a reusable platform capability serving many customers and agent
+# types. TEMPLATES ONLY: no prewritten features, customers, brands, characters or personas.
+# A character contract, persona, relationship mode or brand canon belongs in a linked
+# configuration artifact, never in the PRD text, and these modules say so.
+
+- id: platform.customer-onboarding
+  version: 1.0.0
+  title: Customers and onboarding
+  description: How a customer organisation is provisioned, onboarded and organised on the platform.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: customer_onboarding}
+      - {op: contains, path: scope.capabilities, value: organisation_model}
+      - {op: gte, path: signals.tenant_count, value: 2}
+  display_order: 200
+  section_ids: [customer-onboarding]
+  brief_layer: false
+  fields:
+    - {key: provisioning, label: "Provisioning steps", type: markdown, required: true}
+    - {key: organisation_model, label: "Organisation model", type: markdown}
+    - {key: time_to_first_value, label: "Time to first value target", type: text}
+  question_prompts:
+    - key: onboarding_owner
+      prompt: Who sets up a new customer, and what must be true before their first agent runs?
+      category: customer_user
+      importance: high
+      fills: [provisioning]
+  instructions: >-
+    Describe provisioning, how a customer organisation is structured, roles and the path to
+    first value as a reusable capability. No customer-specific setup.
+
+- id: platform.tenant-isolation
+  version: 1.0.0
+  title: Multi-tenant isolation
+  description: Data, configuration, execution and cost isolation between customers.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: multi_tenant}
+      - {op: gte, path: signals.tenant_count, value: 2}
+      - {op: eq, path: category, value: ai_agent_platform}
+  depends_on: [requirements.nonfunctional]
+  display_order: 210
+  section_ids: [tenant-isolation]
+  brief_layer: false
+  fields:
+    - {key: isolation_boundaries, label: "Isolation boundaries", type: markdown, required: true}
+    - {key: shared_resources, label: "Shared resources and their limits", type: markdown}
+    - {key: isolation_tests, label: "Isolation tests", type: markdown, required: true}
+  validators:
+    - {kind: required, field: isolation_tests}
+  question_prompts:
+    - key: isolation
+      prompt: Which data, memory, tools and spend must never cross between customers?
+      category: security_privacy
+      importance: critical
+      fills: [isolation_boundaries]
+  instructions: >-
+    Define isolation for data, knowledge and memory, configuration, execution, logs and
+    spend, and the negative tests that prove one customer cannot reach another's.
+  required_review_role: approver
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [isolation_boundaries]
+    acceptance_tests: [isolation_tests]
+
+- id: platform.config-precedence
+  version: 1.0.0
+  title: Configuration precedence and versioning
+  description: Which configuration level wins, how configuration is versioned and validated.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: configuration}
+      - {op: gte, path: signals.configuration_levels, value: 2}
+  depends_on: [platform.tenant-isolation]
+  display_order: 220
+  section_ids: [config-precedence]
+  brief_layer: false
+  fields:
+    - {key: levels, label: "Configuration levels in precedence order", type: list, item_type: text, required: true}
+    - {key: versioning, label: "Versioning and validation", type: markdown, required: true}
+    - {key: schema_artifact, label: "Linked configuration schema artifact", type: text}
+  question_prompts:
+    - key: precedence
+      prompt: When platform, customer and agent settings disagree, which one wins?
+      category: configurability_scaling
+      importance: high
+      fills: [levels]
+  instructions: >-
+    Define configuration levels, precedence, inheritance, validation and versioning. The
+    configuration schema itself is a linked configuration artifact, not PRD text.
+
+- id: agents.archetypes
+  version: 1.0.0
+  title: Agent archetypes and behaviour configuration
+  description: The kinds of agents the platform supports and which behaviour is configurable.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: agent_configuration}
+      - {op: gte, path: signals.agent_archetype_count, value: 1}
+      - {op: eq, path: category, value: ai_agent_platform}
+  display_order: 230
+  section_ids: [agent-archetypes]
+  brief_layer: false
+  fields:
+    - {key: archetypes, label: "Supported archetypes", type: markdown, required: true}
+    - {key: configurable_behaviour, label: "Configurable behaviour", type: markdown, required: true}
+    - {key: configuration_artifact, label: "Linked behaviour configuration artifact", type: text}
+  question_prompts:
+    - key: archetypes
+      prompt: Which kinds of agents must the platform support, and what may each customer configure?
+      category: configurability_scaling
+      importance: high
+      fills: [archetypes, configurable_behaviour]
+  instructions: >-
+    Describe archetypes as reusable capability classes and the behaviour each exposes for
+    configuration. Any individual character contract, persona or relationship mode is a
+    linked configuration artifact, never written into this PRD.
+
+- id: agents.tool-policies
+  version: 1.0.0
+  title: Tool policies
+  description: Which tools agents may call, with what permissions, limits and approvals.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: tool_use}
+      - {op: gte, path: signals.tool_count, value: 1}
+  depends_on: [agents.archetypes]
+  display_order: 240
+  section_ids: [tool-policies]
+  brief_layer: false
+  fields:
+    - {key: tool_classes, label: "Tool classes and permissions", type: markdown, required: true}
+    - {key: approvals, label: "Actions needing human approval", type: markdown}
+    - {key: limits, label: "Rate and spend limits", type: markdown}
+  question_prompts:
+    - key: side_effects
+      prompt: Which tool actions have side effects that need approval or a limit?
+      category: security_privacy
+      importance: critical
+      fills: [tool_classes, approvals]
+  instructions: >-
+    Define tool classes, least-privilege permissions, approvals for side effects, limits
+    and audit. Third-party tools follow their providers' rules.
+  required_review_role: approver
+
+- id: agents.knowledge-memory
+  version: 1.0.0
+  title: Knowledge, memory and state contracts
+  description: What agents know, remember and keep between sessions, and who controls it.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: memory}
+      - {op: contains, path: scope.capabilities, value: knowledge}
+      - {op: eq, path: signals.persistent_state, value: true}
+  depends_on: [agents.archetypes]
+  display_order: 250
+  section_ids: [knowledge-memory]
+  brief_layer: false
+  fields:
+    - {key: knowledge_sources, label: "Knowledge sources", type: markdown}
+    - {key: memory_contract, label: "Memory and state contract", type: markdown, required: true}
+    - {key: retention, label: "Retention and deletion", type: markdown, required: true}
+  question_prompts:
+    - key: memory_controls
+      prompt: What may an agent remember, for how long, and how can a customer or end user remove it?
+      category: security_privacy
+      importance: critical
+      fills: [memory_contract, retention]
+  instructions: >-
+    Define knowledge sources, memory scopes, state lifetimes, retention, deletion and
+    user controls as contracts, with isolation per customer.
+
+- id: agents.evaluation
+  version: 1.0.0
+  title: Testing, simulation and evaluation
+  description: How agent behaviour is tested, simulated and evaluated before and after release.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: evaluation}
+      - {op: eq, path: brief.model_driven, value: true}
+      - {op: eq, path: category, value: ai_agent_platform}
+  depends_on: [goals.outcomes, agents.archetypes]
+  display_order: 260
+  section_ids: [agent-evaluation]
+  brief_layer: false
+  fields:
+    - {key: eval_suites, label: "Evaluation suites", type: markdown, required: true}
+    - {key: pass_thresholds, label: "Pass thresholds", type: markdown, required: true}
+    - {key: simulation, label: "Simulation approach", type: markdown}
+  question_prompts:
+    - key: eval_bar
+      prompt: What must an agent version pass before it reaches customers?
+      category: evaluation_criteria
+      importance: critical
+      fills: [eval_suites, pass_thresholds]
+  instructions: >-
+    Define evaluation suites, simulated scenarios, thresholds, regression gates and the
+    owners of each, per archetype rather than per individual agent.
+  outputs: [prd, acceptance_tests]
+  output_mappings:
+    acceptance_tests: [eval_suites, pass_thresholds]
+
+- id: platform.rollout-migration
+  version: 1.0.0
+  title: Rollout and version migration
+  description: How new platform and agent versions roll out and how existing configurations migrate.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: versioning}
+      - {op: gte, path: signals.deployed_version_count, value: 2}
+      - {op: eq, path: signals.breaking_change, value: true}
+  depends_on: [release.rollout, platform.config-precedence]
+  display_order: 270
+  section_ids: [rollout-migration]
+  brief_layer: false
+  fields:
+    - {key: rollout_strategy, label: "Rollout strategy", type: markdown, required: true}
+    - {key: migration, label: "Configuration migration", type: markdown, required: true}
+    - {key: rollback, label: "Rollback", type: markdown}
+  question_prompts:
+    - key: migration
+      prompt: What happens to existing customer configurations when a new version ships?
+      category: release_rollout
+      importance: high
+      fills: [migration]
+  instructions: >-
+    Define staged rollout, compatibility windows, configuration migration, customer
+    notice and rollback.
+
+- id: platform.fleet-operations
+  version: 1.0.0
+  title: Fleet operations and observability
+  description: Operating many agents across customers, with monitoring, alerts and incident response.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: fleet_operations}
+      - {op: gte, path: signals.agent_instance_count, value: 10}
+  depends_on: [requirements.nonfunctional]
+  display_order: 280
+  section_ids: [fleet-operations]
+  brief_layer: false
+  fields:
+    - {key: signals_monitored, label: "Signals monitored", type: markdown, required: true}
+    - {key: incident_response, label: "Incident response", type: markdown}
+  question_prompts:
+    - key: fleet_signals
+      prompt: Which signals tell operators an agent or customer needs attention?
+      category: configurability_scaling
+      importance: medium
+      fills: [signals_monitored]
+  instructions: >-
+    Define the health signals, dashboards, alerts, kill switches and incident response for
+    the fleet, per customer and per archetype.
+
+- id: platform.cost-quotas
+  version: 1.0.0
+  title: Cost and quotas
+  description: Spend attribution, quotas and limits per customer and per agent.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: quotas}
+      - {op: contains, path: scope.capabilities, value: usage_billing}
+      - {op: eq, path: signals.metered_usage, value: true}
+  depends_on: [economics.value]
+  display_order: 290
+  section_ids: [cost-quotas]
+  brief_layer: false
+  fields:
+    - {key: attribution, label: "Cost attribution", type: markdown, required: true}
+    - {key: quotas, label: "Quotas and limits", type: markdown, required: true}
+    - {key: overrun_behaviour, label: "Behaviour at a limit", type: markdown}
+  question_prompts:
+    - key: quota_behaviour
+      prompt: What should happen when a customer reaches a quota or spend limit?
+      category: economic_benefit
+      importance: high
+      fills: [quotas, overrun_behaviour]
+  instructions: >-
+    Define how cost is attributed per customer and agent, the quotas, the limits and what
+    happens at each limit.
+
+- id: agents.external-channels
+  version: 1.0.0
+  title: External social and API channel constraints
+  description: Rules, rate limits, eligibility and permissions of external channels agents act on.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: external_channels}
+      - {op: gte, path: signals.external_channel_count, value: 1}
+  depends_on: [constraints.solutions]
+  display_order: 300
+  section_ids: [external-channels]
+  brief_layer: false
+  fields:
+    - {key: channels, label: "Channels and their rules", type: markdown, required: true}
+    - {key: limits, label: "Rate, eligibility and permission limits", type: markdown, required: true}
+  question_prompts:
+    - key: channel_rules
+      prompt: Which external channels will agents act on, and what do their terms allow?
+      category: third_party_policy
+      importance: critical
+      fills: [channels, limits]
+  instructions: >-
+    For each external channel, separate rate or capacity limits, API eligibility,
+    permissions and policy. Never propose evading a platform's rules.
+  evidence_expectations: {min_sources: 1, fields: [limits]}
+
+- id: agents.human-interaction
+  version: 1.0.0
+  title: Human-agent interaction policy
+  description: Configurable rules for how agents interact with people, disclose themselves and hand off.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: human_interaction}
+      - {op: eq, path: signals.end_user_facing, value: true}
+  depends_on: [agents.archetypes]
+  display_order: 310
+  section_ids: [human-interaction]
+  brief_layer: false
+  fields:
+    - {key: disclosure, label: "Disclosure rules", type: markdown, required: true}
+    - {key: handoff, label: "Human handoff", type: markdown}
+    - {key: configurable_limits, label: "What customers may configure", type: markdown}
+  question_prompts:
+    - key: interaction_limits
+      prompt: Which interaction rules are fixed by the platform, and which may a customer configure?
+      category: security_privacy
+      importance: high
+      fills: [disclosure, configurable_limits]
+  instructions: >-
+    Define disclosure, consent, escalation, handoff and the bounds within which customers
+    configure interaction policy. Specific relationship modes are configuration artifacts.
+
+- id: platform.brand-governance
+  version: 1.0.0
+  title: Customer-brand governance
+  description: How customers govern brand and voice settings and who approves changes.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: customer_branding}
+      - {op: eq, path: signals.customer_branded, value: true}
+  depends_on: [platform.config-precedence]
+  display_order: 320
+  section_ids: [brand-governance]
+  brief_layer: false
+  fields:
+    - {key: governed_settings, label: "Governed settings", type: markdown, required: true}
+    - {key: approval_flow, label: "Approval flow", type: markdown, required: true}
+    - {key: configuration_artifact, label: "Linked brand configuration artifact", type: text}
+  question_prompts:
+    - key: brand_approvals
+      prompt: Who on the customer's side approves brand and voice changes, and how are they checked?
+      category: ownership
+      importance: medium
+      fills: [approval_flow]
+  instructions: >-
+    Define which brand settings customers govern, validation, approval and audit. Brand
+    canon, voice and persona content live in a linked configuration artifact, never in
+    this PRD.
+
+- id: agents.continuous-improvement
+  version: 1.0.0
+  title: Continuous agent improvement
+  description: How agent behaviour improves from feedback and evaluation without regressions.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: continuous_improvement}
+      - {op: eq, path: signals.learns_from_feedback, value: true}
+  depends_on: [agents.evaluation]
+  display_order: 330
+  section_ids: [continuous-improvement]
+  brief_layer: false
+  fields:
+    - {key: feedback_loop, label: "Feedback loop", type: markdown, required: true}
+    - {key: regression_gates, label: "Regression gates", type: markdown, required: true}
+  question_prompts:
+    - key: improvement_loop
+      prompt: Which feedback changes agent behaviour, and what stops a change that makes it worse?
+      category: evaluation_criteria
+      importance: high
+      fills: [feedback_loop, regression_gates]
+  instructions: >-
+    Define the feedback sources, who approves behaviour changes, the evaluation gates and
+    customer consent for learning from their data.
+
+- id: agents.capability-portability
+  version: 1.0.0
+  title: Capability portability
+  description: Moving agent capabilities across archetypes, customers, runtimes or channels.
+  applies_to: [ai-agent.platform]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: portability}
+      - {op: gte, path: signals.target_runtime_count, value: 2}
+  depends_on: [agents.archetypes]
+  display_order: 340
+  section_ids: [capability-portability]
+  brief_layer: false
+  fields:
+    - {key: portable_units, label: "Portable capability units", type: markdown, required: true}
+    - {key: compatibility, label: "Compatibility rules", type: markdown}
+  question_prompts:
+    - key: portability
+      prompt: Which capabilities must work unchanged across archetypes, runtimes or channels?
+      category: configurability_scaling
+      importance: medium
+      fills: [portable_units]
+  instructions: >-
+    Define the portable capability units, their interfaces and compatibility rules, and
+    what is customer-specific configuration.

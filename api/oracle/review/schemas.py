@@ -524,7 +524,7 @@ class PublishCheckOut(BaseModel):
     readiness: list[ReadinessResultOut] = []
 
 
-class PublishIn(BaseModel):
+class VersionPublishIn(BaseModel):
     # The version's content hash the publisher checked (PublishCheckOut); a mismatch
     # is a 409.
     content_hash: str | None = None
@@ -556,3 +556,22 @@ class PublicationOut(PublicationSummary):
 
     manifest: dict
     markdown: str
+
+
+class PublishBlock(BaseModel):
+    """One reason a publish is refused."""
+
+    # The readiness check that refused it.
+    key: str
+    # The blocker's id for ``critical_blockers``; otherwise the check's key.
+    id: str
+    title: str
+    rationale: str
+
+
+class PublishBlockedOut(BaseModel):
+    """409 from approve: the PRD version may not be published (T2 publish gate, C5)."""
+
+    # "<N> blocks: <titles>", or "v<M> exists: ..." when the version is not the latest.
+    detail: str
+    blocking: list[PublishBlock]

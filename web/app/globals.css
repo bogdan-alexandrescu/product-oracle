@@ -1,26 +1,328 @@
 @import "tailwindcss";
 
+/*
+ * Product Oracle v2 design system (I3: B1 Split). The colour tokens below are the one
+ * source of truth: components use them through Tailwind (bg-surface, text-text2,
+ * border-line, ...) or var(--token), never a hard-coded colour.
+ *
+ * Theme: light by default, dark when the system asks for it, unless the user picked
+ * one in the user menu (data-theme on <html>, set before paint by the layout).
+ */
+/* I3 palette "Open sky" (owner, 2026-10-19), as SwarmCloud's console uses it. Replaces B1's
+   violet and lime; B1's token names stay. Contrast of every text pair: the PR's report. */
 :root {
-  --background: #fafafa;
-  --foreground: #171717;
+  --bg: #f3f6f9;
+  --surface: #ffffff;
+  --surface2: #eef4fa;
+  --line: #d6e0ea;
+  --line-strong: #7d8ea3;
+  --text: #0d1724;
+  --text2: #4f5d6e;
+  --text-faint: #606a77;
+  --accent: #0369a1;
+  --on-accent: #ffffff;
+  --accent-ink: #075985;
+  --accent-soft: #e5f3fc;
+  --accent-mid: #b6daf2;
+  --hero: #0c1a2e;
+  --hero-2: #173052;
+  --hero-text: #eef4fa;
+  --hero-text2: #b4c3d4;
+  --hero-line: #2a4568;
+  --hero-accent: #7cc8f8;
+  /* Sky: the logo tile and the journey's current step only (lime is retired). */
+  --brand: #38bdf8;
+  --on-brand: #06101e;
+  --pass: #0a7a55;
+  --pass-bg: #e3f5ee;
+  --warn: #8a5a00;
+  --warn-bg: #fdf3dc;
+  --crit: #b42318;
+  --crit-bg: #fdecea;
+  --na: #5b6878;
+  --na-bg: #eef1f5;
+  --tip: #0d1724;
+  --tip-text: #eef4fa;
+  --spark-fill: rgba(3, 105, 161, 0.1);
+  --shadow: 0 1px 2px rgba(13, 23, 36, 0.06);
+  --tip-shadow: 0 12px 32px rgba(13, 23, 36, 0.28);
+  /* The rail, the phone header and tab bar: the same in both themes (SwarmCloud's rail, state for state). */
+  --rail: linear-gradient(180deg, #0b3a7a, #06101e);
+  --rail-top: #0b3a7a;
+  --rail-foot: #06101e;
+  --rail-text: #bcd6ee;
+  --rail-hover: #194b89;
+  --rail-active: #225693;
+  --rail-active-text: #ffffff;
+  --rail-bar: #7cc8f8;
+  --rail-badge: #f5c451;
+  --on-rail-badge: #06101e;
+  --rail-sep: rgba(255, 255, 255, 0.16);
+  --rail-avatar: #0369a1;
+  --on-rail-avatar: #ffffff;
+  --rail-avatar-ring: rgba(255, 255, 255, 0.18);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #06101e;
+    --surface: #0c1a2e;
+    --surface2: #11233b;
+    --line: #1e3350;
+    --line-strong: #5f7087;
+    --text: #eef4fa;
+    --text2: #9fb0c4;
+    --text-faint: #828d9b;
+    --accent: #7cc8f8;
+    --on-accent: #06101e;
+    --accent-ink: #b9e3fc;
+    --accent-soft: #10294a;
+    --accent-mid: #1f4a7a;
+    --hero: #11233b;
+    --hero-2: #1a3352;
+    --hero-text: #eef4fa;
+    --hero-text2: #9fb0c4;
+    --hero-line: #2e4c72;
+    --hero-accent: #7cc8f8;
+    --pass: #4cd9a0;
+    --pass-bg: #0d2e25;
+    --warn: #f5c451;
+    --warn-bg: #3a2a0c;
+    --crit: #ff8a80;
+    --crit-bg: #3a1512;
+    --na: #9aa8b8;
+    --na-bg: #16263b;
+    --tip: #eef4fa;
+    --tip-text: #0d1724;
+    --spark-fill: rgba(124, 200, 248, 0.14);
+    --shadow: none;
+    --tip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #06101e;
+  --surface: #0c1a2e;
+  --surface2: #11233b;
+  --line: #1e3350;
+  --line-strong: #5f7087;
+  --text: #eef4fa;
+  --text2: #9fb0c4;
+  --text-faint: #828d9b;
+  --accent: #7cc8f8;
+  --on-accent: #06101e;
+  --accent-ink: #b9e3fc;
+  --accent-soft: #10294a;
+  --accent-mid: #1f4a7a;
+  --hero: #11233b;
+  --hero-2: #1a3352;
+  --hero-text: #eef4fa;
+  --hero-text2: #9fb0c4;
+  --hero-line: #2e4c72;
+  --hero-accent: #7cc8f8;
+  --pass: #4cd9a0;
+  --pass-bg: #0d2e25;
+  --warn: #f5c451;
+  --warn-bg: #3a2a0c;
+  --crit: #ff8a80;
+  --crit-bg: #3a1512;
+  --na: #9aa8b8;
+  --na-bg: #16263b;
+  --tip: #eef4fa;
+  --tip-text: #0d1724;
+  --spark-fill: rgba(124, 200, 248, 0.14);
+  --shadow: none;
+  --tip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-text: var(--text);
+  --color-text2: var(--text2);
+  --color-text-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-mid: var(--accent-mid);
+  --color-hero: var(--hero);
+  --color-hero-2: var(--hero-2);
+  --color-hero-text: var(--hero-text);
+  --color-hero-text2: var(--hero-text2);
+  --color-hero-line: var(--hero-line);
+  --color-hero-accent: var(--hero-accent);
+  --color-brand: var(--brand);
+  --color-on-brand: var(--on-brand);
+  --color-pass: var(--pass);
+  --color-pass-bg: var(--pass-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-crit: var(--crit);
+  --color-crit-bg: var(--crit-bg);
+  --color-na: var(--na);
+  --color-na-bg: var(--na-bg);
+  --color-tip: var(--tip);
+  --color-tip-text: var(--tip-text);
+  --color-rail-top: var(--rail-top);
+  --color-rail-foot: var(--rail-foot);
+  --color-rail-text: var(--rail-text);
+  --color-rail-hover: var(--rail-hover);
+  --color-rail-active: var(--rail-active);
+  --color-rail-active-text: var(--rail-active-text);
+  --color-rail-bar: var(--rail-bar);
+  --color-rail-badge: var(--rail-badge);
+  --color-on-rail-badge: var(--on-rail-badge);
+  --color-rail-sep: var(--rail-sep);
+  --color-rail-avatar: var(--rail-avatar);
+  --color-on-rail-avatar: var(--on-rail-avatar);
+  --color-rail-avatar-ring: var(--rail-avatar-ring);
+
+  --color-white: var(--surface);
+  --color-black: var(--text);
+
+  /* Today's screens still use Tailwind's palette names; they map onto the tokens so
+     every screen follows the theme. New code uses the token names above. */
+  --color-neutral-50: var(--surface2);
+  --color-neutral-100: var(--surface2);
+  --color-neutral-200: var(--line);
+  --color-neutral-300: var(--line-strong);
+  --color-neutral-400: var(--text2);
+  --color-neutral-500: var(--text2);
+  --color-neutral-600: var(--text2);
+  --color-neutral-700: var(--text);
+  --color-neutral-800: var(--text);
+  --color-neutral-900: var(--text);
+  --color-neutral-950: var(--text);
+  --color-rose-50: var(--crit-bg);
+  --color-rose-100: var(--crit-bg);
+  --color-rose-200: var(--crit-bg);
+  --color-rose-300: var(--crit);
+  --color-rose-400: var(--crit);
+  --color-rose-500: var(--crit);
+  --color-rose-600: var(--crit);
+  --color-rose-700: var(--crit);
+  --color-rose-800: var(--crit);
+  --color-rose-900: var(--crit);
+  --color-amber-50: var(--warn-bg);
+  --color-amber-100: var(--warn-bg);
+  --color-amber-200: var(--warn-bg);
+  --color-amber-300: var(--warn);
+  --color-amber-400: var(--warn);
+  --color-amber-500: var(--warn);
+  --color-amber-600: var(--warn);
+  --color-amber-700: var(--warn);
+  --color-amber-800: var(--warn);
+  --color-amber-900: var(--warn);
+  --color-emerald-50: var(--pass-bg);
+  --color-emerald-100: var(--pass-bg);
+  --color-emerald-200: var(--pass-bg);
+  --color-emerald-300: var(--pass);
+  --color-emerald-400: var(--pass);
+  --color-emerald-500: var(--pass);
+  --color-emerald-600: var(--pass);
+  --color-emerald-700: var(--pass);
+  --color-emerald-800: var(--pass);
+  --color-emerald-900: var(--pass);
+  --color-sky-50: var(--accent-soft);
+  --color-sky-100: var(--accent-soft);
+  --color-sky-200: var(--accent-mid);
+  --color-sky-300: var(--accent-mid);
+  --color-sky-400: var(--accent);
+  --color-sky-500: var(--accent);
+  --color-sky-600: var(--accent-ink);
+  --color-sky-700: var(--accent-ink);
+  --color-sky-800: var(--accent-ink);
+  --color-sky-900: var(--accent-ink);
+
+  /* Inter Tight for the UI, DM Mono for figures, ids and code. Headings are Inter Tight too
+     (`font-display` + `tracking-heading`, weight 650-700): no separate display face. */
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+  --tracking-heading: -0.015em;
+
+  /* Type scale (tokens.json): nothing under 13 px; body 15/22. */
+  --text-xs: 13px;
+  --text-xs--line-height: 18px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 15px;
+  --text-base--line-height: 22px;
+  --text-lg: 18px;
+  --text-lg--line-height: 24px;
+  --text-xl: 22px;
+  --text-xl--line-height: 27px;
+  --text-2xl: 28px;
+  --text-2xl--line-height: 32px;
+
+  --radius-panel: 12px;
+  --radius-inspector: 16px;
+  --radius-button: 10px;
+  --radius-goal: 6px;
+  --shadow-panel: var(--shadow);
+  --shadow-tip: var(--tip-shadow);
+
+  --spacing-rail: 88px;
+  --spacing-inspector: 380px;
 }
 
+html {
+  background: var(--bg);
+}
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  font: 400 15px/22px var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+/* The rail's gradient (desktop rail; the phone header uses its top, bg-rail-top, the tab bar its foot, bg-rail-foot). */
+@utility bg-rail {
+  background: var(--rail);
+}
+
+/* Tabular figures on numbers only (round 2: not on the whole body). */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A strip that scrolls sideways (ScrollStrip): fades out at each edge that has more to scroll to,
+   so a cut-off item reads as "more", not clipped. Nothing fades when everything fits. */
+@utility scroll-fade {
+  --fade-l: 0px;
+  --fade-r: 0px;
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent);
+  scrollbar-width: none;
+  &[data-more-left] {
+    --fade-l: 32px;
+  }
+  &[data-more-right] {
+    --fade-r: 32px;
+  }
+}
+/* Phone sheets (ds Sheet): every control is a 44 px touch target. */
+@utility touch-44 {
+  & :is(button, select, summary, input:not([type="checkbox"], [type="radio"]), a[data-testid="feedback-goto"]) {
+    min-height: 44px;
+  }
+  & a[data-testid="feedback-goto"] {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+/* The rail sets --focus-ring to its sky (#7cc8f8); elsewhere the ring is the accent. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent));
+  outline-offset: 2px;
 }
 
 /* Document prose: section bodies rendered by MarkdownBody. */
 .doc-body {
-  font-size: 15.5px;
+  font-size: 15px;
   line-height: 1.75;
   color: var(--color-neutral-800);
 }
@@ -100,8 +402,8 @@ body {
   padding: 0 0.4em;
   border: 1px solid var(--color-neutral-300);
   border-radius: 4px;
-  background: white;
-  font-size: 11.5px;
+  background: var(--surface);
+  font-size: 13px;
   line-height: 1.6;
   font-weight: 500;
   color: var(--color-neutral-600);
@@ -160,11 +462,11 @@ mark.hl-pending {
   border: 1px solid var(--color-neutral-300);
   border-radius: 4px;
   padding: 0 0.35em;
-  font-size: 11.5px;
+  font-size: 13px;
   line-height: 1.6;
   font-weight: 500;
   color: var(--color-neutral-600);
-  background: white;
+  background: var(--surface);
   vertical-align: 1px;
   cursor: pointer;
 }
@@ -183,7 +485,7 @@ mark.hl-pending {
   background: var(--color-neutral-50);
   border-radius: 0 6px 6px 0;
   padding: 0 0.9em;
-  font-size: 14.5px;
+  font-size: 15px;
   white-space: normal;
 }
 .doc-body tr.detail-row > td {

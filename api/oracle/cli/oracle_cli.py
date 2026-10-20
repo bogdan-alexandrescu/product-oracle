@@ -28,7 +28,8 @@ from typing import Any, TextIO
 from urllib.parse import quote
 
 import httpx
-import yaml
+
+from oracle import safe_yaml
 
 DEFAULT_URL = "http://localhost:8000"
 TIMEOUT = httpx.Timeout(30.0, read=120.0)
@@ -87,8 +88,8 @@ def _front_matter(text: str) -> dict[str, Any]:
     if len(parts) < 2:
         return {}
     try:
-        data = yaml.safe_load(parts[0].removeprefix("---"))
-    except yaml.YAMLError:
+        data = safe_yaml.load(parts[0].removeprefix("---"))
+    except safe_yaml.SafeYamlError:
         return {}  # the API reports front matter problems properly
     return data if isinstance(data, dict) else {}
 
@@ -290,6 +291,14 @@ def baseline_pull(
     return 0
 
 
+def _sweep_note(lease: str) -> str:
+    if lease == "ran":
+        return ""
+    if lease == "not_due":
+        return " (sweep not due yet)"
+    return f" (sweep {lease})"
+
+
 def tick(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: TextIO) -> int:
     """Advance active runs once, or every ``--every`` seconds until interrupted."""
     with _client(args, transport) as client:
@@ -310,8 +319,7 @@ def tick(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: T
                 print(
                     f"Claude accounts: {pool['reclaimed']} hold(s) reclaimed, "
                     f"{pool['refreshed']} of {pool['examined']} credential(s) refreshed, "
-                    f"{pool['polled']} usage reading(s)"
-                    + ("" if pool["lease"] == "ran" else f" (sweep {pool['lease']})"),
+                    f"{pool['polled']} usage reading(s)" + _sweep_note(pool["lease"]),
                     file=out,
                 )
                 for account_id in pool.get("reauth_required") or []:

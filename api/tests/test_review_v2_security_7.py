@@ -80,11 +80,11 @@ async def test_the_gate_is_not_held_while_a_request_body_is_received(client, rou
 
 @pytest.mark.parametrize("route", ["baseline_yaml", "document_version"])
 async def test_a_request_body_over_the_limit_is_refused_before_the_gate(client, monkeypatch, route):
-    from oracle import http
+    from oracle.config import get_settings
     from oracle.review import publish
 
     ctx = await setup(client)
-    monkeypatch.setattr(http, "MAX_BODY_BYTES", 64)
+    monkeypatch.setattr(get_settings(), "max_body_bytes", 64)
     taken: list[bool] = []
     real = publish.gate_lock
 

@@ -14,7 +14,7 @@ from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role, require_role_now
 from oracle.docs.schemas import VersionSummary
 from oracle.jobs import service as jobs_service
-from oracle.review import service
+from oracle.review import publish_gate, service
 from oracle.review.schemas import (
     ApproveOut,
     CommentCreate,
@@ -25,6 +25,7 @@ from oracle.review.schemas import (
     FeedbackPackage,
     FeedbackPatch,
     FeedbackStatus,
+    PublishBlockedOut,
     ReplyCreate,
     ResolutionReport,
     SectionReviewIn,
@@ -157,9 +158,23 @@ async def get_resolution_report(doc: str, n: int, db: TenantDB) -> ResolutionRep
     return await _call(service.resolution_report(db, doc, n))
 
 
-@router.post(VERSION + "/approve", response_model=ApproveOut)
-async def approve_version(doc: str, n: int, principal: Approver, db: TenantDB) -> ApproveOut:
-    document, version = await _call(service.approve_version(db, principal, doc, n))
+@router.post(
+    VERSION + "/approve",
+    response_model=ApproveOut,
+    responses={status.HTTP_409_CONFLICT: {"model": PublishBlockedOut}},
+)
+async def approve_version(
+    doc: str, n: int, principal: Approver, db: TenantDB
+) -> ApproveOut | JSONResponse:
+    """Approve (publish) a version. A PRD version is refused with a 409 naming the blocks
+    when its readiness verdict for purpose ``publish`` is blocked, or when it is not the
+    latest version; nothing is recorded then."""
+    try:
+        document, version = await _call(service.approve_version(db, principal, doc, n))
+    except publish_gate.PublishBlocked as e:
+        await db.rollback()
+        out = PublishBlockedOut(detail=e.message, blocking=e.blocking)
+        return JSONResponse(out.model_dump(mode="json"), status_code=status.HTTP_409_CONFLICT)
     await db.commit()
     return ApproveOut(
         document_id=document.id,

@@ -22,7 +22,7 @@ from oracle.docs.schemas import (
     VersionOut,
     VersionSummary,
 )
-from oracle.http import read_body
+from oracle.http import read_capped_body
 from oracle.jobs import service as jobs_service
 from oracle.review.schemas import ConflictResponse
 
@@ -70,6 +70,7 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
             "description": "The draft's base version is older than the latest, and the "
             "draft would overwrite sections changed since",
         },
+        413: {"description": "Draft larger than 1 MiB (ORACLE_MAX_BODY_BYTES)"},
         422: {"model": ImportErrorResponse, "description": "Draft rejected"},
     },
     openapi_extra={
@@ -93,7 +94,7 @@ async def import_version(
     does not have as the latest has them, the import is a 409 naming both versions and
     those sections (never a silent overwrite). Without it the import works as before,
     and the version carries a ``base_version_missing`` note."""
-    raw = await read_body(request)
+    raw = await read_capped_body(request)
     # The body is in before the gate is taken (and the caller re-read under it).
     await recheck_caller(db, principal, "approver")
     try:

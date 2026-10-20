@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
-import { login, section } from "./helpers";
+import { login, section, openSection } from "./helpers";
 
 // O4b: a roadmap built from an approved PRD. The usage-alerts PRD's v1 is approved, and
 // usage-alerts-roadmap v1 was built from it.
@@ -31,14 +31,19 @@ test("roadmap screen lists roadmaps with status, template and source PRD; PRDs l
   await expect(row).toContainText("In review");
   await expect(row).toContainText("v1");
   await expect(row).toContainText("now-next-later");
-  await expect(row).toContainText("roadmap-board");
-  await expect(row.getByTestId("version-source")).toHaveText("From Usage alerts PRD v1");
+  // The template key alone in the row (the theme is in the inspector); the source PRD by name.
+  await expect(row).not.toContainText("roadmap-board");
+  await expect(page.getByTestId("roadmap-inspector")).toContainText("roadmap-board");
+  await expect(row.getByTestId("roadmap-source")).toHaveText("Usage alerts PRD v1");
   await expect(row.getByRole("link", { name: "Usage alerts PRD v1" })).toHaveAttribute("href", "/documents/usage-alerts/v/1");
 
   // Approved PRDs, each with the roadmap built from it.
   await expect(page.getByTestId("approved-prd")).toHaveCount(1);
   await expect(approvedPrd(page)).toContainText("v1 approved");
-  await expect(approvedPrd(page).getByRole("link", { name: "Usage alerts roadmap" })).toBeVisible();
+  // The roadmaps it built are in its inspector, not in the Template column.
+  await expect(approvedPrd(page).getByRole("link", { name: "Usage alerts roadmap" })).toHaveCount(0);
+  await approvedPrd(page).locator("td").nth(2).click();
+  await expect(page.getByTestId("roadmap-inspector").getByRole("link", { name: "Usage alerts roadmap" })).toBeVisible();
 
   // A roadmap opens in the document view.
   await row.getByRole("link", { name: "Usage alerts roadmap" }).click();
@@ -62,7 +67,7 @@ for (const role of ["viewer", "commenter"] as const) {
     await expect(page.getByText("Approvers and owners start these runs.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
     await page.goto("/documents/usage-alerts/v/1");
-    await expect(section(page, "behaviour")).toBeVisible();
+    await openSection(page, "behaviour");
     await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
   });
 }
@@ -135,7 +140,7 @@ test("build roadmap from the PRD view, into a new roadmap", async ({ page }) => 
   await login(page);
   // Not approved: no Build roadmap.
   await page.goto("/documents/checkout-redesign/v/2");
-  await expect(section(page, "problem")).toBeVisible();
+  await expect(page.getByTestId("document-sections").filter({ visible: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
 
   await page.goto("/documents/usage-alerts/v/1");
@@ -162,11 +167,12 @@ test("a roadmap version names its PRD, and its PRD links open the PRD view at th
   await expect(page.getByRole("group", { name: "Document view" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
 
-  const link = section(page, "brief-items").getByRole("link", { name: "1. Behaviour" });
-  await expect(link).toHaveAttribute("href", "/documents/usage-alerts/v/1#s-behaviour");
+  const link = (await openSection(page, "brief-items")).getByRole("link", { name: "1. Behaviour" });
+  // One section link form everywhere (sectionHref): #key; the older #s-key still opens it.
+  await expect(link).toHaveAttribute("href", "/documents/usage-alerts/v/1#behaviour");
   await expect(link).not.toHaveAttribute("target", "_blank");
   await link.click();
-  await expect(page).toHaveURL(/\/documents\/usage-alerts\/v\/1#s-behaviour$/);
+  await expect(page).toHaveURL(/\/documents\/usage-alerts\/v\/1#behaviour$/);
   await expect(section(page, "behaviour")).toBeVisible();
 
   // Present mode carries the provenance on the deck.

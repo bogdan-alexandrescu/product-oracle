@@ -52,5 +52,17 @@
   </ol>
 </footer>
 {% endif %}
+{% if evidence_links %}
+<footer class="citations evidence-appendix">
+  <h2 id="sources-evidence-links">Evidence links by section</h2>
+  <ul class="by-section evidence-links">
+  {% for e in evidence_links %}
+    <li><a class="section-link" href="#{{ e.key }}">{{ e.heading }}</a>:
+      {% for lk in e.links %}<span class="evidence-link">{% if lk.claim %}&ldquo;{{ lk.claim }}&rdquo; &mdash; {% endif %}{{ lk.label }}{% if lk.confidence is not none %} ({{ '%.2f' % lk.confidence }}){% endif %}</span>{% if not loop.last %}; {% endif %}{% endfor %}
+    </li>
+  {% endfor %}
+  </ul>
+</footer>
+{% endif %}
 </body>
 </html>

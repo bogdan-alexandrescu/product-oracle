@@ -17,6 +17,10 @@ from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.sources import base
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
+from oracle.v2 import links
+
+if TYPE_CHECKING:
+    from oracle.auth.deps import Principal
 
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
@@ -273,8 +277,16 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         source.connection_id = connection_id
         source.config = config
         # A new allowlist or account: sync from the start. Unchanged content writes no
-        # new versions, so a full pass is cheap in storage.
-        source.cursor = None
+        # new versions, so a full pass is cheap in storage. A connector that deletes by
+        # its cursor (items it knew minus items still live) must keep its known ids across
+        # a config change, or narrowing the source could never delete anything (S5).
+        if source.kind == "notion":
+            # Keep the page ids, drop the render cache: every live page is re-rendered
+            # and pages now outside the roots are deleted.
+            pages = (source.cursor or {}).get("pages") or {}
+            source.cursor = {"pages": {page_id: {} for page_id in pages}}
+        else:
+            source.cursor = None
         if source.status == "error":
             source.status = "active"
             source.last_error = None
@@ -295,14 +307,22 @@ async def set_paused(db: AsyncSession, source: Source, paused: bool) -> Source:
 
 
 async def delete_source(
-    db: AsyncSession, source: Source, principal: "Principal | None" = None
+    db: AsyncSession, source: Source, *, actor: "Principal | str | None"
 ) -> None:
-    """Delete the source and its items. First a ``source_permission`` revocation is
+    """Delete a source and its items. First a ``source_permission`` revocation is
     recorded (a tombstone of its items, URLs, evidence and section links), so the
-    publish gate refuses documents that still cite it (oracle.review.publish)."""
+    publish gate refuses documents that still cite it (oracle.review.publish); the same
+    change marks what the items' evidence backs, and the section links citing the items,
+    potentially stale while they still exist (oracle.trace). Then a link citing an item
+    keeps its other target (an entity or evidence) and only drops the item; one left with
+    no target is deleted."""
     from oracle.review.publish import record_source_revocation
 
-    await record_source_revocation(db, principal, [source], "source_revoked", drop_links=True)
+    await record_source_revocation(db, actor, [source], "source_deleted", drop_links=False)
+    item_ids = (
+        await db.scalars(select(SourceItem.id).where(SourceItem.source_id == source.id))
+    ).all()
+    await links.release(db, source_item_ids=set(item_ids))
     await db.delete(source)
     await db.commit()
 

@@ -1,4 +1,4 @@
-"""The three built-in job kinds. Each builds its prompt's JSON payload from the database,
+"""The built-in job kinds. Each builds its prompt's JSON payload from the database,
 makes one model call through ``ask`` and turns the answer into the job's output (and,
 for review comments, suggestions). The worker owns the call's accounting and the
 transaction; nothing here commits.
@@ -33,7 +33,12 @@ HIGH_CONFIDENCE = confidence_rules.DEFAULTS["pushback"]
 MAX_GOALS = 30
 MAX_EVIDENCE = 40
 MAX_FEEDBACK = 60
-MAX_TOKENS = {"review_comments": 8000, "reporting": 4000, "refinement": 6000}
+MAX_TOKENS = {
+    "review_comments": 8000,
+    "reporting": 4000,
+    "refinement": 6000,
+    "quality_review": 4000,
+}
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
 Ask = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -581,10 +586,18 @@ async def refinement(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     }
 
 
+async def quality_review(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """CR-08 light judging; it lives with the quality criteria it judges."""
+    from oracle.quality import judge
+
+    return await judge.run(s, job, ask, await _context(s, job))
+
+
 RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any]]]] = {
     "review_comments": review_comments,
     "reporting": reporting,
     "refinement": refinement,
+    "quality_review": quality_review,
 }
 
 

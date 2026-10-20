@@ -59,6 +59,7 @@ from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: 
 from oracle.members.models import Invite, MemberFollowUp  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
 from oracle.priorities.models import PrioritySnapshot  # noqa: E402
+from oracle.quality.models import OutcomeRecord, QualityLearning  # noqa: E402
 from oracle.review.models import (  # noqa: E402
     Comment,
     DocumentPublication,
@@ -154,10 +155,12 @@ __all__ = [
     "OAuthClient",
     "OAuthCode",
     "OAuthToken",
+    "OutcomeRecord",
     "PrioritySnapshot",
     "ProductIntake",
     "Proposal",
     "ReviewCampaign",
+    "QualityLearning",
     "Run",
     "RunSegment",
     "RunToken",

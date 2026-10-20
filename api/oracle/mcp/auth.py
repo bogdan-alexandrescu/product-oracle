@@ -42,6 +42,8 @@ class McpCaller:
     scopes: frozenset[str] | None = None
     user_id: uuid.UUID | None = None
     token_id: uuid.UUID | None = None
+    # A run token's run. Whether its writes are held back for now (W5) is decided when a
+    # write is about to run (oracle.mcp.tools.call_operation), never here.
     run_id: uuid.UUID | None = None
 
 
@@ -149,6 +151,8 @@ async def verify_run_token_caller(raw: str) -> McpCaller | None:
         return None
     from oracle.runs.models import Run
 
+    # Records only, and nothing slow: no call to the agent runtime is made here (a read,
+    # initialize or tools/list never waits on it).
     async with tenant_session(claims.tenant_id) as s:
         run = await s.get(Run, claims.run_id)
         user = await s.get(User, run.created_by) if run and run.created_by else None

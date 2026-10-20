@@ -15,11 +15,12 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-import yaml
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from oracle import safe_yaml
+from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.schemas import CitationSource, ImportProblem
 from oracle.review.schemas import Resolution
@@ -180,10 +181,23 @@ def _inline_text(token: Token) -> str:
 def body_text(body_md: str) -> str:
     """Plain text of a section body, as the reader sees it (citation markers removed).
 
+    A table keeps its rows: one line per row (header first, separator row dropped),
+    cells joined by ``" | "``; a literal ``|`` inside a cell is kept as ``\\|``. The
+    version diff rebuilds tables from these rows.
+
     Comment anchors (TextQuoteSelector) are relative to this text.
     """
     blocks: list[str] = []
+    row: list[str] | None = None
     for token in _md.parse(body_md):
+        if token.type == "tr_open":
+            row = []
+            continue
+        if token.type == "tr_close":
+            if row is not None and any(row):
+                blocks.append(" | ".join(row))
+            row = None
+            continue
         if token.type == "inline":
             text = _inline_text(token)
         elif token.type in ("fence", "code_block"):
@@ -191,7 +205,9 @@ def body_text(body_md: str) -> str:
         else:
             continue
         text = CITATION_STRIP_RE.sub("", text).strip()
-        if text:
+        if row is not None:
+            row.append(text.replace("|", "\\|"))
+        elif text:
             blocks.append(text)
     return "\n".join(blocks)
 
@@ -240,14 +256,14 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
         )
         return {}
     try:
-        data = yaml.safe_load(yaml_text) or {}
-    except yaml.YAMLError as exc:
-        mark = getattr(exc, "problem_mark", None)
+        data = safe_yaml.load(yaml_text) or {}
+    except safe_yaml.SafeYamlError as exc:
+        # Invalid or refused (oracle.safe_yaml): too large, too deep, anchors, tags...
         problems.append(
             ImportProblem(
                 code="invalid_front_matter",
                 message=f"front matter is not valid YAML: {exc}",
-                line=mark.line + 2 if mark else None,
+                line=exc.line + 1 if exc.line else None,
             )
         )
         return {}
@@ -419,6 +435,12 @@ def _check_citations(
 
 def parse_draft(markdown: str) -> ParsedDraft:
     """Parse and validate a draft. Raises :class:`DraftError` listing every problem."""
+    # The request body is capped (413); a run's file is not, so the draft is too.
+    limit = get_settings().max_body_bytes
+    if len(markdown.encode("utf-8")) > limit:
+        raise DraftError(
+            [ImportProblem(code="draft_too_large", message=f"draft is larger than {limit} bytes")]
+        )
     text = normalize(markdown)
     problems: list[ImportProblem] = []
 

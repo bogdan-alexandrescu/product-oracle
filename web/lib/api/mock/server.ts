@@ -7,17 +7,23 @@ import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
-import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { mockUuid, seeded } from "./ids";
+import { enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
+import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
-import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
-import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { routeModules, seedModules, type ModulesDb } from "./modules";
+import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
-import { routeV2, seedV2, type V2Db } from "./v2";
+import { routeTrace } from "./trace";
+import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
@@ -55,6 +61,12 @@ export interface Db {
   v2?: V2Db;
   /** v2 review state, campaigns, notifications, publications (./review-v2.ts). */
   review_v2?: ReviewV2Db;
+  /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
+  quality?: QualityDb;
+  /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
+  modules?: ModulesDb;
+  /** Blocker strategies (./blockers.ts) on the v2 rows; absent in older saved data. */
+  blockers?: BlockersDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded on first use. */
@@ -130,6 +142,16 @@ function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Respo
 const STORAGE_KEY = "po-mock-db-v2";
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
+/**
+ * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
+ * new company (members only, no goals, documents, runs or questions); "large" as a big one
+ * (30 goals, 50 more active runs, questions asked of the signed-in member); "suggestions" as the
+ * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
+ * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts).
+ */
+export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+/** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
+export const MOCK_FAIL_KEY = "po-mock-fail";
 const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
 
 /** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
@@ -139,12 +161,7 @@ function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
 }
 const LATENCY_MS = 60;
 
-let counter = 0;
-function uuid(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  counter += 1;
-  return `00000000-0000-4000-8000-${String(Date.now() + counter).padStart(12, "0").slice(-12)}`;
-}
+const uuid = mockUuid;
 
 function hash(text: string): string {
   let h = 0x811c9dc5;
@@ -198,6 +215,193 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
       retrieved_at: c.retrieved_at,
     })),
   };
+}
+
+/** A new company: the members and their invites, nothing else yet. */
+function seedEmpty(): Db {
+  const db: Db = {
+    session: null,
+    tenant_id: uuid(),
+    user_id: uuid(),
+    members: [],
+    invites: [],
+    documents: [],
+    versions: [],
+    comments: [],
+    reviews: [],
+    feedback: [],
+    baseline: { entities: [], edges: [], evidence: [], conflicts: [], proposals: [], revisions: [] },
+    runs: { runs: [], artifacts: {} },
+    v2: emptyV2(),
+  };
+  db.members = MOCK_MEMBERS.map((m) => ({
+    ...m,
+    id: m.email === MOCK_LOGIN.email ? db.user_id : uuid(),
+    disabled_at: null,
+    disabled_by: null,
+    status: "active" as const,
+  }));
+  return db;
+}
+
+/** A big company: Home must stay within a fixed number of calls however much there is. */
+function seedLarge(): Db {
+  const db = seed();
+  enlargeBaseline(db.baseline, uuid, 27);
+  db.runs = seeded("runs", () => seedRuns(runsContext(db)));
+  enlargeRuns(db.runs, uuid, 50);
+  const v2 = ensureV2(db);
+  const model = v2.questions[0];
+  for (let i = 1; i <= 4; i++) {
+    const at = new Date(Date.parse(model.created_at) + i * 60_000).toISOString();
+    v2.questions.push({ ...model, id: uuid(), prompt: `Which clinics open first in region ${i}?`, priority: 10 + i, created_at: at, updated_at: at });
+  }
+  // Asked of someone else: not the signed-in member's to answer.
+  const other = db.members.find((m) => m.id !== db.user_id)!;
+  v2.questions.push({ ...model, id: uuid(), prompt: "Who owns the pricing page?", asked_to: other.id, created_at: model.created_at, updated_at: model.created_at });
+  return db;
+}
+
+/**
+ * The default company plus a PRD whose open feedback is three Oracle change requests on
+ * feature sections (none on the first section) and one item already addressed: what the
+ * Inbox's feedback row leads to.
+ */
+function seedSuggestions(): Db {
+  const db = seed();
+  const doc: DocumentRow = {
+    id: uuid(),
+    slug: FLEET_DOC.slug,
+    title: FLEET_DOC.title,
+    status: "in_review",
+    kind: "prd",
+    template: FLEET_DOC.template ?? null,
+    template_version: FLEET_DOC.template_version ?? null,
+    theme: null,
+    created_at: FLEET_DOC.versions[0].created_at,
+    updated_at: FLEET_DOC.versions.at(-1)!.created_at,
+  };
+  db.documents.push(doc);
+  for (const v of FLEET_DOC.versions) db.versions.push(buildVersion(doc, v));
+  const v1 = findVersion(db, doc, 1)!;
+  const v2 = findVersion(db, doc, 2)!;
+  addComment(db, v1, {
+    section_key: "problem",
+    anchor: { exact: "so many are out when the driver comes", prefix: "arrive, ", suffix: "." },
+    body: "How many first attempts fail today? Put the number in.",
+  }, { created_at: "2026-10-17T11:00:00Z" });
+  Object.assign(db.feedback.at(-1)!, {
+    status: "addressed",
+    addressed_in_version: 2,
+    resolution_note: "Added the failed first-attempt rate.",
+    updated_at: "2026-10-19T09:00:00Z",
+  });
+  const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
+  FLEET_SUGGESTIONS.forEach((x, i) => {
+    const created_at = `2026-10-19T10:0${i}:00Z`;
+    const f: FeedbackRow = {
+      id: uuid(),
+      document_id: doc.id,
+      raised_on_version: 2,
+      kind: "general",
+      comment_id: null,
+      section_review_id: null,
+      section_key: x.key,
+      summary: x.summary,
+      anchor: null,
+      verdict: null,
+      status: "open",
+      addressed_in_version: null,
+      resolution_note: null,
+      created_at,
+      updated_at: created_at,
+    };
+    db.feedback.push(f);
+    llm.suggestions.push({
+      id: uuid(),
+      document_id: doc.id,
+      feedback_item_id: f.id,
+      job_id: null,
+      version_number: v2.number,
+      classification: "change_request",
+      group_key: null,
+      duplicate_of: null,
+      kind: "section_text",
+      section_key: x.key,
+      text: x.text,
+      edited_text: null,
+      rationale: x.rationale,
+      pushback: null,
+      status: "open",
+      override_reason: null,
+      decided_by: null,
+      decided_at: null,
+      applied_in_version: null,
+      created_at,
+      updated_at: created_at,
+    });
+  });
+  return db;
+}
+
+/** The default seed plus one PRD of 100+ sections in nested chapters (./big-prd.ts). */
+function seedBigPrd(): Db {
+  const db = seed();
+  const row: DocumentRow = {
+    id: uuid(),
+    slug: BIG_PRD.slug,
+    title: BIG_PRD.title,
+    status: "in_review",
+    kind: "prd",
+    template: BIG_PRD.template ?? null,
+    template_version: BIG_PRD.template_version ?? null,
+    theme: null,
+    created_at: BIG_PRD.versions[0].created_at,
+    updated_at: BIG_PRD.versions[0].created_at,
+  };
+  db.documents.push(row);
+  const v = buildVersion(row, BIG_PRD.versions[0]);
+  db.versions.push(v);
+  const at = "2026-10-19T10:00:00Z";
+  for (const [key, r] of Object.entries(BIG_PRD_REVIEWS)) addReview(db, v, key, r, { created_at: at });
+  const comments = BIG_PRD_COMMENTS.map(([key, exact, text], i) => {
+    const plain = v.sections.find((s) => s.section_key === key)!.body_text;
+    const start = plain.indexOf(exact);
+    const anchor = { exact, prefix: plain.slice(Math.max(0, start - 32), start), suffix: plain.slice(start + exact.length, start + exact.length + 32) };
+    return addComment(db, v, { section_key: key, anchor, body: text }, { created_at: `2026-10-19T11:${String(10 + i).padStart(2, "0")}:00Z` });
+  });
+  const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
+  for (const s of BIG_PRD_SUGGESTIONS) {
+    const c = comments.find((x) => x.body === s.comment)!;
+    llm.suggestions.push({
+      id: uuid(),
+      document_id: row.id,
+      feedback_item_id: c.feedback_item_id!,
+      job_id: null,
+      version_number: 1,
+      classification: "change_request",
+      group_key: null,
+      duplicate_of: null,
+      kind: "section_text",
+      section_key: c.section_key,
+      text: s.text,
+      edited_text: null,
+      rationale: s.rationale,
+      pushback: null,
+      status: s.status,
+      override_reason: null,
+      decided_by: s.status === "open" ? null : db.user_id,
+      decided_at: s.status === "open" ? null : at,
+      applied_in_version: null,
+      created_at: at,
+      updated_at: at,
+    });
+    // Dismissed with "decline the feedback".
+    if (s.status === "dismissed") Object.assign(db.feedback.find((f) => f.id === c.feedback_item_id)!, { status: "declined", resolution_note: "Kept as written." });
+  }
+  // One resolved thread: Done.
+  comments.find((c) => c.body.startsWith("List the shortcuts"))!.resolved_at = at;
+  return db;
 }
 
 function seed(): Db {
@@ -351,8 +555,8 @@ function seed(): Db {
     }
   }
   docs.get("usage-alerts-roadmap")!.status = "in_review";
-  db.runs = seedRuns(runsContext(db));
-  db.llm = seedLlm(llmContext(db, db.user_id, "owner"));
+  db.runs = seeded("runs", () => seedRuns(runsContext(db)));
+  db.llm = seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   return db;
 }
 
@@ -417,6 +621,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     userId: db.user_id,
     feedback: db.feedback,
     documents: db.documents,
+    suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     latestVersion: (id) => {
       const doc = db.documents.find((d) => d.id === id);
       const vs = doc ? docVersions(db, doc) : [];
@@ -500,7 +705,15 @@ function load(): Db {
       // fall through to a fresh seed
     }
   }
-  const db = seed();
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  const db = seeded(
+    "db",
+    scenario === "empty" ? seedEmpty : scenario === "large" ? seedLarge : scenario === "suggestions"
+        ? seedSuggestions
+        : scenario === "big-prd"
+          ? seedBigPrd
+          : seed,
+  );
   save(db);
   return db;
 }
@@ -937,6 +1150,56 @@ function reviewV2Context(db: Db, userId: string, role: Role) {
   };
 }
 
+/**
+ * The PRDs in review trace to the baseline: their goal-trace and scope sections link the
+ * goals and features they serve, so Home and the trace show goal tags.
+ */
+function goalLinks(db: Db): V2Db["section_links"] {
+  const out: V2Db["section_links"] = [];
+  const link = (slug: string, section: string, entityKey: string) => {
+    const doc = findDocument(db, slug);
+    const v = doc && docVersions(db, doc).at(-1);
+    const e = db.baseline.entities.find((x) => x.key === entityKey);
+    if (!doc || !v || !e || !v.sections.some((s) => s.section_key === section)) return;
+    out.push({
+      id: uuid(), document_id: doc.id, version_id: v.id, section_key: section, section_hash: null, composition_revision: null,
+      module_key: null, kind: "implements", entity_id: e.id, evidence_id: null, source_item_id: null, precision: "section",
+      claim: null, created_by: null, created_at: v.created_at,
+    });
+  };
+  link("checkout-redesign", "goal-trace", "g.activation");
+  link("checkout-redesign", "goal-trace", "g.paid-conversion");
+  link("team-workspaces", "scope", "f.team-invites");
+  return out;
+}
+
+/** The v2 rows, seeded on first use against the first mock PRD. */
+function ensureV2(db: Db): V2Db {
+  if (!db.v2) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
+    db.v2 = seeded("v2", () => {
+      const v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
+      v2.section_links.push(...goalLinks(db));
+      return v2;
+    });
+  }
+  return db.v2;
+}
+
+function ensureBlockers(db: Db): BlockersDb {
+  if (!db.blockers) {
+    const v2 = ensureV2(db);
+    const deposits = db.documents.find((d) => d.slug === "online-deposits");
+    db.blockers = seedBlockers(
+      db.documents.find((d) => d.kind === "prd")?.id ?? db.tenant_id,
+      db.user_id,
+      deposits && { documentId: deposits.id, v2 },
+    );
+  }
+  return db.blockers;
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -982,22 +1245,83 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
+  // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
+  if (["documents", "section-links", "baseline", "trace"].includes(p[1])) {
+    const traced = await routeTrace(
+      {
+        v2: ensureV2(db),
+        documents: db.documents,
+        versions: db.versions,
+        entities: db.baseline.entities,
+        edges: db.baseline.edges,
+        userId: me.id,
+        role: me.role,
+        now,
+        uuid,
+      },
+      req,
+      p,
+      q,
+    );
+    if (traced) return traced;
+  }
   // The baseline mock checks roles itself (commenters propose, approvers decide).
   if (p[1] === "baseline") {
     return routeBaseline(db.baseline, { userId: me.id, role: me.role }, req, p.slice(2), q);
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  // Company settings are the owner's, as in the API (tenant_settings_api.py).
+  if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const connections = await connectionsRoute(req, p);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role);
   if (pool) return pool;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
-  db.llm ??= seedLlm(llmContext(db, db.user_id, "owner"));
+  db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   const llm = llmContext(db, me.id, me.role);
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
+  // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
+  const v2db = ensureV2(db);
+  db.quality ??= seedQuality();
+  const qualityCtx: QualityContext = {
+    db: db.quality,
+    v2: v2db,
+    userId: me.id,
+    role: me.role,
+    findVersion: (ref, n) => {
+      const doc = findDocument(db, ref);
+      const v = doc && findVersion(db, doc, n);
+      return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
+    },
+    blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
+  };
+  const quality = await routeQuality(qualityCtx, req, p, q);
+  if (quality) return quality;
+  // Modules and compositions check roles themselves (viewers may ask for a recommendation).
+  if (!db.modules) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    db.modules = seedModules(prd?.id ?? null, db.user_id);
+  }
+  const modules = await routeModules(
+    db.modules,
+    {
+      userId: me.id,
+      role: me.role,
+      document: (ref) => {
+        const doc = findDocument(db, ref);
+        return doc && doc.kind === "prd" ? { id: doc.id, slug: doc.slug, template: doc.template ?? null } : null;
+      },
+      approvedVersion: (documentId, n) =>
+        db.versions.find((v) => v.document_id === documentId && v.number === n && v.approved_at)?.id ?? null,
+    },
+    req,
+    p,
+    q,
+  );
+  if (modules) return modules;
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
@@ -1041,17 +1365,20 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "feedback" && p[2] && m === "PATCH") {
     const f = db.feedback.find((x) => x.id === p[2]);
     if (!f) return notFound("Feedback item");
-    Object.assign(f, await body<Schemas["FeedbackPatch"]>(), { updated_at: now() });
+    const patch = await body<Schemas["FeedbackPatch"]>();
+    // As the API: reopening clears the version it was addressed in, unless one is given.
+    if (patch.status === "open" && !("addressed_in_version" in patch)) patch.addressed_in_version = null;
+    Object.assign(f, patch, { updated_at: now() });
     return json(200, f);
   }
 
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
-  if (!db.v2) {
-    const prd = db.documents.find((d) => d.kind === "prd");
-    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
-    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
-  }
-  const v2 = routeV2(db.v2, req, p, q);
+  const v2Db = ensureV2(db);
+  // Blocker strategy routes (CR-04): writes on the v2 option, experiment and event rows.
+  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents };
+  const blockers = await routeBlockers(blockerContext, ensureBlockers(db), req, p, q);
+  if (blockers) return blockers;
+  const v2 = routeV2(v2Db, req, p, q, me.id);
   if (v2) return v2;
 
   const handled = await laneF(db, req, p, m);
@@ -1060,7 +1387,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const followUp = followUpsRoute(db, req, p, me);
   if (followUp) return followUp;
 
-  db.runs ??= seedRuns(runsContext(db));
+  db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   if (runs && p[1] === "inbox") {
     // Owners also see the provider revokes a removed member's disable could not make.
@@ -1105,7 +1432,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       .filter((f) => f.document_id === doc.id)
       .filter((f) => !status || f.status === status)
       .filter((f) => !version || f.raised_on_version === Number(version))
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      // As the API: by the version raised on, then age.
+      .sort((a, b) => a.raised_on_version - b.raised_on_version || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
       .map((f) => withSuggestion(db.llm, f));
     return json(200, items);
   }
@@ -1171,6 +1499,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
+    // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
+    if (doc.kind === "prd") {
+      const latest = docVersions(db, doc).pop()!.number;
+      const refusal = publishRefusal(qualityCtx, { documentId: doc.id, slug: doc.slug, versionId: v.id }, v.number, latest, (id) =>
+        ensureBlockers(db).blockers.find((b) => b.id === id)?.statement,
+      );
+      if (refusal) return json(409, refusal);
+    }
     v.approved_at = now();
     doc.status = "approved";
     doc.updated_at = v.approved_at;
@@ -1227,10 +1563,24 @@ async function route(db: Db, req: Request): Promise<Response> {
   return notFound("Route");
 }
 
+/** One request at a time: each loads the whole db and saves it back, so two in flight would lose a write. */
+let queue: Promise<unknown> = Promise.resolve();
+
 export async function mockFetch(req: Request): Promise<Response> {
+  // Every call, in order: tests count them (Home's call budget).
+  const url = new URL(req.url);
+  const log = ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ??= []);
+  log.push(`${req.method} ${url.pathname}${url.search}`);
   await new Promise((r) => setTimeout(r, LATENCY_MS));
-  const db = load();
-  const res = await route(db, req);
-  save(db);
-  return res;
+  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_FAIL_KEY)) {
+    return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
+  }
+  const next = queue.then(async () => {
+    const db = load();
+    const res = await route(db, req);
+    save(db);
+    return res;
+  });
+  queue = next.catch(() => undefined);
+  return next;
 }

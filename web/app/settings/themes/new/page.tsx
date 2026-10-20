@@ -6,7 +6,9 @@ import { useState, type FormEvent } from "react";
 
 import { ProblemList } from "@/components/TemplateBodyEditor";
 import { ThemePreview } from "@/components/ThemePreview";
-import { Button, ErrorNote, INPUT, Loading } from "@/components/ui";
+import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
+import { Button, InfoTip, Notice, PageHeader, Panel } from "@/components/ds";
+import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -57,69 +59,97 @@ export default function NewThemePage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      <p className="mb-2 text-sm">
-        <Link href="/settings/themes" className="text-neutral-500 hover:text-neutral-900 hover:underline">
-          ← Themes
-        </Link>
-      </p>
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight text-neutral-900">New theme</h1>
-      {themes.error && <ErrorNote>{themes.error}</ErrorNote>}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <form onSubmit={create} className="space-y-4">
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-neutral-700">Key</span>
-            <input
-              className={`${INPUT} font-mono`}
-              value={key}
-              onChange={(e) => setKey(e.target.value.toLowerCase())}
-              placeholder="company-brand"
-              pattern="[a-z0-9][a-z0-9-]{1,62}"
-              title="Lowercase letters, digits and hyphens"
-              required
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-neutral-700">Name</span>
-            <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Company brand" required />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-neutral-700">For</span>
-            <select className={INPUT} value={kind} onChange={(e) => setKind(e.target.value as ThemeKind)}>
-              <option value="prd">PRD</option>
-              <option value="roadmap">Roadmap</option>
-              <option value="any">Any document</option>
-            </select>
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-neutral-700">Description</span>
-            <input className={INPUT} value={description} onChange={(e) => setDescription(e.target.value)} />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-neutral-700">Start from</span>
-            {themes.loading ? (
-              <Loading />
-            ) : (
-              <select className={INPUT} value={base?.key ?? ""} onChange={(e) => setFrom(e.target.value)}>
-                {themes.data?.map((t) => (
-                  <option key={t.key} value={t.key}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <span className="mt-1 block text-xs text-neutral-500">Its fonts, colours and CSS are copied; edit them next.</span>
-          </label>
-          <Button type="submit" variant="primary" disabled={busy || !base || !key || !name}>
+    <>
+      <PageHeader
+        back={
+          <Link href="/settings/themes" className="hover:text-text hover:underline">
+            ← Themes
+          </Link>
+        }
+        title="New theme"
+        action={
+          <Button type="submit" form="new-theme" variant="primary" icon="plus" disabled={busy || !base || !key || !name}>
             {busy ? "Creating…" : "Create theme"}
           </Button>
-          {error && <ErrorNote>{error}</ErrorNote>}
+        }
+      />
+      {themes.error && <Notice tone="error">{themes.error}</Notice>}
+      <div className="grid grid-cols-[420px_minmax(0,1fr)] items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3">
+        <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
+          <Panel title="Details" bodyClassName="p-4 max-[600px]:p-3">
+            <form id="new-theme" onSubmit={create} className="flex flex-col gap-3">
+              <Field
+                label="Key"
+                htmlFor="theme-key"
+                tip={
+                  <InfoTip label="allowed characters" align="start">
+                    Lowercase letters, digits and hyphens. It cannot change later.
+                  </InfoTip>
+                }
+              >
+                <input
+                  id="theme-key"
+                  className={`${INPUT} font-mono`}
+                  value={key}
+                  onChange={(e) => setKey(e.target.value.toLowerCase())}
+                  placeholder="company-brand"
+                  pattern="[a-z0-9][a-z0-9-]{1,62}"
+                  title="Lowercase letters, digits and hyphens"
+                  required
+                />
+              </Field>
+              <Field label="Name">
+                <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Company brand" required />
+              </Field>
+              <Field label="For">
+                <select className={`${SELECT} h-9 w-full`} value={kind} onChange={(e) => setKind(e.target.value as ThemeKind)}>
+                  <option value="prd">PRD</option>
+                  <option value="roadmap">Roadmap</option>
+                  <option value="any">Any document</option>
+                </select>
+              </Field>
+              <Field label="Description">
+                <input className={INPUT} value={description} onChange={(e) => setDescription(e.target.value)} />
+              </Field>
+              <Field
+                label="Start from"
+                htmlFor="theme-from"
+                tip={
+                  <InfoTip label="copying" align="start">
+                    Its fonts, colours and CSS are copied; edit them next.
+                  </InfoTip>
+                }
+              >
+                {themes.loading ? (
+                  <Loading />
+                ) : (
+                  <select
+                    id="theme-from"
+                    className={`${SELECT} h-9 w-full`}
+                    value={base?.key ?? ""}
+                    onChange={(e) => setFrom(e.target.value)}
+                  >
+                    {themes.data?.map((t) => (
+                      <option key={t.key} value={t.key}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+            </form>
+          </Panel>
+          {error && <Notice tone="error">{error}</Notice>}
           {problems.length > 0 && <ProblemList problems={problems} testId="save-problems" />}
-        </form>
-        <div>
-          {base && <ThemePreview tokens={base.tokens} css={base.css} kind={kind === "roadmap" ? "roadmap" : "prd"} />}
         </div>
+        <Panel title="Preview" bodyClassName="p-4 max-[600px]:p-3">
+          {base ? (
+            <ThemePreview tokens={base.tokens} css={base.css} kind={kind === "roadmap" ? "roadmap" : "prd"} />
+          ) : (
+            <Loading />
+          )}
+        </Panel>
       </div>
-    </div>
+    </>
   );
 }

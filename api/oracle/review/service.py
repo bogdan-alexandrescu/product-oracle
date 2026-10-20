@@ -25,6 +25,7 @@ from oracle import audit
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.jobs.schemas import SuggestionOut
+from oracle.review import publish_gate
 from oracle.review.models import FEEDBACK_STATUSES, Comment, FeedbackItem, SectionReview
 from oracle.review.schemas import (
     CommentOut,
@@ -814,7 +815,8 @@ async def approve_version(
 
     The final approval is the designated decider's when the review policy names one
     (others review and give section verdicts), and it is of the current version only:
-    approving a version a newer one replaced is a ``conflict``.
+    approving a version a newer one replaced is a ``conflict``. A PRD passes the publish
+    gate first (raises ``publish_gate.PublishBlocked``).
     """
     from oracle.review.publish import lock_document
     from oracle.review.state import effective_policy
@@ -844,6 +846,7 @@ async def approve_version(
             f"version {version.number} is not the current version (version {latest} is); "
             "approve the current version",
         )
+    await publish_gate.check(session, document, version)
     already = version.approved_at is not None
     previous_approver = version.approved_by
     # A re-approval by someone else (the decider set after an earlier approval) is the

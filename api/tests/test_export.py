@@ -21,6 +21,7 @@ from oracle.export import pdf as pdf_module
 from oracle.export.pdf import PdfUnavailable, pdf_available
 from oracle.export.render import render_markdown
 from oracle.tenancy import tenant_session
+from tests.conftest import seed_company
 
 V1_MARKDOWN = """---
 document: checkout-redesign
@@ -132,6 +133,7 @@ async def _add_version(
 
 @pytest.fixture
 async def fx(tenant_id) -> Fixture:
+    await seed_company(tenant_id)
     async with tenant_session(tenant_id) as s:
         doc = Document(slug="checkout-redesign", title="Checkout redesign PRD", status="approved")
         s.add(doc)

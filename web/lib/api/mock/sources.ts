@@ -4,6 +4,8 @@
  * scoring, so the UI's badge and breakdown can be exercised.
  */
 import type { Schemas } from "@/lib/api/client";
+import { mockUuid, seeded } from "./ids";
+import { MOCK_NOTION_CONNECTION_ID } from "./notion";
 
 type Source = Schemas["SourceOut"];
 type Item = Schemas["ItemOut"] & { content: string; source_name: string };
@@ -20,7 +22,7 @@ export const SOURCES_STORAGE_KEY = "po-mock-sources-v1";
 const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
   slack: [{ id: "c0000000-0000-4000-8000-000000000001", account_label: "Example Co chat", status: "active" }],
   github: [{ id: "c0000000-0000-4000-8000-000000000002", account_label: "example-org", status: "active" }],
-  notion: [],
+  notion: [{ id: MOCK_NOTION_CONNECTION_ID, account_label: "Example Notion", status: "active" }],
   fireflies: [],
   google: [],
 };
@@ -36,7 +38,7 @@ const AVAILABLE: Record<Source["kind"], boolean> = {
   upload: true,
   github: true,
   slack: true,
-  notion: false,
+  notion: true,
   fireflies: false,
   google_docs: false,
 };
@@ -44,10 +46,7 @@ const AVAILABLE: Record<Source["kind"], boolean> = {
 const SOURCE_FACTOR: Record<string, number> = { github: 0.85, upload: 0.7, notion: 0.7, slack: 0.5 };
 
 const now = () => new Date().toISOString();
-const uuid = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `00000000-0000-4000-8000-${String(Date.now()).padStart(12, "0").slice(-12)}`;
+const uuid = mockUuid;
 
 function confidence(kind: string, freshness: number): Confidence {
   const values = { source: SOURCE_FACTOR[kind] ?? 0.5, freshness, mentions: 0.5, goal_impact: 0.5 };
@@ -127,7 +126,7 @@ function load(): SourcesDb {
       // fall through to a fresh seed
     }
   }
-  return seed();
+  return seeded("sources", seed);
 }
 
 function json(status: number, body: unknown): Response {
@@ -199,6 +198,10 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (m === "GET") return json(200, db.sources.map((s) => counted(db, s)));
     const body = (await req.json()) as Schemas["SourceCreate"];
     if (!AVAILABLE[body.kind]) return json(422, { detail: "connector not available yet" });
+    // As the real connector reads a Notion allowlist: "roots" only.
+    if (body.kind === "notion" && !(Array.isArray(body.config?.roots) && body.config.roots.length)) {
+      return json(422, { detail: "allowlist at least one root page or database" });
+    }
     if (db.sources.some((s) => s.name === body.name.trim())) {
       return json(409, { detail: "You already have a source with this name" });
     }

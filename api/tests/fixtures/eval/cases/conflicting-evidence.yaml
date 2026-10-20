@@ -1,0 +1,15 @@
+id: conflicting-evidence
+description: >
+  Two sources disagree on a fact the feature's priority rests on (a material conflict that
+  is still open). The evidence criterion is critical and names the conflict.
+covers: [conflicting_evidence]
+extends: good-prd
+add:
+  baseline:
+    conflicts:
+      - {ref: effort-conflict, entity: feature, field: attrs.effort, material: true, status: open,
+         claims: [{value: 3, source_kind: tracker}, {value: 8, source_kind: chat}]}
+expected:
+  evidence_provenance: critical
+rationale_contains:
+  evidence_provenance: [conflict, attrs.effort]

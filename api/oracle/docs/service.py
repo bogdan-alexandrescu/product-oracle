@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, changes, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.docs import layers
 from oracle.docs.diff import diff_sections
@@ -445,7 +445,8 @@ async def import_draft(
         run_id = run_id or acting_for_run
         if cause == "draft_imported":
             cause = "run_draft"
-    draft = parse_draft(markdown)
+    # Off the event loop: the draft is untrusted text (oracle.safe_yaml bounds its cost).
+    draft = await safe_yaml.run_parse(parse_draft, markdown)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template
     held: dict[str, HeldSection] = {}
@@ -662,6 +663,20 @@ async def import_draft(
         # A newer, unapproved version now exists.
         document.status = "in_review"
 
+    # v2 hook: outputs built on earlier versions may now be stale (oracle.trace).
+    await changes.record_change(
+        db,
+        "document_version",
+        cause="version_imported",
+        actor=principal,
+        subject_id=version.id,
+        subject_ref=f"{document.slug}@{version.number}",
+        document_id=document.id,
+        data={
+            "number": version.number,
+            "previous_version_id": str(previous.id) if previous else None,
+        },
+    )
     await audit.record(
         db,
         principal,

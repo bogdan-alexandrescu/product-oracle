@@ -10,6 +10,7 @@ from oracle.templates import builtins
 from oracle.templates.builtins import ensure_builtins
 from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.tenancy import tenant_session
+from tests.conftest import seed_company
 from tests.legacy.helpers import fixture, import_md, role_token
 
 COMPANY_TEMPLATE = """---
@@ -78,8 +79,8 @@ async def _themes(tenant_id) -> dict[str, tuple]:
 async def test_template_upgrade_skips_edited_archived_and_company_templates(
     client, tenant_id, monkeypatch
 ):
+    await seed_company(tenant_id)
     h = {"Authorization": f"Bearer {await role_token(tenant_id, 'approver')}"}
-    assert (await client.get("/v1/templates", headers=h)).status_code == 200
     # Edited built-in: a user's body becomes its latest version.
     body = (await client.get("/v1/templates/one-pager", headers=h)).json()["versions"][-1]["body"]
     edited = body.replace("{#problem}", "{#problem}\n\nCompany wording.", 1)
@@ -130,6 +131,7 @@ async def test_template_upgrade_skips_edited_archived_and_company_templates(
 
 
 async def test_theme_upgrade_never_rewrites_existing_themes(client, tenant_id, monkeypatch):
+    await seed_company(tenant_id)
     h = {"Authorization": f"Bearer {await role_token(tenant_id, 'approver')}"}
     themes = (await client.get("/v1/themes", headers=h)).json()
     assert len([t for t in themes if t["builtin"]]) == 6
@@ -160,8 +162,8 @@ async def test_theme_upgrade_never_rewrites_existing_themes(client, tenant_id, m
 
 
 async def test_documents_keep_resolving_their_template_after_edit_and_archive(client, tenant_id):
+    await seed_company(tenant_id)
     owner = {"Authorization": f"Bearer {await role_token(tenant_id, 'owner')}"}
-    assert (await client.get("/v1/templates", headers=owner)).status_code == 200
     resp = await import_md(client, owner, fixture("legacy_prd_v1.md"))
     assert resp.status_code == 201, resp.text
     # The draft names oracle-default v1; the company then edits and archives it.

@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>B1 Split · Baseline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* B1 Split, round 2: Ledger master table on the left, Atlas dark-headed inspector on the right, on every screen. */
+:root{
+  --bg:#f5f4fb;--surface:#ffffff;--surface2:#efedf8;--line:#dedaee;--line-strong:#b9b3d6;
+  --text:#16132c;--text2:#3f3a63;
+  --accent:#5a3cf0;--on-accent:#ffffff;--accent-ink:#3d23b8;--accent-soft:#ebe6ff;--accent-mid:#c9bfff;
+  --hero:#1c1838;--hero-2:#2a2550;--hero-text:#f3f1ff;--hero-text2:#d4cff5;--hero-line:#3b3566;
+  --lime:#c8f169;--on-lime:#16132c;
+  --pass:#0d6a4c;--pass-bg:#d9f4e8;--warn:#7a3f00;--warn-bg:#ffecd0;--crit:#a3122f;--crit-bg:#ffe1e8;--na:#46416b;--na-bg:#ebe9f3;
+  --nav:#16132c;--nav-text:#d4cff5;--nav-active:#c8f169;--nav-active-text:#16132c;
+  --tip:#16132c;--tip-text:#f3f1ff;
+  --spark-fill:rgba(90,60,240,.10);
+  --shadow:0 1px 2px rgba(22,19,44,.06);
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0e0d1a;--surface:#17152b;--surface2:#1f1c38;--line:#2d2950;--line-strong:#4a4478;
+  --text:#f1efff;--text2:#c9c4ec;
+  --accent:#a796ff;--on-accent:#120f26;--accent-ink:#c3b8ff;--accent-soft:#2a2357;--accent-mid:#4a4185;
+  --hero:#241f4a;--hero-2:#2e2860;--hero-text:#f3f1ff;--hero-text2:#d4cff5;--hero-line:#40397a;
+  --pass:#5fe0a9;--pass-bg:#0f2b22;--warn:#ffc46e;--warn-bg:#2f2413;--crit:#ff8ca6;--crit-bg:#3a1426;--na:#c9c4ec;--na-bg:#221f3a;
+  --nav:#07060f;--nav-text:#c9c4ec;
+  --tip:#f1efff;--tip-text:#16132c;
+  --spark-fill:rgba(167,150,255,.14);
+  --shadow:none;
+}}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:400 15px/22px 'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ul{margin:0;padding:0}ul{list-style:none}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:500}
+.num,.numeral,b,.chip,.gid,.cost,.age{font-variant-numeric:tabular-nums}
+.disp{font-family:'Bricolage Grotesque',system-ui,sans-serif}
+.ic{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:16px;height:16px}
+
+/* shell */
+.app{display:grid;grid-template-columns:88px minmax(0,1fr);min-height:100vh}
+.rail{background:var(--nav);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:2px;min-height:100vh}
+.rail .logo{width:40px;height:40px;border-radius:12px;background:var(--lime);color:var(--on-lime);display:grid;place-items:center;font:700 19px 'Bricolage Grotesque',sans-serif;margin-bottom:12px}
+.rail a{width:78px;padding:7px 0 6px;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--nav-text);font:500 13px/16px 'Inter',sans-serif;position:relative}
+.rail a[aria-current]{background:var(--nav-active);color:var(--nav-active-text);font-weight:600}
+.rail .badge{position:absolute;top:2px;right:12px;min-width:20px;height:20px;border-radius:10px;background:var(--lime);color:var(--on-lime);font:600 13px/20px 'Inter',sans-serif;text-align:center;padding:0 5px}
+.rail .sp{flex:1}
+.rail .me{width:38px;height:38px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:600 14px 'Inter',sans-serif;margin-top:8px}
+.main{min-width:0;padding:0 24px 24px}
+.top{display:flex;align-items:center;gap:12px;height:64px}
+.top h1{font:700 28px/32px 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em}
+.top .grow{flex:1}
+.btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:10px;font:600 15px/1 'Inter',sans-serif;white-space:nowrap}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.sec{height:32px;padding:0 12px;border:1px solid var(--line-strong);background:var(--surface);color:var(--text);font-size:14px;border-radius:8px}
+.btn.sec.solid{background:var(--accent-soft);border-color:transparent;color:var(--accent-ink)}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;font:600 13px/1 'Inter',sans-serif;white-space:nowrap;background:var(--na-bg);color:var(--na)}
+.chip.pass{background:var(--pass-bg);color:var(--pass)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.crit{background:var(--crit-bg);color:var(--crit)}
+.chip.acc{background:var(--accent-soft);color:var(--accent-ink)}
+.chip.now{background:var(--lime);color:var(--on-lime)}
+.chip.line{background:transparent;border:1px solid var(--line-strong);color:var(--text)}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.gid{display:inline-grid;place-items:center;height:24px;padding:0 7px;border-radius:6px;background:var(--accent-soft);color:var(--accent-ink);font:500 13px/1 'JetBrains Mono',monospace}
+.cost{font:500 13px/1 'JetBrains Mono',monospace;color:var(--text2);white-space:nowrap}
+.cap{font:600 13px/16px 'Inter',sans-serif;color:var(--text2);letter-spacing:.02em}
+.av{width:28px;height:28px;border-radius:50%;display:inline-grid;place-items:center;background:var(--surface2);color:var(--text);font:600 13px/1 'Inter',sans-serif;flex:none;border:1px solid var(--line)}
+
+/* panels and ledger tables */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);min-width:0}
+.ph{display:flex;align-items:center;gap:10px;height:48px;padding:0 16px;border-bottom:1px solid var(--line)}
+.ph h2{font:700 18px/1 'Bricolage Grotesque',sans-serif;letter-spacing:-.01em}
+.ph .n{font:700 18px/1 'Bricolage Grotesque',sans-serif;color:var(--accent-ink)}
+.ph .grow{flex:1}
+.tr{display:grid;align-items:center;column-gap:14px;min-height:44px;padding:0 16px;border-bottom:1px solid var(--line);position:relative}
+.tr:last-child{border-bottom:0}
+.tr.head{min-height:36px;background:var(--surface2)}
+.tr.head>*{font:600 13px/16px 'Inter',sans-serif;color:var(--text2)}
+.tr.sel{background:var(--accent-soft)}
+.tr.sel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}
+.tr .t{font-weight:500;min-width:0;white-space:nowrap}
+.tr .r{text-align:right}
+.kind{display:flex;align-items:center;gap:8px;color:var(--text2);font-weight:500;white-space:nowrap}
+.kind .ic{color:var(--accent-ink)}
+.bar{height:8px;border-radius:4px;background:var(--surface2);overflow:hidden;flex:1;min-width:40px;box-shadow:inset 0 0 0 1px var(--line)}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.meter{display:flex;align-items:center;gap:10px}
+.meter b{font-weight:600;white-space:nowrap}
+
+/* inspector (Atlas) */
+.insp{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;min-width:0;box-shadow:var(--shadow)}
+.ih{background:var(--hero);color:var(--hero-text);padding:16px 20px 18px}
+.ih .cap{color:var(--hero-text2)}
+.ih h3{font:700 22px/27px 'Bricolage Grotesque',sans-serif;letter-spacing:-.01em;margin:6px 0 10px}
+.ih .chips{display:flex;gap:8px;flex-wrap:wrap}
+.ih .chip{background:var(--hero-2);color:var(--hero-text)}
+.ih .chip.now{background:var(--lime);color:var(--on-lime)}
+.is{padding:14px 20px;border-bottom:1px solid var(--line)}
+.is:last-child{border-bottom:0}
+.is .cap{margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.big3{display:grid;grid-template-columns:repeat(3,1fr)}
+.big3>div{padding:14px 0 12px 20px;border-right:1px solid var(--line)}
+.big3>div:last-child{border-right:0}
+.numeral{font:700 34px/36px 'Bricolage Grotesque',sans-serif;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.numeral small{font:600 18px/1 'Bricolage Grotesque',sans-serif;color:var(--text2);letter-spacing:0}
+.numeral.crit{color:var(--crit)}.numeral.warn{color:var(--warn)}
+.ilist li{display:flex;align-items:center;gap:10px;min-height:34px}
+.ilist li .grow{flex:1;min-width:0}
+
+/* journey (Atlas) */
+.jt{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.jt i{height:10px;border-radius:5px;background:var(--surface2);box-shadow:inset 0 0 0 1px var(--line-strong)}
+.jt i.d{background:var(--accent);box-shadow:none}
+.jt i.c{background:var(--lime);box-shadow:inset 0 0 0 2px var(--on-lime)}
+.jlab{display:flex;justify-content:space-between;margin-top:8px;font-size:14px;color:var(--text2)}
+.jlab b{color:var(--text);font-weight:600}
+.jmini{display:inline-flex;gap:3px;align-items:center}
+.jmini i{width:9px;height:9px;border-radius:50%;background:var(--surface2);box-shadow:inset 0 0 0 1px var(--line-strong)}
+.jmini i.d{background:var(--accent);box-shadow:none}
+.jmini i.c{background:var(--lime);box-shadow:0 0 0 2px var(--on-lime)}
+.journey{display:flex;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;width:max-content}
+.journey span{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;font-size:14px;font-weight:500;color:var(--text2);white-space:nowrap}
+.journey span i{font:500 13px/22px 'JetBrains Mono',monospace;font-style:normal;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--surface2);color:var(--text2)}
+.journey .d i{background:var(--pass-bg);color:var(--pass)}
+.journey .c{background:var(--hero);color:var(--hero-text);font-weight:600}
+.journey .c i{background:var(--lime);color:var(--on-lime)}
+
+/* segmented */
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg a{padding:0 14px;height:36px;display:flex;align-items:center;gap:8px;font-weight:500;border-right:1px solid var(--line);white-space:nowrap}
+.seg a:last-child{border-right:0}
+.seg a b{font-weight:600;color:var(--text2)}
+.seg a[aria-current]{background:var(--accent);color:var(--on-accent)}
+.seg a[aria-current] b{color:var(--on-accent)}
+
+/* tooltip */
+.info{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--text2);color:var(--text2);font:700 13px/1 'Inter',serif;font-style:italic;position:relative;flex:none}
+.info.open{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.tip{position:absolute;bottom:calc(100% + 10px);right:-12px;width:380px;background:var(--tip);color:var(--tip-text);border-radius:10px;padding:10px 14px;font:400 14px/20px 'Inter',sans-serif;font-style:normal;text-align:left;box-shadow:0 12px 32px rgba(22,19,44,.28);z-index:5}
+.tip::after{content:"";position:absolute;top:100%;right:16px;border:8px solid transparent;border-top-color:var(--tip)}
+.tip b{font-weight:600}
+
+/* mobile tab bar */
+.tabs{display:none}
+@media (max-width:600px){
+  .app{grid-template-columns:1fr}
+  .rail{display:none}
+  .main{padding:0 10px 96px}
+  .top{height:60px}
+  .top h1{font-size:24px}
+  .tabs{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;height:68px;background:var(--nav);padding:6px 6px 8px;z-index:10}
+  .tabs a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:12px;color:var(--nav-text);font:500 13px/16px 'Inter',sans-serif;position:relative}
+  .tabs a[aria-current]{background:var(--nav-active);color:var(--nav-active-text);font-weight:600}
+  .tabs .badge{position:absolute;top:2px;left:calc(50% + 6px);min-width:20px;height:20px;border-radius:10px;background:var(--lime);color:var(--on-lime);font:600 13px/20px 'Inter',sans-serif;text-align:center;padding:0 5px}
+}
+
+/* round 2 shared */
+.grow{flex:1;min-width:0}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.left{display:flex;flex-direction:column;gap:16px;min-width:0}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.muted{color:var(--text2)}
+.vv{font-size:13px;color:var(--text2)}
+.tstat{display:flex;align-items:center;gap:8px}
+.togo{font-weight:600;color:var(--text);white-space:nowrap}
+.togo b{font-weight:700}
+.ihtop{display:flex;align-items:center;justify-content:space-between}
+.ih .hb{background:transparent;color:var(--hero-text);border-color:var(--hero-text2)}
+.ig{display:flex;align-items:center;gap:10px;min-height:32px}
+.ig .grow{flex:1;min-width:0}
+.ig2{display:flex;align-items:center;gap:10px;margin-top:6px}
+.ig2 .gt{flex:1}
+.iact{display:flex;gap:8px;align-items:center}
+.bl{color:var(--crit);display:grid}
+.big3.two{grid-template-columns:1fr 1fr}
+.big3 .cap{margin-top:2px}
+.hnum{font:700 30px/34px 'Bricolage Grotesque',sans-serif;color:var(--hero-text)}
+.ihr{display:flex;align-items:center;gap:18px;margin-top:6px}
+.gid.prop{background:var(--warn-bg);color:var(--warn)}
+.tr .t.ell{display:block}
+.handle{color:var(--text2);display:grid;cursor:grab}
+.btn[aria-disabled]{background:var(--surface2);color:var(--text2);border:1px solid var(--line-strong)}
+@media (max-width:600px){
+  .split{grid-template-columns:1fr;gap:12px}
+  .left{gap:12px}
+  .top{flex-wrap:wrap;height:auto;padding:14px 0 12px;row-gap:8px;align-items:center}
+  .top h1{flex:1 1 0;min-width:0;font-size:24px;line-height:28px}
+  .top .grow{order:2;flex-basis:100%;height:0}
+  .top .tstat{order:3}
+  .top .btn.primary{order:1;height:38px;padding:0 14px}
+  .tr{padding:0 12px;column-gap:10px}
+  .ih{padding:14px 16px 16px}.is{padding:12px 16px}.big3>div{padding:12px 0 10px 16px}
+  .insp{border-radius:14px}
+}
+
+.numeral.sm{font-size:28px;line-height:32px}
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="rail" aria-label="Main"><div class="logo">Q</div><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Home</a><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg>Requests</a><a href="#" aria-current="page"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Baseline</a><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>PRDs</a><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h9M5 18h5"/></svg>Priorities</a><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6M4 12h10M4 18h16"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/></svg>Roadmap</a><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M10 9l5 3-5 3z"/></svg>Runs</a><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Inbox<span class="badge num">7</span></a><span class="sp"></span><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Settings</a><div class="me" title="Maya K.">MK</div></nav>
+<div class="main">
+<header class="top"><h1>Baseline</h1><span class="tstat"><span class="chip line">Snapshot 14 Oct</span><span class="chip pass num">3 confirmed</span></span><span class="grow"></span><a class="btn primary" href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M10 9l5 3-5 3z"/></svg>Run baseline</a></header><style>
+.kstrip{display:grid;grid-template-columns:repeat(5,1fr);margin-bottom:16px}
+.kstrip>div{padding:12px 18px;border-right:1px solid var(--line)}.kstrip>div:last-child{border-right:0}
+.mx{display:grid;grid-template-columns:minmax(0,1fr) 100px repeat(4,134px);align-items:center;column-gap:0;border-bottom:1px solid var(--line);min-height:52px;position:relative}
+.mx:last-child{border-bottom:0}
+.mx>*{padding:0 12px;min-width:0}
+.mx>.mxf{padding-left:16px;display:flex;align-items:center;gap:8px}
+.mx .fn{font-weight:500}
+.mx.sel{background:var(--accent-soft)}
+.mx.sel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}
+.mxh{align-items:stretch;background:var(--surface2);min-height:0}
+.mxh>.mxf,.mxh>.cap{padding-top:12px}
+.mx>.gh{padding:10px 8px 8px 10px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.ghn{font:500 13px/18px 'Inter',sans-serif;min-height:54px;color:var(--text)}.ghn .gid{height:20px;padding:0 5px;margin-right:2px}
+.ghv .ring{flex:none}.gh .numeral.sm{font-size:24px;line-height:28px}
+.ghv{display:flex;align-items:center;gap:6px}
+.ghg .togo{font-size:14px}
+.gh .spark{display:block;width:100%}
+.mc{border-left:1px solid var(--line);align-self:stretch;display:grid;place-items:center}
+.nil{width:6px;height:6px;border-radius:50%;background:var(--line-strong)}
+.r1{display:flex;flex-direction:column;gap:2px}.r1 svg{margin:-4px 0 0}
+</style><div class="split"><div class="left"><div><section class="panel kstrip" aria-label="Baseline counts"><div><div class="numeral">3<small>/4</small></div><div class="cap">Goals confirmed</div></div><div><div class="numeral">5<small>/6</small></div><div class="cap">Features traced</div></div><div><div class="numeral">86</div><div class="cap">Evidence items</div></div><div><div class="numeral">6</div><div class="cap">Sources</div></div><div><div class="numeral warn">2</div><div class="cap">Low-confidence links</div></div></section><section class="panel" aria-label="Feature by goal">
+  <div class="ph"><h2>Feature × goal</h2><span class="n num">6</span><span class="grow"></span><span class="chip crit num">Flagged 1</span><span class="chip warn num">Conflicts 2</span><span class="chip acc num">Proposals 3</span></div>
+  <div class="mx mxh"><div class="mxf"><span class="cap">Feature</span></div><div class="cap">State</div><div class="gh"><div class="ghn"><span class="gid">G1</span> Net revenue retention</div><div class="ghv"><span class="numeral sm">87%</span><span class="grow"></span><svg class="ring" width="36" height="36" viewBox="0 0 36 36" role="img" aria-label="Confidence 84">
+<circle cx="18" cy="18" r="16" fill="none" stroke="var(--surface2)" stroke-width="4"/>
+<circle cx="18" cy="18" r="16" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-dasharray="84.4 100.5" transform="rotate(-90 18 18)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">84</text></svg></div><div class="ghg"><span class="togo"><b class="num">5</b> pts to go</span></div><svg class="spark" width="120" height="26" viewBox="0 0 120 26" role="img" aria-label="6 month trend 84, 85, 85, 86, 86, 87; target 92">
+<path d="M4,26 L4.0,22.0 L25.2,19.8 L46.4,19.8 L67.6,17.5 L88.8,17.5 L110.0,15.3 L110,26 Z" fill="var(--spark-fill)"/>
+<line x1="0" x2="120" y1="4.0" y2="4.0" stroke="var(--text2)" stroke-width="1.5" stroke-dasharray="4 4"/>
+<polyline points="4.0,22.0 25.2,19.8 46.4,19.8 67.6,17.5 88.8,17.5 110.0,15.3" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="110.0" cy="15.3" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/></svg></div><div class="gh"><div class="ghn"><span class="gid">G2</span> Front-desk minutes per appointment</div><div class="ghv"><span class="numeral sm">4.6</span><span class="grow"></span><svg class="ring" width="36" height="36" viewBox="0 0 36 36" role="img" aria-label="Confidence 66">
+<circle cx="18" cy="18" r="16" fill="none" stroke="var(--surface2)" stroke-width="4"/>
+<circle cx="18" cy="18" r="16" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-dasharray="66.4 100.5" transform="rotate(-90 18 18)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">66</text></svg></div><div class="ghg"><span class="togo"><b class="num">1.6</b> min to go</span></div><svg class="spark" width="120" height="26" viewBox="0 0 120 26" role="img" aria-label="6 month trend 6, 5.6, 5.3, 5, 4.8, 4.6; target 3">
+<path d="M4,26 L4.0,4.0 L25.2,6.4 L46.4,8.2 L67.6,10.0 L88.8,11.2 L110.0,12.4 L110,26 Z" fill="var(--spark-fill)"/>
+<line x1="0" x2="120" y1="22.0" y2="22.0" stroke="var(--text2)" stroke-width="1.5" stroke-dasharray="4 4"/>
+<polyline points="4.0,4.0 25.2,6.4 46.4,8.2 67.6,10.0 88.8,11.2 110.0,12.4" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="110.0" cy="12.4" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/></svg></div><div class="gh"><div class="ghn"><span class="gid">G3</span> Paying UK clinics</div><div class="ghv"><span class="numeral sm">236</span><span class="grow"></span><svg class="ring" width="36" height="36" viewBox="0 0 36 36" role="img" aria-label="Confidence 58">
+<circle cx="18" cy="18" r="16" fill="none" stroke="var(--surface2)" stroke-width="4"/>
+<circle cx="18" cy="18" r="16" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-dasharray="58.3 100.5" transform="rotate(-90 18 18)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">58</text></svg></div><div class="ghg"><span class="togo"><b class="num">164</b> to go</span></div><svg class="spark" width="120" height="26" viewBox="0 0 120 26" role="img" aria-label="6 month trend 180, 192, 205, 214, 226, 236; target 400">
+<path d="M4,26 L4.0,22.0 L25.2,21.0 L46.4,20.0 L67.6,19.2 L88.8,18.2 L110.0,17.4 L110,26 Z" fill="var(--spark-fill)"/>
+<line x1="0" x2="120" y1="4.0" y2="4.0" stroke="var(--text2)" stroke-width="1.5" stroke-dasharray="4 4"/>
+<polyline points="4.0,22.0 25.2,21.0 46.4,20.0 67.6,19.2 88.8,18.2 110.0,17.4" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="110.0" cy="17.4" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/></svg></div><div class="gh"><div class="ghn"><span class="gid prop">G4</span> Support tickets per clinic per month</div><div class="ghv"><span class="numeral sm">1.9</span><span class="grow"></span><svg class="ring" width="36" height="36" viewBox="0 0 36 36" role="img" aria-label="Confidence 34">
+<circle cx="18" cy="18" r="16" fill="none" stroke="var(--surface2)" stroke-width="4"/>
+<circle cx="18" cy="18" r="16" fill="none" stroke="var(--warn)" stroke-width="4" stroke-linecap="round" stroke-dasharray="34.2 100.5" transform="rotate(-90 18 18)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">34</text></svg></div><div class="ghg"><span class="togo"><b class="num">0.4</b> to go</span></div><svg class="spark" width="120" height="26" viewBox="0 0 120 26" role="img" aria-label="6 month trend 2.3, 2.2, 2.1, 2, 1.9, 1.9; target 1.5">
+<path d="M4,26 L4.0,4.0 L25.2,6.2 L46.4,8.5 L67.6,10.7 L88.8,13.0 L110.0,13.0 L110,26 Z" fill="var(--spark-fill)"/>
+<line x1="0" x2="120" y1="22.0" y2="22.0" stroke="var(--text2)" stroke-width="1.5" stroke-dasharray="4 4"/>
+<polyline points="4.0,4.0 25.2,6.2 46.4,8.5 67.6,10.7 88.8,13.0 110.0,13.0" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="110.0" cy="13.0" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/></svg></div></div><div class="mx"><div class="mxf"><span class="ell fn">Automated reminder SMS</span></div><div><span class="chip pass">Shipped</span></div><div class="mc"><svg class="ring" width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Automated reminder SMS serves G1: 78">
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--surface2)" stroke-width="5"/>
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round" stroke-dasharray="85.8 110.0" transform="rotate(-90 20 20)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">78</text></svg></div><div class="mc"><svg class="ring" width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Automated reminder SMS serves G2: 57">
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--surface2)" stroke-width="5"/>
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--warn)" stroke-width="5" stroke-linecap="round" stroke-dasharray="62.7 110.0" transform="rotate(-90 20 20)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">57</text></svg></div><div class="mc"><span class="nil"></span></div><div class="mc"><span class="nil"></span></div></div><div class="mx"><div class="mxf"><span class="ell fn">Stock reorder suggestions</span></div><div><span class="chip warn">Proposed</span></div><div class="mc"><svg class="ring" width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Stock reorder suggestions serves G1: 31">
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--surface2)" stroke-width="5"/>
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--warn)" stroke-width="5" stroke-linecap="round" stroke-dasharray="34.1 110.0" transform="rotate(-90 20 20)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">31</text></svg></div><div class="mc"><span class="nil"></span></div><div class="mc"><span class="nil"></span></div><div class="mc"><span class="nil"></span></div></div><div class="mx"><div class="mxf"><span class="ell fn">Online booking widget</span></div><div><span class="chip pass">Shipped</span></div><div class="mc"><span class="nil"></span></div><div class="mc"><svg class="ring" width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Online booking widget serves G2: 88">
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--surface2)" stroke-width="5"/>
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round" stroke-dasharray="96.8 110.0" transform="rotate(-90 20 20)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">88</text></svg></div><div class="mc"><svg class="ring" width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Online booking widget serves G3: 70">
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--surface2)" stroke-width="5"/>
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round" stroke-dasharray="77.0 110.0" transform="rotate(-90 20 20)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">70</text></svg></div><div class="mc"><span class="nil"></span></div></div><div class="mx sel"><div class="mxf"><span class="ell fn">Check-in from the waiting room</span></div><div><span class="chip acc">In build</span></div><div class="mc"><span class="nil"></span></div><div class="mc"><svg class="ring" width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Check-in from the waiting room serves G2: 61">
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--surface2)" stroke-width="5"/>
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round" stroke-dasharray="67.1 110.0" transform="rotate(-90 20 20)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">61</text></svg></div><div class="mc"><span class="nil"></span></div><div class="mc"><span class="nil"></span></div></div><div class="mx"><div class="mxf"><span class="ell fn">Multi-site dashboard</span></div><div><span class="chip ">Planned</span></div><div class="mc"><span class="nil"></span></div><div class="mc"><span class="nil"></span></div><div class="mc"><svg class="ring" width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Multi-site dashboard serves G3: 64">
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--surface2)" stroke-width="5"/>
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round" stroke-dasharray="70.4 110.0" transform="rotate(-90 20 20)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">64</text></svg></div><div class="mc"><span class="nil"></span></div></div><div class="mx"><div class="mxf"><span class="ell fn">Legacy fax import</span><span class="chip crit">Flagged</span></div><div><span class="chip pass">Shipped</span></div><div class="mc"><span class="nil"></span></div><div class="mc"><span class="nil"></span></div><div class="mc"><span class="nil"></span></div><div class="mc"><span class="nil"></span></div></div>
+</section></div></div><aside class="insp" aria-label="Inspector">
+  <div class="ih"><div class="ihtop"><span class="cap">Feature · selected</span><a class="btn sec hb" href="#">Open</a></div><h3>Check-in from the waiting room</h3><div class="chips"><span class="chip">In build</span><span class="chip mono">PRD v1</span><span class="chip">Published</span></div></div>
+  <div class="big3"><div class="r1"><svg class="ring" width="46" height="46" viewBox="0 0 46 46" role="img" aria-label="Link strength">
+<circle cx="23" cy="23" r="20" fill="none" stroke="var(--surface2)" stroke-width="6"/>
+<circle cx="23" cy="23" r="20" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-dasharray="76.7 125.7" transform="rotate(-90 23 23)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="14" fill="var(--text)">61</text></svg><div class="cap">Link to G2</div></div><div><div class="numeral">4<small>/7</small></div><div class="cap">Done</div></div><div><div class="numeral crit">1</div><div class="cap">At risk</div></div></div>
+  <div class="is"><div class="cap">Goal</div><div class="ig"><span class="gid">G2</span><span class="grow ell">Front-desk minutes per appointment</span></div>
+  <div class="ig2"><div class="numeral sm">4.6</div><div class="gt"><span class="togo"><b class="num">1.6</b> min to go</span></div><svg class="spark" width="104" height="36" viewBox="0 0 104 36" role="img" aria-label="6 month trend 6, 5.6, 5.3, 5, 4.8, 4.6; target 3">
+<path d="M4,36 L4.0,4.0 L22.0,7.7 L40.0,10.5 L58.0,13.3 L76.0,15.2 L94.0,17.1 L94,36 Z" fill="var(--spark-fill)"/>
+<line x1="0" x2="104" y1="32.0" y2="32.0" stroke="var(--text2)" stroke-width="1.5" stroke-dasharray="4 4"/>
+<polyline points="4.0,4.0 22.0,7.7 40.0,10.5 58.0,13.3 76.0,15.2 94.0,17.1" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="94.0" cy="17.1" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/></svg><svg class="ring" width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Confidence 66">
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--surface2)" stroke-width="5"/>
+<circle cx="20" cy="20" r="17.5" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round" stroke-dasharray="72.6 110.0" transform="rotate(-90 20 20)"/>
+<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter" font-weight="600" font-size="13" fill="var(--text)">66</text></svg></div></div>
+  <div class="is"><div class="cap">Track</div><div class="ig"><span class="grow ell"><b>Check-in v1.1</b></span><span class="chip warn"><span class="dot"></span><span class="cl">Drifting</span></span></div><div class="ig"><span class="bl"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg></span><span class="grow ell">SMS arrival link</span><span class="chip crit">At risk</span></div></div>
+  <div class="is"><div class="cap">Requests</div><div class="ig"><span class="grow ell">Faster check-in</span><span class="gid">G2</span><b class="num">8</b></div></div>
+  <div class="is iact"><a class="btn sec" href="#">Edit links</a><a class="btn sec" href="#">Evidence</a></div>
+</aside></div>
+</div>
+</div>
+<nav class="tabs" aria-label="Main"><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Home</a><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>PRDs</a><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6M4 12h10M4 18h16"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/></svg>Roadmap</a><a href="#"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Inbox<span class="badge num">7</span></a><a href="#" aria-current="page"><svg class="ic " viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</a></nav>
+</body>
+</html>
