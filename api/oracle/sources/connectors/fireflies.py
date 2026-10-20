@@ -27,7 +27,8 @@ keywords) followed by the sentences as ``speaker: text``. Participants are the `
 Cursor::
 
     {"since": "2026-10-01T09:00:00Z", "listed": "2026-10-03T15:00:00Z",
-     "recent": {"id1": "2026-10-01T09:00:00Z"}, "aliases": ["title:standup|ada@example.com"]}
+     "recent": {"id1": "2026-10-01T09:00:00Z"}, "aliases": ["title:standup|ada@example.com"],
+     "selection": "3f2a9c0d1e4b5a6c"}
 
 ``since`` is the date of the newest transcript synced; ``listed`` that of the newest
 meeting listed when it is later (one not picked), so the position moves on even when
@@ -35,6 +36,9 @@ nothing new is picked and an old pick does not make every sync list the account'
 history since then. Fireflies can finish processing
 an earlier meeting after a later one, so a sync reads back ``OVERLAP`` before ``since``
 and skips the ids in ``recent`` (those synced within that window, with their dates).
+
+``selection`` is a fingerprint of the config the cursor was saved under: a cursor of
+another selection is ignored, so narrowing always gets a full pass (see below).
 
 ``aliases`` are the title keys of meetings seen in a picked calendar series: a meeting
 whose calendar id changed (or that has none) still matches the series by its title and
@@ -45,6 +49,8 @@ range: stored items no longer picked are deleted, stored items still picked are 
 fetched again. The engine passes ``known`` (the source's stored ids) for this.
 """
 
+import hashlib
+import json
 import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -454,8 +460,18 @@ class _Fireflies:
         return body.get("data") or {}
 
 
+def fingerprint(config: dict[str, Any]) -> str:
+    """What the config selects, as a short hash (``labels`` only name things)."""
+    chosen = {k: v for k, v in config.items() if k != "labels"}
+    return hashlib.sha256(json.dumps(chosen, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def _cursor(
-    since: datetime | None, listed: datetime | None, recent: dict[str, str], aliases: set[str]
+    selected: str,
+    since: datetime | None,
+    listed: datetime | None,
+    recent: dict[str, str],
+    aliases: set[str],
 ) -> dict[str, Any]:
     cursor: dict[str, Any] = {"recent": dict(recent)}
     if since is not None:
@@ -465,7 +481,12 @@ def _cursor(
         cursor["listed"] = _iso(listed)
     if aliases:
         cursor["aliases"] = sorted(aliases)
+    cursor["selection"] = selected
     return cursor
+
+
+def _without_selection(cursor: dict[str, Any] | None) -> dict[str, Any] | None:
+    return None if cursor is None else {k: v for k, v in cursor.items() if k != "selection"}
 
 
 class FirefliesConnector:
@@ -514,6 +535,13 @@ class FirefliesConnector:
         known: Callable[[], Awaitable[set[str]]] | None = None,
     ) -> AsyncIterator[SyncEvent]:
         picked = selection(config)
+        selected = fingerprint(config)
+        # Saved under another selection (a sync that was still running when the source
+        # was narrowed saves its cursor after the reset): start over with a full pass,
+        # which deletes what the selection no longer takes. Cursors from before the
+        # fingerprint carry none and are kept.
+        if cursor and cursor.get("selection", selected) != selected:
+            cursor = None
         since = _parse_date((cursor or {}).get("since"))
         listed_before = _parse_date((cursor or {}).get("listed"))
         recent: dict[str, str] = dict((cursor or {}).get("recent") or {})
@@ -580,15 +608,16 @@ class FirefliesConnector:
                 horizon = newest - OVERLAP
                 recent = {i: d for i, d in recent.items() if _parse_date(d) >= horizon}
                 if fetch:
-                    written = _cursor(newest, listed_before, recent, aliases)
+                    written = _cursor(selected, newest, listed_before, recent, aliases)
                     yield CursorCheckpoint(written)
             # The whole listing is done: the position moves to the newest meeting listed,
             # picked or not. Written whenever it changed, deletes and all.
             end = max((d for d in (newest, newest_listed) if d), default=None)
             if end is not None:
                 recent = {i: d for i, d in recent.items() if _parse_date(d) >= end - OVERLAP}
-            final = _cursor(newest, newest_listed, recent, aliases)
-            if final != written:
+            final = _cursor(selected, newest, newest_listed, recent, aliases)
+            # The fingerprint alone is no change (cursors saved before it lack it).
+            if _without_selection(final) != _without_selection(written):
                 yield CursorCheckpoint(final)
 
     async def browse_meetings(

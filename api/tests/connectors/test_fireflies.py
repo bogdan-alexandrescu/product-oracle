@@ -14,7 +14,7 @@ from oracle.sources.base import (
     get_connector,
 )
 from oracle.sources.connectors import fireflies
-from oracle.sources.connectors.fireflies import API_URL, FirefliesConnector
+from oracle.sources.connectors.fireflies import API_URL, FirefliesConnector, fingerprint
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "connectors" / "fireflies"
 CREDENTIAL = {"api_key": "ff-test-key"}
@@ -147,7 +147,11 @@ async def test_full_sync_pages_newest_first_and_yields_oldest_first():
     assert items[2].acl == {"participants": ["ada@example.com", "sam@example.com"]}
 
     assert events[-1] == CursorCheckpoint(
-        {"since": "2026-10-10T15:00:00Z", "recent": {"01TRANSCRIPT4": "2026-10-10T15:00:00Z"}}
+        {
+            "since": "2026-10-10T15:00:00Z",
+            "recent": {"01TRANSCRIPT4": "2026-10-10T15:00:00Z"},
+            "selection": fingerprint({}),
+        }
     )
 
 
@@ -179,10 +183,15 @@ async def test_incremental_sync_reads_back_an_overlap():
                 "01TRANSCRIPT3": "2026-10-08T09:30:00Z",
                 "01TRANSCRIPTL": "2026-10-07T23:00:00Z",
             },
+            "selection": fingerprint({}),
         }
     )
     assert events[-1] == CursorCheckpoint(
-        {"since": "2026-10-12T10:00:00Z", "recent": {"01TRANSCRIPT5": "2026-10-12T10:00:00Z"}}
+        {
+            "since": "2026-10-12T10:00:00Z",
+            "recent": {"01TRANSCRIPT5": "2026-10-12T10:00:00Z"},
+            "selection": fingerprint({}),
+        }
     )
 
 

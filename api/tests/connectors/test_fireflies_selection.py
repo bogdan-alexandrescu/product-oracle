@@ -19,6 +19,7 @@ from oracle.sources.connectors.fireflies import (
     FirefliesConnector,
     Selection,
     _iso,
+    fingerprint,
     normalise_title,
     selection,
     series_key,
@@ -322,6 +323,7 @@ async def test_a_full_pass_deletes_what_is_no_longer_picked_and_skips_what_is_st
             "listed": "2026-10-14T14:00:00Z",
             # The series' title key, should its calendar id change.
             "aliases": ["title:ai agents daily standup|ada@example.com"],
+            "selection": fingerprint(config),
         }
     )
 
@@ -387,6 +389,25 @@ async def test_a_full_pass_that_matches_and_deletes_nothing_still_checkpoints():
     fake.requests.clear()
     await collect(conn, config, events[-1].cursor, known=known())
     assert fake.list_variables()[0]["fromDate"] == "2026-10-13T14:00:00Z"
+
+
+async def test_narrowing_deletes_even_when_an_older_sync_saved_its_position_last():
+    """A sync still running under the old selection when the source is narrowed saves
+    its cursor after the reset: the next sync must still see the selection changed."""
+    fake = FakeFireflies(SAMPLE)
+    conn = connector(fake)
+    wide = {"mode": "selected", "series": [STANDUP], "meetings": ["K1"]}
+    first = await collect(conn, wide, None, known=known())
+    stale = next(e for e in reversed(first) if isinstance(e, CursorCheckpoint)).cursor
+
+    narrow = {"mode": "selected", "series": [STANDUP], "labels": {STANDUP: "Standup"}}
+    events = await collect(conn, narrow, stale, known=known("S1", "S2", "S3", "K1"))
+    assert deleted(events) == ["K1"]
+    # Labels only name things for the web UI: they change no selection.
+    cursor = next(e for e in reversed(events) if isinstance(e, CursorCheckpoint)).cursor
+    relabelled = {**narrow, "labels": {STANDUP: "Daily standup"}}
+    again = await collect(conn, relabelled, cursor, known=known("S1", "S2", "S3"))
+    assert again == []
 
 
 async def test_legacy_title_rule_still_filters():

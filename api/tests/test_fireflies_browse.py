@@ -214,3 +214,81 @@ async def test_legacy_source_keeps_syncing(fake, connector, tenant_id, alice, co
         sync = (await a.post(f"/v1/sources/{resp.json()['id']}/sync")).json()
         assert sync["outcome"] == "completed", sync
         assert set(await _items(tenant_id, resp.json()["id"])) == {"S1", "S2", "S3"}
+
+
+ALL_IDS = {"S1", "S2", "S3", "P1", "P2", "K1", "O1"}
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "kept"),
+    [
+        pytest.param(
+            {"mode": "selected", "series": [STANDUP], "meetings": ["K1"]},
+            {"mode": "selected", "series": [STANDUP]},
+            {"S1", "S2", "S3"},
+            id="deselect-a-meeting",
+        ),
+        pytest.param(
+            {"mode": "selected", "series": [STANDUP, PLANNING]},
+            {"mode": "selected", "series": [PLANNING]},
+            {"P1", "P2"},
+            id="deselect-a-series",
+        ),
+        pytest.param(
+            {"mode": "all"},
+            {"mode": "all", "date_from": "2026-10-10"},
+            {"S3", "P2"},
+            id="later-date-from",
+        ),
+        pytest.param(
+            {"mode": "all", "date_from": "2026-09-01"},
+            {"mode": "all", "date_from": "2026-09-01", "date_to": "2026-10-01"},
+            {"S1", "P1"},
+            id="earlier-date-to",
+        ),
+        pytest.param(
+            {"mode": "all"},
+            {"mode": "selected", "series": [STANDUP], "meetings": ["K1"]},
+            {"S1", "S2", "S3", "K1"},
+            id="all-to-selected",
+        ),
+    ],
+)
+async def test_narrowing_deletes_what_falls_outside_on_the_next_sync(
+    fake, connector, tenant_id, alice, conn, before, after, kept
+):
+    """Owner, 2026-10-19: narrowing a source deletes what was already pulled in and now
+    falls outside it on the next sync."""
+    async with client_for(alice) as a:
+        resp = await a.post(
+            "/v1/sources",
+            json={
+                "kind": "fireflies",
+                "name": "Meetings",
+                "connection_id": str(conn),
+                "config": before,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        source_id = resp.json()["id"]
+        for _ in range(2):  # a full pass, then an incremental one
+            sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+            assert sync["outcome"] == "completed", sync
+        stored = {i for i, live in (await _items(tenant_id, source_id)).items() if live}
+        assert kept < stored
+
+        resp = await a.patch(f"/v1/sources/{source_id}", json={"config": after})
+        assert resp.status_code == 200, resp.text
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert sync["outcome"] == "completed", sync
+        assert sync["deleted"] == len(stored - kept)
+        items = await _items(tenant_id, source_id)
+        assert {i for i, live in items.items() if live} == kept
+        assert {i for i, live in items.items() if not live} == stored - kept
+        # Deleted, not purged: citations to them can still say "source removed".
+        assert set(items) == stored
+
+        # The source's item list no longer shows them.
+        resp = await a.get(f"/v1/sources/{source_id}/items")
+        assert resp.status_code == 200, resp.text
+        assert {i["external_id"] for i in resp.json()} == kept
