@@ -118,9 +118,14 @@ limits, configurability and scaling (`categories.CATEGORIES`).
   `doc_type`, no `source_updated_at`, confidence from the version released. A run's own
   item deleted upstream is missing from baseline evidence and from its YAML imports, as
   is one frozen with no release. An item a person may not see scores neutral in intake
-  refs, and baseline evidence scores by the item's time as it was when the evidence was
-  taken (no later than its `retrieved_at`, recorded by the first scoring and kept),
-  never by when the item changed upstream. Owners are never frozen:
+  refs. Evidence freshness (owner, 2026-10-20) is frozen only for runs: people read the
+  live score, which decays as the source ages and follows it as it changes upstream
+  (baseline evidence as main scores it; intake refs scored now); a run reads baseline
+  evidence by the item's time as it was when the evidence was taken (no later than its
+  `retrieved_at`, recorded by the first scoring as `taken_latest_at` and kept) scored
+  at its pinned snapshot, a public link by the newest page snapshot fetched by then,
+  and intake refs from the version shown, scored at the pin; a run's entity and edge
+  confidence is the aggregate of that evidence. Owners are never frozen:
   their current reads show the item's current title and link (a rename alone writes no
   version).
 - Version links after a deploy (round 10): `0014_intake` backfills

@@ -12,8 +12,8 @@ Minors: (1) a run reads its user's own frozen items as at release (acl, upstream
 confidence); (2) a run's own deleted item is missing from baseline evidence; (3) a
 run's YAML import never links its deleted or frozen-but-unreleased items; (4, 5) the
 link backfill repairs versions an old image wrote, writing only rows it gives a link;
-(6) another user's hidden item, and baseline evidence, never score by when the item
-changed upstream; (7) owners see their item's current title and link.
+(6) another user's hidden item never scores by when the item changed upstream (baseline
+evidence: people read it live, runs as of their pin, owner 2026-10-20); (7) owners see their item's current title and link.
 
 Synthetic placeholders only.
 """
@@ -319,10 +319,11 @@ async def test_the_link_repair_fills_old_image_versions_only_where_it_has_a_link
     assert await repair_version_urls() == 0
 
 
-async def test_hidden_items_and_baseline_evidence_never_score_by_upstream_changes(client, fake):  # noqa: F811
+async def test_hidden_items_score_neutral_and_people_see_live_freshness(client, fake):  # noqa: F811
     """(6) Intake refs another person reads with nothing released (an item they may not
-    see) score neutral, never by the item's current upstream time; baseline evidence
-    scores by the version it was taken from."""
+    see) score neutral, never by the item's current upstream time. Baseline evidence:
+    people read the live score, which follows the item as it changes upstream (S6,
+    owner 2026-10-20: freshness is frozen only for runs, test_evidence_freshness)."""
     from oracle.baseline import scoring
     from oracle.intake import evidence as ev
 
@@ -354,7 +355,7 @@ async def test_hidden_items_and_baseline_evidence_never_score_by_upstream_change
     [row] = (
         await client.get(f"/v1/baseline/entities/{feat['id']}", headers=ctx.as_("viewer"))
     ).json()["evidence"]
-    assert row["confidence"] == scored
+    assert row["confidence"] > scored
 
 
 async def test_owners_see_their_items_current_title_and_link(client, fake):  # noqa: F811

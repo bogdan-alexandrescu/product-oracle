@@ -179,11 +179,11 @@ async def get_entity(entity_id: uuid.UUID, principal: Reader, db: TenantDB) -> E
     edges = await service.list_edges(db, entity_id=entity.id)
     proposals = [p for p in await service.list_proposals(db, "open") if p.entity_id == entity.id]
     base = (await _entities_out(db, [entity]))[0]
+    rows = await evidence.present(db, principal, await evidence.list_for(db, entity_id=entity.id))
     return EntityDetail(
-        **base.model_dump(),
-        evidence=await evidence.present(
-            db, principal, await evidence.list_for(db, entity_id=entity.id)
-        ),
+        **base.model_dump(exclude={"confidence"}),
+        confidence=evidence.as_read(principal, base.confidence, rows),
+        evidence=rows,
         edges_out=await _edges_out(db, [e for e in edges if e.src_id == entity.id]),
         edges_in=await _edges_out(db, [e for e in edges if e.dst_id == entity.id]),
         open_proposals=len(proposals),
@@ -322,11 +322,11 @@ async def get_edge(edge_id: uuid.UUID, principal: Reader, db: TenantDB) -> EdgeD
     except service.BaselineError as exc:
         raise _fail(exc) from exc
     base = (await _edges_out(db, [edge]))[0]
+    rows = await evidence.present(db, principal, await evidence.list_for(db, edge_id=edge.id))
     return EdgeDetail(
-        **base.model_dump(),
-        evidence=await evidence.present(
-            db, principal, await evidence.list_for(db, edge_id=edge.id)
-        ),
+        **base.model_dump(exclude={"confidence"}),
+        confidence=evidence.as_read(principal, base.confidence, rows),
+        evidence=rows,
     )
 
 

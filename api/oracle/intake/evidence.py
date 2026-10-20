@@ -371,7 +371,9 @@ async def refs(
     to the item's owner (never through a run token), and for ``reveal`` (items of
     findings shared in full) to anyone. ``released``: the version sharing released of
     each revealed item, shown instead of the pinned one; a revealed item with none
-    (deleted upstream since) is not shown."""
+    (deleted upstream since) is not shown. Confidence: people see live freshness (the
+    item as it is now, scored now); a run sees it as of the pin, from the version
+    shown; an item the reader may not see scores neutral."""
     if not item_ids:
         return {}
     rows = (
@@ -394,16 +396,23 @@ async def refs(
         if version is not None:
             versions[item.id] = version
     settings = await source_items.confidence_settings(db)
+    # People read live freshness, which decays as the source ages; a run (or a job)
+    # reads it as of the pin, from the version shown only (S6, owner 2026-10-20).
+    person = principal is not None and not principal.is_run
     out: dict[uuid.UUID, EvidenceRef] = {}
     for item, source in rows:
         version = versions.get(item.id)
         owner = me is not None and source.owner_user_id == me
         shown = item.id in reveal and (released is None or item.id in released)
         visible = owner or (shown and item.deleted_at is None)
-        # Anyone but the owner: as fresh as the version shown, never as the item
-        # changed upstream since; an item they may not see scores neutral (S6).
+        # An item the reader may not see scores neutral: nothing of it shows (S6).
         row = source_items.ItemRow(item, version if visible else None, source.kind)
-        score = source_items.item_confidence(row, settings, now=as_of, released=not owner)
+        score = source_items.item_confidence(
+            row,
+            settings,
+            now=None if person else as_of,
+            released=not (person and visible),
+        )
         out[item.id] = EvidenceRef(
             source_item_id=item.id,
             visible=visible,

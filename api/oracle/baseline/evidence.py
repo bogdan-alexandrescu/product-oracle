@@ -19,7 +19,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes
+from oracle import audit, changes, confidence
 from oracle.auth.deps import Principal
 from oracle.authz import has_role
 from oracle.baseline import public_links, scoring, service
@@ -34,7 +34,7 @@ from oracle.baseline.schemas import (
     SourceItemRef,
 )
 from oracle.baseline.service import ConflictError, ForbiddenError, InvalidError, NotFoundError
-from oracle.sources.models import Source, SourceItem, SourceItemVersion
+from oracle.sources.models import Snapshot, Source, SourceItem, SourceItemVersion
 from oracle.v2 import links
 
 EXCERPT_CHARS = 500
@@ -73,6 +73,27 @@ async def run_versions(
         ).all()
     )
     return {i: pairs.get(i) for i in frozen}
+
+
+def as_read(principal: Principal, stored: float | None, rows: list[EvidenceOut]) -> float | None:
+    """An entity's or edge's confidence as ``present`` gave its evidence: for a run, the
+    aggregate of its evidence as of the run's pin; for people, the stored one."""
+    if not principal.is_run:
+        return stored
+    value = confidence.aggregate([r.confidence for r in rows if r.confidence is not None])
+    return None if value is None else round(value, 3)
+
+
+async def run_pin(db: AsyncSession, principal: Principal) -> Snapshot | None:
+    """The snapshot the principal's run pinned when it started; None for anyone but a
+    run, and for a run that pinned none."""
+    if not principal.is_run:
+        return None
+    from oracle.runs.models import Run
+
+    return await db.scalar(
+        select(Snapshot).join(Run, Run.snapshot_id == Snapshot.id).where(Run.id == principal.run_id)
+    )
 
 
 async def _own_item(
@@ -388,7 +409,9 @@ async def refresh_link(
 async def present(
     db: AsyncSession, principal: Principal, rows: list[Evidence]
 ) -> list[EvidenceOut]:
-    """Evidence as the principal may see it: the item only for its owner."""
+    """Evidence as the principal may see it: the item only for its owner. People read
+    the live confidence; a run reads it as of its pinned snapshot (S6, owner
+    2026-10-20, ``scoring.as_of_pin``)."""
     item_ids = {r.source_item_id for r in rows if r.source_item_id}
     items: dict[uuid.UUID, tuple[SourceItem, Source]] = {}
     if item_ids:
@@ -407,16 +430,27 @@ async def present(
     if released := {v for v in frozen.values() if v}:
         res = await db.scalars(select(SourceItemVersion).where(SourceItemVersion.id.in_(released)))
         versions = {v.item_id: v for v in res.all()}
-    out = []
-    for r in rows:
-        item, source = items.get(r.source_item_id, (None, None))
-        mine = (
-            source is not None
+
+    def mine(item: SourceItem | None, source: Source | None) -> bool:
+        return (
+            item is not None
+            and source is not None
             and principal.user_id == source.owner_user_id
             and item.id not in withheld
             and not (item.id in frozen and frozen[item.id] is None)
             # A run never reads an item deleted upstream, frozen or not (S6).
             and not (principal.is_run and item.deleted_at is not None)
+        )
+
+    pin = await run_pin(db, principal)
+    pinned = await scoring.as_of_pin(db, rows, pin) if pin is not None else {}
+    out = []
+    for r in rows:
+        item, source = items.get(r.source_item_id, (None, None))
+        shown = mine(item, source)
+        score, factors = pinned.get(r.id) or (
+            float(r.confidence) if r.confidence is not None else None,
+            r.confidence_factors or {},
         )
         version = versions.get(item.id) if item is not None else None
         snap = snapshots.get(r.id)
@@ -443,12 +477,12 @@ async def present(
                     # version; owners are never frozen).
                     url=version.url if version is not None else item.url,
                 )
-                if mine
+                if shown
                 else None,
-                source_item_private=item is not None and not mine,
-                confidence=float(r.confidence) if r.confidence is not None else None,
-                confidence_factors=r.confidence_factors or {},
-                scored_at=r.scored_at,
+                source_item_private=item is not None and not shown,
+                confidence=score,
+                confidence_factors=factors,
+                scored_at=pin.as_of if pin is not None and r.id in pinned else r.scored_at,
                 created_at=r.created_at,
                 kind=r.kind,
                 note=r.note,
