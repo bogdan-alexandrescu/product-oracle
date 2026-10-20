@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import require_role, require_role_now
 from oracle.claude_accounts.sweep import summarise_sweep
 from oracle.claude_accounts.sweep import sweep as sweep_claude_accounts
 from oracle.connections.router import ProviderHttp
@@ -41,6 +41,8 @@ router = APIRouter(prefix="/v1", tags=["runs"])
 
 Approver = Annotated[Principal, Depends(require_role("approver"))]
 Owner = Annotated[Principal, Depends(require_role("owner"))]
+ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
+OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]
 
 
 async def _call[T](op: Awaitable[T]) -> T:
@@ -86,7 +88,7 @@ async def list_runs(
 
 
 @router.post("/runs", response_model=RunOut, status_code=status.HTTP_201_CREATED)
-async def create_run(body: RunCreate, principal: Approver, db: TenantDB) -> RunOut:
+async def create_run(body: RunCreate, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Create a draft run. Nothing runs and nothing is spent until it is started."""
     run_id = await _call(service.create_run(db, principal, body))
     return await service.read_run(db, run_id, principal)
@@ -99,7 +101,7 @@ async def get_run(run_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB) 
 
 @router.patch("/runs/{run_id}", response_model=RunOut)
 async def update_run(
-    run_id: uuid.UUID, body: RunPatch, principal: Approver, db: TenantDB
+    run_id: uuid.UUID, body: RunPatch, principal: ApproverNow, db: TenantDB
 ) -> RunOut:
     """Change a draft's document or knobs; its estimate is cleared."""
     await _call(service.update_run(db, principal, run_id, body))
@@ -107,13 +109,13 @@ async def update_run(
 
 
 @router.post("/runs/{run_id}/estimate", response_model=EstimateOut)
-async def estimate_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> EstimateOut:
+async def estimate_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> EstimateOut:
     """Per-segment cost estimate from the cost table; stored on the run."""
     return await _call(service.estimate(db, principal, run_id))
 
 
 @router.post("/runs/{run_id}/start", response_model=RunOut)
-async def start_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def start_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Pin a snapshot and submit the first segment, or wait for an owner when the
     estimate is over the approval threshold ($50)."""
     await _call(service.start(db, principal, run_id))
@@ -121,21 +123,21 @@ async def start_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> Run
 
 
 @router.post("/runs/{run_id}/approve", response_model=RunOut)
-async def approve_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) -> RunOut:
+async def approve_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Approve the cost of a run awaiting approval and start it."""
     await _call(service.approve(db, principal, run_id))
     return await service.read_run(db, run_id, principal)
 
 
 @router.post("/runs/{run_id}/resume", response_model=RunOut)
-async def resume_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) -> RunOut:
+async def resume_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Resume a run paused on overrun; it may spend another half of its estimate."""
     await _call(service.resume(db, principal, run_id))
     return await service.read_run(db, run_id, principal)
 
 
 @router.post("/runs/{run_id}/cancel", response_model=RunOut)
-async def cancel_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def cancel_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     await _call(service.cancel(db, principal, run_id))
     return await service.read_run(db, run_id, principal)
 

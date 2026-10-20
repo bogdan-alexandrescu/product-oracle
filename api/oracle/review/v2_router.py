@@ -19,7 +19,7 @@ from starlette.concurrency import run_in_threadpool
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import has_role, require_role
+from oracle.authz import has_role, require_role, require_role_now
 from oracle.docs import service as docs_service
 from oracle.docs.edit import EditForbidden, EditRefused, edit_section
 from oracle.docs.parser import DraftError
@@ -60,6 +60,7 @@ Viewer = Annotated[Principal, Depends(require_role("viewer"))]
 Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]
 Owner = Annotated[Principal, Depends(require_role("owner"))]
+ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 DOC = "/documents/{doc}"
 VERSION = DOC + "/versions/{n}"
 
@@ -130,7 +131,7 @@ async def list_section_assignments(doc: str, db: TenantDB) -> list[SectionAssign
     DOC + "/sections/{key}/assignment", response_model=SectionAssignmentOut, responses=CONFLICT
 )
 async def put_section_assignment(
-    doc: str, key: str, body: SectionAssignmentIn, principal: Approver, db: TenantDB
+    doc: str, key: str, body: SectionAssignmentIn, principal: ApproverNow, db: TenantDB
 ) -> SectionAssignmentOut | JSONResponse:
     """Set a section's owner, reviewer assignees and due date. Send the ``lock_version``
     from the section states (null for a section with none); a stale one is a 409."""
@@ -269,7 +270,7 @@ async def get_section_patch(patch_id: uuid.UUID, db: TenantDB) -> SectionPatchDe
     responses=CONFLICT,
 )
 async def accept_section_patch(
-    patch_id: uuid.UUID, body: SectionPatchAccept, principal: Approver, db: TenantDB
+    patch_id: uuid.UUID, body: SectionPatchAccept, principal: ApproverNow, db: TenantDB
 ) -> VersionOut | JSONResponse:
     """Accept a patch (optionally edited): the section's next revision, as a new
     version. ``base_revision`` is the current revision you compared against."""
@@ -307,7 +308,7 @@ async def accept_section_patch(
     "/section-patches/{patch_id}/reject", response_model=SectionPatchOut, responses=CONFLICT
 )
 async def reject_section_patch(
-    patch_id: uuid.UUID, body: SectionPatchReject, principal: Approver, db: TenantDB
+    patch_id: uuid.UUID, body: SectionPatchReject, principal: ApproverNow, db: TenantDB
 ) -> SectionPatchOut | JSONResponse:
     try:
         row = await _call(
@@ -325,7 +326,7 @@ async def reject_section_patch(
 
 @router.post(DOC + "/campaigns", response_model=CampaignOut, status_code=status.HTTP_201_CREATED)
 async def create_review_campaign(
-    doc: str, body: CampaignCreate, principal: Approver, db: TenantDB
+    doc: str, body: CampaignCreate, principal: ApproverNow, db: TenantDB
 ) -> CampaignOut:
     """Ask the organization for feedback on a version: everyone with an audience role
     is notified. Comments are gathered; approval stays with the decider."""
@@ -349,7 +350,7 @@ async def get_review_campaign(campaign_id: uuid.UUID, db: TenantDB) -> CampaignO
 
 @router.patch("/campaigns/{campaign_id}", response_model=CampaignOut, responses=CONFLICT)
 async def update_review_campaign(
-    campaign_id: uuid.UUID, body: CampaignPatch, principal: Approver, db: TenantDB
+    campaign_id: uuid.UUID, body: CampaignPatch, principal: ApproverNow, db: TenantDB
 ) -> CampaignOut | JSONResponse:
     """Close (or reopen) a campaign."""
     try:
@@ -424,7 +425,7 @@ def _summary(row: DocumentPublication) -> dict[str, Any]:
     responses={409: {"model": PublishRefused, "description": "The publish was refused"}},
 )
 async def publish_version(
-    doc: str, n: int, body: PublishIn, principal: Approver, db: TenantDB
+    doc: str, n: int, body: PublishIn, principal: ApproverNow, db: TenantDB
 ) -> PublicationOut | JSONResponse:
     """Publish an approved version, immutably. Refused (409, nothing written) while
     the publish check lists a blocker."""

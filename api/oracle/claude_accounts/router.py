@@ -20,7 +20,7 @@ from sqlalchemy import select
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import recheck_caller, require_role, require_role_now
 from oracle.claude_accounts import fallback, store
 from oracle.claude_accounts.accounts import (
     DEFAULT_STALE_AFTER,
@@ -55,6 +55,7 @@ router = APIRouter(prefix="/v1/claude-accounts", tags=["claude-accounts"])
 
 Member = Annotated[Principal, Depends(require_role("viewer"))]
 Owner = Annotated[Principal, Depends(require_role("owner"))]
+OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]
 
 #: Refresh outcomes that mean only a person can fix the credential.
 CREDENTIAL_NEEDS_A_HUMAN = ("reauth_required", "unreadable")
@@ -308,7 +309,9 @@ async def list_claude_accounts(principal: Member, db: TenantDB) -> AccountsPage:
 
 
 @router.post("/authorize", response_model=AuthorizeOut)
-async def begin_claude_sign_in(body: AuthorizeIn, principal: Owner, db: TenantDB) -> AuthorizeOut:
+async def begin_claude_sign_in(
+    body: AuthorizeIn, principal: OwnerNow, db: TenantDB
+) -> AuthorizeOut:
     """Start a browser sign-in: the URL to open, and the ``state`` that keys it.
 
     The PKCE verifier stays here, keyed by ``state``; the browser never holds it.
@@ -376,6 +379,9 @@ async def finish_claude_sign_in(body: ExchangeIn, principal: Owner, db: TenantDB
     except CredentialError as e:
         # The pending sign-in stays, so the person can paste again.
         raise _unprocessable(str(e)) from None
+    # The redeem is a network call: the caller is re-read under the gate after it, and the
+    # gate is held until the account is recorded.
+    await recheck_caller(db, principal, "owner")
     label = pending.label
     account = await store.register(
         principal.tenant_id,
@@ -395,7 +401,7 @@ async def finish_claude_sign_in(body: ExchangeIn, principal: Owner, db: TenantDB
 
 
 @router.post("", response_model=AccountCreated, status_code=status.HTTP_201_CREATED)
-async def add_claude_account(body: RegisterIn, principal: Owner, db: TenantDB) -> AccountCreated:
+async def add_claude_account(body: RegisterIn, principal: OwnerNow, db: TenantDB) -> AccountCreated:
     """Add an account from Claude Code's saved login, pasted verbatim.
 
     It must be a PAIR: a credential with no refresh token cannot be kept alive, so it is
@@ -425,7 +431,7 @@ async def add_claude_account(body: RegisterIn, principal: Owner, db: TenantDB) -
 
 
 @router.put("/fallback", response_model=FallbackOut)
-async def set_claude_fallback(body: FallbackIn, principal: Owner, db: TenantDB) -> FallbackOut:
+async def set_claude_fallback(body: FallbackIn, principal: OwnerNow, db: TenantDB) -> FallbackOut:
     """Set the credential used while no account is registered (setup-token or API key)."""
     try:
         row = await fallback.store(db, body.token, principal.id)
@@ -440,7 +446,7 @@ async def set_claude_fallback(body: FallbackIn, principal: Owner, db: TenantDB) 
 
 
 @router.delete("/fallback", status_code=status.HTTP_204_NO_CONTENT)
-async def clear_claude_fallback(principal: Owner, db: TenantDB) -> None:
+async def clear_claude_fallback(principal: OwnerNow, db: TenantDB) -> None:
     await fallback.clear(db)
     await audit.record(db, principal, "claude_fallback.clear", "claude_fallback")
     await db.commit()
@@ -449,12 +455,16 @@ async def clear_claude_fallback(principal: Owner, db: TenantDB) -> None:
 @router.post("/sweep", response_model=SweepOut)
 async def sweep_claude_accounts(principal: Owner, db: TenantDB) -> SweepOut:
     """Run the sweep now: reclaim holds, refresh credentials, read usage."""
+    # Checked now; the sweep's network calls do not hold the gate (it writes nothing an
+    # owner decides: the tick runs the same sweep).
+    await recheck_caller(db, principal, "owner")
+    await db.commit()
     return SweepOut(result=await run_sweep(principal.tenant_id))
 
 
 @router.put("/{account_id}/state", response_model=StateOut)
 async def set_claude_account_state(
-    account_id: str, body: StateIn, principal: Owner, db: TenantDB
+    account_id: str, body: StateIn, principal: OwnerNow, db: TenantDB
 ) -> StateOut:
     """AVAILABLE, PAUSED, DRAINING or REAUTH_REQUIRED. DRAINING marks every live hold to
     move at its next turn boundary, in the same transaction."""
@@ -481,6 +491,9 @@ async def set_claude_account_state(
 async def refresh_claude_account(account_id: str, principal: Owner, db: TenantDB) -> RefreshOut:
     """Exchange this account's credential now, through the same single writer as the
     sweep, and say what happened."""
+    # Checked now; the exchange does not hold the gate (the sweep makes the same one).
+    await recheck_caller(db, principal, "owner")
+    await db.commit()
     account = await _own(db, account_id)
     outcome = await refresher_for(principal.tenant_id).refresh_secret(store.secret_for(account))
     await store.record_refresh(
@@ -504,7 +517,7 @@ async def refresh_claude_account(account_id: str, principal: Owner, db: TenantDB
 
 
 @router.delete("/{account_id}", response_model=RemovedOut)
-async def remove_claude_account(account_id: str, principal: Owner, db: TenantDB) -> RemovedOut:
+async def remove_claude_account(account_id: str, principal: OwnerNow, db: TenantDB) -> RemovedOut:
     """Remove the account; its open hold records close as ``account_removed``."""
     account = await _own(db, account_id)
     closed = await store.remove_account_and_close_holds(

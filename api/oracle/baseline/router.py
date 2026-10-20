@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import inspect
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import require_role, require_role_now
 from oracle.baseline import conflicts, evidence, public_links, scoring, service, trace, yaml_io
 from oracle.baseline.models import Edge, Entity
 from oracle.baseline.schemas import (
@@ -59,6 +59,7 @@ router = APIRouter(prefix="/v1/baseline", tags=["baseline"])
 Reader = Annotated[Principal, Depends(require_role("viewer"))]
 Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]
+ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 
 
 async def _fresh(db, *rows):
@@ -152,7 +153,7 @@ async def list_entities(
     status_code=status.HTTP_201_CREATED,
     responses=_WRITE_RESPONSES,
 )
-async def create_entity(body: EntityCreate, principal: Approver, db: TenantDB) -> JSONResponse:
+async def create_entity(body: EntityCreate, principal: ApproverNow, db: TenantDB) -> JSONResponse:
     try:
         result = await service.create_entity(
             db,
@@ -191,7 +192,7 @@ async def get_entity(entity_id: uuid.UUID, principal: Reader, db: TenantDB) -> E
 
 @router.patch("/entities/{entity_id}", response_model=EntityWriteOut, responses=_WRITE_RESPONSES)
 async def update_entity(
-    entity_id: uuid.UUID, body: EntityPatch, principal: Approver, db: TenantDB
+    entity_id: uuid.UUID, body: EntityPatch, principal: ApproverNow, db: TenantDB
 ) -> JSONResponse:
     changes = body.model_dump(exclude_unset=True, exclude={"origin", "run_id", "reason"})
     try:
@@ -209,7 +210,7 @@ async def update_entity(
 )
 async def delete_entity(
     entity_id: uuid.UUID,
-    principal: Approver,
+    principal: ApproverNow,
     db: TenantDB,
     origin: WriteOrigin = "user",
     run_id: uuid.UUID | None = None,
@@ -232,7 +233,7 @@ async def delete_entity(
 
 @router.post("/entities/{entity_id}/confirm", response_model=EntityOut)
 async def confirm_entity(
-    entity_id: uuid.UUID, principal: Approver, db: TenantDB, body: ProposalDecision | None = None
+    entity_id: uuid.UUID, principal: ApproverNow, db: TenantDB, body: ProposalDecision | None = None
 ) -> EntityOut:
     """Confirm a proposed entity; goals are confirmed this way only (B2)."""
     return await _set_status(db, principal, entity_id, "confirmed", body)
@@ -240,7 +241,7 @@ async def confirm_entity(
 
 @router.post("/entities/{entity_id}/reject", response_model=EntityOut)
 async def reject_entity(
-    entity_id: uuid.UUID, principal: Approver, db: TenantDB, body: ProposalDecision | None = None
+    entity_id: uuid.UUID, principal: ApproverNow, db: TenantDB, body: ProposalDecision | None = None
 ) -> EntityOut:
     return await _set_status(db, principal, entity_id, "rejected", body)
 
@@ -256,7 +257,7 @@ async def _set_status(db, principal, entity_id, status_, body) -> EntityOut:
 
 
 @router.post("/entities/{entity_id}/unlock", response_model=EntityOut)
-async def unlock_entity(entity_id: uuid.UUID, principal: Approver, db: TenantDB) -> EntityOut:
+async def unlock_entity(entity_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> EntityOut:
     """Let agents write to it again."""
     try:
         entity = await service.get_entity(db, entity_id)
@@ -293,7 +294,7 @@ async def list_edges(
     status_code=status.HTTP_201_CREATED,
     responses=_WRITE_RESPONSES,
 )
-async def create_edge(body: EdgeCreate, principal: Approver, db: TenantDB) -> JSONResponse:
+async def create_edge(body: EdgeCreate, principal: ApproverNow, db: TenantDB) -> JSONResponse:
     try:
         result = await service.create_edge(
             db,
@@ -326,7 +327,7 @@ async def get_edge(edge_id: uuid.UUID, principal: Reader, db: TenantDB) -> EdgeD
 
 @router.patch("/edges/{edge_id}", response_model=EdgeWriteOut, responses=_WRITE_RESPONSES)
 async def update_edge(
-    edge_id: uuid.UUID, body: EdgePatch, principal: Approver, db: TenantDB
+    edge_id: uuid.UUID, body: EdgePatch, principal: ApproverNow, db: TenantDB
 ) -> JSONResponse:
     changes = body.model_dump(exclude_unset=True, exclude={"origin", "run_id", "reason"})
     try:
@@ -344,7 +345,7 @@ async def update_edge(
 )
 async def delete_edge(
     edge_id: uuid.UUID,
-    principal: Approver,
+    principal: ApproverNow,
     db: TenantDB,
     origin: WriteOrigin = "user",
     run_id: uuid.UUID | None = None,
@@ -366,7 +367,7 @@ async def delete_edge(
 
 
 @router.post("/edges/{edge_id}/unlock", response_model=EdgeOut)
-async def unlock_edge(edge_id: uuid.UUID, principal: Approver, db: TenantDB) -> EdgeOut:
+async def unlock_edge(edge_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> EdgeOut:
     try:
         edge = await service.get_edge(db, edge_id)
     except service.BaselineError as exc:
@@ -405,7 +406,7 @@ async def list_evidence(
     status_code=status.HTTP_201_CREATED,
 )
 async def add_entity_evidence(
-    entity_id: uuid.UUID, body: EvidenceCreate, principal: Approver, db: TenantDB
+    entity_id: uuid.UUID, body: EvidenceCreate, principal: ApproverNow, db: TenantDB
 ) -> EvidenceOut:
     """Cite one of your own source items (its url, ref and an excerpt are copied), or
     a free-standing url / ref / excerpt."""
@@ -423,7 +424,7 @@ async def add_entity_evidence(
     "/edges/{edge_id}/evidence", response_model=EvidenceOut, status_code=status.HTTP_201_CREATED
 )
 async def add_edge_evidence(
-    edge_id: uuid.UUID, body: EvidenceCreate, principal: Approver, db: TenantDB
+    edge_id: uuid.UUID, body: EvidenceCreate, principal: ApproverNow, db: TenantDB
 ) -> EvidenceOut:
     try:
         edge = await service.get_edge(db, edge_id)
@@ -512,7 +513,7 @@ async def remove_evidence(evidence_id: uuid.UUID, principal: Commenter, db: Tena
 
 
 @router.post("/rescore", response_model=RescoreResult)
-async def rescore(principal: Approver, db: TenantDB) -> RescoreResult:
+async def rescore(principal: ApproverNow, db: TenantDB) -> RescoreResult:
     """Rescore all evidence, e.g. after changing the confidence_weights setting."""
     n_evidence, n_entities, n_edges = await scoring.rescore_all(db)
     await db.commit()
@@ -552,7 +553,10 @@ async def create_proposal(body: ProposalCreate, principal: Commenter, db: Tenant
 
 @router.post("/proposals/{proposal_id}/accept", response_model=ProposalOut)
 async def accept_proposal(
-    proposal_id: uuid.UUID, principal: Approver, db: TenantDB, body: ProposalDecision | None = None
+    proposal_id: uuid.UUID,
+    principal: ApproverNow,
+    db: TenantDB,
+    body: ProposalDecision | None = None,
 ) -> ProposalOut:
     """Apply the change as your own edit (it locks the item)."""
     return await _decide(db, principal, proposal_id, True, body)
@@ -560,7 +564,10 @@ async def accept_proposal(
 
 @router.post("/proposals/{proposal_id}/reject", response_model=ProposalOut)
 async def reject_proposal(
-    proposal_id: uuid.UUID, principal: Approver, db: TenantDB, body: ProposalDecision | None = None
+    proposal_id: uuid.UUID,
+    principal: ApproverNow,
+    db: TenantDB,
+    body: ProposalDecision | None = None,
 ) -> ProposalOut:
     return await _decide(db, principal, proposal_id, False, body)
 
@@ -594,7 +601,9 @@ async def list_conflicts(
 
 
 @router.post("/conflicts", response_model=ConflictOut, status_code=status.HTTP_201_CREATED)
-async def record_conflict(body: ConflictCreate, principal: Approver, db: TenantDB) -> ConflictOut:
+async def record_conflict(
+    body: ConflictCreate, principal: ApproverNow, db: TenantDB
+) -> ConflictOut:
     """Record competing claims. Resolved by confidence, then precedence; material ones
     (a feature's status, a goal link, a priority input) stay open for an approver."""
     try:
@@ -616,7 +625,7 @@ async def record_conflict(body: ConflictCreate, principal: Approver, db: TenantD
 
 @router.post("/conflicts/{conflict_id}/resolve", response_model=ConflictOut)
 async def resolve_conflict(
-    conflict_id: uuid.UUID, body: ConflictResolve, principal: Approver, db: TenantDB
+    conflict_id: uuid.UUID, body: ConflictResolve, principal: ApproverNow, db: TenantDB
 ) -> ConflictOut:
     try:
         conflict = await conflicts.resolve(
@@ -662,7 +671,7 @@ async def export_yaml(principal: Reader, db: TenantDB) -> PlainTextResponse:
     },
 )
 async def import_yaml(
-    request: Request, principal: Approver, db: TenantDB, run_id: uuid.UUID | None = None
+    request: Request, principal: ApproverNow, db: TenantDB, run_id: uuid.UUID | None = None
 ) -> YamlImportResult | JSONResponse:
     """Merge a YAML graph in, idempotent by (type, key); locked items get proposals."""
     try:

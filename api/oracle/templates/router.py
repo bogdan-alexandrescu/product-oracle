@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import require_role, require_role_now
 from oracle.templates import service
 from oracle.templates.schemas import (
     DraftDefaults,
@@ -40,6 +40,8 @@ router = APIRouter(prefix="/v1", tags=["templates"])
 
 Approver = Annotated[Principal, Depends(require_role("approver"))]
 Owner = Annotated[Principal, Depends(require_role("owner"))]
+ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
+OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]
 REJECTED = {422: {"model": ProblemsResponse, "description": "Validation problems"}}
 
 
@@ -76,7 +78,7 @@ async def list_templates(
     status_code=status.HTTP_201_CREATED,
     responses={**REJECTED, 409: {"description": "Key taken"}},
 )
-async def create_template(data: TemplateCreate, db: TenantDB, principal: Approver):
+async def create_template(data: TemplateCreate, db: TenantDB, principal: ApproverNow):
     try:
         return await service.create_template(db, data, principal)
     except service.InvalidError as e:
@@ -114,7 +116,7 @@ async def get_template_version(
 
 
 @router.patch("/templates/{key}", response_model=TemplateOut, responses=REJECTED)
-async def update_template(key: str, data: TemplateUpdate, db: TenantDB, principal: Approver):
+async def update_template(key: str, data: TemplateUpdate, db: TenantDB, principal: ApproverNow):
     """Rename or describe in place; a changed body adds a new immutable version."""
     try:
         return await service.update_template(db, key, data, principal)
@@ -125,7 +127,7 @@ async def update_template(key: str, data: TemplateUpdate, db: TenantDB, principa
 
 
 @router.delete("/templates/{key}", response_model=TemplateOut)
-async def archive_template(key: str, db: TenantDB, principal: Approver) -> TemplateOut:
+async def archive_template(key: str, db: TenantDB, principal: ApproverNow) -> TemplateOut:
     """Delete = archive: hidden from pickers, still readable by the documents using it."""
     try:
         return await service.set_template_archived(db, key, True, principal)
@@ -134,7 +136,7 @@ async def archive_template(key: str, db: TenantDB, principal: Approver) -> Templ
 
 
 @router.post("/templates/{key}/restore", response_model=TemplateOut)
-async def restore_template(key: str, db: TenantDB, principal: Approver) -> TemplateOut:
+async def restore_template(key: str, db: TenantDB, principal: ApproverNow) -> TemplateOut:
     try:
         return await service.set_template_archived(db, key, False, principal)
     except service.NotFoundError as e:
@@ -165,7 +167,7 @@ async def list_themes(
     responses={**REJECTED, 409: {"description": "Key taken"}},
     tags=["themes"],
 )
-async def create_theme(data: ThemeCreate, db: TenantDB, principal: Approver):
+async def create_theme(data: ThemeCreate, db: TenantDB, principal: ApproverNow):
     """Rejected (422) when a text colour misses WCAG AA contrast on the background, or
     the CSS or slide CSS loads anything from outside the export."""
     try:
@@ -209,7 +211,7 @@ async def get_theme(key: str, db: TenantDB, _: CurrentPrincipal) -> ThemeOut:
 
 
 @router.patch("/themes/{key}", response_model=ThemeOut, responses=REJECTED, tags=["themes"])
-async def update_theme(key: str, data: ThemeUpdate, db: TenantDB, principal: Approver):
+async def update_theme(key: str, data: ThemeUpdate, db: TenantDB, principal: ApproverNow):
     try:
         return ThemeOut.model_validate(await service.update_theme(db, key, data, principal))
     except service.NotFoundError as e:
@@ -219,7 +221,7 @@ async def update_theme(key: str, data: ThemeUpdate, db: TenantDB, principal: App
 
 
 @router.delete("/themes/{key}", response_model=ThemeOut, tags=["themes"])
-async def archive_theme(key: str, db: TenantDB, principal: Approver) -> ThemeOut:
+async def archive_theme(key: str, db: TenantDB, principal: ApproverNow) -> ThemeOut:
     """Delete = archive: documents that use the theme still export with it."""
     try:
         return ThemeOut.model_validate(await service.set_theme_archived(db, key, True, principal))
@@ -228,7 +230,7 @@ async def archive_theme(key: str, db: TenantDB, principal: Approver) -> ThemeOut
 
 
 @router.post("/themes/{key}/restore", response_model=ThemeOut, tags=["themes"])
-async def restore_theme(key: str, db: TenantDB, principal: Approver) -> ThemeOut:
+async def restore_theme(key: str, db: TenantDB, principal: ApproverNow) -> ThemeOut:
     try:
         return ThemeOut.model_validate(await service.set_theme_archived(db, key, False, principal))
     except service.NotFoundError as e:
@@ -255,7 +257,7 @@ async def recommend_draft(data: RecommendIn, db: TenantDB, _: CurrentPrincipal) 
     responses={**REJECTED, 409: {"description": "Slug taken"}},
     tags=["drafts"],
 )
-async def start_draft(data: StartDraftIn, db: TenantDB, principal: Approver):
+async def start_draft(data: StartDraftIn, db: TenantDB, principal: ApproverNow):
     """Create the document (kind, template + version, theme) and its version 1 from the
     template skeleton."""
     try:
@@ -275,7 +277,7 @@ async def get_draft_defaults(db: TenantDB, _: CurrentPrincipal) -> DraftDefaults
 
 
 @router.put("/drafts/defaults", response_model=DraftDefaults, responses=REJECTED, tags=["drafts"])
-async def set_draft_defaults(data: DraftDefaults, db: TenantDB, principal: Owner):
+async def set_draft_defaults(data: DraftDefaults, db: TenantDB, principal: OwnerNow):
     try:
         return await service.write_draft_defaults(db, data, principal)
     except service.InvalidError as e:

@@ -155,12 +155,21 @@ async def effective_policy(db: AsyncSession, document: Document) -> ReviewPolicy
 async def set_policy(
     db: AsyncSession, principal: "Principal", document: Document, body: ReviewPolicyIn
 ) -> ReviewPolicyOut:
-    from oracle.review.publish import lock_document
+    """Set a document's own review policy (owner only). Under the review gate, shared:
+    the caller must still be an owner (C2), and the decider and reviewers it names are
+    read while no role change or disable can commit."""
+    from oracle.auth.service import caller_refusal
+    from oracle.review import publish
+    from oracle.review.service import ReviewError
     from oracle.v2.concurrency import VersionConflict, expect_version, flush_or_conflict
 
+    await publish.gate_lock(db, shared=True)
+    refusal = await caller_refusal(db, principal, "owner")
+    if refusal is not None:
+        raise ReviewError("forbidden", refusal)
     value = await validate_policy(db, body.model_dump(mode="json"))
     # The publish lock: a policy change never commits while a publish renders.
-    await lock_document(db, document.id)
+    await publish.lock_document(db, document.id)
     row = await db.scalar(
         select(DocumentReviewPolicy)
         .where(DocumentReviewPolicy.document_id == document.id)

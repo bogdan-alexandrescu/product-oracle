@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import require_role_now
 from oracle.priorities import service
 from oracle.priorities.schemas import (
     Method,
@@ -20,6 +20,7 @@ from oracle.priorities.schemas import (
 )
 
 router = APIRouter(prefix="/v1", tags=["priorities"])
+ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 
 
 @router.get("/priorities", response_model=PriorityRanking)
@@ -40,7 +41,7 @@ async def get_priorities(
 async def create_priority_snapshot(
     data: PrioritySnapshotCreate,
     db: TenantDB,
-    principal: Annotated[Principal, Depends(require_role("approver"))],
+    principal: ApproverNow,
 ) -> PrioritySnapshotOut:
     return await service.create_snapshot(db, data.method, data.note, principal)
 

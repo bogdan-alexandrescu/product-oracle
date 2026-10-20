@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import require_role, require_role_now
 from oracle.docs.schemas import VersionSummary
 from oracle.jobs import service as jobs_service
 from oracle.review import service
@@ -36,6 +36,7 @@ from oracle.review.schemas import (
 router = APIRouter(prefix="/v1", tags=["review"], dependencies=[Depends(require_role("viewer"))])
 Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]
+ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 VERSION = "/documents/{doc}/versions/{n}"
 
 _STATUS = {
@@ -138,7 +139,7 @@ async def list_feedback(
 
 @router.patch("/feedback/{feedback_id}", response_model=FeedbackItemOut)
 async def update_feedback(
-    feedback_id: uuid.UUID, body: FeedbackPatch, principal: Approver, db: TenantDB
+    feedback_id: uuid.UUID, body: FeedbackPatch, principal: ApproverNow, db: TenantDB
 ) -> FeedbackItemOut:
     fields = body.model_dump(exclude_unset=True)
     out = await _call(service.update_feedback(db, principal, feedback_id, fields))

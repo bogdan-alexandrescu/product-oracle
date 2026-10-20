@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import require_role, require_role_now
 from oracle.docs import service
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import (
@@ -30,6 +30,7 @@ router = APIRouter(
     prefix="/v1/documents", tags=["documents"], dependencies=[Depends(require_role("viewer"))]
 )
 Approver = Annotated[Principal, Depends(require_role("approver"))]
+ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 
 
 def _not_found(exc: service.NotFoundError) -> HTTPException:
@@ -81,7 +82,7 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
 async def import_version(
     doc: str,
     request: Request,
-    principal: Approver,
+    principal: ApproverNow,
     db: TenantDB,
     base_version: Annotated[int | None, Query(ge=0)] = None,
 ) -> VersionOut | JSONResponse:

@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import ROLES
-from oracle.authz import require_role
+from oracle.authz import recheck_caller, require_role
 from oracle.baseline.models import LINK_KINDS
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
@@ -44,7 +44,8 @@ DEFAULTS: dict[str, Any] = {
     "publish_latest_only": True,
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
-# never lands while a publish renders (oracle.review.publish.gate_lock).
+# never lands while a publish renders (oracle.review.publish.gate_lock). Every other
+# key takes it shared; either way the caller is re-read under it.
 GATE_KEYS = ("review_policy", "publish_latest_only")
 KNOWN_KEYS = tuple(DEFAULTS)
 
@@ -200,10 +201,9 @@ async def get_setting_endpoint(key: str, principal: Owner, db: TenantDB) -> Sett
 async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB) -> SettingOut:
     if key not in DEFAULTS:
         raise _unknown(key)
-    if key in GATE_KEYS:
-        from oracle.review.publish import gate_lock
-
-        await gate_lock(db, shared=False)
+    # Every key: the caller must still be an owner when the change lands (a rogue owner
+    # being disabled must not raise iap_default_role with a request in flight).
+    await recheck_caller(db, principal, "owner", shared=key not in GATE_KEYS)
     if body.value is None:
         await clear_setting(db, key)
         await audit.record(db, principal, "setting.reset", "tenant_setting", data={"key": key})
