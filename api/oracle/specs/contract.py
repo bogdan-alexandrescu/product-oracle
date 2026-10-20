@@ -596,7 +596,8 @@ def state_line(label: str) -> str:
 _STATE_LINES = frozenset(state_line(label) for label in STATE_LABELS)
 
 # E1 (owner, 2026-10-20): citations added in an edit are listed apart from Oracle's
-# Sources. The served markdown names them in a YAML comment above ``citations:``.
+# Sources. The served markdown names them (ids JSON-quoted) in a YAML comment on the front
+# matter's first line.
 ADDED_SOURCES = "Added sources"
 ADDED_SOURCES_COMMENT = f"# {ADDED_SOURCES} · {ADDED_LABEL} (not Oracle's Sources):"
 
