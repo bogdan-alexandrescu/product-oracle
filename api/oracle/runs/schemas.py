@@ -220,6 +220,15 @@ class CheckpointOut(BaseModel):
     can_decide: bool = False
 
 
+class RunProgress(BaseModel):
+    """Segments done of the run's total, and what it does now: Home's In flight row."""
+
+    done: int
+    total: int
+    # The segment under way, else the next to run; None once every segment is done.
+    now: str | None = None
+
+
 class RunSummary(BaseModel):
     id: uuid.UUID
     flow: Flow
@@ -243,6 +252,8 @@ class RunSummary(BaseModel):
     # The kind of the checkpoint the run waits on, if any.
     waiting_on: CheckpointKind | None = None
     error: str | None = None
+    # Set by GET /v1/runs and GET /v1/runs/{id}; None where a summary is embedded (inbox).
+    progress: RunProgress | None = None
 
 
 class RunOut(RunSummary):

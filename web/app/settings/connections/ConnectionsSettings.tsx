@@ -2,18 +2,29 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useId, useState, type FormEvent } from "react";
 
-import { Badge, Button, ErrorNote, Loading } from "@/components/ui";
+import { Button, Chip, InfoTip, Notice, PageHeader, Panel, type ChipKind } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
+
+import { Field, INPUT } from "../_components/fields";
 
 type Connection = Schemas["ConnectionOut"];
 type Provider = Schemas["ProviderOut"];
 type Data = { providers: Provider[]; connections: Connection[] };
 
-const STATUS_TONE = { active: "green", expired: "amber", revoked: "neutral", error: "red" } as const;
+const STATUS_KIND: Record<Connection["status"], ChipKind> = { active: "pass", expired: "warn", revoked: "na", error: "crit" };
 const STATUS_LABEL = { active: "Connected", expired: "Expired", revoked: "Revoked", error: "Error" } as const;
+/** The chip on a card: what a provider pulls in, in a word or two. */
+const KIND_SHORT: Record<string, string> = {
+  github: "Repos",
+  slack: "Channels",
+  notion: "Pages",
+  fireflies: "Transcripts",
+  google_docs: "Docs",
+};
+/** The (i) behind the chips: what exactly it pulls in. */
 const KIND_LABEL: Record<string, string> = {
   github: "repos, issues, pull requests, releases",
   slack: "channels you pick (never direct messages)",
@@ -30,7 +41,7 @@ async function loadAll(): Promise<Data> {
   return { providers, connections };
 }
 
-/** Settings > Connections: the signed-in user's own accounts, one card per provider. */
+/** Settings > Connections: the signed-in user's own accounts, one panel per provider. */
 export function ConnectionsSettings() {
   const params = useSearchParams();
   const q = useQuery("connections", loadAll);
@@ -39,64 +50,69 @@ export function ConnectionsSettings() {
 
   const providers = q.data?.providers ?? [];
   const nameOf = (key: string | null) => providers.find((p) => p.key === key)?.name ?? key;
+  const active = q.data?.connections.filter((c) => c.status === "active").length ?? 0;
+  const broken = q.data?.connections.filter((c) => c.status === "expired" || c.status === "error").length ?? 0;
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8">
-      <h1 className="mb-2 text-2xl font-semibold tracking-tight text-neutral-900">Connections</h1>
-      <p className="mb-6 text-sm text-neutral-600">
-        Your own accounts. Only you see these connections and what they pull in; nobody else in the company can
-        use them. Oracle&apos;s own Claude calls run on the company&apos;s{" "}
-        <Link href="/settings/claude-accounts" className="underline">
-          Claude accounts
-        </Link>
-        .
-      </p>
+    <>
+      <PageHeader
+        title="Connections"
+        status={
+          <>
+            <InfoTip label="connections" align="start" side="bottom">
+              Your own accounts. Only you see these connections and what they pull in; nobody else in the company can
+              use them. Oracle&apos;s own Claude calls run on the company&apos;s{" "}
+              <Link href="/settings/claude-accounts" className="underline">
+                Claude accounts
+              </Link>
+              .
+            </InfoTip>
+            {q.data && (
+              <Chip kind="line">
+                <span className="tnum">{active}</span> active
+              </Chip>
+            )}
+            {broken > 0 && (
+              <Chip kind="warn" dot>
+                {broken} to fix
+              </Chip>
+            )}
+          </>
+        }
+      />
 
-      {connected && !callbackError && (
-        <p role="status" className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {nameOf(connected)} is connected.
-        </p>
-      )}
-      {callbackError && (
-        <div className="mb-4">
-          <ErrorNote>
+      <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
+        {connected && !callbackError && <Notice tone="pass">{nameOf(connected)} is connected.</Notice>}
+        {callbackError && (
+          <Notice tone="error">
             {params.get("provider") ? `${nameOf(params.get("provider"))}: ` : ""}
             {callbackError}
-          </ErrorNote>
-        </div>
-      )}
+          </Notice>
+        )}
+        {q.error && <Notice tone="error">{q.error}</Notice>}
 
-      {q.loading && !q.data && <Loading />}
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
+        {q.loading && !q.data && (
+          <div aria-busy className="grid gap-4 md:grid-cols-2">
+            {[0, 1].map((i) => (
+              <div key={i} className="h-40 animate-pulse rounded-panel border border-line bg-surface" />
+            ))}
+          </div>
+        )}
 
-      {q.data && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {providers.map((p) => (
-            <ProviderCard
-              key={p.key}
-              provider={p}
-              connections={q.data!.connections.filter((c) => c.provider === p.key)}
-              reload={q.reload}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Card({ provider, children }: { provider: Provider; children: ReactNode }) {
-  return (
-    <section
-      data-testid={`connection-card-${provider.key}`}
-      aria-labelledby={`card-${provider.key}`}
-      className="rounded-lg border border-neutral-200 bg-white p-4"
-    >
-      <h2 id={`card-${provider.key}`} className="text-base font-semibold text-neutral-900">
-        {provider.name}
-      </h2>
-      {children}
-    </section>
+        {q.data && (
+          <div className="grid items-start gap-4 md:grid-cols-2 max-[600px]:gap-3">
+            {providers.map((p) => (
+              <ProviderCard
+                key={p.key}
+                provider={p}
+                connections={q.data!.connections.filter((c) => c.provider === p.key)}
+                reload={q.reload}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -111,6 +127,7 @@ function ProviderCard({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [pasting, setPasting] = useState(false);
 
   async function signIn() {
     setPending(true);
@@ -127,56 +144,55 @@ function ProviderCard({
   }
 
   return (
-    <Card provider={provider}>
-      <p className="mt-0.5 text-xs text-neutral-500">
-        Pulls in {provider.source_kinds.map((k) => KIND_LABEL[k] ?? k).join(", ")}.
-      </p>
-      <ConnectionList connections={connections} reload={reload} />
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+    <Panel
+      testId={`connection-card-${provider.key}`}
+      title={provider.name}
+      count={connections.length || undefined}
+      tools={
+        <>
+          {provider.source_kinds.map((k) => (
+            <Chip key={k} kind="acc">
+              {KIND_SHORT[k] ?? k}
+            </Chip>
+          ))}
+          <InfoTip label={`what ${provider.name} pulls in`}>
+            Pulls in {provider.source_kinds.map((k) => KIND_LABEL[k] ?? k).join(", ")}.
+          </InfoTip>
+        </>
+      }
+    >
+      {connections.length === 0 ? (
+        <p className="px-4 py-3 text-[15px] text-text2">Not connected</p>
+      ) : (
+        <ul aria-label={`${provider.name} accounts`} className="flex flex-col">
+          {connections.map((c) => (
+            <ConnectionRow key={c.id} connection={c} reload={reload} />
+          ))}
+        </ul>
+      )}
+      {pasting && <TokenForm provider={provider} reload={reload} close={() => setPasting(false)} />}
+      <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5">
         {provider.oauth_configured && (
-          <Button variant="primary" size="sm" onClick={signIn} disabled={pending}>
+          <Button variant="solid" icon="link" onClick={signIn} disabled={pending}>
             Connect with {provider.name}
           </Button>
         )}
+        {!pasting && (
+          <Button variant="ghost" className="first:-ml-2.5" onClick={() => setPasting(true)}>
+            Paste a token
+          </Button>
+        )}
       </div>
-      <TokenForm provider={provider} reload={reload} openByDefault={false} />
       {error && (
-        <div className="mt-2">
-          <ErrorNote>{error}</ErrorNote>
+        <div className="px-4 pb-3">
+          <Notice tone="error">{error}</Notice>
         </div>
       )}
-    </Card>
+    </Panel>
   );
 }
 
-function ConnectionList({
-  connections,
-  reload,
-  extra,
-}: {
-  connections: Connection[];
-  reload: () => Promise<void>;
-  extra?: (c: Connection) => ReactNode;
-}) {
-  if (connections.length === 0) return <p className="mt-3 text-sm text-neutral-500">Not connected.</p>;
-  return (
-    <ul className="mt-3 flex flex-col gap-2">
-      {connections.map((c) => (
-        <ConnectionRow key={c.id} connection={c} reload={reload} extra={extra?.(c)} />
-      ))}
-    </ul>
-  );
-}
-
-function ConnectionRow({
-  connection: c,
-  reload,
-  extra,
-}: {
-  connection: Connection;
-  reload: () => Promise<void>;
-  extra?: ReactNode;
-}) {
+function ConnectionRow({ connection: c, reload }: { connection: Connection; reload: () => Promise<void> }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -212,40 +228,50 @@ function ConnectionRow({
     }
   }
 
+  const name = c.account_label ?? c.account_id;
   return (
-    <li data-testid={`connection-${c.id}`} className="rounded-md border border-neutral-200 px-3 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-neutral-900">{c.account_label ?? c.account_id}</span>
-            <Badge tone={STATUS_TONE[c.status]}>{STATUS_LABEL[c.status]}</Badge>
-            <span className="text-xs text-neutral-500">{c.auth_mode === "oauth" ? "signed in" : "token"}</span>
-          </div>
-          {c.scopes.length > 0 && <p className="mt-0.5 text-xs text-neutral-500">Scopes: {c.scopes.join(", ")}</p>}
-          {c.last_error && <p className="mt-0.5 text-xs text-rose-700">{c.last_error}</p>}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Button size="sm" onClick={reconnect} disabled={pending}>
+    <li data-testid={`connection-${c.id}`} className="border-t border-line px-4 py-2 first:border-t-0 max-[600px]:px-3">
+      <div className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1.5">
+        <span className="min-w-0 flex-1 basis-32 truncate font-medium" title={name}>
+          {name}
+        </span>
+        <Chip kind={STATUS_KIND[c.status]} dot>
+          {STATUS_LABEL[c.status]}
+        </Chip>
+        <Chip kind="line">{c.auth_mode === "oauth" ? "signed in" : "token"}</Chip>
+        {c.scopes.length > 0 && (
+          <InfoTip label={`${name} scopes`}>Scopes: {c.scopes.join(", ")}</InfoTip>
+        )}
+        <span className="flex flex-none items-center gap-1">
+          <Button onClick={reconnect} disabled={pending}>
             Reconnect
           </Button>
           {confirming ? (
             <>
-              <Button size="sm" variant="primary" onClick={disconnect} disabled={pending}>
+              <Button variant="danger" onClick={disconnect} disabled={pending}>
                 Confirm disconnect
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+              <Button variant="ghost" onClick={() => setConfirming(false)}>
                 Cancel
               </Button>
             </>
           ) : (
-            <Button size="sm" variant="ghost" onClick={() => setConfirming(true)}>
+            <Button variant="ghost" onClick={() => setConfirming(true)}>
               Disconnect
             </Button>
           )}
-        </div>
+        </span>
       </div>
-      {extra}
-      {error && <p className="mt-1 text-xs text-rose-700">{error}</p>}
+      {c.last_error && (
+        <p className="mt-1 truncate text-sm text-crit" title={c.last_error}>
+          {c.last_error}
+        </p>
+      )}
+      {error && (
+        <div className="mt-1.5">
+          <Notice tone="error">{error}</Notice>
+        </div>
+      )}
     </li>
   );
 }
@@ -253,13 +279,13 @@ function ConnectionRow({
 function TokenForm({
   provider,
   reload,
-  openByDefault,
+  close,
 }: {
   provider: Provider;
   reload: () => Promise<void>;
-  openByDefault: boolean;
+  close: () => void;
 }) {
-  const [open, setOpen] = useState(openByDefault);
+  const id = useId();
   const [token, setToken] = useState("");
   const [label, setLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -278,7 +304,7 @@ function TokenForm({
       );
       setToken("");
       setLabel("");
-      setOpen(false);
+      close();
       await reload();
     } catch (e) {
       setError(errorMessage(e));
@@ -287,42 +313,48 @@ function TokenForm({
     }
   }
 
-  if (!open) {
-    return (
-      <Button size="sm" variant="ghost" className="mt-2" onClick={() => setOpen(true)}>
-        Paste a token
-      </Button>
-    );
-  }
-  const field = "rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm text-neutral-900";
   return (
-    <form onSubmit={onSubmit} className="mt-3 flex flex-col gap-2" aria-label={`${provider.name} token`}>
-      <p className="text-xs text-neutral-500">{provider.token_help}</p>
-      <label className="flex flex-col gap-1 text-xs text-neutral-700">
-        Token
-        <input
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          required
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          className={`${field} font-mono`}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-neutral-700">
-        Label (optional)
-        <input value={label} onChange={(e) => setLabel(e.target.value)} className={field} maxLength={200} />
-      </label>
+    <form
+      onSubmit={onSubmit}
+      className="flex flex-col gap-3 border-t border-line bg-surface2 px-4 py-3 max-[600px]:px-3"
+      aria-label={`${provider.name} token`}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          label="Token"
+          htmlFor={`${id}-token`}
+          tip={
+            provider.token_help ? (
+              <InfoTip label={`${provider.name} tokens`} align="start">
+                {provider.token_help}
+              </InfoTip>
+            ) : undefined
+          }
+        >
+          <input
+            id={`${id}-token`}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            required
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            className={`${INPUT} font-mono`}
+          />
+        </Field>
+        <Field label="Label (optional)">
+          <input value={label} onChange={(e) => setLabel(e.target.value)} className={INPUT} maxLength={200} />
+        </Field>
+      </div>
       <div className="flex items-center gap-2">
-        <Button type="submit" size="sm" variant="primary" disabled={pending || !token.trim()}>
+        <Button type="submit" variant="solid" disabled={pending || !token.trim()}>
           {pending ? "Checking…" : "Connect"}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+        <Button variant="ghost" onClick={close}>
           Cancel
         </Button>
       </div>
-      {error && <ErrorNote>{error}</ErrorNote>}
+      {error && <Notice tone="error">{error}</Notice>}
     </form>
   );
 }

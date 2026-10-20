@@ -11,39 +11,65 @@ Everything else the lane stores uses the foundation's tables (``artifact_request
 ``artifact_versions``, ``artifact_outputs``, ``artifact_review_events``,
 ``artifact_dependencies``). The ``eng_review`` checkpoint kind already exists (E1).
 
-The downgrade deletes spec documents and prd_to_spec runs (the old schema cannot hold
-them), then restores the constraints.
+Each constraint is widened from its CURRENT definition in the database (read from
+``pg_constraint``), never rebuilt from a fixed list, so values other lanes added before
+this revision survive it. The downgrade deletes spec documents and prd_to_spec runs (the
+old schema cannot hold them), then removes the one value again the same way.
 
 Revision ID: 0015_specs
-Revises: 0014_trace
+Revises: 0014_blockers_snapshot
 """
 
+import re
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0015_specs"
-down_revision: str | None = "0014_trace"
+down_revision: str | None = "0014_blockers_snapshot"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-OLD_KINDS = "kind IN ('prd', 'roadmap')"
-NEW_KINDS = "kind IN ('prd', 'roadmap', 'spec')"
-OLD_FLOWS = "flow IN ('baseline_to_prd', 'feedback_loop', 'prd_to_roadmap')"
-NEW_FLOWS = "flow IN ('baseline_to_prd', 'feedback_loop', 'prd_to_roadmap', 'prd_to_spec')"
+
+def _values(table: str, name: str) -> list[str]:
+    """The quoted values the live check constraint ``name`` on ``table`` accepts."""
+    definition = op.get_bind().execute(
+        sa.text(
+            "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+            "JOIN pg_class t ON t.oid = c.conrelid "
+            "WHERE t.relname = :table AND c.conname = :name AND c.contype = 'c'"
+        ),
+        {"table": table, "name": name},
+    ).scalar_one()
+    return re.findall(r"'((?:[^']|'')*)'", definition)
+
+
+def _set(table: str, name: str, column: str, values: list[str]) -> None:
+    op.drop_constraint(op.f(name), table, type_="check")
+    listed = ", ".join("'" + v + "'" for v in values)
+    op.execute(sa.text(f"ALTER TABLE {table} ADD CONSTRAINT {name} CHECK ({column} IN ({listed}))"))
+
+
+def _widen(table: str, name: str, column: str, value: str) -> None:
+    current = _values(table, name)
+    if value not in current:
+        _set(table, name, column, [*current, value])
+
+
+def _narrow(table: str, name: str, column: str, value: str) -> None:
+    current = _values(table, name)
+    if value in current:
+        _set(table, name, column, [v for v in current if v != value])
 
 
 def upgrade() -> None:
-    op.drop_constraint(op.f("ck_documents_kind"), "documents", type_="check")
-    op.create_check_constraint(op.f("ck_documents_kind"), "documents", NEW_KINDS)
-    op.drop_constraint(op.f("ck_runs_flow"), "runs", type_="check")
-    op.create_check_constraint(op.f("ck_runs_flow"), "runs", NEW_FLOWS)
+    _widen("documents", "ck_documents_kind", "kind", "spec")
+    _widen("runs", "ck_runs_flow", "flow", "prd_to_spec")
 
 
 def downgrade() -> None:
     op.execute("DELETE FROM runs WHERE flow = 'prd_to_spec'")
     op.execute("DELETE FROM documents WHERE kind = 'spec'")
-    op.drop_constraint(op.f("ck_runs_flow"), "runs", type_="check")
-    op.create_check_constraint(op.f("ck_runs_flow"), "runs", OLD_FLOWS)
-    op.drop_constraint(op.f("ck_documents_kind"), "documents", type_="check")
-    op.create_check_constraint(op.f("ck_documents_kind"), "documents", OLD_KINDS)
+    _narrow("runs", "ck_runs_flow", "flow", "prd_to_spec")
+    _narrow("documents", "ck_documents_kind", "kind", "spec")

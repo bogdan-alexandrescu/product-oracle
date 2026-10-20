@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, section } from "./helpers";
+import { login, openSection, sectionAction } from "./helpers";
 
 const NOTION = "https://examplecorp.notion.site/Onboarding-research-summary-8c8f4dca142f44198555e626ba58742d";
 
@@ -81,15 +81,17 @@ test("evidence links: a viewer gets no Add evidence link control", async ({ page
 
   await page.keyboard.press("Escape");
   await page.goto("/documents/checkout-redesign/v/2");
-  await expect(section(page, "goal-trace")).toBeVisible();
+  await openSection(page, "goal-trace");
+  await expect(page.getByRole("button", { name: /Actions for/ }).filter({ visible: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Add evidence link/ }).filter({ visible: true })).toHaveCount(0);
 });
 
 test("evidence links: a commenter cites a Google Doc from a document section", async ({ page }) => {
   await login(page, "commenter@example.com");
   await page.goto("/documents/checkout-redesign/v/2");
-  const goalTrace = section(page, "goal-trace");
-  await goalTrace.getByRole("button", { name: "Add evidence link to 1. Goal trace" }).click();
+  const goalTrace = await openSection(page, "goal-trace");
+  // The section's ⋯ menu holds Add evidence link (and Refine section, for approvers).
+  await sectionAction(goalTrace, "1. Goal trace", "Add evidence link to 1. Goal trace");
 
   const form = goalTrace.getByRole("form", { name: "Add evidence link" });
   const target = form.getByLabel("Baseline item it supports");

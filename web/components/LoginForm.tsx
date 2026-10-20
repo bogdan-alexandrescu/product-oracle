@@ -3,7 +3,9 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { Button } from "@/components/ui";
+import { AuthCard } from "@/app/login/_components/AuthCard";
+import { Button, Chip, InfoTip, Notice } from "@/components/ds";
+import { INPUT } from "@/components/ui";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { MOCK_LOGIN } from "@/lib/api/mock/fixtures";
 
@@ -47,13 +49,11 @@ export function LoginForm() {
     }
   }
 
-  const field = "rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900";
+  const field = `${INPUT} h-10`;
   return (
-    <div className="mx-auto mt-20 max-w-sm px-6">
-      <h1 className="mb-1 text-2xl font-semibold tracking-tight">Sign in</h1>
-      <p className="mb-6 text-sm text-neutral-500">Review PRD drafts produced by the agent track.</p>
+    <AuthCard title="Sign in">
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1 text-sm text-neutral-700">
+        <label className="flex flex-col gap-1 text-[13px] font-semibold text-text2">
           Email
           <input
             type="email"
@@ -63,10 +63,10 @@ export function LoginForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className={field}
+            className={`${field} font-normal`}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm text-neutral-700">
+        <label className="flex flex-col gap-1 text-[13px] font-semibold text-text2">
           Password
           <input
             type="password"
@@ -75,25 +75,25 @@ export function LoginForm() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className={field}
+            className={`${field} font-normal`}
           />
         </label>
-        {error && (
-          <p role="alert" className="text-sm text-rose-700">
-            {error}
-          </p>
-        )}
-        <Button type="submit" variant="primary" disabled={pending} className="py-2">
+        {error && <Notice tone="error">{error}</Notice>}
+        <Button type="submit" variant="primary" disabled={pending} className="mt-1 w-full">
           {pending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
       {MOCK_MODE && (
-        <p className="mt-6 rounded-md border border-dashed border-neutral-300 px-3 py-2 text-xs text-neutral-500">
-          Mock mode: sign in with <span className="font-mono">{MOCK_LOGIN.email}</span> /{" "}
-          <span className="font-mono">{MOCK_LOGIN.password}</span>. To try a role, use approver@, commenter@ or
-          viewer@example.com with the same password.
-        </p>
+        <div data-testid="mock-login" className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4 text-sm">
+          <Chip kind="warn">Mock</Chip>
+          <span className="min-w-0 font-mono text-[13px] break-all">
+            {MOCK_LOGIN.email} / {MOCK_LOGIN.password}
+          </span>
+          <InfoTip label="Mock mode" side="top">
+            To try a role, use approver@, commenter@ or viewer@example.com with the same password.
+          </InfoTip>
+        </div>
       )}
-    </div>
+    </AuthCard>
   );
 }

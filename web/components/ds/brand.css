@@ -1,0 +1,12 @@
+/* The mark's colour on pages (I3 logo, brand/README.md): #0b3a7a on light, #bcd6ee on dark. */
+:root {
+  --brand-mark: #0b3a7a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --brand-mark: #bcd6ee;
+  }
+}
+:root[data-theme="dark"] {
+  --brand-mark: #bcd6ee;
+}

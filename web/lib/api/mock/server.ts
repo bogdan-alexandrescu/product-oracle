@@ -7,7 +7,9 @@ import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
-import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { mockUuid, seeded } from "./ids";
+import { enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
@@ -15,12 +17,12 @@ import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
-import { routeQuality, seedQuality, type QualityDb } from "./quality";
+import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { routeTrace } from "./trace";
-import { routeV2, seedV2, type V2Db } from "./v2";
+import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
@@ -60,6 +62,8 @@ export interface Db {
   quality?: QualityDb;
   /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
   modules?: ModulesDb;
+  /** Blocker strategies (./blockers.ts) on the v2 rows; absent in older saved data. */
+  blockers?: BlockersDb;
   /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
   specs?: SpecsDb;
   /** Per-user preferences (O1f document_view), by member email. */
@@ -69,6 +73,14 @@ export interface Db {
 const STORAGE_KEY = "po-mock-db-v2";
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
+/**
+ * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
+ * new company (members only, no goals, documents, runs or questions); "large" as a big one
+ * (30 goals, 50 more active runs, questions asked of the signed-in member).
+ */
+export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+/** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
+export const MOCK_FAIL_KEY = "po-mock-fail";
 const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
 
 /** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
@@ -78,12 +90,7 @@ function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
 }
 const LATENCY_MS = 60;
 
-let counter = 0;
-function uuid(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  counter += 1;
-  return `00000000-0000-4000-8000-${String(Date.now() + counter).padStart(12, "0").slice(-12)}`;
-}
+const uuid = mockUuid;
 
 function hash(text: string): string {
   let h = 0x811c9dc5;
@@ -136,6 +143,45 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
       retrieved_at: c.retrieved_at,
     })),
   };
+}
+
+/** A new company: the members and their invites, nothing else yet. */
+function seedEmpty(): Db {
+  const db: Db = {
+    session: null,
+    tenant_id: uuid(),
+    user_id: uuid(),
+    members: [],
+    invites: [],
+    documents: [],
+    versions: [],
+    comments: [],
+    reviews: [],
+    feedback: [],
+    baseline: { entities: [], edges: [], evidence: [], conflicts: [], proposals: [], revisions: [] },
+    runs: { runs: [], artifacts: {} },
+    v2: emptyV2(),
+  };
+  db.members = MOCK_MEMBERS.map((m) => ({ ...m, id: m.email === MOCK_LOGIN.email ? db.user_id : uuid() }));
+  return db;
+}
+
+/** A big company: Home must stay within a fixed number of calls however much there is. */
+function seedLarge(): Db {
+  const db = seed();
+  enlargeBaseline(db.baseline, uuid, 27);
+  db.runs = seeded("runs", () => seedRuns(runsContext(db)));
+  enlargeRuns(db.runs, uuid, 50);
+  const v2 = ensureV2(db);
+  const model = v2.questions[0];
+  for (let i = 1; i <= 4; i++) {
+    const at = new Date(Date.parse(model.created_at) + i * 60_000).toISOString();
+    v2.questions.push({ ...model, id: uuid(), prompt: `Which clinics open first in region ${i}?`, priority: 10 + i, created_at: at, updated_at: at });
+  }
+  // Asked of someone else: not the signed-in member's to answer.
+  const other = db.members.find((m) => m.id !== db.user_id)!;
+  v2.questions.push({ ...model, id: uuid(), prompt: "Who owns the pricing page?", asked_to: other.id, created_at: model.created_at, updated_at: model.created_at });
+  return db;
 }
 
 function seed(): Db {
@@ -283,8 +329,8 @@ function seed(): Db {
     }
   }
   docs.get("usage-alerts-roadmap")!.status = "in_review";
-  db.runs = seedRuns(runsContext(db));
-  db.llm = seedLlm(llmContext(db, db.user_id, "owner"));
+  db.runs = seeded("runs", () => seedRuns(runsContext(db)));
+  db.llm = seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   return db;
 }
 
@@ -432,7 +478,8 @@ function load(): Db {
       // fall through to a fresh seed
     }
   }
-  const db = seed();
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  const db = seeded("db", scenario === "empty" ? seedEmpty : scenario === "large" ? seedLarge : seed);
   save(db);
   return db;
 }
@@ -812,14 +859,54 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   return notFound("Route");
 }
 
+/**
+ * The PRDs in review trace to the baseline: their goal-trace and scope sections link the
+ * goals and features they serve, so Home and the trace show goal tags.
+ */
+function goalLinks(db: Db): V2Db["section_links"] {
+  const out: V2Db["section_links"] = [];
+  const link = (slug: string, section: string, entityKey: string) => {
+    const doc = findDocument(db, slug);
+    const v = doc && docVersions(db, doc).at(-1);
+    const e = db.baseline.entities.find((x) => x.key === entityKey);
+    if (!doc || !v || !e || !v.sections.some((s) => s.section_key === section)) return;
+    out.push({
+      id: uuid(), document_id: doc.id, version_id: v.id, section_key: section, section_hash: null, composition_revision: null,
+      module_key: null, kind: "implements", entity_id: e.id, evidence_id: null, source_item_id: null, precision: "section",
+      claim: null, created_by: null, created_at: v.created_at,
+    });
+  };
+  link("checkout-redesign", "goal-trace", "g.activation");
+  link("checkout-redesign", "goal-trace", "g.paid-conversion");
+  link("team-workspaces", "scope", "f.team-invites");
+  return out;
+}
+
 /** The v2 rows, seeded on first use against the first mock PRD. */
 function ensureV2(db: Db): V2Db {
   if (!db.v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
     const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
-    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
+    db.v2 = seeded("v2", () => {
+      const v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
+      v2.section_links.push(...goalLinks(db));
+      return v2;
+    });
   }
   return db.v2;
+}
+
+function ensureBlockers(db: Db): BlockersDb {
+  if (!db.blockers) {
+    const v2 = ensureV2(db);
+    const deposits = db.documents.find((d) => d.slug === "online-deposits");
+    db.blockers = seedBlockers(
+      db.documents.find((d) => d.kind === "prd")?.id ?? db.tenant_id,
+      db.user_id,
+      deposits && { documentId: deposits.id, v2 },
+    );
+  }
+  return db.blockers;
 }
 
 async function route(db: Db, req: Request): Promise<Response> {
@@ -868,6 +955,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         documents: db.documents,
         versions: db.versions,
         entities: db.baseline.entities,
+        edges: db.baseline.edges,
         userId: me.id,
         role: me.role,
         now,
@@ -885,39 +973,34 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  // Company settings are the owner's, as in the API (tenant_settings_api.py).
+  if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const connections = await connectionsRoute(req, p);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role);
   if (pool) return pool;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
-  db.llm ??= seedLlm(llmContext(db, db.user_id, "owner"));
+  db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   const llm = llmContext(db, me.id, me.role);
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
   // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
-  if (!db.v2) {
-    const prd = db.documents.find((d) => d.kind === "prd");
-    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
-    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
-  }
+  const v2db = ensureV2(db);
   db.quality ??= seedQuality();
-  const quality = await routeQuality(
-    {
-      db: db.quality,
-      v2: db.v2,
-      userId: me.id,
-      role: me.role,
-      findVersion: (ref, n) => {
-        const doc = findDocument(db, ref);
-        const v = doc && findVersion(db, doc, n);
-        return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
-      },
+  const qualityCtx: QualityContext = {
+    db: db.quality,
+    v2: v2db,
+    userId: me.id,
+    role: me.role,
+    findVersion: (ref, n) => {
+      const doc = findDocument(db, ref);
+      const v = doc && findVersion(db, doc, n);
+      return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
     },
-    req,
-    p,
-    q,
-  );
+    blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
+  };
+  const quality = await routeQuality(qualityCtx, req, p, q);
   if (quality) return quality;
   // Specs, flows and wireframes (./specs.ts) check roles themselves.
   if (p[1] === "spec-requests" || p[1] === "design-artifacts") {
@@ -995,13 +1078,18 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
 
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
-  const v2 = routeV2(ensureV2(db), req, p, q);
+  const v2Db = ensureV2(db);
+  // Blocker strategy routes (CR-04): writes on the v2 option, experiment and event rows.
+  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents };
+  const blockers = await routeBlockers(blockerContext, ensureBlockers(db), req, p, q);
+  if (blockers) return blockers;
+  const v2 = routeV2(v2Db, req, p, q, me.id);
   if (v2) return v2;
 
   const handled = await laneF(db, req, p, m);
   if (handled) return handled;
 
-  db.runs ??= seedRuns(runsContext(db));
+  db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   if (runs) return runs;
 
@@ -1103,6 +1191,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
+    // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
+    if (doc.kind === "prd") {
+      const latest = docVersions(db, doc).pop()!.number;
+      const refusal = publishRefusal(qualityCtx, { documentId: doc.id, slug: doc.slug, versionId: v.id }, v.number, latest, (id) =>
+        ensureBlockers(db).blockers.find((b) => b.id === id)?.statement,
+      );
+      if (refusal) return json(409, refusal);
+    }
     v.approved_at = now();
     doc.status = "approved";
     doc.updated_at = v.approved_at;
@@ -1159,10 +1255,24 @@ async function route(db: Db, req: Request): Promise<Response> {
   return notFound("Route");
 }
 
+/** One request at a time: each loads the whole db and saves it back, so two in flight would lose a write. */
+let queue: Promise<unknown> = Promise.resolve();
+
 export async function mockFetch(req: Request): Promise<Response> {
+  // Every call, in order: tests count them (Home's call budget).
+  const url = new URL(req.url);
+  const log = ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ??= []);
+  log.push(`${req.method} ${url.pathname}${url.search}`);
   await new Promise((r) => setTimeout(r, LATENCY_MS));
-  const db = load();
-  const res = await route(db, req);
-  save(db);
-  return res;
+  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_FAIL_KEY)) {
+    return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
+  }
+  const next = queue.then(async () => {
+    const db = load();
+    const res = await route(db, req);
+    save(db);
+    return res;
+  });
+  queue = next.catch(() => undefined);
+  return next;
 }

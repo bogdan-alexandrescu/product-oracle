@@ -6,20 +6,21 @@ Every route needs the viewer role; the tenant-scoped session keeps each company 
 own rows, so another company's id is a 404.
 
 The routes are generated from :data:`RESOURCES`; each list takes the filters declared
-there plus ``limit`` and ``offset``, and returns rows newest first.
+there plus ``limit`` and ``offset``, and returns rows newest first. A filter typed
+``Literal["me"]`` matches the signed-in user's id (``/questions?asked_to=me``).
 """
 
 import inspect
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from oracle.auth.deps import TenantDB
+from oracle.auth.deps import CurrentPrincipal, TenantDB
 from oracle.authz import require_role
 from oracle.db import Base
 from oracle.v2 import models as m
@@ -127,7 +128,14 @@ RESOURCES: list[Resource] = [
         s.StakeholderQuestionOut,
         "stakeholder_questions",
         "stakeholder_question",
-        {"intake_id": U, "document_id": U, "gap_id": U, "status": s.QuestionStatus | None},
+        {
+            "intake_id": U,
+            "document_id": U,
+            "gap_id": U,
+            "status": s.QuestionStatus | None,
+            # Questions asked of the signed-in person: the Inbox's Questions group (I3).
+            "asked_to": Literal["me"] | None,
+        },
     ),
     Resource(
         "/answers",
@@ -257,10 +265,13 @@ RESOURCES: list[Resource] = [
 
 
 def _list_endpoint(res: Resource) -> Callable[..., Any]:
-    async def endpoint(db: TenantDB, **params: Any) -> list[Any]:
+    async def endpoint(db: TenantDB, principal: CurrentPrincipal, **params: Any) -> list[Any]:
         limit, offset = params.pop("limit"), params.pop("offset")
         stmt = select(res.model)
         for name, value in params.items():
+            if value == "me":
+                # An API token that acts for no user: nothing is asked of it.
+                value = principal.user_id or uuid.UUID(int=0)
             if value is not None:
                 stmt = stmt.where(getattr(res.model, name) == value)
         stmt = stmt.order_by(res.model.created_at.desc(), res.model.id).limit(limit).offset(offset)
@@ -268,7 +279,10 @@ def _list_endpoint(res: Resource) -> Callable[..., Any]:
         return [res.out.model_validate(r) for r in rows]
 
     kw = inspect.Parameter.KEYWORD_ONLY
-    parameters = [inspect.Parameter("db", kw, annotation=TenantDB)]
+    parameters = [
+        inspect.Parameter("db", kw, annotation=TenantDB),
+        inspect.Parameter("principal", kw, annotation=CurrentPrincipal),
+    ]
     for name, annotation in res.filters.items():
         parameters.append(inspect.Parameter(name, kw, default=None, annotation=annotation))
     parameters += [

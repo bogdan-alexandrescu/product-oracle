@@ -870,3 +870,24 @@ async def test_a_rejected_baseline_yaml_with_review_off_fails_the_run(client, ow
     assert run["error"].startswith("baseline.yaml was rejected: [invalid_type]")
     graph = (await client.get("/v1/baseline/graph", headers=auth)).json()
     assert graph["entities"] == []
+
+
+async def test_the_runs_list_carries_each_runs_progress(client, owner, runtime):
+    """Home's In flight reads segments done and what comes next from the list, no call per run."""
+    _, auth = owner
+    first = await started(client, auth)
+    second = await started(client, auth)
+    await tick(client, auth)  # each run's first segment done, waiting on its checkpoint
+    listed = {r["id"]: r for r in (await client.get("/v1/runs", headers=auth)).json()}
+    for run_id in (first["id"], second["id"]):
+        run = await get(client, auth, run_id)
+        progress = listed[run_id]["progress"]
+        assert progress == {"done": 1, "total": 4, "now": run["segments"][1]["title"]}
+        assert run["progress"] == progress
+    run = await decide(client, auth, await get(client, auth, first["id"]))
+    listed = {r["id"]: r for r in (await client.get("/v1/runs", headers=auth)).json()}
+    assert listed[first["id"]]["progress"]["now"] == run["segments"][1]["title"]
+    assert run["segments"][1]["status"] == "running"
+    # The inbox embeds summaries without it.
+    inbox = (await client.get("/v1/inbox", headers=auth)).json()
+    assert all(r["progress"] is None for r in inbox["approvals"] + inbox["overruns"])

@@ -2,9 +2,11 @@
 
 import type { ReactNode } from "react";
 
+import { Chip, InfoTip, Label } from "@/components/ds";
+import { TEXTAREA } from "@/app/settings/_components/fields";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { problemText, type Problem } from "@/lib/api/problems";
-import { useLive } from "@/lib/use-live";
+import { useLive, type Live } from "@/lib/use-live";
 
 export type TemplateCheck = Schemas["TemplateValidateOut"];
 
@@ -27,10 +29,20 @@ brief: [problem, solution]
 <!-- The only place for sources, numbers and evidence. -->
 `;
 
+const validateBody = (body: string) => unwrap(api.POST("/v1/templates/validate", { body: { body } }));
+
+/**
+ * Live (debounced) validation of a template body by POST /v1/templates/validate. Call it in
+ * the page when the save button sits outside the editor (top-right), and pass it as `live`.
+ */
+export function useTemplateCheck(value: string, enabled = true): Live<TemplateCheck> {
+  return useLive(value, validateBody, 400, enabled);
+}
+
 /** Validation problems of a template body, with line numbers. */
 export function ProblemList({ problems, testId = "problems" }: { problems: Problem[]; testId?: string }) {
   return (
-    <ul data-testid={testId} className="space-y-1 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+    <ul data-testid={testId} className="space-y-1 rounded-button bg-crit-bg px-3 py-2 text-sm text-crit">
       {problems.map((p, i) => (
         <li key={i}>{problemText(p)}</li>
       ))}
@@ -41,7 +53,7 @@ export function ProblemList({ problems, testId = "problems" }: { problems: Probl
 /** Findings on a body or a stored version that do not block anything by themselves. */
 export function WarningList({ warnings }: { warnings: Problem[] }) {
   return (
-    <ul data-testid="template-warnings" className="mt-1 space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+    <ul data-testid="template-warnings" className="mt-1 space-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
       {warnings.map((w, i) => (
         <li key={i}>{problemText(w)}</li>
       ))}
@@ -52,16 +64,19 @@ export function WarningList({ warnings }: { warnings: Problem[] }) {
 /** How to fix `no_brief_sections` (O1g): every template marks the sections it presents. */
 export function BriefFix() {
   return (
-    <div data-testid="brief-fix" className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700">
-      <p className="font-medium text-neutral-800">Mark the brief: the sections Present mode shows, one per slide. Either:</p>
+    <div data-testid="brief-fix" className="rounded-button border border-line bg-surface2 px-3 py-2 text-sm text-text">
+      <p className="flex items-center gap-2 font-semibold">
+        Mark the brief, either:
+        <InfoTip label="the brief" align="start">
+          The brief is the sections Present mode shows, one per slide.
+        </InfoTip>
+      </p>
       <ul className="mt-1 list-disc space-y-1 pl-5">
         <li>
-          list their ids in the front matter, e.g. <code className="font-mono text-xs">brief: [summary, problem, decisions]</code>
-          ; or
+          <code className="font-mono text-[13px]">brief: [summary, problem, decisions]</code> in the front matter
         </li>
         <li>
-          put a level-1 <code className="font-mono text-xs">{"# Full version {#full}"}</code> heading after them: the sections
-          before it (except the title) are the brief.
+          <code className="font-mono text-[13px]">{"# Full version {#full}"}</code> after the brief sections
         </li>
       </ul>
     </div>
@@ -72,61 +87,80 @@ export function BriefFix() {
  * Markdown editor of a template body, validated live (debounced) by
  * POST /v1/templates/validate. `children` renders below it with the latest check, so
  * the parent can disable its save button while the body is invalid or being checked.
+ * Pass `live` (from useTemplateCheck) when the parent needs the check itself.
  */
 export function TemplateBodyEditor({
   value,
   onChange,
   label = "Body",
   rows = 22,
+  live: given,
   children,
 }: {
   value: string;
   onChange: (v: string) => void;
   label?: string;
   rows?: number;
+  live?: Live<TemplateCheck>;
   children?: (state: { check: TemplateCheck | undefined; pending: boolean }) => ReactNode;
 }) {
-  const live = useLive(value, (body: string) => unwrap(api.POST("/v1/templates/validate", { body: { body } })), 400);
+  const own = useTemplateCheck(value, !given);
+  const live = given ?? own;
   const check = live.data;
   return (
-    <div className="space-y-2">
-      <label className="block text-sm font-medium text-neutral-700" htmlFor="template-body">
-        {label}
-      </label>
+    <div className="flex flex-col gap-2">
+      <span className="flex items-center gap-1.5">
+        <label className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2" htmlFor="template-body">
+          {label}
+        </label>
+        <InfoTip label="template rules" align="start" side="bottom">
+          Every heading ends with <code>{"{#id}"}</code>; the last section is{" "}
+          <code>## Sources and data points {"{#sources}"}</code>. Saving adds a new version; documents keep the version they
+          started from.
+        </InfoTip>
+      </span>
       <textarea
         id="template-body"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={rows}
         spellCheck={false}
-        className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 font-mono text-[13px] leading-5 text-neutral-900"
+        className={`${TEXTAREA} font-mono text-sm leading-5`}
       />
-      <div aria-live="polite" className="min-h-6 text-sm">
-        {live.error && <p className="text-rose-800">{live.error}</p>}
-        {!check && !live.error && <p className="text-neutral-500">Checking…</p>}
+      <div aria-live="polite" className="flex min-h-6 flex-col gap-2 text-sm">
+        {live.error && <p className="text-crit">{live.error}</p>}
+        {!check && !live.error && <p className="text-text2">Checking…</p>}
         {check && check.valid && (
-          <p data-testid="validation-ok" className="text-emerald-800">
-            {live.pending ? "Checking…" : "Valid."} Sections: <span className="font-mono text-xs">{check.section_keys.join(", ")}</span>
+          <p data-testid="validation-ok" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <Chip kind="pass" dot>
+              {live.pending ? "Checking…" : "Valid."}
+            </Chip>
+            <Label>Sections:</Label>
+            <span className="min-w-0 font-mono text-[13px] break-words">{check.section_keys.join(", ")}</span>
             {check.suggested_theme && (
               <>
-                {" "}
-                · suggested theme <span className="font-mono text-xs">{check.suggested_theme}</span>
+                <Label>· theme</Label>
+                <span className="font-mono text-[13px]">{check.suggested_theme}</span>
               </>
             )}
             {check.brief_sections.length > 0 && (
               <>
-                {" "}
-                · brief <span data-testid="brief-sections" className="font-mono text-xs">{check.brief_sections.join(", ")}</span>
+                <Label>· brief</Label>
+                <span data-testid="brief-sections" className="font-mono text-[13px]">
+                  {check.brief_sections.join(", ")}
+                </span>
               </>
             )}
           </p>
         )}
         {check && check.warnings.length > 0 && <WarningList warnings={check.warnings} />}
         {check && !check.valid && (
-          <div className="space-y-1">
-            <p className="font-medium text-rose-800">
-              {check.problems.length} problem{check.problems.length > 1 ? "s" : ""} to fix before saving
-              {live.pending ? " (checking…)" : ""}:
+          <div className="flex flex-col gap-1.5">
+            <p className="flex items-center gap-2">
+              <Chip kind="crit" dot>
+                <span className="tnum">{check.problems.length}</span> problem{check.problems.length > 1 ? "s" : ""}
+                {live.pending ? " · checking…" : ""}
+              </Chip>
             </p>
             <ProblemList problems={check.problems} />
             {check.problems.some((p) => p.code === "no_brief_sections") && <BriefFix />}

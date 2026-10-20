@@ -6,6 +6,14 @@ to an unlocked item but becomes a proposal on a locked one (B1: agents must ask
 before overriding a user correction). Every applied change writes an
 ``entity_revisions`` row with the fields before and after.
 
+Some attrs keys belong to a module with its own rules (:data:`MANAGED_ATTRS`): only a
+writer that names the key in ``manages`` may set, change or remove it. Every other
+path (PATCH, POST, proposals and their acceptance, agent writes, YAML imports,
+conflict resolution) is refused, so a blocker's strategy cannot be weakened around
+its recorded decisions. Likewise, archiving (rejecting) or deleting a constraint whose
+blocker still gates publishing takes the B4 role on every path
+(:func:`_check_archivable`).
+
 The caller commits.
 """
 
@@ -32,8 +40,12 @@ from oracle.baseline.models import (
     Evidence,
     Proposal,
 )
+from oracle.v2 import links
+from oracle.v2.models import DocumentSectionLink
 
 ENTITY_FIELDS = ("title", "body", "attrs", "status")
+# attrs keys a module owns, and the routes that change them.
+MANAGED_ATTRS = {"blocker": "the blocker routes (/v1/blockers)"}
 EDGE_FIELDS = ("attrs", "status")
 
 
@@ -63,6 +75,8 @@ class Writer:
     origin: str  # user | agent | import
     run_id: uuid.UUID | None = None
     reason: str | None = None
+    # MANAGED_ATTRS keys this writer may change (the owning module's writes only).
+    manages: tuple[str, ...] = ()
 
     @property
     def actor(self) -> str:
@@ -219,6 +233,46 @@ async def evidence_counts(
 # --- validation --------------------------------------------------------------------------
 
 
+def check_managed_attrs(
+    writer: Writer, before: dict[str, Any] | None, after: dict[str, Any] | None
+) -> None:
+    """Refuse a change to a managed attrs key by a writer that does not manage it."""
+    before, after = before or {}, after or {}
+    for key, where in MANAGED_ATTRS.items():
+        if key in writer.manages:
+            continue
+        if before.get(key) != after.get(key):
+            raise InvalidError(
+                f"attrs.{key} cannot be set, changed or removed here; change it through {where}"
+            )
+
+
+def _check_fields_managed_attrs(
+    writer: Writer, entity: Entity | None, fields: dict[str, Any]
+) -> None:
+    """The managed-attrs rule for a proposal's entity fields (create or update)."""
+    attrs = fields.get("attrs")
+    if not isinstance(attrs, dict):
+        return
+    current = dict(entity.attrs or {}) if entity is not None else {}
+    check_managed_attrs(writer, current, merge_attrs(current, attrs))
+
+
+async def _check_archivable(
+    db: AsyncSession, principal: Principal | None, entity: Entity, verb: str
+) -> None:
+    """B4: a blocker that still gates publishing is archived or deleted by an owner (the
+    company's ``blocker_risk_acceptance_role``) only; the blocker module decides."""
+    if entity.type != "constraint":
+        return
+    from oracle.blockers import service as blockers  # imports this module
+
+    try:
+        await blockers.require_archiver(db, principal, entity, verb)
+    except blockers.ForbiddenError as e:
+        raise ForbiddenError(str(e)) from None
+
+
 def _check_status(status: str | None) -> None:
     if status is not None and status not in NODE_STATUSES:
         raise InvalidError(f"status must be one of {', '.join(NODE_STATUSES)}")
@@ -256,6 +310,8 @@ async def propose(
     edge: Edge | None = None,
 ) -> Proposal:
     """A proposal, or the identical open one already there (so repeats are idempotent)."""
+    if kind == "entity" and op in ("create", "update"):
+        _check_fields_managed_attrs(writer, entity, fields)
     payload = _jsonable(
         {"op": op, "kind": kind, "fields": fields, "reason": writer.reason, "origin": writer.origin}
     )
@@ -308,6 +364,7 @@ async def decide_proposal(
                 if p["op"] == "update":
                     await update_entity(db, writer, target, fields)
                 else:
+                    await _detach(db, proposal)
                     await delete_entity(db, writer, target)
         else:
             if p["op"] == "create":
@@ -317,6 +374,7 @@ async def decide_proposal(
                 if p["op"] == "update":
                     await update_edge(db, writer, target, fields)
                 else:
+                    await _detach(db, proposal)
                     await delete_edge(db, writer, target)
     proposal.status = "accepted" if accept else "rejected"
     proposal.decided_by = principal.id
@@ -331,6 +389,18 @@ async def decide_proposal(
     )
     await db.flush()
     return proposal
+
+
+async def _detach(db: AsyncSession, proposal: Proposal) -> None:
+    """An accepted delete proposal outlives its target: the target's foreign key would
+    cascade it away mid-decision. The payload keeps which item it was."""
+    proposal.payload = {
+        **proposal.payload,
+        "fields": {**(proposal.payload.get("fields") or {}),
+                   "id": str(proposal.entity_id or proposal.edge_id)},
+    }  # fmt: skip
+    proposal.entity_id = proposal.edge_id = None
+    await db.flush()
 
 
 def _entity_create_args(fields: dict[str, Any]) -> dict[str, Any]:
@@ -391,18 +461,39 @@ async def submit_proposal(
     return await propose(db, writer, op=op, kind=kind, fields=fields, entity=entity, edge=edge)
 
 
-def _change_subject(entity: Entity, before: dict[str, Any] | None) -> str:
-    """The oracle.changes subject a change to ``entity`` is recorded under."""
+def _change_subject(entity: Entity, before: dict[str, Any] | None) -> str | None:
+    """The oracle.changes subject a change to ``entity`` is recorded under, or None when
+    the blocker routes record it."""
     if entity.type == "requirement":
         return "requirement"
     if entity.type == "decision":
         return "decision"
-    if entity.type == "constraint":
-        old = ((before or {}).get("attrs") or {}).get("blocker") or {}
-        new = (entity.attrs or {}).get("blocker") or {}
-        if old.get("status") != new.get("status"):
-            return "blocker_status"
+    if before is not None and entity.type == "constraint":
+        after = entity_snapshot(entity)
+        old, new = dict(before.get("attrs") or {}), dict(after["attrs"])
+        old_blocker, new_blocker = old.pop("blocker", None), new.pop("blocker", None)
+        if old_blocker != new_blocker:
+            # Only the blocker routes change attrs.blocker (MANAGED_ATTRS). They record
+            # their own ``blocker_status`` changes for status, type and severity changes
+            # and option selection (oracle.blockers.service._record). Any other strategy
+            # field (threshold, timing, documents, impacted entities, scaling...) is not
+            # recorded there, so it stays an ``entity`` change here: a duplicate event is
+            # harmless, a missing one leaves dependents unmarked.
+            rest = {**before, "attrs": old} != {**after, "attrs": new}
+            if rest or _strip_route_recorded(old_blocker) != _strip_route_recorded(new_blocker):
+                return "entity"
+            return None
     return "entity"
+
+
+# The blocker fields whose changes the blocker routes record themselves.
+_ROUTE_RECORDED_BLOCKER_KEYS = ("status", "revision", "type", "severity", "selected_option_id")
+
+
+def _strip_route_recorded(blocker: Any) -> Any:
+    if not isinstance(blocker, dict):
+        return blocker
+    return {k: v for k, v in blocker.items() if k not in _ROUTE_RECORDED_BLOCKER_KEYS}
 
 
 # Edge meaning for change propagation (as in oracle.trace.graph): for these types the
@@ -432,14 +523,19 @@ async def _record_change(
     *,
     edge: dict[str, Any] | None = None,
     wholes: list[uuid.UUID] | None = None,
+    evidence_ids: list[uuid.UUID] | None = None,
 ) -> None:
     """v2 hook: what is built on this entity may now be stale (oracle.trace).
 
     Inside :func:`batched_changes` the change is collected instead (a deletion is
-    always recorded at once, while the entity and its edges still exist)."""
+    always recorded at once, while the entity and its edges still exist).
+    ``evidence_ids``: the evidence a deletion takes with it."""
+    kind = _change_subject(entity, before)
+    if kind is None:
+        return
     after = entity_snapshot(entity)
     entry = {
-        "kind": _change_subject(entity, before),
+        "kind": kind,
         "id": entity.id,
         "ref": f"{entity.type}:{entity.key}",
         "cause": cause,
@@ -448,6 +544,7 @@ async def _record_change(
         "entity": _entity_ref(entity),
         "edge": edge,
         "wholes": [str(w) for w in wholes or []],
+        "evidence_ids": [str(e) for e in evidence_ids or []],
     }
     batch = db.info.get(_BATCH)
     if batch is not None and cause != "entity_deleted":
@@ -464,9 +561,8 @@ def _collect(batch: dict[uuid.UUID, dict[str, Any]], entry: dict[str, Any]) -> N
         return
     seen["fields"] = sorted(set(seen["fields"]) | set(entry["fields"]))
     seen["wholes"] = list(dict.fromkeys(seen["wholes"] + entry["wholes"]))
+    seen["evidence_ids"] = list(dict.fromkeys(seen["evidence_ids"] + entry["evidence_ids"]))
     seen["entity"] = entry["entity"]
-    if entry["kind"] == "blocker_status":
-        seen["kind"] = "blocker_status"
     if REMOVAL_PRIORITY.get(entry["cause"], 0) > REMOVAL_PRIORITY.get(seen["cause"], 0):
         seen["cause"] = entry["cause"]
     seen["edge"] = seen["edge"] or entry["edge"]
@@ -478,6 +574,8 @@ def _data(entry: dict[str, Any]) -> dict[str, Any]:
         data["edge"] = entry["edge"]
     if entry["wholes"]:
         data["wholes"] = entry["wholes"]
+    if entry["evidence_ids"]:
+        data["evidence_ids"] = entry["evidence_ids"]
     return data
 
 
@@ -558,6 +656,48 @@ async def _record_edge_change(
     )
 
 
+async def _evidence_of(
+    db: AsyncSession, *, entity_ids: list[uuid.UUID] = (), edge_ids: list[uuid.UUID] = ()
+) -> list[uuid.UUID]:
+    conditions = []
+    if entity_ids:
+        conditions.append(Evidence.entity_id.in_(list(entity_ids)))
+    if edge_ids:
+        conditions.append(Evidence.edge_id.in_(list(edge_ids)))
+    if not conditions:
+        return []
+    stmt = select(Evidence.id).where(or_(*conditions)).order_by(Evidence.created_at, Evidence.id)
+    return list((await db.scalars(stmt)).all())
+
+
+async def _release_edge_evidence(db: AsyncSession, actor: str, edge: Edge) -> set[uuid.UUID]:
+    """An edge about to be deleted takes its evidence with it. When a section link cites
+    that evidence, the deletion is recorded as removed evidence is (``evidence_deleted``,
+    before the delete, whether or not the edge is confirmed or the edge change batched):
+    the sections citing it may now be stale. Returns the evidence ids to release."""
+    evidence_ids = await _evidence_of(db, edge_ids=[edge.id])
+    if not evidence_ids:
+        return set()
+    cited = await db.scalar(
+        select(DocumentSectionLink.id)
+        .where(DocumentSectionLink.evidence_id.in_(evidence_ids))
+        .limit(1)
+    )
+    if cited is not None:
+        await changes.record_change(
+            db,
+            "source_permission",
+            cause="evidence_deleted",
+            actor=actor,
+            subject_ref=f"evidence of a {edge.type.replace('_', ' ')} link",
+            data={
+                "evidence_ids": [str(e) for e in evidence_ids],
+                "edge": {"id": str(edge.id), **edge_snapshot(edge)},
+            },
+        )
+    return set(evidence_ids)
+
+
 # --- entities ------------------------------------------------------------------------------
 
 
@@ -576,6 +716,7 @@ async def create_entity(
         raise InvalidError(f"type must be one of {', '.join(ENTITY_TYPES)}")
     if await find_entity(db, type_, key) is not None:
         raise ConflictError(f"{type_}:{key} already exists")
+    check_managed_attrs(writer, {}, attrs)
     entity = Entity(
         type=type_,
         key=key,
@@ -619,6 +760,8 @@ async def update_entity(
     diff = _entity_changes(entity, changes)
     if not diff:
         return WriteResult(entity=entity)
+    if "attrs" in diff:
+        check_managed_attrs(writer, entity.attrs, diff["attrs"])
     if entity.type == "goal" and diff.get("status") == "confirmed":
         raise InvalidError("confirm a goal with POST .../confirm")
     if entity.locked and not writer.locks:
@@ -627,6 +770,8 @@ async def update_entity(
             db, writer, op="update", kind="entity", fields=fields, entity=entity
         )
         return WriteResult(entity=entity, proposal=proposal)
+    if diff.get("status") == "rejected":
+        await _check_archivable(db, writer.principal, entity, "archive")
     before = entity_snapshot(entity)
     for f, value in diff.items():
         setattr(entity, f, value)
@@ -646,6 +791,8 @@ async def set_entity_status(
     """Confirm or reject (approver+). A person's decision, so it locks the entity."""
     writer = Writer(principal, "user", reason=reason or f"{status} by {principal.actor}")
     if entity.status != status:
+        if status == "rejected":
+            await _check_archivable(db, principal, entity, "archive")
         before = entity_snapshot(entity)
         entity.status = status
         lock(entity, writer)
@@ -661,6 +808,7 @@ async def delete_entity(db: AsyncSession, writer: Writer, entity: Entity) -> Wri
     if entity.locked and not writer.locks:
         proposal = await propose(db, writer, op="delete", kind="entity", fields={}, entity=entity)
         return WriteResult(entity=entity, proposal=proposal)
+    await _check_archivable(db, writer.principal, entity, "delete")
     # Neighbours whose goal impact depends on this entity (a goal being removed).
     supporters = (await db.scalars(select(Edge.src_id).where(Edge.dst_id == entity.id))).all()
     await audit.record(
@@ -671,8 +819,21 @@ async def delete_entity(db: AsyncSession, writer: Writer, entity: Entity) -> Wri
         entity.id,
         {"before": entity_snapshot(entity), "origin": writer.origin, "reason": writer.reason},
     )
-    # Before the delete: what was built on it is found through its links.
-    await _record_change(db, writer.actor, entity, entity_snapshot(entity), "entity_deleted")
+    # Before the delete: what was built on it is found through its links, and so are the
+    # section links citing it, its evidence or its edges' evidence (all go with it). Then
+    # those links are released as for removed evidence (oracle.v2.links): one that keeps
+    # another target only drops the deleted ones, one left with none goes.
+    edge_ids = (
+        await db.scalars(
+            select(Edge.id).where(or_(Edge.src_id == entity.id, Edge.dst_id == entity.id))
+        )
+    ).all()
+    evidence_ids = await _evidence_of(db, entity_ids=[entity.id], edge_ids=list(edge_ids))
+    await _record_change(
+        db, writer.actor, entity, entity_snapshot(entity), "entity_deleted",
+        evidence_ids=evidence_ids,
+    )  # fmt: skip
+    await links.release(db, entity_ids={entity.id}, evidence_ids=set(evidence_ids))
     await db.delete(entity)
     await db.flush()
     if supporters:
@@ -716,9 +877,17 @@ async def list_edges(
 
 
 async def revisions(
-    db: AsyncSession, *, entity_id: uuid.UUID | None = None, edge_id: uuid.UUID | None = None
+    db: AsyncSession,
+    *,
+    entity_id: uuid.UUID | None = None,
+    edge_id: uuid.UUID | None = None,
+    limit: int | None = None,
 ) -> list[EntityRevision]:
-    stmt = select(EntityRevision).order_by(EntityRevision.created_at.desc())
+    stmt = (
+        select(EntityRevision)
+        .order_by(EntityRevision.created_at.desc(), EntityRevision.id)
+        .limit(limit)
+    )
     if entity_id:
         stmt = stmt.where(EntityRevision.entity_id == entity_id)
     if edge_id:
@@ -818,7 +987,9 @@ async def delete_edge(db: AsyncSession, writer: Writer, edge: Edge) -> WriteResu
         edge.id,
         {"before": edge_snapshot(edge), "origin": writer.origin, "reason": writer.reason},
     )
+    evidence_ids = await _release_edge_evidence(db, writer.actor, edge)
     await _record_edge_change(db, writer.actor, edge, "edge_deleted", was=edge.status)
+    await links.release(db, evidence_ids=evidence_ids)
     await db.delete(edge)
     await db.flush()
     if type_ == "supports":

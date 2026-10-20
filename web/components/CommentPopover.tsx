@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
-import { Button, Kbd } from "@/components/ui";
+import { Button } from "@/components/ds";
+import { InlineError, Kbd, Quote, TEXTAREA } from "@/components/review/parts";
 import type { TextQuoteSelector } from "@/lib/anchor";
 
 export type PageRect = { top: number; left: number; bottom: number };
@@ -13,14 +14,14 @@ export function SelectionButton({ rect, onOpen }: { rect: PageRect; onOpen: () =
   return createPortal(
     <div className="absolute z-40" style={{ top: rect.bottom + 6, left: rect.left }}>
       <Button
-        size="sm"
         variant="primary"
-        className="shadow-md"
+        icon="comment"
+        className="shadow-tip"
         // Keep the text selection alive while clicking.
         onMouseDown={(e) => e.preventDefault()}
         onClick={onOpen}
       >
-        Comment <Kbd>c</Kbd>
+        Comment <kbd className="rounded border border-on-accent/40 px-1 font-mono text-[13px] leading-none">c</kbd>
       </Button>
     </div>,
     document.body,
@@ -61,11 +62,13 @@ export function CommentPopover({
     <div
       role="dialog"
       aria-label="New comment"
-      className="absolute z-40 w-[22rem] rounded-lg border border-neutral-200 bg-white p-3 shadow-xl"
+      className="absolute z-40 w-[22rem] max-w-[calc(100vw-16px)] rounded-panel border border-line bg-surface p-3 text-text shadow-tip"
       style={{ top: rect.bottom + 6, left }}
       onKeyDown={(e) => e.key === "Escape" && onCancel()}
     >
-      <p className="mb-2 line-clamp-2 border-l-2 border-amber-300 pl-2 text-xs text-neutral-600">{anchor.exact}</p>
+      <p className="mb-2">
+        <Quote>{anchor.exact}</Quote>
+      </p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -85,15 +88,18 @@ export function CommentPopover({
               submit();
             }
           }}
-          className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+          className={TEXTAREA}
         />
-        {error && <p className="mt-1 text-xs text-rose-700">{error}</p>}
+        {error && <InlineError>{error}</InlineError>}
         <div className="mt-2 flex items-center gap-2">
-          <span className="text-xs text-neutral-400">Ctrl/⌘ + Enter</span>
-          <Button variant="ghost" size="sm" className="ml-auto" onClick={onCancel}>
+          <span className="flex items-center gap-1 text-[13px] text-text2">
+            <Kbd>⌘</Kbd>
+            <Kbd>↵</Kbd>
+          </span>
+          <Button variant="ghost" className="ml-auto" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" size="sm" disabled={!body.trim() || saving}>
+          <Button type="submit" variant="solid" disabled={!body.trim() || saving}>
             {saving ? "Saving…" : "Comment"}
           </Button>
         </div>

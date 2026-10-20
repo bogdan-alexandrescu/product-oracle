@@ -1,0 +1,44 @@
+/**
+ * Ids for the mock. Seeded data takes stable ids, so the same run, document or
+ * item has the same id on every page load (each fresh browser seeds the mock anew);
+ * rows created later take random ones and so never collide with the seed.
+ */
+
+let scope: { label: string; seq: number } | null = null;
+
+function fnv(text: string, basis: number): number {
+  let h = basis;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** A v4-shaped uuid derived from `key`: the same key always gives the same id. */
+export function stableUuid(key: string): string {
+  const hex = [0x811c9dc5, 0x01000193, 0x2a5f7c3d, 0x6b8e1f47]
+    .map((basis) => fnv(key, basis).toString(16).padStart(8, "0"))
+    .join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+let counter = 0;
+/** Stable inside `seeded`, random outside it. */
+export function mockUuid(): string {
+  if (scope) return stableUuid(`${scope.label}#${scope.seq++}`);
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  counter += 1;
+  return `00000000-0000-4000-8000-${String(Date.now() + counter).padStart(12, "0").slice(-12)}`;
+}
+
+/** Runs `seed` with stable ids, numbered from zero under `label`. */
+export function seeded<T>(label: string, seed: () => T): T {
+  const outer = scope;
+  scope = { label: outer ? `${outer.label}/${label}` : label, seq: 0 };
+  try {
+    return seed();
+  } finally {
+    scope = outer;
+  }
+}
