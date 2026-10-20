@@ -351,6 +351,9 @@
               }
             }
           },
+          "413": {
+            "description": "Draft larger than 1 MiB (ORACLE_MAX_BODY_BYTES)"
+          },
           "422": {
             "description": "Draft rejected",
             "content": {
@@ -6914,6 +6917,9 @@
                 }
               }
             }
+          },
+          "413": {
+            "description": "File larger than 1 MiB (ORACLE_MAX_BODY_BYTES)"
           },
           "422": {
             "description": "File rejected",
