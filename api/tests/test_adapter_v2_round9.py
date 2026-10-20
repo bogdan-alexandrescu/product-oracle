@@ -8,6 +8,7 @@ cancel."""
 import asyncio
 import uuid
 
+import httpx
 import pytest
 from sqlalchemy import select
 
@@ -16,9 +17,10 @@ from oracle.config import get_settings
 from oracle.models import AuditEvent
 from oracle.runs import service
 from oracle.runs.models import Run, RunSegment
-from oracle.swarm import RuntimeUnavailable
+from oracle.swarm import RuntimeUnavailable, set_runtime
 from oracle.swarm.runtime import StepStatus, WorkflowStatus
 from oracle.swarm.settings import get_runtime_settings
+from oracle.swarm.swarmcloud import StaticBearer, SwarmCloudRuntime
 from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
 from tests.fixtures import seed_auth
@@ -596,3 +598,78 @@ async def test_a_dismissed_overrun_does_not_block_a_new_one(client, owner, monke
     assert len(await _audits(tenant_id, "run.overrun_after_end")) == 2
     got = await get(client, auth, run["id"])
     assert got["cancel_again"] == ["wf_1"]
+
+
+# --------------------------------------------------------------------------- item 6
+
+
+def _runtime_on(handler) -> SwarmCloudRuntime:
+    return SwarmCloudRuntime(
+        "https://swarm.test", StaticBearer("sc-bearer"), transport=httpx.MockTransport(handler)
+    )
+
+
+async def test_a_pool_timeout_never_left_so_it_is_not_lost():
+    def handler(request):
+        raise httpx.PoolTimeout("no connection free in the pool")
+
+    with pytest.raises(RuntimeUnavailable) as caught:
+        await _runtime_on(handler).status("wf_1")
+    assert caught.value.lost is False and caught.value.retryable
+
+
+async def test_a_submit_stuck_in_the_pool_is_not_lost_and_holds_nothing(client, owner, monkeypatch):
+    tenant_id, auth = owner
+    swarm = on()
+    pool_timeouts = 1
+
+    def handler(request):
+        nonlocal pool_timeouts
+        if request.method == "POST" and request.url.path == "/v1/workflows" and pool_timeouts:
+            pool_timeouts -= 1
+            raise httpx.PoolTimeout("no connection free in the pool")
+        return swarm(request)
+
+    runtime = swarm.runtime()
+    runtime._transport = httpx.MockTransport(handler)
+    set_runtime(runtime)
+    run = await started(client, auth)
+    seg = await _segment(tenant_id, run["id"])
+    assert seg.status == "pending" and "lost" not in (seg.artifacts or {}), seg.artifacts
+    got = await get(client, auth, run["id"])
+    assert got["token_read_only"] is False
+    assert not (await _inbox(client, auth))["lookups"]
+
+
+async def test_cookies_are_not_shared_across_calls():
+    seen: list[str | None] = []
+
+    def handler(request):
+        seen.append(request.headers.get("cookie"))
+        return httpx.Response(
+            404, json={"error": "not_found"}, headers={"set-cookie": "sticky=1; Path=/"}
+        )
+
+    runtime = _runtime_on(handler)
+    for _ in range(2):
+        with pytest.raises(RuntimeUnavailable):
+            await runtime.status("wf_1")
+    assert seen == [None, None]
+
+
+def test_the_old_client_is_closed_when_the_event_loop_changes():
+    def handler(request):
+        return httpx.Response(404, json={"error": "not_found"})
+
+    runtime = _runtime_on(handler)
+    clients = []
+
+    async def call():
+        with pytest.raises(RuntimeUnavailable):
+            await runtime.status("wf_1")
+        clients.append(runtime._http)
+
+    asyncio.run(call())
+    asyncio.run(call())
+    assert clients[0] is not clients[1]
+    assert clients[0].is_closed and not clients[1].is_closed

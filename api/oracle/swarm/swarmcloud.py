@@ -48,6 +48,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from email.utils import parsedate_to_datetime
+from http.cookiejar import CookieJar, DefaultCookiePolicy
 from typing import Any, Protocol
 
 import httpx
@@ -291,6 +292,12 @@ def capacity_features(body: Any) -> dict[str, FeatureState]:
         if state:
             out["await_input"] = state
     return out
+
+
+def _never_sent(exc: httpx.HTTPError) -> bool:
+    """A request that never left Oracle: no connection was made, or none was free in the
+    pool (PoolTimeout). Anything later may have arrived (a lost answer)."""
+    return isinstance(exc, httpx.ConnectError | httpx.ConnectTimeout | httpx.PoolTimeout)
 
 
 class SwarmCloudRuntime:
@@ -568,11 +575,20 @@ class SwarmCloudRuntime:
         the running event loop; leaving the block does not close it (:meth:`aclose`)."""
         loop = asyncio.get_running_loop()
         if self._http is None or self._http.is_closed or self._http_loop is not loop:
+            old, self._http = self._http, None
+            if old is not None and not old.is_closed:
+                # Made in another event loop: its connections are closed, not leaked.
+                try:
+                    await old.aclose()
+                except Exception as exc:  # its loop may be gone; nothing else to free
+                    log.debug("closing the HTTP client of an earlier event loop: %s", exc)
             self._http = httpx.AsyncClient(
                 base_url=self._base_url,
                 timeout=self._timeout,
                 transport=self._transport,
                 headers={"User-Agent": "product-oracle"},
+                # No cookie is kept: one call's Set-Cookie is never sent on another.
+                cookies=CookieJar(policy=DefaultCookiePolicy(allowed_domains=[])),
             )
             self._http_loop = loop
         yield self._http
@@ -591,7 +607,7 @@ class SwarmCloudRuntime:
             resp = await client.request(method, path, headers=headers, **kwargs)
         except httpx.HTTPError as exc:
             # A connection never made sent nothing; anything later may have arrived.
-            sent = not isinstance(exc, httpx.ConnectError | httpx.ConnectTimeout)
+            sent = not _never_sent(exc)
             raise RuntimeUnavailable(
                 f"cannot reach SwarmCloud ({method} {path}): {type(exc).__name__}", lost=sent
             ) from None
@@ -847,7 +863,7 @@ class SwarmCloudRuntime:
         try:
             resp = await client.send(request, stream=True)
         except httpx.HTTPError as exc:
-            sent = not isinstance(exc, httpx.ConnectError | httpx.ConnectTimeout)
+            sent = not _never_sent(exc)
             raise RuntimeUnavailable(
                 f"cannot reach SwarmCloud (GET {path}): {type(exc).__name__}", lost=sent
             ) from None
