@@ -980,3 +980,32 @@ async def test_companies_take_turns_at_built_in_jobs(client, ticker_on, claude, 
     assert out["llm_jobs"]["succeeded"] == 4
     # One job each in turn: the second company's job runs before the backlog's second.
     assert order[:2] == [first, second]
+
+
+async def test_the_ticker_makes_the_follow_ups_a_cancel_owes_as_the_v1_tick_does(
+    client, ticker_on, runtime
+):
+    """One tick body (oracle.ticker.body): the scheduled ticker makes a due run_cancel
+    follow-up last, as POST /v1/internal/tick does, and counts it."""
+    from oracle.members.models import MemberFollowUp
+
+    tenant_id, auth = await seed_auth()
+    run = await started(client, auth)
+    segment = run["segments"][0]
+    async with tenant_session(tenant_id) as s:
+        row = MemberFollowUp(
+            member_id=uuid.uuid4(),
+            kind="run_cancel",
+            target_id=uuid.UUID(segment["id"]),
+            workflow_id=segment["workflow_id"],
+        )
+        s.add(row)
+        await s.commit()
+        row_id = row.id
+    out = (await client.post(PATH, headers=bearer(id_token()))).json()
+    assert out["member_follow_ups"] == 1
+    assert out["companies"]["failed"] == 0
+    assert segment["workflow_id"] in runtime.cancelled
+    async with tenant_session(tenant_id) as s:
+        done = await s.get(MemberFollowUp, row_id)
+        assert (done.status, done.outcome) == ("done", "cancelled")

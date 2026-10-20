@@ -593,16 +593,21 @@ async def run_follow_ups(
     http: "httpx.AsyncClient",
     *,
     member_id: uuid.UUID | None = None,
+    budget_seconds: float | None = None,
 ) -> int:
     """Make the pending follow-ups that are due (of ``member_id``, or all of the
     session's tenant), one transaction each, outside the review gate, within
-    :data:`FOLLOW_UP_TICK_BUDGET_SECONDS` in all: a call the budget cuts short is not
-    counted and waits for the next tick. A DB error in one rolls that one back; the
-    others still run. Returns how many ran (:func:`_attempt` records each outcome)."""
+    :data:`FOLLOW_UP_TICK_BUDGET_SECONDS` in all (or ``budget_seconds``, when less: the
+    time a scheduled tick has left): a call the budget cuts short is not counted and
+    waits for the next tick. A DB error in one rolls that one back; the others still
+    run. Returns how many ran (:func:`_attempt` records each outcome)."""
     import asyncio
 
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + FOLLOW_UP_TICK_BUDGET_SECONDS
+    budget = FOLLOW_UP_TICK_BUDGET_SECONDS
+    if budget_seconds is not None:
+        budget = min(budget, budget_seconds)
+    deadline = loop.time() + budget
     stmt = select(MemberFollowUp.id).where(
         MemberFollowUp.status == "pending",
         or_(

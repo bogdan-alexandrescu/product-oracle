@@ -2,9 +2,11 @@
 
 SwarmCloud never calls Oracle back, so runs only advance when something ticks
 (decision W3). One tick does, for every company in its own tenant session, what
-``POST /v1/internal/tick`` does for one: advance its runs, sweep its Claude account
-pool and run its queued built-in model jobs. One company's failure stops none of the
-others, and the answer carries counts only (no ids, no error text).
+``POST /v1/internal/tick`` does for one (the same body, ``oracle.ticker.body``): advance
+its runs, sweep its Claude account pool, run its queued built-in model jobs and, last,
+make the calls a member's disable or a run's cancel still owes (follow-ups). One
+company's failure stops none of the others, and the answer carries counts only (no ids,
+no error text).
 
 The account sweep runs only when the company's last one completed more than
 ``ORACLE_CLAUDE_SWEEP_SECONDS`` ago, and never within five minutes of it, even with that
@@ -38,6 +40,7 @@ import time
 import uuid
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
@@ -45,12 +48,12 @@ from sqlalchemy import select, text
 from oracle.auth.jwks import KeysUnavailable
 from oracle.claude_accounts import sweep as claude_sweep
 from oracle.config import get_settings
+from oracle.connections import service as connections_service
 from oracle.db import get_engine
 from oracle.jobs import worker as llm_jobs
 from oracle.models import Tenant
-from oracle.runs import service as runs_service
 from oracle.tenancy import tenant_session, unscoped_session
-from oracle.ticker import idtoken
+from oracle.ticker import body, idtoken
 
 log = logging.getLogger(__name__)
 
@@ -106,6 +109,9 @@ class TickerOut(BaseModel):
     runs: _Runs = Field(default_factory=_Runs)
     claude_accounts: _ClaudeAccounts = Field(default_factory=_ClaudeAccounts)
     llm_jobs: _LlmJobs = Field(default_factory=_LlmJobs)
+    # Calls a member's disable or a run's cancel still owed (a provider revoke, a runtime
+    # cancel), made.
+    member_follow_ups: int = 0
     timed_out: bool = False
 
 
@@ -147,9 +153,9 @@ class _Failures:
             self.out.companies.failed += 1
 
 
-async def _sweep_if_due(tenant_id: uuid.UUID, out: TickerOut) -> None:
+def _count_sweep(result: dict[str, Any] | None, out: TickerOut) -> None:
     acc = out.claude_accounts
-    swept = claude_sweep.summarise_sweep(await claude_sweep.sweep_if_due(tenant_id))
+    swept = claude_sweep.summarise_sweep(result)
     acc.not_due += swept.lease == "not_due"
     acc.reclaimed += swept.reclaimed
     acc.examined += swept.examined
@@ -161,22 +167,45 @@ async def _sweep_if_due(tenant_id: uuid.UUID, out: TickerOut) -> None:
 
 
 async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failures) -> None:
-    """One company's runs and account sweep, each on its own."""
-    try:
-        async with tenant_session(tenant_id) as db:
-            runs = await runs_service.tick(db)
+    """One company's runs and account sweep (``oracle.ticker.body``), each on its own."""
+    async with tenant_session(tenant_id) as db:
+        company = await body.tick_company(db, tenant_id)
+    if company.runs is not None:
+        runs = company.runs
         out.runs.checked += runs.runs_checked
         out.runs.segments_finished += runs.segments_finished
         out.runs.advanced += runs.runs_advanced
         out.runs.paused += runs.runs_paused
         out.runs.errors += len(runs.errors)
-    except Exception:
-        log.exception("run ticker: runs failed for company %s", tenant_id)
+    if company.swept:
+        _count_sweep(company.sweep, out)
+    if company.errors:
         failures.add(tenant_id)
-    try:
-        await _sweep_if_due(tenant_id, out)
-    except Exception:
-        log.exception("run ticker: the Claude account sweep failed for company %s", tenant_id)
+
+
+# Follow-ups start only with at least this much of the tick's hard limit left.
+SETTLE_MIN_SECONDS = 1.0
+
+
+async def _settle_company(
+    tenant_id: uuid.UUID,
+    http: httpx.AsyncClient,
+    out: TickerOut,
+    failures: _Failures,
+    started: float,
+) -> None:
+    """Last, as ``POST /v1/internal/tick`` does: the calls a member's disable or a run's
+    cancel still owes (``oracle.ticker.body.settle_company``), in the time the tick has
+    left; what does not fit waits for the next tick."""
+    budget = HARD_LIMIT_SECONDS - SETTLE_MIN_SECONDS - (time.monotonic() - started)
+    if budget <= 0:
+        return
+    async with tenant_session(tenant_id) as db:
+        company = await body.settle_company(
+            db, tenant_id, http, body.CompanyTick(), budget_seconds=budget
+        )
+    out.member_follow_ups += company.follow_ups
+    if company.errors:
         failures.add(tenant_id)
 
 
@@ -229,6 +258,10 @@ async def _tick_every_company(out: TickerOut, started: float) -> None:
         ticked.append(tenant_id)
         await _tick_company(tenant_id, out, failures)
     await _run_jobs(ticked, out, failures, started)
+    # Last, inside the tick's hard limit, each within its own budget.
+    async with connections_service.http_client() as http:
+        for tenant_id in ticked:
+            await _settle_company(tenant_id, http, out, failures, started)
 
 
 @router.post("/internal/scheduler/tick", include_in_schema=False)

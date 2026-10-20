@@ -18,10 +18,8 @@ from fastapi.responses import PlainTextResponse
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role, require_role_now
 from oracle.claude_accounts.sweep import summarise_sweep
-from oracle.claude_accounts.sweep import sweep_if_due as sweep_claude_accounts_if_due
 from oracle.connections.router import ProviderHttp
 from oracle.jobs.worker import run_pending as run_llm_jobs
-from oracle.members import service as members_service
 from oracle.runs import service
 from oracle.runs.schemas import (
     CancelAgain,
@@ -42,6 +40,7 @@ from oracle.runs.schemas import (
 from oracle.swarm import Features, RuntimeUnavailable, get_runtime
 from oracle.swarm.runtime import MCP_SERVER
 from oracle.swarm.settings import get_runtime_settings
+from oracle.ticker import body as tick_body
 from oracle.ticker import router as scheduler_tick
 
 router = APIRouter(prefix="/v1", tags=["runs"])
@@ -283,20 +282,23 @@ async def tick(principal: CurrentPrincipal, db: TenantDB, http: ProviderHttp) ->
         # The tick submits workflows and spends: a read-only token does not run it.
         raise HTTPException(status.HTTP_403_FORBIDDEN, "A viewer API token cannot run the tick")
     started = time.monotonic()
+    # The scheduled ticker's body, for this company (oracle.ticker.body).
+    company = await tick_body.tick_company(db, principal.tenant_id, principal)
     try:
-        out = await service.tick(db, principal)
-        # Only when due, at most every five minutes however often this is called.
-        out.claude_accounts = summarise_sweep(
-            await sweep_claude_accounts_if_due(principal.tenant_id)
-        )
         # The scheduled tick's time limit, from the start of this request: no job is
         # claimed, and no call started, that could not finish inside it.
         budget = scheduler_tick.HARD_LIMIT_SECONDS - (time.monotonic() - started)
-        out.llm_jobs = await run_llm_jobs(principal.tenant_id, budget_seconds=budget)
+        llm_jobs = await run_llm_jobs(principal.tenant_id, budget_seconds=budget)
     finally:
         # Last, within their own time budget: they never hold up runs and jobs, and a
         # failure of those never skips them.
-        await db.rollback()
-        follow_ups = await members_service.run_follow_ups(db, principal, http)
-    out.member_follow_ups = follow_ups
+        await tick_body.settle_company(db, principal.tenant_id, http, company, principal)
+    if company.errors:
+        raise company.errors[0]
+    out = company.runs
+    assert out is not None
+    # Only when due, at most every five minutes however often this is called.
+    out.claude_accounts = summarise_sweep(company.sweep)
+    out.llm_jobs = llm_jobs
+    out.member_follow_ups = company.follow_ups
     return out
