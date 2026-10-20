@@ -242,13 +242,15 @@ test("a rejected draft reads Draft rejected, with one summary line and every pro
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(prd.getByTestId("draft-problems")).toHaveCount(0);
   await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const hide = prd.getByRole("button", { name: "Hide the problems" });
+  await expect(hide).toHaveAttribute("aria-expanded", "true");
   const list = prd.getByTestId("draft-problems");
   await expect(list.getByRole("listitem")).toHaveCount(126);
   await expect(list.getByRole("listitem").first()).toHaveText("citation #1 (k1) is invalid: source 'x' isn't accepted");
   await expect(list.getByRole("listitem").nth(24)).toHaveText("Line 80: [c:k1] in section 's0' is not defined in front matter 'citations'");
-  await prd.getByRole("button", { name: "Hide the problems" }).click();
+  await hide.click();
   await expect(prd.getByTestId("draft-problems")).toHaveCount(0);
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
 
   // The runs list says it too.
   await page.getByTestId("nav-runs").click();

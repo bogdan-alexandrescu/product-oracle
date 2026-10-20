@@ -212,6 +212,14 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
     return _jsonable(data)
 
 
+def _citation_field(error: Any) -> str:
+    """What is wrong with one field of a citation: the field, and a source this Oracle does
+    not accept by name (the run page groups refused citations by it)."""
+    if tuple(error["loc"]) == ("source",) and error["type"] == "literal_error":
+        return f"source '{error['input']}' isn't accepted"
+    return ".".join(map(str, error["loc"]))
+
+
 def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn]:
     if raw is None:
         return []
@@ -229,7 +237,7 @@ def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn
                 {**item, "id": key} if isinstance(item, dict) else item
             )
         except ValidationError as exc:
-            fields = ", ".join(".".join(map(str, e["loc"])) for e in exc.errors())
+            fields = ", ".join(_citation_field(e) for e in exc.errors())
             problems.append(
                 ImportProblem(
                     code="invalid_citation",

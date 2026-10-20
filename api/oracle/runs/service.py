@@ -136,7 +136,7 @@ from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import schedule
-from oracle.runs import flows, roadmap, workflow
+from oracle.runs import flows, rejection, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -427,7 +427,18 @@ def _summary(
         import_failed=_import_failed_text(run, refs),
         can_retry_import=_import_failed(run) is not None,
         progress=_progress(run, segments) if segments is not None else None,
+        draft_rejected=_draft_rejected(segments) if segments is not None else None,
     )
+
+
+def _draft_rejected(segments: list[RunSegment]) -> str | None:
+    """The summary of a draft the run's segments left that Oracle refused to import (the
+    runs list's "Draft rejected"), else None."""
+    for s in segments:
+        imp = (s.artifacts or {}).get("import")
+        if isinstance(imp, dict) and imp.get("error"):
+            return imp.get("summary") or imp["error"]
+    return None
 
 
 def _import_failed(run: Run) -> dict[str, Any] | None:
@@ -2395,7 +2406,13 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             )
         except DraftError as exc:
             problems = "; ".join(f"[{p.code}] {p.message}" for p in exc.problems)
-            return {"error": f"{name} was rejected: {problems}"}
+            # The string stays (older readers); the run page, the Inbox and MCP read the
+            # problems and their summary.
+            return {
+                "error": f"{name} was rejected: {problems}",
+                "problems": [p.model_dump(mode="json") for p in exc.problems],
+                "summary": rejection.summary(name, exc.problems),
+            }
         except (docs_service.NotFoundError, docs_service.ImportConflictError) as exc:
             return {"error": f"{name} was not imported: {exc}"}
         if not result.created and source_id and result.version.source is None:

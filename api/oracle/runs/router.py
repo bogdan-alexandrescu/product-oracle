@@ -216,7 +216,8 @@ async def retry_draft_import(
     run_id: uuid.UUID, seq: int, principal: CurrentPrincipal, db: TenantDB
 ) -> RunOut:
     """Import a segment's draft again after its import at segment end was refused
-    (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).
+    (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``,
+    its problems ``draft_import.problems`` and their summary ``draft_import.summary``).
     While the run waits at that segment's review: the review's approver role or above, and
     nothing is decided (the review stays open for a person). After the run finished with
     the review approved past the refusal: owners only, while no version from the run

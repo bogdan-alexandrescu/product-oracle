@@ -2661,7 +2661,8 @@ export interface paths {
         /**
          * Retry Draft Import
          * @description Import a segment's draft again after its import at segment end was refused
-         *     (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).
+         *     (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``,
+         *     its problems ``draft_import.problems`` and their summary ``draft_import.summary``).
          *     While the run waits at that segment's review: the review's approver role or above, and
          *     nothing is decided (the review stays open for a person). After the run finished with
          *     the review approved past the refusal: owners only, while no version from the run
@@ -7789,6 +7790,13 @@ export interface components {
             warnings: string[];
             /** Error */
             error?: string | null;
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["ImportProblem"][];
+            /** Summary */
+            summary?: string | null;
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
         };
@@ -12300,6 +12308,8 @@ export interface components {
              * @default false
              */
             can_retry_import: boolean;
+            /** Draft Rejected */
+            draft_rejected?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
@@ -12439,6 +12449,8 @@ export interface components {
              * @default false
              */
             can_retry_import: boolean;
+            /** Draft Rejected */
+            draft_rejected?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
         };
         /**

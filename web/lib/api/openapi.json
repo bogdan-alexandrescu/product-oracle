@@ -9430,7 +9430,7 @@
           "runs"
         ],
         "summary": "Retry Draft Import",
-        "description": "Import a segment's draft again after its import at segment end was refused\n(``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).\nWhile the run waits at that segment's review: the review's approver role or above, and\nnothing is decided (the review stays open for a person). After the run finished with\nthe review approved past the refusal: owners only, while no version from the run\nexists; the run's checkpoints do not change. Imported, the run names the document and\nthe error is replaced by the import; refused again, by the new error (200 either way:\nread ``draft_import``). 409 when there is nothing to retry (imported already, a version\nfrom the run exists, no draft file, changes requested, the run cancelled or failed).\nAudited. Not the stopped advance of ``retry_import_run``.",
+        "description": "Import a segment's draft again after its import at segment end was refused\n(``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``,\nits problems ``draft_import.problems`` and their summary ``draft_import.summary``).\nWhile the run waits at that segment's review: the review's approver role or above, and\nnothing is decided (the review stays open for a person). After the run finished with\nthe review approved past the refusal: owners only, while no version from the run\nexists; the run's checkpoints do not change. Imported, the run names the document and\nthe error is replaced by the import; refused again, by the new error (200 either way:\nread ``draft_import``). 409 when there is nothing to retry (imported already, a version\nfrom the run exists, no draft file, changes requested, the run cancelled or failed).\nAudited. Not the stopped advance of ``retry_import_run``.",
         "operationId": "retry_draft_import",
         "security": [
           {
@@ -25998,6 +25998,25 @@
             ],
             "title": "Error"
           },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/ImportProblem"
+            },
+            "type": "array",
+            "title": "Problems",
+            "default": []
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
           "source": {
             "anyOf": [
               {
@@ -38390,6 +38409,17 @@
             "title": "Can Retry Import",
             "default": false
           },
+          "draft_rejected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Rejected"
+          },
           "progress": {
             "anyOf": [
               {
@@ -38880,6 +38910,17 @@
             "type": "boolean",
             "title": "Can Retry Import",
             "default": false
+          },
+          "draft_rejected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Rejected"
           },
           "progress": {
             "anyOf": [
