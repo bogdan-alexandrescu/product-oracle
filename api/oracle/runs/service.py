@@ -2443,6 +2443,35 @@ def _claimed(segment: RunSegment) -> bool:
     return at is not None and (_now() - at).total_seconds() < CLAIM_SECONDS
 
 
+# How long a cancel's follow-up, recorded before its call, waits before the tick may make
+# it: the request that recorded it is making the call meanwhile.
+CANCEL_FOLLOW_UP_GRACE_SECONDS = 120
+
+
+async def _settle_cancel_follow_ups(
+    db: AsyncSession, follow_ups: dict[str, uuid.UUID], done: dict[str, "_Cancelled"]
+) -> None:
+    """Record the outcome of the cancel calls :func:`cancel` made on their follow-ups, in
+    the transaction that records them on the run: from here a cancel not confirmed is the
+    run's to retry (``cancel_pending`` or a background search), not the follow-up's."""
+    from oracle.members.models import MemberFollowUp
+
+    for workflow_id, follow_up_id in follow_ups.items():
+        row = await db.get(MemberFollowUp, follow_up_id, with_for_update=True)
+        if row is None or row.status != "pending":
+            continue
+        out = done.get(workflow_id)
+        confirmed = out is not None and (out.error is None or out.gone)
+        row.attempts += 1
+        row.outcome = "cancelled" if confirmed else "followed_by_run"
+        row.last_error = (
+            None if confirmed or out is None or out.error is None else _shown(out.error)
+        )
+        row.status = "done"
+        row.done_at = _now()
+        row.next_attempt_at = None
+
+
 async def cancel_at_runtime(db: AsyncSession, follow_ups: list[uuid.UUID]) -> None:
     """Make the run_cancel follow-ups a cancel recorded (:func:`_cancel_follow_up`),
     after it committed (outside the review gate). A cancel the runtime does not confirm
@@ -5517,15 +5546,27 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     # What to ask SwarmCloud, read without the lock.
     wf = _live(run)
     ids: list[str] = []
+    # The segment each workflow is cancelled for (its follow-up's target).
+    targets: dict[str, uuid.UUID] = {}
+    segments = await _segments(db, run.id)
     if wf is not None and wf.get("id") and run.status not in FINAL:
         ids.append(wf["id"])  # a stuck cancel too: one more try
+        seg = next((x for x in segments if x.seq == wf.get("seq")), None) or next(
+            (x for x in segments if x.swarm_workflow_id == wf["id"]), None
+        )
+        if seg is not None:
+            targets[wf["id"]] = seg.id
     lookups: dict[tuple[str, str | None], str | None] = {}
-    for s in await _segments(db, run.id):
+    lost_in: dict[tuple[str, str | None], uuid.UUID] = {}
+    for s in segments:
         lost = _art(s).get("lost")
         if s.status == "running" and s.swarm_workflow_id:
             ids.append(s.swarm_workflow_id)
+            targets.setdefault(s.swarm_workflow_id, s.id)
         elif s.status == "pending" and isinstance(lost, dict) and lost.get("label"):
             lookups[(lost["label"], lost.get("submitted_at"))] = lost.get("submitted_at")
+            lost_in[(lost["label"], lost.get("submitted_at"))] = s.id
+    member_id = run.created_by or run.id
     await db.rollback()
     found: dict[tuple[str, str | None], str | None | RuntimeUnavailable] = {}
     for key, since in lookups.items():
@@ -5536,12 +5577,24 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
             found[key] = exc
         if isinstance(found[key], str):
             ids.append(found[key])  # type: ignore[arg-type]
-    done = {i: await _cancel_call({"id": i}) for i in dict.fromkeys(ids)}
+            targets.setdefault(found[key], lost_in[key])  # type: ignore[arg-type]
+    ids = list(dict.fromkeys(ids))
+    # Each cancel is recorded as a follow-up before SwarmCloud is called (no lock held):
+    # a crash in between leaves it for the tick, after a grace that keeps the tick off
+    # the call this request is making. Settled below, with the run's change.
+    follow_ups = {i: _cancel_follow_up(db, member_id, targets.get(i, run_id), i) for i in ids}
+    for row in follow_ups.values():
+        row.next_attempt_at = _now() + timedelta(seconds=CANCEL_FOLLOW_UP_GRACE_SECONDS)
+    await db.commit()
+    follow_up_ids = {i: row.id for i, row in follow_ups.items()}
+    done = {i: await _cancel_call({"id": i}) for i in ids}
 
     # Under the lock, as the run is now.
     run = await _get_run(db, run_id, lock=True)
+    await _settle_cancel_follow_ups(db, follow_up_ids, done)
     if run.status in FINAL:
         if not await _stop_cancelling(db, run):
+            await db.commit()  # the follow-ups' outcomes
             raise RunError(f"run is already {run.status}")
         await audit.record(db, principal, "run.cancel_stopped", "run", run.id, {})
         await db.commit()
