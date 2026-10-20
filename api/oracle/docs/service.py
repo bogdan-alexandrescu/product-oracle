@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes
+from oracle import audit, changes, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.docs import layers
 from oracle.docs.diff import diff_sections
@@ -326,7 +326,8 @@ async def import_draft(
     Raises :class:`DraftError` (422), :class:`NotFoundError` (404, ``doc`` is an
     unknown id) or :class:`ImportConflictError` (409, lost a concurrent import race).
     """
-    draft = parse_draft(markdown)
+    # Off the event loop: the draft is untrusted text (oracle.safe_yaml bounds its cost).
+    draft = await safe_yaml.run_parse(parse_draft, markdown)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template
 
