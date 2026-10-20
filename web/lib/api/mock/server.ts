@@ -122,7 +122,7 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     body_md: s.body,
     body_text: plainText(s.body),
     content_hash: hash(s.heading + "\n" + s.body),
-    citation_keys: [...new Set([...s.body.matchAll(/\[c:([\w.-]+)\]/g)].map((m) => m[1]))],
+    citation_keys: [...new Set([...s.body.matchAll(/\[c:([\w.:-]+)\]/g)].map((m) => m[1]))],
     layer: layered.brief.has(s.key) ? ("brief" as const) : ("detail" as const),
     notes: layered.brief.has(s.key) ? presenterNotes(s.body) : null,
     spec_states: doc.kind === "spec" ? specStates(s.key, s.body, false, depth) : [],

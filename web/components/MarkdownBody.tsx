@@ -58,7 +58,9 @@ function docLinkHref(href: string): string | null {
 }
 
 function label(nodes: Inline[]): string {
-  return nodes.map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" ? "" : label(n.c))).join("");
+  return nodes
+    .map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" || n.t === "img" ? "" : label(n.c)))
+    .join("");
 }
 
 /** The detail sections opened from the links of the block just rendered. */
@@ -212,6 +214,11 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
           </span>
         );
       }
+      case "img":
+        // An https image only; its alt text is an attribute, not anchorable text (the
+        // API checks a spec's labels the same way: an image is no visible text).
+        // eslint-disable-next-line @next/next/no-img-element
+        return /^https:\/\//i.test(n.src) ? <img key={k} src={n.src} alt={n.alt} loading="lazy" className="max-w-full" /> : null;
       case "cite": {
         const c = ctx.citations.get(n.key);
         return <CitationChip key={k} citeKey={n.key} citation={c?.citation} number={c?.number} />;
@@ -244,7 +251,7 @@ function leaves(blocks: Block[]): string[] {
   const walk = (nodes: Inline[]) => {
     for (const n of nodes) {
       if (n.t === "text" || n.t === "code") out.push(n.v);
-      else if (n.t !== "cite") walk(n.c);
+      else if (n.t !== "cite" && n.t !== "img") walk(n.c);
     }
   };
   for (const b of blocks) {

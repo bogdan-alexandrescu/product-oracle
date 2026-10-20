@@ -31,7 +31,7 @@ from oracle.baseline.models import Edge, Entity
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import SLUG_RE as PARSER_SLUG_RE
-from oracle.docs.parser import DraftError, is_uuid
+from oracle.docs.parser import DraftError, ParsedDraft, is_uuid
 from oracle.docs.schemas import ImportProblem
 from oracle.review import service as review_service
 from oracle.runs import service as runs_service
@@ -271,7 +271,14 @@ async def create_request(
     subject = feature.title if feature else entities[0].title
     kind = "tech_brief" if body.depth == "brief" else "engineering_spec"
     noun = "technical brief" if body.depth == "brief" else "engineering spec"
-    title = body.title or f"{subject}: {noun}"
+    # One line (the title heads the spec as '# {title} {#spec}'), never one of Oracle's
+    # labels or notes (E1).
+    title = " ".join((body.title or f"{subject}: {noun}").split())
+    if not title or contract.title_takes_label(title):
+        raise Invalid(
+            "the spec's title may not be blank or read as Oracle's note ('Decided in the "
+            "approved PRD') or its Decided and Proposed labels"
+        )
     if body.document:
         if await docs_service.find_document(db, body.document) is not None:
             raise Invalid(
@@ -790,6 +797,7 @@ async def check_edit(
     request: ArtifactRequest,
     previous: ArtifactVersion | None,
     markdown: str,
+    draft: ParsedDraft | None = None,
 ) -> None:
     """E1: an edit of a spec version (the API, ``push_draft``, ``oracle push``) may change
     only its engineering parts and add sections, outside Oracle's parts and not under
@@ -819,7 +827,9 @@ async def check_edit(
             if dv is not None:
                 texts[name] = dv.markdown
     # Off the event loop, the edit parsed once: it is untrusted text (oracle.safe_yaml).
-    check = await safe_yaml.run_parse(contract.edit_check, markdown, inputs=inputs, **texts)
+    check = await safe_yaml.run_parse(
+        contract.edit_check, markdown, inputs=inputs, draft=draft, **texts
+    )
     structure = [
         ImportProblem(code=p.code, message=p.message, section_key=p.section) for p in check.problems
     ]

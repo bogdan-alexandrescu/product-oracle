@@ -50,7 +50,7 @@ TEMPLATES = HERE / "templates"
 STATIC = HERE / "static"
 
 # [c:c1] or [c:c1, c2]
-_CITE = re.compile(r"\[c:\s*([A-Za-z0-9_.\-]+(?:\s*,\s*[A-Za-z0-9_.\-]+)*)\s*\]")
+_CITE = re.compile(r"\[c:\s*([A-Za-z0-9_.:\-]+(?:\s*,\s*[A-Za-z0-9_.:\-]+)*)\s*\]")
 # Parsers normally strip the id from the heading; this guards against one that does not.
 _HEADING_ID = re.compile(r"\s*\{#[^}]*\}\s*$")
 

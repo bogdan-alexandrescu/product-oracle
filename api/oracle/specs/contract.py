@@ -34,11 +34,13 @@ from typing import Any, Literal
 import yaml
 from markdown_it import MarkdownIt
 
+from oracle.docs import layers
 from oracle.docs.parser import (
     CITATION_STRIP_RE,
     DraftError,
     ParsedDraft,
     parse_draft,
+    prepared,
     split_front_matter,
 )
 from oracle.docs.schemas import ImportProblem
@@ -429,7 +431,9 @@ def compose(agent_md: str, inputs: SpecInputs) -> Composed:
         yaml.safe_dump(front, sort_keys=False, allow_unicode=True).rstrip(),
         "---",
         "",
-        f"# {inputs.title} {{#{TITLE_ID}}}",
+        # The request's title as one escaped line (it may hold newlines, '{#id}' or
+        # markup); one that reads as a label is refused when the spec is requested.
+        f"# {_oracle_text(inputs.title, inputs.slug)} {{#{TITLE_ID}}}",
         "",
         intro,
         "",
@@ -619,7 +623,7 @@ def _refuse(code: str, message: str, key: str | None = None) -> DraftError:
 def _fenced_lines(body: str, offset: int) -> set[int]:
     """0-based lines (of the whole file) inside code blocks, fenced or indented."""
     out: set[int] = set()
-    for tok in _HTML_MD.parse(body):
+    for tok in _BLOCK_MD.parse(body):
         if tok.type in ("fence", "code_block") and tok.map:
             out.update(range(tok.map[0] + offset, tok.map[1] + offset))
     return out
@@ -711,8 +715,10 @@ def strip_state_labels(markdown: str) -> str:
     """The markdown without Oracle's state labels (each with the blank line before it) and
     its Added sources comment: they are shown, never stored, whoever wrote them. Lines
     inside code blocks are left alone. (A body that started right under its heading keeps
-    the blank line :func:`label_markdown` put after the label: the same sections.)"""
-    text = markdown.replace("\r\n", "\n")
+    the blank line :func:`label_markdown` put after the label: the same sections.) The
+    text is read as :func:`parse_draft` reads it (:func:`prepared`), so the import parses
+    the result once."""
+    text = prepared(markdown)
     lines = text.split("\n")
     fm, body, offset = split_front_matter(text)
     fenced = _fenced_lines(body, offset)
@@ -742,7 +748,10 @@ PRD_PART_TITLES = {k: SECTIONS_BY_KEY[k].title for k in PRD_PARTS}
 # like, lower case). Only ever compared with Oracle's few fixed phrases, so non-Latin text
 # is refused only when it reads as one of them.
 _PLAIN_MD = MarkdownIt("commonmark", {"html": False}).enable("strikethrough")
-_HTML_MD = MarkdownIt("commonmark", {"html": True}).enable(["table", "strikethrough"])
+# Blocks as the views read them (tables on). Never with HTML on: markdown-it's inline
+# HTML rule is quadratic on many unclosed '<!--' (or '<?', '<a b="'), and a spec holds no
+# raw HTML anyway (:func:`_html_and_data` finds it in the text tokens, linearly).
+_BLOCK_MD = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
 _EMPHASIS = re.compile(r"[*_`~]+")
 # Default_Ignorable_Code_Point (DerivedCoreProperties.txt) outside category Cf: what
 # renders as nothing, or as blank space, yet is a letter or a mark.
@@ -782,8 +791,7 @@ def _inline_plain(text: str) -> str:
                 out.append(tok.content)
             elif tok.type in ("softbreak", "hardbreak"):
                 out.append(" ")
-            elif tok.type == "image":
-                out.append(tok.content)
+            # An image is nothing: its alt text is not visible text.
     return "".join(out)
 
 
@@ -800,7 +808,9 @@ def _squashed(text: str) -> str:
 # A leading 'decided' or 'proposed' followed by any separator (a dot, bullet, dash,
 # colon...) reads as a state label.
 _LABEL_START = re.compile(r"^[\W_]*(?:decided|proposed)\s*[^\w\s]")
-_LIST_MARKER = re.compile(r"^\s*(?:(?:>|[-*+]|\d{1,9}[.)])\s*)+")
+# What renders before a block's text, not as text: a list or quote marker, a task-list
+# box ('[x]'), a footnote marker ('[^1]:').
+_LIST_MARKER = re.compile(r"^\s*(?:(?:>|[-*+]|\d{1,9}[.)]|\[[ x]\]|\[\^[^\]\s]*\]:?)\s*)+")
 # Oracle's notes and labels, as skeletons squashed: no body text or added heading may
 # take them.
 _NOTES = ("decidedintheapprovedprd", "decidedwiththeprd", "inthebaselinedecidedwiththeprd")
@@ -818,7 +828,8 @@ def _takes_plain(plain: str, anywhere: bool) -> bool:
     ``anywhere``."""
     sk = skeleton(_LIST_MARKER.sub("", skeleton(plain)))
     squashed = re.sub(r"[\W_]+", "", sk)
-    if _LABEL_START.match(sk):
+    # A bare 'Decided' or 'Proposed' reads as a label too.
+    if _LABEL_START.match(sk) or squashed in ("decided", "proposed"):
         return True
     if anywhere:
         return any(n in squashed for n in _PHRASES)
@@ -830,52 +841,128 @@ def _takes_label(text: str, anywhere: bool) -> bool:
     return _takes_plain(_inline_plain(_visible(text)), anywhere)
 
 
+def title_takes_label(title: str) -> bool:
+    """A spec request's title reads as one of Oracle's labels or notes (as a heading)."""
+    return _takes_label(_heading_plain(title), anywhere=True)
+
+
 def _plain_runs(body: str) -> list[str]:
     """The rendered text of a body, block by block (a paragraph, a heading, every table
-    cell, a list item's paragraph): soft breaks read as spaces, a hard break starts a
-    run of its own, inline HTML renders as nothing; each line of a code block is a run."""
+    cell, a list item's paragraph): soft breaks read as spaces; a hard break starts a run
+    of its own (and the block is read joined as well); the end of emphasis or a code span
+    reads as a separator ('**Decided** R-9' looks like a label); images render as nothing
+    (alt text is not visible text); each line of a code block is a run. (Raw HTML is
+    refused before, :func:`_html_and_data`.)"""
     runs: list[str] = []
-    for tok in _HTML_MD.parse(body):
+    for tok in _BLOCK_MD.parse(body):
         if tok.type in ("fence", "code_block"):
             runs += tok.content.split("\n")
         if tok.type != "inline":
             continue
         run: list[str] = []
+        joined: list[str] = []
         for child in tok.children or []:
-            if child.type in ("text", "code_inline"):
+            if child.type == "text":
                 run.append(child.content)
+            elif child.type == "code_inline":
+                run.append(f"{child.content} · ")
+            elif child.type in ("strong_close", "em_close", "s_close"):
+                run.append(" · ")
             elif child.type == "softbreak":
                 run.append(" ")
             elif child.type == "hardbreak":
                 runs.append("".join(run))
+                joined += [*run, " "]
                 run = []
-            elif child.type == "image":
-                run.append(child.content)
         runs.append("".join(run))
+        if joined:
+            runs.append("".join(joined + run))
     return runs
 
 
-def _inline_comments(body: str) -> bool:
-    """A body holds an inline HTML comment (one inside a paragraph, on one line)."""
-    return any(
-        child.type == "html_inline" and child.content.startswith("<!--")
-        for tok in _HTML_MD.parse(body)
-        if tok.type == "inline"
-        for child in tok.children or []
-    )
+def _section_text(s) -> str:
+    """A section's heading and body as one text (the heading as a paragraph of its own)."""
+    return f"{s.heading}\n\n{s.body_md}"
+
+
+def _has_comment_syntax(text: str) -> bool:
+    """E1 (owner, 2026-10-20): HTML comment syntax, anywhere (code included)."""
+    return "<!--" in text or "-->" in text
 
 
 def _comment_spans(text: str) -> bool:
     """A section's text opens a comment it does not close (or closes one it did not
-    open), or holds a comment that hides a heading (one that ran into the next section)."""
-    if any(_HEADING_LINE.search(m.group(0)) for m in _COMMENT.finditer(text)):
-        return True
-    rest = _COMMENT.sub("", text)
-    return "<!--" in rest or "-->" in rest
+    open), or holds a comment that hides a heading (one that ran into the next section).
+    One linear pass (a lazy-dot regex is quadratic on many unclosed '<!--')."""
+    pos = 0
+    while (start := text.find("<!--", pos)) >= 0:
+        end = text.find("-->", start + 4)
+        if end < 0:
+            return True
+        if _HEADING_LINE.search(text, start, end):
+            return True
+        pos = end + 3
+    return "-->" in layers.strip_comments(text)
 
 
-_COMMENT = re.compile(r"<!--.*?-->", re.S)
 _HEADING_LINE = re.compile(r"^ {0,3}#{1,6}(?:\s|$)", re.M)
+# A data: URL as a link or image destination, or a reference definition, as written (a
+# data: URL markdown-it does not accept stays text here but may render elsewhere).
+_DATA_DEST = re.compile(r"\]\(\s*(?:<\s*)?data:|^ {0,3}\[[^\]\n]+\]:\s*(?:<\s*)?data:", re.I | re.M)
+
+
+def _is_data_url(url: str | None) -> bool:
+    return (url or "").strip().lower().startswith("data:")
+
+
+# Text markdown-it with HTML on would read as HTML (a block or an inline tag): an open or
+# closing tag ('<span', '</div'), a comment, declaration or CDATA ('<!'), a processing
+# instruction ('<?'). Not an autolink ('<https://...>', '<a@b.c>').
+_TAG_LIKE = re.compile(r"<(?:/?[A-Za-z][A-Za-z0-9-]*(?=[\s/>]|$)|[!?])")
+
+
+def _html_and_data(text: str) -> tuple[bool, bool]:
+    """(raw HTML, a data: URL) in ``text``: tag-like text outside code (as markdown-it
+    with HTML on would read it, a block or an inline tag; escaped text that renders as a
+    tag counts too), and an image or link whose URL is a data: URL. Linear."""
+    data_found = bool(_DATA_DEST.search(text))
+    if not _TAG_LIKE.search(text):
+        # No tag-like text at all: nothing to tell apart from code, no parse.
+        return False, data_found
+    html_found = False
+    for tok in _BLOCK_MD.parse(text):
+        for child in tok.children or []:
+            if child.type == "text" and _TAG_LIKE.search(child.content):
+                html_found = True
+            elif child.type in ("image", "link_open") and _is_data_url(
+                child.attrGet("src") or child.attrGet("href")
+            ):
+                data_found = True
+    return html_found, data_found
+
+
+def _renderings(text: str) -> list[str]:
+    """What each output renders of a body (E1, owner, 2026-10-20): the body itself (the
+    document view, the markdown), without its citation markers (they render as chips or
+    footnote numbers), and as slides and exports show it (:func:`layers.slide_body`, no
+    notes blocks or comments), with and without its citation markers."""
+    slide = layers.slide_body(text)
+    return list(
+        dict.fromkeys(
+            (text, CITATION_STRIP_RE.sub("", text), slide, CITATION_STRIP_RE.sub("", slide))
+        )
+    )
+
+
+def _body_takes_label(text: str) -> bool:
+    return any(
+        _takes_plain(run, anywhere=False) for out in _renderings(text) for run in _plain_runs(out)
+    )
+
+
+def _heading_plain(heading: str) -> str:
+    """A heading without its citation markers (they render as chips or numbers)."""
+    return CITATION_STRIP_RE.sub("", heading).strip()
 
 
 def _editable_text(key: str, body: str) -> str:
@@ -891,14 +978,18 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
     at once:
 
     - a section heading that is not a top-level ATX '#' heading (setext, or inside a list
-      or block quote), or a raw HTML block anywhere (comments, <details>, <script>...);
+      or block quote);
+    - in any section's heading or body (E1, owner, 2026-10-20): raw HTML (a block or an
+      inline tag), HTML comment syntax ('<!--', '-->') or a data: URL;
     - a section added, or moved, inside the subtree of Product requirements, the
       acceptance criteria or Sources and data points, or one of Oracle's parts under an
       added level-1 heading;
     - a template section's title changed (only bodies are editable);
-    - a heading that takes a PRD part's title, Oracle's note ('Decided in the approved
-      PRD') or a state label, or a body line (in a part an edit may change) that starts
-      with a state label or Oracle's note, in any spelling (:func:`normalised`);
+    - a heading (the title's included) that takes a PRD part's title, Oracle's note
+      ('Decided in the approved PRD') or a state label, citation markers aside, or a block
+      (in a part an edit may change) that starts with a state label or Oracle's note, in
+      any spelling (:func:`normalised`) and in every output's rendering of the body
+      (:func:`_renderings`);
     - an HTML comment left open across sections."""
     if draft is None:
         try:
@@ -913,20 +1004,41 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
     def section_at(line: int) -> str | None:
         return next((k for start, k in reversed(starts) if start <= line), None)
 
-    seen_html: set[str | None] = set()
-    for tok in _HTML_MD.parse(body):
-        if tok.type == "html_block" and tok.map:
-            key = section_at(tok.map[0] + offset + 1)
-            if key not in seen_html:
-                seen_html.add(key)
-                problems.append(
-                    Problem(
-                        "raw_html",
-                        "A spec may not hold raw HTML blocks (comments, <details>, <script>, "
-                        "<pre>...): write it as markdown.",
-                        key,
-                    )
+    # E1 (owner, 2026-10-20): no section's heading or body holds raw HTML, HTML comment
+    # syntax or a data: URL, whatever renders it.
+    commented: set[str] = set()
+    for s in draft.sections:
+        text = _section_text(s)
+        if _has_comment_syntax(text):
+            # Refused whatever else it holds; not parsed further (linear checks only).
+            commented.add(s.section_key)
+            problems.append(
+                Problem(
+                    "inline_comment",
+                    "A spec may not hold HTML comment syntax ('<!--' or '-->'), in code "
+                    "included: write it as markdown.",
+                    s.section_key,
                 )
+            )
+            continue
+        raw_html, data_url = _html_and_data(text)
+        if raw_html:
+            problems.append(
+                Problem(
+                    "raw_html",
+                    "A spec may not hold raw HTML (<span>, <details>, <script>, <pre>...), "
+                    "inline or as a block: write it as markdown.",
+                    s.section_key,
+                )
+            )
+        if data_url:
+            problems.append(
+                Problem(
+                    "data_url",
+                    "A spec may not hold data: URLs in images or links: link to an https URL.",
+                    s.section_key,
+                )
+            )
     owner: tuple[str, int] | None = None
     level_one: str | None = None
     titles = {_squashed(t): k for k, t in PRD_PART_TITLES.items()}
@@ -962,6 +1074,16 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
             )
         if owner is not None and s.level <= owner[1]:
             owner = None
+        heading = _heading_plain(s.heading)
+        if s.section_key == TITLE_ID and _takes_label(heading, anywhere=True):
+            problems.append(
+                Problem(
+                    "heading_takes_oracle_note",
+                    "The spec's title may not read as Oracle's note or its Decided and "
+                    "Proposed labels.",
+                    s.section_key,
+                )
+            )
         if s.section_key in PRD_PART_TITLES:
             owner = (s.section_key, s.level)
             continue
@@ -979,7 +1101,7 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
             )
         inside = owner[0] if owner is not None else None
         if inside is None and s.section_key not in keys:
-            inside = titles.get(_squashed(s.heading))
+            inside = titles.get(_squashed(heading))
         if inside is not None:
             problems.append(
                 Problem(
@@ -989,7 +1111,7 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
                     s.section_key,
                 )
             )
-        elif _takes_label(s.heading, anywhere=True):
+        elif _takes_label(s.heading, anywhere=True) or _takes_label(heading, anywhere=True):
             problems.append(
                 Problem(
                     "heading_takes_oracle_note",
@@ -1001,26 +1123,20 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
     for s in draft.sections:
         if s.section_key in ORACLE_PARTS and s.section_key != "acceptance-criteria":
             continue
+        if s.section_key in commented:
+            continue
         text = _editable_text(s.section_key, s.body_md)
         # M4/M6: the text as it renders, block by block (not raw lines: a label may be
-        # split over two lines, or hide behind characters that render as nothing).
-        if any(_takes_plain(run, anywhere=False) for run in _plain_runs(text)):
+        # split over two lines, or hide behind characters that render as nothing), in
+        # every output's rendering of it (E1, owner, 2026-10-20).
+        if _body_takes_label(text):
             problems.append(
                 Problem(
                     "body_takes_oracle_label",
                     "A paragraph, list item, heading or table cell may not start with a "
                     "Decided or Proposed label or Oracle's note ('Decided in the approved "
-                    "PRD', 'In the baseline (decided with the PRD)'): Oracle shows each "
-                    "part's state itself.",
-                    s.section_key,
-                )
-            )
-        if _inline_comments(text):
-            problems.append(
-                Problem(
-                    "inline_comment",
-                    "A spec may not hold HTML comments ('<!-- -->'), inline ones included: "
-                    "write it as markdown.",
+                    "PRD', 'In the baseline (decided with the PRD)'), in the document, its "
+                    "slides or its exports: Oracle shows each part's state itself.",
                     s.section_key,
                 )
             )
@@ -1157,6 +1273,7 @@ def edit_check(
     written: str | None,
     previous: str | None,
     inputs: SpecInputs,
+    draft: ParsedDraft | None = None,
 ) -> EditCheck:
     """The pure half of an edit's check (:func:`oracle.specs.service.check_edit`), run off
     the event loop: the edit parsed once, then its structure (:func:`structure_problems`),
@@ -1164,11 +1281,13 @@ def edit_check(
     against ``written`` and ``previous`` (the version the edit replaces; the version
     :func:`compose` writes from ``inputs`` when there is neither), and whether the
     version can be served with its labels (:func:`label_markdown`, M3: refused here
-    rather than a 500 on every read)."""
-    try:
-        draft = parse_draft(markdown)
-    except DraftError as exc:
-        return EditCheck([_problem(p) for p in exc.problems], {}, [])
+    rather than a 500 on every read). ``draft``: ``markdown`` as the import already parsed
+    it (an API edit is parsed once)."""
+    if draft is None or draft.markdown != markdown:
+        try:
+            draft = parse_draft(markdown)
+        except DraftError as exc:
+            return EditCheck([_problem(p) for p in exc.problems], {}, [])
     problems = structure_problems(markdown, draft)
     allowed: list[dict[str, object]] = []
     oracle: dict[str, dict[str, Any]] | None = None

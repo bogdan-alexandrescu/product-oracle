@@ -296,7 +296,8 @@ async def test_raw_html_blocks_are_refused_in_spec_edits(client, runtime, block)
         ),
     )
     assert resp.status_code == 422, resp.text
-    assert "raw_html" in resp.text
+    # Round 7: comment syntax is refused as such (E1, owner, 2026-10-20).
+    assert "raw_html" in resp.text or "inline_comment" in resp.text
 
 
 @pytest.mark.parametrize(

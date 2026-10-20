@@ -15,6 +15,7 @@ export type Inline =
   | { t: "strong"; c: Inline[] }
   | { t: "em"; c: Inline[] }
   | { t: "link"; href: string; c: Inline[] }
+  | { t: "img"; src: string; alt: string }
   | { t: "cite"; key: string };
 
 export type Block =
@@ -25,8 +26,10 @@ export type Block =
   | { t: "pre"; v: string }
   | { t: "table"; head: Inline[][]; rows: Inline[][][] };
 
+// Citation ids are those the API accepts ([A-Za-z0-9_.:-]); an image is matched before a
+// link, so its alt text never shows as link text.
 const INLINE =
-  /\[c:([\w.-]+)\]|`([^`]+)`|\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])|(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/g;
+  /\[c:([\w.:-]+)\]|!\[([^\]]*)\]\(([^)\s]+)\)|`([^`]+)`|\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])|(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/g;
 
 export function parseInline(src: string): Inline[] {
   const out: Inline[] = [];
@@ -41,11 +44,12 @@ export function parseInline(src: string): Inline[] {
     pushText(src.slice(last, m.index));
     last = m.index + m[0].length;
     if (m[1] !== undefined) out.push({ t: "cite", key: m[1] });
-    else if (m[2] !== undefined) out.push({ t: "code", v: m[2] });
-    else if (m[3] !== undefined) out.push({ t: "strong", c: parseInline(m[3]) });
-    else if (m[4] !== undefined) out.push({ t: "link", href: m[5], c: parseInline(m[4]) });
-    else if (m[6] !== undefined) out.push({ t: "em", c: parseInline(m[6]) });
-    else if (m[7] !== undefined) out.push({ t: "em", c: parseInline(m[7]) });
+    else if (m[3] !== undefined) out.push({ t: "img", alt: m[2], src: m[3] });
+    else if (m[4] !== undefined) out.push({ t: "code", v: m[4] });
+    else if (m[5] !== undefined) out.push({ t: "strong", c: parseInline(m[5]) });
+    else if (m[6] !== undefined) out.push({ t: "link", href: m[7], c: parseInline(m[6]) });
+    else if (m[8] !== undefined) out.push({ t: "em", c: parseInline(m[8]) });
+    else if (m[9] !== undefined) out.push({ t: "em", c: parseInline(m[9]) });
   }
   pushText(src.slice(last));
   return out;
@@ -53,27 +57,44 @@ export function parseInline(src: string): Inline[] {
 
 const UL = /^\s*[-*+]\s+(.*)$/;
 const OL = /^\s*\d+[.)]\s+(.*)$/;
+// As CommonMark: a block starts with at most three spaces of indentation (more continues
+// the paragraph), and a list interrupts a paragraph only with a non-empty item, an
+// ordered one only when it starts at 1.
+const UL_START = /^ {0,3}[-*+][ \t]+\S/;
+const OL_START = /^ {0,3}0*1[.)][ \t]+\S/;
 const HEADING = /^(#{1,6})\s+(.*?)\s*(\{#[\w.-]+\})?\s*$/;
 const NOTES_FENCE = /^```[ \t]*notes[ \t]*$/;
 const TABLE_SEP = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 
-function cells(row: string): Inline[][] {
-  return row
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((c) => parseInline(c.trim()));
+function rawCells(row: string): string[] {
+  return row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+}
+
+/** A row's cells, as many as the header has (GFM: extra cells are dropped, missing ones empty). */
+function cells(row: string, width?: number): Inline[][] {
+  const raw = rawCells(row);
+  const n = width ?? raw.length;
+  return Array.from({ length: n }, (_, i) => parseInline((raw[i] ?? "").trim()));
+}
+
+/** A table starts at `line` when the next line is a delimiter row with as many cells (GFM). */
+function startsTable(line: string, next?: string): boolean {
+  return (
+    line.trim().startsWith("|") &&
+    next !== undefined &&
+    TABLE_SEP.test(next) &&
+    rawCells(line).length === rawCells(next).length
+  );
 }
 
 function startsBlock(line: string, next?: string): boolean {
   return (
     line.startsWith("```") ||
     HEADING.test(line) ||
-    UL.test(line) ||
-    OL.test(line) ||
+    UL_START.test(line) ||
+    OL_START.test(line) ||
     line.startsWith(">") ||
-    (line.trim().startsWith("|") && next !== undefined && TABLE_SEP.test(next))
+    startsTable(line, next)
   );
 }
 
@@ -102,15 +123,17 @@ export function parseBlocks(md: string): Block[] {
       i++;
       continue;
     }
-    if (line.trim().startsWith("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1])) {
+    if (startsTable(line, lines[i + 1])) {
       const head = cells(line);
       const rows: Inline[][][] = [];
       i += 2;
-      while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(cells(lines[i++]));
+      while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(cells(lines[i++], head.length));
       blocks.push({ t: "table", head, rows });
       continue;
     }
-    const list = UL.test(line) ? "ul" : OL.test(line) ? "ol" : null;
+    // Four or more spaces of indentation: not a list (an indented code block in CommonMark,
+    // shown here as paragraph text).
+    const list = /^ {4}/.test(line) ? null : UL.test(line) ? "ul" : OL.test(line) ? "ol" : null;
     if (list) {
       const re = list === "ul" ? UL : OL;
       const items: string[] = [];
@@ -142,7 +165,7 @@ export function parseBlocks(md: string): Block[] {
 
 function inlineText(nodes: Inline[]): string {
   return nodes
-    .map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" ? "" : inlineText(n.c)))
+    .map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" || n.t === "img" ? "" : inlineText(n.c)))
     .join("");
 }
 
@@ -170,7 +193,7 @@ export function blocksText(blocks: Block[]): string {
 /** Readable plain text (blocks separated by blank lines), e.g. for diffs and exports. */
 export function plainText(md: string): string {
   // Drop citation markers together with the space before them ("appears [c:c1]." → "appears.").
-  return parseBlocks(md.replace(/[ \t]*\[c:[\w.-]+\]/g, ""))
+  return parseBlocks(md.replace(/[ \t]*\[c:[\w.:-]+\]/g, ""))
     .map((b) => {
       switch (b.t) {
         case "p":

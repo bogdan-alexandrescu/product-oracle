@@ -517,6 +517,19 @@ async def import_draft(
     Raises :class:`DraftError` (422), :class:`NotFoundError` (404, ``doc`` is an
     unknown id) or :class:`ImportConflictError` (409, lost a concurrent import race).
     """
+    # E1: the state labels a spec's markdown is served with are never stored. They are
+    # stripped before the draft's one parse (the kind read without the row lock, which is
+    # taken after the parse).
+    found = await find_document(db, doc)
+    if found is not None and found.kind == "spec":
+        from oracle.specs.contract import strip_state_labels
+
+        try:
+            markdown = await safe_yaml.run_parse_within(
+                strip_state_labels, markdown, name="the draft"
+            )
+        except safe_yaml.ParseTimeout as exc:
+            raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
     # Off the event loop, time-capped: the draft is untrusted text (oracle.safe_yaml).
     draft = await parse_draft_async(markdown)
     if draft.template is None and template is not None:
@@ -554,16 +567,6 @@ async def import_draft(
         draft_kind = await _draft_kind(db, draft)
         if draft_kind is not None and draft_kind != document.kind:
             raise _kind_mismatch(document.slug, document.kind, draft_kind)
-        if document.kind == "spec":
-            # E1: the state labels a spec's markdown is served with are never stored.
-            from oracle.specs.contract import strip_state_labels
-
-            stripped = await safe_yaml.run_parse(strip_state_labels, draft.markdown)
-            if stripped != draft.markdown:
-                named = draft.template, draft.template_version
-                draft = await parse_draft_async(stripped)
-                if draft.template is None:
-                    draft.template, draft.template_version = named
         existing = await db.scalar(
             select(DocumentVersion).where(
                 DocumentVersion.document_id == document.id,
@@ -709,6 +712,9 @@ async def import_draft(
         # A newer, unapproved version now exists.
         document.status = "in_review"
 
+    if document.kind == "spec":
+        # The spec lineage handler checks the edit on this parse (oracle.specs.lineage).
+        db.info.setdefault("spec_drafts", {})[version.id] = draft
     # v2 hook: outputs built on earlier versions may now be stale (oracle.trace).
     await changes.record_change(
         db,

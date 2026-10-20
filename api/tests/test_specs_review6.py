@@ -115,7 +115,8 @@ def test_the_skeleton_folds_look_alikes_and_drops_ignorables():
 
 def test_body_runs_read_soft_breaks_as_spaces_and_every_cell():
     runs = contract._plain_runs("**a\nb**\n\n| x | y |\n| - | - |\n| c | d |\n\n```\ncode\n```")
-    assert runs == ["a b", "x", "y", "c", "d", "code", ""]
+    # Round 7: the end of emphasis reads as a separator ('**Decided** R-9').
+    assert runs == ["a b · ", "x", "y", "c", "d", "code", ""]
 
 
 # --------------------------------------------------------------------------- M2
@@ -287,7 +288,7 @@ def test_escape_inline_never_opens_a_block(text):
     md = f"---\ntitle: T\n---\n\n# T {{#t}}\n\n- **R-1: T**\n  {contract.escape_inline(text)}\n"
     draft = parse_draft(md)
     assert [s.section_key for s in draft.sections] == ["t"]
-    tokens = [t.type for t in contract._HTML_MD.parse(draft.sections[0].body_md)]
+    tokens = [t.type for t in contract._BLOCK_MD.parse(draft.sections[0].body_md)]
     assert "hr" not in tokens and "heading_open" not in tokens
     assert tokens.count("list_item_open") == 1
 
@@ -299,7 +300,7 @@ def test_a_body_starting_with_a_rule_does_not_make_the_label_a_heading(first):
         f"## Rollout {{#rollout}}\n{first}\nTen percent.\n"
     )
     labelled = contract.label_markdown(md, approved=False)
-    tokens = contract._HTML_MD.parse(labelled.split("{#rollout}", 1)[1])
+    tokens = contract._BLOCK_MD.parse(labelled.split("{#rollout}", 1)[1])
     assert "heading_open" not in [t.type for t in tokens]
     again = parse_draft(contract.strip_state_labels(labelled))
     assert [(s.section_key, s.body_md) for s in again.sections] == [

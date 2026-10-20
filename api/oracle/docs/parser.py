@@ -397,6 +397,12 @@ def _check_citations(
                 )
 
 
+def prepared(markdown: str) -> str:
+    """A draft's text as :func:`parse_draft` reads it: an export's banner and date marker
+    comments dropped, then :func:`normalize`."""
+    return normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
+
+
 def parse_draft(markdown: str) -> ParsedDraft:
     """Parse and validate a draft. Raises :class:`DraftError` listing every problem.
 
@@ -407,7 +413,7 @@ def parse_draft(markdown: str) -> ParsedDraft:
         raise DraftError(
             [ImportProblem(code="draft_too_large", message=f"draft is larger than {limit} bytes")]
         )
-    text = normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
+    text = prepared(markdown)
     problems: list[ImportProblem] = []
 
     yaml_text, body, offset = split_front_matter(text)

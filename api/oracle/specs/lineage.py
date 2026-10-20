@@ -318,7 +318,9 @@ async def on_document_version(db: AsyncSession, event: ChangeEvent) -> None:
         # E1: an edit changes only engineering parts (the service imports this module).
         from oracle.specs.service import check_edit
 
-        await check_edit(db, request, previous, version.markdown)
+        # On the import's own parse of the edit (oracle.docs.service.import_draft).
+        draft = db.info.get("spec_drafts", {}).pop(version.id, None)
+        await check_edit(db, request, previous, version.markdown, draft)
         av = ArtifactVersion(
             request_id=request.id,
             number=await next_number(db, request.id),
