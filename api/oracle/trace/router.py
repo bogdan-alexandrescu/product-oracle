@@ -18,6 +18,7 @@ from sqlalchemy import case, func, or_, select
 from oracle import audit, changes
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
+from oracle.baseline.evidence import run_versions, withheld_from
 from oracle.baseline.models import Entity, Evidence
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
@@ -112,13 +113,25 @@ async def _check_target(db, principal: Principal, link) -> None:
     if link.evidence_id is not None and await db.get(Evidence, link.evidence_id) is None:
         raise HTTPException(422, f"unknown evidence {link.evidence_id}")
     if link.source_item_id is not None:
-        owner = await db.scalar(
-            select(Source.owner_user_id)
-            .join(SourceItem, SourceItem.source_id == Source.id)
-            .where(SourceItem.id == link.source_item_id)
-        )
+        row = (
+            await db.execute(
+                select(Source.owner_user_id, SourceItem.deleted_at)
+                .join(SourceItem, SourceItem.source_id == Source.id)
+                .where(SourceItem.id == link.source_item_id)
+            )
+        ).first()
         # Only a source's owner reads its items (AUD-9): to others it does not exist.
-        if owner is None or owner != principal.user_id:
+        missing = row is None or row[0] != principal.user_id
+        if not missing and principal.is_run:
+            # Nor to a run, an item it may not read (S6): withheld by its user's
+            # intakes, deleted upstream, or ever frozen with no release readable now.
+            frozen = await run_versions(db, principal, {link.source_item_id})
+            missing = (
+                row[1] is not None
+                or link.source_item_id in await withheld_from(db, principal)
+                or (link.source_item_id in frozen and frozen[link.source_item_id] is None)
+            )
+        if missing:
             raise HTTPException(422, f"unknown source item {link.source_item_id}")
 
 

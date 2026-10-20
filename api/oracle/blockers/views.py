@@ -274,21 +274,24 @@ async def _evidence_refs(
         return {}
     rows = (
         await db.execute(
-            select(Evidence, SourceItem, Source)
+            select(Evidence, Source)
             .outerjoin(SourceItem, SourceItem.id == Evidence.source_item_id)
             .outerjoin(Source, Source.id == SourceItem.source_id)
             .where(Evidence.id.in_(ids))
         )
     ).all()
     out = {}
-    for ev, item, source in rows:
+    for ev, source in rows:
         kind = ev.kind or (source.kind if source is not None else None)
         if kind is None and ev.url:
             kind = "web"
         out[ev.id] = render.EvidenceRef(
             id=ev.id,
             source=render.CITATION_SOURCES.get(kind) if kind else None,
-            ref=ev.url or ev.ref or (item.url if item is not None else None),
+            # The link and ref copied when the evidence was attached, never the item's
+            # current link: a rename upstream (a Notion link carries the page title)
+            # never reaches readers (S6, links).
+            ref=ev.url or ev.ref,
             # The appendix shows what any user may see of evidence: never a private
             # item's title (AUD-9), only the excerpt, url and ref.
             title=None,
