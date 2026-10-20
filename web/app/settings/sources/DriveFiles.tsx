@@ -272,7 +272,7 @@ function noAccessLabel(reason: string): string {
 function NameList({ names, shown = 4 }: { names: string[]; shown?: number }) {
   const rest = names.length - shown;
   return (
-    <span className="min-w-0 truncate text-text" title={names.join(", ")}>
+    <span className="min-w-0 truncate text-text max-[600px]:whitespace-normal" title={names.join(", ")}>
       {names.slice(0, shown).join(", ")}
       {rest > 0 && <span className="text-text2">{` +${rest} more`}</span>}
     </span>
