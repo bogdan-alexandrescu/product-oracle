@@ -687,3 +687,75 @@ async def test_apply_skips_a_suggestion_dismissed_during_the_build(client, ctx, 
     assert fb[ids["sol"]]["suggestion"]["status"] == "dismissed"
     assert fb[ids["sol"]]["suggestion"]["applied_in_version"] is None
     assert fb[ids["sol"]]["state"] != "done"
+
+
+# --- UI test finding E4 (owner, 2026-10-20): staged changes carry into the next draft ------
+
+
+async def test_approving_a_version_keeps_accepted_unapplied_suggestions_staged(
+    client, ctx, pool, fake
+):
+    """An accepted suggestion not applied in any draft stays Staged until a draft applies
+    it or someone discards it, whatever its feedback item's status: draft 2 closing the
+    items (its resolutions, as a run's draft does) and being approved does not hide them.
+    The Inbox, the review panel and the build action count the same changes."""
+    ids = await staged_setup(client, ctx, fake)
+    resolutions = "".join(
+        f"  - feedback_id: {ids[k]}\n    status: addressed\n    note: Covered in v2.\n"
+        for k in ("goal", "sol")
+    )
+    v2 = DRAFT_V1.replace("---\n\n# Onboarding", f"resolutions:\n{resolutions}---\n\n# Onboarding")
+    await import_draft(client, ctx, v2)
+    resp = await client.post(f"{DOC}/versions/2/approve", headers=ctx["headers"])
+    assert resp.status_code == 200, resp.text
+
+    # The review panel (the document's feedback).
+    fb = await feedback(client, ctx)
+    for k in ("goal", "sol"):
+        assert fb[ids[k]]["status"] == "addressed"
+        assert (fb[ids[k]]["state"], fb[ids[k]]["staged_for_version"]) == ("staged", 3)
+    assert fb[ids["drop"]]["state"] == "declined" and fb[ids["still"]]["state"] == "open"
+
+    # The build action ("Build draft 3 · 2 staged").
+    out = await staged(client, ctx)
+    assert (out["latest_version"], out["next_version"]) == (2, 3)
+    assert {r["suggestion_id"] for r in out["items"]} == {ids["goal_s"], ids["sol_s"]}
+
+    # The Inbox: Staged lists them and counts what the build action counts; Done does not.
+    inbox = (await client.get("/v1/inbox", headers=ctx["headers"])).json()
+    states = {i["id"]: i["state"] for i in inbox["items"]}
+    assert (states[ids["goal"]], states[ids["sol"]]) == ("staged", "staged")
+    assert inbox["counts"]["staged"] == len(out["items"]) == 2
+    assert inbox["counts"]["done"] == 0 and inbox["counts"]["declined"] == 1
+    staged_item = next(i for i in inbox["items"] if i["id"] == ids["goal"])
+    assert staged_item["staged_for_version"] == 3
+    [row] = inbox["staged"]
+    assert (row["count"], row["next_version"]) == (2, 3)
+    # Still not open feedback.
+    assert inbox["total"] == 1
+
+    # Discarding one ends its staging: its item was closed, so it is done.
+    resp = await client.post(
+        f"/v1/suggestions/{ids['goal_s']}/dismiss",
+        json={"reason": "Not any more.", "decline": False},
+        headers=ctx["headers"],
+    )
+    assert resp.status_code == 200, resp.text
+    inbox = (await client.get("/v1/inbox", headers=ctx["headers"])).json()
+    assert {i["id"]: i["state"] for i in inbox["items"]}[ids["goal"]] == "done"
+    assert (inbox["counts"]["staged"], inbox["counts"]["done"]) == (1, 1)
+    assert len((await staged(client, ctx))["items"]) == 1
+    assert (await feedback(client, ctx))[ids["goal"]]["state"] == "done"
+
+
+async def test_an_item_closed_by_hand_keeps_its_staged_change(client, ctx, pool, fake):
+    """The same rule when an approver closes the item itself (status addressed)."""
+    ids = await staged_setup(client, ctx, fake)
+    resp = await client.patch(
+        f"/v1/feedback/{ids['sol']}", json={"status": "addressed"}, headers=ctx["headers"]
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["state"] == "staged"
+    inbox = (await client.get("/v1/inbox", headers=ctx["headers"])).json()
+    assert {i["id"]: i["state"] for i in inbox["items"]}[ids["sol"]] == "staged"
+    assert inbox["counts"]["staged"] == 2 and inbox["counts"]["done"] == 0

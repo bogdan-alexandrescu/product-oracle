@@ -124,11 +124,38 @@ test("new run over $50 waits for an owner's approval", async ({ page }) => {
   await expect(status(page)).toHaveText("Running");
 });
 
-test("cancel a run", async ({ page }) => {
+test("cancel a run: it asks in the page, never in a browser dialog; going back does nothing", async ({ page }) => {
+  // UI test finding E5 (2026-10-20): a native confirm froze the tab for browser automation.
+  const native: string[] = [];
+  page.on("dialog", (d) => {
+    native.push(d.message());
+    void d.dismiss();
+  });
   await openRuns(page);
   await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
-  page.once("dialog", (d) => d.accept());
-  await page.getByRole("button", { name: "Cancel run" }).click();
+  const before = await status(page).textContent();
+  const cancel = page.getByTestId("run-cancel").filter({ visible: true });
+  const ask = page.getByRole("alertdialog", { name: "Cancel run" });
+
+  await cancel.click();
+  await expect(ask).toContainText("Cancel this run? Agents still working are stopped.");
+  await expect(ask.getByRole("button", { name: "Cancel run" })).toBeFocused();
+  await ask.getByRole("button", { name: "Back" }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(cancel).toBeFocused();
+  // Escape is Back too.
+  await cancel.click();
+  await expect(ask).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(ask).toHaveCount(0);
+  await page.reload();
+  await expect(status(page)).toHaveText(before!);
+  await expect(cancel).toBeVisible();
+
+  await cancel.click();
+  await ask.getByRole("button", { name: "Cancel run" }).click();
+  await expect(ask).toHaveCount(0);
+  expect(native).toEqual([]);
   await expect(status(page)).toHaveText("Cancelled");
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Skipped");
   await expect(page.getByRole("button", { name: "Cancel run" })).toHaveCount(0);

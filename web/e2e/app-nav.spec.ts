@@ -234,3 +234,50 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
   expect((await page.getByRole("heading", { level: 1, name: "Home" }).boundingBox())!.height).toBeGreaterThan(20);
 });
+
+// UI test findings E1 and E2 (2026-10-20).
+
+test("the bare site URL lands on Home, the rail's first destination", async ({ page }) => {
+  await login(page);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Home", exact: true })).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "Oracle" });
+  await expect(nav.getByTestId("nav-home")).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
+});
+
+test("a roadmap document's pages highlight Roadmap; a PRD's highlight PRDs", async ({ page }) => {
+  await login(page);
+  const nav = page.getByRole("navigation", { name: "Oracle" });
+  const roadmap = nav.getByTestId("nav-roadmap");
+  const prds = nav.getByTestId("nav-prds");
+
+  // Opened from the Roadmap screen, and loaded directly: the overview and a version.
+  await roadmap.click();
+  await page.getByTestId("roadmap-row").getByRole("link", { name: "Usage alerts roadmap" }).click();
+  await expect(page).toHaveURL(/\/documents\/usage-alerts-roadmap$/);
+  await expect(roadmap).toHaveAttribute("aria-current", "page");
+  await expect(prds).not.toHaveAttribute("aria-current", "page");
+  for (const path of ["/documents/usage-alerts-roadmap", "/documents/usage-alerts-roadmap/v/1"]) {
+    await page.goto(path);
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" }).filter({ visible: true }).first()).toContainText("Roadmap");
+    await expect(roadmap).toHaveAttribute("aria-current", "page");
+    await expect(prds).not.toHaveAttribute("aria-current", "page");
+  }
+
+  // From the roadmap to a PRD inside the app: the highlight follows the document.
+  await page.evaluate(() =>
+    (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push("/documents/saved-carts/v/2"),
+  );
+  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2$/);
+  await expect(prds).toHaveAttribute("aria-current", "page");
+  await expect(roadmap).not.toHaveAttribute("aria-current", "page");
+
+  // The phone's tab bar says the same.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/documents/usage-alerts-roadmap/v/1");
+  const tabs = page.getByTestId("tab-bar");
+  await expect(tabs.getByTestId("tab-roadmap")).toHaveAttribute("aria-current", "page");
+  await expect(tabs.getByTestId("tab-prds")).not.toHaveAttribute("aria-current", "page");
+});
