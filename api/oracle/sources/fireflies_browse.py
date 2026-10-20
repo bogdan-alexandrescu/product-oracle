@@ -29,16 +29,15 @@ from typing import Annotated
 import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import delete, select
 
 from oracle.auth.deps import TenantDB
+from oracle.connections import browse
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.connections.router import ProviderHttp, UserPrincipal
 from oracle.sources import base
 from oracle.sources.connectors import fireflies
 from oracle.sources.connectors.fireflies import FirefliesConnector, Meeting
-from oracle.sources.models import BrowseCall
 from oracle.sources.service import InvalidError, _read_credential, redact
 
 router = APIRouter(prefix="/v1", tags=["connections"])
@@ -135,43 +134,18 @@ def _limited(detail: str, seconds: int | None) -> HTTPException:
 
 
 async def _spend(db: TenantDB, conn: Connection, calls: int) -> None:
-    """Reserve ``calls`` Fireflies calls for this connection, or answer 429. Commits."""
-    now = _now()
-    longest = max(window for window, _, _ in _WINDOWS)
-    # One reservation at a time per connection, across API processes.
-    await db.execute(select(Connection.id).where(Connection.id == conn.id).with_for_update())
-    await db.execute(
-        delete(BrowseCall).where(
-            BrowseCall.connection_id == conn.id, BrowseCall.at <= now - longest
+    """Reserve ``calls`` Fireflies calls for this connection, or answer 429. Commits.
+    Counted in the one browse budget of every picker (oracle.connections.browse)."""
+    windows = tuple((window, limit) for window, limit, _ in _WINDOWS)
+    refused = await browse.reserve(db, conn.id, calls, windows, _now())
+    if refused is not None:
+        seconds, index = refused
+        _, limit, per = _WINDOWS[index]
+        raise _limited(
+            f"Browsing may make {limit} Fireflies calls {per} for this connection, so "
+            f"syncs keep the rest of your Fireflies quota. Try again in {_later(seconds)}.",
+            seconds,
         )
-    )
-    spent = (
-        await db.execute(
-            select(BrowseCall.at, BrowseCall.calls)
-            .where(BrowseCall.connection_id == conn.id)
-            .order_by(BrowseCall.at)
-        )
-    ).all()
-    for window, limit, per in _WINDOWS:
-        recent = [(at, n) for at, n in spent if at > now - window]
-        used = sum(n for _, n in recent)
-        if used + calls > limit:
-            # Wait until enough of the window's calls have aged out.
-            freed, wait = 0, window
-            for at, n in recent:
-                freed += n
-                if used - freed + calls <= limit:
-                    wait = at + window - now
-                    break
-            await db.rollback()
-            seconds = max(1, math.ceil(wait.total_seconds()))
-            raise _limited(
-                f"Browsing may make {limit} Fireflies calls {per} for this connection, so "
-                f"syncs keep the rest of your Fireflies quota. Try again in {_later(seconds)}.",
-                seconds,
-            )
-    db.add(BrowseCall(connection_id=conn.id, at=now, calls=calls))
-    await db.commit()
 
 
 async def _cached(

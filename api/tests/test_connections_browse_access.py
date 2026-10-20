@@ -5,6 +5,7 @@ provider. A refusal that is not about the token never marks the connection expir
 """
 
 import time
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -14,6 +15,7 @@ from oracle.auth.service import create_api_token
 from oracle.connections import browse
 from oracle.connections.models import Connection
 from oracle.runtokens import SCOPES as RUN_SCOPES
+from oracle.sources.models import BrowseCall
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
@@ -174,13 +176,13 @@ async def test_searches_past_the_limit_are_refused_without_calling_the_provider(
 async def test_the_limit_frees_up_as_the_window_moves(
     client, alice, github_conn, provider, monkeypatch
 ):
-    now = [1000.0]
-    monkeypatch.setattr(browse, "_clock", lambda: now[0])
+    now = [datetime.now(UTC)]
+    monkeypatch.setattr(browse, "_now", lambda: now[0])
     for n in range(browse.RATE_LIMIT):
         await client.get(repos(github_conn, f"?search=r{n}"), headers=alice.headers)
     over = await client.get(repos(github_conn, "?search=x"), headers=alice.headers)
     assert over.status_code == 429
-    now[0] += browse.RATE_WINDOW + 1
+    now[0] += timedelta(seconds=browse.RATE_WINDOW + 1)
     later = await client.get(repos(github_conn, "?search=x"), headers=alice.headers)
     assert later.status_code == 200
 
@@ -391,21 +393,25 @@ async def test_provider_calls_in_a_window_never_exceed_the_limit(
 
 
 async def test_expired_cache_entries_and_call_counts_are_dropped(
-    client, alice, slack_conn, github_conn, provider, monkeypatch
+    client, tenant_id, alice, slack_conn, github_conn, provider, monkeypatch
 ):
     now = [10_000.0]
+    later = [datetime.now(UTC)]
     monkeypatch.setattr(browse, "_clock", lambda: now[0])
+    monkeypatch.setattr(browse, "_now", lambda: later[0])
     await client.get(channels(slack_conn), headers=alice.headers)
     await client.get(repos(github_conn), headers=alice.headers)
     assert {k[0] for k in browse._cache} == {slack_conn.id, github_conn.id}
-    assert set(browse._calls) == {slack_conn.id, github_conn.id}
     now[0] += max(browse.CACHE_SECONDS, browse.RATE_WINDOW) + browse.SWEEP_SECONDS
+    later[0] += timedelta(seconds=browse.RATE_WINDOW + 1)
     # Any later browse, through another connection, sweeps them.
     await client.get(repos(github_conn, "?search=x"), headers=alice.headers)
     assert {k[0] for k in browse._cache} == {github_conn.id}
     assert [k[1] for k in browse._cache] == [("github/repos", "x", 1)]
-    assert set(browse._calls) == {github_conn.id}
-    assert len(browse._calls[github_conn.id]) == 1
+    # The connection's spent calls older than the window are deleted as it spends again.
+    async with tenant_session(tenant_id) as s:
+        spent = (await s.execute(select(BrowseCall.connection_id, BrowseCall.calls))).all()
+    assert sorted((c, n) for c, n in spent if c == github_conn.id) == [(github_conn.id, 1)]
 
 
 # --- who may browse -----------------------------------------------------------------

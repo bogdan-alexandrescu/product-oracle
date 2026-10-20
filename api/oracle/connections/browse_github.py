@@ -131,8 +131,8 @@ async def list_github_repos(
             # Each page counts against the connection's budget; when it runs out after
             # the first, answer what was read with the cursor to resume.
             if n == 0:
-                browse.admit(conn, "GitHub")
-            elif not browse.admit_more(conn):
+                await browse.admit(db, conn, "GitHub")
+            elif not await browse.admit_more(db, conn):
                 break
             assert page is not None
             resp = await api.get(

@@ -130,8 +130,8 @@ async def list_slack_channels(
             # Each page counts against the connection's budget; when it runs out after
             # the first, answer what was read with the cursor to resume.
             if n == 0:
-                browse.admit(conn, "Slack")
-            elif not browse.admit_more(conn):
+                await browse.admit(db, conn, "Slack")
+            elif not await browse.admit_more(db, conn):
                 break
             page = await slack.call(
                 "conversations.list",

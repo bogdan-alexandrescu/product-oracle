@@ -5,20 +5,23 @@ never holds a provider token: Oracle calls the provider and returns names and id
 
 The lists are open to the person in the browser and to MCP clients acting as that
 person (S5, owner 2026-10-19). So that a search cannot hammer the provider, an answer is
-kept for :data:`CACHE_SECONDS` per connection and question, and a connection may reach
-the provider at most :data:`RATE_LIMIT` times per :data:`RATE_WINDOW` seconds, each page
-read counting once (cached answers are free). Both live in this process: with several
-API instances each keeps its own, which still bounds what one person can send.
+kept for :data:`CACHE_SECONDS` per connection and question (in this process), and a
+connection may reach the provider at most :data:`RATE_LIMIT` times per
+:data:`RATE_WINDOW` seconds, each page read counting once (cached answers are free).
+The calls are counted in the database (``browse_calls``, :func:`reserve`), one budget
+for every picker and every API process; Fireflies' picker spends from it with its own
+windows (oracle.sources.fireflies_browse).
 """
 
 import logging
 import math
 import time
 import uuid
-from collections import deque
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
@@ -31,6 +34,7 @@ from oracle.sources.base import (
     ConnectorForbidden,
     ConnectorRateLimited,
 )
+from oracle.sources.models import BrowseCall
 
 # What a browse call says when the provider gives no wait.
 DEFAULT_RETRY_SECONDS = 60
@@ -41,35 +45,36 @@ CACHE_ENTRIES = 2000
 # conversations.list calls a minute (Tier 2) for a token.
 RATE_LIMIT = 20
 RATE_WINDOW = 60
-# Expired answers and idle call counts are dropped at most this often.
+WINDOWS = ((timedelta(seconds=RATE_WINDOW), RATE_LIMIT),)
+# Expired answers are dropped at most this often.
 SWEEP_SECONDS = 5
 
 log = logging.getLogger(__name__)
 
 _clock = time.monotonic
 _cache: dict[tuple[uuid.UUID, tuple[Any, ...]], tuple[float, Any]] = {}
-_calls: dict[uuid.UUID, deque[float]] = {}
 _last_sweep = -math.inf
 
 
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
 def reset() -> None:
-    """Forget every cached answer and call count (tests)."""
+    """Forget every cached answer (tests; spent budgets live in the database)."""
     global _last_sweep
     _cache.clear()
-    _calls.clear()
     _last_sweep = -math.inf
 
 
 def _sweep(now: float) -> None:
-    """Drop expired answers and the call counts of connections idle for a window."""
+    """Drop expired answers."""
     global _last_sweep
     if 0 <= now - _last_sweep < SWEEP_SECONDS:
         return
     _last_sweep = now
     for k in [k for k, (at, _) in _cache.items() if now - at >= CACHE_SECONDS]:
         del _cache[k]
-    for k in [k for k, calls in _calls.items() if not calls or now - calls[-1] >= RATE_WINDOW]:
-        del _calls[k]
 
 
 def cached(conn: Connection, key: tuple[Any, ...]) -> Any | None:
@@ -95,24 +100,56 @@ def remember(conn: Connection, key: tuple[Any, ...], answer: Any) -> None:
     _cache[(conn.id, key)] = (now, answer)
 
 
-def _take(conn: Connection) -> int | None:
-    """Count one provider call through ``conn``: None when admitted, else the seconds
-    until one is."""
-    now = _clock()
-    _sweep(now)
-    calls = _calls.setdefault(conn.id, deque())
-    while calls and now - calls[0] >= RATE_WINDOW:
-        calls.popleft()
-    if len(calls) >= RATE_LIMIT:
-        return max(1, math.ceil(RATE_WINDOW - (now - calls[0])))
-    calls.append(now)
+async def reserve(
+    db: AsyncSession,
+    connection_id: uuid.UUID,
+    calls: int,
+    windows: tuple[tuple[timedelta, int], ...] = WINDOWS,
+    now: datetime | None = None,
+) -> tuple[int, int] | None:
+    """Reserve ``calls`` provider calls for browsing through a connection: None when
+    reserved, else the seconds until they fit and the index of the ``(window, limit)``
+    that refused them. Counted in
+    ``browse_calls``, one reservation at a time per connection across API processes.
+    Commits (a refusal too: it writes nothing but the cleanup)."""
+    now = now or _now()
+    longest = max(window for window, _ in windows)
+    await db.execute(select(Connection.id).where(Connection.id == connection_id).with_for_update())
+    await db.execute(
+        delete(BrowseCall).where(
+            BrowseCall.connection_id == connection_id, BrowseCall.at <= now - longest
+        )
+    )
+    spent = (
+        await db.execute(
+            select(BrowseCall.at, BrowseCall.calls)
+            .where(BrowseCall.connection_id == connection_id)
+            .order_by(BrowseCall.at)
+        )
+    ).all()
+    for index, (window, limit) in enumerate(windows):
+        recent = [(at, n) for at, n in spent if at > now - window]
+        used = sum(n for _, n in recent)
+        if used + calls > limit:
+            # Wait until enough of the window's calls have aged out.
+            freed, wait = 0, window
+            for at, n in recent:
+                freed += n
+                if used - freed + calls <= limit:
+                    wait = at + window - now
+                    break
+            await db.commit()
+            return max(1, math.ceil(wait.total_seconds())), index
+    db.add(BrowseCall(connection_id=connection_id, at=now, calls=calls))
+    await db.commit()
     return None
 
 
-def admit(conn: Connection, name: str) -> None:
+async def admit(db: AsyncSession, conn: Connection, name: str) -> None:
     """Count a request's first provider call through ``conn``; a 429 past RATE_LIMIT."""
-    wait = _take(conn)
-    if wait is not None:
+    refused = await reserve(db, conn.id, 1)
+    if refused is not None:
+        wait, _ = refused
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
             f"Too many {name} searches: try again in {wait} seconds",
@@ -120,10 +157,10 @@ def admit(conn: Connection, name: str) -> None:
         )
 
 
-def admit_more(conn: Connection) -> bool:
+async def admit_more(db: AsyncSession, conn: Connection) -> bool:
     """Count a further page of the same request; False when the budget is spent (the
     request stops and answers what it read, with a cursor to resume)."""
-    return _take(conn) is None
+    return await reserve(db, conn.id, 1) is None
 
 
 async def open_connection(
