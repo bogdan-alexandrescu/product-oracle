@@ -2405,6 +2405,11 @@ async def submit_queued(
     if run is None or run.status != "running" or segment is None or _claimed(segment):
         await db.rollback()
         return
+    if _live(run) is not None:
+        # A workflow is still attached (driven, or its cancel not confirmed): the tick
+        # follows it and submits what waits only once it is done with.
+        await db.rollback()
+        return
     claim = uuid.uuid4().hex
     art = _art(segment)
     art["claim"] = {"id": claim, "at": _now().isoformat()}
@@ -3016,11 +3021,11 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
     running = next((s for s in segments if s.status == "running"), None)
     if running is None:
         if run.status != "running":
-            await db.rollback()
             return
         # A submission the runtime refused earlier, or one a request queued: submit it.
+        # What this pass wrote (a cancel confirmed above) commits first.
         if any(_waiting(s) for s in segments):
-            await db.rollback()
+            await db.commit()
             await submit_queued(db, run_id, deadline=deadline)
             return
         # Resumed after an overrun with a finished segment not yet advanced.
