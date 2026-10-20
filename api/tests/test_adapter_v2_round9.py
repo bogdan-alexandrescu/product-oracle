@@ -822,9 +822,67 @@ async def test_a_step_parked_on_its_dependencies_does_not_hold_the_run_token(cli
         ("PARKED", None, True),
         ("RUNNING", "DEPENDENCY_INCOMPLETE", True),
         ("SUCCEEDED", None, True),
+        ("PARKED", "dependency_incomplete", True),
+        ("READY", None, True),
+        ("CANCELLED", None, True),
+        ("DEAD_LETTERED", None, True),
     ],
 )
 def test_not_reached_counts_a_step_parked_on_its_dependencies(state, reason, reached):
     from oracle.swarm.runtime import not_reached
 
     assert not_reached(StepStatus("s", "t", state, park_reason=reason)) is not reached
+
+
+def test_not_reached_fails_closed_without_a_task_or_with_an_opened_wait():
+    from oracle.swarm.runtime import not_reached
+
+    parked = dict(state="PARKED", park_reason="DEPENDENCY_INCOMPLETE")
+    assert not_reached(StepStatus("s", "t", **parked)) is True
+    # The task page had no task for the step: reached (held), whatever the default says.
+    assert not_reached(StepStatus("s", "t", **parked, task_read=False)) is False
+    assert not_reached(StepStatus("s", None, task_read=False)) is False
+    # An opened wait is reached whatever its park reason says.
+    assert not_reached(StepStatus("s", "t", **parked, wait_opened=True)) is False
+
+
+async def test_a_review_step_with_no_task_in_the_page_holds_the_run_token_and_reads_cleanly(
+    monkeypatch,
+):
+    from oracle.swarm.swarmcloud import SwarmCloudRuntime
+
+    rt = object.__new__(SwarmCloudRuntime)
+
+    async def read(workflow_id):
+        return {
+            "workflow": {
+                "state": "running",
+                "steps": [
+                    {"step_id": "r1", "task_id": "t_missing"},
+                    {"step_id": "r2", "task_id": "t_p", "state": "PARKED"},
+                ],
+            },
+            "tasks": [
+                {
+                    "id": "t_p",
+                    "state": "PARKED",
+                    "park_reason": "DEPENDENCY_INCOMPLETE",
+                    "metadata": {"await_input": {"opened_at": "2026-10-20T10:00:00+00:00"}},
+                }
+            ],
+        }
+
+    rt._read = read
+    status = await rt.status("wf_1")
+    missing, opened = status.step("r1"), status.step("r2")
+    assert missing.state == "PENDING" and missing.task_read is False  # display unchanged
+    assert opened.wait_opened is True and opened.park_reason == "DEPENDENCY_INCOMPLETE"
+
+    service._hold_cache.clear()
+    service._hold_reads.clear()
+    for review in ("r1", "r2"):
+        monkeypatch.setattr(service, "get_runtime", lambda: rt)
+        service._hold_cache.clear()
+        assert await service._live_hold(uuid.uuid4(), "wf_1", (review,)) == service.HOLD_DECISION
+    service._hold_cache.clear()
+    service._hold_reads.clear()

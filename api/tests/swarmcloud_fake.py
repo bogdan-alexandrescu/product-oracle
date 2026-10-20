@@ -691,10 +691,11 @@ class FakeSwarmCloud:
         for s in wf.steps:
             # Real SwarmCloud makes a task for every step at submission; a step whose
             # dependencies have not finished is PARKED with park_reason DEPENDENCY_INCOMPLETE.
-            waiting = s.state == "PENDING"
+            # A root step (no dependencies) is READY, not parked.
+            waiting = s.state == "PENDING" and bool(s.depends_on)
             task: dict[str, Any] = {
                 "id": s.task_id,
-                "state": "PARKED" if waiting else s.state,
+                "state": "PARKED" if waiting else ("READY" if s.state == "PENDING" else s.state),
                 "cost_usd_total": s.cost,
                 "last_error": s.last_error,
             }
@@ -719,7 +720,6 @@ class FakeSwarmCloud:
                     {
                         "step_id": s.step_id,
                         "task_id": s.task_id,
-                        "state": "PARKED" if s.state == "PENDING" else s.state,
                     }
                     for s in wf.steps
                 ],
