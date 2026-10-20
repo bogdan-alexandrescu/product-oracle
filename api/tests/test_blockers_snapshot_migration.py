@@ -23,7 +23,7 @@ from sqlalchemy.engine import make_url
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
 REVISION = "0014_blockers_snapshot"
-PREVIOUS = "0014_trace"
+PREVIOUS = "0015_section_table_rows"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_blockers")
@@ -58,11 +58,11 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_the_migration_follows_0014_trace_on_a_single_head():
+def test_the_migration_follows_0015_on_a_single_head():
     # Re-chained at the wave 1 integration: the blockers lane's 0014 comes after main's
     # 0014 chain (quality, usage_retry_at, trace).
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_revision(REVISION).down_revision == "0014_trace"
+    assert script.get_revision(REVISION).down_revision == "0015_section_table_rows"
     assert script.get_heads() == [REVISION]
 
 

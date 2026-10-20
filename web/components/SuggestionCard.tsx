@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 
-import { Badge, Button, INPUT } from "@/components/ui";
+import { Avatar, Button, Chip, type ChipKind } from "@/components/ds";
+import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Suggestion } from "@/lib/api/client";
 import { CLASSIFICATION_LABEL } from "@/lib/format";
 
-const STATUS: Record<Suggestion["status"], { label: string; tone: "neutral" | "green" | "blue" }> = {
-  open: { label: "Suggested", tone: "blue" },
-  accepted: { label: "Accepted", tone: "green" },
-  dismissed: { label: "Dismissed", tone: "neutral" },
-  applied: { label: "Applied", tone: "green" },
-  superseded: { label: "Superseded", tone: "neutral" },
+const STATUS: Record<Suggestion["status"], { label: string; kind: ChipKind }> = {
+  open: { label: "Suggested", kind: "warn" },
+  accepted: { label: "Accepted", kind: "pass" },
+  dismissed: { label: "Dismissed", kind: "na" },
+  applied: { label: "Applied", kind: "pass" },
+  superseded: { label: "Superseded", kind: "na" },
 };
 
 type Mode = null | "edit" | "keep" | "dismiss";
@@ -62,36 +63,44 @@ export function SuggestionCard({
   const saveEdit = () => run(() => unwrap(api.PATCH("/v1/suggestions/{suggestion_id}", { ...path, body: { text } })));
 
   return (
-    <div className="mt-2 rounded-md border border-sky-200 bg-sky-50/50 px-2.5 py-2" data-testid="suggestion" data-kind={s.kind}>
-      <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        <span className="font-medium text-sky-900">Oracle</span>
-        <Badge>{CLASSIFICATION_LABEL[s.classification]}</Badge>
-        {s.group_key && <span className="text-neutral-500">group: {s.group_key}</span>}
+    <div className="mt-2.5 rounded-button border border-line bg-surface2 px-3 py-2.5" data-testid="suggestion" data-kind={s.kind}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Avatar name="Oracle" initials="O" tone="oracle" />
+        <span className="font-semibold">Oracle</span>
+        <Chip kind="line">{CLASSIFICATION_LABEL[s.classification]}</Chip>
+        {s.group_key && (
+          <span className="truncate font-mono text-[13px] text-text2" title={`group: ${s.group_key}`}>
+            {s.group_key}
+          </span>
+        )}
         <span className="ml-auto">
-          <Badge tone={STATUS[s.status].tone}>{STATUS[s.status].label}</Badge>
+          <Chip kind={STATUS[s.status].kind}>{STATUS[s.status].label}</Chip>
         </span>
       </div>
-      {s.kind === "duplicate" && <p className="mt-1 text-xs text-neutral-700">Duplicate of an earlier item; resolved with it.</p>}
+      {s.kind === "duplicate" && <p className="mt-1.5 text-sm text-text2">Duplicate of an earlier item; resolved with it.</p>}
       {shown && mode !== "edit" && (
-        <div className="mt-1.5">
-          <p className="text-[11px] font-medium text-neutral-500 uppercase">
+        <div className="mt-2">
+          <p className="text-[13px] font-semibold tracking-[0.02em] text-text2">
             {s.kind === "answer" ? "Suggested answer" : `Proposed text for #${s.section_key}`}
             {s.edited_text && " (edited)"}
           </p>
-          <p className="mt-0.5 rounded border border-neutral-200 bg-white px-2 py-1.5 text-xs whitespace-pre-wrap text-neutral-800" data-testid="suggestion-text">
+          <p
+            className="mt-1 rounded-lg border border-line bg-surface px-2.5 py-2 text-sm leading-5 whitespace-pre-wrap text-text"
+            data-testid="suggestion-text"
+          >
             {shown}
           </p>
         </div>
       )}
-      {s.rationale && <p className="mt-1 text-xs text-neutral-600">{s.rationale}</p>}
+      {s.rationale && <p className="mt-1.5 text-sm leading-5 text-text2">{s.rationale}</p>}
       {s.pushback && (
-        <div className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-950" data-testid="pushback" role="note">
-          <p className="font-medium">Oracle pushes back</p>
-          <p className="mt-0.5">{s.pushback.reason}</p>
-          <ul className="mt-1 list-disc pl-4">
+        <div className="mt-2 rounded-lg bg-warn-bg px-2.5 py-2 text-sm leading-5 text-warn" data-testid="pushback" role="note">
+          <p className="font-semibold">Oracle pushes back</p>
+          <p className="mt-0.5 text-text">{s.pushback.reason}</p>
+          <ul className="mt-1 flex flex-col gap-1">
             {s.pushback.sources.map((src) => (
-              <li key={src.ref}>
-                <span className="text-amber-800">{src.kind === "goal" ? "Confirmed goal" : "Evidence"}: </span>
+              <li key={src.ref} className="text-text">
+                <span className="font-semibold text-warn">{src.kind === "goal" ? "Confirmed goal" : "Evidence"}: </span>
                 {src.url ? (
                   <a href={src.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
                     {src.title}
@@ -99,101 +108,101 @@ export function SuggestionCard({
                 ) : (
                   src.title
                 )}
-                {src.confidence != null && <span className="text-amber-800"> · confidence {src.confidence.toFixed(2)}</span>}
-                {src.excerpt && <span className="block text-amber-900/80">“{src.excerpt}”</span>}
+                {src.confidence != null && <span className="tnum text-text2"> · confidence {src.confidence.toFixed(2)}</span>}
+                {src.excerpt && <span className="block text-text2">“{src.excerpt}”</span>}
               </li>
             ))}
           </ul>
           {s.override_reason && (
-            <p className="mt-1">
-              <span className="font-medium">Kept the call:</span> {s.override_reason}
+            <p className="mt-1 text-text">
+              <span className="font-semibold">Kept the call:</span> {s.override_reason}
             </p>
           )}
         </div>
       )}
 
       {canDecide && s.status === "open" && mode === null && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
           {s.pushback ? (
             <>
-              <Button size="sm" variant="primary" disabled={busy} onClick={() => dismiss(true)}>
+              <Button variant="solid" icon="check" disabled={busy} onClick={() => dismiss(true)}>
                 Take the advice
               </Button>
-              <Button size="sm" disabled={busy} onClick={() => setMode("keep")}>
+              <Button disabled={busy} onClick={() => setMode("keep")}>
                 Keep my call
               </Button>
             </>
           ) : (
-            <Button size="sm" variant="primary" disabled={busy} onClick={() => accept({})}>
+            <Button variant="solid" icon="check" disabled={busy} onClick={() => accept({})}>
               Accept
             </Button>
           )}
           {editable && (
-            <Button size="sm" disabled={busy} onClick={() => setMode("edit")}>
+            <Button disabled={busy} onClick={() => setMode("edit")}>
               Edit
             </Button>
           )}
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => setMode("dismiss")}>
+          <Button variant="ghost" disabled={busy} onClick={() => setMode("dismiss")}>
             Dismiss
           </Button>
         </div>
       )}
       {canDecide && s.status === "accepted" && s.kind === "section_text" && (
-        <p className="mt-1.5 text-xs text-neutral-600">Accepted: use “Refine section” on #{s.section_key} to work it into the next version.</p>
+        <p className="mt-1.5 text-sm text-text2">Accepted: use “Refine section” on #{s.section_key} for the next version.</p>
       )}
 
       {mode === "edit" && (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <label className="flex flex-col gap-1 text-xs text-neutral-600">
+        <div className="mt-2 flex flex-col gap-2">
+          <label className={FIELD_LABEL}>
             {s.kind === "answer" ? "Answer" : "Proposed section text"}
-            <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} className={INPUT} />
+            <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} className={TEXTAREA} />
           </label>
           <div className="flex gap-1.5">
-            <Button size="sm" variant="primary" disabled={busy || !text.trim()} onClick={saveEdit}>
+            <Button variant="solid" icon="check" disabled={busy || !text.trim()} onClick={saveEdit}>
               Save edit
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode(null)}>
+            <Button variant="ghost" onClick={() => setMode(null)}>
               Cancel
             </Button>
           </div>
         </div>
       )}
       {mode === "keep" && (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <label className="flex flex-col gap-1 text-xs text-neutral-600">
+        <div className="mt-2 flex flex-col gap-2">
+          <label className={FIELD_LABEL}>
             Why keep your call? (logged for later review)
-            <textarea autoFocus rows={2} value={reason} onChange={(e) => setReason(e.target.value)} className={INPUT} />
+            <textarea autoFocus rows={2} value={reason} onChange={(e) => setReason(e.target.value)} className={TEXTAREA} />
           </label>
           <div className="flex gap-1.5">
-            <Button size="sm" variant="primary" disabled={busy || !reason.trim()} onClick={() => accept({ reason })}>
+            <Button variant="solid" disabled={busy || !reason.trim()} onClick={() => accept({ reason })}>
               Accept anyway
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode(null)}>
+            <Button variant="ghost" onClick={() => setMode(null)}>
               Cancel
             </Button>
           </div>
         </div>
       )}
       {mode === "dismiss" && (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <label className="flex flex-col gap-1 text-xs text-neutral-600">
+        <div className="mt-2 flex flex-col gap-2">
+          <label className={FIELD_LABEL}>
             Reason (optional)
-            <input value={reason} onChange={(e) => setReason(e.target.value)} className={INPUT} />
+            <input value={reason} onChange={(e) => setReason(e.target.value)} className={`h-9 ${TEXTAREA}`} />
           </label>
           <div className="flex flex-wrap gap-1.5">
-            <Button size="sm" disabled={busy} onClick={() => dismiss(false)}>
+            <Button disabled={busy} onClick={() => dismiss(false)}>
               Dismiss suggestion
             </Button>
-            <Button size="sm" disabled={busy} onClick={() => dismiss(true)}>
+            <Button variant="danger" disabled={busy} onClick={() => dismiss(true)}>
               Dismiss and decline the feedback
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode(null)}>
+            <Button variant="ghost" onClick={() => setMode(null)}>
               Cancel
             </Button>
           </div>
         </div>
       )}
-      {error && <p className="mt-1 text-xs text-rose-700">{error}</p>}
+      {error && <InlineError>{error}</InlineError>}
     </div>
   );
 }

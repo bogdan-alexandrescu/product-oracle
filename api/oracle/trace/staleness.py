@@ -30,7 +30,10 @@ Which change reaches which dependency:
   deleted also reaches the wholes it was part of or verified (``part_of``, ``verifies``),
   and what is downstream of those wholes (a sibling part and its criteria); an edge
   change reaches the wholes in ``data["wholes"]``. A deleted root's dependencies stay,
-  potentially stale, with a snapshot of what they pointed at;
+  potentially stale, with a snapshot of what they pointed at. A deleted root also
+  reaches the sections whose links cite the evidence it takes with it (its own and its
+  edges', ``data["evidence_ids"]``), and the links it leaves with no target are kept in
+  ``data["trace"]["links"]``;
 - ``source_permission``: evidence and the sources behind it. With cause
   ``source_permission`` (subject: a source or source item) or ``source_deleted``
   (subject: a source, recorded before it is deleted), the evidence that came from its
@@ -466,6 +469,32 @@ async def _by_source_permission(db: AsyncSession, subject: Subject, out: Affecte
         )
 
 
+async def _by_deleted_entities(db: AsyncSession, subject: Subject, out: Affected) -> None:
+    """An entity about to be deleted takes with it the section links naming it and its
+    evidence and its edges' evidence (``data["evidence_ids"]``). The sections whose links
+    cite that evidence are reached as for removed evidence. A link that keeps another
+    target only drops the deleted ones (oracle.v2.links); the links left with no target
+    are deleted, and ``data["trace"]["links"]`` keeps what they were."""
+    entity_ids = {r.id for r in roots_of(subject) if r.cause == "entity_deleted"}
+    if not entity_ids:
+        return
+    evidence_ids = {_uuid(i) for i in subject.data.get("evidence_ids", [])}
+    for root in subject.data.get("roots") or []:
+        evidence_ids |= {_uuid(i) for i in root.get("evidence_ids") or []}
+    conditions = [DocumentSectionLink.entity_id.in_(entity_ids)]
+    if evidence_ids:
+        conditions.append(DocumentSectionLink.evidence_id.in_(evidence_ids))
+    links = (await db.scalars(select(DocumentSectionLink).where(or_(*conditions)))).all()
+    citing = [link for link in links if link.evidence_id in evidence_ids]
+    why = {link.id: EVIDENCE_CAUSES["evidence_deleted"] for link in citing}
+    await _by_sections(db, citing, why, out)
+    out.links.extend(
+        link_snapshot(link)
+        for link in links
+        if left_without_target(link, evidence_ids, entity_ids=entity_ids)
+    )
+
+
 def _module_sections(modules: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {m["key"]: m for m in modules or [] if "key" in m}
 
@@ -519,6 +548,7 @@ async def affected(db: AsyncSession, subject: Subject) -> Affected:
         await _by_document_section(db, subject, out)
     elif subject.kind in ENTITY_SUBJECTS:
         await _by_entities(db, roots_of(subject), out)
+        await _by_deleted_entities(db, subject, out)
     elif subject.kind == "source_permission":
         await _by_source_permission(db, subject, out)
     elif subject.kind == "composition_revision":

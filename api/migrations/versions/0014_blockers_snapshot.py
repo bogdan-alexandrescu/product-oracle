@@ -16,7 +16,7 @@ snapshot for a strategy it cannot read).
 Downgrade deletes exactly the events this upgrade wrote (``data.migration``).
 
 Revision ID: 0014_blockers_snapshot
-Revises: 0014_trace
+Revises: 0015_section_table_rows
 """
 
 import json
@@ -28,7 +28,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0014_blockers_snapshot"
-down_revision: str | None = "0014_trace"
+down_revision: str | None = "0015_section_table_rows"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

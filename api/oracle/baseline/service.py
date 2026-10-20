@@ -40,6 +40,8 @@ from oracle.baseline.models import (
     Evidence,
     Proposal,
 )
+from oracle.v2 import links
+from oracle.v2.models import DocumentSectionLink
 
 ENTITY_FIELDS = ("title", "body", "attrs", "status")
 # attrs keys a module owns, and the routes that change them.
@@ -362,6 +364,7 @@ async def decide_proposal(
                 if p["op"] == "update":
                     await update_entity(db, writer, target, fields)
                 else:
+                    await _detach(db, proposal)
                     await delete_entity(db, writer, target)
         else:
             if p["op"] == "create":
@@ -371,6 +374,7 @@ async def decide_proposal(
                 if p["op"] == "update":
                     await update_edge(db, writer, target, fields)
                 else:
+                    await _detach(db, proposal)
                     await delete_edge(db, writer, target)
     proposal.status = "accepted" if accept else "rejected"
     proposal.decided_by = principal.id
@@ -385,6 +389,18 @@ async def decide_proposal(
     )
     await db.flush()
     return proposal
+
+
+async def _detach(db: AsyncSession, proposal: Proposal) -> None:
+    """An accepted delete proposal outlives its target: the target's foreign key would
+    cascade it away mid-decision. The payload keeps which item it was."""
+    proposal.payload = {
+        **proposal.payload,
+        "fields": {**(proposal.payload.get("fields") or {}),
+                   "id": str(proposal.entity_id or proposal.edge_id)},
+    }  # fmt: skip
+    proposal.entity_id = proposal.edge_id = None
+    await db.flush()
 
 
 def _entity_create_args(fields: dict[str, Any]) -> dict[str, Any]:
@@ -455,14 +471,29 @@ def _change_subject(entity: Entity, before: dict[str, Any] | None) -> str | None
     if before is not None and entity.type == "constraint":
         after = entity_snapshot(entity)
         old, new = dict(before.get("attrs") or {}), dict(after["attrs"])
-        if old.pop("blocker", None) != new.pop("blocker", None):
+        old_blocker, new_blocker = old.pop("blocker", None), new.pop("blocker", None)
+        if old_blocker != new_blocker:
             # Only the blocker routes change attrs.blocker (MANAGED_ATTRS). They record
-            # their own changes (``blocker_status``, once per gated document, with
-            # from_status and to_status: oracle.blockers.service._record), so a write that
-            # changes nothing else is not recorded here as well.
+            # their own ``blocker_status`` changes for status, type and severity changes
+            # and option selection (oracle.blockers.service._record). Any other strategy
+            # field (threshold, timing, documents, impacted entities, scaling...) is not
+            # recorded there, so it stays an ``entity`` change here: a duplicate event is
+            # harmless, a missing one leaves dependents unmarked.
             rest = {**before, "attrs": old} != {**after, "attrs": new}
-            return "entity" if rest else None
+            if rest or _strip_route_recorded(old_blocker) != _strip_route_recorded(new_blocker):
+                return "entity"
+            return None
     return "entity"
+
+
+# The blocker fields whose changes the blocker routes record themselves.
+_ROUTE_RECORDED_BLOCKER_KEYS = ("status", "revision", "type", "severity", "selected_option_id")
+
+
+def _strip_route_recorded(blocker: Any) -> Any:
+    if not isinstance(blocker, dict):
+        return blocker
+    return {k: v for k, v in blocker.items() if k not in _ROUTE_RECORDED_BLOCKER_KEYS}
 
 
 # Edge meaning for change propagation (as in oracle.trace.graph): for these types the
@@ -492,11 +523,13 @@ async def _record_change(
     *,
     edge: dict[str, Any] | None = None,
     wholes: list[uuid.UUID] | None = None,
+    evidence_ids: list[uuid.UUID] | None = None,
 ) -> None:
     """v2 hook: what is built on this entity may now be stale (oracle.trace).
 
     Inside :func:`batched_changes` the change is collected instead (a deletion is
-    always recorded at once, while the entity and its edges still exist)."""
+    always recorded at once, while the entity and its edges still exist).
+    ``evidence_ids``: the evidence a deletion takes with it."""
     kind = _change_subject(entity, before)
     if kind is None:
         return
@@ -511,6 +544,7 @@ async def _record_change(
         "entity": _entity_ref(entity),
         "edge": edge,
         "wholes": [str(w) for w in wholes or []],
+        "evidence_ids": [str(e) for e in evidence_ids or []],
     }
     batch = db.info.get(_BATCH)
     if batch is not None and cause != "entity_deleted":
@@ -527,6 +561,7 @@ def _collect(batch: dict[uuid.UUID, dict[str, Any]], entry: dict[str, Any]) -> N
         return
     seen["fields"] = sorted(set(seen["fields"]) | set(entry["fields"]))
     seen["wholes"] = list(dict.fromkeys(seen["wholes"] + entry["wholes"]))
+    seen["evidence_ids"] = list(dict.fromkeys(seen["evidence_ids"] + entry["evidence_ids"]))
     seen["entity"] = entry["entity"]
     if REMOVAL_PRIORITY.get(entry["cause"], 0) > REMOVAL_PRIORITY.get(seen["cause"], 0):
         seen["cause"] = entry["cause"]
@@ -539,6 +574,8 @@ def _data(entry: dict[str, Any]) -> dict[str, Any]:
         data["edge"] = entry["edge"]
     if entry["wholes"]:
         data["wholes"] = entry["wholes"]
+    if entry["evidence_ids"]:
+        data["evidence_ids"] = entry["evidence_ids"]
     return data
 
 
@@ -617,6 +654,48 @@ async def _record_edge_change(
     await _record_change(
         db, actor, target, entity_snapshot(target), cause, edge=snapshot, wholes=wholes
     )
+
+
+async def _evidence_of(
+    db: AsyncSession, *, entity_ids: list[uuid.UUID] = (), edge_ids: list[uuid.UUID] = ()
+) -> list[uuid.UUID]:
+    conditions = []
+    if entity_ids:
+        conditions.append(Evidence.entity_id.in_(list(entity_ids)))
+    if edge_ids:
+        conditions.append(Evidence.edge_id.in_(list(edge_ids)))
+    if not conditions:
+        return []
+    stmt = select(Evidence.id).where(or_(*conditions)).order_by(Evidence.created_at, Evidence.id)
+    return list((await db.scalars(stmt)).all())
+
+
+async def _release_edge_evidence(db: AsyncSession, actor: str, edge: Edge) -> set[uuid.UUID]:
+    """An edge about to be deleted takes its evidence with it. When a section link cites
+    that evidence, the deletion is recorded as removed evidence is (``evidence_deleted``,
+    before the delete, whether or not the edge is confirmed or the edge change batched):
+    the sections citing it may now be stale. Returns the evidence ids to release."""
+    evidence_ids = await _evidence_of(db, edge_ids=[edge.id])
+    if not evidence_ids:
+        return set()
+    cited = await db.scalar(
+        select(DocumentSectionLink.id)
+        .where(DocumentSectionLink.evidence_id.in_(evidence_ids))
+        .limit(1)
+    )
+    if cited is not None:
+        await changes.record_change(
+            db,
+            "source_permission",
+            cause="evidence_deleted",
+            actor=actor,
+            subject_ref=f"evidence of a {edge.type.replace('_', ' ')} link",
+            data={
+                "evidence_ids": [str(e) for e in evidence_ids],
+                "edge": {"id": str(edge.id), **edge_snapshot(edge)},
+            },
+        )
+    return set(evidence_ids)
 
 
 # --- entities ------------------------------------------------------------------------------
@@ -740,8 +819,21 @@ async def delete_entity(db: AsyncSession, writer: Writer, entity: Entity) -> Wri
         entity.id,
         {"before": entity_snapshot(entity), "origin": writer.origin, "reason": writer.reason},
     )
-    # Before the delete: what was built on it is found through its links.
-    await _record_change(db, writer.actor, entity, entity_snapshot(entity), "entity_deleted")
+    # Before the delete: what was built on it is found through its links, and so are the
+    # section links citing it, its evidence or its edges' evidence (all go with it). Then
+    # those links are released as for removed evidence (oracle.v2.links): one that keeps
+    # another target only drops the deleted ones, one left with none goes.
+    edge_ids = (
+        await db.scalars(
+            select(Edge.id).where(or_(Edge.src_id == entity.id, Edge.dst_id == entity.id))
+        )
+    ).all()
+    evidence_ids = await _evidence_of(db, entity_ids=[entity.id], edge_ids=list(edge_ids))
+    await _record_change(
+        db, writer.actor, entity, entity_snapshot(entity), "entity_deleted",
+        evidence_ids=evidence_ids,
+    )  # fmt: skip
+    await links.release(db, entity_ids={entity.id}, evidence_ids=set(evidence_ids))
     await db.delete(entity)
     await db.flush()
     if supporters:
@@ -887,7 +979,9 @@ async def delete_edge(db: AsyncSession, writer: Writer, edge: Edge) -> WriteResu
         edge.id,
         {"before": edge_snapshot(edge), "origin": writer.origin, "reason": writer.reason},
     )
+    evidence_ids = await _release_edge_evidence(db, writer.actor, edge)
     await _record_edge_change(db, writer.actor, edge, "edge_deleted", was=edge.status)
+    await links.release(db, evidence_ids=evidence_ids)
     await db.delete(edge)
     await db.flush()
     if type_ == "supports":
