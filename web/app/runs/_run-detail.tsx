@@ -192,7 +192,7 @@ export function RunDetail({ id }: { id: string }) {
                     <Button
                       disabled={busy}
                       onClick={async () => {
-                        if (await confirmInPage({ action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
+                        if (await confirmInPage({ destructive: true, action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
                           void act(() => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path)));
                         }
                       }}
@@ -210,7 +210,7 @@ export function RunDetail({ id }: { id: string }) {
                       key={wid}
                       disabled={busy}
                       onClick={async () => {
-                        if (await confirmInPage({ action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
+                        if (await confirmInPage({ destructive: true, action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
                           void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path, body: { workflow_id: wid } })));
                         }
                       }}
@@ -283,7 +283,7 @@ export function RunDetail({ id }: { id: string }) {
                   disabled={busy}
                   data-testid="run-cancel"
                   onClick={async () => {
-                    if (await confirmInPage({ action: "Cancel run", message: "Cancel this run? Agents still working are stopped." })) {
+                    if (await confirmInPage({ destructive: true, action: "Cancel run", message: "Cancel this run? Agents still working are stopped." })) {
                       void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel", path)));
                     }
                   }}

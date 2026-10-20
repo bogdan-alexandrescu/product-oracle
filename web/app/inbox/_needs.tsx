@@ -444,7 +444,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
           <Button
             disabled={busy !== null}
             onClick={async () => {
-              if (await confirmInPage({ action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
+              if (await confirmInPage({ destructive: true, action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
                 void act(`stop-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path(r.id))));
               }
             }}
@@ -465,7 +465,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
             key={wid}
             disabled={busy !== null}
             onClick={async () => {
-              if (await confirmInPage({ action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
+              if (await confirmInPage({ destructive: true, action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
                 void act(`again-${r.id}-${wid}`, () =>
                   unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path(r.id), body: { workflow_id: wid } })),
                 );

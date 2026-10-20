@@ -244,7 +244,7 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
   }
 
   async function remove() {
-    if (!(await confirmInPage({ action: "Delete", message: `Delete “${source.name}” and everything it pulled in?` }))) return;
+    if (!(await confirmInPage({ destructive: true, action: "Delete", message: `Delete “${source.name}” and everything it pulled in?` }))) return;
     const ok = await act(() => unwrap(api.DELETE("/v1/sources/{source_id}", path)).then(() => true));
     if (ok) onDelete();
   }

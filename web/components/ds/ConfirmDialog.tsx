@@ -58,6 +58,8 @@ export type ConfirmAsk = {
   action: string;
   /** The question, word for word. */
   message: string;
+  /** Cancels or deletes something: Back has the focus (Enter does not confirm) and the action is drawn as danger. */
+  destructive?: boolean;
 };
 
 type Pending = ConfirmAsk & { resolve: (yes: boolean) => void };
@@ -133,10 +135,14 @@ function ConfirmDialog({ ask, onAnswer }: { ask: ConfirmAsk; onAnswer: (yes: boo
           {ask.message}
         </p>
         <div className="flex justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
-          <Button variant="ghost" onClick={() => onAnswer(false)}>
+          <Button variant="ghost" data-autofocus={ask.destructive ? true : undefined} onClick={() => onAnswer(false)}>
             Back
           </Button>
-          <Button variant="primary" data-autofocus onClick={() => onAnswer(true)}>
+          <Button
+            variant={ask.destructive ? "danger" : "primary"}
+            data-autofocus={ask.destructive ? undefined : true}
+            onClick={() => onAnswer(true)}
+          >
             {ask.action}
           </Button>
         </div>

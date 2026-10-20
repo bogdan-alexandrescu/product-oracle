@@ -8,6 +8,7 @@ import { Button, Chip, InfoTip, Notice } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { MOCK_LOGIN } from "@/lib/api/mock/fixtures";
+import { safeNextPath } from "@/lib/safe-next";
 
 export function LoginForm() {
   const router = useRouter();
@@ -16,8 +17,8 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  // Only follow same-site paths.
-  const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/home";
+  // Only follow same-site paths (nothing is rendered from it, so the server pass may say /home).
+  const target = typeof window === "undefined" ? "/home" : safeNextPath(next, window.location.origin);
 
   // Already signed in (e.g. by Google IAP in front of the app): skip the form.
   useEffect(() => {
