@@ -296,3 +296,14 @@ test("sign-in lands on Home; a deep link's next path still wins", async ({ page 
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/runs$/);
 });
+
+test("sign-in never follows a next path that leaves the site", async ({ page }) => {
+  await login(page);
+  await page.context().clearCookies();
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/login?next=/%5Cevil.com");
+  await page.getByLabel("Email").fill(ADMIN.email);
+  await page.getByLabel("Password").fill(ADMIN.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/localhost:\d+\/home$/);
+});

@@ -223,7 +223,13 @@ test("cancel a run: it asks in the page, never in a browser dialog; going back d
 
   await cancel.click();
   await expect(ask).toContainText("Cancel this run? Agents still working are stopped.");
-  await expect(ask.getByRole("button", { name: "Cancel run" })).toBeFocused();
+  // Destructive: Back has the focus, so Enter right after it opens does not cancel.
+  await expect(ask.getByRole("button", { name: "Back" })).toBeFocused();
+  await expect(ask.getByRole("button", { name: "Cancel run" })).toHaveAttribute("data-variant", "danger");
+  await page.keyboard.press("Enter");
+  await expect(ask).toHaveCount(0);
+  await expect(status(page)).toHaveText(before!);
+  await cancel.click();
   await ask.getByRole("button", { name: "Back" }).click();
   await expect(ask).toHaveCount(0);
   await expect(cancel).toBeFocused();
