@@ -101,7 +101,7 @@ class FollowUpOut(BaseModel):
 
     id: uuid.UUID
     member_id: uuid.UUID
-    kind: Literal["provider_revoke", "run_cancel"]
+    kind: Literal["provider_revoke", "run_cancel", "run_recheck"]
     provider: str | None = None
     status: FollowUpStatus
     attempts: int

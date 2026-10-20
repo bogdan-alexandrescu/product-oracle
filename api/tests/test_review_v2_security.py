@@ -115,7 +115,7 @@ async def test_a_cited_source_deleted_blocks_publish(client):
         [event] = (await s.scalars(select(ChangeEvent))).all()
         assert (event.subject_kind, event.cause, event.subject_id) == (
             "source_permission",
-            "source_revoked",
+            "source_deleted",
             source_id,
         )
         assert str(item_id) in event.data["item_ids"]

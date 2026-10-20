@@ -7,9 +7,12 @@ The known keys and how each value is checked:
 - ``review_policy``: the company's default review policy (``oracle.review.state``):
   designated decider, mandatory reviewers, required sections, which sections need an
   approval before a publish, re-review on change. A document's own policy replaces it.
-
 - ``publish_latest_only``: true (default) refuses publishing a version a newer one
   superseded; false lets an approved older version be published.
+- ``blocker_risk_acceptance_role`` (B4): ``approver`` or ``owner``, the lowest role that
+  may accept a critical hard blocker's risk or approve its feasibility scope.
+- ``blocker_risk_review_max_days`` (B4): an integer, 1-365, the latest review date of an
+  accepted risk, in days from its acceptance.
 
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
@@ -42,7 +45,12 @@ DEFAULTS: dict[str, Any] = {
         "rereview_on_change": True,
     },
     "publish_latest_only": True,
+    # B4 (owner, 2026-10-19): owners only, reviewed within at most 90 days.
+    "blocker_risk_acceptance_role": "owner",
+    "blocker_risk_review_max_days": 90,
 }
+RISK_ACCEPTANCE_ROLES = ("approver", "owner")
+MAX_REVIEW_DAYS = 365
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
 # key takes it shared; either way the caller is re-read under it.
@@ -142,6 +150,20 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
     if key == "publish_latest_only":
         if not isinstance(value, bool):
             raise InvalidSetting("publish_latest_only must be true or false")
+        return value
+    if key == "blocker_risk_acceptance_role":
+        if value not in RISK_ACCEPTANCE_ROLES:
+            raise InvalidSetting(
+                f"blocker_risk_acceptance_role must be one of {', '.join(RISK_ACCEPTANCE_ROLES)}"
+            )
+        return value
+    if key == "blocker_risk_review_max_days":
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise InvalidSetting("blocker_risk_review_max_days must be a whole number of days")
+        if not 1 <= value <= MAX_REVIEW_DAYS:
+            raise InvalidSetting(
+                f"blocker_risk_review_max_days must be between 1 and {MAX_REVIEW_DAYS}"
+            )
         return value
     raise KeyError(key)
 

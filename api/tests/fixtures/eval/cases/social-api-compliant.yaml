@@ -1,0 +1,24 @@
+id: social-api-compliant
+description: >
+  The same platform policy, resolved the compliant way: the member shares through the
+  platform's own share dialog. The plan no longer relies on the unsupported operation, so
+  the hard check passes and the recommended option stays compliant (§16 item 8).
+covers: [social_api_policy]
+extends: good-prd
+add:
+  blockers:
+    - ref: social-posting
+      key: social-auto-posting
+      title: Example social network forbids automated posting
+      blocker: {type: hard, limit_kind: policy, severity: critical, status: resolved}
+      third_party: {provider: Example social network, operation: automated posting on a member's behalf, limit_kind: policy, supported: false}
+      links: [scope]
+      options:
+        - {title: Member shares through the platform's share dialog, approach: alternative_workflow, compliance: compliant, status: selected}
+        - {title: Post through a headless browser session, approach: direct_remedy, compliance: non_compliant, status: rejected}
+expected:
+  third_party_support: pass
+  blocker_feasibility: pass
+blocked: false
+rationale_contains:
+  third_party_support: [share dialog]

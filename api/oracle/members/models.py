@@ -34,7 +34,10 @@ class Invite(TenantScoped, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel")
+# run_recheck: a run a disable or a demotion could not lock (busy), to recheck for the
+# change once it can (oracle.runs.service.recheck_run). run_cancel: no longer recorded
+# (a stopped run's workflows are cancelled from its ``searches``).
+FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel", "run_recheck")
 # pending: retried by the tick, by time; failed: still not done after the retry window,
 # no more automatic retries (an owner's Retry or Dismiss in the Inbox); done; dismissed:
 # an owner gave up on it.
@@ -43,7 +46,8 @@ FOLLOW_UP_STATUSES = ("pending", "done", "failed", "dismissed")
 
 class MemberFollowUp(TenantScoped, Base):
     """An outbound call a disable owes, made after the disable commits (C2): revoking a
-    connection's grant at its provider, cancelling a run segment at the runtime. Kept
+    connection's grant at its provider; or a run a disable or a demotion could not lock
+    to recheck (``run_recheck``). Kept
     out of the disable's transaction so the company-wide review gate is never held
     across a network call; its outcome is recorded here and retried from the tick
     (``oracle.members.service.run_follow_ups``), with a backoff, for 24 hours; a provider
@@ -58,7 +62,7 @@ class MemberFollowUp(TenantScoped, Base):
 
     member_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
     kind: Mapped[str] = mapped_column(Text, nullable=False)
-    # The connection (deleted by the disable) or the run segment the call is for.
+    # The connection (deleted by the disable), or the run to recheck.
     target_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     # provider_revoke: the connection's provider, auth mode and its credential, still
     # encrypted, kept only until the revoke is done or an owner dismisses it (then

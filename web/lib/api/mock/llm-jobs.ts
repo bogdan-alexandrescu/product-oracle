@@ -45,11 +45,12 @@ export type LlmContext = {
   ) => Version;
 };
 
-const KINDS: Job["kind"][] = ["review_comments", "reporting", "refinement"];
+const KINDS: Job["kind"][] = ["review_comments", "reporting", "refinement", "quality_review"];
 const LABEL: Record<Job["kind"], string> = {
   review_comments: "Review comments",
   reporting: "Reporting",
   refinement: "Refinement",
+  quality_review: "Quality review",
 };
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);

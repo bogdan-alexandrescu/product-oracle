@@ -3,7 +3,20 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Badge, ErrorNote, Loading } from "@/components/ui";
+import {
+  Chip,
+  DataTable,
+  InfoTip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  LinkButton,
+  Notice,
+  PageHeader,
+  Panel,
+  Split,
+  type Column,
+} from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
@@ -15,87 +28,158 @@ const KINDS = [
   { kind: "roadmap", title: "Roadmap templates" },
 ] as const;
 
-function TemplateTable({ templates }: { templates: TemplateSummary[] }) {
+const KIND_LABEL: Record<TemplateSummary["kind"], string> = { prd: "PRD", roadmap: "Roadmap" };
+
+const COLUMNS: Column<TemplateSummary>[] = [
+  {
+    key: "name",
+    header: "Template",
+    cell: (t) => (
+      <span className="flex min-w-0 items-center gap-2">
+        <Link
+          href={`/settings/templates/${t.key}`}
+          onClick={(e) => e.stopPropagation()}
+          className={`min-w-0 truncate font-medium hover:underline ${t.archived_at ? "text-text2" : "text-text"}`}
+        >
+          {t.name}
+        </Link>
+        {t.builtin && <Chip kind="na">Built-in</Chip>}
+        {t.archived_at && <Chip kind="warn">Archived</Chip>}
+      </span>
+    ),
+  },
+  {
+    key: "theme",
+    header: "Suggested theme",
+    width: "190px",
+    hideOnPhone: true,
+    cell: (t) => <span className="font-mono text-sm text-text2">{t.suggested_theme ?? "—"}</span>,
+  },
+  { key: "latest", header: "Latest", width: "76px", align: "right", cell: (t) => <span className="tnum">v{t.latest_version}</span> },
+  {
+    key: "added",
+    header: "Added",
+    width: "120px",
+    align: "right",
+    hideOnPhone: true,
+    cell: (t) => <span className="tnum text-text2">{formatDate(t.created_at)}</span>,
+  },
+];
+
+function TemplateInspector({ t }: { t: TemplateSummary }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-      <table className="w-full text-sm">
-        <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
-          <tr>
-            <th className="px-4 py-2 font-medium">Template</th>
-            <th className="px-4 py-2 font-medium">Suggested theme</th>
-            <th className="px-4 py-2 font-medium">Latest</th>
-            <th className="px-4 py-2 font-medium">Added</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-neutral-200">
-          {templates.map((t) => (
-            <tr key={t.key} data-testid={`template-row-${t.key}`} className={t.archived_at ? "bg-neutral-50 text-neutral-500" : "hover:bg-neutral-50"}>
-              <td className="px-4 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link href={`/settings/templates/${t.key}`} className="font-medium text-neutral-900 hover:underline">
-                    {t.name}
-                  </Link>
-                  {t.builtin && <Badge>Built-in</Badge>}
-                  {t.archived_at && <Badge tone="amber">Archived</Badge>}
-                </div>
-                <div className="font-mono text-[11px] text-neutral-400">{t.key}</div>
-                {t.description && <p className="mt-1 text-xs text-neutral-600">{t.description}</p>}
-              </td>
-              <td className="px-4 py-3 font-mono text-xs text-neutral-600">{t.suggested_theme ?? "—"}</td>
-              <td className="px-4 py-3 text-neutral-700">v{t.latest_version}</td>
-              <td className="px-4 py-3 text-neutral-500">{formatDate(t.created_at)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Inspector
+      eyebrow="Template · selected"
+      title={t.name}
+      testId="template-inspector"
+      chips={
+        <>
+          <Chip hero kind="acc">
+            {KIND_LABEL[t.kind]}
+          </Chip>
+          {t.builtin && (
+            <Chip hero kind="na">
+              Built-in
+            </Chip>
+          )}
+          {t.archived_at && (
+            <Chip hero kind="warn">
+              Archived
+            </Chip>
+          )}
+        </>
+      }
+      action={
+        <LinkButton variant="hero" href={`/settings/templates/${t.key}`}>
+          Open
+        </LinkButton>
+      }
+      stats={[
+        { label: "Latest", value: `v${t.latest_version}` },
+        { label: "Added", value: <span className="text-lg">{formatDate(t.created_at)}</span> },
+      ]}
+    >
+      <InspectorSection label="Facts">
+        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
+        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.suggested_theme ?? "—"}</span>}>
+          Suggested theme
+        </InspectorRow>
+      </InspectorSection>
+      {t.description && (
+        <InspectorSection label="Description">
+          <p className="text-[15px] text-text">{t.description}</p>
+        </InspectorSection>
+      )}
+      {t.suggest_when && (
+        <InspectorSection label="Suggested when">
+          <p className="text-[15px] text-text">{t.suggest_when}</p>
+        </InspectorSection>
+      )}
+    </Inspector>
   );
 }
 
 export default function TemplatesPage() {
   const [showArchived, setShowArchived] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
   const q = useQuery(`templates|${showArchived}`, () =>
     unwrap(api.GET("/v1/templates", { params: { query: { include_archived: showArchived } } })),
   );
 
-  return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      <div className="mb-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Templates</h1>
-        <Link
-          href="/settings/templates/new"
-          className="ml-auto rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
-        >
-          New template
-        </Link>
-      </div>
-      <p className="mb-4 text-sm text-neutral-600">
-        The skeletons new PRDs and roadmaps start from. Every saved change to a template is a new version; documents keep
-        the version they started from.
-      </p>
-      <label className="mb-6 inline-flex items-center gap-2 text-sm text-neutral-700">
-        <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-        Show archived
-      </label>
+  const lists = KINDS.map(({ kind, title }) => ({
+    kind,
+    title,
+    rows: q.data?.filter((t) => t.kind === kind).sort((a, b) => a.name.localeCompare(b.name)),
+  }));
+  const all = lists.flatMap((l) => l.rows ?? []);
+  const current = all.find((t) => t.key === selected) ?? all[0];
 
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      {q.loading && <Loading />}
-      {q.data &&
-        KINDS.map(({ kind, title }) => {
-          const list = q.data!.filter((t) => t.kind === kind).sort((a, b) => a.name.localeCompare(b.name));
-          return (
-            <section key={kind} className="mb-8" aria-labelledby={`templates-${kind}`} data-testid={`templates-${kind}`}>
-              <h2 id={`templates-${kind}`} className="mb-3 text-sm font-semibold text-neutral-700">
-                {title} <span className="font-normal text-neutral-400">({list.length})</span>
-              </h2>
-              {list.length === 0 ? (
-                <p className="text-sm text-neutral-600">No {kind === "prd" ? "PRD" : "roadmap"} templates.</p>
-              ) : (
-                <TemplateTable templates={list} />
-              )}
-            </section>
-          );
-        })}
-    </div>
+  const toggle = (
+    <label className="inline-flex items-center gap-2 text-sm text-text2">
+      <input
+        type="checkbox"
+        className="size-4 accent-[var(--accent)]"
+        checked={showArchived}
+        onChange={(e) => setShowArchived(e.target.checked)}
+      />
+      Show archived
+    </label>
+  );
+
+  return (
+    <>
+      <PageHeader
+        title="Templates"
+        status={
+          <InfoTip label="templates" align="start" side="bottom">
+            The skeletons new PRDs and roadmaps start from. Every saved change to a template is a new version; documents keep
+            the version they started from.
+          </InfoTip>
+        }
+        action={
+          <LinkButton variant="primary" icon="plus" href="/settings/templates/new">
+            New template
+          </LinkButton>
+        }
+      />
+      <Split inspector={current ? <TemplateInspector t={current} /> : undefined}>
+        {q.error && <Notice tone="error">{q.error}</Notice>}
+        {lists.map(({ kind, title, rows }, i) => (
+          <Panel key={kind} title={title} count={rows?.length} tools={i === 0 ? toggle : undefined} testId={`templates-${kind}`}>
+            <DataTable
+              label={title}
+              columns={COLUMNS}
+              rows={rows}
+              loading={q.loading}
+              rowKey={(t) => t.key}
+              selected={current?.key}
+              onSelect={(k) => setSelected(k)}
+              rowProps={(t) => ({ "data-testid": `template-row-${t.key}` })}
+              empty={kind === "prd" ? "No PRD templates" : "No roadmap templates"}
+            />
+          </Panel>
+        ))}
+      </Split>
+    </>
   );
 }

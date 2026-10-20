@@ -151,7 +151,7 @@ async def update_source(
 async def delete_source(
     source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> Response:
-    await service.delete_source(db, await _owned(db, principal, source_id), principal)
+    await service.delete_source(db, await _owned(db, principal, source_id), actor=principal)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

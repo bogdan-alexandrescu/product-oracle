@@ -89,10 +89,10 @@ function PreviewFrame({
           data-testid={testId}
           sandbox=""
           srcDoc={html ?? ""}
-          className="h-[34rem] w-full rounded-md border border-neutral-200 bg-white"
+          className="h-[34rem] w-full rounded-button border border-line bg-surface"
         />
       ) : (
-        <div className="h-[34rem] w-full overflow-hidden rounded-md border border-neutral-200 bg-neutral-200">
+        <div className="h-[34rem] w-full overflow-hidden rounded-button border border-line bg-surface2">
           <iframe
             title={title}
             data-testid={testId}
@@ -104,20 +104,27 @@ function PreviewFrame({
         </div>
       )}
       {(pending || !html) && !error && (
-        <span className="absolute top-2 right-2 rounded bg-white/90 px-1.5 py-0.5 text-[11px] text-neutral-500">
+        <span className="absolute top-2 right-2 rounded-full bg-surface px-2 py-0.5 text-[13px] text-text2 shadow-panel">
           Updating…
         </span>
       )}
-      {error && <p className="mt-1 text-xs text-rose-800">Preview failed: {error}</p>}
+      {error && <p className="mt-1 text-sm text-crit">Preview failed: {error}</p>}
     </div>
   );
 }
 
-/** A small, non-interactive picture of a theme: the preview page scaled down to a quarter. */
-export function ThemeThumbnail({ tokens, css, kind }: PreviewIn) {
+/**
+ * A small, non-interactive picture of a theme: the preview page scaled down (a quarter by
+ * default: 160 x 120).
+ */
+export function ThemeThumbnail({ tokens, css, kind, scale = 0.25 }: PreviewIn & { scale?: number }) {
   const live = useLive<PreviewIn, string>({ tokens, css, kind }, loadPreview, 0);
   return (
-    <div aria-hidden className="pointer-events-none h-[120px] w-[160px] overflow-hidden rounded border border-neutral-200 bg-white">
+    <div
+      aria-hidden
+      className="pointer-events-none overflow-hidden rounded border border-line bg-surface"
+      style={{ width: 640 * scale, height: 480 * scale }}
+    >
       {live.data && (
         <iframe
           title="Theme thumbnail"
@@ -125,7 +132,7 @@ export function ThemeThumbnail({ tokens, css, kind }: PreviewIn) {
           sandbox=""
           srcDoc={live.data}
           className="border-0"
-          style={{ width: 640, height: 480, transform: "scale(0.25)", transformOrigin: "top left" }}
+          style={{ width: 640, height: 480, transform: `scale(${scale})`, transformOrigin: "top left" }}
         />
       )}
     </div>

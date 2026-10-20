@@ -32,6 +32,17 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   await expect(page.getByTestId("run-notes")).toContainText("Local agent runtime");
   await expect(page.getByTestId("run-spent")).toHaveText("$6.30");
 
+  // The open checkpoint: its state in the row (named once, in the decision and the inspector),
+  // Decide as the page's primary action.
+  const chip = page.getByTestId("segment-baseline").getByTestId("checkpoint-waiting");
+  await expect(chip).toHaveText(/^Waiting/);
+  await expect(chip).toHaveAttribute("href", "#decide");
+  await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Confirm the baseline");
+  await expect(page.getByRole("complementary", { name: "Run" }).filter({ visible: true })).toContainText("Confirm the baseline");
+  await page.getByRole("link", { name: "Decide", exact: true }).click();
+  await expect(page).toHaveURL(/#decide$/);
+  await expect(page.locator("#decide")).toBeInViewport();
+
   // The baseline's artifacts can be read before deciding.
   const baseline = page.getByTestId("segment-baseline");
   await baseline.getByRole("button", { name: "baseline.yaml" }).click();
@@ -121,4 +132,42 @@ test("cancel a run", async ({ page }) => {
   await expect(status(page)).toHaveText("Cancelled");
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Skipped");
   await expect(page.getByRole("button", { name: "Cancel run" })).toHaveCount(0);
+});
+
+test("mock run ids and times are stable: every page load, the runs list, the inbox and run detail agree", async ({ browser }) => {
+  // Two fresh browsers seed the mock separately; the seeded runs keep their ids and times.
+  const ids: Record<string, string>[] = [];
+  const dates: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await openRuns(page);
+    const rows = page.getByTestId("run-row");
+    await expect(rows).toHaveCount(4);
+    const byRun: Record<string, string> = {};
+    for (const row of await rows.all()) {
+      const slug = (await row.getByRole("link").first().innerText()).trim();
+      byRun[slug] = (await row.getByRole("link").first().getAttribute("href"))!;
+    }
+    ids.push(byRun);
+
+    // The started run's dates, in its inspector.
+    await rows.filter({ hasText: "team-onboarding" }).locator("td").nth(2).click();
+    const inspector = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
+    await expect(inspector).toContainText("team-onboarding");
+    await expect(inspector).toContainText("Started");
+    dates.push(await inspector.innerText());
+
+    // The inbox shows the same short ids as the list; run detail the same id.
+    const short = (slug: string) => byRun[slug]!.split("/").pop()!.slice(0, 4);
+    await page.goto("/inbox");
+    await expect(page.getByTestId("inbox-approvals")).toContainText(short("usage-alerts-v2"));
+    await expect(page.getByTestId("inbox-checkpoints")).toContainText(short("team-onboarding"));
+    await page.goto(byRun["team-onboarding"]!);
+    await expect(page.getByText(`Run ${short("team-onboarding")}`)).toBeVisible();
+    await context.close();
+  }
+  expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
+  expect(ids[1]).toEqual(ids[0]);
+  expect(dates[1]).toEqual(dates[0]);
 });

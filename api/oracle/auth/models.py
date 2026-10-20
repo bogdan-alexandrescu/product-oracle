@@ -34,9 +34,17 @@ class User(TenantScoped, Base):
     sessions_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+# What a scoped API token may do, and nothing else: "tick" runs POST /v1/internal/tick
+# (the scheduler's token, minted with ``python -m oracle.tick_token``).
+TOKEN_SCOPES = ("tick",)
+
+
 class ApiToken(TenantScoped, Base):
     __tablename__ = "api_tokens"
-    __table_args__ = (CheckConstraint(_in("role", ROLES), name="role"),)
+    __table_args__ = (
+        CheckConstraint(_in("role", ROLES), name="role"),
+        CheckConstraint(f"scope IS NULL OR {_in('scope', TOKEN_SCOPES)}", name="scope"),
+    )
 
     name: Mapped[str] = mapped_column(Text, nullable=False)
     # sha256 hex of the raw token; globally unique so a Bearer token resolves its tenant.
@@ -49,3 +57,5 @@ class ApiToken(TenantScoped, Base):
     )
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # None: a regular token. "tick": the scheduler's token, good for the tick only.
+    scope: Mapped[str | None] = mapped_column(Text)

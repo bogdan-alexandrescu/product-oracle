@@ -56,10 +56,15 @@ async def list_members(db: TenantDB) -> list[MemberOut]:
     responses={409: {"description": "Would demote the last owner"}},
 )
 async def update_member(
-    user_id: uuid.UUID, body: MemberPatch, principal: Owner, db: TenantDB
+    user_id: uuid.UUID, body: MemberPatch, principal: Owner, db: TenantDB, http: ProviderHttp
 ) -> MemberOut:
+    """Change a member's role. A demotion lapses their approvals for good, and voids
+    their pending spend approvals and not-yet-acted checkpoint decisions the new role no
+    longer allows (they return to the Inbox); a run busy right then is rechecked just
+    after the change commits, and by the tick."""
     user = await _call(service.set_role(db, principal, user_id, body.role))
     await db.commit()
+    await service.run_follow_ups(db, principal, http, member_id=user.id)
     return MemberOut.model_validate(user)
 
 

@@ -977,6 +977,7 @@ async def test_an_owner_turns_job_kinds_off_per_document(client, ctx, pool, fake
         "review_comments": True,
         "reporting": True,
         "refinement": True,
+        "quality_review": True,
     }
     resp = await client.put(
         url,

@@ -1,8 +1,23 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
-import { Badge, Button, ErrorNote, Loading } from "@/components/ui";
+import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
+import {
+  Avatar,
+  Button,
+  Chip,
+  DataTable,
+  InfoTip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  Notice,
+  PageHeader,
+  Panel,
+  Split,
+  type Column,
+} from "@/components/ds";
 import { api, unwrap, type Invite, type Member } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { hasRole, useMe, type Role } from "@/lib/me";
@@ -15,25 +30,29 @@ const ROLES: { role: Role; label: string; can: string }[] = [
   { role: "viewer", label: "Viewer", can: "reads documents, versions, diffs, feedback and exports" },
 ];
 const LABEL = Object.fromEntries(ROLES.map((r) => [r.role, r.label])) as Record<Role, string>;
+const INVITE_FORM = "invite-form";
 
 function RoleSelect({
   value,
   label,
   disabled,
   onChange,
+  id,
 }: {
   value: Role;
   label: string;
   disabled?: boolean;
   onChange: (role: Role) => void;
+  id?: string;
 }) {
   return (
     <select
+      id={id}
       aria-label={label}
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as Role)}
-      className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900 disabled:opacity-50"
+      className={SELECT}
     >
       {ROLES.map((r) => (
         <option key={r.role} value={r.role}>
@@ -44,38 +63,67 @@ function RoleSelect({
   );
 }
 
+const pageTip = (
+  <InfoTip label="roles" align="start" side="bottom">
+    Everyone who signs in to this company&apos;s Oracle has one role. Owners see members, change roles and invite people.
+    Removing someone disables them: they can no longer sign in, their connections and sources are revoked and their
+    approvals stop counting for good. History keeps their name, and an owner can restore them.
+  </InfoTip>
+);
+
 /** Settings > Members: the people of this company's Oracle, their roles and open invites. */
 export function MembersSettings() {
   const { me, role, loading } = useMe();
   const isOwner = hasRole(role, "owner");
 
+  if (!loading && isOwner) return <OwnerView selfId={me?.user_id ?? null} />;
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8">
-      <h1 className="mb-2 text-2xl font-semibold tracking-tight text-neutral-900">Members</h1>
-      <p className="mb-6 text-sm text-neutral-600">
-        Everyone who signs in to this company&apos;s Oracle has one role. Removing someone disables them: they can no
-        longer sign in, their connections and sources are revoked and their approvals stop counting for good. History
-        keeps their name, and an owner can restore them.
-      </p>
-      <dl className="mb-8 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[8rem_1fr]">
-        {ROLES.map((r) => (
-          <div key={r.role} className="contents">
-            <dt className="font-medium text-neutral-800">{r.label}</dt>
-            <dd className="text-neutral-600">{r.can}</dd>
-          </div>
-        ))}
-      </dl>
-      {loading ? (
-        <Loading />
-      ) : isOwner ? (
-        <OwnerView selfId={me?.user_id ?? null} />
-      ) : (
-        <p role="note" data-testid="role-note" className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
-          Your role is {role ? LABEL[role].toLowerCase() : "unknown"}. Only owners can see members, change roles and
-          invite people.
-        </p>
+    <>
+      <PageHeader title="Members" status={pageTip} />
+      {!loading && (
+        <Split inspector={<RolesInspector />}>
+          <p
+            role="note"
+            data-testid="role-note"
+            className="flex flex-wrap items-center gap-2 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink"
+          >
+            <span>
+              Your role is <b>{role ? LABEL[role].toLowerCase() : "unknown"}</b>.
+            </span>
+            <span>Only owners manage members.</span>
+          </p>
+        </Split>
       )}
-    </div>
+    </>
+  );
+}
+
+/** The four roles, what each can do behind an (i), and how many people hold each. */
+function RolesSection({ members }: { members?: Member[] }) {
+  return (
+    <InspectorSection label="Roles">
+      {ROLES.map((r) => (
+        <InspectorRow
+          key={r.role}
+          value={members ? <span className="tnum">{members.filter((m) => m.role === r.role).length}</span> : undefined}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            {r.label}
+            <InfoTip label={`the ${r.label.toLowerCase()} role`} align="start">
+              {r.label}: {r.can}.
+            </InfoTip>
+          </span>
+        </InspectorRow>
+      ))}
+    </InspectorSection>
+  );
+}
+
+function RolesInspector() {
+  return (
+    <Inspector eyebrow="Members · roles" title="Roles" label="Roles">
+      <RolesSection />
+    </Inspector>
   );
 }
 
@@ -85,6 +133,14 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+
+  // The invite form lives in the inspector with its own submit; the header's Invite (the
+  // page's one primary action) takes you to it, which on a phone is below the table.
+  const emailRef = useRef<HTMLInputElement>(null);
+  const [email, setEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<Role>("commenter");
+  const [pending, setPending] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   async function changeRole(m: Member, role: Role) {
     setSaving(m.id);
@@ -132,174 +188,209 @@ function OwnerView({ selfId }: { selfId: string | null }) {
     }
   }
 
-  return (
-    <div className="flex flex-col gap-8">
-      {error && <ErrorNote>{error}</ErrorNote>}
+  async function invite(e: FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setPending(true);
+    setInviteError(null);
+    try {
+      const created = await unwrap(api.POST("/v1/invites", { body: { email: email.trim(), role: inviteRole } }));
+      invitesQ.setData((prev) => [created, ...(prev ?? [])]);
+      setEmail("");
+    } catch (err) {
+      setInviteError(errorMessage(err));
+    } finally {
+      setPending(false);
+    }
+  }
 
-      <section aria-labelledby="members-heading">
-        <h2 id="members-heading" className="mb-3 text-sm font-semibold text-neutral-800">
-          People
-        </h2>
-        {membersQ.error && <ErrorNote>{membersQ.error}</ErrorNote>}
-        {!membersQ.data && !membersQ.error && <Loading />}
-        {membersQ.data && (
-          <table className="w-full text-sm" aria-label="Members">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-xs text-neutral-500">
-                <th className="py-2 font-medium">Email</th>
-                <th className="py-2 font-medium">Role</th>
-                <th className="py-2 font-medium">Since</th>
-                <th className="py-2 font-medium">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {membersQ.data.map((m) => {
-                const disabled = m.status === "disabled";
-                return (
-                  <tr
-                    key={m.id}
-                    data-testid="member-row"
-                    data-status={m.status}
-                    className={`border-b border-neutral-100 ${disabled ? "text-neutral-500" : ""}`}
-                  >
-                    <td className={`py-2 ${disabled ? "text-neutral-500" : "text-neutral-900"}`}>
-                      {m.email}
-                      {m.id === selfId && <span className="ml-2 text-xs text-neutral-500">(you)</span>}
-                      {disabled && (
-                        <span className="ml-2">
-                          <Badge title={m.disabled_at ? `Removed ${formatDate(m.disabled_at)}` : undefined}>Removed</Badge>
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2">
-                      <RoleSelect
-                        value={m.role}
-                        label={`Role for ${m.email}`}
-                        disabled={saving === m.id || disabled}
-                        onChange={(role) => changeRole(m, role)}
-                      />
-                    </td>
-                    <td className="py-2 text-neutral-500">{formatDate(m.created_at)}</td>
-                    <td className="py-2 text-right">
-                      {disabled ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          aria-label={`Restore ${m.email}`}
-                          disabled={saving === m.id}
-                          onClick={() => setDisabled(m, false)}
-                        >
-                          Restore
-                        </Button>
-                      ) : m.id === selfId ? null : confirming === m.id ? (
-                        <span className="inline-flex items-center gap-1" role="group" aria-label={`Confirm removing ${m.email}`}>
-                          <Button size="sm" variant="primary" disabled={saving === m.id} onClick={() => setDisabled(m, true)}>
-                            {saving === m.id ? "Removing…" : "Confirm"}
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
-                            Cancel
-                          </Button>
-                        </span>
-                      ) : (
-                        <Button size="sm" variant="ghost" aria-label={`Remove ${m.email}`} onClick={() => setConfirming(m.id)}>
-                          Remove
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </section>
+  const columns: Column<Member>[] = [
+    {
+      key: "email",
+      header: "Email",
+      cell: (m) => (
+        <span className="flex min-w-0 items-center gap-2.5">
+          <Avatar name={m.email} size={28} tone={m.id === selfId ? "me" : "default"} />
+          <span className={`min-w-0 truncate font-medium ${m.status === "disabled" ? "text-text2" : ""}`}>
+            {m.email}
+          </span>
+          {m.id === selfId && (
+            <Chip kind="acc">
+              <span className="sr-only">(</span>you<span className="sr-only">)</span>
+            </Chip>
+          )}
+          {m.status === "disabled" && (
+            <span title={m.disabled_at ? `Removed ${formatDate(m.disabled_at)}` : undefined}>
+              <Chip kind="warn">Removed</Chip>
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "role",
+      header: "Role",
+      width: "150px",
+      cell: (m) => (
+        <RoleSelect
+          value={m.role}
+          label={`Role for ${m.email}`}
+          disabled={saving === m.id || m.status === "disabled"}
+          onChange={(role) => changeRole(m, role)}
+        />
+      ),
+    },
+    {
+      key: "since",
+      header: "Since",
+      width: "130px",
+      align: "right",
+      hideOnPhone: true,
+      cell: (m) => <span className="tnum text-text2">{formatDate(m.created_at)}</span>,
+    },
+    {
+      key: "actions",
+      header: <span className="sr-only">Actions</span>,
+      width: "190px",
+      align: "right",
+      cell: (m) =>
+        m.status === "disabled" ? (
+          <Button
+            variant="ghost"
+            aria-label={`Restore ${m.email}`}
+            disabled={saving === m.id}
+            onClick={() => setDisabled(m, false)}
+          >
+            Restore
+          </Button>
+        ) : m.id === selfId ? null : confirming === m.id ? (
+          <span className="inline-flex items-center gap-1" role="group" aria-label={`Confirm removing ${m.email}`}>
+            <Button variant="primary" disabled={saving === m.id} onClick={() => setDisabled(m, true)}>
+              {saving === m.id ? "Removing…" : "Confirm"}
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirming(null)}>
+              Cancel
+            </Button>
+          </span>
+        ) : (
+          <Button variant="ghost" aria-label={`Remove ${m.email}`} onClick={() => setConfirming(m.id)}>
+            Remove
+          </Button>
+        ),
+    },
+  ];
 
-      <section aria-labelledby="invite-heading">
-        <h2 id="invite-heading" className="mb-1 text-sm font-semibold text-neutral-800">
-          Invite someone
-        </h2>
-        <p className="mb-3 text-sm text-neutral-600">
-          Their first Google sign-in lands with the role you pick. Without an invite, a Google sign-in from an allowed
-          domain gets the company&apos;s default role (commenter unless changed).
-        </p>
-        <InviteForm onInvited={(i) => invitesQ.setData((prev) => [i, ...(prev ?? [])])} />
-      </section>
-
-      <section aria-labelledby="invites-heading">
-        <h2 id="invites-heading" className="mb-3 text-sm font-semibold text-neutral-800">
-          Open invites
-        </h2>
-        {invitesQ.error && <ErrorNote>{invitesQ.error}</ErrorNote>}
-        {!invitesQ.data && !invitesQ.error && <Loading />}
-        {invitesQ.data?.length === 0 && <p className="text-sm text-neutral-500">No open invites.</p>}
-        {!!invitesQ.data?.length && (
-          <ul aria-label="Open invites" className="flex flex-col divide-y divide-neutral-100 text-sm">
-            {invitesQ.data.map((i) => (
-              <li key={i.id} data-testid="invite-row" className="flex items-center gap-3 py-2">
-                <span className="text-neutral-900">{i.email}</span>
-                <Badge>{LABEL[i.role]}</Badge>
-                <span className="text-xs text-neutral-500">invited {formatDate(i.created_at)}</span>
-                <Button size="sm" variant="ghost" className="ml-auto" aria-label={`Revoke invite for ${i.email}`} onClick={() => revoke(i)}>
+  const invites = invitesQ.data;
+  const inspector = (
+    <Inspector
+      eyebrow="Members · invite"
+      title="Invite someone"
+      label="Invite someone"
+      chips={
+        <>
+          <Chip hero>Google sign-in</Chip>
+          <InfoTip label="invites" hero align="start" side="bottom">
+            Their first Google sign-in lands with the role you pick. Without an invite, a Google sign-in from an allowed
+            domain gets the company&apos;s default role (commenter unless changed).
+          </InfoTip>
+        </>
+      }
+      stats={[
+        { label: "Members", value: membersQ.data?.length ?? "—" },
+        { label: "Open invites", value: invites?.length ?? "—" },
+      ]}
+    >
+      <InspectorSection>
+        <form id={INVITE_FORM} onSubmit={invite} aria-label="Invite" className="flex flex-col gap-3">
+          <Field label="Email">
+            <input
+              ref={emailRef}
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.com"
+              className={INPUT}
+            />
+          </Field>
+          <Field label="Role">
+            <RoleSelect value={inviteRole} label="Role" onChange={setInviteRole} />
+          </Field>
+          {inviteError && <Notice tone="error">{inviteError}</Notice>}
+          <div>
+            <Button type="submit" variant="solid" icon="plus" disabled={pending || !email.trim()}>
+              {pending ? "Inviting…" : "Send invite"}
+            </Button>
+          </div>
+        </form>
+      </InspectorSection>
+      <InspectorSection label="Open invites" testId="open-invites">
+        {invitesQ.error && <Notice tone="error">{invitesQ.error}</Notice>}
+        {!invites && !invitesQ.error && <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
+        {invites?.length === 0 && <p className="text-[15px] text-text2">No open invites</p>}
+        {!!invites?.length && (
+          <ul aria-label="Open invites" className="-my-1 flex flex-col">
+            {invites.map((i) => (
+              <li
+                key={i.id}
+                data-testid="invite-row"
+                className="flex min-h-11 items-center gap-2 border-t border-line py-1.5 first:border-t-0"
+              >
+                <span className="min-w-0 flex-1 truncate font-medium" title={`${i.email} · invited ${formatDate(i.created_at)}`}>
+                  {i.email}
+                </span>
+                <Chip kind="acc">{LABEL[i.role]}</Chip>
+                <Button variant="ghost" aria-label={`Revoke invite for ${i.email}`} onClick={() => revoke(i)}>
                   Revoke
                 </Button>
               </li>
             ))}
           </ul>
         )}
-      </section>
-    </div>
+      </InspectorSection>
+      <RolesSection members={membersQ.data} />
+    </Inspector>
   );
-}
-
-function InviteForm({ onInvited }: { onInvited: (invite: Invite) => void }) {
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("commenter");
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setPending(true);
-    setError(null);
-    try {
-      const invite = await unwrap(api.POST("/v1/invites", { body: { email: email.trim(), role } }));
-      onInvited(invite);
-      setEmail("");
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setPending(false);
-    }
-  }
 
   return (
-    <form onSubmit={submit} aria-label="Invite" className="flex flex-wrap items-end gap-2">
-      <label className="flex flex-col gap-1 text-xs text-neutral-600">
-        Email
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="name@example.com"
-          className="w-72 rounded-md border border-neutral-300 px-2 py-1.5 text-sm text-neutral-900"
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-neutral-600">
-        Role
-        <RoleSelect value={role} label="Role" onChange={setRole} />
-      </label>
-      <Button type="submit" variant="primary" disabled={pending || !email.trim()}>
-        {pending ? "Inviting…" : "Invite"}
-      </Button>
-      {error && (
-        <p role="alert" className="w-full text-sm text-rose-700">
-          {error}
-        </p>
-      )}
-    </form>
+    <>
+      <PageHeader
+        title="Members"
+        status={pageTip}
+        action={
+          <Button
+            variant="primary"
+            icon="plus"
+            aria-controls={INVITE_FORM}
+            onClick={() => {
+              emailRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+              emailRef.current?.focus({ preventScroll: true });
+            }}
+          >
+            Invite
+          </Button>
+        }
+      />
+      <Split inspector={inspector}>
+        {error && <Notice tone="error">{error}</Notice>}
+        <Panel title="People" count={membersQ.data?.length}>
+          {membersQ.error ? (
+            <div className="p-4">
+              <Notice tone="error">{membersQ.error}</Notice>
+            </div>
+          ) : (
+            <DataTable
+              label="Members"
+              columns={columns}
+              rows={membersQ.data}
+              loading={!membersQ.data}
+              rowKey={(m) => m.id}
+              rowProps={(m) => ({ "data-testid": "member-row", "data-status": m.status })}
+              empty="No members"
+            />
+          )}
+        </Panel>
+      </Split>
+    </>
   );
 }

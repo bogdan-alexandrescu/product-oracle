@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Atlas · publish</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root{--bg:#f5f4fb;--surface:#ffffff;--surface2:#efedf8;--sunken:#e5e2f3;--border:#dedaee;--border-strong:#b9b3d6;--text:#16132c;--text2:#46416b;--text3:#5d5882;--accent:#5a3cf0;--accent-hover:#4a2fd6;--on-accent:#ffffff;--accent-soft:#ebe6ff;--accent-soft-text:#3d23b8;--focus:#5a3cf0;--highlight:#d8f58a;--highlight-text:#16132c;--hero:#1c1838;--hero-text:#f3f1ff;--hero-text2:#c9c3f0;--lime:#c8f169;--on-lime:#16132c;--pass:#0d6a4c;--pass-bg:#d9f4e8;--warn:#894700;--warn-bg:#ffecd0;--crit:#b01539;--crit-bg:#ffe1e8;--na:#524e6c;--na-bg:#ebe9f3;--info:#3d23b8;--info-bg:#ebe6ff;--nav-bg:#16132c;--nav-text:#c9c3f0;--nav-active-bg:#c8f169;--nav-active-text:#16132c;--scrim:rgba(22,19,44,.5);color-scheme:light}
+@media (prefers-color-scheme: dark){:root{--bg:#0e0d1a;--surface:#17152b;--surface2:#1f1c38;--sunken:#0a0914;--border:#2d2950;--border-strong:#4a4478;--text:#f1efff;--text2:#c4bfe8;--text3:#9e98c8;--accent:#a796ff;--accent-hover:#bdb0ff;--on-accent:#120f26;--accent-soft:#2a2357;--accent-soft-text:#d3cbff;--focus:#a796ff;--highlight:#3b4a12;--highlight-text:#e9fbb8;--hero:#241f4a;--hero-text:#f3f1ff;--hero-text2:#c9c3f0;--lime:#c8f169;--on-lime:#16132c;--pass:#5fe0a9;--pass-bg:#0f2b22;--warn:#ffc46e;--warn-bg:#2f2413;--crit:#ff8ca6;--crit-bg:#3a1426;--na:#b8b4d8;--na-bg:#221f3a;--info:#c3b8ff;--info-bg:#2a2357;--nav-bg:#07060f;--nav-text:#c4bfe8;--nav-active-bg:#c8f169;--nav-active-text:#16132c;--scrim:rgba(0,0,0,.6);color-scheme:dark}}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+::placeholder{color:var(--text3);opacity:1}
+h1,h2,h3,h4,p,ul,ol,dl,dd,figure{margin:0}
+ul,ol{padding:0;list-style:none}
+a{color:inherit;text-decoration:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.num{font-variant-numeric:tabular-nums}
+
+body{font:14px/21px 'Inter', system-ui, sans-serif}
+.app{display:grid;grid-template-columns:84px 1fr;min-height:100vh}
+.rail{background:var(--nav-bg);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px}
+.rail .logo{width:40px;height:40px;border-radius:12px;background:var(--lime);color:var(--on-lime);display:grid;place-items:center;font:700 16px 'Bricolage Grotesque', system-ui, sans-serif;margin-bottom:14px}
+.rail a{width:72px;padding:8px 0 6px;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--nav-text);font-size:11px;line-height:14px;font-weight:500;position:relative}
+.rail a .ic{width:20px;height:20px}
+.rail a[aria-current]{background:var(--nav-active-bg);color:var(--nav-active-text);font-weight:700}
+.rail .count{position:absolute;top:4px;right:14px;min-width:17px;height:17px;border-radius:9px;background:#ff5c8a;color:#16132c;font:700 10.5px/17px 'Inter', system-ui, sans-serif;text-align:center;padding:0 4px}
+.rail .sp{flex:1}
+.rail .me{width:36px;height:36px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:700 13px 'Inter', system-ui, sans-serif;margin-top:6px}
+.main{min-width:0}
+.bar{display:flex;align-items:center;gap:14px;height:56px;padding:0 28px}
+.bar .crumb{color:var(--text2);font-weight:500;display:flex;gap:8px;align-items:center}
+.bar .crumb b{color:var(--text)}
+.bar .crumb .ic{width:12px;height:12px}
+.bar .who{margin-left:auto;display:flex;gap:16px;align-items:center;color:var(--text2);font-size:13px}
+.bar .who button{background:none;border:0;padding:0;color:var(--text2);font-weight:500}
+.content{padding:0 28px 24px}
+h1{font:700 30px/34px 'Bricolage Grotesque', system-ui, sans-serif;letter-spacing:-.02em}
+.sub{color:var(--text2)}
+.btn{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:10px;border:1.5px solid var(--border-strong);background:var(--surface);color:var(--text);font-weight:600;font-size:13.5px;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.lime{background:var(--lime);border-color:var(--lime);color:var(--on-lime)}
+.btn.sm{height:30px;padding:0 10px;font-size:12.5px;border-radius:8px}
+.btn[disabled]{background:var(--surface2);border-color:var(--border);color:var(--text3);cursor:not-allowed}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px}
+.cap{font:600 11px/14px 'Inter', system-ui, sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--text3)}
+.tag{display:inline-flex;align-items:center;gap:5px;height:22px;line-height:22px;padding:0 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.tag .ic{width:12px;height:12px}
+.t-pass{background:var(--pass-bg);color:var(--pass)}.t-warn{background:var(--warn-bg);color:var(--warn)}.t-crit{background:var(--crit-bg);color:var(--crit)}.t-na{background:var(--na-bg);color:var(--na)}.t-info{background:var(--info-bg);color:var(--info)}
+.top{display:flex;align-items:flex-end;gap:16px;margin-bottom:16px}
+.top .act{margin-left:auto;display:flex;gap:10px}
+/* journey track (proposed IA change) */
+.journey{display:flex;align-items:center;gap:0;margin:0 0 16px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:4px;width:max-content;max-width:100%}
+.journey span{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:12.5px;font-weight:500;color:var(--text2);white-space:nowrap}
+.journey span i{font:600 11px/18px 'JetBrains Mono', ui-monospace, monospace;font-style:normal;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--surface2);color:var(--text2)}
+.journey .done i{background:var(--pass-bg);color:var(--pass)}
+.journey .cur{background:var(--hero);color:var(--hero-text);font-weight:700}
+.journey .cur i{background:var(--lime);color:var(--on-lime)}
+/* baseline matrix */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.stat{padding:14px 16px}
+.stat b{display:flex;align-items:baseline;font:700 40px/46px 'Bricolage Grotesque', system-ui, sans-serif;letter-spacing:-.03em}
+.stat b small{font:500 14px 'Inter', system-ui, sans-serif;color:var(--text2);letter-spacing:0;margin-left:6px}
+.stat span{color:var(--text2);font-size:13px}
+.matrix{width:100%;border-collapse:separate;border-spacing:0}
+.matrix th,.matrix td{border-bottom:1px solid var(--border);padding:0 12px}
+.matrix thead th{vertical-align:top;text-align:left;padding:14px 12px 12px;font-weight:400;width:19%}
+.matrix thead th:first-child{width:auto;vertical-align:bottom}
+.gh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.gh b{font:700 13px 'JetBrains Mono', ui-monospace, monospace;color:var(--accent-soft-text);background:var(--accent-soft);padding:1px 7px;border-radius:6px}
+.gt{font:700 14.5px/19px 'Bricolage Grotesque', system-ui, sans-serif;color:var(--text);min-height:38px}
+.gm{font-size:12px;color:var(--text2);margin-top:4px}
+.matrix tbody td{height:46px}
+.matrix tbody td:first-child{font-weight:600}
+.matrix tbody td:first-child small{display:block;font-weight:400;color:var(--text2);font-size:12px;line-height:15px}
+.cell{display:inline-flex;align-items:center;gap:8px}
+.ring{width:26px;height:26px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--sunken) 0);display:grid;place-items:center}
+.ring::after{content:"";width:16px;height:16px;border-radius:50%;background:var(--surface)}
+.cell .v{font:600 13px 'Inter', system-ui, sans-serif}
+.cell .e{font-size:12px;color:var(--text2)}
+.hi{--c:var(--pass)}.me{--c:var(--warn)}.lo{--c:var(--crit)}
+.hi .v{color:var(--pass)}.me .v{color:var(--warn)}.lo .v{color:var(--crit)}
+.empty{color:var(--text3)}
+.matrix tr.flag td{background:var(--crit-bg);color:var(--crit)}
+.matrix tr.flag td:first-child{border-radius:12px 0 0 12px}
+.matrix tr.flag td:last-child{border-radius:0 12px 12px 0}
+.matrix tr.flag small{color:var(--crit)!important}
+.matrix tr:last-child td{border-bottom:0}
+.mwrap{padding:0 6px 6px}
+/* idea gaps */
+.hero{background:var(--hero);color:var(--hero-text);border-radius:20px;padding:18px 22px;display:grid;grid-template-columns:1fr 1.25fr;gap:28px;margin-bottom:14px}
+.hero .cap{color:var(--lime)}
+.hero q{display:block;quotes:none;font:700 21px/27px 'Bricolage Grotesque', system-ui, sans-serif;letter-spacing:-.01em;margin-top:6px}
+.hero small{display:block;color:var(--hero-text2);font-size:12.5px;margin-top:8px}
+.hero p{font-size:15px;line-height:23px;margin-top:6px}
+.board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+.col{padding:14px 16px}
+.col h2{font:700 17px/22px 'Bricolage Grotesque', system-ui, sans-serif;display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.col h2 .n{font:600 12px 'Inter', system-ui, sans-serif;color:var(--text2);margin-left:auto}
+.item{padding:8px 0;border-top:1px solid var(--border);font-size:13.5px;line-height:19px}
+.item .row{display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
+.item .s{color:var(--text2);font-size:12.5px;line-height:17px;margin-top:2px}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.vs div{background:var(--surface2);border-radius:8px;padding:6px 8px;font-size:12px;line-height:16px}
+.vs b{color:var(--accent-soft-text)}
+.rk{font:700 22px/22px 'Bricolage Grotesque', system-ui, sans-serif;color:var(--accent);margin-right:8px}
+.qrow{display:grid;grid-template-columns:repeat(3,1fr) ;gap:12px}
+.qh{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.qh h2{font:700 20px/24px 'Bricolage Grotesque', system-ui, sans-serif}
+.qh .btn{margin-left:auto}
+.qc{padding:14px 16px;display:flex;flex-direction:column}
+.qc .qn{font:700 13px 'JetBrains Mono', ui-monospace, monospace;color:var(--accent)}
+.qc .qq{font:700 15.5px/20px 'Bricolage Grotesque', system-ui, sans-serif;margin:2px 0 4px}
+.qc .why{font-size:12.5px;line-height:17px;color:var(--text2);flex:1}
+.qc textarea{margin-top:8px;width:100%;height:56px;resize:none;border:1.5px solid var(--border-strong);border-radius:10px;background:var(--surface);padding:7px 10px;font-size:13px;line-height:18px}
+.qc .del{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.qc .del button{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--border-strong);background:transparent;font-size:12px;font-weight:500;color:var(--text2)}
+.qc .del button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+/* prd review */
+.rv{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+.doc{padding:20px 24px 22px;position:relative}
+.dt{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--surface2);border-radius:10px;padding:3px}
+.seg button{border:0;background:none;height:28px;padding:0 12px;border-radius:8px;font-weight:600;font-size:12.5px;color:var(--text2)}
+.seg button[aria-pressed=true]{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(22,19,44,.15)}
+.dt .sp{flex:1}
+.sh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sh h2{font:700 24px/30px 'Bricolage Grotesque', system-ui, sans-serif;letter-spacing:-.01em}
+.meta{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px}
+.meta span{background:var(--surface2);border-radius:8px;padding:3px 9px;font-size:12.5px;color:var(--text2)}
+.meta b{color:var(--text);font-weight:600}
+.verd{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:var(--surface2);margin-bottom:14px;flex-wrap:wrap}
+.verd .r{margin-left:auto;font-size:12.5px;color:var(--text2)}
+.reqs p{font-size:15px;line-height:24px;margin-bottom:8px}
+.reqs ol>li{display:grid;grid-template-columns:48px 1fr;padding:8px 0;border-top:1px solid var(--border);font-size:15px;line-height:24px}
+.reqs .id{font:500 12.5px/24px 'JetBrains Mono', ui-monospace, monospace;color:var(--text3)}
+.claim{background:var(--highlight);color:var(--highlight-text);border-radius:4px;padding:1px 3px}
+.pop{position:absolute;z-index:3;width:340px;left:calc(100% + 26px);top:-12px;background:var(--surface);border:1.5px solid var(--accent);border-radius:14px;box-shadow:0 6px 20px rgba(22,19,44,.10);padding:12px 14px}
+.reqs{max-width:480px}
+.reqs ol>li{position:relative}
+.reqs ol{padding-bottom:110px}
+.pop::before{content:"";position:absolute;top:18px;left:-8px;width:14px;height:14px;background:var(--surface);border-left:1.5px solid var(--accent);border-bottom:1.5px solid var(--accent);transform:rotate(45deg)}
+.pop h3{display:flex;align-items:center;gap:8px;font:700 14px 'Bricolage Grotesque', system-ui, sans-serif}
+.pop h3 button{margin-left:auto;border:0;background:none;color:var(--text2);display:flex;padding:0}
+.pop ul{margin-top:8px}
+.pop li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 10px;padding:6px 0;border-top:1px solid var(--border);font-size:12.5px;line-height:17px}
+.pop li b{font-weight:600}
+.pop li span{color:var(--text2)}
+.pop li .d{grid-column:1/-1}
+.pop .cf{margin-top:6px;background:var(--warn-bg);color:var(--text);border-radius:8px;padding:6px 9px;font-size:12px;line-height:17px}
+.pop .cf b{color:var(--warn)}
+.pop .ap{font-size:12px;color:var(--text2);margin-top:6px}
+.insp{padding:16px}
+.insp h2{font:700 18px/22px 'Bricolage Grotesque', system-ui, sans-serif;display:flex;align-items:center;gap:8px}
+.insp .r{font-size:12.5px;color:var(--text2);margin:2px 0 10px}
+.mod{display:grid;grid-template-columns:1fr auto;gap:1px 8px;padding:8px 10px;border-radius:10px;margin-bottom:5px;background:var(--surface2);font-size:13px;line-height:18px}
+.mod b{font-weight:600}
+.mod .w{grid-column:1/-1;font-size:12px;color:var(--text2);line-height:16px}
+.mod .m{grid-column:1/-1;font-size:12px;color:var(--warn);line-height:16px;font-weight:600}
+.mod.omit{background:transparent;border:1px dashed var(--border-strong)}
+.mod.omit b{text-decoration:line-through;color:var(--text2)}
+.insp .f{font-size:12.5px;line-height:18px;color:var(--text2);margin:8px 0 10px}
+.insp .f b{color:var(--text)}
+/* runs inbox */
+.queue{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.qcard{padding:12px 14px}
+.qcard .h{display:flex;justify-content:space-between;align-items:center}
+.qcard .h b{font:700 26px/28px 'Bricolage Grotesque', system-ui, sans-serif}
+.qcard .it{margin-top:8px;font-size:13px;line-height:18px;padding:7px 9px;border-radius:10px;background:var(--surface2)}
+.qcard .it.cur{background:var(--hero);color:var(--hero-text)}
+.qcard .it.cur .s{color:var(--hero-text2)}
+.qcard .it .s{color:var(--text2);font-size:12px}
+.qcard .none{margin-top:8px;font-size:13px;color:var(--text3)}
+.runcard{padding:18px 20px}
+.rh{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start}
+.rh h2{font:700 24px/28px 'Bricolage Grotesque', system-ui, sans-serif;letter-spacing:-.01em;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.gauge{display:flex;gap:22px;align-items:center}
+.gauge .big{display:flex;align-items:baseline;gap:6px;font:700 40px/46px 'Bricolage Grotesque', system-ui, sans-serif;letter-spacing:-.03em}
+.gauge .big small{font:500 14px 'Inter', system-ui, sans-serif;color:var(--text2);letter-spacing:0}
+.gauge .lim{font-size:12.5px;color:var(--text2);line-height:18px}
+.meter{position:relative;height:12px;border-radius:6px;background:var(--sunken);margin:14px 0 20px}
+.meter i{position:absolute;inset:0 auto 0 0;border-radius:6px;background:linear-gradient(90deg,var(--accent),var(--accent))}
+.meter span{position:absolute;top:-4px;bottom:-4px;width:3px;border-radius:2px;background:var(--text)}
+.meter span.c{background:var(--crit)}
+.meter em{position:absolute;top:18px;transform:translateX(-50%);font-style:normal;font-size:11.5px;color:var(--text2);white-space:nowrap}
+.pipe{display:grid;grid-template-columns:1fr 1fr 1.7fr 1fr;gap:10px;align-items:stretch}
+.sg{border-radius:14px;padding:12px 14px;background:var(--surface2);display:flex;flex-direction:column;gap:6px}
+.sg .n{font:600 12px 'JetBrains Mono', ui-monospace, monospace;color:var(--text2)}
+.sg h3{font:700 15px/19px 'Bricolage Grotesque', system-ui, sans-serif}
+.sg .roles{display:flex;gap:4px;flex-wrap:wrap}
+.sg .roles span{font-size:11.5px;padding:1px 7px;border-radius:6px;background:var(--surface);color:var(--text2);white-space:nowrap}
+.sg .cost{font:500 13px 'JetBrains Mono', ui-monospace, monospace;white-space:nowrap}
+.sg .cost.over{color:var(--warn)}
+.sg .cost small{color:var(--text2)}
+.sg .cp{font-size:12px;color:var(--text2);line-height:16px;display:flex;gap:5px;align-items:flex-start}
+.sg .cp .ic{width:13px;height:13px;flex-shrink:0;margin-top:2px;color:var(--pass)}
+.sg.wait{background:var(--surface);border:2px solid var(--warn)}
+.sg.wait ol li{display:flex;gap:8px;font-size:12.5px;line-height:17px;padding:4px 0;border-top:1px solid var(--border)}
+.sg.wait ol li span:last-child{margin-left:auto;font:500 11.5px 'JetBrains Mono', ui-monospace, monospace;color:var(--text2)}
+.sg textarea{width:100%;height:34px;resize:none;border:1.5px solid var(--border-strong);border-radius:8px;background:var(--surface);padding:6px 9px;font-size:12.5px}
+.sg .a{display:flex;gap:6px}
+.sg.pend{background:transparent;border:1.5px dashed var(--border-strong)}
+/* publish drawer */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:10}
+.drawer{z-index:11;position:fixed;top:0;right:0;bottom:0;width:760px;background:var(--bg);display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(22,19,44,.28)}
+.dh{background:var(--hero);color:var(--hero-text);padding:20px 24px}
+.dh .cap{color:var(--lime)}
+.dh h2{font:700 26px/30px 'Bricolage Grotesque', system-ui, sans-serif;letter-spacing:-.01em;margin-top:4px;display:flex;align-items:center;gap:10px}
+.dh h2 button{margin-left:auto;border:0;background:none;color:var(--hero-text);display:flex}
+.dh p{color:var(--hero-text2);margin-top:4px;font-size:13.5px}
+.db{padding:16px 24px;flex:1;display:flex;flex-direction:column;gap:14px}
+.blk{background:var(--crit-bg);border-radius:14px;padding:12px 14px}
+.blk h3{font:700 16px 'Bricolage Grotesque', system-ui, sans-serif;color:var(--crit);display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.blk li{display:grid;grid-template-columns:auto 1fr;gap:0 10px;padding:8px 0;border-top:1px solid var(--border-strong)}
+.blk li:first-child{border-top:0}
+.blk .k{font:600 11px/16px 'Inter', system-ui, sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--crit);padding-top:2px;width:110px}
+.blk b{font-weight:600}
+.blk p{grid-column:2;font-size:12.5px;line-height:17px;color:var(--text)}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.tile{display:grid;grid-template-columns:auto 1fr auto;gap:0 8px;align-items:start;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:7px 10px;font-size:13px;line-height:18px}
+.tile .ic{margin-top:1px}
+.tile p{grid-column:2/-1;font-size:12px;line-height:16px;color:var(--text2)}
+.tile.warning{border-color:var(--warn)}.tile.critical{border-color:var(--crit)}
+.k-pass{color:var(--pass)}.k-warning{color:var(--warn)}.k-critical{color:var(--crit)}.k-na{color:var(--na)}
+.hard{display:flex;gap:6px;flex-wrap:wrap}
+.recs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.recs div{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px;line-height:17px}
+.recs dt{color:var(--text3);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+.df{display:flex;align-items:center;gap:10px;padding:14px 24px;border-top:1px solid var(--border);background:var(--surface)}
+.df .why{margin-right:auto;font-weight:600;color:var(--crit);display:flex;gap:6px;align-items:center}
+.tabbar{display:none}
+.mbar{display:none}
+@media (max-width:720px){
+  .app{display:block}
+  .rail,.bar{display:none}
+  .mbar{display:flex;align-items:center;gap:10px;height:52px;padding:0 16px;background:var(--nav-bg);color:var(--hero-text)}
+  .mbar .logo{width:30px;height:30px;border-radius:9px;background:var(--lime);color:var(--on-lime);display:grid;place-items:center;font:700 13px 'Bricolage Grotesque', system-ui, sans-serif}
+  .mbar b{font:700 16px 'Bricolage Grotesque', system-ui, sans-serif;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .content{padding:14px 14px 20px}
+  .tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:sticky;bottom:0;background:var(--nav-bg);padding:6px 4px 10px;z-index:5}
+  .tabbar a{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;line-height:14px;color:var(--nav-text);padding:6px 0;border-radius:10px;position:relative}
+  .tabbar a .ic{width:20px;height:20px}
+  .tabbar a[aria-current]{background:var(--nav-active-bg);color:var(--nav-active-text);font-weight:700}
+  .tabbar .count{position:absolute;top:2px;right:16px;min-width:16px;height:16px;border-radius:8px;background:#ff5c8a;color:#16132c;font:700 10px/16px 'Inter', system-ui, sans-serif;text-align:center}
+  h1{font-size:26px;line-height:30px}
+  .journey{width:auto;border-radius:14px;flex-wrap:wrap}
+  .journey span:not(.cur):not(.near){display:none}
+  .hero{grid-template-columns:1fr;gap:12px;padding:16px}
+  .board{grid-template-columns:1fr}
+  .qrow{grid-template-columns:1fr}
+  .qh{flex-wrap:wrap}
+  .qh .btn{margin-left:0}
+  .rv{display:block}
+  .doc{padding:16px 14px}
+  .dt .sp{display:none}
+  .verd .r{margin-left:0;width:100%}
+  .reqs{max-width:none}
+  .reqs ol{padding-bottom:0}
+  .pop{grid-column:1/-1;position:relative;left:auto;top:auto;width:auto;margin-top:12px}
+  .pop::before{left:30px;top:-8px;border-bottom:0;border-top:1.5px solid var(--accent)}
+  .reqs ol>li{grid-template-columns:40px 1fr}
+  .insp{margin-top:14px}
+}
+
+</style>
+</head>
+<body class="">
+<div aria-hidden="true" inert style="position:relative;z-index:0"><div class="app"><nav class="rail" aria-label="Oracle"><span class="logo" aria-label="Product Oracle">PO</span>
+<a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M5.5 5.5 7 10.5M10.5 5.5 9 10.5"/></svg>Baseline</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8h3l2-5 2 10 2-5h3"/></svg>Runs</a><a href="#" aria-current="page"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 1.5h5.5L12.5 4.5V14.5H4z"/><path d="M9.5 1.5V4.5H12.5M6 8h4.5M6 10.5h4.5"/></svg>PRDs</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5h10M3 8h7M3 12.5h4"/></svg>Priorities</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h5M5 8h6M9 12h5"/><circle cx="2" cy="4" r=".6"/></svg>Roadmap</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9.5 4 3h8l2 6.5V13H2z"/><path d="M2 9.5h3.5l1 1.5h3l1-1.5H14"/></svg>Inbox<span class="count">4</span></a>
+<span class="sp"></span><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</a></nav>
+<div class="main"><header class="bar"><span class="crumb">PRDs<svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>Online deposits at booking<svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg><b>v3</b></span>
+<span class="who">maya.k@quillfield.example<button type="button">Sign out</button></span></header>
+<header class="mbar"><span class="logo" aria-hidden="true">PO</span><b>Online deposits at booking · v3</b></header>
+<main class="content"><div class="journey" aria-label="PRD journey: Review"><span class="done"><i>✓</i>Idea</span><span class="done"><i>✓</i>Sources</span><span class="done"><i>✓</i>Gaps</span><span class="done"><i>✓</i>Composition</span><span class="done"><i>✓</i>Research</span><span class="done"><i>✓</i>Blockers</span><span class="done near"><i>✓</i>Draft run</span><span class="cur"><i>8</i>Review</span><span class=" near"><i>9</i>Publish</span></div>
+  <div class="rv"><article class="card doc">
+    <div class="dt"><div class="seg" role="group" aria-label="Layer"><button aria-pressed="false">Brief</button><button aria-pressed="true">Full</button></div><button class="btn sm" type="button">Compare versions</button><span class="sp"></span><button class="btn sm" type="button">Present</button><button class="btn sm" type="button">Export</button><button class="btn sm lime" type="button">Publish…</button></div>
+    <div class="sh"><span class="cap">Section 5 of 8</span></div>
+    <div class="sh"><h2>Functional requirements</h2><span class="tag t-crit"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg>Changes requested</span></div>
+    <div class="meta"><span>Revision <b>r4</b> · was r3</span><span>Owner <b>Tomas B.</b></span><span>Reviewers <b>Ines R., Dev L.</b></span><span>Due <b>24 Oct</b></span></div>
+    <div class="verd"><button class="btn sm" type="button">Approve</button><button class="btn sm" type="button">Request changes</button><button class="btn sm" type="button">Reject</button><span class="r">3 comments · r3 approval is stale</span></div>
+    <div class="reqs"><p>A pet owner booking a first appointment online pays a refundable deposit before the slot is held. Regular clients skip the deposit unless the clinic turns it on for them.</p><ol><li><span class="id">FR-1</span><span>The booking widget asks for a deposit when the clinic has deposits on and the client is new.</span></li><li><span class="id">FR-2</span><span><mark class="claim">No-shows cost a typical clinic about 9% of booked slots</mark>, so the deposit defaults to £15.</span><div class="pop" data-overhang role="dialog" aria-label="Evidence inspector"><h3><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2 14 5.5 8 9 2 5.5z"/><path d="M2 8.5 8 12l6-3.5"/></svg>Evidence for this claim <span class="tag t-warn">Medium 63%</span><button type="button" aria-label="Close inspector"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></h3>
+  <ul><li><b>9.1% of slots</b><span>Sep 2026</span><span class="d">Booking export, 58 clinics (upload)</span></li><li><b>7–12% reported</b><span>Jul 2026</span><span class="d">Churn survey, question 14 (upload)</span></li><li><b>&quot;Every Monday we lose three slots&quot;</b><span>Aug 2026</span><span class="d">Slack #support thread</span></li></ul>
+  <p class="cf"><b>Disagrees:</b> Sales call notes estimate 4%; older (Mar 2026) and from 2 clinics.</p><p class="ap">In Sources and data points › Functional requirements › FR-2</p></div></li><li><span class="id">FR-3</span><span>A deposit is refunded automatically when the owner cancels at least 24 hours before the slot.</span></li><li><span class="id">FR-4</span><span>Front-desk staff can waive or refund a deposit from the appointment, with a reason.</span></li></ol></div>
+  </article>
+  <aside class="card insp" aria-label="Composition inspector"><h2><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2 14 5.5 8 9 2 5.5z"/><path d="M2 8.5 8 12l6-3.5"/></svg>Composition</h2><p class="r">Composition rev 3 · confirmed by Ines R.</p>
+    <div class="mod"><b>Executive decision</b><span class="tag t-info">Mandatory</span><span class="w">Company policy</span></div><div class="mod"><b>Goals and success metrics</b><span class="tag t-info">Mandatory</span><span class="w">Company policy</span></div><div class="mod"><b>Functional requirements</b><span class="tag t-info">Mandatory</span><span class="w">Company policy</span></div><div class="mod"><b>Also included</b><span class="tag t-info">Mandatory</span><span class="w">Opportunity and problem · Users and jobs · Risks · Sources and data points</span></div><div class="mod"><b>Constraints and blockers</b><span class="tag t-warn">Suggested</span><span class="w">2 blocking uncertainties from Gaps</span></div><div class="mod"><b>Unit economics</b><span class="tag t-warn">Suggested</span><span class="w">Not in v3 yet · assumes a deposit ≤ £20</span><span class="m">Missing: Processor fee per transaction</span></div><div class="mod"><b>Multi-tenant configuration</b><span class="tag t-na">Optional</span><span class="w">Not in v3 · clinics turn deposits on per site</span></div><div class="mod omit"><b>AI evaluation</b><span class="tag t-na">Omitted</span><span class="w">No AI behaviour in scope</span></div>
+    <p class="f"><b>Depends:</b> Unit economics depends on Goals and success metrics · <b>Conflicts:</b> None</p>
+    <button class="btn sm" type="button">Change composition</button></aside></div>
+</main>
+<nav class="tabbar" data-overlay aria-label="Oracle (mobile)"><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M5.5 5.5 7 10.5M10.5 5.5 9 10.5"/></svg>Baseline</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8h3l2-5 2 10 2-5h3"/></svg>Runs</a><a href="#" aria-current="page"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 1.5h5.5L12.5 4.5V14.5H4z"/><path d="M9.5 1.5V4.5H12.5M6 8h4.5M6 10.5h4.5"/></svg>PRDs</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9.5 4 3h8l2 6.5V13H2z"/><path d="M2 9.5h3.5l1 1.5h3l1-1.5H14"/></svg>Inbox<span class="count">4</span></a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="3.5" cy="8" r=".9"/><circle cx="8" cy="8" r=".9"/><circle cx="12.5" cy="8" r=".9"/></svg>More</a></nav>
+</div></div></div><div class="scrim"></div>
+<aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="pt">
+  <div class="dh"><span class="cap">Publish check · Brief and Full</span><h2 id="pt">Online deposits at booking v3<button type="button" aria-label="Close"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></h2><p>2 blocks. Readiness is advice; only review, blocker and policy checks block.</p></div>
+  <div class="db">
+    <section class="blk"><h3><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg>What blocks</h3><ul><li><span class="k">Review invariant</span><b>Stale approval: Functional requirements</b><p>Approved at r3; r4 changed FR-2 and FR-4. Needs Ines R. to approve r4.</p></li><li><span class="k">Blocker policy</span><b>Hard blocker unresolved: payment provider coverage</b><p>No mitigation accepted for clinics without a supported processor.</p></li></ul></section>
+    <section><div class="cap" style="margin-bottom:6px">Hard checks passed</div><div class="hard"><span class="tag t-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg>Required sections present</span><span class="tag t-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg>Source permissions still valid</span><span class="tag t-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg>Security and policy checks</span></div></section>
+    <section><div class="cap" style="margin-bottom:6px">Readiness · advisory</div><div class="tiles"><div class="tile pass"><span class="k-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg></span><span>Problem and user clarity</span><span class="tag t-pass">Pass</span></div><div class="tile pass"><span class="k-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg></span><span>Business goal alignment</span><span class="tag t-pass">Pass</span></div><div class="tile warning"><span class="k-warning"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.2M8 11.6v.1"/></svg></span><span>Evidence and provenance</span><span class="tag t-warn">Warning</span><p>FR-2 rests on one export; sales notes disagree.</p></div><div class="tile pass"><span class="k-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg></span><span>Alternatives and trade-offs</span><span class="tag t-pass">Pass</span></div><div class="tile critical"><span class="k-critical"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg></span><span>Blocker and feasibility resolution</span><span class="tag t-crit">Critical</span><p>The payment provider blocker, listed under What blocks.</p></div><div class="tile pass"><span class="k-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg></span><span>Scope and testable requirements</span><span class="tag t-pass">Pass</span></div><div class="tile critical"><span class="k-critical"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg></span><span>Economic and scaling assumptions</span><span class="tag t-crit">Critical</span><p>Processor fee per deposit unknown. Advisory.</p></div><div class="tile warning"><span class="k-warning"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.2M8 11.6v.1"/></svg></span><span>Validation plan and thresholds</span><span class="tag t-warn">Warning</span><p>No-show threshold not set (question 3 deferred).</p></div><div class="tile pass"><span class="k-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg></span><span>Ownership and review</span><span class="tag t-pass">Pass</span></div><div class="tile na"><span class="k-na"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5 8h6"/></svg></span><span>Downstream design consistency</span><span class="tag t-na">Not applicable</span><p>No specs or wireframes yet.</p></div></div></section>
+    <dl class="recs"><div><dt>Version</dt><dd>v3 (immutable once published)</dd></div><div><dt>Template and composition</dt><dd>Startup standard 1.4 · composition rev 3</dd></div><div><dt>Decider</dt><dd>Ines R. (approver)</dd></div><div><dt>Appendix</dt><dd>Sources and data points, 41 items</dd></div></dl>
+  </div>
+  <div class="df"><span class="why"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg>Resolve 2 blocks to publish</span><button class="btn" type="button">Cancel</button><button class="btn primary" type="button" disabled>Publish v3</button></div>
+</aside>
+</body>
+</html>

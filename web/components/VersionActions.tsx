@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 
-import { Badge, Button } from "@/components/ui";
+import { InlineError, Menu } from "@/components/review/parts";
+import { Button, Chip } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 
@@ -70,31 +71,34 @@ export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: nu
 
   const groups = GROUPS.filter((g) => hasBrief || g.layer === "full");
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-neutral-600">Export</span>
-      {groups.map((g) => (
-        <div key={g.layer} role="group" aria-label={`Export ${g.label.toLowerCase()}`} className="flex items-center">
-          {hasBrief && <span className="mr-1 text-xs text-neutral-500">{g.label}</span>}
-          {g.formats.map((f, i) => (
-            <Button
-              key={f.format}
-              size="sm"
-              className={`${i > 0 ? "-ml-px rounded-l-none" : ""} ${i < g.formats.length - 1 ? "rounded-r-none" : ""}`}
-              disabled={busy !== null}
-              onClick={() => download(g.layer, f.format)}
-              aria-label={g.layer === "full" ? `Export ${f.label}` : `Export ${g.layer} ${f.label}`}
-            >
-              {busy === `${g.layer}.${f.format}` ? "…" : f.label}
-            </Button>
-          ))}
-        </div>
-      ))}
-      {error && (
-        <span role="alert" className="text-xs text-rose-700">
-          {error}
-        </span>
-      )}
-    </div>
+    <Menu label="Export">
+      <div className="flex flex-col gap-2.5">
+        {groups.map((g) => (
+          <div
+            key={g.layer}
+            role="group"
+            aria-label={`Export ${g.label.toLowerCase()}`}
+            className="flex items-center justify-between gap-4"
+          >
+            <span className="text-[13px] font-semibold tracking-[0.02em] text-text2">{g.label}</span>
+            <span className="flex gap-1.5">
+              {g.formats.map((f) => (
+                <Button
+                  key={f.format}
+                  disabled={busy !== null}
+                  onClick={() => download(g.layer, f.format)}
+                  aria-label={g.layer === "full" ? `Export ${f.label}` : `Export ${g.layer} ${f.label}`}
+                  className="min-w-14"
+                >
+                  {busy === `${g.layer}.${f.format}` ? "…" : f.label}
+                </Button>
+              ))}
+            </span>
+          </div>
+        ))}
+        {error && <InlineError>{error}</InlineError>}
+      </div>
+    </Menu>
   );
 }
 
@@ -118,9 +122,9 @@ export function ApproveButton({
 
   if (approvedAt) {
     return (
-      <Badge tone="green" title={`Approved ${formatDate(approvedAt)}`}>
+      <Chip kind="pass" title={`Approved ${formatDate(approvedAt)}`} className="h-10 px-4 text-[15px]">
         ✓ Approved {formatDate(approvedAt)}
-      </Badge>
+      </Chip>
     );
   }
 
@@ -140,23 +144,25 @@ export function ApproveButton({
 
   if (!confirming) {
     return (
-      <Button variant="primary" size="sm" onClick={() => setConfirming(true)}>
+      <Button variant="primary" icon="check" onClick={() => setConfirming(true)}>
         Approve version
       </Button>
     );
   }
   return (
-    <div className="flex items-center gap-1" role="group" aria-label="Confirm approval">
-      <span className="text-xs text-neutral-600">
-        {isLatest ? `Approve v${n}?` : `v${n} is not the latest. Approve anyway?`}
-      </span>
-      <Button variant="primary" size="sm" disabled={saving} onClick={approve} autoFocus>
-        {saving ? "Approving…" : "Confirm"}
-      </Button>
-      <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+    <div className="flex flex-wrap items-center justify-end gap-2" role="group" aria-label="Confirm approval">
+      <span className="text-sm font-semibold text-text2">{isLatest ? `Approve v${n}?` : `v${n} is not the latest. Approve?`}</span>
+      <Button variant="ghost" onClick={() => setConfirming(false)}>
         Cancel
       </Button>
-      {error && <span className="text-xs text-rose-700">{error}</span>}
+      <Button variant="primary" icon="check" disabled={saving} onClick={approve} autoFocus>
+        {saving ? "Approving…" : "Confirm"}
+      </Button>
+      {error && (
+        <span role="alert" className="basis-full text-right text-sm font-medium text-crit">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

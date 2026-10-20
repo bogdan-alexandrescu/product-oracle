@@ -17,7 +17,7 @@ docs/product-oracle-v2/08-review-and-publish.md.
 The integrator re-chains this revision onto the head in merge order.
 
 Revision ID: 0014_review
-Revises: 0013
+Revises: 0014_blockers_snapshot
 """
 
 import hashlib
@@ -29,8 +29,10 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from oracle.migration_checks import add_check_values, remove_check_values
+
 revision: str = "0014_review"
-down_revision: str | None = "0013"
+down_revision: str | None = "0014_blockers_snapshot"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -48,24 +50,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql
 """
-
-
-# change_events.subject_kind as of 0013.
-CHANGE_SUBJECTS = (
-    "document_section",
-    "requirement",
-    "decision",
-    "source_permission",
-    "blocker_status",
-    "composition_revision",
-    "document_version",
-    "entity",
-    "artifact_version",
-)
-
-
-def _quoted(values: tuple[str, ...]) -> str:
-    return ", ".join(f"'{v}'" for v in values)
 
 
 def _instant(value: datetime | None) -> str | None:
@@ -539,12 +523,8 @@ def upgrade() -> None:
     op.alter_column("sections", "revision", nullable=False)
     # A member's role change or removal is a change event (approvals count only while
     # the approver still is one).
-    op.drop_constraint(op.f("ck_change_events_subject_kind"), "change_events", type_="check")
-    op.create_check_constraint(
-        op.f("ck_change_events_subject_kind"),
-        "change_events",
-        f"subject_kind IN ({_quoted(CHANGE_SUBJECTS + ('member',))})",
-    )
+    # Additive: other lanes' subject kinds survive (oracle.migration_checks).
+    add_check_values("change_events", "ck_change_events_subject_kind", "subject_kind", ("member",))
     # A publication is immutable: later edits and source updates never change it, and
     # only deleting its document or company removes it.
     op.execute(IMMUTABLE_FUNCTION)
@@ -557,11 +537,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DELETE FROM change_events WHERE subject_kind = 'member'")
-    op.drop_constraint(op.f("ck_change_events_subject_kind"), "change_events", type_="check")
-    op.create_check_constraint(
-        op.f("ck_change_events_subject_kind"),
-        "change_events",
-        f"subject_kind IN ({_quoted(CHANGE_SUBJECTS)})",
+    remove_check_values(
+        "change_events", "ck_change_events_subject_kind", "subject_kind", ("member",)
     )
     op.execute("DROP TRIGGER IF EXISTS document_publications_immutable ON document_publications")
     op.execute("DROP FUNCTION IF EXISTS oracle_refuse_publication_update()")

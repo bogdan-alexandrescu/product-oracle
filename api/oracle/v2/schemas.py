@@ -9,7 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from oracle.v2.contract import ModulePolicy, OutputKind
 
@@ -404,6 +404,50 @@ class BlockerResolutionEventOut(ORM):
     data: dict[str, Any]
     created_at: datetime
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def summary(self) -> str:
+        """One line for a history list. Events that record no status change (a
+        reclassification, a gate snapshot, an experiment) have no from/to status."""
+        return describe_blocker_event(self.kind, self.from_status, self.to_status, self.data)
+
+
+def _words(value: Any) -> str:
+    return str(value).replace("_", " ")
+
+
+def describe_blocker_event(
+    kind: str, from_status: str | None, to_status: str | None, data: dict[str, Any]
+) -> str:
+    data = data or {}
+    gate = data.get("gate") if isinstance(data.get("gate"), dict) else {}
+    change = data.get("change")
+    if change == "reclassified":
+        before = data.get("before") if isinstance(data.get("before"), dict) else {}
+        stays = f"status stays {_words(gate.get('status', 'unknown'))}"
+        was = f"{before.get('type')} {before.get('severity')}"
+        now = f"{gate.get('type')} {gate.get('severity')}"
+        if was != now:
+            return f"Reclassified from {_words(was)} to {_words(now)} ({stays})"
+        return f"Gated documents changed ({stays})"
+    if change in ("reopened_by_reclassification", "confirmed"):
+        status = data.get("withdrawn") or data.get("confirmed")
+        what = "risk acceptance" if status == "accepted_risk" else "feasibility scope"
+        now = _words(f"{gate.get('type')} {gate.get('severity')}")
+        if change == "confirmed":
+            return f"{what.capitalize()} confirmed on reclassification to {now}"
+        role = data.get("role") or "owner"
+        return f"Reopened by reclassification to {now} (the {what} needs an {role})"
+    if change == "legacy_snapshot":
+        return f"Gate snapshot recorded for an older blocker ({_words(gate.get('status'))})"
+    if kind in ("experiment_started", "experiment_concluded"):
+        return f"Experiment {_words(data.get('to') or kind.removeprefix('experiment_'))}"
+    if to_status and from_status and to_status != from_status:
+        return f"Status changed from {_words(from_status)} to {_words(to_status)}"
+    if to_status and not from_status:
+        return f"Status set to {_words(to_status)}"
+    return _words(kind).capitalize()
+
 
 # --- change events and trace ------------------------------------------------------------
 
@@ -447,6 +491,9 @@ class ArtifactDependencyOut(ORM):
     upstream_section_key: str | None = None
     upstream_section_hash: str | None = None
     upstream_entity_id: uuid.UUID | None = None
+    # A deleted upstream entity: what it was, and when it went.
+    upstream_snapshot: dict[str, Any] | None = None
+    upstream_deleted_at: datetime | None = None
     composition_revision: int | None = None
     freshness: Freshness
     caused_by_change_id: uuid.UUID | None = None

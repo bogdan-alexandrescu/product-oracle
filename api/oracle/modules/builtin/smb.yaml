@@ -1,0 +1,255 @@
+# Built-in semantic modules for the SMB services pack (smb.services, O1h). The pack reuses
+# the shared core of startup.standard and adds these modules: some REQUIRED for every
+# small-business PRD, some CONDITIONAL on the capability scope or signals, and some
+# OPTIONAL for an author to add.
+#
+# TEMPLATES ONLY: titles, instructions, typed fields, question prompts and evidence
+# expectations. No prewritten features, products, businesses, trades, brands, places or
+# prices.
+
+- id: smb.owner-workflows
+  version: 1.0.0
+  title: Owner-operator workflows
+  description: The daily work of the owner and staff this product fits into, and the time it takes.
+  applies_to: [smb.services]
+  policy: required
+  depends_on: [users.jtbd]
+  display_order: 700
+  section_ids: [smb-owner-workflows]
+  brief_layer: false
+  fields:
+    - {key: daily_workflow, label: "Current daily workflow", type: markdown, required: true}
+    - {key: roles_on_site, label: "Who does the work: owner, staff, outside help", type: markdown}
+    - {key: time_spent, label: "Time spent on the job today", type: text}
+    - {key: workarounds, label: "Current tools and workarounds", type: markdown}
+  question_prompts:
+    - key: daily_work
+      prompt: Walk through the owner's day around this job; where does the time go?
+      category: pain_evidence
+      importance: critical
+      fills: [daily_workflow, time_spent]
+    - key: who_does_it
+      prompt: Who in the business actually does this work, and with which tools today?
+      category: customer_user
+      importance: high
+      fills: [roles_on_site, workarounds]
+  instructions: >-
+    Describe the current workflow of the owner and staff around this job, the time it
+    takes, who does it and the tools or paper workarounds used, grounded in observed
+    evidence. Design for interrupted, part-time attention. No invented businesses.
+  evidence_expectations: {min_sources: 1, fields: [daily_workflow]}
+  required_review_role: approver
+
+- id: smb.self-setup
+  version: 1.0.0
+  title: Setup without IT staff
+  description: How a business with no IT staff signs up, sets up and gets value on its own.
+  applies_to: [smb.services]
+  policy: required
+  depends_on: [smb.owner-workflows]
+  display_order: 710
+  section_ids: [smb-self-setup]
+  brief_layer: false
+  fields:
+    - {key: setup_steps, label: "Setup steps and time", type: markdown, required: true}
+    - {key: first_value, label: "First useful outcome", type: text, required: true}
+    - {key: help_points, label: "Where people get stuck and get help", type: markdown}
+    - {key: setup_tests, label: "Setup acceptance checks", type: markdown}
+  question_prompts:
+    - key: setup_time
+      prompt: How long can setup take before an owner gives up, and what is the first useful result?
+      category: customer_user
+      importance: critical
+      fills: [setup_steps, first_value]
+  instructions: >-
+    Define setup steps an owner completes alone, the time each takes, the first useful
+    outcome and where help is offered. Avoid jargon and technical prerequisites. No
+    invented screens.
+  required_review_role: approver
+  outputs: [prd, acceptance_tests]
+  output_mappings:
+    acceptance_tests: [setup_tests]
+
+- id: smb.affordability
+  version: 1.0.0
+  title: Pricing sensitivity and payback
+  description: What small businesses can afford, how quickly the product pays back and how they pay.
+  applies_to: [smb.services]
+  policy: required
+  depends_on: [economics.value]
+  display_order: 720
+  section_ids: [smb-affordability]
+  brief_layer: false
+  fields:
+    - {key: willingness_to_pay, label: "Willingness to pay evidence", type: markdown, required: true}
+    - {key: payback, label: "Payback for the business", type: markdown, required: true}
+    - {key: billing_preferences, label: "Billing and payment preferences", type: markdown}
+  validators:
+    - {kind: requires_evidence, field: willingness_to_pay}
+  question_prompts:
+    - key: payback
+      prompt: How quickly must this save or earn the business money to be worth paying for?
+      category: economic_benefit
+      importance: critical
+      fills: [payback, willingness_to_pay]
+  instructions: >-
+    State willingness to pay with its evidence, the payback for the business in its own
+    terms, seasonality of cash flow and billing preferences. Use confirmed figures or
+    mark assumptions. No invented prices.
+  evidence_expectations: {min_sources: 1, fields: [willingness_to_pay]}
+  required_review_role: approver
+  outputs: [prd, roadmap]
+  output_mappings:
+    roadmap: [payback]
+
+- id: smb.local-regulations
+  version: 1.0.0
+  title: Local and vertical regulations
+  description: Licensing, tax, record keeping and trade rules that bind the businesses served.
+  applies_to: [smb.services]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: local_regulation}
+      - {op: contains, path: scope.capabilities, value: trade_licensing}
+      - {op: contains, path: scope.capabilities, value: tax_records}
+  depends_on: [constraints.solutions]
+  display_order: 730
+  section_ids: [smb-local-regulations]
+  brief_layer: false
+  fields:
+    - {key: rules, label: "Rules that apply, by vertical and locality", type: markdown, required: true}
+    - {key: product_obligations, label: "What the product does to keep owners compliant", type: markdown}
+    - {key: liability, label: "Where responsibility stays with the owner", type: markdown}
+  question_prompts:
+    - key: local_rules
+      prompt: Which licensing, tax or trade rules change how the businesses served must run this work?
+      category: constraints
+      importance: high
+      fills: [rules]
+  instructions: >-
+    List the rules that apply by vertical and locality as slots, what the product does to
+    help owners comply and where responsibility stays with the owner. Cite every rule; no
+    legal advice and no invented localities.
+  evidence_expectations: {min_sources: 1, fields: [rules]}
+  required_review_role: approver
+
+- id: smb.offline-low-tech
+  version: 1.0.0
+  title: Offline and low-tech constraints
+  description: Working with poor connectivity, shared or old devices and low digital confidence.
+  applies_to: [smb.services]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: offline_use}
+      - {op: contains, path: scope.capabilities, value: shared_devices}
+      - {op: contains, path: scope.capabilities, value: low_connectivity}
+  depends_on: [requirements.nonfunctional]
+  display_order: 740
+  section_ids: [smb-offline-low-tech]
+  brief_layer: false
+  fields:
+    - {key: environment, label: "Devices, connectivity and setting", type: markdown, required: true}
+    - {key: offline_behaviour, label: "Offline behaviour and sync", type: markdown, required: true}
+    - {key: offline_tests, label: "Offline acceptance checks", type: markdown}
+  question_prompts:
+    - key: conditions
+      prompt: On which devices and with what connectivity will owners and staff use this?
+      category: constraints
+      importance: high
+      fills: [environment]
+    - key: offline
+      prompt: Which tasks must keep working offline, and how are conflicts resolved on reconnect?
+      category: constraints
+      importance: high
+      fills: [offline_behaviour]
+  instructions: >-
+    Describe devices, connectivity and the physical setting of use, offline behaviour,
+    sync and conflict resolution, shared-device sign-in and accessibility for low digital
+    confidence. No invented devices.
+  outputs: [prd, engineering_spec, acceptance_tests]
+  output_mappings:
+    engineering_spec: [offline_behaviour]
+    acceptance_tests: [offline_tests]
+
+- id: smb.customer-touchpoints
+  version: 1.0.0
+  title: End-customer touchpoints
+  description: Where the business's own customers book, pay, get reminders or message through the product.
+  applies_to: [smb.services]
+  policy: conditional
+  condition:
+    op: or
+    args:
+      - {op: contains, path: scope.capabilities, value: appointment_booking}
+      - {op: contains, path: scope.capabilities, value: customer_messaging}
+      - {op: contains, path: scope.capabilities, value: in_person_payments}
+  depends_on: [smb.owner-workflows]
+  display_order: 750
+  section_ids: [smb-customer-touchpoints]
+  brief_layer: false
+  fields:
+    - {key: touchpoints, label: "Touchpoints with the business's customers", type: markdown, required: true}
+    - {key: owner_control, label: "What the owner controls and approves", type: markdown}
+    - {key: consent, label: "Consent and contact rules", type: markdown}
+  question_prompts:
+    - key: touchpoints
+      prompt: Where will the business's own customers interact with this, and what must the owner approve?
+      category: customer_user
+      importance: high
+      fills: [touchpoints, owner_control]
+  instructions: >-
+    Describe each touchpoint with the business's customers, what the owner controls,
+    consent and contact rules and what happens when the owner is unavailable. Messaging
+    and payment provider terms are sourced constraints. No invented customers.
+
+- id: smb.support-model
+  version: 1.0.0
+  title: Support model
+  description: How owners get help, at which hours, through which channels and at what cost to serve.
+  applies_to: [smb.services]
+  policy: optional
+  depends_on: [smb.self-setup]
+  display_order: 760
+  section_ids: [smb-support-model]
+  brief_layer: false
+  fields:
+    - {key: channels, label: "Support channels and hours", type: markdown, required: true}
+    - {key: cost_to_serve, label: "Support cost to serve", type: text}
+    - {key: self_help, label: "Self-help and community", type: markdown}
+  question_prompts:
+    - key: support
+      prompt: When an owner gets stuck during business hours, how do they get help fast enough?
+      category: customer_user
+      importance: medium
+      fills: [channels]
+  instructions: >-
+    Define support channels and hours that match when owners work, self-help, escalation
+    and the support cost to serve against the price. No invented service levels.
+
+- id: smb.tool-switching
+  version: 1.0.0
+  title: Switching from current tools
+  description: How owners move from paper, spreadsheets or other tools without disrupting the business.
+  applies_to: [smb.services]
+  policy: optional
+  depends_on: [smb.owner-workflows]
+  display_order: 770
+  section_ids: [smb-tool-switching]
+  brief_layer: false
+  fields:
+    - {key: current_tools, label: "Tools and records being replaced", type: markdown, required: true}
+    - {key: switch_plan, label: "Switch-over plan", type: markdown}
+    - {key: switching_cost, label: "Switching effort for the owner", type: text}
+  question_prompts:
+    - key: switching
+      prompt: What would an owner have to move or re-enter to switch, and when in the business cycle could they do it?
+      category: effort_cost
+      importance: medium
+      fills: [current_tools, switching_cost]
+  instructions: >-
+    Describe the tools and records being replaced by class, the switch-over plan, the
+    effort for the owner and timing around the business cycle. No vendor names.

@@ -14,6 +14,7 @@ from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBea
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth import iap, service
+from oracle.auth.jwks import KeysUnavailable
 from oracle.auth.models import Role, User
 from oracle.config import get_settings
 from oracle.tenancy import tenant_session
@@ -40,6 +41,8 @@ class Principal:
     # Set when the call is made for a run (an MCP call with the run's token): what it
     # writes is an agent's work (oracle.docs.service.import_draft holds approved text).
     run_id: uuid.UUID | None = None
+    # A scoped API token (oracle.auth.models.TOKEN_SCOPES): "tick" runs the tick only.
+    scope: str | None = None
 
     @property
     def id(self) -> uuid.UUID:
@@ -74,7 +77,7 @@ async def _iap_user(request: Request) -> User | None:
         claims = await iap.verify_assertion(assertion, audiences)
     except iap.InvalidAssertion:
         raise _unauthorized() from None
-    except iap.KeysUnavailable:
+    except KeysUnavailable:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Cannot verify the sign-in right now"
         ) from None
@@ -98,6 +101,16 @@ async def _bearer_principal(raw: str) -> Principal:
     token = await service.resolve_api_token(raw)
     if token is None:
         raise _unauthorized()
+    if token.scope is not None:
+        # The scheduler's tick token: it runs the tick (get_principal refuses the rest),
+        # with no role beyond reading.
+        return Principal(
+            tenant_id=token.tenant_id,
+            kind="token",
+            role="viewer",
+            token_id=token.id,
+            scope=token.scope,
+        )
     if token.user_id is not None:
         # A token for a user acts as that user: the user's role and own data.
         async with tenant_session(token.tenant_id) as s:
@@ -113,6 +126,9 @@ async def _bearer_principal(raw: str) -> Principal:
         )
     return Principal(tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id)
 
+
+# The only route a tick-scoped API token may call.
+TICK_PATH = "/v1/internal/tick"
 
 # The MCP server's in-process REST call for a run token carries the run creator's session
 # and this header with the run token, so the REST layer knows the call is the run's.
@@ -143,6 +159,8 @@ async def get_principal(
     cookie: Annotated[str | None, Depends(_cookie)],
 ) -> Principal:
     principal = await _get_principal(request, bearer, cookie)
+    if principal.scope == "tick" and request.url.path.rstrip("/") != TICK_PATH:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "A tick token runs the tick only")
     run_token = request.headers.get(RUN_TOKEN_HEADER)
     if run_token is not None:
         principal = await _for_run(principal, run_token)

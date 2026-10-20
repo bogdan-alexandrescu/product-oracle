@@ -3,12 +3,15 @@
 import { useId, useMemo, useState, type FormEvent } from "react";
 
 import { ConfidenceBadge, DEFAULT_LOW, sourceKindLabel } from "@/app/baseline/_components/common";
+import { InfoTip } from "@/components/ds";
 import { Button, ErrorNote, INPUT } from "@/components/ui";
 import { api, ApiError, type EntityOut, type LinkPreviewOut } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useAuthRedirect } from "@/lib/use-query";
 
 type Target = { entity_id: string } | { edge_id: string };
+
+const LABEL = "block text-[13px] font-semibold tracking-[0.02em] text-text2";
 
 const FACTOR_LABEL: Record<string, string> = {
   source: "Source",
@@ -42,6 +45,8 @@ export function AddEvidenceLink({
   context,
   low = DEFAULT_LOW,
   quiet = false,
+  defaultOpen = false,
+  onClose,
   onSaved,
 }: {
   target?: Target;
@@ -53,9 +58,16 @@ export function AddEvidenceLink({
   low?: number;
   /** A quieter button, for places that repeat it (every document section). */
   quiet?: boolean;
+  /** Start with the form open (the caller offers its own "Add evidence link"). */
+  defaultOpen?: boolean;
+  /**
+   * The caller owns the open control (a ⋯ menu): Cancel calls this, and once closed the
+   * component shows only the saved note, not its own button.
+   */
+  onClose?: () => void;
   onSaved?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
   const [picked, setPicked] = useState<string>(suggested ?? "");
@@ -135,11 +147,11 @@ export function AddEvidenceLink({
     return (
       <div className="flex flex-col items-start gap-1.5">
         {saved && (
-          <p role="status" className="text-xs text-emerald-800">
+          <p role="status" className="text-sm font-medium text-pass">
             {saved}
           </p>
         )}
-        <Button
+        {!onClose && <Button
           size="sm"
           variant={quiet ? "ghost" : "secondary"}
           onClick={() => {
@@ -149,7 +161,7 @@ export function AddEvidenceLink({
           aria-label={context ? `Add evidence link to ${context}` : "Add evidence link"}
         >
           Add evidence link
-        </Button>
+        </Button>}
       </div>
     );
   }
@@ -161,12 +173,12 @@ export function AddEvidenceLink({
     <form
       onSubmit={fetchPreview}
       aria-label="Add evidence link"
-      className="space-y-2.5 rounded-md border border-neutral-200 bg-neutral-50/60 p-3 text-sm"
+      className="flex flex-col gap-3 rounded-button border border-line bg-surface2 p-3 text-[15px]"
       data-testid="add-evidence-link"
     >
       {!target && (
         <div>
-          <label htmlFor={ids.target} className="block text-xs font-medium text-neutral-600">
+          <label htmlFor={ids.target} className={LABEL}>
             Baseline item it supports
           </label>
           <select
@@ -188,15 +200,21 @@ export function AddEvidenceLink({
         </div>
       )}
       <div>
-        <label htmlFor={ids.url} className="block text-xs font-medium text-neutral-600">
-          Public link
-        </label>
+        <span className="flex items-center gap-2">
+          <label htmlFor={ids.url} className={LABEL}>
+            Public link
+          </label>
+          <InfoTip label="link rules" align="start">
+            No account needed: the page must be public (a Google Doc shared with anyone with the link). Everyone in the
+            company will see it.
+          </InfoTip>
+        </span>
         <input
           id={ids.url}
           type="url"
           inputMode="url"
           autoFocus
-          placeholder="https://… (public Notion page, Google Doc, web page)"
+          placeholder="https://…"
           className={`${INPUT} mt-1`}
           value={url}
           onChange={(e) => {
@@ -204,13 +222,9 @@ export function AddEvidenceLink({
             setPreview(null);
           }}
         />
-        <p className="mt-1 text-xs text-neutral-500">
-          No account needed: the page must be public (a Google Doc shared with anyone with the link). Everyone in the
-          company will see it.
-        </p>
       </div>
       <div>
-        <label htmlFor={ids.note} className="block text-xs font-medium text-neutral-600">
+        <label htmlFor={ids.note} className={LABEL}>
           Note (optional)
         </label>
         <textarea
@@ -218,7 +232,7 @@ export function AddEvidenceLink({
           rows={2}
           maxLength={2000}
           className={`${INPUT} mt-1`}
-          placeholder="Why this supports the item"
+          placeholder="Why it supports the item"
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
@@ -227,31 +241,33 @@ export function AddEvidenceLink({
       {error && <ErrorNote>{error}</ErrorNote>}
 
       {preview && (
-        <div className="rounded-md border border-neutral-200 bg-white p-3" data-testid="link-preview" aria-label="Link preview">
+        <div className="rounded-button border border-line bg-surface p-3" data-testid="link-preview" aria-label="Link preview">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-xs text-neutral-500">
+              <p className="tnum text-[13px] font-semibold text-text2">
                 {sourceKindLabel(preview.kind)} · fetched {formatDate(preview.fetched_at)}
                 {preview.last_modified ? ` · updated ${formatDate(preview.last_modified)}` : ""}
               </p>
-              <p className="font-medium text-neutral-900" data-testid="link-preview-title">
+              <p className="font-semibold break-words" data-testid="link-preview-title">
                 {preview.title ?? preview.url}
               </p>
             </div>
             <ConfidenceBadge value={preview.confidence} low={low} />
           </div>
-          <p className="mt-2 border-l-2 border-neutral-200 pl-2 text-neutral-600 italic" data-testid="link-preview-excerpt">
+          <p className="mt-2 line-clamp-4 border-l-2 border-accent pl-2.5 text-text2" data-testid="link-preview-excerpt">
             “{preview.excerpt}”
           </p>
           {breakdown && (
-            <p className="mt-2 text-xs text-neutral-500" data-testid="link-preview-factors">
+            <p className="tnum mt-2 text-[13px] text-text2" data-testid="link-preview-factors">
               {Object.entries(breakdown)
                 .map(([k, f]) => `${FACTOR_LABEL[k] ?? k} ${typeof f.value === "number" ? f.value.toFixed(2) : "—"}`)
                 .join(" · ")}
             </p>
           )}
           {preview.already_cited && (
-            <p className="mt-2 text-xs text-amber-800">This item already cites this link; refresh it from its evidence instead.</p>
+            <p className="mt-2 rounded-lg bg-warn-bg px-2 py-1 text-[13px] font-medium text-warn">
+              This item already cites this link; refresh it from its evidence instead.
+            </p>
           )}
         </div>
       )}
@@ -271,6 +287,7 @@ export function AddEvidenceLink({
           onClick={() => {
             reset();
             setOpen(false);
+            onClose?.();
           }}
           disabled={busy}
         >

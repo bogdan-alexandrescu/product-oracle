@@ -24,6 +24,7 @@ CURRENT = {
     "review_comments": "review_comments.v1",
     "reporting": "reporting.v1",
     "refinement": "refinement.v1",
+    "quality_review": "quality_review.v1",
 }
 
 

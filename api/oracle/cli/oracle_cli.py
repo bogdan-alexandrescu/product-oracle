@@ -290,6 +290,14 @@ def baseline_pull(
     return 0
 
 
+def _sweep_note(lease: str) -> str:
+    if lease == "ran":
+        return ""
+    if lease == "not_due":
+        return " (sweep not due yet)"
+    return f" (sweep {lease})"
+
+
 def tick(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: TextIO) -> int:
     """Advance active runs once, or every ``--every`` seconds until interrupted."""
     with _client(args, transport) as client:
@@ -310,8 +318,7 @@ def tick(args: argparse.Namespace, transport: httpx.BaseTransport | None, out: T
                 print(
                     f"Claude accounts: {pool['reclaimed']} hold(s) reclaimed, "
                     f"{pool['refreshed']} of {pool['examined']} credential(s) refreshed, "
-                    f"{pool['polled']} usage reading(s)"
-                    + ("" if pool["lease"] == "ran" else f" (sweep {pool['lease']})"),
+                    f"{pool['polled']} usage reading(s)" + _sweep_note(pool["lease"]),
                     file=out,
                 )
                 for account_id in pool.get("reauth_required") or []:

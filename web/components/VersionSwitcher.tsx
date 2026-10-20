@@ -2,33 +2,62 @@
 
 import { useRouter } from "next/navigation";
 
+import { SegmentedControl } from "@/components/ds";
 import type { VersionSummary } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 
-/** Native select of the document's versions; navigates on change. */
+/** Up to this many versions show as a segmented control; more as a select. */
+const MAX_SEGMENTS = 6;
+
+/**
+ * The document's versions. `segments`: v1 · v2 · v3 links (B1's switcher), falling back to
+ * the select when there are many; `select` (default): a native select that navigates on change.
+ */
 export function VersionSwitcher({
   doc,
   versions,
   current,
   hrefFor = (n) => `/documents/${doc}/v/${n}`,
   label = "Version",
+  variant = "select",
 }: {
   doc: string;
   versions: VersionSummary[];
   current: number;
   hrefFor?: (n: number) => string;
   label?: string;
+  variant?: "select" | "segments";
 }) {
   const router = useRouter();
   const latest = versions.at(-1)?.number;
+  if (variant === "segments" && versions.length <= MAX_SEGMENTS) {
+    return (
+      <SegmentedControl
+        label={label}
+        value={String(current)}
+        items={versions.map((v) => ({
+          value: String(v.number),
+          href: hrefFor(v.number),
+          label: (
+            <span
+              className="font-mono"
+              title={`v${v.number} · ${formatDate(v.created_at)}${v.approved_at ? " · approved" : v.number === latest ? " · latest" : ""}`}
+            >
+              v{v.number}
+            </span>
+          ),
+        }))}
+      />
+    );
+  }
   return (
-    <label className="flex items-center gap-2 text-sm text-neutral-600">
+    <label className="flex items-center gap-2 text-sm font-semibold text-text2">
       <span className="sr-only sm:not-sr-only">{label}</span>
       <select
         aria-label={label}
         value={current}
         onChange={(e) => router.push(hrefFor(Number(e.target.value)))}
-        className="rounded-md border border-neutral-300 bg-white py-1 pr-7 pl-2 text-sm text-neutral-900"
+        className="tnum h-9 rounded-button border border-line-strong bg-surface pr-7 pl-2.5 text-sm font-medium text-text"
       >
         {[...versions].reverse().map((v) => (
           <option key={v.number} value={v.number}>

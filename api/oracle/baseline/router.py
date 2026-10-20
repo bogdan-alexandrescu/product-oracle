@@ -8,7 +8,7 @@ Commenters may only propose (POST /v1/baseline/proposals).
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import inspect
 
@@ -271,9 +271,14 @@ async def unlock_entity(entity_id: uuid.UUID, principal: ApproverNow, db: Tenant
 
 @router.get("/entities/{entity_id}/revisions", response_model=list[RevisionOut])
 async def list_entity_revisions(
-    entity_id: uuid.UUID, principal: Reader, db: TenantDB
+    entity_id: uuid.UUID,
+    principal: Reader,
+    db: TenantDB,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
 ) -> list[RevisionOut]:
-    return [RevisionOut.model_validate(r) for r in await service.revisions(db, entity_id=entity_id)]
+    """The entity's revisions, newest first; ``limit`` keeps only the newest (Home's trend)."""
+    rows = await service.revisions(db, entity_id=entity_id, limit=limit)
+    return [RevisionOut.model_validate(r) for r in rows]
 
 
 # --- edges ----------------------------------------------------------------------------------
@@ -663,7 +668,10 @@ async def export_yaml(principal: Reader, db: TenantDB) -> PlainTextResponse:
 @router.post(
     "/yaml",
     response_model=YamlImportResult,
-    responses={422: {"model": YamlImportError, "description": "File rejected"}},
+    responses={
+        403: {"model": YamlImportError, "description": "A change the caller's role may not make"},
+        422: {"model": YamlImportError, "description": "File rejected"},
+    },
     openapi_extra={
         "requestBody": {
             "required": True,
@@ -686,6 +694,10 @@ async def import_yaml(
         if text is None:
             raise yaml_io.YamlInvalid([])
         result = await yaml_io.import_yaml(db, principal, text, run_id=run_id)
+    except yaml_io.YamlForbidden as exc:
+        await db.rollback()
+        body = YamlImportError(detail=exc.message, errors=exc.problems)
+        return JSONResponse(body.model_dump(mode="json"), 403)
     except yaml_io.YamlInvalid as exc:
         await db.rollback()
         problems = exc.problems or []

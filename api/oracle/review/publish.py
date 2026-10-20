@@ -288,7 +288,7 @@ async def revocation_record(db: AsyncSession, source_ids: list[uuid.UUID]) -> di
 
 async def record_source_revocation(
     db: AsyncSession,
-    principal: "Principal | None",
+    principal: "Principal | str | None",
     sources: list[Source],
     cause: str,
     *,
@@ -304,7 +304,10 @@ async def record_source_revocation(
     events = []
     for source in sources:
         record = await revocation_record(db, [source.id])
-        record.update({"source_kind": source.kind, "source_name": source.name})
+        # The name stays out: a source is private to its owner.
+        record.update(
+            {"source_kind": source.kind, "source": {"id": str(source.id), "kind": source.kind}}
+        )
         events.append(
             await changes.record_change(
                 db,
@@ -312,7 +315,7 @@ async def record_source_revocation(
                 cause=cause,
                 actor=principal,
                 subject_id=source.id,
-                subject_ref=f"source:{source.name}",
+                subject_ref=f"{source.kind} source",
                 data=record,
             )
         )

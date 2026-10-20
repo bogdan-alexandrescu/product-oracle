@@ -7,6 +7,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { plainText } from "@/lib/markdown";
 import { presenterNotes, resolveBrief } from "./brief";
+import { mockUuid, seeded } from "./ids";
 
 import type { Db, DocumentRow, VersionRow } from "./server";
 
@@ -30,12 +31,7 @@ export interface LaneFState {
 const SEEDED_AT = "2026-10-01T09:00:00Z";
 const now = () => new Date().toISOString();
 
-let counter = 0;
-function uuid(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  counter += 1;
-  return `00000000-0000-4000-8000-${String(Date.now() + counter).padStart(12, "0").slice(-12)}`;
-}
+const uuid = mockUuid;
 
 function hash(text: string): string {
   let h = 0x811c9dc5;
@@ -1414,7 +1410,7 @@ function seedState(): LaneFState {
 }
 
 function state(db: Db): LaneFState {
-  db.lane_f ??= seedState();
+  db.lane_f ??= seeded("lane-f", seedState);
   return db.lane_f;
 }
 

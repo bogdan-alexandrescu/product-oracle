@@ -128,6 +128,18 @@ async def set_role(
         await lapse_approvals(
             session, principal, reviewer_id=user.id, reason=f"approver demoted to {role}"
         )
+    if not has_role(role, before):  # type: ignore[arg-type]
+        # A demotion voids their pending spend approvals (a start approval, a Resume after
+        # an overrun) and their checkpoint decisions not acted on yet, where the new role
+        # no longer allows them (C2, owner 2026-10-19/20).
+        via = {"via": "member.role", "member_id": str(user.id), "role": role}
+        voided = await recheck_member_runs(session, principal, user.id, via)
+        if voided:
+            await audit.record(
+                session, principal, "member.role_voids", "user", user.id,
+                {"runs": [str(r) for r in voided["runs"]],
+                 "deferred": [str(r) for r in voided["deferred"]]},
+            )  # fmt: skip
     # Review gates read approvers' current roles; the change event tells every lane.
     await changes.record_change(
         session,
@@ -167,8 +179,6 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     from oracle.mcp.oauth.models import OAuthToken
     from oracle.review.publish import record_source_revocation
     from oracle.review.state import lapse_approvals
-    from oracle.runs.models import Run
-    from oracle.runs.service import FINAL, stop_run
     from oracle.sources.models import Source
 
     await _gate(session, principal)
@@ -205,23 +215,6 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
         .values(revoked_at=at)
         .execution_options(synchronize_session=False)
     )
-    runs = list(
-        await session.scalars(
-            select(Run).where(Run.created_by == user.id, Run.status.not_in(FINAL)).with_for_update()
-        )
-    )
-    segments: list = []
-    for run in runs:
-        await stop_run(session, principal, run, via, deferred=segments)
-    for segment in segments:
-        session.add(
-            MemberFollowUp(
-                member_id=user.id,
-                kind="run_cancel",
-                target_id=segment.id,
-                workflow_id=segment.swarm_workflow_id,
-            )
-        )
     # Their identities: the user, and the API tokens that acted for them.
     acted_as = {user.id, *tokens_ever}
     # The open invite for their email, and every open invite they created.
@@ -238,8 +231,12 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
             session, principal, "invite.revoke", "invite", invite.id, {"email": invite.email, **via}
         )
     jobs = await _cancel_llm_jobs(session, acted_as, at)
-    voided = await _void_spend_approvals(session, principal, acted_as, user.id, via)
-    decisions = await _void_checkpoint_decisions(session, principal, acted_as, via)
+    # Disabled before the runs are rechecked: their creator's and approvers' standing is
+    # read from the row.
+    user.disabled_at = at
+    user.disabled_by = principal.id
+    await session.flush()
+    rechecked = await recheck_member_runs(session, principal, user.id, via)
     lapsed = await lapse_approvals(
         session, principal, reviewer_id=user.id, reason="member was removed (disabled)"
     )
@@ -261,11 +258,13 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
             "sources": [str(x.id) for x in sources],
             "connections": [str(c.id) for c in connections],
             "api_tokens": [str(t.id) for t in tokens],
-            "runs": [str(r.id) for r in runs],
+            "runs": [str(r) for r in rechecked["stopped"]],
             "invites": [str(i.id) for i in invites],
             "llm_jobs": [str(j) for j in jobs],
-            "run_approvals_voided": [str(r) for r in voided],
-            "checkpoint_decisions_voided": [str(c) for c in decisions],
+            "run_approvals_voided": [str(r) for r in rechecked["approvals"]],
+            "run_resumes_voided": [str(r) for r in rechecked["resumes"]],
+            "checkpoint_decisions_voided": [str(c) for c in rechecked["decisions"]],
+            "runs_rechecked_later": [str(r) for r in rechecked["deferred"]],
             **lapsed,
         },
     )
@@ -306,100 +305,97 @@ async def _cancel_llm_jobs(
     return [j.id for j in jobs]
 
 
-async def _void_spend_approvals(
+async def recheck_member_runs(
     session: AsyncSession,
-    principal: "Principal",
-    approvers: set[uuid.UUID],
+    principal: "Principal | None",
     member_id: uuid.UUID,
     via: dict[str, str],
-) -> list[uuid.UUID]:
-    """A spend approval the removed member gave on someone else's run that has not
-    started (no segment ever ran) is void: the run waits for an approval again. A run
-    that started keeps its approval and its ceiling. Their own runs are cancelled."""
-    from oracle.runs.models import Run, RunSegment
-    from oracle.runs.service import FINAL, unqueue
-    from oracle.runtokens import revoke_run_tokens
+) -> dict[str, list[uuid.UUID]]:
+    """After a disable or a demotion of ``member_id`` (flushed, under the review gate held
+    exclusively): every run it may concern is rechecked (oracle.runs.service.recheck_run):
+    the member's own runs (cancelled if they are disabled), and the runs whose spend
+    approval (a start approval, a Resume after an overrun) or not-yet-acted checkpoint
+    decision they gave, by them or a token of theirs (voided when their role no longer
+    allows it: they return to the Inbox as needing approval again).
 
-    started = select(RunSegment.id).where(
-        RunSegment.run_id == Run.id,
-        or_(RunSegment.started_at.is_not(None), RunSegment.swarm_workflow_id.is_not(None)),
+    The gate is held exclusively, so no run's row is waited on (a tick or a request may
+    hold it across a call to SwarmCloud): a busy run gets a ``run_recheck`` follow-up,
+    made after the commit and by every tick until done; the tick and every submission
+    recheck it too. Returns the run ids by what was done (checkpoint ids for decisions)
+    and those deferred."""
+    from oracle.runs.models import Run, RunSegment
+    from oracle.runs.service import FINAL, recheck_run
+
+    acted_as = [
+        member_id,
+        *await session.scalars(select(ApiToken.id).where(ApiToken.user_id == member_id)),
+    ]
+    ids_text = [str(i) for i in acted_as]
+    decided = (
+        select(RunSegment.id)
+        .where(
+            RunSegment.run_id == Run.id,
+            RunSegment.status == "pending",
+            RunSegment.artifacts["decision"]["decided_by"].astext.in_(ids_text),
+        )
+        .exists()
     )
-    runs = list(
+    candidates = list(
+        await session.scalars(
+            select(Run.id).where(
+                Run.status.not_in(FINAL),
+                or_(
+                    Run.created_by == member_id,
+                    Run.approved_by.in_(acted_as),
+                    Run.knobs["resume_approval"]["by"].astext.in_(ids_text),
+                    decided,
+                ),
+            )
+        )
+    )
+    out: dict[str, list[uuid.UUID]] = {
+        "stopped": [],
+        "approvals": [],
+        "resumes": [],
+        "decisions": [],
+        "deferred": [],
+    }
+    if not candidates:
+        return out
+    locked = list(
         await session.scalars(
             select(Run)
-            .where(
-                Run.approved_by.in_(approvers),
-                Run.status.not_in(FINAL),
-                Run.created_by.is_distinct_from(member_id),
-                ~started.exists(),
-            )
-            .with_for_update()
+            .where(Run.id.in_(candidates))
+            .with_for_update(skip_locked=True)
+            .execution_options(populate_existing=True)
         )
     )
-    for run in runs:
-        approved_by = run.approved_by
-        run.status = "awaiting_approval"
-        run.approved_by = None
-        run.approved_at = None
-        await revoke_run_tokens(session, run.id)
-        # Its first segment may be queued, or its submission under way: it is not ours
-        # now (oracle.runs.service.submit_queued cancels a workflow it started).
-        for segment in await session.scalars(
-            select(RunSegment).where(RunSegment.run_id == run.id, RunSegment.status == "pending")
-        ):
-            unqueue(segment)
-        await audit.record(
-            session, principal, "run.approval_voided", "run", run.id,
-            {"approved_by": str(approved_by), **via},
-        )  # fmt: skip
-    return [r.id for r in runs]
-
-
-async def _void_checkpoint_decisions(
-    session: AsyncSession,
-    principal: "Principal",
-    deciders: set[uuid.UUID],
-    via: dict[str, str],
-) -> list[uuid.UUID]:
-    """A checkpoint decision the removed member gave whose segment has not been
-    submitted yet (the submission is under way, or waits for the tick's retry) is void,
-    as a spend approval is: the checkpoint waits for a decision again, nothing runs for
-    it. A decision whose workflow was submitted stands (it is running)."""
-    from oracle.runs.models import Checkpoint, Run, RunSegment
-    from oracle.runs.service import void_decision
-
-    decided = [str(d) for d in deciders]
-    candidates = (
-        await session.execute(
-            select(RunSegment.id, RunSegment.run_id)
-            .join(Run, Run.id == RunSegment.run_id)
-            .where(
-                Run.status == "running",
-                RunSegment.status == "pending",
-                RunSegment.artifacts["decision"]["decided_by"].astext.in_(decided),
+    for run in locked:
+        pending = {
+            str(s.artifacts["decision"]["checkpoint_id"])
+            for s in await session.scalars(
+                select(RunSegment).where(
+                    RunSegment.run_id == run.id, RunSegment.status == "pending"
+                )
             )
-        )
-    ).all()
-    voided: list[uuid.UUID] = []
-    for segment_id, run_id in candidates:
-        fresh = {"populate_existing": True}
-        run = await session.scalar(
-            select(Run).where(Run.id == run_id).with_for_update().execution_options(**fresh)
-        )
-        segment = await session.scalar(
-            select(RunSegment).where(RunSegment.id == segment_id).execution_options(**fresh)
-        )
-        decision = (segment.artifacts or {}).get("decision") or {}
-        if run.status != "running" or segment.status != "pending":
-            continue
-        if decision.get("decided_by") not in decided:
-            continue
-        cp = await session.get(Checkpoint, uuid.UUID(decision["checkpoint_id"]))
-        if cp is None or cp.run_id != run.id:
-            continue
-        await void_decision(session, principal, run, segment, cp, via)
-        voided.append(cp.id)
-    return voided
+            if isinstance((s.artifacts or {}).get("decision"), dict)
+        }
+        done = await recheck_run(session, run, principal=principal, via=via)
+        if done == "stopped":
+            out["stopped"].append(run.id)
+        elif done == "approval_voided":
+            out["approvals"].append(run.id)
+        elif done == "resume_voided":
+            out["resumes"].append(run.id)
+        elif done == "decision_voided":
+            out["decisions"].extend(uuid.UUID(c) for c in pending)
+    seen = {r.id for r in locked}
+    for run_id in candidates:
+        if run_id not in seen:
+            session.add(MemberFollowUp(member_id=member_id, kind="run_recheck", target_id=run_id))
+            out["deferred"].append(run_id)
+    await session.flush()
+    return out
 
 
 async def _disconnect_all(
@@ -454,9 +450,31 @@ async def after_disable(
 ) -> None:
     """After a disable commits: revoke anything of theirs that slipped in while it ran
     (a credential created by a request that authenticated before it), then make the
-    calls the disable owes (:func:`run_follow_ups`). Commits."""
+    calls the disable owes (:func:`run_follow_ups`), and cancel at the runtime the
+    workflows of the runs it stopped (the tick does it otherwise). Commits."""
     await sweep_disabled(session, principal, user_id)
     await run_follow_ups(session, principal, http, member_id=user_id)
+    await cancel_stopped_runs(session, user_id)
+
+
+async def cancel_stopped_runs(session: AsyncSession, member_id: uuid.UUID) -> None:
+    """Cancel now, with nothing held, the workflows of the member's runs a disable
+    stopped (each on its run's ``searches``; the tick cancels whatever this misses)."""
+    from oracle.runs.models import Run
+    from oracle.runs.service import settle_now
+
+    run_ids = list(
+        await session.scalars(
+            select(Run.id).where(
+                Run.created_by == member_id,
+                Run.status == "cancelled",
+                Run.knobs.has_key("searches"),
+            )
+        )
+    )
+    await session.rollback()
+    for run_id in run_ids:
+        await settle_now(session, run_id)
 
 
 async def _left_over(
@@ -582,6 +600,13 @@ class _BudgetSpent(Exception):
     """The run's time budget ran out during a call; that call is not counted."""
 
 
+_FOLLOW_UP_AUDIT = {
+    "provider_revoke": "connection.provider_revoke",
+    "run_cancel": "run.runtime_cancel",
+    "run_recheck": "run.member_recheck",
+}
+
+
 def follow_up_backoff(attempts: int) -> timedelta:
     """How long a follow-up waits after its ``attempts``-th failed attempt."""
     return min(FOLLOW_UP_FIRST_BACKOFF * 2 ** max(attempts - 1, 0), FOLLOW_UP_MAX_BACKOFF)
@@ -680,14 +705,6 @@ async def _attempt(
         raise
 
 
-async def attempt_follow_up(
-    session: AsyncSession, follow_up_id: uuid.UUID
-) -> MemberFollowUp | None:
-    """Make a pending run_cancel follow-up now (the cancel that recorded it just
-    committed); a failure waits for the tick's retry. Commits."""
-    return await _attempt(session, None, None, follow_up_id, ("pending",))  # type: ignore[arg-type]
-
-
 async def _record_attempt(
     session: AsyncSession,
     principal: "Principal | None",
@@ -706,7 +723,7 @@ async def _record_attempt(
         row.done_at = now
         row.next_attempt_at = None
         row.ciphertext = None
-    elif now >= row.created_at + FOLLOW_UP_RETRY_WINDOW:
+    elif row.kind != "run_recheck" and now >= row.created_at + FOLLOW_UP_RETRY_WINDOW:
         # No more automatic retries; the copy stays for an owner's Retry or Dismiss.
         row.status = "failed"
         row.next_attempt_at = None
@@ -716,8 +733,8 @@ async def _record_attempt(
     await audit.record(
         session,
         principal,
-        "connection.provider_revoke" if row.kind == "provider_revoke" else "run.runtime_cancel",
-        "connection" if row.kind == "provider_revoke" else "run_segment",
+        _FOLLOW_UP_AUDIT.get(row.kind, "run.runtime_cancel"),
+        {"provider_revoke": "connection", "run_recheck": "run"}.get(row.kind, "run_segment"),
         row.target_id,
         {
             "member_id": str(row.member_id),
@@ -850,6 +867,25 @@ async def _follow_up(
         except TimeoutError:
             return False, "failed", "the provider did not answer in time"
         return outcome in REVOKE_DONE, outcome, None
+
+    if row.kind == "run_recheck":
+        from oracle.runs.models import Run
+        from oracle.runs.service import recheck_run
+
+        run = await session.scalar(
+            select(Run)
+            .where(Run.id == row.target_id)
+            .with_for_update(skip_locked=True)
+            .execution_options(populate_existing=True)
+        )
+        if run is None:
+            if await session.scalar(select(Run.id).where(Run.id == row.target_id)) is None:
+                return True, "gone", None
+            return False, "busy", "the run was busy; rechecked at the next tick"
+        done = await recheck_run(
+            session, run, via={"via": "member.recheck", "member_id": str(row.member_id)}
+        )
+        return True, done or "unchanged", None
 
     from oracle.runs.models import RunSegment
     from oracle.swarm import RuntimeUnavailable, get_runtime

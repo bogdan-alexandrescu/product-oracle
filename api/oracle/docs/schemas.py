@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 DocumentStatus = Literal["draft", "in_review", "approved"]
 CitationSource = Literal["slack", "notion", "gdocs", "github", "fireflies", "upload", "web"]
@@ -125,7 +125,11 @@ class SectionOut(ORM):
     level: int
     heading: str
     body_md: str
-    body_text: str
+    body_text: str = Field(
+        description="Plain text of the body, citation markers removed. A table is one line "
+        "per row (header first, no separator row), cells joined by ' | '; a literal '|' in "
+        "a cell is '\\|'."
+    )
     content_hash: str
     # The review revision: the text, the citation entries it cites and its layer. Send
     # it as ``base_revision`` when saving the section.
