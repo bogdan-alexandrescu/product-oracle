@@ -494,6 +494,7 @@
           "documents"
         ],
         "summary": "Get Version Markdown",
+        "description": "The version's markdown as stored; a roadmap's date that rests on no verified basis\nnow has ``<!-- oracle: date unverified -->`` (or ``date withdrawn``) after it, which\nan import drops.",
         "operationId": "get_version_markdown",
         "security": [
           {

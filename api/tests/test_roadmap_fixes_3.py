@@ -17,6 +17,7 @@ from datetime import UTC, date, datetime
 import pytest
 from sqlalchemy import select
 
+from oracle import safe_yaml
 from oracle.auth.models import User
 from oracle.auth.service import create_user
 from oracle.roadmap.schedule import Basis, supporting
@@ -74,9 +75,10 @@ def base60(size: int) -> str:
     return "1" + ":1" * (size // 2)
 
 
+# YAML 1.1 sexagesimal int: quadratic for yaml.safe_load (3 s at 160 KB); oracle.safe_yaml
+# reads it as a string, at once (main's PR #94 semantics).
+BASE60 = _in_economics(base60(160_000))
 PROBES = {
-    # YAML 1.1 sexagesimal int: quadratic to build (3 s at 160 KB), then ValueError.
-    "base60": _in_economics(base60(160_000)),
     # Python refuses int() of more than 4,300 digits: ValueError at once.
     "long_decimal": _in_economics("9" * 5_000),
     # ~400 levels of nesting: RecursionError in the composer, under 1 KB.
@@ -101,6 +103,13 @@ def test_the_loader_raises_only_its_refusal(name):
         items_file.load_items_yaml(PROBES[name])
 
 
+def test_a_base60_value_is_a_string_read_at_once():
+    started = time.monotonic()
+    data = items_file.load_items_yaml(BASE60)
+    assert time.monotonic() - started < 0.1
+    assert isinstance(data["items"][0]["economics"]["effort"], str)
+
+
 def test_the_one_megabyte_base60_scalar_is_refused_at_once():
     text = _in_economics(base60(1_000_000))
     started = time.monotonic()
@@ -111,11 +120,13 @@ def test_the_one_megabyte_base60_scalar_is_refused_at_once():
 
 def test_only_plain_decimal_numbers_are_numbers():
     data = items_file.load_items_yaml(
-        "a: 1:30\nb: 0x1F\nc: 0o17\nd: 1_000\ne: 12\nf: -3.5\ng: 1e3\nh: 2026-11-30\ni: true\n"
+        "a: 1:30\nb: 0x1F\nc: 0o17\nd: 1_000\ne: 12\nf: -3.5\ng: 1e3\nj: 1.5e+3\n"
+        "h: 2026-11-30\ni: true\n"
     )
     assert data["a"] == "1:30" and data["b"] == "0x1F" and data["c"] == "0o17"
     assert data["d"] == "1_000"
-    assert data["e"] == 12 and data["f"] == -3.5 and data["g"] == 1000.0
+    assert data["e"] == 12 and data["f"] == -3.5 and data["g"] == "1e3"
+    assert data["j"] == 1500.0
     assert str(data["h"]) == "2026-11-30" and data["i"] is True
 
 
@@ -127,7 +138,7 @@ def test_explicit_tags_are_refused():
 
 
 def test_an_over_long_value_is_refused(monkeypatch):
-    monkeypatch.setattr(items_file, "MAX_SCALAR_CHARS", 50)
+    monkeypatch.setattr(safe_yaml, "MAX_SCALAR_CHARS", 50)
     out = check_items(_in_economics('"' + "x " * 40 + '"'))
     assert [p["code"] for p in out.problems] == ["too_large"]
 
@@ -170,7 +181,7 @@ def test_any_other_failure_of_the_check_is_a_problem(monkeypatch):
     assert [p["code"] for p in check_items(ITEMS).problems] == ["unreadable_yaml"]
 
 
-@pytest.mark.parametrize("probe", ["long_decimal", "deep_sequence", "base60"])
+@pytest.mark.parametrize("probe", ["long_decimal", "deep_sequence", "deep_mapping"])
 async def test_the_tick_completes_and_revokes_the_token(client, owner, runtime, probe):  # noqa: F811
     tenant_id, auth = owner
     await approved_prd(client, auth)
@@ -204,7 +215,7 @@ async def test_the_tick_completes_and_revokes_the_token(client, owner, runtime, 
         ("confidence: high", "confidence: .nan"),
         ("score: 4.2", "score: .inf"),
         ("score: 4.2", "score: -.Inf"),
-        ("score: 4.2", "score: 1e999"),
+        ("score: 4.2", "score: 1.0e+999"),
     ],
 )
 def test_nan_and_infinity_are_refused(change):

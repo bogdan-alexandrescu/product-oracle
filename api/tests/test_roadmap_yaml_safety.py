@@ -6,6 +6,7 @@ run's import, a person's PUT) refuses such a file before it is expanded."""
 
 import time
 
+from oracle import safe_yaml
 from oracle.runs import roadmap as items_file
 from oracle.runs.roadmap import check_items
 from oracle.swarm import Outcome
@@ -65,7 +66,7 @@ def test_an_anchor_alone_and_a_merge_key_are_refused():
 
 
 def test_too_many_nodes_is_refused(monkeypatch):
-    monkeypatch.setattr(items_file, "MAX_NODES", 50)
+    monkeypatch.setattr(safe_yaml, "MAX_NODES", 50)
     assert _codes(ITEMS) == ["too_large"]
 
 

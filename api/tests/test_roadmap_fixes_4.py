@@ -41,9 +41,9 @@ ALIAS_BOMB = (
     "c: &c [*b,*b,*b,*b,*b,*b,*b,*b,*b]\n"
     "d: &d [*c,*c,*c,*c,*c,*c,*c,*c,*c]\n"
 )
-# Each a YAML value that stock yaml.safe_load stalls on, crashes on or expands.
+# Each a YAML value that stock yaml.safe_load stalls on, crashes on or expands. (A base-60
+# value is no refusal: oracle.safe_yaml reads it as a string, at once.)
 YAML_PROBES = {
-    "base60": f"effort: {base60(160_000)}",
     "long_decimal": "effort: " + "9" * 5_000,
     "deep_sequence": "effort: " + "[" * 400 + "]" * 400,
     "deep_mapping": "effort: " + "{a: " * 400 + "1" + "}" * 400,
@@ -182,7 +182,7 @@ async def test_the_draft_parse_runs_off_the_event_loop(monkeypatch):
     assert [p.code for p in exc.value.problems] == ["too_slow"] and beats >= 2
 
 
-@pytest.mark.parametrize("name", ["base60", "deep_sequence", "alias_bomb"])
+@pytest.mark.parametrize("name", ["deep_mapping", "deep_sequence", "alias_bomb"])
 async def test_a_runs_roadmap_md_probe_fails_the_import_not_the_tick(
     client,
     owner,  # noqa: F811
@@ -206,7 +206,7 @@ async def test_a_runs_roadmap_md_probe_fails_the_import_not_the_tick(
     assert "roadmap.md was rejected" in run["error"] and "invalid_front_matter" in run["error"]
 
 
-@pytest.mark.parametrize("name", ["base60", "deep_mapping", "alias_bomb"])
+@pytest.mark.parametrize("name", ["long_decimal", "deep_mapping", "alias_bomb"])
 async def test_a_runs_prd_md_probe_fails_the_import_not_the_tick(client, owner, runtime, name):  # noqa: F811
     from tests.fixtures import draft
 

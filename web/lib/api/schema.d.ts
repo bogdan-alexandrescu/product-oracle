@@ -176,7 +176,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Version Markdown */
+        /**
+         * Get Version Markdown
+         * @description The version's markdown as stored; a roadmap's date that rests on no verified basis
+         *     now has ``<!-- oracle: date unverified -->`` (or ``date withdrawn``) after it, which
+         *     an import drops.
+         */
         get: operations["get_version_markdown"];
         put?: never;
         post?: never;
