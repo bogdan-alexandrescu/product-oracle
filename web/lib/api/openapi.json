@@ -3100,6 +3100,194 @@
         }
       }
     },
+    "/v1/connections/{connection_id}/slack/channels": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "List Slack Channels",
+        "description": "Public channels and the private channels you are in, by name; never DMs.",
+        "operationId": "list_slack_channels",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": "",
+              "title": "Search"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackChannelPage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your Slack connections"
+          },
+          "409": {
+            "description": "The connection needs reconnecting"
+          },
+          "429": {
+            "description": "Slack is rate limiting; retry after Retry-After seconds"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/connections/{connection_id}/github/repos": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "List Github Repos",
+        "description": "Repos your GitHub sign-in can read, matched on owner/name and description.",
+        "operationId": "list_github_repos",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": "",
+              "title": "Search"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 10
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubRepoPage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your GitHub connections"
+          },
+          "409": {
+            "description": "The connection needs reconnecting"
+          },
+          "429": {
+            "description": "GitHub is rate limiting; retry after Retry-After seconds"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settings": {
       "get": {
         "tags": [
@@ -26145,6 +26333,92 @@
         ],
         "title": "FlowSegmentOut"
       },
+      "GithubRepoOut": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_private": {
+            "type": "boolean",
+            "title": "Is Private"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "pushed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pushed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "owner",
+          "name",
+          "is_private",
+          "is_archived",
+          "description",
+          "pushed_at"
+        ],
+        "title": "GithubRepoOut"
+      },
+      "GithubRepoPage": {
+        "properties": {
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/GithubRepoOut"
+            },
+            "type": "array",
+            "title": "Repos"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repos",
+          "next_cursor"
+        ],
+        "title": "GithubRepoPage"
+      },
       "GoalTerm": {
         "properties": {
           "goal": {
@@ -35401,6 +35675,86 @@
           "is_default"
         ],
         "title": "SettingOut"
+      },
+      "SlackChannelOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_private": {
+            "type": "boolean",
+            "title": "Is Private"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "num_members": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Members"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "is_private",
+          "is_archived",
+          "num_members",
+          "topic"
+        ],
+        "title": "SlackChannelOut"
+      },
+      "SlackChannelPage": {
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/SlackChannelOut"
+            },
+            "type": "array",
+            "title": "Channels"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channels",
+          "next_cursor"
+        ],
+        "title": "SlackChannelPage"
       },
       "SlideOut": {
         "properties": {

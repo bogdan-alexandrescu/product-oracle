@@ -886,6 +886,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{connection_id}/slack/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Slack Channels
+         * @description Public channels and the private channels you are in, by name; never DMs.
+         */
+        get: operations["list_slack_channels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{connection_id}/github/repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Github Repos
+         * @description Repos your GitHub sign-in can read, matched on owner/name and description.
+         */
+        get: operations["list_github_repos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/settings": {
         parameters: {
             query?: never;
@@ -7902,6 +7942,30 @@ export interface components {
              */
             approver_role: "viewer" | "commenter" | "approver" | "owner";
         };
+        /** GithubRepoOut */
+        GithubRepoOut: {
+            /** Full Name */
+            full_name: string;
+            /** Owner */
+            owner: string;
+            /** Name */
+            name: string;
+            /** Is Private */
+            is_private: boolean;
+            /** Is Archived */
+            is_archived: boolean;
+            /** Description */
+            description: string | null;
+            /** Pushed At */
+            pushed_at: string | null;
+        };
+        /** GithubRepoPage */
+        GithubRepoPage: {
+            /** Repos */
+            repos: components["schemas"]["GithubRepoOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** GoalTerm */
         GoalTerm: {
             /** Goal */
@@ -11170,6 +11234,28 @@ export interface components {
             is_default: boolean;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** SlackChannelOut */
+        SlackChannelOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Is Private */
+            is_private: boolean;
+            /** Is Archived */
+            is_archived: boolean;
+            /** Num Members */
+            num_members: number | null;
+            /** Topic */
+            topic: string | null;
+        };
+        /** SlackChannelPage */
+        SlackChannelPage: {
+            /** Channels */
+            channels: components["schemas"]["SlackChannelOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /** SlideOut */
         SlideOut: {
@@ -14646,6 +14732,117 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_slack_channels: {
+        parameters: {
+            query?: {
+                search?: string;
+                cursor?: string | null;
+                include_archived?: boolean;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackChannelPage"];
+                };
+            };
+            /** @description Not one of your Slack connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection needs reconnecting */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Slack is rate limiting; retry after Retry-After seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_github_repos: {
+        parameters: {
+            query?: {
+                search?: string;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GithubRepoPage"];
+                };
+            };
+            /** @description Not one of your GitHub connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection needs reconnecting */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description GitHub is rate limiting; retry after Retry-After seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
