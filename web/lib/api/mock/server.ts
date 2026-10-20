@@ -106,6 +106,7 @@ const now = () => new Date().toISOString();
 function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
   const id = uuid();
   const layered = resolveBrief(seed.sections.map((s) => ({ section_key: s.key, level: s.level })), seed.brief);
+  const depth = (DOCUMENTS as DocumentSeed[]).find((d) => d.slug === doc.slug)?.depth ?? "full";
   const sections = seed.sections.map((s, ordinal) => ({
     id: uuid(),
     section_key: s.key,
@@ -118,7 +119,7 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     citation_keys: [...new Set([...s.body.matchAll(/\[c:([\w.-]+)\]/g)].map((m) => m[1]))],
     layer: layered.brief.has(s.key) ? ("brief" as const) : ("detail" as const),
     notes: layered.brief.has(s.key) ? presenterNotes(s.body) : null,
-    spec_states: doc.kind === "spec" ? specStates(s.key, s.body, false) : [],
+    spec_states: doc.kind === "spec" ? specStates(s.key, s.body, false, depth) : [],
   }));
   return {
     id,
@@ -141,6 +142,8 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
       title: c.title,
       excerpt: c.excerpt,
       retrieved_at: c.retrieved_at,
+      added: c.added ?? false,
+      state_label: c.state_label ?? null,
     })),
   };
 }
@@ -369,6 +372,8 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
           title: c.title ?? "",
           excerpt: c.excerpt ?? "",
           retrieved_at: c.retrieved_at ?? "",
+          added: c.added,
+          state_label: c.state_label ?? undefined,
         })),
       });
       db.versions.push(v);

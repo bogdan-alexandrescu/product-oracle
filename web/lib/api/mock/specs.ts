@@ -105,14 +105,23 @@ const ADDED = "Proposed · added in an edit";
 const PROPOSED_AC = "Proposed · not a product requirement until the PRD adopts it";
 /** Oracle's label that starts the proposed acceptance criteria. */
 export const ACCEPTANCE_PROPOSED_LABEL = "Proposed by this spec (not product requirements until the PRD adopts them):";
+/** The spec template's sections a technical brief has (api/oracle/specs/contract.py SECTIONS). */
+const BRIEF_TEMPLATE_KEYS = new Set(["summary", "requirements", "approach", "open-decisions", "acceptance-criteria", "assumptions", "sources"]);
+/** ... and a full engineering spec. */
 const TEMPLATE_KEYS = new Set([
-  "summary", "requirements", "approach", "open-decisions", "acceptance-criteria", "user-flows", "inputs-outputs",
-  "architecture", "apis-data", "dependencies", "failure-modes", "security-privacy-performance", "test-strategy",
-  "release-flags", "migration-rollback", "assumptions", "sources",
+  ...BRIEF_TEMPLATE_KEYS, "user-flows", "inputs-outputs", "architecture", "apis-data", "dependencies", "failure-modes",
+  "security-privacy-performance", "test-strategy", "release-flags", "migration-rollback",
 ]);
+const ADDED_STATE: Schemas["SpecPartState"] = { label: ADDED, decided: false, added: true, half: null, starts_at: null };
+/** E1: a citation an edit added to a spec version, as the API's `CitationOut.state_label`. */
+export const ADDED_CITATION_LABEL = ADDED;
 
-/** E1, as the API's `spec_states`: only what Oracle locks is decided; an added section is proposed. */
-export function specStates(key: string, body: string, approved: boolean): Schemas["SpecPartState"][] {
+/**
+ * E1, as the API's `spec_states`: only what Oracle locks is decided; an added section is
+ * proposed. A template section a technical brief does not have (e.g. Architecture), added
+ * in an edit, is an added section too (owner, 2026-10-20).
+ */
+export function specStates(key: string, body: string, approved: boolean, depth: "brief" | "full" = "full"): Schemas["SpecPartState"][] {
   if (key === "spec" || key === "full") return [];
   if (key === "acceptance-criteria") {
     const out: Schemas["SpecPartState"][] = [{ label: DECIDED, decided: true, added: false, half: "decided", starts_at: null }];
@@ -122,7 +131,7 @@ export function specStates(key: string, body: string, approved: boolean): Schema
     return out;
   }
   if (key === "requirements" || key === "sources") return [{ label: DECIDED, decided: true, added: false, half: null, starts_at: null }];
-  if (!TEMPLATE_KEYS.has(key)) return [{ label: ADDED, decided: false, added: true, half: null, starts_at: null }];
+  if (!(depth === "brief" ? BRIEF_TEMPLATE_KEYS : TEMPLATE_KEYS).has(key)) return [ADDED_STATE];
   return [{ label: approved ? APPROVED : PROPOSED, decided: approved, added: false, half: null, starts_at: null }];
 }
 

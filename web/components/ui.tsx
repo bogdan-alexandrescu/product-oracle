@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
+import { Chip } from "@/components/ds/Chip";
 import { Page, PageHeader } from "@/components/ds/Layout";
 import type { FeedbackStatus, Verdict } from "@/lib/api/client";
 import { DOC_STATUS_LABEL, STATUS_LABEL, VERDICT_LABEL } from "@/lib/format";
@@ -40,21 +41,21 @@ export function LayerBadge({ layer }: { layer: "brief" | "detail" | null | undef
 
 /**
  * E1: the decided/proposed state of a part of a spec version (Oracle's parts are decided
- * from the approved PRD; a section an edit added is "Proposed · added in an edit").
+ * from the approved PRD; a section or source an edit added is "Proposed · added in an edit",
+ * drawn with a dashed edge so it reads apart from Oracle's proposed parts).
  */
 export function SpecStateBadge({ state }: { state: { label: string; decided: boolean; added?: boolean } }) {
-  const tone = state.decided ? TONES.green : TONES.amber;
   return (
-    <span
+    <Chip
+      wrap
+      kind={state.decided ? "pass" : "warn"}
       data-testid="spec-state"
       data-decided={state.decided ? "true" : "false"}
       data-added={state.added ? "true" : "false"}
-      className={`inline-flex max-w-full items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ${tone} ${
-        state.added ? "ring-dashed border border-dashed border-amber-400" : ""
-      }`}
+      className={state.added ? "border border-dashed border-warn" : ""}
     >
       {state.label}
-    </span>
+    </Chip>
   );
 }
 

@@ -18,6 +18,7 @@ import {
   Inspector,
   InspectorRow,
   InspectorSection,
+  Label,
   LinkButton,
   Page,
   PageHeader,
@@ -34,7 +35,7 @@ import type { ExpandCtx, Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
-import { ErrorNote, Loading } from "@/components/ui";
+import { ErrorNote, Loading, SpecStateBadge } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
 import { api, unwrap, type CitationOut, type SectionOut, type Verdict } from "@/lib/api/client";
 import { formatDate, formatDateTime, SOURCE_LABEL, VERDICT_LABEL } from "@/lib/format";
@@ -296,7 +297,9 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
 
   const citations = useMemo(() => {
     const m = new Map<string, { citation: CitationOut; number: number }>();
-    version?.citations.forEach((c, i) => m.set(c.cite_key, { citation: c, number: i + 1 }));
+    // E1: Oracle's sources first, then the ones an edit added (listed apart, numbered on).
+    const ordered = [...(version?.citations.filter((c) => !c.added) ?? []), ...(version?.citations.filter((c) => c.added) ?? [])];
+    ordered.forEach((c, i) => m.set(c.cite_key, { citation: c, number: i + 1 }));
     return m;
   }, [version]);
 
@@ -663,24 +666,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           <FeedbackPanel doc={doc} current={n} versions={versions} refreshKey={refreshKey} sectionKeys={scoped} />
         )}
         {tab === "resolutions" && <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} sectionKeys={scoped} />}
-        {tab === "sources" && version && (
-          <ol className="flex flex-col" aria-label="Sources" data-testid="sources-list">
-            {version.citations.map((c, i) => (
-              <li key={c.id} className="flex min-h-8 items-center gap-2.5 text-sm">
-                <span className="tnum w-5 flex-none text-right font-semibold text-text2">{i + 1}</span>
-                <span className="flex-none text-[13px] font-semibold text-text2">{SOURCE_LABEL[c.source]}</span>
-                <a
-                  href={c.ref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
-                >
-                  {c.title ?? c.ref}
-                </a>
-              </li>
-            ))}
-          </ol>
-        )}
+        {tab === "sources" && version && <SourcesPanel citations={citations} />}
         {tab === "reports" && <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} />}
         {tab === "jobs" && <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />}
       </div>
@@ -980,3 +966,53 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
 }
 
 const NO_HIGHLIGHTS: Highlight[] = [];
+
+/** E1 (owner, 2026-10-20): sources an edit added to a spec are listed apart from Oracle's. */
+const ADDED_SOURCE_LABEL = "Proposed · added in an edit";
+
+function SourcesPanel({ citations }: { citations: Map<string, { citation: CitationOut; number: number }> }) {
+  const all = [...citations.values()];
+  const oracle = all.filter((x) => !x.citation.added);
+  const added = all.filter((x) => x.citation.added);
+  const row = ({ citation: c, number }: { citation: CitationOut; number: number }) => (
+    <li key={c.id} className="flex min-h-8 items-center gap-2.5 text-sm">
+      <span className="tnum w-5 flex-none text-right font-semibold text-text2">{number}</span>
+      <span className="flex-none text-[13px] font-semibold text-text2">{SOURCE_LABEL[c.source]}</span>
+      <a
+        href={c.ref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
+      >
+        {c.title ?? c.ref}
+      </a>
+    </li>
+  );
+  return (
+    <div className="flex flex-col gap-4">
+      {oracle.length > 0 && (
+        <section className="flex flex-col gap-1" aria-labelledby={added.length ? "sources-oracle" : undefined}>
+          {added.length > 0 && (
+            <Label id="sources-oracle" className="py-1">
+              Sources
+            </Label>
+          )}
+          <ol className="flex flex-col" aria-label="Sources" data-testid="sources-list">
+            {oracle.map(row)}
+          </ol>
+        </section>
+      )}
+      {added.length > 0 && (
+        <section className="flex flex-col gap-2 border-t border-line pt-3" aria-labelledby="sources-added" data-testid="added-sources">
+          <div className="flex flex-wrap items-center gap-2">
+            <Label id="sources-added">Added sources</Label>
+            <SpecStateBadge state={{ label: added[0].citation.state_label ?? ADDED_SOURCE_LABEL, decided: false, added: true }} />
+          </div>
+          <ol className="flex flex-col" aria-label="Added sources">
+            {added.map(row)}
+          </ol>
+        </section>
+      )}
+    </div>
+  );
+}

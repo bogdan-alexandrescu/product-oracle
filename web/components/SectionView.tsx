@@ -80,7 +80,7 @@ export const SectionView = memo(function SectionView({
       if (at >= 0)
         m.set(
           at,
-          <p key={`state-${at}`} className="not-prose mt-4 mb-1" {...{ [IGNORE_ATTR]: "" }}>
+          <p key={`state-${at}`} className="pt-2" data-testid="spec-state-marker" {...{ [IGNORE_ATTR]: "" }}>
             <SpecStateBadge state={st} />
           </p>,
         );
@@ -170,7 +170,7 @@ export const SectionView = memo(function SectionView({
         </span>
       </div>
       {topState && (
-        <p className="mb-2" data-testid="spec-state-top">
+        <p className="mb-3" data-testid="spec-state-top">
           <SpecStateBadge state={topState} />
         </p>
       )}
