@@ -8,7 +8,11 @@ import json
 import httpx
 import pytest
 
+from oracle.auth.service import create_api_token
+from oracle.connections import notion_pages
+from oracle.connections import service as connections_service
 from oracle.connections.models import Connection
+from oracle.mcp import scopes
 from oracle.sources import base, service
 from oracle.sources.connectors.notion import NotionConnector
 from oracle.tenancy import tenant_session
@@ -48,6 +52,13 @@ def notion_http():
     use_provider_http(fake)
     yield fake
     clear_provider_http()
+
+
+@pytest.fixture(autouse=True)
+def fresh_throttle():
+    notion_pages._browses.clear()
+    yield
+    notion_pages._browses.clear()
 
 
 @pytest.fixture
@@ -181,9 +192,8 @@ def notion_connector(monkeypatch):
     return fake
 
 
-@pytest.mark.parametrize("key", ["roots", "pages"])
-async def test_notion_source_from_the_ui_syncs(client, alice, notion_conn, notion_connector, key):
-    # "roots" is what the picker saves; "pages" is what the UI saved before it.
+async def test_notion_source_from_the_ui_syncs(client, alice, notion_conn, notion_connector):
+    # "roots" is what the picker saves.
     created = await client.post(
         "/v1/sources",
         headers=alice.headers,
@@ -191,7 +201,7 @@ async def test_notion_source_from_the_ui_syncs(client, alice, notion_conn, notio
             "kind": "notion",
             "name": "Handbook",
             "connection_id": str(notion_conn.id),
-            "config": {key: [ROOT]},
+            "config": {"roots": [ROOT]},
         },
     )
     assert created.status_code == 201, created.text
@@ -238,3 +248,153 @@ async def test_narrowing_a_notion_source_deletes_pages_outside_it(
     ).json()
     deleted = {i["external_id"]: i["deleted_at"] is not None for i in items}
     assert deleted == {CHILD: False, GRAND: False, ROW1: True, ROW2: True}
+
+
+async def test_the_old_pages_key_is_refused_naming_roots(
+    client, alice, notion_conn, notion_connector
+):
+    resp = await client.post(
+        "/v1/sources",
+        headers=alice.headers,
+        json={
+            "kind": "notion",
+            "name": "Handbook",
+            "connection_id": str(notion_conn.id),
+            "config": {"pages": [ROOT]},
+        },
+    )
+    assert resp.status_code in (400, 422), resp.text
+    assert '"roots"' in resp.json()["detail"]
+
+
+# --- Review fixes, round 2 ----------------------------------------------------------------
+
+
+async def test_browsing_reads_the_credential_with_the_row_locked(
+    client, alice, notion_conn, notion_http, monkeypatch
+):
+    locked: list[bool] = []
+    get_own = connections_service.get_own
+
+    async def spy(session, connection_id, user_id, *, lock=False):
+        locked.append(lock)
+        return await get_own(session, connection_id, user_id, lock=lock)
+
+    monkeypatch.setattr(connections_service, "get_own", spy)
+    resp = await client.get(pages_url(notion_conn), headers=alice.headers)
+    assert resp.status_code == 200, resp.text
+    assert locked == [True]
+
+
+async def test_a_missing_capability_does_not_expire_the_connection(
+    client, tenant_id, alice, notion_conn
+):
+    use_provider_http(
+        lambda r: httpx.Response(
+            403,
+            json={"object": "error", "status": 403, "code": "restricted_resource", "message": "x"},
+        )
+    )
+    try:
+        resp = await client.get(pages_url(notion_conn), headers=alice.headers)
+    finally:
+        clear_provider_http()
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "Notion refused: the integration lacks a capability"
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Connection, notion_conn.id)
+        assert row.status == "active"
+
+
+async def test_malformed_results_are_skipped_not_a_500(client, alice, notion_conn):
+    good = fixture("search_roadmap.json")["results"][0]
+    body = {
+        "object": "list",
+        "results": [
+            {"object": "page", "properties": {}},  # no id
+            {**good, "icon": {"type": "emoji", "emoji": 5}},  # fails NotionPageOut
+            {**good, "last_edited_time": "yesterday"},
+            good,
+        ],
+        "has_more": False,
+        "next_cursor": None,
+    }
+    use_provider_http(lambda r: httpx.Response(200, json=body))
+    try:
+        resp = await client.get(pages_url(notion_conn), headers=alice.headers)
+        use_provider_http(lambda r: httpx.Response(200, json=["not", "an", "object"]))
+        odd = await client.get(pages_url(notion_conn), headers=alice.headers)
+    finally:
+        clear_provider_http()
+    assert resp.status_code == 200, resp.text
+    assert [i["title"] for i in resp.json()["items"]] == ["Roadmap"]
+    assert odd.status_code == 502
+    assert odd.json()["detail"] == "Notion did not answer; try again shortly"
+
+
+async def test_browsing_is_throttled_per_person_and_connection(
+    client, tenant_id, alice, bob, notion_conn, notion_http, monkeypatch
+):
+    monkeypatch.setattr(notion_pages, "BROWSE_LIMIT", 3)
+    for _ in range(3):
+        ok = await client.get(pages_url(notion_conn), headers=alice.headers)
+        assert ok.status_code == 200, ok.text
+    limited = await client.get(pages_url(notion_conn), headers=alice.headers)
+    assert limited.status_code == 429
+    assert 1 <= int(limited.headers["retry-after"]) <= 60
+    assert limited.json()["detail"].startswith("Too many Notion page lists")
+    # Notion was not called for the refused one.
+    assert len(notion_http.requests) == 3
+
+    # Another connection of the same person has its own allowance.
+    other = await add_connection(
+        tenant_id, alice.id, "notion", bundle={"access_token": TOKEN}, account_id="2"
+    )
+    assert (await client.get(pages_url(other), headers=alice.headers)).status_code == 200
+
+    # The window slides: once it has passed, lists are allowed again.
+    later = notion_pages.time.monotonic() + notion_pages.BROWSE_WINDOW_SECONDS + 1
+    monkeypatch.setattr(notion_pages.time, "monotonic", lambda: later)
+    assert (await client.get(pages_url(notion_conn), headers=alice.headers)).status_code == 200
+
+
+def test_run_tokens_may_not_list_notion_pages():
+    path = "/v1/connections/{connection_id}/notion/pages"
+    assert scopes.required_scope("GET", path) is None
+    every_scope = frozenset({*scopes.READ_AREAS, "write:proposals", "write:drafts"})
+    assert not scopes.allowed(every_scope, "GET", path)
+
+
+async def test_service_api_tokens_may_not_list_notion_pages(
+    client, tenant_id, notion_conn, notion_http
+):
+    async with tenant_session(tenant_id) as s:
+        _token, raw = await create_api_token(s, "service")
+        await s.commit()
+    resp = await client.get(pages_url(notion_conn), headers={"Authorization": f"Bearer {raw}"})
+    assert resp.status_code == 403
+    assert notion_http.requests == []
+
+
+async def test_a_run_token_is_refused_list_notion_pages_over_mcp(
+    tenant_id, alice, notion_conn, notion_http
+):
+    from tests.test_mcp import mcp_client, run_token, text_of
+
+    token = await run_token(tenant_id, ["read:sources", "read:baseline"], alice.id)
+    async with mcp_client(token) as c:
+        names = {t.name for t in (await c.list_tools()).tools}
+        assert "list_notion_pages" not in names
+        refused = await c.call_tool("list_notion_pages", {"connection_id": str(notion_conn.id)})
+        assert refused.is_error and "not available to run tokens" in text_of(refused)
+    assert notion_http.requests == []
+
+
+async def test_the_mcp_tool_says_it_lists_every_shared_page(tenant_id, alice):
+    from oracle.main import app
+    from oracle.mcp.tools import app_operations
+
+    op = next(o for o in app_operations(app) if o.operation_id == "list_notion_pages")
+    assert op.excluded is None
+    assert "every Notion page" in op.tool_description()
+    assert "including pages that are in no source" in op.tool_description()

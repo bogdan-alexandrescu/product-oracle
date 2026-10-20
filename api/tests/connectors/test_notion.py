@@ -11,6 +11,7 @@ from oracle.sources.base import (
     Connector,
     ConnectorAuthError,
     ConnectorConfigError,
+    ConnectorError,
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemDelete,
@@ -387,21 +388,21 @@ def test_markdown_edge_cases():
     )
 
 
-# --- Legacy config key and the page picker's search ------------------------------------
+# --- Old config key and the page picker's search ------------------------------------
 
 OTHER = "77777777-7777-4777-8777-777777777777"
 
 
-async def test_legacy_pages_key_is_read_as_roots():
-    # Sources made in the web UI before the picker stored their ids under "pages".
+async def test_the_old_pages_key_is_refused_naming_roots():
+    # Validation never accepted a pages-only config, so no source carries the old key.
     fake = FakeNotion(full_routes())
-    await fake.connector().validate({"pages": [ROOT]}, CREDENTIAL)
-    events = await collect(fake.connector(), config={"pages": [ROOT]})
-    assert set(upserts(events)) == {ROOT, CHILD, ROW1, ROW2, GRAND}
-    # Both keys: one allowlist, no duplicates.
-    assert notion._parse_config({"roots": [ROOT], "pages": [ROOT, DB]}) == [ROOT, DB]
+    with pytest.raises(ConnectorConfigError, match='"roots"'):
+        await fake.connector().validate({"pages": [ROOT]}, CREDENTIAL)
+    with pytest.raises(ConnectorConfigError, match='"roots"'):
+        notion._parse_config({"roots": [ROOT], "pages": [DB]})
     with pytest.raises(ConnectorConfigError, match="at least one root"):
-        notion._parse_config({"pages": []})
+        notion._parse_config({"roots": []})
+    assert fake.requests == []
 
 
 def _search_routes(seen: list[dict]):
@@ -450,7 +451,9 @@ async def test_search_shared_lists_pages_and_databases_with_parents():
     assert seen[1]["start_cursor"] == "cursor-search-2"
     # Trashed items are left out; a page in a column has a block parent.
     assert [(i["id"], i["parent_type"]) for i in second] == [(ROW1, "database"), (OTHER, "block")]
-    assert second[1]["icon"] == "https://files.example.com/i.png"
+    # A Notion-hosted icon's URL is signed and short-lived: no icon rather than a broken
+    # or signed URL in the browser.
+    assert second[1]["icon"] is None
 
     found, _ = await notion.search_shared(client, "ntn_example", " road ", None)
     assert seen[2] == {"page_size": notion.PAGE_SIZE, "query": "road"}
@@ -476,3 +479,63 @@ async def test_search_shared_errors():
     client = httpx.AsyncClient(transport=httpx.MockTransport(rejected))
     with pytest.raises(ConnectorAuthError):
         await notion.search_shared(client, "ntn_example", "", None)
+
+
+async def test_search_shared_403_is_a_missing_capability_not_a_bad_token():
+    forbidden = FakeNotion(
+        {
+            "POST /search": lambda r: httpx.Response(
+                403, json={"object": "error", "code": "restricted_resource", "message": "no"}
+            )
+        }
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(forbidden))
+    with pytest.raises(notion.NotionForbidden):
+        await notion.search_shared(client, "ntn_example", "", None)
+
+
+async def test_search_shared_skips_malformed_results():
+    good = fixture("search_roadmap.json")["results"][0]
+    body = {
+        "object": "list",
+        "results": [
+            {"object": "page", "title": "no id"},
+            {**good, "id": "not-an-id"},
+            "not an object",
+            {**good, "parent": "weird", "icon": {"type": "external", "external": None}},
+            good,
+        ],
+        "has_more": True,
+        "next_cursor": 7,
+    }
+    fake = FakeNotion({"POST /search": lambda r: httpx.Response(200, json=body)})
+    client = httpx.AsyncClient(transport=httpx.MockTransport(fake))
+    items, cursor = await notion.search_shared(client, "ntn_example", "", None)
+    assert [i["title"] for i in items] == ["Roadmap"]
+    assert cursor is None
+
+    odd = FakeNotion({"POST /search": lambda r: httpx.Response(200, json=[1, 2])})
+    client = httpx.AsyncClient(transport=httpx.MockTransport(odd))
+    with pytest.raises(ConnectorError):
+        await notion.search_shared(client, "ntn_example", "", None)
+
+
+@pytest.mark.parametrize(
+    "icon, shown",
+    [
+        ({"type": "emoji", "emoji": "📘"}, "📘"),
+        (
+            {"type": "external", "external": {"url": "https://example.com/i.png"}},
+            ("https://example.com/i.png"),
+        ),
+        ({"type": "external", "external": {"url": "http://example.com/i.png"}}, None),
+        (
+            {"type": "file", "file": {"url": "https://prod-files-secure.s3.amazonaws.com/a?X=1"}},
+            None,
+        ),
+        ({"type": "custom_emoji", "custom_emoji": {"url": "https://x"}}, None),
+        (None, None),
+    ],
+)
+def test_icon(icon, shown):
+    assert notion._icon(icon) == shown

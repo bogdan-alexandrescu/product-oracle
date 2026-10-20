@@ -1,8 +1,7 @@
 """Notion connector: pages under allowlisted root pages and databases, as markdown.
 
 ``config``: ``{"roots": [page or database id or URL, ...]}``, the roots ticked in the web
-UI's page picker (:func:`search_shared` lists what can be ticked). Sources the web UI made
-before the picker keep their ids under ``"pages"``; that key is read as roots too.
+UI's page picker (:func:`search_shared` lists what can be ticked).
 The credential carries a ``token`` entry: an internal integration secret or an OAuth
 access token.
 
@@ -83,13 +82,10 @@ def _token(credential: dict[str, Any] | None) -> str:
 
 
 def _parse_config(config: dict[str, Any]) -> list[str]:
-    roots: list[Any] = []
-    # "pages": the key the web UI wrote before the page picker.
-    for key in ("roots", "pages"):
-        value = config.get(key)
-        if isinstance(value, list):
-            roots += value
-    if not roots:
+    if "pages" in config:
+        raise ConnectorConfigError('use "roots" for the Notion pages and databases, not "pages"')
+    roots = config.get("roots")
+    if not isinstance(roots, list) or not roots:
         raise ConnectorConfigError("allowlist at least one root page or database")
     ids: list[str] = []
     for root in roots:
@@ -116,7 +112,7 @@ def _raise_for_status(resp: httpx.Response) -> None:
     if resp.status_code == 401:
         raise ConnectorAuthError(f"Notion rejected the token ({message})")
     if resp.status_code == 403:
-        raise ConnectorAuthError(f"Notion refused access ({message})")
+        raise NotionForbidden(f"Notion refused access ({message})")
     if resp.status_code == 429:
         retry_after = None
         with contextlib.suppress(KeyError, ValueError):
@@ -125,6 +121,11 @@ def _raise_for_status(resp: httpx.Response) -> None:
     raise ConnectorError(
         f"Notion API error {resp.status_code} on {resp.request.url.path} ({message})"
     )
+
+
+class NotionForbidden(ConnectorAuthError):
+    """A 403: the token is valid but the integration lacks a capability for this call
+    (``restricted_resource``). Not a reason to reconnect."""
 
 
 class _Api:
@@ -427,26 +428,31 @@ _PARENT_TYPES = {"workspace": "workspace", "page_id": "page", "database_id": "da
 
 
 def _icon(icon: dict[str, Any] | None) -> str | None:
-    """An emoji, or the URL of an image icon (a Notion-hosted one without its signature)."""
-    if not icon:
+    """An emoji, or the URL of an external image icon. A Notion-hosted ("file") icon has
+    a short-lived signed URL: unsigned it does not load, and a signed one should not reach
+    the browser, so it gets no icon (the picker shows its default glyph)."""
+    if not isinstance(icon, dict):
         return None
     kind = icon.get("type")
     if kind == "emoji":
         return icon.get("emoji")
-    url = (icon.get(kind) or {}).get("url") if kind else None
-    if url and kind == "file":
-        url = url.split("?")[0]
-    return url
+    if kind != "external":
+        return None
+    url = (icon.get("external") or {}).get("url")
+    return url if isinstance(url, str) and url.startswith("https://") else None
 
 
-def shared_object(obj: dict[str, Any]) -> dict[str, Any]:
-    """A search result as the page picker shows it."""
+def shared_object(obj: dict[str, Any]) -> dict[str, Any] | None:
+    """A search result as the page picker shows it; ``None`` if it has no usable id."""
+    object_id = normalize_id(obj.get("id"))
+    if object_id is None:
+        return None
     parent = obj.get("parent") or {}
     parent_kind = parent.get("type", "")
     is_database = obj.get("object") == "database"
     title = (_plain(obj.get("title", [])).strip() or "Untitled") if is_database else page_title(obj)
     return {
-        "id": obj["id"],
+        "id": object_id,
         "type": "database" if is_database else "page",
         "title": title,
         "icon": _icon(obj.get("icon")),
@@ -454,7 +460,7 @@ def shared_object(obj: dict[str, Any]) -> dict[str, Any]:
         "parent_type": _PARENT_TYPES.get(parent_kind, "block"),
         "parent_id": None if parent_kind == "workspace" else parent.get(parent_kind),
         "last_edited_at": _ts(obj.get("last_edited_time")),
-        "url": obj.get("url") or page_url(obj["id"]),
+        "url": obj.get("url") or page_url(object_id),
     }
 
 
@@ -477,8 +483,16 @@ async def search_shared(
         body["start_cursor"] = cursor
     resp = await _Api(client, token, base_url).request("POST", "/search", json=body)
     data = resp.json()
-    items = [shared_object(obj) for obj in data.get("results", []) if not _gone(obj)]
-    return items, data.get("next_cursor") if data.get("has_more") else None
+    if not isinstance(data, dict) or not isinstance(data.get("results", []), list):
+        raise ConnectorError("Notion search answered with an unexpected body")
+    items = []
+    for obj in data.get("results", []):
+        # A malformed result is skipped rather than failing the whole page.
+        with contextlib.suppress(AttributeError, KeyError, TypeError, ValueError):
+            if not _gone(obj) and (item := shared_object(obj)) is not None:
+                items.append(item)
+    next_cursor = data.get("next_cursor") if data.get("has_more") else None
+    return items, next_cursor if isinstance(next_cursor, str) else None
 
 
 # --- Connector ------------------------------------------------------------------------

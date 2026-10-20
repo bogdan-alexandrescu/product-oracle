@@ -3105,8 +3105,8 @@
         "tags": [
           "connections"
         ],
-        "summary": "List Notion Pages",
-        "description": "The pages and databases this Notion connection can read, most recently edited first\n(or by relevance with ``search``), 100 at a time, each with its parent.",
+        "summary": "List Notion pages",
+        "description": "Lists the titles of every Notion page and database shared with Product Oracle\nthrough this Notion connection, including pages that are in no source. Most recently\nedited first (or by relevance with ``search``), 100 at a time, each with its parent.\nLimited to 30 lists a minute per connection.",
         "operationId": "list_notion_pages",
         "security": [
           {
@@ -3171,10 +3171,10 @@
             "description": "Not one of your connections"
           },
           "409": {
-            "description": "Not a Notion connection, or it needs reconnecting"
+            "description": "Not a Notion connection, it needs reconnecting, or the integration lacks a capability"
           },
           "429": {
-            "description": "Notion's rate limit; retry after ``Retry-After`` seconds"
+            "description": "Too many lists, or Notion's rate limit; retry after ``Retry-After`` seconds"
           },
           "502": {
             "description": "Notion did not answer"

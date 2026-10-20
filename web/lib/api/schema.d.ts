@@ -894,9 +894,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Notion Pages
-         * @description The pages and databases this Notion connection can read, most recently edited first
-         *     (or by relevance with ``search``), 100 at a time, each with its parent.
+         * List Notion pages
+         * @description Lists the titles of every Notion page and database shared with Product Oracle
+         *     through this Notion connection, including pages that are in no source. Most recently
+         *     edited first (or by relevance with ``search``), 100 at a time, each with its parent.
+         *     Limited to 30 lists a minute per connection.
          */
         get: operations["list_notion_pages"];
         put?: never;
@@ -14749,7 +14751,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not a Notion connection, or it needs reconnecting */
+            /** @description Not a Notion connection, it needs reconnecting, or the integration lacks a capability */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14765,7 +14767,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Notion's rate limit; retry after ``Retry-After`` seconds */
+            /** @description Too many lists, or Notion's rate limit; retry after ``Retry-After`` seconds */
             429: {
                 headers: {
                     [name: string]: unknown;
