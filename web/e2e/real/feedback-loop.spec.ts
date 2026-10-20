@@ -113,7 +113,7 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   for (const note of ["bulk download as a zip archive", "numeric target for support tickets"]) {
     const row = rows.filter({ hasText: note });
     await expect(row).toContainText("Addressed");
-    await expect(row).toContainText("addressed in v2");
+    await expect(row).toContainText("Addressed in v2");
   }
 
   // Publish v2 (the PRD has no blocks: the API's publish gate lets it through), then export it.
