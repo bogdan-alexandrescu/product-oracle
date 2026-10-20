@@ -38,7 +38,7 @@ from tests.test_adapter_v2 import (
     use,
 )
 from tests.test_adapter_v2 import settings as _v2_settings
-from tests.test_adapter_v2_round7 import _wf_cost
+from tests.test_adapter_v2_round7 import _stopped, _wf_cost
 from tests.test_runs import as_user, get, started
 
 # The same environment as test_adapter_v2 (Oracle's public URL, default timings).
@@ -456,3 +456,88 @@ async def test_a_stuck_cancel_is_not_cost_unknown_while_its_cost_reads(client, o
     assert not (await _knobs_of(tenant_id, run["id"])).get("searches")
     got = await get(client, auth, run["id"])
     assert any("wf_1" in n and "CANCELLING" in n for n in got["notes"]), got["notes"]
+
+
+# --------------------------------------------------------------------------- item 4
+
+
+async def _over_after_stop(client, auth, tenant_id, swarm, clock) -> dict:
+    """A cancelled run whose workflow wf_1 was stopped (Stop cancelling) and whose spend
+    then passed its ceiling: the overrun is recorded, Cancel again is offered."""
+    run = await _stopped(client, auth, tenant_id, swarm, clock)
+    await _ceiling(tenant_id, run["id"], str(run["spent_usd"] + 0.5))
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    await _tick_errors(client, auth)
+    got = await get(client, auth, run["id"])
+    assert got["cancel_again"] == ["wf_1"], got["cancel_again"]
+    return got
+
+
+async def _again(client, headers, run_id: str, wid: str = "wf_1"):
+    return await client.post(
+        f"/v1/runs/{run_id}/cancel-again", json={"workflow_id": wid}, headers=headers
+    )
+
+
+async def _edit_run(tenant_id, run_id: str, **changes) -> None:
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Run, uuid.UUID(run_id))
+        knobs = dict(row.knobs or {})
+        for key, value in changes.pop("knobs", {}).items():
+            if value is None:
+                knobs.pop(key, None)
+            else:
+                knobs[key] = value
+        row.knobs = knobs
+        for key, value in changes.items():
+            setattr(row, key, value)
+        await s.commit()
+
+
+@pytest.mark.parametrize("case", ["no_overrun", "dismissed", "not_ended", "not_stopped"])
+async def test_cancel_again_is_refused_unless_the_ui_would_offer_it(
+    client, owner, monkeypatch, case
+):
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _over_after_stop(client, auth, tenant_id, swarm, clock)
+    knobs = await _knobs_of(tenant_id, run["id"])
+    if case == "no_overrun":
+        await _edit_run(tenant_id, run["id"], knobs={"overrun_after_end": None})
+    elif case == "dismissed":
+        over = {**knobs["overrun_after_end"], "dismissed_at": "2026-10-20T10:00:00+00:00"}
+        await _edit_run(tenant_id, run["id"], knobs={"overrun_after_end": over})
+    elif case == "not_ended":
+        await _edit_run(tenant_id, run["id"], status="running", finished_at=None)
+    else:
+        searches = [{**e, "cancel": True} for e in knobs["searches"]]
+        await _edit_run(tenant_id, run["id"], knobs={"searches": searches})
+    resp = await _again(client, auth, run["id"])
+    assert resp.status_code == 409, resp.text
+    assert await _audits(tenant_id, "run.cancel_again") == []
+    entries = (await _knobs_of(tenant_id, run["id"]))["searches"]
+    assert not any(e.get("cancel_again_at") for e in entries)
+
+
+async def test_cancel_again_who_and_which_run(client, owner, monkeypatch):
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _over_after_stop(client, auth, tenant_id, swarm, clock)
+    # An approver who did not create the run: refused; another tenant: not found.
+    _, lead = await _user(tenant_id, "approver")
+    assert (await _again(client, lead, run["id"])).status_code == 403
+    assert (await _again(client, await _other_tenant_owner(), run["id"])).status_code == 404
+    # Another run's workflow (the run is otherwise eligible): refused.
+    assert (await _again(client, auth, run["id"], "wf_2")).status_code == 409
+    # The approver who created it may; a second call has no second effect.
+    creator_id, creator = await _user(tenant_id, "approver")
+    await _created_by(tenant_id, run["id"], creator_id)
+    resp = await _again(client, creator, run["id"])
+    assert resp.status_code == 200, resp.text
+    notes = len((await get(client, auth, run["id"]))["notes"])
+    resp = await _again(client, creator, run["id"])
+    assert resp.status_code == 409, resp.text
+    assert len(await _audits(tenant_id, "run.cancel_again")) == 1
+    assert len((await get(client, auth, run["id"]))["notes"]) == notes

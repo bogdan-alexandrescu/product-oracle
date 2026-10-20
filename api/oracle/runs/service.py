@@ -4961,9 +4961,19 @@ async def cancel_again(
     run = await _get_run(db, run_id, lock=True)
     if not _may_manage(principal, run):
         raise Forbidden("Only an owner or the approver who created the run can cancel this")
+    # What the Inbox offers (:func:`_cancel_again_ids`), enforced here: a workflow of this
+    # run that an approver stopped cancelling, on a run that has ended, whose overrun is
+    # recorded and not dismissed.
+    over = (run.knobs or {}).get("overrun_after_end")
+    if run.status not in FINAL:
+        raise RunError(f"nothing to cancel again: the run has not ended (it is {run.status})")
+    if not isinstance(over, dict):
+        raise RunError("nothing to cancel again: no overrun is recorded on this run")
+    if over.get("dismissed_at"):
+        raise RunError("nothing to cancel again: this run's overrun was dismissed")
     entries = copy.deepcopy((run.knobs or {}).get("searches") or [])
     e = next((x for x in entries if x.get("id") == workflow_id and x.get("cancel") is False), None)
-    if e is None:
+    if e is None or workflow_id not in _cancel_again_ids(run):
         raise RunError(
             f"nothing to cancel again: workflow {workflow_id} is not one Oracle stopped "
             "cancelling for this run"
