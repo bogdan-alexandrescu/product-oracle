@@ -3103,6 +3103,98 @@
         }
       }
     },
+    "/v1/connections/{connection_id}/notion/pages": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "List Notion pages",
+        "description": "Lists the titles of every Notion page and database shared with Product Oracle\nthrough this Notion connection, including pages that are in no source. Most recently\nedited first (or by relevance with ``search``), 100 at a time, each with its parent.\nLimited to 30 lists a minute per connection.",
+        "operationId": "list_notion_pages",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": "",
+              "title": "Search"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionPagesOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your connections"
+          },
+          "409": {
+            "description": "Not a Notion connection, it needs reconnecting, or the integration lacks a capability"
+          },
+          "429": {
+            "description": "Too many lists, or Notion's rate limit; retry after ``Retry-After`` seconds"
+          },
+          "502": {
+            "description": "Notion did not answer"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settings": {
       "get": {
         "tags": [
@@ -30748,6 +30840,114 @@
           "added_at"
         ],
         "title": "NewSource"
+      },
+      "NotionPageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "page",
+              "database"
+            ],
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "parent_type": {
+            "type": "string",
+            "enum": [
+              "workspace",
+              "page",
+              "database",
+              "block"
+            ],
+            "title": "Parent Type"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "last_edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Edited At"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "title",
+          "icon",
+          "parent_type",
+          "parent_id",
+          "last_edited_at",
+          "url"
+        ],
+        "title": "NotionPageOut"
+      },
+      "NotionPagesOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotionPageOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "NotionPagesOut"
       },
       "OAuthErrorOut": {
         "properties": {

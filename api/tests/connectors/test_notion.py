@@ -11,6 +11,7 @@ from oracle.sources.base import (
     Connector,
     ConnectorAuthError,
     ConnectorConfigError,
+    ConnectorError,
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemDelete,
@@ -385,3 +386,156 @@ def test_markdown_edge_cases():
         "**bold** tail\n\n1. one\n\nbreak\n\n1. again\n\n$$\ne=mc^2\n$$\n\n"
         "[https://example.com](https://example.com)\n\nin column"
     )
+
+
+# --- Old config key and the page picker's search ------------------------------------
+
+OTHER = "77777777-7777-4777-8777-777777777777"
+
+
+async def test_the_old_pages_key_is_refused_naming_roots():
+    # Validation never accepted a pages-only config, so no source carries the old key.
+    fake = FakeNotion(full_routes())
+    with pytest.raises(ConnectorConfigError, match='"roots"'):
+        await fake.connector().validate({"pages": [ROOT]}, CREDENTIAL)
+    with pytest.raises(ConnectorConfigError, match='"roots"'):
+        notion._parse_config({"roots": [ROOT], "pages": [DB]})
+    with pytest.raises(ConnectorConfigError, match="at least one root"):
+        notion._parse_config({"roots": []})
+    assert fake.requests == []
+
+
+def _search_routes(seen: list[dict]):
+    def search(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen.append(body)
+        if body.get("query") == "road":
+            return httpx.Response(200, json=fixture("search_roadmap.json"))
+        if body.get("start_cursor") == "cursor-search-2":
+            return httpx.Response(200, json=fixture("search_2.json"))
+        return httpx.Response(200, json=fixture("search_1.json"))
+
+    # FakeNotion keys a paginated request by its start_cursor.
+    return {"POST /search": search, "POST /search#cursor-search-2": search}
+
+
+async def test_search_shared_lists_pages_and_databases_with_parents():
+    seen: list[dict] = []
+    fake = FakeNotion(_search_routes(seen))
+    client = httpx.AsyncClient(transport=httpx.MockTransport(fake))
+    first, cursor = await notion.search_shared(client, "ntn_example", "", None)
+    assert cursor == "cursor-search-2"
+    assert seen[0] == {
+        "page_size": notion.PAGE_SIZE,
+        "sort": {"direction": "descending", "timestamp": "last_edited_time"},
+    }
+    assert first[0] == {
+        "id": ROOT,
+        "type": "page",
+        "title": "Product handbook",
+        "icon": "📘",
+        "parent_type": "workspace",
+        "parent_id": None,
+        "last_edited_at": datetime(2026, 9, 2, 10, tzinfo=UTC),
+        "url": "https://www.notion.so/11111111111141118111111111111111",
+    }
+    assert [(i["id"], i["type"], i["parent_type"], i["parent_id"]) for i in first[1:]] == [
+        (CHILD, "page", "page", ROOT),
+        (DB, "database", "page", ROOT),
+    ]
+    assert first[2]["title"] == "Feature requests"
+    assert first[2]["icon"] == "https://example.com/icon.png"
+
+    second, cursor = await notion.search_shared(client, "ntn_example", "", "cursor-search-2")
+    assert cursor is None
+    assert seen[1]["start_cursor"] == "cursor-search-2"
+    # Trashed items are left out; a page in a column has a block parent.
+    assert [(i["id"], i["parent_type"]) for i in second] == [(ROW1, "database"), (OTHER, "block")]
+    # A Notion-hosted icon's URL is signed and short-lived: no icon rather than a broken
+    # or signed URL in the browser.
+    assert second[1]["icon"] is None
+
+    found, _ = await notion.search_shared(client, "ntn_example", " road ", None)
+    assert seen[2] == {"page_size": notion.PAGE_SIZE, "query": "road"}
+    assert [i["title"] for i in found] == ["Roadmap"]
+
+
+async def test_search_shared_errors():
+    limited = FakeNotion(
+        {
+            "POST /search": lambda r: httpx.Response(
+                429, json=fixture("error_rate_limited.json"), headers={"Retry-After": "12"}
+            )
+        }
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(limited))
+    with pytest.raises(ConnectorRateLimited) as info:
+        await notion.search_shared(client, "ntn_example", "", None)
+    assert info.value.retry_after == 12
+
+    rejected = FakeNotion(
+        {"POST /search": lambda r: httpx.Response(401, json=fixture("error_unauthorized.json"))}
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(rejected))
+    with pytest.raises(ConnectorAuthError):
+        await notion.search_shared(client, "ntn_example", "", None)
+
+
+async def test_search_shared_403_is_a_missing_capability_not_a_bad_token():
+    forbidden = FakeNotion(
+        {
+            "POST /search": lambda r: httpx.Response(
+                403, json={"object": "error", "code": "restricted_resource", "message": "no"}
+            )
+        }
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(forbidden))
+    with pytest.raises(notion.NotionForbidden):
+        await notion.search_shared(client, "ntn_example", "", None)
+
+
+async def test_search_shared_skips_malformed_results():
+    good = fixture("search_roadmap.json")["results"][0]
+    body = {
+        "object": "list",
+        "results": [
+            {"object": "page", "title": "no id"},
+            {**good, "id": "not-an-id"},
+            "not an object",
+            {**good, "parent": "weird", "icon": {"type": "external", "external": None}},
+            good,
+        ],
+        "has_more": True,
+        "next_cursor": 7,
+    }
+    fake = FakeNotion({"POST /search": lambda r: httpx.Response(200, json=body)})
+    client = httpx.AsyncClient(transport=httpx.MockTransport(fake))
+    items, cursor = await notion.search_shared(client, "ntn_example", "", None)
+    assert [i["title"] for i in items] == ["Roadmap"]
+    assert cursor is None
+
+    odd = FakeNotion({"POST /search": lambda r: httpx.Response(200, json=[1, 2])})
+    client = httpx.AsyncClient(transport=httpx.MockTransport(odd))
+    with pytest.raises(ConnectorError):
+        await notion.search_shared(client, "ntn_example", "", None)
+
+
+@pytest.mark.parametrize(
+    "icon, shown",
+    [
+        ({"type": "emoji", "emoji": "📘"}, "📘"),
+        (
+            {"type": "external", "external": {"url": "https://example.com/i.png"}},
+            ("https://example.com/i.png"),
+        ),
+        ({"type": "external", "external": {"url": "http://example.com/i.png"}}, None),
+        (
+            {"type": "file", "file": {"url": "https://prod-files-secure.s3.amazonaws.com/a?X=1"}},
+            None,
+        ),
+        ({"type": "custom_emoji", "custom_emoji": {"url": "https://x"}}, None),
+        (None, None),
+    ],
+)
+def test_icon(icon, shown):
+    assert notion._icon(icon) == shown
