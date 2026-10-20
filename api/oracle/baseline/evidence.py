@@ -374,6 +374,7 @@ async def present(
                 if mine
                 else None,
                 source_item_private=item is not None and not mine,
+                source_removed=item is not None and item.deleted_at is not None,
                 confidence=float(r.confidence) if r.confidence is not None else None,
                 confidence_factors=r.confidence_factors or {},
                 scored_at=r.scored_at,

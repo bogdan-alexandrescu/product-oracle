@@ -25,6 +25,7 @@ from oracle.blockers.schemas import (
 )
 from oracle.docs.models import Document
 from oracle.sources.models import Source, SourceItem
+from oracle.trace.evidence import SOURCE_REMOVED
 from oracle.v2.models import (
     BlockerOption,
     BlockerResolutionEvent,
@@ -290,8 +291,9 @@ async def _evidence_refs(
             source=render.CITATION_SOURCES.get(kind) if kind else None,
             ref=ev.url or ev.ref or (item.url if item is not None else None),
             # The appendix shows what any user may see of evidence: never a private
-            # item's title (AUD-9), only the excerpt, url and ref.
-            title=None,
+            # item's title (AUD-9), only the excerpt, url and ref; 'source removed' when
+            # the item was narrowed out or deleted upstream (S5).
+            title=SOURCE_REMOVED if item is not None and item.deleted_at is not None else None,
             excerpt=ev.excerpt,
             retrieved_at=ev.retrieved_at,
         )

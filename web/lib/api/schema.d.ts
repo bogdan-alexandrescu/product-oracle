@@ -7809,6 +7809,11 @@ export interface components {
              * @default false
              */
             source_item_private: boolean;
+            /**
+             * Source Removed
+             * @default false
+             */
+            source_removed: boolean;
             /** Confidence */
             confidence?: number | null;
             /**
@@ -7839,6 +7844,11 @@ export interface components {
             confidence: number | null;
             /** Ref */
             ref: string | null;
+            /**
+             * Source Removed
+             * @default false
+             */
+            source_removed: boolean;
         };
         /** ExchangeIn */
         ExchangeIn: {
@@ -11362,6 +11372,11 @@ export interface components {
              * @default false
              */
             restricted: boolean;
+            /**
+             * Source Removed
+             * @default false
+             */
+            source_removed: boolean;
         };
         /** SectionLinkView */
         SectionLinkView: {

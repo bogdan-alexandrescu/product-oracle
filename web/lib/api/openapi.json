@@ -25760,6 +25760,11 @@
             "title": "Source Item Private",
             "default": false
           },
+          "source_removed": {
+            "type": "boolean",
+            "title": "Source Removed",
+            "default": false
+          },
           "confidence": {
             "anyOf": [
               {
@@ -25867,6 +25872,11 @@
               }
             ],
             "title": "Ref"
+          },
+          "source_removed": {
+            "type": "boolean",
+            "title": "Source Removed",
+            "default": false
           }
         },
         "type": "object",
@@ -35780,6 +35790,11 @@
           "restricted": {
             "type": "boolean",
             "title": "Restricted",
+            "default": false
+          },
+          "source_removed": {
+            "type": "boolean",
+            "title": "Source Removed",
             "default": false
           }
         },
