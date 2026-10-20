@@ -354,7 +354,8 @@ class ClaudeSweepSummary(BaseModel):
     reauth_required: list[str] = []
     # Usage readings taken.
     polled: int = 0
-    # "ran", "skipped" (another sweep holds the lease) or "error".
+    # "ran", "skipped" (another sweep holds the lease), "not_due" (the company's last
+    # sweep completed under the sweep interval ago, at least 5 minutes) or "error".
     lease: str = "ran"
     errors: list[str] = []
 

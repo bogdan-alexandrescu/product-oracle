@@ -1,0 +1,14 @@
+id: stale-derived-spec
+description: >
+  An engineering spec derived from the scope section is potentially stale since the section
+  changed. Downstream consistency is a warning until someone reconciles it.
+covers: [stale_derived_spec]
+extends: good-prd
+add:
+  artifacts:
+    - {kind: engineering_spec, title: Saved addresses engineering spec, section: scope, freshness: potentially_stale}
+    - {kind: tech_brief, title: Saved addresses tech brief, section: problem, freshness: fresh}
+expected:
+  downstream_consistency: warning
+rationale_contains:
+  downstream_consistency: [potentially stale, Saved addresses engineering spec]

@@ -5,9 +5,29 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 EntityType = Literal[
-    "goal", "product", "feature", "requirement", "constraint", "decision", "person"
+    "goal",
+    "product",
+    "feature",
+    "requirement",
+    "constraint",
+    "decision",
+    "person",
+    "outcome",
+    "acceptance_criterion",
+    "assumption",
+    "risk",
 ]
-EdgeType = Literal["supports", "depends_on", "blocks", "part_of", "owned_by"]
+EdgeType = Literal[
+    "supports",
+    "depends_on",
+    "blocks",
+    "part_of",
+    "owned_by",
+    "derived_from",
+    "verifies",
+    "affects",
+    "mitigates",
+]
 NodeStatus = Literal["proposed", "confirmed", "rejected"]
 Origin = Literal["user", "agent", "import"]
 # Who a write comes from. "user" (a person, or an API token acting as one) locks what

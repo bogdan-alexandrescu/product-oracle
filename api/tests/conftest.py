@@ -91,6 +91,16 @@ async def make_tenant(name: str = "Example Co") -> uuid.UUID:
         return tenant.id
 
 
+async def seed_company(tenant_id: uuid.UUID) -> None:
+    """Seed a company's built-in templates and themes, as startup and company creation
+    do (reads never seed)."""
+    from oracle.templates.builtins import ensure_builtins
+
+    async with tenant_session(tenant_id) as s:
+        await ensure_builtins(s)
+        await s.commit()
+
+
 @pytest.fixture
 async def tenant_id() -> uuid.UUID:
     return await make_tenant()

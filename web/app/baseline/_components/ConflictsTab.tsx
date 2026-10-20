@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button } from "@/components/ui";
+import { Button, Chip, Empty, InfoTip, Panel, type ChipKind } from "@/components/ds";
 import type { ConflictOut, GraphOut } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 
@@ -14,7 +14,7 @@ type Claim = {
   observed_at?: string | null;
 };
 
-const STATUS_TONE = { open: "amber", resolved: "green", logged: "neutral" } as const;
+const STATUS_KIND: Record<ConflictOut["status"], ChipKind> = { open: "warn", resolved: "pass", logged: "na" };
 const STATUS_LABEL = { open: "Open", resolved: "Resolved", logged: "Logged" } as const;
 
 /** Competing claims about one field; open material ones wait for an approver to pick. */
@@ -36,13 +36,19 @@ export function ConflictsTab({
   onPick: (conflict: ConflictOut, claim: number) => void;
 }) {
   if (conflicts.length === 0) {
-    return <p className="text-sm text-neutral-500">No conflicting claims recorded.</p>;
+    return (
+      <Panel>
+        <Empty>No conflicts</Empty>
+      </Panel>
+    );
   }
   const order = { open: 0, logged: 1, resolved: 2 };
   const sorted = [...conflicts].sort((a, b) => order[a.status] - order[b.status] || b.created_at.localeCompare(a.created_at));
+  const th = "h-9 bg-surface2 px-2 text-left text-[13px] leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4";
+  const td = "px-2 py-1.5 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3";
 
   return (
-    <ul className="space-y-4" aria-label="Conflicts">
+    <ul className="flex flex-col gap-4" aria-label="Conflicts">
       {sorted.map((c) => {
         const res = (c.resolution ?? {}) as { rule?: string; winner?: number | null; value?: unknown; decided_by?: string };
         const title = targetTitle(graph, c.entity_id, c.edge_id);
@@ -50,85 +56,119 @@ export function ConflictsTab({
           <li
             key={c.id}
             data-testid="conflict"
-            className="overflow-hidden rounded-lg border border-neutral-200 bg-white"
+            className="min-w-0 overflow-hidden rounded-panel border border-line bg-surface shadow-panel"
           >
-            <div className="flex flex-wrap items-center gap-1.5 border-b border-neutral-200 bg-neutral-50 px-4 py-2">
+            <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-line px-4 py-2 max-[600px]:px-3">
               {c.entity_id ? (
-                <button type="button" onClick={() => onOpen(c.entity_id!)} className="font-medium text-neutral-900 hover:underline">
+                <button
+                  type="button"
+                  onClick={() => onOpen(c.entity_id!)}
+                  className="min-w-0 truncate font-display tracking-heading text-lg font-bold hover:underline"
+                >
                   {title}
                 </button>
               ) : (
-                <span className="font-medium text-neutral-900">{title}</span>
+                <span className="min-w-0 truncate font-display tracking-heading text-lg font-bold">{title}</span>
               )}
-              <span className="text-neutral-400">·</span>
-              <span className="font-mono text-xs text-neutral-700" data-testid="conflict-field">
+              <span className="rounded-goal bg-surface2 px-1.5 font-mono text-sm" data-testid="conflict-field">
                 {fieldLabel(c.field)}
               </span>
-              <Badge tone={STATUS_TONE[c.status]}>
+              <Chip kind={STATUS_KIND[c.status]}>
                 <span data-testid="conflict-status">{STATUS_LABEL[c.status]}</span>
-              </Badge>
-              {c.material && <Badge tone="red">Material</Badge>}
-              <span className="ml-auto text-xs text-neutral-500">{formatDateTime(c.created_at)}</span>
+              </Chip>
+              {c.material && <Chip kind="crit">Material</Chip>}
+              {c.status === "open" && (
+                <InfoTip label="open conflict">
+                  This changes a status, a goal link or a priority input, so a person decides.
+                </InfoTip>
+              )}
+              <span className="tnum ml-auto text-sm text-text2">{formatDateTime(c.created_at)}</span>
             </div>
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-neutral-500">
+            <table className="w-full table-fixed border-collapse text-[15px] leading-[22px]">
+              <colgroup>
+                <col />
+                <col className="w-[34%] max-[600px]:hidden" />
+                <col className="w-[96px]" />
+                <col className="w-[110px] max-[600px]:hidden" />
+                {canWrite && <col className="w-[84px]" />}
+              </colgroup>
+              <thead>
                 <tr>
-                  <th className="px-4 py-1.5 font-medium">Claim</th>
-                  <th className="px-4 py-1.5 font-medium">Source</th>
-                  <th className="px-4 py-1.5 font-medium">Confidence</th>
-                  <th className="px-4 py-1.5 font-medium">Observed</th>
-                  <th className="px-4 py-1.5" />
+                  <th scope="col" className={th}>
+                    Claim
+                  </th>
+                  <th scope="col" className={`${th} max-[600px]:hidden`}>
+                    Source
+                  </th>
+                  <th scope="col" className={th}>
+                    Conf.
+                  </th>
+                  <th scope="col" className={`${th} max-[600px]:hidden`}>
+                    Observed
+                  </th>
+                  {canWrite && (
+                    <th scope="col" className={th}>
+                      <span className="sr-only">Action</span>
+                    </th>
+                  )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody>
                 {(c.claims as Claim[]).map((claim, i) => (
-                  <tr key={i} data-testid="claim">
-                    <td className="px-4 py-2 text-neutral-900">
-                      {formatValue(claim.value)}
-                      {res.winner === i && (
-                        <span className="ml-2">
-                          <Badge tone={c.status === "resolved" ? "green" : "blue"}>
+                  <tr key={i} data-testid="claim" className="h-11 border-t border-line">
+                    <td className={td}>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 truncate font-medium">{formatValue(claim.value)}</span>
+                        {res.winner === i && (
+                          <Chip kind={c.status === "resolved" ? "pass" : "acc"}>
                             {c.status === "resolved" ? "Chosen" : "Leading"}
-                          </Badge>
-                        </span>
-                      )}
+                          </Chip>
+                        )}
+                      </span>
                     </td>
-                    <td className="px-4 py-2 text-neutral-700">
+                    <td className={`${td} truncate max-[600px]:hidden`}>
                       {sourceKindLabel(claim.source_kind)}
-                      {claim.source_class && <span className="text-neutral-400"> · {claim.source_class}</span>}
+                      {claim.source_class && <span className="text-text2"> · {claim.source_class}</span>}
                     </td>
-                    <td className="px-4 py-2">
+                    <td className={td}>
                       <ConfidenceBadge value={claim.confidence} low={low} />
                     </td>
-                    <td className="px-4 py-2 text-neutral-500">{claim.observed_at ? formatDate(claim.observed_at) : "—"}</td>
-                    <td className="px-4 py-2 text-right">
-                      {canWrite && c.status === "open" && (
-                        <Button size="sm" disabled={busy} onClick={() => onPick(c, i)} aria-label={`Pick ${formatValue(claim.value)}`}>
-                          Pick
-                        </Button>
-                      )}
+                    <td className={`${td} tnum text-text2 max-[600px]:hidden`}>
+                      {claim.observed_at ? formatDate(claim.observed_at) : "–"}
                     </td>
+                    {canWrite && (
+                      <td className={`${td} text-right`}>
+                        {c.status === "open" && (
+                          <Button
+                            disabled={busy}
+                            onClick={() => onPick(c, i)}
+                            aria-label={`Pick ${formatValue(claim.value)}`}
+                          >
+                            Pick
+                          </Button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="border-t border-neutral-100 px-4 py-2 text-xs text-neutral-600">
-              {res.rule && (
-                <p data-testid="conflict-rule">
-                  <span className="text-neutral-400">Rule: </span>
-                  {res.rule}
-                </p>
-              )}
-              {c.status === "resolved" && (
-                <p>
-                  Set to <strong>{formatValue(res.value)}</strong>
-                  {res.decided_by && ` by ${res.decided_by}`}.
-                </p>
-              )}
-              {c.status === "open" && (
-                <p>This changes a status, a goal link or a priority input, so a person decides.</p>
-              )}
-            </div>
+            {(res.rule || c.status === "resolved") && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-line px-4 py-2.5 text-sm max-[600px]:px-3">
+                {res.rule && (
+                  <p data-testid="conflict-rule">
+                    <span className="font-semibold text-text2">Rule </span>
+                    {res.rule}
+                  </p>
+                )}
+                {c.status === "resolved" && (
+                  <p>
+                    Set to <strong>{formatValue(res.value)}</strong>
+                    {res.decided_by && <span className="text-text2"> · {res.decided_by}</span>}
+                  </p>
+                )}
+              </div>
+            )}
           </li>
         );
       })}

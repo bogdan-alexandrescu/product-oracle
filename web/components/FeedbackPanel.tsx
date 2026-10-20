@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { SuggestionCard } from "@/components/SuggestionCard";
-import { Badge, ErrorNote, Loading, StatusBadge, VerdictBadge } from "@/components/ui";
+import { Chip, Empty } from "@/components/ds";
+import { FeedbackStatusChip, Quote, SELECT, VerdictChip } from "@/components/review/parts";
+import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type FeedbackItem, type FeedbackStatus, type VersionSummary } from "@/lib/api/client";
 import { STATUS_LABEL } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
@@ -26,29 +28,24 @@ function FeedbackRow({
   const { role } = useMe();
   const href = `/documents/${doc}/v/${item.raised_on_version}${item.section_key ? `#s-${item.section_key}` : ""}`;
   return (
-    <li className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm" data-testid="feedback-item">
+    <li className="border-b border-line py-3 last:border-b-0" data-testid="feedback-item">
       <div className="flex flex-wrap items-center gap-1.5">
-        <StatusBadge status={item.status} />
-        {item.verdict ? <VerdictBadge verdict={item.verdict} /> : <Badge>{item.kind === "comment" ? "Comment" : "General"}</Badge>}
-        <span className="ml-auto text-xs text-neutral-500">
+        <FeedbackStatusChip status={item.status} />
+        {item.verdict ? <VerdictChip verdict={item.verdict} /> : <Chip kind="line">{item.kind === "comment" ? "Comment" : "General"}</Chip>}
+        <span className="tnum ml-auto text-[13px] text-text2">
           raised on v{item.raised_on_version}
           {item.addressed_in_version != null && ` · addressed in v${item.addressed_in_version}`}
         </span>
       </div>
-      <p className="mt-1.5 text-neutral-900">{item.summary}</p>
-      {item.anchor && (
-        <p className="mt-1 line-clamp-2 border-l-2 border-amber-300 pl-2 text-xs text-neutral-600">{item.anchor.exact}</p>
-      )}
+      <p className="mt-1.5 text-[15px] leading-[22px] text-text">{item.summary}</p>
+      {item.anchor && <Quote>{item.anchor.exact}</Quote>}
       {item.resolution_note && (
-        <p className="mt-1 text-xs text-neutral-700">
-          <span className="font-medium">Resolution:</span> {item.resolution_note}
+        <p className="mt-1 text-sm leading-5 text-text2">
+          <span className="font-semibold text-text">Resolution:</span> {item.resolution_note}
         </p>
       )}
       {item.section_key && (
-        <Link
-          href={href}
-          className="mt-1 inline-block font-mono text-[11px] text-neutral-500 underline-offset-2 hover:text-neutral-900 hover:underline"
-        >
+        <Link href={href} className="mt-1 inline-block font-mono text-[13px] text-accent-ink hover:underline">
           #{item.section_key}
           {item.raised_on_version !== current && ` (v${item.raised_on_version})`}
         </Link>
@@ -65,17 +62,22 @@ function FeedbackRow({
   );
 }
 
-/** Every comment and section verdict on the document, filterable by status and version. */
+/**
+ * Every comment and section verdict on the document, filterable by status and version;
+ * `sectionKeys` keeps only the items raised on those sections (the open one).
+ */
 export function FeedbackPanel({
   doc,
   current,
   versions,
   refreshKey,
+  sectionKeys,
 }: {
   doc: string;
   current: number;
   versions: VersionSummary[];
   refreshKey: number;
+  sectionKeys?: ReadonlySet<string> | null;
 }) {
   const [status, setStatus] = useState<FeedbackStatus | "">("");
   const [version, setVersion] = useState<number | "">("");
@@ -89,17 +91,18 @@ export function FeedbackPanel({
       }),
     ),
   );
+  const items = q.data && sectionKeys ? q.data.filter((f) => !!f.section_key && sectionKeys.has(f.section_key)) : q.data;
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-2">
-        <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-600">
-          Status
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex min-w-0 flex-1">
+          <span className="sr-only">Status</span>
           <select
             aria-label="Filter by status"
             value={status}
             onChange={(e) => setStatus(e.target.value as FeedbackStatus | "")}
-            className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900"
+            className={`${SELECT} w-full`}
           >
             <option value="">All statuses</option>
             {STATUSES.map((s) => (
@@ -109,63 +112,79 @@ export function FeedbackPanel({
             ))}
           </select>
         </label>
-        <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-600">
-          Raised on
+        <label className="flex min-w-0 flex-1">
+          <span className="sr-only">Raised on</span>
           <select
             aria-label="Filter by version"
             value={version}
             onChange={(e) => setVersion(e.target.value ? Number(e.target.value) : "")}
-            className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900"
+            className={`${SELECT} w-full`}
           >
             <option value="">All versions</option>
             {versions.map((v) => (
               <option key={v.number} value={v.number}>
-                v{v.number}
+                Raised on v{v.number}
               </option>
             ))}
           </select>
         </label>
+        {items && (
+          <span className="tnum flex-none text-[13px] font-semibold text-text2">
+            {items.length} item{items.length === 1 ? "" : "s"}
+          </span>
+        )}
       </div>
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {q.loading && !q.data && <Loading />}
-      {q.data && q.data.length === 0 && <p className="text-sm text-neutral-500">No feedback matches these filters.</p>}
-      {q.data && q.data.length > 0 && (
-        <>
-          <p className="text-xs text-neutral-500">
-            {q.data.length} item{q.data.length === 1 ? "" : "s"}
-          </p>
-          <ol className="flex flex-col gap-2" aria-label="Feedback items">
-            {q.data.map((f) => (
-              <FeedbackRow key={f.id} item={f} doc={doc} current={current} onChanged={() => void q.reload()} />
-            ))}
-          </ol>
-        </>
+      {items && items.length === 0 && <Empty>No feedback</Empty>}
+      {items && items.length > 0 && (
+        <ol className="flex flex-col" aria-label="Feedback items">
+          {items.map((f) => (
+            <FeedbackRow key={f.id} item={f} doc={doc} current={current} onChanged={() => void q.reload()} />
+          ))}
+        </ol>
       )}
     </div>
   );
 }
 
-/** How this version handled feedback raised on earlier versions. */
-export function ResolutionPanel({ doc, n, refreshKey }: { doc: string; n: number; refreshKey: number }) {
+/** How this version handled feedback raised on earlier versions; `sectionKeys` as in FeedbackPanel. */
+export function ResolutionPanel({
+  doc,
+  n,
+  refreshKey,
+  sectionKeys,
+}: {
+  doc: string;
+  n: number;
+  refreshKey: number;
+  sectionKeys?: ReadonlySet<string> | null;
+}) {
   const q = useQuery(`${doc}|${n}|${refreshKey}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}/resolution-report", { params: { path: { doc, n } } })),
   );
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   if (!q.data) return <Loading />;
-  if (q.data.items.length === 0) {
-    return <p className="text-sm text-neutral-500">No feedback was raised on earlier versions.</p>;
+  const items = sectionKeys
+    ? q.data.items.filter((f) => !!f.section_key && sectionKeys.has(f.section_key))
+    : q.data.items;
+  if (items.length === 0) {
+    return <Empty>No earlier feedback</Empty>;
   }
+  const counts = sectionKeys
+    ? items.reduce<Record<string, number>>((m, f) => ({ ...m, [f.status]: (m[f.status] ?? 0) + 1 }), {})
+    : q.data.counts;
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-1.5">
-        {Object.entries(q.data.counts).map(([s, count]) => (
-          <span key={s} className="text-xs text-neutral-600">
-            <StatusBadge status={s as FeedbackStatus} /> {count}
+      <div className="flex flex-wrap gap-3">
+        {Object.entries(counts).map(([s, count]) => (
+          <span key={s} className="tnum inline-flex items-center gap-1.5 text-sm font-bold">
+            <FeedbackStatusChip status={s as FeedbackStatus} /> {count}
           </span>
         ))}
       </div>
-      <ol className="flex flex-col gap-2">
-        {q.data.items.map((f) => (
+      <ol className="flex flex-col">
+        {items.map((f) => (
           <FeedbackRow key={f.id} item={f} doc={doc} current={n} />
         ))}
       </ol>

@@ -1,0 +1,17 @@
+id: untestable-acceptance
+description: >
+  Acceptance criteria that cannot be tested: no number, no observable condition.
+covers: [untestable_acceptance]
+extends: good-prd
+remove: [criterion]
+document:
+  from: good-prd.md
+  replace:
+    acceptance: |
+      - The address step should be fast and easy.
+      - Saved addresses must feel seamless and intuitive.
+      - The experience is better than today.
+expected:
+  scope_testability: critical
+rationale_contains:
+  scope_testability: [untestable, fast and easy]

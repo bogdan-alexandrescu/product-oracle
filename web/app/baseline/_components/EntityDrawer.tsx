@@ -1,15 +1,26 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
-import { Badge, Button, ErrorNote, Loading } from "@/components/ui";
+import { Button, Chip, GoalTag, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
+import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
-import { ConfidenceBadge, DEFAULT_LOW, formatValue, LockBadge, NodeStatusBadge, titleOf } from "./common";
+import {
+  ConfidenceRing,
+  contributionOf,
+  ContributionPips,
+  DEFAULT_LOW,
+  DeliveryChip,
+  formatValue,
+  LockBadge,
+  NodeStatusBadge,
+  titleOf,
+} from "./common";
 
 const TYPE_LABEL: Record<EntityOut["type"], string> = {
   goal: "Goal",
@@ -19,6 +30,10 @@ const TYPE_LABEL: Record<EntityOut["type"], string> = {
   constraint: "Constraint",
   decision: "Decision",
   person: "Person",
+  outcome: "Outcome",
+  acceptance_criterion: "Acceptance criterion",
+  assumption: "Assumption",
+  risk: "Risk",
 };
 
 /** Attribute fields offered in the edit form, per entity type. */
@@ -43,13 +58,18 @@ type Props = {
   /** Commenters and up may add (and refresh) evidence from public links. */
   canComment?: boolean;
   meId?: string | null;
+  /** Goal id -> "G1", as in the ledger. */
+  tags: Map<string, string>;
   onClose: () => void;
   onOpen: (id: string) => void;
   /** Called after a write, so the lists behind the drawer refresh. */
   onChanged: () => void;
 };
 
-/** Right-side panel with one entity: its links, evidence and (for approvers) edit and unlock. */
+/**
+ * The inspector for one baseline item (B1's dark-headed panel, right of the tables, below
+ * them on a phone): its links, evidence and (for approvers) edit and unlock.
+ */
 export function EntityDrawer({
   entity,
   graph,
@@ -57,6 +77,7 @@ export function EntityDrawer({
   canWrite,
   canComment = canWrite,
   meId,
+  tags,
   onClose,
   onOpen,
   onChanged,
@@ -71,6 +92,13 @@ export function EntityDrawer({
   const [notice, setNotice] = useState<string | null>(null);
   const d = q.data;
   const title = d?.title ?? entity.title;
+  const tag = tags.get(entity.id);
+  const root = useRef<HTMLDivElement>(null);
+
+  // Below the tables (narrow screens), bring the inspector into view when it opens.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 1100px)").matches) root.current?.scrollIntoView({ block: "start" });
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -124,101 +152,109 @@ export function EntityDrawer({
       return "Saved. The item is now locked against agent changes.";
     });
 
-  return (
-    <div
-      role="dialog"
-      aria-label={title}
-      aria-modal="false"
-      data-testid="entity-drawer"
-      className="fixed top-0 right-0 bottom-0 z-40 flex w-[30rem] max-w-full flex-col border-l border-neutral-200 bg-white shadow-xl"
-    >
-      <header className="flex items-start justify-between gap-3 border-b border-neutral-200 px-5 py-4">
-        <div className="min-w-0">
-          <p className="text-xs text-neutral-500">
-            {TYPE_LABEL[entity.type]} · <span className="font-mono">{d?.key ?? entity.key}</span>
-          </p>
-          <h2 className="mt-0.5 text-lg font-semibold text-neutral-900">{title}</h2>
-        </div>
-        <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close">
-          ✕
-        </Button>
-      </header>
+  const links = d ? [...d.edges_out, ...d.edges_in].filter((e) => e.status !== "rejected").length : undefined;
+  const evidence = d?.evidence.length ?? entity.evidence_count;
+  const proposals = d?.open_proposals;
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4 text-sm">
-        {q.error && <ErrorNote>{q.error}</ErrorNote>}
-        {q.loading && !d && <Loading />}
-        {error && <ErrorNote>{error}</ErrorNote>}
-        {notice && (
-          <p role="status" className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sky-900">
-            {notice}
-          </p>
+  return (
+    <div role="dialog" aria-label={title} aria-modal="false" data-testid="entity-drawer" ref={root} className="scroll-mt-4">
+      <Inspector
+        label={title}
+        eyebrow={
+          <>
+            {TYPE_LABEL[entity.type]} · <span className="font-mono">{d?.key ?? entity.key}</span>
+          </>
+        }
+        title={title}
+        chips={
+          <>
+            {tag && <GoalTag id={tag} proposed={(d ?? entity).status === "proposed"} />}
+            <NodeStatusBadge status={(d ?? entity).status} hero />
+            <DeliveryChip value={(d ?? entity).type === "feature" ? (d ?? entity).attrs?.status : undefined} hero />
+            <LockBadge entity={d ?? entity} meId={meId} hero />
+          </>
+        }
+        action={
+          <Button variant="hero" icon="x" onClick={onClose} aria-label="Close">
+            Close
+          </Button>
+        }
+        stats={[
+          { label: "Confidence", figure: <ConfidenceRing value={(d ?? entity).confidence} low={low} size={44} /> },
+          { label: "Evidence", value: evidence },
+          { label: "Links", value: links ?? "–" },
+          { label: "Proposals", value: proposals ?? "–", tone: proposals ? "warn" : undefined },
+        ]}
+      >
+        {(q.error || error || notice || (q.loading && !d)) && (
+          <InspectorSection>
+            <div className="flex flex-col gap-2">
+              {q.error && <Notice tone="error">{q.error}</Notice>}
+              {q.loading && !d && <Loading />}
+              {error && <Notice tone="error">{error}</Notice>}
+              {notice && <Notice>{notice}</Notice>}
+            </div>
+          </InspectorSection>
         )}
         {d && (
           <>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <NodeStatusBadge status={d.status} />
-              <ConfidenceBadge value={d.confidence} low={low} />
-              <LockBadge entity={d} meId={meId} />
-              {d.open_proposals > 0 && (
-                <Badge tone="blue">
-                  {d.open_proposals} open proposal{d.open_proposals === 1 ? "" : "s"}
-                </Badge>
-              )}
-            </div>
-
             {d.locked && (
-              <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2">
-                <p className="text-neutral-700" data-testid="lock-note">
-                  Locked by {d.locked_by === meId ? "you" : d.locked_by ? `member ${d.locked_by.slice(0, 8)}` : "a person"}
-                  {d.locked_at && ` on ${formatDateTime(d.locked_at)}`}. Agents can only propose changes.
+              <InspectorSection
+                label="Lock"
+                tools={
+                  canWrite && (
+                    <Button onClick={unlock} disabled={busy} icon="lock">
+                      Unlock
+                    </Button>
+                  )
+                }
+              >
+                <p className="flex items-center gap-2">
+                  <span className="min-w-0 truncate" data-testid="lock-note">
+                    Locked by {d.locked_by === meId ? "you" : d.locked_by ? `member ${d.locked_by.slice(0, 8)}` : "a person"}
+                    {d.locked_at && <span className="tnum text-text2"> · {formatDateTime(d.locked_at)}</span>}
+                    <span className="sr-only">. Agents can only propose changes.</span>
+                  </span>
+                  <InfoTip label="the lock">A person&apos;s edit locks the item: agents can only propose changes to it.</InfoTip>
                 </p>
-                {canWrite && (
-                  <Button size="sm" onClick={unlock} disabled={busy}>
-                    Unlock
-                  </Button>
-                )}
-              </div>
+              </InspectorSection>
             )}
 
             {editing ? (
-              <EditForm entity={d} busy={busy} onCancel={() => setEditing(false)} onSave={save} />
+              <InspectorSection label="Edit">
+                <EditForm entity={d} busy={busy} onCancel={() => setEditing(false)} onSave={save} />
+              </InspectorSection>
             ) : (
               <>
-                {d.body && <p className="whitespace-pre-line text-neutral-700">{d.body}</p>}
-                <Attrs attrs={d.attrs} />
-                {canWrite && (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setNotice(null);
-                      setEditing(true);
-                    }}
-                  >
-                    Edit
-                  </Button>
+                {d.body && (
+                  <InspectorSection label="Description">
+                    <p className="line-clamp-4 whitespace-pre-line text-text2" title={d.body}>
+                      {d.body}
+                    </p>
+                  </InspectorSection>
                 )}
+                <Attrs attrs={d.attrs} />
               </>
             )}
 
-            <Links detail={d} graph={graph} onOpen={onOpen} />
+            <Links detail={d} graph={graph} tags={tags} onOpen={onOpen} />
 
-            <Section title={`Evidence (${d.evidence.length})`}>
+            <InspectorSection label="Evidence" tools={<span className="tnum text-text">{d.evidence.length}</span>}>
               {d.evidence.length === 0 ? (
-                <p className="text-neutral-500">Nothing cites this yet.</p>
+                <p className="text-text2">None yet</p>
               ) : (
-                <ul className="flex flex-col items-start gap-2" aria-label="Evidence">
+                <ul className="flex flex-col gap-1.5" aria-label="Evidence">
                   {d.evidence.map((ev) => (
-                    <li key={ev.id} className="flex max-w-full items-center gap-2" data-testid="evidence-row">
+                    <li key={ev.id} className="flex min-h-8 max-w-full min-w-0 items-center gap-2" data-testid="evidence-row">
                       <EvidenceChip evidence={ev} low={low} />
-                      <span className="truncate text-xs text-neutral-500">
+                      <span className="min-w-0 flex-1 truncate text-sm text-text2" title={ev.ref ?? ev.url ?? undefined}>
                         {ev.ref ?? ev.url}
-                        {ev.retrieved_at && ` · ${formatDate(ev.retrieved_at)}`}
+                        {ev.retrieved_at && <span className="tnum"> · {formatDate(ev.retrieved_at)}</span>}
                       </span>
                       {ev.kind && canComment && (
                         <Button
-                          size="sm"
                           variant="ghost"
-                          className="ml-auto shrink-0"
+                          className="flex-none"
                           disabled={busy}
                           aria-label={`Refresh ${ev.ref ?? ev.url}`}
                           title="Fetch the public page again and rescore it"
@@ -243,20 +279,26 @@ export function EntityDrawer({
                   />
                 </div>
               )}
-            </Section>
+            </InspectorSection>
+
+            {canWrite && !editing && (
+              <InspectorSection>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => {
+                      setNotice(null);
+                      setEditing(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              </InspectorSection>
+            )}
           </>
         )}
-      </div>
+      </Inspector>
     </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section aria-label={title}>
-      <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-neutral-500 uppercase">{title}</h3>
-      {children}
-    </section>
   );
 }
 
@@ -264,76 +306,69 @@ function Attrs({ attrs }: { attrs: Record<string, unknown> }) {
   const entries = Object.entries(attrs ?? {});
   if (entries.length === 0) return null;
   return (
-    <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1" aria-label="Attributes">
-      {entries.map(([k, v]) => (
-        <div key={k} className="contents">
-          <dt className="text-neutral-500">{k}</dt>
-          <dd className="text-neutral-800" data-attr={k}>
-            {formatValue(v)}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <InspectorSection label="Attributes">
+      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5" aria-label="Attributes">
+        {entries.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="text-text2">{k}</dt>
+            <dd className="tnum truncate font-semibold" data-attr={k} title={formatValue(v)}>
+              {k === "status" ? <DeliveryChip value={v} /> : formatValue(v)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </InspectorSection>
   );
 }
 
-function Links({ detail, graph, onOpen }: { detail: EntityDetail; graph: GraphOut | undefined; onOpen: (id: string) => void }) {
+function Links({
+  detail,
+  graph,
+  tags,
+  onOpen,
+}: {
+  detail: EntityDetail;
+  graph: GraphOut | undefined;
+  tags: Map<string, string>;
+  onOpen: (id: string) => void;
+}) {
   const out = (t: EdgeOut["type"]) => detail.edges_out.filter((e) => e.type === t && e.status !== "rejected");
   const inn = (t: EdgeOut["type"]) => detail.edges_in.filter((e) => e.type === t && e.status !== "rejected");
   const link = (id: string) => (
-    <button type="button" className="text-left text-neutral-900 underline-offset-2 hover:underline" onClick={() => onOpen(id)}>
-      {titleOf(graph, id)}
-    </button>
+    <span className="flex min-w-0 items-center gap-2">
+      {tags.get(id) && <GoalTag id={tags.get(id)!} />}
+      <button type="button" className="min-w-0 truncate text-left hover:underline" onClick={() => onOpen(id)}>
+        {titleOf(graph, id)}
+      </button>
+    </span>
   );
-  const list = (title: string, edges: EdgeOut[], end: "src_id" | "dst_id") =>
+  const list = (title: string, edges: EdgeOut[], end: "src_id" | "dst_id", contribution = false) =>
     edges.length > 0 && (
-      <Section title={title}>
-        <ul className="space-y-1" aria-label={title}>
-          {edges.map((e) => (
-            <li key={e.id} className="flex items-center gap-2">
-              {link(e[end])}
-              {e.status === "proposed" && <Badge tone="blue">Proposed</Badge>}
+      <InspectorSection label={title}>
+        <ul aria-label={title}>
+          {(contribution ? [...edges].sort((a, b) => contributionOf(b.attrs) - contributionOf(a.attrs)) : edges).map((e) => (
+            <li key={e.id} className="flex min-h-8 min-w-0 items-center gap-2.5">
+              <span className="min-w-0 flex-1">{link(e[end])}</span>
+              {e.status === "proposed" && <Chip kind="warn">Proposed</Chip>}
+              {contribution && (
+                <span className="flex flex-none items-center gap-2" data-testid="contribution">
+                  <ContributionPips value={contributionOf(e.attrs)} proposed={e.status === "proposed"} />
+                  <span className="tnum font-semibold">
+                    <span className="sr-only">contribution </span>
+                    {contributionOf(e.attrs)}/3
+                  </span>
+                </span>
+              )}
             </li>
           ))}
         </ul>
-      </Section>
-    );
-
-  const supports = out("supports");
-  const supportedBy = inn("supports");
-  const contribution = (e: EdgeOut) => {
-    const c = Number(e.attrs?.contribution ?? 0);
-    return Number.isFinite(c) ? c : 0;
-  };
-  const supportList = (title: string, edges: EdgeOut[], end: "src_id" | "dst_id") =>
-    edges.length > 0 && (
-      <Section title={title}>
-        <ul className="space-y-1" aria-label={title}>
-          {[...edges]
-            .sort((a, b) => contribution(b) - contribution(a))
-            .map((e) => (
-              <li key={e.id} className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-2">
-                  {link(e[end])}
-                  {e.status === "proposed" && <Badge tone="blue">Proposed</Badge>}
-                </span>
-                <span
-                  className="text-xs text-neutral-500"
-                  title="Contribution, 0 (none) to 3 (strong)"
-                  data-testid="contribution"
-                >
-                  contribution {contribution(e)}/3
-                </span>
-              </li>
-            ))}
-        </ul>
-      </Section>
+      </InspectorSection>
     );
 
   return (
     <>
-      {supportList("Supports", supports, "dst_id")}
-      {supportList("Supported by", supportedBy, "src_id")}
+      {list("Supports", out("supports"), "dst_id", true)}
+      {list("Supported by", inn("supports"), "src_id", true)}
       {list("Depends on", out("depends_on"), "dst_id")}
       {list("Needed by", inn("depends_on"), "src_id")}
       {list("Blocks", out("blocks"), "dst_id")}
@@ -389,37 +424,39 @@ function EditForm({
     onSave({ title: title.trim(), body: body.trim() ? body : null, attrs: out });
   }
 
-  const input = "mt-1 w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm focus:border-neutral-500 focus:outline-none";
+  const label = "flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2";
   return (
-    <form onSubmit={submit} aria-label="Edit" className="space-y-3 rounded-md border border-neutral-200 p-3">
-      <label className="block text-xs font-medium text-neutral-600">
+    <form onSubmit={submit} aria-label="Edit" className="flex flex-col gap-3">
+      <label className={label}>
         Title
-        <input className={input} value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input className={INPUT} value={title} onChange={(e) => setTitle(e.target.value)} />
       </label>
-      <label className="block text-xs font-medium text-neutral-600">
+      <label className={label}>
         Description
-        <textarea className={input} rows={3} value={body} onChange={(e) => setBody(e.target.value)} />
+        <textarea className={INPUT} rows={3} value={body} onChange={(e) => setBody(e.target.value)} />
       </label>
       {fields.map((f) => (
-        <label key={f.key} className="block text-xs font-medium text-neutral-600">
+        <label key={f.key} className={label}>
           {f.label}
           <input
-            className={input}
+            className={INPUT}
             inputMode={f.numeric ? "decimal" : undefined}
             value={attrs[f.key]}
             onChange={(e) => setAttrs((a) => ({ ...a, [f.key]: e.target.value }))}
           />
         </label>
       ))}
-      <p className="text-xs text-neutral-500">Saving locks this item: agents can then only propose changes to it.</p>
-      {invalid && <ErrorNote>{invalid}</ErrorNote>}
-      <div className="flex gap-2">
-        <Button type="submit" variant="primary" size="sm" disabled={busy}>
+      {invalid && <Notice tone="error">{invalid}</Notice>}
+      <div className="flex items-center gap-2">
+        <Button type="submit" variant="solid" disabled={busy}>
           Save
         </Button>
-        <Button size="sm" onClick={onCancel} disabled={busy}>
+        <Button onClick={onCancel} disabled={busy}>
           Cancel
         </Button>
+        <InfoTip label="saving" align="start">
+          Saving locks this item: agents can then only propose changes to it.
+        </InfoTip>
       </div>
     </form>
   );

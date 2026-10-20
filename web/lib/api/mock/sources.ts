@@ -4,6 +4,7 @@
  * scoring, so the UI's badge and breakdown can be exercised.
  */
 import type { Schemas } from "@/lib/api/client";
+import { mockUuid, seeded } from "./ids";
 
 type Source = Schemas["SourceOut"];
 type Item = Schemas["ItemOut"] & { content: string; source_name: string };
@@ -44,10 +45,7 @@ const AVAILABLE: Record<Source["kind"], boolean> = {
 const SOURCE_FACTOR: Record<string, number> = { github: 0.85, upload: 0.7, notion: 0.7, slack: 0.5 };
 
 const now = () => new Date().toISOString();
-const uuid = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `00000000-0000-4000-8000-${String(Date.now()).padStart(12, "0").slice(-12)}`;
+const uuid = mockUuid;
 
 function confidence(kind: string, freshness: number): Confidence {
   const values = { source: SOURCE_FACTOR[kind] ?? 0.5, freshness, mentions: 0.5, goal_impact: 0.5 };
@@ -127,7 +125,7 @@ function load(): SourcesDb {
       // fall through to a fresh seed
     }
   }
-  return seed();
+  return seeded("sources", seed);
 }
 
 function json(status: number, body: unknown): Response {

@@ -7,15 +7,21 @@ import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
+import { mockUuid, seeded } from "./ids";
 import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
 import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
+import { routeTrace } from "./trace";
+import { routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
@@ -49,6 +55,14 @@ export interface Db {
   runs?: RunsDb;
   /** Built-in model jobs and suggestions (./llm-jobs.ts); absent in older saved data. */
   llm?: LlmDb;
+  /** Product Oracle v2 tables (./v2.ts); absent in data saved before v2. */
+  v2?: V2Db;
+  /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
+  quality?: QualityDb;
+  /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
+  modules?: ModulesDb;
+  /** Blocker strategies (./blockers.ts) on the v2 rows; absent in older saved data. */
+  blockers?: BlockersDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -65,12 +79,7 @@ function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
 }
 const LATENCY_MS = 60;
 
-let counter = 0;
-function uuid(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  counter += 1;
-  return `00000000-0000-4000-8000-${String(Date.now() + counter).padStart(12, "0").slice(-12)}`;
-}
+const uuid = mockUuid;
 
 function hash(text: string): string {
   let h = 0x811c9dc5;
@@ -269,8 +278,8 @@ function seed(): Db {
     }
   }
   docs.get("usage-alerts-roadmap")!.status = "in_review";
-  db.runs = seedRuns(runsContext(db));
-  db.llm = seedLlm(llmContext(db, db.user_id, "owner"));
+  db.runs = seeded("runs", () => seedRuns(runsContext(db)));
+  db.llm = seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   return db;
 }
 
@@ -418,7 +427,7 @@ function load(): Db {
       // fall through to a fresh seed
     }
   }
-  const db = seed();
+  const db = seeded("db", seed);
   save(db);
   return db;
 }
@@ -797,6 +806,29 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   return notFound("Route");
 }
 
+/** The v2 rows, seeded on first use against the first mock PRD. */
+function ensureV2(db: Db): V2Db {
+  if (!db.v2) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
+    db.v2 = seeded("v2", () => seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id));
+  }
+  return db.v2;
+}
+
+function ensureBlockers(db: Db): BlockersDb {
+  if (!db.blockers) {
+    const v2 = ensureV2(db);
+    const deposits = db.documents.find((d) => d.slug === "online-deposits");
+    db.blockers = seedBlockers(
+      db.documents.find((d) => d.kind === "prd")?.id ?? db.tenant_id,
+      db.user_id,
+      deposits && { documentId: deposits.id, v2 },
+    );
+  }
+  return db.blockers;
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -835,22 +867,82 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
+  // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
+  if (["documents", "section-links", "baseline", "trace"].includes(p[1])) {
+    const traced = await routeTrace(
+      {
+        v2: ensureV2(db),
+        documents: db.documents,
+        versions: db.versions,
+        entities: db.baseline.entities,
+        userId: me.id,
+        role: me.role,
+        now,
+        uuid,
+      },
+      req,
+      p,
+      q,
+    );
+    if (traced) return traced;
+  }
   // The baseline mock checks roles itself (commenters propose, approvers decide).
   if (p[1] === "baseline") {
     return routeBaseline(db.baseline, { userId: me.id, role: me.role }, req, p.slice(2), q);
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  // Company settings are the owner's, as in the API (tenant_settings_api.py).
+  if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const connections = await connectionsRoute(req, p);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role);
   if (pool) return pool;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
-  db.llm ??= seedLlm(llmContext(db, db.user_id, "owner"));
+  db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   const llm = llmContext(db, me.id, me.role);
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
+  // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
+  const v2db = ensureV2(db);
+  db.quality ??= seedQuality();
+  const qualityCtx: QualityContext = {
+    db: db.quality,
+    v2: v2db,
+    userId: me.id,
+    role: me.role,
+    findVersion: (ref, n) => {
+      const doc = findDocument(db, ref);
+      const v = doc && findVersion(db, doc, n);
+      return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
+    },
+    blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
+  };
+  const quality = await routeQuality(qualityCtx, req, p, q);
+  if (quality) return quality;
+  // Modules and compositions check roles themselves (viewers may ask for a recommendation).
+  if (!db.modules) {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    db.modules = seedModules(prd?.id ?? null, db.user_id);
+  }
+  const modules = await routeModules(
+    db.modules,
+    {
+      userId: me.id,
+      role: me.role,
+      document: (ref) => {
+        const doc = findDocument(db, ref);
+        return doc && doc.kind === "prd" ? { id: doc.id, slug: doc.slug, template: doc.template ?? null } : null;
+      },
+      approvedVersion: (documentId, n) =>
+        db.versions.find((v) => v.document_id === documentId && v.number === n && v.approved_at)?.id ?? null,
+    },
+    req,
+    p,
+    q,
+  );
+  if (modules) return modules;
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
@@ -898,10 +990,19 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, f);
   }
 
+  // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
+  const v2Db = ensureV2(db);
+  // Blocker strategy routes (CR-04): writes on the v2 option, experiment and event rows.
+  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents };
+  const blockers = await routeBlockers(blockerContext, ensureBlockers(db), req, p, q);
+  if (blockers) return blockers;
+  const v2 = routeV2(v2Db, req, p, q);
+  if (v2) return v2;
+
   const handled = await laneF(db, req, p, m);
   if (handled) return handled;
 
-  db.runs ??= seedRuns(runsContext(db));
+  db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   if (runs) return runs;
 
@@ -1003,6 +1104,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
+    // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
+    if (doc.kind === "prd") {
+      const latest = docVersions(db, doc).pop()!.number;
+      const refusal = publishRefusal(qualityCtx, { documentId: doc.id, slug: doc.slug, versionId: v.id }, v.number, latest, (id) =>
+        ensureBlockers(db).blockers.find((b) => b.id === id)?.statement,
+      );
+      if (refusal) return json(409, refusal);
+    }
     v.approved_at = now();
     doc.status = "approved";
     doc.updated_at = v.approved_at;
@@ -1059,10 +1168,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   return notFound("Route");
 }
 
+/** One request at a time: each loads the whole db and saves it back, so two in flight would lose a write. */
+let queue: Promise<unknown> = Promise.resolve();
+
 export async function mockFetch(req: Request): Promise<Response> {
   await new Promise((r) => setTimeout(r, LATENCY_MS));
-  const db = load();
-  const res = await route(db, req);
-  save(db);
-  return res;
+  const next = queue.then(async () => {
+    const db = load();
+    const res = await route(db, req);
+    save(db);
+    return res;
+  });
+  queue = next.catch(() => undefined);
+  return next;
 }

@@ -4,7 +4,9 @@ import createClient from "openapi-fetch";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Badge, Button, ErrorNote, Loading } from "@/components/ui";
+import { AuthCard } from "@/app/login/_components/AuthCard";
+import { Button, Chip, InfoTip, Label, Notice } from "@/components/ds";
+import { Loading } from "@/components/ui";
 import { ApiError, MOCK_MODE, unwrap, type Schemas } from "@/lib/api/client";
 import type { paths } from "@/lib/api/schema";
 
@@ -72,62 +74,68 @@ export function ConsentScreen() {
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-md px-6">
-      <h1 className="mb-1 text-2xl font-semibold tracking-tight">Connect an MCP client</h1>
-      {error && <ErrorNote>{error}</ErrorNote>}
+    <AuthCard title="Connect an MCP client">
+      {error && <Notice tone="error">{error}</Notice>}
       {!error && !detail && <Loading />}
       {detail && (
-        <div className="mt-4 space-y-5" data-testid="consent">
-          <p className="text-sm text-neutral-700">
-            <strong className="font-semibold text-neutral-900">{detail.client_name}</strong> wants to use Product
-            Oracle as you.
+        <div className="flex flex-col gap-5" data-testid="consent">
+          <p className="text-[15px]">
+            <strong className="font-semibold">{detail.client_name}</strong> wants to use Product Oracle as you.
           </p>
 
           <section aria-labelledby="consent-scopes">
-            <h2 id="consent-scopes" className="mb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
-              It asks to
+            <h2 id="consent-scopes" className="mb-2">
+              <Label>It asks to</Label>
             </h2>
-            <ul className="space-y-2">
+            <ul className="overflow-hidden rounded-button border border-line">
               {detail.scopes.map((s) => (
-                <li key={s.name} className="rounded-md border border-neutral-200 px-3 py-2 text-sm">
-                  <span className="font-mono text-xs text-neutral-500">{s.name}</span>
-                  <p className="text-neutral-800">{s.description}</p>
+                <li key={s.name} className="border-t border-line px-3 py-2.5 first:border-t-0">
+                  <span className="inline-block rounded-goal bg-accent-soft px-1.5 font-mono text-[13px] leading-6 text-accent-ink">
+                    {s.name}
+                  </span>
+                  <p className="mt-1 text-sm text-text">{s.description}</p>
                 </li>
               ))}
             </ul>
           </section>
 
-          <section aria-labelledby="consent-user" className="text-sm text-neutral-700">
-            <h2 id="consent-user" className="mb-1 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
-              Signed in as
+          <section aria-labelledby="consent-user" className="flex flex-col gap-2">
+            <h2 id="consent-user">
+              <Label>Signed in as</Label>
             </h2>
-            <p>
-              <span data-testid="consent-user">{detail.user_email}</span>{" "}
-              <Badge>{ROLE_LABEL[detail.user_role]}</Badge>
-            </p>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span data-testid="consent-user" className="min-w-0 font-semibold break-all">
+                {detail.user_email}
+              </span>
+              <Chip kind="acc">{ROLE_LABEL[detail.user_role]}</Chip>
+            </div>
             {detail.effective_role !== detail.user_role && (
-              <p className="mt-1 text-neutral-500" data-testid="consent-effective-role">
+              <p className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn" data-testid="consent-effective-role">
                 It will act with {ROLE_LABEL[detail.effective_role].toLowerCase()} rights only (read access).
               </p>
             )}
           </section>
 
-          <p className="text-xs text-neutral-500">
-            The name is the one the client gave itself. After you decide, your browser returns to{" "}
-            <span className="font-mono">{detail.redirect_host}</span>. Approve only if you just started this from an
-            MCP client you trust. Access lasts until it is revoked or unused for 30 days.
-          </p>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Label>Returns to</Label>
+            <span className="min-w-0 font-mono text-[13px] break-all">{detail.redirect_host}</span>
+            <InfoTip label="Consent" align="end">
+              The name is the one the client gave itself. After you decide, your browser returns to{" "}
+              {detail.redirect_host}. Approve only if you just started this from an MCP client you trust. Access lasts
+              until it is revoked or unused for 30 days.
+            </InfoTip>
+          </div>
 
-          <div className="flex gap-3">
-            <Button variant="primary" className="flex-1 py-2" disabled={pending !== null} onClick={() => decide(true)}>
+          <div className="grid grid-cols-2 gap-3">
+            <Button variant="primary" disabled={pending !== null} onClick={() => decide(true)}>
               {pending === "approve" ? "Approving…" : "Approve"}
             </Button>
-            <Button className="flex-1 py-2" disabled={pending !== null} onClick={() => decide(false)}>
+            <Button className="h-10! rounded-button! text-[15px]!" disabled={pending !== null} onClick={() => decide(false)}>
               {pending === "deny" ? "Denying…" : "Deny"}
             </Button>
           </div>
         </div>
       )}
-    </div>
+    </AuthCard>
   );
 }

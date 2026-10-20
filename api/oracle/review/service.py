@@ -25,6 +25,7 @@ from oracle import audit
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.jobs.schemas import SuggestionOut
+from oracle.review import publish_gate
 from oracle.review.models import FEEDBACK_STATUSES, Comment, FeedbackItem, SectionReview
 from oracle.review.schemas import (
     CommentOut,
@@ -416,13 +417,14 @@ async def review_section(
     earlier version, becomes ``superseded``. A non-approved verdict opens a new item.
     """
     version = await get_version(session, doc, n)
-    await _get_section(session, version, section_key)
+    section = await _get_section(session, version, section_key)
     review = SectionReview(
         version_id=version.id,
         section_key=section_key,
         verdict=verdict,
         note=note,
         reviewer_id=principal.id,
+        section_hash=section.content_hash,
         created_at=_now(),
     )
     session.add(review)
@@ -682,12 +684,18 @@ async def resolution_report(session: AsyncSession, doc: str, n: int) -> Resoluti
 async def approve_version(
     session: AsyncSession, principal: "Principal", doc: str, n: int
 ) -> tuple[Document, DocumentVersion]:
-    """Stamp the version's ``approved_at`` (kept if already set); document -> approved."""
+    """Stamp the version's ``approved_at`` (kept if already set); document -> approved.
+
+    A PRD passes the publish gate first (raises ``publish_gate.PublishBlocked``).
+    """
     version = await get_version(session, doc, n)
-    document = await session.get(Document, version.document_id)
+    # The lock an import takes: no new version lands while the gate decides.
+    document = await session.get(Document, version.document_id, with_for_update=True)
+    await publish_gate.check(session, document, version)
     already = version.approved_at is not None
     if not already:
         version.approved_at = _now()
+        version.approved_by = principal.id
     previous_status = document.status
     document.status = "approved"
     await session.flush()

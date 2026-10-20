@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Ledger · baseline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#f3f5f7;--surface:#ffffff;--surface2:#eef1f4;--sunken:#e6eaee;--border:#d3d9e0;--border-strong:#aab4bf;--text:#111921;--text2:#384655;--text3:#55636f;--accent:#1d5bb8;--accent-hover:#174a97;--on-accent:#ffffff;--accent-soft:#e3ecfa;--accent-soft-text:#163f80;--focus:#1d5bb8;--highlight:#fff1b8;--highlight-text:#111921;--pass:#16653a;--pass-bg:#e1f2e7;--warn:#80460a;--warn-bg:#fbefd9;--crit:#a3202b;--crit-bg:#fbe3e4;--na:#4c5865;--na-bg:#e8ecf0;--info:#1d5bb8;--info-bg:#e3ecfa;--nav-bg:#e9edf1;--nav-text:#2f3c49;--nav-active-bg:#ffffff;--nav-active-text:#0b1219;--scrim:rgba(17,25,33,.55);color-scheme:light}
+@media (prefers-color-scheme: dark){:root{--bg:#0d1217;--surface:#141b22;--surface2:#1a232c;--sunken:#0a0e12;--border:#2a3541;--border-strong:#435161;--text:#e4e9ee;--text2:#b4c0cc;--text3:#93a1af;--accent:#6aa3ff;--accent-hover:#8cb8ff;--on-accent:#07111f;--accent-soft:#14284a;--accent-soft-text:#b5d0ff;--focus:#6aa3ff;--highlight:#4a3d0e;--highlight-text:#fff3c4;--pass:#6fd49b;--pass-bg:#0f2a1b;--warn:#f0b45e;--warn-bg:#2d2111;--crit:#ff8e96;--crit-bg:#36161a;--na:#a8b4c0;--na-bg:#1e2731;--info:#8cb8ff;--info-bg:#14284a;--nav-bg:#10161c;--nav-text:#b4c0cc;--nav-active-bg:#1f2a35;--nav-active-text:#ffffff;--scrim:rgba(0,0,0,.66);color-scheme:dark}}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+::placeholder{color:var(--text3);opacity:1}
+h1,h2,h3,h4,p,ul,ol,dl,dd,figure{margin:0}
+ul,ol{padding:0;list-style:none}
+a{color:inherit;text-decoration:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.num{font-variant-numeric:tabular-nums}
+
+body{font:13px/19px 'IBM Plex Sans', system-ui, sans-serif}
+.mono{font-family:'IBM Plex Mono', ui-monospace, monospace}
+.app{display:grid;grid-template-columns:216px 1fr;min-height:100vh}
+.side{background:var(--nav-bg);border-right:1px solid var(--border);padding:12px 10px;display:flex;flex-direction:column;gap:2px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;padding:4px 8px 14px;color:var(--text)}
+.brand .mark{width:20px;height:20px;border-radius:4px;background:var(--text);color:var(--bg);display:grid;place-items:center;font:600 11px 'IBM Plex Mono', ui-monospace, monospace}
+.side a{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border-radius:4px;color:var(--nav-text)}
+.side a .ic{opacity:.85}
+.side a[aria-current]{background:var(--nav-active-bg);color:var(--nav-active-text);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
+.side .count{margin-left:auto;font:500 11px/16px 'IBM Plex Mono', ui-monospace, monospace;padding:0 6px;border-radius:3px;background:var(--accent);color:var(--on-accent)}
+.side .cap{font:500 11px/16px 'IBM Plex Sans', system-ui, sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);padding:16px 8px 4px}
+.side .settings a{height:26px;color:var(--text2)}
+.top{height:44px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.crumbs{display:flex;align-items:center;gap:6px;color:var(--text2)}
+.crumbs .ic{width:12px;height:12px;color:var(--text3)}
+.crumbs b{color:var(--text);font-weight:600}
+.top .who{margin-left:auto;display:flex;gap:14px;align-items:center;color:var(--text2)}
+.top .who button{background:none;border:0;padding:0;color:var(--text2)}
+.main{min-width:0;display:flex;flex-direction:column}
+.content{padding:18px 20px 24px;min-width:0}
+.head{display:flex;align-items:flex-start;gap:16px;margin-bottom:14px}
+.head h1{font-size:20px;line-height:26px;font-weight:600;letter-spacing:-.01em}
+.head p{color:var(--text2);margin-top:2px}
+.head .actions{margin-left:auto;display:flex;gap:8px;flex-shrink:0}
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font-weight:500;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--text2)}
+.btn.sm{height:24px;padding:0 8px;font-size:12px}
+.btn[disabled]{background:var(--surface2);border-color:var(--border);color:var(--text3);cursor:not-allowed}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:4px;overflow:hidden}
+.seg button{border:0;background:var(--surface);height:26px;padding:0 10px;color:var(--text2)}
+.seg button[aria-pressed=true]{background:var(--text);color:var(--bg);font-weight:600}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.tabs button{border:0;background:none;padding:7px 10px;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;gap:6px;align-items:center}
+.tabs button[aria-selected=true]{color:var(--text);font-weight:600;border-color:var(--text)}
+.tabs .n{font:500 11px/16px 'IBM Plex Mono', ui-monospace, monospace;padding:0 5px;border-radius:3px;background:var(--surface2);color:var(--text2)}
+.badge{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 6px;border-radius:3px;font-size:12px;font-weight:500;white-space:nowrap}
+.badge .ic{width:12px;height:12px}
+.b-pass{background:var(--pass-bg);color:var(--pass)}.b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-crit{background:var(--crit-bg);color:var(--crit)}.b-na{background:var(--na-bg);color:var(--na)}.b-info{background:var(--info-bg);color:var(--info)}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:6px}
+.panel>h2,.panel .ph{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);font-size:11px;line-height:16px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text2)}
+.panel .ph .r{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:400}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:6px;background:var(--surface);margin-bottom:14px}
+.kpi{padding:10px 14px;border-left:1px solid var(--border)}
+.kpi:first-child{border-left:0}
+.kpi .l{color:var(--text2);font-size:12px}
+.kpi .v{font:500 22px/26px 'IBM Plex Mono', ui-monospace, monospace;margin-top:2px}
+.kpi .v small{font:400 12px 'IBM Plex Sans', system-ui, sans-serif;color:var(--text3);margin-left:6px}
+table.grid{width:100%;border-collapse:collapse}
+.grid th{font-size:11px;line-height:16px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);background:var(--surface2);white-space:nowrap}
+.grid td{padding:0 10px;height:32px;border-bottom:1px solid var(--border);vertical-align:middle}
+.grid tr:last-child td{border-bottom:0}
+.grid .goal td{background:var(--surface2);height:34px}
+.grid .goal td:nth-child(2){font-weight:600}
+.grid .feat td:nth-child(2){padding-left:34px;position:relative}
+.grid .feat td:nth-child(2)::before{content:"";position:absolute;left:18px;top:0;bottom:50%;width:9px;border-left:1px solid var(--border-strong);border-bottom:1px solid var(--border-strong)}
+.grid td.r,.grid th.r{text-align:right}
+.id{font:500 12px 'IBM Plex Mono', ui-monospace, monospace;color:var(--text2)}
+.muted{color:var(--text2)}
+.faint{color:var(--text3)}
+.conf{display:flex;align-items:center;gap:8px}
+.bar{width:64px;height:6px;border-radius:1px;background:var(--sunken);position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--text2)}
+.bar.low i{background:var(--crit)}.bar.med i{background:var(--warn)}.bar.high i{background:var(--pass)}
+.conf .t{font:500 12px 'IBM Plex Mono', ui-monospace, monospace;width:92px;white-space:nowrap}
+.lvl-low{color:var(--crit)}.lvl-med{color:var(--warn)}.lvl-high{color:var(--pass)}
+.flag td{background:var(--crit-bg);color:var(--crit)}
+.flag td .muted{color:var(--crit)}
+/* idea gaps */
+.cols{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start}
+.stack{display:flex;flex-direction:column;gap:12px}
+.brief{display:flex;gap:14px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-left:3px solid var(--accent);background:var(--surface);border-radius:4px;margin-bottom:14px}
+.brief q{quotes:none;font-size:14px;line-height:20px}
+.brief .meta{margin-left:auto;color:var(--text2);font-size:12px;white-space:nowrap}
+.steps{display:flex;gap:0;margin-left:auto;align-self:center;font-size:12px}
+.steps span{padding:3px 9px;border:1px solid var(--border);margin-left:-1px;color:var(--text2);background:var(--surface)}
+.steps span:first-child{border-radius:4px 0 0 4px}.steps span:last-child{border-radius:0 4px 4px 0}
+.steps .done{color:var(--text2)}
+.steps b{font-weight:inherit}
+.steps .cur{background:var(--text);color:var(--bg);border-color:var(--text);font-weight:600}
+.verdict{padding:12px;display:flex;gap:10px}
+.verdict .who{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--accent-soft-text);background:var(--accent-soft);padding:2px 6px;border-radius:3px;height:20px;white-space:nowrap}
+.verdict p{font-size:14px;line-height:20px}
+.rows>li{display:flex;gap:10px;padding:7px 12px;border-top:1px solid var(--border);align-items:flex-start}
+.rows>li:first-child{border-top:0}
+.rows .grow{flex:1;min-width:0}
+.rows .sub{color:var(--text2);font-size:12px;line-height:17px;margin-top:1px}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.vs div{background:var(--surface2);border-radius:4px;padding:6px 8px;font-size:12px;line-height:17px}
+.vs b{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);font-weight:600}
+.rank{font:600 12px/20px 'IBM Plex Mono', ui-monospace, monospace;width:18px;color:var(--text2)}
+.q{padding:10px 12px;border-top:1px solid var(--border)}
+.q:first-of-type{border-top:0}
+.q .qt{font-weight:600;display:flex;gap:8px}
+.q .why{color:var(--text2);font-size:12px;line-height:17px;margin:2px 0 6px 22px}
+.q textarea{width:calc(100% - 22px);margin-left:22px;display:block;border:1px solid var(--border-strong);background:var(--surface);border-radius:4px;padding:5px 8px;height:30px;resize:none;font-size:12.5px;line-height:18px}
+.q .del{display:flex;gap:4px;margin:6px 0 0 22px;flex-wrap:wrap}
+.chip{height:22px;padding:0 8px;border:1px solid var(--border);border-radius:3px;background:var(--surface2);font-size:12px;color:var(--text2)}
+.chip[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-soft-text);font-weight:600}
+.pfoot{display:flex;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface2);border-radius:0 0 6px 6px}
+.pfoot .note{color:var(--text2);font-size:12px;margin-right:auto}
+/* prd review */
+.doc3{display:grid;grid-template-columns:200px minmax(0,1fr) 332px;min-height:calc(100vh - 44px)}
+.outline{border-right:1px solid var(--border);padding:14px 10px;background:var(--surface)}
+.outline h2{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);padding:0 6px 6px}
+.outline li{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:4px;font-size:12.5px;line-height:17px}
+.outline li[aria-current]{background:var(--accent-soft);color:var(--accent-soft-text);font-weight:600}
+.outline .st{margin-left:auto;font:500 11px 'IBM Plex Mono', ui-monospace, monospace;color:var(--text3)}
+.outline li[aria-current] .st{color:var(--accent-soft-text)}
+.sd{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sd.ok{background:var(--pass)}.sd.cr{background:var(--crit)}.sd.rv{background:var(--warn)}.sd.no{border:1.5px solid var(--text3)}.sd.gen{background:var(--text3)}
+.docmain{padding:0;min-width:0;background:var(--bg)}
+.dtool{display:flex;align-items:center;gap:8px;padding:8px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.dtool .sp{flex:1}
+.sec{padding:16px 24px}
+.sechead{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.sechead h1{font-size:18px;line-height:24px;font-weight:600;width:100%;display:flex;gap:10px;align-items:center}
+.sechead dl{display:flex;gap:14px;font-size:12px;color:var(--text2)}
+.sechead dt{display:inline;color:var(--text3)}
+.sechead dd{display:inline;color:var(--text);margin-left:4px}
+.verdictbar{display:flex;gap:6px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.verdictbar .lbl{color:var(--text2);margin-right:4px}
+.verdictbar .r{margin-left:auto;color:var(--text2);font-size:12px}
+.body{max-width:720px;padding-top:12px;font-size:14px;line-height:21px}
+.body p{margin-bottom:10px}
+.reqs li{display:grid;grid-template-columns:44px 1fr;gap:8px;padding:8px 0;border-top:1px solid var(--border)}
+.reqs .rid{font:500 12px/21px 'IBM Plex Mono', ui-monospace, monospace;color:var(--text2)}
+.claim{background:var(--highlight);color:var(--highlight-text);box-shadow:0 0 0 2px var(--highlight);border-radius:2px}
+.ev{margin:8px 0 2px;border:1px solid var(--accent);border-radius:6px;background:var(--surface)}
+.ev .eh{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text2)}
+.ev .eh .x{margin-left:auto;border:0;background:none;color:var(--text2);padding:0;display:flex}
+.ev table{width:100%;border-collapse:collapse;font-size:12px;line-height:17px}
+.ev th{text-align:left;font-weight:500;color:var(--text3);padding:5px 10px;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+.ev td{padding:5px 10px;border-top:1px solid var(--border);vertical-align:top}
+.ev .foot{padding:7px 10px;border-top:1px solid var(--border);font-size:12px;color:var(--text2);display:flex;gap:8px;align-items:flex-start}
+.ev .foot .ic{color:var(--warn);flex-shrink:0;margin-top:1px}
+.side2{border-left:1px solid var(--border);background:var(--surface);min-width:0}
+.side2 .ph{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600}
+.side2 .ph small{font-weight:400;color:var(--text2);width:100%;font-size:12px}
+.mods li{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:8px 14px;border-bottom:1px solid var(--border)}
+.mods .mt{font-weight:600;font-size:12.5px}
+.mods .mw{grid-column:1/-1;color:var(--text2);font-size:12px;line-height:17px}
+.mods .mm{grid-column:1/-1;color:var(--warn);font-size:12px;line-height:17px}
+.mods .omit .mt{color:var(--text2);font-weight:500;text-decoration:line-through}
+.facts{padding:10px 14px;font-size:12px;line-height:17px;display:grid;grid-template-columns:auto 1fr;gap:4px 10px}
+.facts dt{color:var(--text3)}
+.side2 .pfoot{border-radius:0;background:var(--surface2)}
+/* runs inbox */
+.ri{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:calc(100vh - 44px)}
+.inbox{border-right:1px solid var(--border);background:var(--surface)}
+.inbox h2{display:flex;align-items:center;padding:10px 14px 4px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text3)}
+.inbox h2 .n{margin-left:6px;font-family:'IBM Plex Mono', ui-monospace, monospace}
+.inbox li{padding:7px 14px;border-left:2px solid transparent}
+.inbox li[aria-current]{background:var(--accent-soft);border-left-color:var(--accent)}
+.inbox li[aria-current] .sub{color:var(--accent-soft-text)}
+.inbox .t{font-weight:600;display:flex;gap:6px}
+.inbox .t .age{margin-left:auto;white-space:nowrap;font-weight:400;color:var(--text3);font-size:12px}
+.inbox li[aria-current] .age{color:var(--accent-soft-text)}
+.inbox .sub{color:var(--text2);font-size:12px}
+.inbox .empty{padding:2px 14px 6px;color:var(--text3);font-size:12px}
+.runh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.runh h1{font-size:18px;line-height:24px;font-weight:600}
+.runmeta{color:var(--text2);font-size:12px;margin:2px 0 12px}
+.cost{display:grid;grid-template-columns:auto auto auto 1fr;gap:4px 24px;align-items:end;padding:12px 14px}
+.cost .l{color:var(--text2);font-size:12px}
+.cost .v{font:500 18px/24px 'IBM Plex Mono', ui-monospace, monospace}
+.spend{grid-column:1/-1;margin-top:8px;height:8px;background:var(--sunken);border-radius:1px;position:relative}
+.spend i{position:absolute;inset:0 auto 0 0;background:var(--text2)}
+.spend .mk{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--text)}
+.spend .mk.c{background:var(--crit)}
+.spendlbl{grid-column:1/-1;display:flex;justify-content:space-between;font-size:11px;color:var(--text3);position:relative;height:16px}
+.spendlbl span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.roles{display:flex;gap:4px;flex-wrap:nowrap}
+.role{white-space:nowrap;font-size:11.5px;padding:0 6px;height:20px;line-height:20px;border-radius:3px;background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.cp{border-top:0}
+.cpbox{margin:0 0 0 0;padding:12px 14px;background:var(--warn-bg);border-top:1px solid var(--border)}
+.cpbox h3{font-size:13px;font-weight:600;display:flex;gap:8px;align-items:center;color:var(--text)}
+.cpbox .need{color:var(--text2);font-weight:400;font-size:12px}
+.cpbox ol{margin:8px 0;background:var(--surface);border:1px solid var(--border);border-radius:4px}
+.cpbox ol li{display:flex;gap:10px;padding:6px 10px;border-top:1px solid var(--border)}
+.cpbox ol li:first-child{border-top:0}
+.cpbox textarea{width:100%;height:44px;border:1px solid var(--border-strong);border-radius:4px;background:var(--surface);padding:6px 8px;resize:none}
+.cpbox .acts{display:flex;gap:8px;margin-top:8px}
+/* publish */
+.under{filter:saturate(.6)}
+.scrim{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center}
+.dlg{width:960px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 16px 40px rgba(17,25,33,.22)}
+.dlg header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.dlg header h2{font-size:16px;font-weight:600}
+.dlg header .x{margin-left:auto;border:0;background:none;color:var(--text2);display:flex;padding:4px}
+.dlgb{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.dlgb>section{padding:14px 18px}
+.dlgb>section+section{border-left:1px solid var(--border)}
+.dlgb h3{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text2);margin-bottom:8px;display:flex;gap:8px}
+.chk li{display:grid;grid-template-columns:20px 1fr auto;gap:2px 8px;padding:6px 0;border-top:1px solid var(--border);align-items:start}
+.chk li:first-child{border-top:0}
+.chk .ic{margin-top:2px}
+.chk .d{grid-column:2/-1;color:var(--text2);font-size:12px;line-height:17px}
+.s-pass{color:var(--pass)}.s-warning{color:var(--warn)}.s-critical{color:var(--crit)}.s-na{color:var(--na)}
+.block{border:1px solid var(--crit);border-radius:6px;margin-bottom:14px}
+.block li{padding:8px 10px;border-top:1px solid var(--border);display:grid;grid-template-columns:20px 1fr;gap:2px 8px}
+.block li:first-child{border-top:0}
+.block .ic{color:var(--crit);margin-top:2px}
+.block .k{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--crit)}
+.block .d{grid-column:2;color:var(--text2);font-size:12px;line-height:17px}
+.block .t{font-weight:600}
+.rec{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px;line-height:17px}
+.rec dt{color:var(--text3)}
+.dlg footer{display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--border);background:var(--surface2);border-radius:0 0 8px 8px}
+.dlg footer .why{margin-right:auto;color:var(--crit);font-weight:600;display:flex;gap:6px;align-items:center}
+.layers{display:flex;gap:6px;margin-bottom:14px;align-items:center;color:var(--text2);font-size:12px}
+.mtop{display:none}
+@media (max-width:720px){
+  .app{display:block}
+  .side{display:none}
+  .top{display:none}
+  .mtop{display:flex;align-items:center;gap:10px;height:48px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:2}
+  .mtop .btn{padding:0 8px}
+  .mtop .t{font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .content{padding:14px 12px 24px}
+  .head{flex-wrap:wrap}
+  .steps{margin-left:0}
+  .steps span:not(.cur){display:none}
+  .steps .cur{border-radius:4px}
+  .steps .cur::before{content:"Step "}
+  .steps .sn::after{content:" of 6 ·"}
+  .q textarea{height:48px}
+  .brief{flex-direction:column;align-items:flex-start;gap:4px}
+  .brief .meta{margin-left:0;white-space:normal}
+  .cols{display:block}
+  .cols>.stack+.stack{margin-top:12px}
+  .vs{grid-template-columns:1fr}
+  .pfoot{flex-wrap:wrap}
+  .pfoot .note{width:100%}
+  .doc3{display:block}
+  .outline{display:none}
+  .dtool{padding:8px 12px;flex-wrap:wrap}
+  .sec{padding:12px}
+  .sechead dl{flex-wrap:wrap;gap:4px 12px}
+  .verdictbar{flex-wrap:wrap}
+  .verdictbar .r{margin-left:0;width:100%}
+  .side2{border-left:0;border-top:1px solid var(--border);margin-top:4px}
+  .secpick{display:flex!important}
+  .ev table, .ev tbody, .ev tr, .ev td{display:block}
+  .ev thead{display:none}
+  .ev tr{border-top:1px solid var(--border);padding:6px 10px}
+  .ev td{border:0;padding:0}
+  .ev td:first-child{font-weight:600}
+}
+.secpick{display:none;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface);font-size:12.5px}
+.secpick .btn{margin-left:auto}
+
+</style>
+</head>
+<body class="">
+<div class="app">
+<aside class="side" aria-label="Oracle">
+  <div class="brand"><span class="mark">PO</span>Product Oracle</div>
+  <nav><a href="#" aria-current="page"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M5.5 5.5 7 10.5M10.5 5.5 9 10.5"/></svg>Baseline</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8h3l2-5 2 10 2-5h3"/></svg>Runs</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 1.5h5.5L12.5 4.5V14.5H4z"/><path d="M9.5 1.5V4.5H12.5M6 8h4.5M6 10.5h4.5"/></svg>PRDs</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5h10M3 8h7M3 12.5h4"/></svg>Priorities</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h5M5 8h6M9 12h5"/><circle cx="2" cy="4" r=".6"/></svg>Roadmap</a><a href="#"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9.5 4 3h8l2 6.5V13H2z"/><path d="M2 9.5h3.5l1 1.5h3l1-1.5H14"/></svg>Inbox<span class="count">4</span></a></nav>
+  <div class="cap" id="set">Settings</div>
+  <nav class="settings" aria-labelledby="set"><a href="#">Members</a><a href="#">Connections</a><a href="#">Claude accounts</a><a href="#">Sources</a><a href="#">Templates</a><a href="#">Themes</a></nav>
+</aside>
+<div class="main">
+  <header class="top"><nav class="crumbs" aria-label="Breadcrumb"><b>Baseline</b></nav><div class="who"><span>maya.k@quillfield.example</span><button type="button">Sign out</button></div></header>
+  <header class="mtop"><button class="btn" type="button" aria-label="Menu"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg></button><span class="t">Baseline</span></header>
+  <div class="content">
+  <div class="head"><div><h1>Baseline</h1><p>Goals, products and features the product is built on, each linked to its evidence. Snapshot 14 Oct 2026 · 6 sources.</p></div>
+  <div class="actions"><button class="btn primary" type="button"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>New product idea</button></div></div>
+  <div class="tabs" role="tablist"><button role="tab" aria-selected="true">Graph</button><button role="tab" aria-selected="false">Flagged<span class="n">1</span></button><button role="tab" aria-selected="false">Conflicts<span class="n">2</span></button><button role="tab" aria-selected="false">Proposals<span class="n">3</span></button></div>
+  <div class="kpis"><div class="kpi"><div class="l">Confirmed goals</div><div class="v">3<small>of 4</small></div></div><div class="kpi"><div class="l">Features traced to a goal</div><div class="v">5<small>of 6</small></div></div><div class="kpi"><div class="l">Evidence items</div><div class="v">86</div></div><div class="kpi"><div class="l">Low-confidence links</div><div class="v">2</div></div></div>
+  <div class="panel"><table class="grid"><thead><tr><th style="width:44px">Id</th><th>Goal and features serving it</th><th>Target / product</th><th>Horizon</th><th>Owner</th><th>Status</th><th>Confidence</th><th class="r">Evidence</th></tr></thead>
+  <tbody><tr class="goal"><td class="id">G1</td><td>Raise clinic net revenue retention to 92%</td><td class="muted">NRR 92% (now 86%)</td><td class="muted">Next 2 quarters</td><td class="muted">Ines R.</td><td><span class="badge b-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg>Confirmed</span></td><td><span class="conf"><span class="bar high"><i style="width:84%"></i></span><span class="t lvl-high">High 84%</span></span></td><td class="r mono">23</td></tr><tr class="feat"><td></td><td>Automated reminder SMS</td><td class="muted">Desk</td><td class="muted" colspan="2">Shipped</td><td></td><td><span class="conf"><span class="bar high"><i style="width:78%"></i></span><span class="t lvl-high">High 78%</span></span></td><td class="r mono">9</td></tr><tr class="feat"><td></td><td>Stock reorder suggestions</td><td class="muted">Stock</td><td class="muted" colspan="2">Proposed</td><td></td><td><span class="conf"><span class="bar low"><i style="width:31%"></i></span><span class="t lvl-low">Low 31%</span></span></td><td class="r mono">2</td></tr><tr class="goal"><td class="id">G2</td><td>Cut front-desk time per appointment from 6 to 3 minutes</td><td class="muted">3 min median (now 6.2)</td><td class="muted">Current quarter</td><td class="muted">Tomas B.</td><td><span class="badge b-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg>Confirmed</span></td><td><span class="conf"><span class="bar med"><i style="width:66%"></i></span><span class="t lvl-med">Medium 66%</span></span></td><td class="r mono">31</td></tr><tr class="feat"><td></td><td>Online booking widget</td><td class="muted">Desk</td><td class="muted" colspan="2">Shipped</td><td></td><td><span class="conf"><span class="bar high"><i style="width:88%"></i></span><span class="t lvl-high">High 88%</span></span></td><td class="r mono">14</td></tr><tr class="feat"><td></td><td>Check-in from the waiting room</td><td class="muted">Desk</td><td class="muted" colspan="2">In build</td><td></td><td><span class="conf"><span class="bar med"><i style="width:61%"></i></span><span class="t lvl-med">Medium 61%</span></span></td><td class="r mono">6</td></tr><tr class="feat"><td></td><td>Automated reminder SMS</td><td class="muted">Desk</td><td class="muted" colspan="2">Shipped</td><td></td><td><span class="conf"><span class="bar med"><i style="width:57%"></i></span><span class="t lvl-med">Medium 57%</span></span></td><td class="r mono">4</td></tr><tr class="goal"><td class="id">G3</td><td>Reach 400 paying clinics in the UK by end of 2027</td><td class="muted">400 clinics (now 238)</td><td class="muted">12–24 months</td><td class="muted">Ines R.</td><td><span class="badge b-pass"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg>Confirmed</span></td><td><span class="conf"><span class="bar med"><i style="width:58%"></i></span><span class="t lvl-med">Medium 58%</span></span></td><td class="r mono">19</td></tr><tr class="feat"><td></td><td>Multi-site dashboard</td><td class="muted">Desk</td><td class="muted" colspan="2">Planned</td><td></td><td><span class="conf"><span class="bar med"><i style="width:64%"></i></span><span class="t lvl-med">Medium 64%</span></span></td><td class="r mono">5</td></tr><tr class="feat"><td></td><td>Online booking widget</td><td class="muted">Desk</td><td class="muted" colspan="2">Shipped</td><td></td><td><span class="conf"><span class="bar med"><i style="width:70%"></i></span><span class="t lvl-med">Medium 70%</span></span></td><td class="r mono">7</td></tr><tr class="goal"><td class="id">G4</td><td>Keep support tickets under 1.5 per clinic per month</td><td class="muted">1.5 / clinic / month (now 2.3)</td><td class="muted">Next 2 quarters</td><td class="muted">Unassigned</td><td><span class="badge b-warn"><svg class="ic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.2M8 11.6v.1"/></svg>Proposed</span></td><td><span class="conf"><span class="bar low"><i style="width:34%"></i></span><span class="t lvl-low">Low 34%</span></span></td><td class="r mono">4</td></tr><tr class="feat"><td></td><td class="faint" colspan="7">No features serve this goal yet. Confirm the goal to trace features to it.</td></tr>
+  <tr class="flag"><td class="id" style="color:inherit">—</td><td><b>Legacy fax import</b></td><td>Desk</td><td colspan="4">Serves no confirmed goal. 3 tickets in 12 months.</td><td class="r mono">3</td></tr>
+  </tbody></table></div>
+</div>
+</div></div>
+</body>
+</html>

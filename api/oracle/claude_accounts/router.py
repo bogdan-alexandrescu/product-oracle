@@ -448,7 +448,10 @@ async def clear_claude_fallback(principal: Owner, db: TenantDB) -> None:
 
 @router.post("/sweep", response_model=SweepOut)
 async def sweep_claude_accounts(principal: Owner, db: TenantDB) -> SweepOut:
-    """Run the sweep now: reclaim holds, refresh credentials, read usage."""
+    """Run the sweep now: reclaim holds, refresh credentials, read usage. Within five
+    minutes of the last sweep's completion only the holds are reclaimed
+    (``sweep_lease.not_due``): Claude's usage endpoint allows about five calls per five
+    minutes per account."""
     return SweepOut(result=await run_sweep(principal.tenant_id))
 
 
