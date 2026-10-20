@@ -72,6 +72,7 @@ from oracle.sources.models import (  # noqa: E402
     SourceItem,
     SourceItemVersion,
 )
+from oracle.swarm.learned import LearnedFeature  # noqa: E402
 from oracle.templates.models import Template, TemplateVersion, Theme  # noqa: E402
 from oracle.tenant_settings import TenantSetting  # noqa: E402
 from oracle.v2.models import (  # noqa: E402
@@ -137,6 +138,7 @@ __all__ = [
     "FeedbackItem",
     "Invite",
     "KnowledgeGap",
+    "LearnedFeature",
     "LlmJob",
     "LlmSuggestion",
     "ModuleDefinition",

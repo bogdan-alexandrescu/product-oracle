@@ -178,6 +178,7 @@ from oracle.swarm import (
     WorkflowSpec,
     WorkflowStatus,
     get_runtime,
+    load_learned,
     redact,
 )
 from oracle.swarm.runtime import MERGE, NOT_YET, not_reached
@@ -667,6 +668,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             if n not in notes:
                 notes.append(n)
     if run.status == "draft" or not segments or not any(s.swarm_workflow_id for s in segments):
+        await load_learned(runtime)
         notes += [n for n in runtime.notes() if n not in notes]
     return RunOut(
         **_summary(run, refs, waiting, segments).model_dump(),

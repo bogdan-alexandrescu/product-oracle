@@ -1,4 +1,4 @@
-"""Migration 0018_citation_confidence: citations keep what the writer computed per
+"""Migration 0019_citation_confidence: citations keep what the writer computed per
 citation (the source item it read, its confidence 0-1 or a note, the low-confidence
 flag). Additive; the downgrade drops the columns again.
 
@@ -17,8 +17,8 @@ from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0018_citation_confidence"
-PREVIOUS = "0017_citation_source_oracle"
+REVISION = "0019_citation_confidence"
+PREVIOUS = "0018_runtime_features"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_conf")

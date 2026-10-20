@@ -152,7 +152,7 @@ class Citation(TenantScoped, Base):
     title: Mapped[str | None] = mapped_column(Text)
     excerpt: Mapped[str | None] = mapped_column(Text)
     retrieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # What the writer computed for the citation (migration 0018_citation_confidence). The
+    # What the writer computed for the citation (migration 0019_citation_confidence). The
     # source item it read, when the company has that item; null otherwise.
     item_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("source_items.id", ondelete="SET NULL"), index=True

@@ -13,11 +13,9 @@ migration instead of queueing every reader behind it, and the next start tries a
 
 The downgrade drops the four columns: what they held is lost, the citations are kept.
 
-Chain: another open branch also adds a 0018 (runtime_features) on 0017; whichever merges
-second re-chains its revision onto the other.
 
-Revision ID: 0018_citation_confidence
-Revises: 0017_citation_source_oracle
+Revision ID: 0019_citation_confidence
+Revises: 0018_runtime_features
 """
 
 from collections.abc import Sequence
@@ -25,8 +23,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0018_citation_confidence"
-down_revision: str | None = "0017_citation_source_oracle"
+revision: str = "0019_citation_confidence"
+down_revision: str | None = "0018_runtime_features"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
