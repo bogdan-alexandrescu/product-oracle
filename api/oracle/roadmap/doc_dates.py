@@ -971,9 +971,7 @@ async def occurrences_for_version(
 ) -> list[Mark]:
     """Every date occurrence of a stored roadmap version, re-checked now."""
     if prd is None:
-        prd = await prd_of(
-            db, version.document_id, version.source_version_id, version.front_matter
-        )
+        prd = await prd_of(db, version.document_id, version.source_version_id, version.front_matter)
     return await check(db, sections, prd, title=version_title(version), ref=version_day(version))
 
 
