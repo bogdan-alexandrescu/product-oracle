@@ -11535,6 +11535,8 @@ export interface components {
              * @default []
              */
             expand: components["schemas"]["ExpandOut"][];
+            /** State */
+            state?: string | null;
         };
         /** SnapshotCreate */
         SnapshotCreate: {

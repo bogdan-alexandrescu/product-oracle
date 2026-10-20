@@ -36413,6 +36413,17 @@
             "type": "array",
             "title": "Expand",
             "default": []
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
           }
         },
         "type": "object",
