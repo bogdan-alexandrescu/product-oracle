@@ -533,10 +533,13 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     version?.warnings.filter((w) => w.code === "locked_section_changed").flatMap((w) => w.section_keys) ?? [],
   );
   // O4 'document dates': a roadmap's dates that rest on no verified basis now, by section.
-  const dateMarks = new Map<string, DateMarkOut[]>();
-  for (const m of version?.date_marks ?? []) {
-    if (m.label) dateMarks.set(m.section_key, [...(dateMarks.get(m.section_key) ?? []), m]);
-  }
+  const dateMarks = useMemo(() => {
+    const bySection = new Map<string, DateMarkOut[]>();
+    for (const m of version?.date_marks ?? []) {
+      if (m.label) bySection.set(m.section_key, [...(bySection.get(m.section_key) ?? []), m]);
+    }
+    return bySection;
+  }, [version]);
   const titleMarks = (version?.date_marks ?? []).filter((m) => m.label && m.where === "title");
   // Owner, 2026-10-20: a roadmap version cannot be approved while a date is marked.
   const flaggedDates = [

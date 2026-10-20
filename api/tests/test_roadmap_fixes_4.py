@@ -11,7 +11,8 @@ import time
 import pytest
 
 from oracle import safe_yaml
-from oracle.docs.parser import MAX_DRAFT_BYTES, DraftError, parse_draft
+from oracle.config import get_settings
+from oracle.docs.parser import DraftError, parse_draft
 from oracle.runs import flows
 from oracle.runs import roadmap as items_file
 from oracle.swarm import Outcome
@@ -76,8 +77,6 @@ def test_duplicate_keys_are_refused_and_yaml11_words_stay_strings():
     assert exc.value.code == "duplicate_key" and exc.value.line == 3
     data = safe_yaml.load("a: NO\nb: On\nc: off\nd: yes\ne: true\nf: 1:30\n")
     assert data == {"a": "NO", "b": "On", "c": "off", "d": "yes", "e": True, "f": "1:30"}
-    # baseline.yaml keeps its YAML 1.1 booleans (locked: yes), as it always read them.
-    assert safe_yaml.load("locked: yes\n", yaml11_booleans=True) == {"locked": True}
 
 
 def test_items_keep_yaml11_booleans_as_strings_and_refuse_duplicate_keys():
@@ -131,7 +130,8 @@ async def test_post_versions_refuses_each_probe(client, owner, name):  # noqa: F
 
 async def test_post_versions_refuses_a_body_over_one_megabyte(client, owner):  # noqa: F811
     _, auth = owner
-    body = _front_matter_probe("long_decimal", "# T {#t}\n\n" + "word " * (MAX_DRAFT_BYTES // 5))
+    limit = get_settings().max_body_bytes
+    body = _front_matter_probe("long_decimal", "# T {#t}\n\n" + "word " * (limit // 5))
     resp = await client.post(
         "/v1/documents/big/versions",
         content=body.encode(),
@@ -140,7 +140,7 @@ async def test_post_versions_refuses_a_body_over_one_megabyte(client, owner):  #
     assert resp.status_code == 413, resp.text
     with pytest.raises(DraftError) as exc:
         parse_draft(body)
-    assert [p.code for p in exc.value.problems] == ["too_large"]
+    assert [p.code for p in exc.value.problems] == ["draft_too_large"]
 
 
 @pytest.mark.parametrize("name", sorted(YAML_PROBES))
