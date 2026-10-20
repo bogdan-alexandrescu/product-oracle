@@ -14,7 +14,7 @@ import pytest
 from oracle import crypto
 from oracle.connections import oauth, service
 from oracle.connections.models import Connection
-from oracle.connections.providers import DRIVE_FILE, PROVIDERS
+from oracle.connections.providers import DRIVE_READONLY, PROVIDERS
 from oracle.tenancy import tenant_session
 from tests.connection_helpers import (
     add_connection,
@@ -230,7 +230,7 @@ async def _oauth_conn(tenant_id, user_id, minutes: int, refresh: str | None = "r
     bundle = {"access_token": "a1", "refresh_token": refresh}
     return await add_connection(
         tenant_id, user_id, "google", auth_mode="oauth", account_id="g-1",
-        bundle=bundle, expires_at=_soon(minutes), scopes=["openid", "email", DRIVE_FILE],
+        bundle=bundle, expires_at=_soon(minutes), scopes=["openid", "email", DRIVE_READONLY],
     )  # fmt: skip
 
 
