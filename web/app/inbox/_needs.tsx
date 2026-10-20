@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { Button, Chip, CostFigure, DataTable, Icon, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
+import { sectionHref } from "@/lib/section-link";
 
 import {
   CANCEL_AGAIN_CONFIRM,
@@ -153,8 +154,7 @@ export function feedbackWaits(d: InboxDocument): { parts: string[]; verb: string
 /** The latest version, its review panel on the open feedback, at the first open item's section. */
 export function feedbackHref(d: InboxDocument): string {
   if (!d.latest_version) return `/documents/${d.slug}`;
-  const at = d.first_section_key ? `#${encodeURIComponent(d.first_section_key)}` : "";
-  return `/documents/${d.slug}/v/${d.latest_version}?feedback=open${at}`;
+  return sectionHref(d.slug, d.latest_version, d.first_section_key, { feedback: "open" });
 }
 
 const path = (id: string) => ({ params: { path: { run_id: id } } });
