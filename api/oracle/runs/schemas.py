@@ -255,6 +255,15 @@ class CheckpointOut(BaseModel):
     console: ConsoleAnswer | None = None
 
 
+class RunProgress(BaseModel):
+    """Segments done of the run's total, and what it does now: Home's In flight row."""
+
+    done: int
+    total: int
+    # The segment under way, else the next to run; None once every segment is done.
+    now: str | None = None
+
+
 class RunSummary(BaseModel):
     id: uuid.UUID
     flow: Flow
@@ -307,6 +316,8 @@ class RunSummary(BaseModel):
     # failing (the error's class, never what the agents wrote); Retry tries again.
     import_failed: str | None = None
     can_retry_import: bool = False
+    # Set by GET /v1/runs and GET /v1/runs/{id}; None where a summary is embedded (inbox).
+    progress: RunProgress | None = None
 
 
 class CancelAgain(BaseModel):

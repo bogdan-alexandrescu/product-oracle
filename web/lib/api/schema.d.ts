@@ -1513,7 +1513,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Entity Revisions */
+        /**
+         * List Entity Revisions
+         * @description The entity's revisions, newest first; ``limit`` keeps only the newest (Home's trend).
+         */
         get: operations["list_entity_revisions"];
         put?: never;
         post?: never;
@@ -10950,6 +10953,7 @@ export interface components {
              * @default false
              */
             can_retry_import: boolean;
+            progress?: components["schemas"]["RunProgress"] | null;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
             snapshot_id?: string | null;
@@ -10990,6 +10994,18 @@ export interface components {
             /** Theme */
             theme?: string | null;
             knobs?: components["schemas"]["KnobsIn"] | null;
+        };
+        /**
+         * RunProgress
+         * @description Segments done of the run's total, and what it does now: Home's In flight row.
+         */
+        RunProgress: {
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+            /** Now */
+            now?: string | null;
         };
         /** RunSummary */
         RunSummary: {
@@ -11076,6 +11092,7 @@ export interface components {
              * @default false
              */
             can_retry_import: boolean;
+            progress?: components["schemas"]["RunProgress"] | null;
         };
         /**
          * RuntimeFeatures
@@ -16296,7 +16313,9 @@ export interface operations {
     };
     list_entity_revisions: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number | null;
+            };
             header?: never;
             path: {
                 entity_id: string;
@@ -19084,6 +19103,7 @@ export interface operations {
                 document_id?: string | null;
                 gap_id?: string | null;
                 status?: ("draft" | "asked" | "answered" | "deferred" | "delegated" | "researching" | "withdrawn") | null;
+                asked_to?: "me" | null;
                 limit?: number;
                 offset?: number;
             };

@@ -5357,6 +5357,7 @@
           "baseline"
         ],
         "summary": "List Entity Revisions",
+        "description": "The entity's revisions, newest first; ``limit`` keeps only the newest (Home's trend).",
         "operationId": "list_entity_revisions",
         "security": [
           {
@@ -5375,6 +5376,24 @@
               "type": "string",
               "format": "uuid",
               "title": "Entity Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 500,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
             }
           }
         ],
@@ -10537,6 +10556,23 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "name": "asked_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "me",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asked To"
             }
           },
           {
@@ -34370,6 +34406,16 @@
             "title": "Can Retry Import",
             "default": false
           },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "knobs": {
             "$ref": "#/components/schemas/KnobsOut"
           },
@@ -34563,6 +34609,36 @@
         },
         "type": "object",
         "title": "RunPatch"
+      },
+      "RunProgress": {
+        "properties": {
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "now": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Now"
+          }
+        },
+        "type": "object",
+        "required": [
+          "done",
+          "total"
+        ],
+        "title": "RunProgress",
+        "description": "Segments done of the run's total, and what it does now: Home's In flight row."
       },
       "RunSummary": {
         "properties": {
@@ -34820,6 +34896,16 @@
             "type": "boolean",
             "title": "Can Retry Import",
             "default": false
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

@@ -139,13 +139,16 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     finished_at: r.finished_at,
     waiting_on: r.waiting_on,
     error: r.error,
+    stuck: r.stuck,
     can_retry: r.can_retry,
     can_stop_cancelling: r.can_stop_cancelling,
     can_retry_lookup: r.can_retry_lookup,
     cancel_again: r.cancel_again,
     can_dismiss_overrun: r.can_dismiss_overrun,
+    searching: r.searching,
     import_failed: r.import_failed,
     can_retry_import: r.can_retry_import,
+    progress: progressOf(r),
   };
 }
 
@@ -189,7 +192,14 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
   }));
 }
 
+/** Segments done of the total and what the run does now, as GET /v1/runs serves them. */
+function progressOf(r: RunOut): Schemas["RunProgress"] {
+  const now = r.segments.find((s) => s.status === "running") ?? r.segments.find((s) => s.status === "pending");
+  return { done: r.segments.filter((s) => s.status === "succeeded").length, total: r.segments.length, now: now?.title ?? null };
+}
+
 function refresh(r: RunOut) {
+  r.progress = progressOf(r);
   r.spent_usd = round2(r.segments.reduce((sum, s) => sum + s.cost_usd, 0));
   r.waiting_on = r.checkpoints.find((c) => c.status === "pending")?.kind ?? null;
   for (const c of r.checkpoints) c.can_decide = c.status === "pending";
@@ -314,8 +324,10 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
         segment_title: r.segments.find((s) => s.seq === c.segment_seq)?.title ?? null,
       })),
   );
-  const approvals = ctx.db.runs.filter((r) => r.status === "awaiting_approval").map(summary);
-  const overruns = ctx.db.runs.filter((r) => r.status === "paused_overrun").map(summary);
+  // The inbox embeds summaries without their progress, as the API does.
+  const bare = (r: RunOut) => ({ ...summary(r), progress: null });
+  const approvals = ctx.db.runs.filter((r) => r.status === "awaiting_approval").map(bare);
+  const overruns = ctx.db.runs.filter((r) => r.status === "paused_overrun").map(bare);
   const byDoc = new Map<string, FeedbackRow[]>();
   for (const f of ctx.feedback.filter((x) => x.status === "open").sort((a, b) => b.created_at.localeCompare(a.created_at))) {
     byDoc.set(f.document_id, [...(byDoc.get(f.document_id) ?? []), f]);
@@ -342,15 +354,19 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   });
   // Runs whose output Oracle stopped trying to import (owners: Retry).
   const imports = ctx.db.runs.filter((r) => r.can_retry_import && !FINAL.includes(r.status)).map(summary);
+  // Runs that wait on their owner (stuck: Retry, Stop cancelling, Retry lookup, Cancel again,
+  // Dismiss), and work given up on that is still looked for (shown only, not in the total).
+  const lookups = ctx.db.runs.filter((r) => r.stuck).map(summary);
+  const searches = ctx.db.runs.filter((r) => r.searching).map(summary);
   return {
     checkpoints,
     approvals,
     overruns,
-    lookups: [],
-    searches: [],
+    lookups,
+    searches,
     imports,
     feedback,
-    total: checkpoints.length + approvals.length + overruns.length + imports.length + feedback.length,
+    total: checkpoints.length + approvals.length + overruns.length + lookups.length + imports.length + feedback.length,
   };
 }
 
@@ -535,6 +551,13 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       if (c.status === "pending") Object.assign(c, { status: "skipped", note: "Run cancelled.", decided_at: ctx.now() });
     }
     finish(ctx, r, "cancelled");
+    // A run cancelled from the Inbox no longer waits on its lost submission or its 404s.
+    Object.assign(r, { can_retry: false, can_stop_cancelling: false, can_retry_lookup: false, stuck: null });
+    return done();
+  }
+  if (action === "retry" && m === "POST") {
+    if (!r.can_retry) return fail(409, "nothing to retry: no lost submission of this run is past the lookup cap");
+    Object.assign(r, { can_retry: false, stuck: null });
     return done();
   }
   if (action === "stop-cancelling" && m === "POST") {
@@ -691,4 +714,29 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 
   for (const r of db.runs) refresh(r);
   return db;
+}
+
+/**
+ * The large-company scenario (po-mock-scenario=large): `count` more active runs, cloned from
+ * the seeded run that waits on a checkpoint; every fifth still waits on one (an Inbox
+ * line), the others are running their second segment.
+ */
+export function enlargeRuns(db: RunsDb, uuid: () => string, count: number) {
+  const model = db.runs.find((r) => r.status === "awaiting_checkpoint")!;
+  for (let i = 0; i < count; i++) {
+    const r: RunOut = JSON.parse(JSON.stringify(model));
+    r.id = uuid();
+    r.document_slug = `${model.document_slug}-${i + 1}`;
+    r.created_at = new Date(Date.parse(model.created_at) - (i + 1) * 3600_000).toISOString();
+    for (const s of r.segments) s.id = uuid();
+    if (i % 5 === 0) {
+      for (const c of r.checkpoints) Object.assign(c, { id: uuid(), run_id: r.id });
+    } else {
+      r.checkpoints = [];
+      r.status = "running";
+      r.segments[1].status = "running";
+    }
+    refresh(r);
+    db.runs.push(r);
+  }
 }
