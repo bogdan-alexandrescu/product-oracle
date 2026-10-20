@@ -105,3 +105,21 @@ test("spec: a PRD's sections carry no spec state", async ({ page }) => {
   await page.getByRole("tab", { name: /^Sources/ }).filter({ visible: true }).click();
   await expect(page.getByTestId("added-sources")).toHaveCount(0);
 });
+
+// Owner decision (2026-10-20): a body's image loads only when Oracle stores it; a remote
+// image is a link with its alt text and host, and the browser never contacts that host.
+test("spec: a remote image is a link, a stored image still renders", async ({ page }) => {
+  const outside: string[] = [];
+  await page.route("https://example.com/**", (route) => {
+    outside.push(route.request().url());
+    return route.abort();
+  });
+  await login(page);
+  await page.goto(`${BRIEF}/v/2`);
+  const rollout = await openSection(page, "rollout-notes");
+  const link = rollout.getByRole("link", { name: "chart (example.com)" });
+  await expect(link).toHaveAttribute("href", "https://example.com/chart.png");
+  await expect(rollout.locator('img[src*="example.com"]')).toHaveCount(0);
+  await expect(rollout.locator('img[src="/uploads/rollout.png"]')).toHaveCount(1);
+  expect(outside).toEqual([]);
+});

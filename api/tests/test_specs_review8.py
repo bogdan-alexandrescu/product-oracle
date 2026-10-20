@@ -15,6 +15,7 @@ from tests.test_specs_review2 import generated
 from tests.test_specs_review3 import _edit
 from tests.test_specs_review7 import _after_anchor
 
+
 @pytest.fixture
 def runtime():
     fake = FakeRuntime()
@@ -82,3 +83,15 @@ async def test_an_edit_whose_markdown_parse_is_too_slow_is_refused(client, runti
     )
     assert resp.status_code == 422, resp.text
     assert "too_slow" in resp.text
+
+
+def test_exports_render_a_remote_image_as_a_link_and_a_stored_image_as_an_image():
+    from oracle.export import render
+
+    for md in (render._markdown(), render._themed_markdown(False)):
+        remote = md.render("![chart](https://example.com/c.png)")
+        assert "<img" not in remote
+        assert '<a href="https://example.com/c.png"' in remote
+        assert "chart (example.com)" in remote
+        assert "<img" in md.render("![stored](/uploads/a.png)")
+        assert "<img" not in md.render("![x](//evil.io/a.png)")
