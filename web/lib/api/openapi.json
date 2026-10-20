@@ -3228,7 +3228,7 @@
             "description": "folder is not a Drive folder id"
           },
           "403": {
-            "description": "Not a person (an API token without a user)"
+            "description": "Not a person (an API token without a user), or a read-only credential (oracle:read)"
           },
           "404": {
             "description": "Not one of your Google connections"

@@ -15305,7 +15305,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not a person (an API token without a user) */
+            /** @description Not a person (an API token without a user), or a read-only credential (oracle:read) */
             403: {
                 headers: {
                     [name: string]: unknown;
