@@ -648,7 +648,11 @@ async def apply_refinement(
     resolutions = [r for r in resolutions if uuid.UUID(r["feedback_id"]) in open_items]
     markdown = compose_markdown(base.front_matter, sections, replace, resolutions)
     try:
-        result = await docs_service.import_draft(db, document.slug, markdown, principal)
+        # A roadmap's dates are checked in the sections this revision changes only (not
+        # the title): a flagged date elsewhere is the previous version's, marked there.
+        result = await docs_service.import_draft(
+            db, document.slug, markdown, principal, date_sections=set(replace)
+        )
     except docs_service.DraftError as e:
         await db.rollback()
         raise JobError(422, f"the revised draft does not import: {e}") from e

@@ -5,7 +5,7 @@ read, ``[{"external_id": ..., "reason": ...}]``. A Google Doc that was unshared 
 access was removed is reported here, per item, instead of failing the whole source.
 
 Revision ID: 0016_source_unavailable_items
-Revises: 0014_blockers_snapshot
+Revises: 0016_roadmap
 """
 
 from collections.abc import Sequence
@@ -15,7 +15,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0016_source_unavailable_items"
-down_revision: str | None = "0014_blockers_snapshot"
+down_revision: str | None = "0016_roadmap"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

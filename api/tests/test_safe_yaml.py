@@ -343,11 +343,15 @@ async def test_template_validate_route_refuses_a_probe(client):
     assert "invalid_front_matter" in {p["code"] for p in resp.json()["problems"]}
 
 
-@pytest.mark.parametrize("name", ["deep_sequence", "billion_laughs", "nan"])
-def test_roadmap_items_refuse_probes(name):
+@pytest.mark.parametrize(
+    ("name", "code"),
+    [("deep_sequence", "too_deep"), ("billion_laughs", "yaml_alias"), ("nan", "non_finite_number")],
+)
+def test_roadmap_items_refuse_probes(name, code):
+    # The refusal's code (SafeYamlError.code) names why, for the run's items check.
     check, exc, took = _timed(roadmap.check_items, REFUSED[name][0] + "items: []\n")
     assert exc is None and took < FAST
-    assert [p["code"] for p in check.problems] == ["invalid_yaml"]
+    assert [p["code"] for p in check.problems] == [code]
 
 
 def test_roadmap_items_bad_date_is_invalid_yaml_not_a_crash():

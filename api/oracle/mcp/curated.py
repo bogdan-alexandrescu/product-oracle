@@ -7,6 +7,7 @@ run-token scopes apply exactly as for the generated tools.
 """
 
 import copy
+import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -183,7 +184,22 @@ async def _document_markdown(app, caller, ops, args) -> types.CallToolResult:
         version = resp.json().get("latest_version")
         if version is None:
             raise ToolError(f"Document {doc} has no versions yet.")
-    return to_result(await call_operation(app, caller, ops["markdown"], {"doc": doc, "n": version}))
+    resp = await call_operation(app, caller, ops["markdown"], {"doc": doc, "n": version})
+    if not resp.ok:
+        return to_result(resp)
+    markdown = resp.content.decode("utf-8", "replace")
+    marks: list[dict[str, Any]] = []
+    if "<!-- oracle: date " in markdown:
+        # O4 'document dates': the flagged dates beside the markdown, as the view lists them.
+        full = await call_operation(app, caller, ops["version"], {"doc": doc, "n": version})
+        if full.ok:
+            marks = [m for m in full.json().get("date_marks") or [] if m.get("label")]
+    content = [types.TextContent(text=markdown)]
+    if marks:
+        content.append(types.TextContent(text=json.dumps({"date_marks": marks})))
+    return types.CallToolResult(
+        content=content, structured_content={"markdown": markdown, "date_marks": marks}
+    )
 
 
 _PUSH_DRAFT_SCHEMA = {
@@ -330,11 +346,15 @@ CURATED: tuple[Curated, ...] = (
         name="get_document_markdown",
         description=(
             "Read a document version as markdown (the latest version unless one is given). "
-            "Sections approved in review should not be changed in a new draft."
+            "Sections approved in review should not be changed in a new draft. In a roadmap, "
+            "a date that rests on no verified schedule basis has '<!-- oracle: date "
+            "unverified -->' or '<!-- oracle: date withdrawn -->' after it, and date_marks "
+            "lists them: the next draft must drop such a date or name a verified basis."
         ),
         needs={
             "document": _by("GET", ("get_document",)),
             "markdown": _by("GET", ("get_version_markdown",)),
+            "version": _by("GET", ("get_version",)),
         },
         schema=lambda ops: copy.deepcopy(_DOC_MARKDOWN_SCHEMA),
         run=_document_markdown,

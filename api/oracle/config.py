@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     # <domain>'; "include_and_flag" pulls it in and lists it as 'Owned outside <domain>'.
     # Docs picked one by one are always pulled in. Owner, 2026-10-20 (S5): skip.
     drive_docs_owned_outside: Literal["skip", "include_and_flag"] = "skip"
+    # Two-way tracker sync (E1, CR-11): Oracle writing epics and issues to Linear or Jira.
+    # Off, and stays off until a connector is verified end to end on an authorized
+    # account; with it off Oracle makes no tracker writes and the read-only alignment
+    # report is the path. No connector is built yet, so on still writes nothing (501).
+    tracker_two_way_enabled: bool = False
     # Untrusted YAML (drafts' front matter, baseline.yaml, run files) is refused above this
     # many bytes (oracle.safe_yaml); request bodies that carry it are capped at
     # max_body_bytes (413).
