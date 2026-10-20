@@ -79,7 +79,9 @@ return once Oracle has read an answer that counts. The hold is decided just befo
 run token's write runs (never for a read, initialize or tools/list): Oracle's records are
 read and released first, then a review step no checkpoint stands for yet is read from
 SwarmCloud (:func:`run_token_hold`; one read shared by concurrent writes, bounded by
-``HOLD_READ_SECONDS``; reached in any state, not listed or not read, it holds; a
+``HOLD_READ_SECONDS``; reached once the step it depends on succeeded, whatever its own
+row says, and in any state but parked on that unfinished step, not listed or not read,
+it holds; a
 read-only answer is reused for up to 5 seconds, 'may write' never; a request joining a
 read in flight shares only a read-only answer, and on 'may write' reads for itself).
 A lost submission holds its token until it is resolved. Agents are told a fixed reason. An
@@ -758,7 +760,10 @@ HOLD_READ_SECONDS = 3.0
 HOLD_CACHE_SECONDS = 5.0
 _hold_clock = time.monotonic
 
-_HoldKey = tuple[uuid.UUID, str, tuple[str, ...]]
+# Run, workflow, and each review step no checkpoint stands for yet with the step it
+# depends on (None: not known, so it holds).
+_Reviews = tuple[tuple[str, str | None], ...]
+_HoldKey = tuple[uuid.UUID, str, _Reviews]
 _hold_cache: dict[_HoldKey, tuple[float, str]] = {}
 _hold_reads: dict[_HoldKey, "asyncio.Task[str | None]"] = {}
 
@@ -767,12 +772,25 @@ _hold_reads: dict[_HoldKey, "asyncio.Task[str | None]"] = {}
 class _HoldPlan:
     """What Oracle's records say of a run token's hold: held (``reason``, and the
     ``detail`` logged for it), or decided by a live read of workflow ``workflow_id``:
-    its review steps no checkpoint stands for yet (``reviews``)."""
+    its review steps no checkpoint stands for yet, each with the step it depends on
+    (``reviews``)."""
 
     reason: str | None = None
     detail: str | None = None
     workflow_id: str | None = None
-    reviews: tuple[str, ...] = ()
+    reviews: _Reviews = ()
+
+
+def _review_predecessors(entry: dict[str, Any]) -> list[tuple[str, str | None]]:
+    """A segment's review steps, each with the step it depends on in Oracle's own plan
+    (:func:`workflow.build_plan`): the segment's last work step for the first round, the
+    previous round's revise step after it. None when Oracle's record does not say."""
+    work = entry.get("work") or []
+    before = [work[-1] if work else None, *(entry.get("revises") or [])]
+    return [
+        (str(r), before[i] if i < len(before) else None)
+        for i, r in enumerate(entry.get("reviews") or [])
+    ]
 
 
 async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
@@ -801,8 +819,8 @@ async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
         for c in checkpoints
         if ((c.payload or {}).get("wait") or {}).get("workflow_id") == wf.get("id")
     }
-    reviews = [r for e in wf.get("segments") or [] for r in e.get("reviews") or []]
-    unknown = tuple(r for r in reviews if r not in known)
+    reviews = [p for e in wf.get("segments") or [] for p in _review_predecessors(e)]
+    unknown = tuple(p for p in reviews if p[0] not in known)
     if not unknown or not wf.get("id"):
         return _HoldPlan()
     return _HoldPlan(workflow_id=wf["id"], reviews=unknown)
@@ -810,7 +828,8 @@ async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
 
 async def _read_hold(key: _HoldKey) -> str | None:
     """One live read of a workflow's status: whether it reached a review step no
-    checkpoint stands for yet (not :func:`not_reached`, or not listed).
+    checkpoint stands for yet (not :func:`not_reached` given the step it depends on in
+    the same read, or not listed).
     Bounded by :data:`HOLD_READ_SECONDS`; a read-only answer
     is kept for :data:`HOLD_CACHE_SECONDS`."""
     run_id, workflow_id, reviews = key
@@ -827,16 +846,19 @@ async def _read_hold(key: _HoldKey) -> str | None:
         )
         held = HOLD_UNKNOWN
     else:
-        for review in reviews:
+        for review, after in reviews:
             step = status.step(review)
-            if step is None or not not_reached(step):
+            before = status.step(after) if after else None
+            if step is None or not not_reached(step, before):
                 log.info(
-                    "run %s: token read-only, step %s of %s is %s (park reason %s)",
+                    "run %s: token read-only, step %s of %s is %s (park reason %s, after %s: %s)",
                     run_id,
                     review,
                     workflow_id,
                     step.state if step else "not listed",
                     step.park_reason if step else None,
+                    after,
+                    before.state if before else "not listed",
                 )
                 held = HOLD_DECISION
                 break
@@ -860,7 +882,7 @@ def _cached_hold(key: _HoldKey) -> str | None:
     return cached[1] if cached is not None else None
 
 
-async def _live_hold(run_id: uuid.UUID, workflow_id: str, reviews: tuple[str, ...]) -> str | None:
+async def _live_hold(run_id: uuid.UUID, workflow_id: str, reviews: _Reviews) -> str | None:
     """The live read's answer: a read-only one from the last 5 seconds, else a read.
 
     W5, shared status checks (owner, 2026-10-20): a request that starts a read uses its
@@ -902,7 +924,9 @@ async def token_hold(db: AsyncSession, run_id: uuid.UUID, *, live: bool = True) 
 
     From the moment the workflow reaches the wait, not from Oracle's next look at it: a
     review step of the live workflow that no checkpoint stands for yet is read from
-    SwarmCloud, and reached in any state (or not listed, or not read) it holds.
+    SwarmCloud, and reached (once the step it depends on succeeded, whatever its own row
+    says; in any state but parked on that unfinished step; not listed, or not read) it
+    holds.
     ``live`` False: from what Oracle recorded only (the run's page). A write checks it
     with :func:`run_token_hold`, which releases the database before SwarmCloud is read."""
     plan = await _hold_plan(db, run_id)

@@ -242,9 +242,15 @@ async def test_importing_baseline_again_makes_no_second_proposal_for_a_locked_it
 # --------------------------------------------------------------------------- item 2
 
 
+# The one review step state that leaves the token writable (its predecessor ``w1``
+# running): PARKED on its dependencies.
+_DEP = "DEPENDENCY_INCOMPLETE"
+
+
 class _Status:
     """A runtime whose status reads are counted; the first waits for ``gate``. Review
-    step ``r1`` reads ``state``."""
+    step ``r1`` reads ``state`` (:data:`_DEP`: parked on its dependencies), after its
+    predecessor ``w1``, running."""
 
     def __init__(self, state: str) -> None:
         self.state = state
@@ -255,7 +261,14 @@ class _Status:
         self.calls += 1
         if self.calls == 1:
             await self.gate.wait()
-        return WorkflowStatus("running", steps=(StepStatus("r1", state=self.state),))
+        review = (
+            StepStatus("r1", "t1", "PARKED", park_reason=_DEP, task_read=True)
+            if self.state == _DEP
+            else StepStatus("r1", "t1", self.state, task_read=True)
+        )
+        return WorkflowStatus(
+            "running", steps=(StepStatus("w1", "t0", "RUNNING", task_read=True), review)
+        )
 
 
 @pytest.fixture
@@ -274,8 +287,8 @@ def hold_runtime(monkeypatch):
 
 
 async def test_a_joiner_on_a_may_write_check_reads_for_itself(hold_runtime):
-    runtime = hold_runtime("PENDING")
-    key = (uuid.uuid4(), "wf_x", ("r1",))
+    runtime = hold_runtime(_DEP)
+    key = (uuid.uuid4(), "wf_x", (("r1", "w1"),))
     first = asyncio.create_task(service._live_hold(*key))
     await asyncio.sleep(0.01)
     joiners = [asyncio.create_task(service._live_hold(*key)) for _ in range(3)]
@@ -290,7 +303,7 @@ async def test_a_joiner_on_a_may_write_check_reads_for_itself(hold_runtime):
 
 async def test_a_read_only_check_refuses_every_joiner_without_another_read(hold_runtime):
     runtime = hold_runtime("RUNNING")
-    key = (uuid.uuid4(), "wf_x", ("r1",))
+    key = (uuid.uuid4(), "wf_x", (("r1", "w1"),))
     first = asyncio.create_task(service._live_hold(*key))
     await asyncio.sleep(0.01)
     joiners = [asyncio.create_task(service._live_hold(*key)) for _ in range(3)]
@@ -310,11 +323,11 @@ async def test_a_read_only_check_refuses_every_joiner_without_another_read(hold_
 async def test_the_hold_cache_does_not_leak_across_runs(hold_runtime):
     runtime = hold_runtime("RUNNING")
     runtime.gate.set()
-    one = (uuid.uuid4(), "wf_1", ("r1",))
+    one = (uuid.uuid4(), "wf_1", (("r1", "w1"),))
     assert await service._live_hold(*one) == service.HOLD_DECISION
-    runtime.state = "PENDING"
+    runtime.state = _DEP
     # Another run on a workflow of the same id and review steps: its own read.
-    other = (uuid.uuid4(), "wf_1", ("r1",))
+    other = (uuid.uuid4(), "wf_1", (("r1", "w1"),))
     assert await service._live_hold(*other) is None
     assert runtime.calls == 2
     assert await service._live_hold(*one) == service.HOLD_DECISION  # still cached
@@ -326,11 +339,11 @@ async def test_expired_hold_answers_are_pruned_on_reads_too(hold_runtime, monkey
     runtime.gate.set()
     now = [1000.0]
     monkeypatch.setattr(service, "_hold_clock", lambda: now[0])
-    old = (uuid.uuid4(), "wf_1", ("r1",))
+    old = (uuid.uuid4(), "wf_1", (("r1", "w1"),))
     await service._live_hold(*old)
     assert old in service._hold_cache
     now[0] += service.HOLD_CACHE_SECONDS + 1
-    fresh = (uuid.uuid4(), "wf_2", ("r1",))
+    fresh = (uuid.uuid4(), "wf_2", (("r1", "w1"),))
     service._hold_cache[fresh] = (now[0], service.HOLD_DECISION)
     # Served from the cache (no read), and the expired answer is gone.
     assert await service._live_hold(*fresh) == service.HOLD_DECISION
@@ -338,24 +351,23 @@ async def test_expired_hold_answers_are_pruned_on_reads_too(hold_runtime, monkey
     assert old not in service._hold_cache
 
 
-def test_the_not_reached_step_states_are_in_one_place():
+def test_no_list_of_step_states_leaves_the_token_writable():
+    # W5 structural rule (owner 2026-10-20): PENDING and SKIPPED no longer release.
     from oracle.swarm import runtime as swarm_runtime
 
-    assert swarm_runtime.NOT_REACHED_STATES == frozenset({"PENDING", "SKIPPED"})
+    assert not hasattr(swarm_runtime, "NOT_REACHED_STATES")
     assert not hasattr(service, "_NOT_REACHED")
 
 
 @pytest.mark.parametrize(
     "state",
-    ["PENDING", "SKIPPED", "RUNNING", "PARKED", "SUCCEEDED", "FAILED", "CANCELLED", "NEW_STATE"],
+    [_DEP, "PENDING", "SKIPPED", "RUNNING", "PARKED", "SUCCEEDED", "FAILED", "CANCELLED", "NEW"],
 )
-async def test_only_the_not_reached_states_leave_the_token_writable(hold_runtime, state):
-    from oracle.swarm.runtime import NOT_REACHED_STATES
-
+async def test_only_a_dependency_park_leaves_the_token_writable(hold_runtime, state):
     runtime = hold_runtime(state)
     runtime.gate.set()
-    held = await service._live_hold(uuid.uuid4(), "wf_1", ("r1",))
-    assert (held is None) == (state in NOT_REACHED_STATES), held
+    held = await service._live_hold(uuid.uuid4(), "wf_1", (("r1", "w1"),))
+    assert (held is None) == (state == _DEP), held
 
 
 async def _curated_writes(token: str) -> dict[str, tuple[bool, str]]:
@@ -814,8 +826,8 @@ async def test_a_step_parked_on_its_dependencies_does_not_hold_the_run_token(cli
 @pytest.mark.parametrize(
     ("state", "reason", "reached"),
     [
-        ("PENDING", None, False),
-        ("SKIPPED", None, False),
+        ("PENDING", None, True),
+        ("SKIPPED", None, True),
         ("PARKED", "DEPENDENCY_INCOMPLETE", False),
         ("PARKED", "AWAITING_INPUT", True),
         ("PARKED", "CREDENTIAL_MISSING", True),
@@ -831,19 +843,23 @@ async def test_a_step_parked_on_its_dependencies_does_not_hold_the_run_token(cli
 def test_not_reached_counts_a_step_parked_on_its_dependencies(state, reason, reached):
     from oracle.swarm.runtime import not_reached
 
-    assert not_reached(StepStatus("s", "t", state, park_reason=reason)) is not reached
+    before = StepStatus("w", "t0", "RUNNING", task_read=True)
+    step = StepStatus("s", "t", state, park_reason=reason, task_read=True)
+    assert not_reached(step, before) is not reached
 
 
 def test_not_reached_fails_closed_without_a_task_or_with_an_opened_wait():
     from oracle.swarm.runtime import not_reached
 
+    before = StepStatus("w", "t0", "RUNNING", task_read=True)
     parked = dict(state="PARKED", park_reason="DEPENDENCY_INCOMPLETE")
-    assert not_reached(StepStatus("s", "t", **parked)) is True
+    assert not_reached(StepStatus("s", "t", **parked, task_read=True), before) is True
     # The task page had no task for the step: reached (held), whatever the default says.
-    assert not_reached(StepStatus("s", "t", **parked, task_read=False)) is False
-    assert not_reached(StepStatus("s", None, task_read=False)) is False
+    assert not_reached(StepStatus("s", "t", **parked), before) is False
+    assert not_reached(StepStatus("s", None, task_read=False), before) is False
     # An opened wait is reached whatever its park reason says.
-    assert not_reached(StepStatus("s", "t", **parked, wait_opened=True)) is False
+    opened = StepStatus("s", "t", **parked, task_read=True, wait_opened=True)
+    assert not_reached(opened, before) is False
 
 
 async def test_a_review_step_with_no_task_in_the_page_holds_the_run_token_and_reads_cleanly(
@@ -883,6 +899,9 @@ async def test_a_review_step_with_no_task_in_the_page_holds_the_run_token_and_re
     for review in ("r1", "r2"):
         monkeypatch.setattr(service, "get_runtime", lambda: rt)
         service._hold_cache.clear()
-        assert await service._live_hold(uuid.uuid4(), "wf_1", (review,)) == service.HOLD_DECISION
+        assert (
+            await service._live_hold(uuid.uuid4(), "wf_1", ((review, "r0"),))
+            == service.HOLD_DECISION
+        )
     service._hold_cache.clear()
     service._hold_reads.clear()

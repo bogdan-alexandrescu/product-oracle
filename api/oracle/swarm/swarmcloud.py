@@ -953,7 +953,10 @@ class SwarmCloudRuntime:
             step_id = str(row.get("step_id") or "")
             task_id = row.get("task_id")
             task = tasks.get(str(task_id)) if task_id else None
-            task_state = str((task or {}).get("state") or row.get("state") or "PENDING").upper()
+            # The task's own state; the row's (or PENDING) is only shown. A step whose
+            # task is missing or has no state of its own was not read: it holds (W5).
+            own = str((task or {}).get("state") or "").upper()
+            task_state = own or str(row.get("state") or "PENDING").upper()
             steps.append(
                 StepStatus(
                     step_id,
@@ -961,10 +964,10 @@ class SwarmCloudRuntime:
                     task_state,
                     _redact(str(task["last_error"])) if (task or {}).get("last_error") else None,
                     str(task["park_reason"])
-                    if task_state == "PARKED" and (task or {}).get("park_reason")
+                    if own == "PARKED" and (task or {}).get("park_reason")
                     else None,
-                    task is not None,
-                    bool(
+                    task_read=bool(own),
+                    wait_opened=bool(
                         (((task or {}).get("metadata") or {}).get("await_input") or {}).get(
                             "opened_at"
                         )
