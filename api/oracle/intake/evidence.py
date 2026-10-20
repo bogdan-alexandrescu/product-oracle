@@ -310,7 +310,7 @@ async def run_include(db: AsyncSession, intake: ProductIntake) -> dict[uuid.UUID
     items and versions ``/v1/source-items/{id}`` and ``/v1/search`` give a run."""
     if intake.author_id is None:
         return {}
-    return dict((await db.execute(readable_shared(intake.id))).tuples().all())
+    return dict((await db.execute(readable_shared(intake.id))).all())  # type: ignore[arg-type]
 
 
 async def released_versions(
@@ -331,7 +331,7 @@ async def released_versions(
         .order_by(SourceItemVersion.item_id, SourceItemVersion.fetched_at.desc())
     )
     wanted = {i for i, _ in pairs}
-    return {i: v for i, v in rows.tuples().all() if i in wanted}
+    return {i: v for i, v in rows.all() if i in wanted}
 
 
 async def refs(

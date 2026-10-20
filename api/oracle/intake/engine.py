@@ -548,6 +548,11 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
     await ev.record_reads(db, intake)
     await sync_questions(db, intake, gaps)
     refresh_status(intake, gaps, ("draft", "analyzing", "awaiting_answers", "ready"))
+    # A finding this analysis made private, or lowered, takes its open baseline
+    # proposals down with it, as setting the level does (S6, owner 2026-10-19).
+    from oracle.intake import answers
+
+    await answers.propose_shared(db, None, intake, gaps, create=False)
     await db.flush()
 
 

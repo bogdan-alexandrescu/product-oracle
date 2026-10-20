@@ -278,11 +278,7 @@ async def propose(
     return proposal
 
 
-def awaits_answer(payload: dict[str, Any]) -> bool:
-    """A question-only proposal an intake made of an answer to a finding shared as
-    counts (S6): the category's question, the gap's id and category, no answer. It waits
-    for the author to share the answer (a follow-up proposal carries it) and is never
-    accepted itself: it would make an entity of the question."""
+def _question_only_shape(payload: dict[str, Any]) -> bool:
     fields = payload.get("fields") or {}
     attrs = fields.get("attrs") or {}
     return (
@@ -290,6 +286,26 @@ def awaits_answer(payload: dict[str, Any]) -> bool:
         and payload.get("op") == "create"
         and set(attrs) == {"gap_id", "category"}
     )
+
+
+async def awaits_answer(db: AsyncSession, payload: dict[str, Any]) -> bool:
+    """A question-only proposal an intake made of an answer to a finding shared as
+    counts (S6): the category's question, the gap's id and category, no answer. It waits
+    for the author to share the answer (a follow-up proposal carries it) and is never
+    accepted itself: it would make an entity of the question. Told by its shape and by
+    the intake gap it names (same id and category): any other proposal of that shape is
+    an ordinary one."""
+    from oracle.v2.models import KnowledgeGap
+
+    if not _question_only_shape(payload):
+        return False
+    attrs = payload["fields"]["attrs"]
+    try:
+        gap_id = uuid.UUID(str(attrs["gap_id"]))
+    except ValueError:
+        return False
+    gap = await db.get(KnowledgeGap, gap_id)
+    return gap is not None and gap.intake_id is not None and gap.category == attrs["category"]
 
 
 async def list_proposals(db: AsyncSession, status: str | None = None) -> list[Proposal]:
@@ -303,15 +319,27 @@ async def list_proposals(db: AsyncSession, status: str | None = None) -> list[Pr
     return list((await db.scalars(stmt)).all())
 
 
+async def lock_proposal(db: AsyncSession, proposal_id: uuid.UUID) -> Proposal | None:
+    """The proposal row, locked FOR UPDATE and read afresh: whoever decides or withdraws
+    it holds the lock, so an accept and a withdraw never both win (the second sees what
+    the first committed)."""
+    return await db.scalar(
+        select(Proposal)
+        .where(Proposal.id == proposal_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
 async def decide_proposal(
     db: AsyncSession, proposal_id: uuid.UUID, principal: Principal, accept: bool, note: str | None
 ) -> Proposal:
-    proposal = await db.get(Proposal, proposal_id)
+    proposal = await lock_proposal(db, proposal_id)
     if proposal is None or proposal.status == "withdrawn":
         raise NotFoundError("Proposal not found")
     if proposal.status != "open":
         raise ConflictError(f"Proposal is already {proposal.status}")
-    if accept and awaits_answer(proposal.payload):
+    if accept and await awaits_answer(db, proposal.payload):
         raise ConflictError("This proposal waits for the author to share the answer")
     if accept:
         p = proposal.payload

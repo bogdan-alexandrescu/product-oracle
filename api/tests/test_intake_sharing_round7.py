@@ -296,3 +296,25 @@ async def test_accepted_first_then_the_withdraw_leaves_it_accepted(client, fake)
     # The lowering itself is audited, and so is the withdraw that found it decided.
     assert actions.count("intake.finding_shared") >= 2
     assert "baseline.proposal.withdraw_skipped" in actions
+
+
+# --- minors ---------------------------------------------------------------------------------
+
+
+async def test_only_a_real_gaps_question_only_proposal_waits_for_the_answer(client, fake):  # noqa: F811
+    """A proposal shaped like a question-only one but naming no gap of an intake is an
+    ordinary proposal: it may be accepted."""
+    ctx, _, _ = await world(client, fake, hidden=False)
+    async with tenant_session(ctx.tenant_id) as s:
+        writer = baseline_service.Writer(_principal(ctx, "approver"), "agent", reason="probe")
+        proposal = await baseline_service.propose(
+            s, writer, op="create", kind="entity",
+            fields={"type": "constraint", "key": "probe-constraint", "title": "Probe",
+                    "body": "Probe", "attrs": {"gap_id": str(uuid.uuid4()),
+                                               "category": "blockers"}},
+        )  # fmt: skip
+        await s.commit()
+    resp = await client.post(
+        f"/v1/baseline/proposals/{proposal.id}/accept", headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text

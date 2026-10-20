@@ -334,7 +334,12 @@ def proposal_mode(intake: ProductIntake, gap: KnowledgeGap) -> str | None:
 
 
 async def propose_shared(
-    db: AsyncSession, principal: Principal, intake: ProductIntake, gaps: list[KnowledgeGap]
+    db: AsyncSession,
+    principal: Principal | None,
+    intake: ProductIntake,
+    gaps: list[KnowledgeGap],
+    *,
+    create: bool = True,
 ) -> list[uuid.UUID]:
     """Bring the baseline proposals of answers to these gaps to their new level (S6,
     owner 2026-10-19): proposed once per answer when shared at counts or above; an open
@@ -343,7 +348,10 @@ async def propose_shared(
     back to private (hidden from the list and from acceptance); sharing it again makes
     a new one. A decided proposal is left as it was decided; once a question-only one
     is decided, the answer reaches the baseline as a follow-up proposal from summary
-    up."""
+    up. A withdrawn proposal keeps no answer text (its fields become the category's
+    question). The open proposal is locked before it is changed, so a withdraw never
+    overwrites an accept that won (audited as skipped). ``create=False``: only bring
+    open proposals down to the level (a re-analysis), never propose."""
     out: list[uuid.UUID] = []
     for gap in gaps:
         if gap.category not in BASELINE_TYPES:
@@ -366,7 +374,8 @@ async def propose_shared(
         held_back = (sharing.registry(intake).get(str(gap.id)) or {}).get("origin") == "model"
         for row, question in rows:
             if (
-                mode == "full"
+                create
+                and mode == "full"
                 and held_back
                 and not await db.scalar(
                     select(IntakeProposal.id).where(
@@ -376,19 +385,47 @@ async def propose_shared(
             ):
                 await _propose_patch(db, principal, intake, gap, question, row)
             existing = await _proposal_of(db, intake, gap, row)
+            raced = None
+            if existing is not None and existing.status == "open":
+                # Locked: an accept in flight either committed first (it stays decided)
+                # or waits for this change.
+                locked = await baseline_service.lock_proposal(db, existing.id)
+                if locked is not None and locked.status != "open":
+                    raced = locked.status
+                existing = locked
             if existing is not None and existing.status == "open":
                 if mode is None:
+                    fields, _ = _baseline_fields(intake, gap, question, row, "question")
+                    existing.payload = {
+                        **existing.payload, "fields": fields,
+                        "reason": f"{cats.BY_KEY[gap.category].label} question withdrawn",
+                    }  # fmt: skip
                     existing.status = "withdrawn"
+                    await audit.record(
+                        db, principal, "baseline.proposal.withdrawn", "proposal", existing.id,
+                        {"intake_id": str(intake.id), "gap_id": str(gap.id)},
+                    )  # fmt: skip
                 else:
                     fields, reason = _baseline_fields(intake, gap, question, row, mode)
                     existing.payload = {**existing.payload, "fields": fields, "reason": reason}
                 continue
             if mode is None:
+                if raced is not None:
+                    # Decided while the finding went private: it stays as decided.
+                    await audit.record(
+                        db, principal, "baseline.proposal.withdraw_skipped", "proposal",
+                        existing.id,  # type: ignore[union-attr]
+                        {"intake_id": str(intake.id), "gap_id": str(gap.id), "status": raced},
+                    )  # fmt: skip
+                continue
+            if not create:
                 continue
             if existing is not None and existing.status != "withdrawn":
                 # Decided: it stays as decided. Only the answer a decided question-only
                 # proposal never carried is proposed, once others may read it.
-                if not (mode == "full" and baseline_service.awaits_answer(existing.payload)):
+                if not (
+                    mode == "full" and await baseline_service.awaits_answer(db, existing.payload)
+                ):
                     continue
             proposal = await _propose_baseline(db, principal, intake, gap, question, row, mode)
             if proposal is not None:
