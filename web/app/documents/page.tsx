@@ -23,6 +23,7 @@ import {
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type DocumentSummary } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 const COLUMNS: Column<DocumentSummary>[] = [
@@ -69,7 +70,7 @@ const COLUMNS: Column<DocumentSummary>[] = [
   },
 ];
 
-function DocInspector({ d }: { d: DocumentSummary }) {
+function DocInspector({ d, canPublish }: { d: DocumentSummary; canPublish: boolean }) {
   return (
     <Inspector
       testId="document-inspector"
@@ -114,6 +115,9 @@ function DocInspector({ d }: { d: DocumentSummary }) {
                 Changes
               </LinkButton>
             )}
+            <LinkButton href={`/documents/${d.slug}/publish`} icon="check">
+              {canPublish && d.approved_version !== d.latest_version ? "Publish" : "Check readiness"}
+            </LinkButton>
           </div>
         </InspectorSection>
       )}
@@ -126,6 +130,7 @@ export default function DocumentsPage() {
   const q = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const documents = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const router = useRouter();
+  const { role } = useMe();
   const [picked, setPicked] = useState<string | null>(null);
   const selected = documents.find((d) => d.slug === picked) ?? documents[0] ?? null;
   const inReview = documents.filter((d) => d.status === "in_review").length;
@@ -149,7 +154,7 @@ export default function DocumentsPage() {
         }
       />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      <Split inspector={selected ? <DocInspector d={selected} /> : undefined}>
+      <Split inspector={selected ? <DocInspector d={selected} canPublish={hasRole(role, "approver")} /> : undefined}>
         <Panel
           title="PRDs"
           count={q.data ? documents.length : undefined}

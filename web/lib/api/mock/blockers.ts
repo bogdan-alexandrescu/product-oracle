@@ -84,7 +84,74 @@ function given(input: object, skip: string[]): Record<string, unknown> {
   return Object.fromEntries(Object.entries(input).filter(([k, v]) => v !== undefined && !skip.includes(k)));
 }
 
-export function seedBlockers(documentId: string, userId: string): BlockersDb {
+/** Fixed ids of the Quillfield deposits blocker and the question asked about it. */
+export const DEPOSITS_IDS = {
+  blocker: "a3000000-0000-4000-8000-000000000001",
+  requirement: "a3000000-0000-4000-8000-000000000002",
+  gap: "a3000000-0000-4000-8000-000000000003",
+  question: "a3000000-0000-4000-8000-000000000004",
+} as const;
+
+/** The deposits PRD's critical blocker, plus the gap and question that ask about it. */
+function depositsBlocker(documentId: string, userId: string, v2: V2Db): BlockerRow {
+  const asked = new Date(Date.now() - 86_400_000).toISOString();
+  v2.gaps.push({
+    id: DEPOSITS_IDS.gap, intake_id: null, document_id: documentId, category: "blockers",
+    statement: "Same-day refund rule unanswered", impact: ["feasibility"], importance: "critical", evidence_ids: [],
+    confidence: null, knowledge_state: "unknown", status: "asked", owner_id: userId, related_modules: ["constraints.solutions"],
+    stop_condition: null, entity_ids: [DEPOSITS_IDS.blocker], section_keys: ["risks"], created_by: userId, lock_version: 1,
+    created_at: asked, updated_at: asked,
+  });
+  v2.questions.push({
+    id: DEPOSITS_IDS.question, gap_id: DEPOSITS_IDS.gap, intake_id: null, document_id: documentId,
+    category: "blockers", prompt: "Same-day cancellation refund?", rationale: null, priority: 1, batch: null,
+    asked_to: userId, asked_by: userId, module_key: "constraints.solutions", section_key: "risks", status: "asked",
+    created_at: asked, updated_at: asked,
+  });
+  return {
+    id: DEPOSITS_IDS.blocker,
+    key: "same-day-refund",
+    statement: "Same-day refund rule unanswered",
+    detail: null,
+    entity_status: "confirmed",
+    locked: false,
+    confidence: 0.6,
+    evidence_count: 0,
+    type: "hard",
+    limit_kind: "policy",
+    third_party: "Example card processor",
+    severity: "critical",
+    status: "open",
+    timing: "Every same-day cancellation",
+    threshold: null,
+    impacted_entity_ids: [DEPOSITS_IDS.requirement],
+    impacted_users: ["Patients who cancel on the day"],
+    owner_id: userId,
+    review_at: null,
+    document_ids: [documentId],
+    scaling: { tenants: "Every clinic", blast_radius: "One booking at a time" },
+    selected_option_id: null,
+    revision: 1,
+    created_at: AT,
+    updated_at: AT,
+  };
+}
+
+/**
+ * The ``critical_blockers`` readiness check for a document, as the API's evaluates it:
+ * critical when a gating blocker is critical, else warning, pass or not_applicable.
+ */
+export function documentGate(db: BlockersDb, documentId: string): { status: Gate["status"]; rationale: string; evidence_ids: string[] } {
+  const rows = db.blockers.filter((b) => b.document_ids.includes(documentId)).map((b) => ({ b, g: gate(b) }));
+  if (!rows.length) return { status: "not_applicable", rationale: "No blockers are linked to this document.", evidence_ids: [] };
+  const critical = rows.filter((r) => r.g.status === "critical");
+  const warnings = rows.filter((r) => r.g.status === "warning");
+  const shown = critical.length ? critical : warnings.length ? warnings : rows;
+  const status = critical.length ? "critical" : warnings.length ? "warning" : "pass";
+  return { status, rationale: shown.map((r) => `${r.g.rationale}.`).join(" "), evidence_ids: shown.map((r) => r.b.id) };
+}
+
+export function seedBlockers(documentId: string, userId: string, deposits?: { documentId: string; v2: V2Db }): BlockersDb {
   return {
     blockers: [
       {
@@ -114,6 +181,7 @@ export function seedBlockers(documentId: string, userId: string): BlockersDb {
         created_at: AT,
         updated_at: AT,
       },
+      ...(deposits ? [depositsBlocker(deposits.documentId, userId, deposits.v2)] : []),
     ],
     acceptances: [],
   };

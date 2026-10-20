@@ -9,7 +9,7 @@ import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
 import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
-import { routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
+import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
@@ -816,6 +816,19 @@ function ensureV2(db: Db): V2Db {
   return db.v2;
 }
 
+function ensureBlockers(db: Db): BlockersDb {
+  if (!db.blockers) {
+    const v2 = ensureV2(db);
+    const deposits = db.documents.find((d) => d.slug === "online-deposits");
+    db.blockers = seedBlockers(
+      db.documents.find((d) => d.kind === "prd")?.id ?? db.tenant_id,
+      db.user_id,
+      deposits && { documentId: deposits.id, v2 },
+    );
+  }
+  return db.blockers;
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -903,6 +916,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         const v = doc && findVersion(db, doc, n);
         return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
       },
+      blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
     },
     req,
     p,
@@ -981,9 +995,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
   const v2Db = ensureV2(db);
   // Blocker strategy routes (CR-04): writes on the v2 option, experiment and event rows.
-  db.blockers ??= seedBlockers(db.documents.find((d) => d.kind === "prd")?.id ?? db.tenant_id, db.user_id);
   const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents };
-  const blockers = await routeBlockers(blockerContext, db.blockers, req, p, q);
+  const blockers = await routeBlockers(blockerContext, ensureBlockers(db), req, p, q);
   if (blockers) return blockers;
   const v2 = routeV2(v2Db, req, p, q);
   if (v2) return v2;
