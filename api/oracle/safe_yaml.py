@@ -163,7 +163,7 @@ class _LimitedConstructor(SafeConstructor):
                 except TypeError:
                     continue  # unhashable: SafeConstructor reports it
                 if duplicate:
-                    raise SafeYamlError(f"duplicate key {key!r}", key_node.start_mark)
+                    raise SafeYamlError(f"duplicate key {repr(key)[:80]}", key_node.start_mark)
         return super().construct_mapping(node, deep=deep)
 
     def construct_yaml_int(self, node):
