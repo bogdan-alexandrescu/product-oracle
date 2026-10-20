@@ -30,6 +30,8 @@ async def test_defaults_and_unknown_keys(client, owner):
     assert {s["key"]: s["value"] for s in listed} == {
         "iap_default_role": "commenter",
         "confidence_weights": {},
+        "blocker_risk_acceptance_role": "owner",
+        "blocker_risk_review_max_days": 90,
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404

@@ -6,7 +6,16 @@ segment after ``/v1`` names the area.
 
 READ_AREAS = {
     "read:sources": {"sources", "search", "snapshots"},
-    "read:baseline": {"baseline", "priorities"},
+    # Blockers are baseline constraints (CR-04): their strategy, options, experiments
+    # and events read like the rest of the baseline.
+    "read:baseline": {
+        "baseline",
+        "priorities",
+        "blockers",
+        "blocker-options",
+        "feasibility-experiments",
+        "blocker-events",
+    },
     "read:documents": {"documents", "feedback", "exports"},
 }
 # Creating a proposal or a piece of evidence; deciding one stays with people.
