@@ -1961,6 +1961,7 @@ def _pending(
     segment: RunSegment, art: dict[str, Any], change_request: str | None, error: str
 ) -> None:
     """Left pending: the next tick submits it again."""
+    art.pop("claim", None)
     segment.status = "pending"
     segment.error = error
     if change_request:
@@ -1974,8 +1975,17 @@ async def _submit_now(
     segment: RunSegment,
     segments: list[RunSegment],
     change_request: str | None = None,
-) -> None:
+    *,
+    claim: str | None = None,
+) -> str | None:
     """Mint the run token and submit the segment's workflow (the caller commits).
+
+    With ``claim`` (:func:`submit_queued`: the segment carries that claim) the
+    transaction commits right before the submit call, so neither the run's row lock nor
+    the new token's key lock is held across it, and the run is locked and read again
+    after it. If the run changed meanwhile (cancelled, a disable voided the decision or
+    the approval), nothing is recorded and the id of the workflow SwarmCloud started is
+    returned, for the caller to cancel; otherwise None.
 
     With caller MCP on, the token goes to the agents through the workflow's credential
     map; with await-input on too, the workflow covers the rest of the run and its
@@ -1989,11 +1999,21 @@ async def _submit_now(
     art = _art(segment)
     # Submissions given up on (Retry from the Inbox) keep their numbers: a new key each.
     attempt = len(art["attempts"]) + len(art.get("abandoned") or []) + 1
-    # A retry after the runtime refused a re-run keeps the reviewer's note.
-    change_request = change_request or art.pop("pending_note", None)
+    # A retry after the runtime refused a re-run keeps the reviewer's note; it stays
+    # recorded until a submission succeeds (:func:`_accepted`).
+    change_request = change_request or art.get("pending_note")
     if segment.estimate_usd is None:
         segment.estimate_usd = flows.segment_estimate(sdef, knobs)
     tag = workflow.label(run.id, segment.name, attempt)
+
+    async def still_ours() -> bool:
+        fresh, _ = await _locked(db, run.id)
+        return (
+            fresh is not None
+            and fresh.status == "running"
+            and segment.status == "pending"
+            and ((segment.artifacts or {}).get("claim") or {}).get("id") == claim
+        )
 
     # SwarmCloud has no idempotency keys: a submission whose answer was lost may exist.
     lost = art.get("lost")
@@ -2137,9 +2157,25 @@ async def _submit_now(
             },
             label=tag,
         )
+        if claim is not None:
+            # Nothing held across the call: a cancel or a disable never waits on it.
+            await db.commit()
         try:
-            workflow_id = await runtime.submit(spec)
+            try:
+                workflow_id = await runtime.submit(spec)
+            except RuntimeUnavailable:
+                raise
+            except Exception as unexpected:
+                if claim is None:
+                    raise
+                # After a commit: recorded as a refusal, never a 500.
+                log.exception("run %s: submission failed", run.id)
+                raise RuntimeUnavailable(
+                    f"the submission failed ({type(unexpected).__name__})"
+                ) from None
         except RuntimeUnavailable as exc:
+            if claim is not None and not await still_ours():
+                return None
             if exc.code == "mcp_server_unregistered" and mode.attach and not registered_again:
                 registered_again = True
                 try:
@@ -2163,7 +2199,7 @@ async def _submit_now(
                     pass
                 if found:
                     _accepted(run, segment, art, found, info, change_request, runtime)
-                    return
+                    return None
                 art["lost"] = info
                 _pending(
                     segment,
@@ -2172,13 +2208,15 @@ async def _submit_now(
                     f"{exc}; Oracle looks for submission {tag} before submitting again",
                 )
                 log.warning("run %s segment %s: submit lost: %s", run.id, segment.name, exc)
-                return
+                return None
             await revoke_run_tokens(db, run.id)
             _pending(segment, art, change_request, workflow.advice(exc.code, str(exc)))
             log.warning("run %s segment %s: submit failed: %s", run.id, segment.name, exc)
-            return
+            return None
+        if claim is not None and not await still_ours():
+            return workflow_id
         _accepted(run, segment, art, workflow_id, info, change_request, runtime)
-        return
+        return None
 
 
 def _accepted(
@@ -2194,6 +2232,7 @@ def _accepted(
     art.pop("lost", None)
     art.pop("decision", None)
     art.pop("claim", None)
+    art.pop("pending_note", None)
     art["attempts"].append(
         {
             # The number in its key: submissions given up on (Retry) keep theirs.
@@ -2351,20 +2390,52 @@ async def submit_queued(
 ) -> None:
     """Submit the run's waiting segment (:func:`_waiting`), after the request that queued
     it committed: outside the review gate. The tick calls it too, for a segment the
-    runtime refused before. The run's row lock is held across the submission (adapter
-    v2's :func:`_submit_now` looks up a lost submission, cancels the previous workflow
-    and degrades refused features in one pass), so a run that changed meanwhile
-    (cancelled, its approval or the checkpoint decision voided by a disable) is seen
-    before anything is submitted. ``deadline``: kept for the tick's callers; the
+    runtime refused before.
+
+    The segment is claimed under the run's row lock; :func:`_submit_now` commits before
+    the submit call (nothing held across it) and reads the run again after it. If the
+    run changed meanwhile (cancelled, its approval or the checkpoint decision voided by
+    a disable), the workflow SwarmCloud started is cancelled at once (a follow-up
+    recorded first, retried from the tick). A submission whose process died mid-call
+    keeps its claim until it expires. ``deadline``: kept for the tick's callers; the
     runtime client's own timeouts bound the calls. Commits."""
     del deadline
     run, segments = await _locked(db, run_id)
     segment = next((s for s in segments if _waiting(s)), None)
-    if run is None or run.status != "running" or segment is None:
+    if run is None or run.status != "running" or segment is None or _claimed(segment):
         await db.rollback()
         return
-    await _submit_now(db, run, segment, segments)
+    claim = uuid.uuid4().hex
+    art = _art(segment)
+    art["claim"] = {"id": claim, "at": _now().isoformat()}
+    _set_art(segment, art)
+    segment_id = segment.id
+    orphan = await _submit_now(db, run, segment, segments, claim=claim)
+    if orphan is None:
+        await db.commit()
+        return
+    # The run changed while SwarmCloud started the workflow: nothing runs for it.
+    await audit.record(
+        db, None, "run.workflow_cancelled", "run", run_id,
+        {"workflow_id": orphan, "segment_id": str(segment_id),
+         "reason": "the run changed while its segment was submitted"},
+    )  # fmt: skip
+    fresh = await db.get(Run, run_id)
+    member_id = (fresh.created_by if fresh is not None else None) or run_id
+    row = _cancel_follow_up(db, member_id, segment_id, orphan)
     await db.commit()
+    await cancel_at_runtime(db, [row.id])
+
+
+# How long a submission under way keeps the tick off its segment: past it, the process
+# that claimed it is taken to be gone and the tick submits the segment again.
+CLAIM_SECONDS = 300
+
+
+def _claimed(segment: RunSegment) -> bool:
+    """A submission of this segment is under way (claimed less than CLAIM_SECONDS ago)."""
+    at = _parse_at(((segment.artifacts or {}).get("claim") or {}).get("at"))
+    return at is not None and (_now() - at).total_seconds() < CLAIM_SECONDS
 
 
 async def cancel_at_runtime(db: AsyncSession, follow_ups: list[uuid.UUID]) -> None:
