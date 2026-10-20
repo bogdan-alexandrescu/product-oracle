@@ -17,6 +17,7 @@ import {
   LockMark,
   sortedGoals,
 } from "./common";
+import { byTitle } from "./order";
 
 type Props = {
   graph: GraphOut;
@@ -29,8 +30,6 @@ type Props = {
   onOpen: (id: string) => void;
   onConfirm: (goal: EntityOut) => void;
 };
-
-const byTitle = (a: EntityOut, b: EntityOut) => a.title.localeCompare(b.title);
 
 /** A title that opens the item in the inspector; one line. */
 function TitleButton({ entity, onOpen, className = "" }: { entity: EntityOut; onOpen: (id: string) => void; className?: string }) {

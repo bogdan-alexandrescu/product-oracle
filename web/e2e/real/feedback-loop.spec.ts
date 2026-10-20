@@ -74,6 +74,14 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   ]);
   expect(JSON.parse(await readFile(path.join(work, `${DOC}-v1.locked.json`), "utf8"))).toEqual(["goal"]);
 
+  // Home on the real API: the open feedback needs the reviewer; a fresh company has no goals yet.
+  await page.goto("/home");
+  await expect(page.getByTestId("home-needs-table")).toContainText("Team invoices PRD");
+  await expect(page.getByTestId("home-goals-empty")).toContainText("No goals yet");
+  await expect(page.getByTestId("home-inspector").getByRole("img", { name: "1 of 5 sections approved" })).toBeVisible();
+  // Error notices are <p role="alert">; Next's route announcer is the only other alert.
+  await expect(page.locator("main p[role=alert], [data-testid^=home] p[role=alert]")).toHaveCount(0);
+
   // v2 answers both items.
   const byKind = (kind: string) => items.find((i) => i.kind === kind)!.id;
   const v2 = (await readFile(path.join(FIXTURES, "draft_v2.md"), "utf8"))

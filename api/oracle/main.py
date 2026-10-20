@@ -37,6 +37,7 @@ from oracle.review.router import router as review_router
 from oracle.runs.router import router as runs_router
 from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.router import router as sources_router
+from oracle.swarm import close_runtime
 from oracle.templates.router import router as templates_router
 from oracle.tenant_settings_api import router as settings_router
 from oracle.ticker.router import HARD_LIMIT_SECONDS
@@ -84,6 +85,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+    await close_runtime()
     await dispose_engine()
 
 

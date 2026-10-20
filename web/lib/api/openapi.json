@@ -5581,6 +5581,7 @@
           "baseline"
         ],
         "summary": "List Entity Revisions",
+        "description": "The entity's revisions, newest first; ``limit`` keeps only the newest (Home's trend).",
         "operationId": "list_entity_revisions",
         "security": [
           {
@@ -5599,6 +5600,24 @@
               "type": "string",
               "format": "uuid",
               "title": "Entity Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 500,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
             }
           }
         ],
@@ -8432,7 +8451,7 @@
           "runs"
         ],
         "summary": "Runtime Status",
-        "description": "Call the agent runtime as Oracle and report what it answers: reachable, and as which\ntenant. Owner only. Never shows a credential.",
+        "description": "Call the agent runtime as Oracle and report what it answers: reachable, as which\ntenant, and which adapter v2 features are on (mcp, await_input, service_answer: on,\noff or unknown; read briefly cached, never longer than the runtime's timeout). Owner\nonly. Never shows a credential.",
         "operationId": "runtime_status",
         "responses": {
           "200": {
@@ -8441,6 +8460,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RuntimeStatusOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/runtime/mcp-server": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Register Mcp Server",
+        "description": "Register Oracle's MCP server in the agent runtime, idempotently: created when\nmissing, its URL updated when ORACLE_PUBLIC_URL changed, else unchanged. Runs do this\non their own before the first run token is sent; this is for owners and the\nswitch-on check. Owner only.",
+        "operationId": "register_mcp_server",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerRegistration"
                 }
               }
             }
@@ -8924,6 +8973,58 @@
         }
       }
     },
+    "/v1/runs/{run_id}/retry": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Run",
+        "description": "Retry a run whose lost submission Oracle could neither find nor rule out (Inbox:\nlookups): looked up once more, else the segment is submitted again.",
+        "operationId": "retry_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runs/{run_id}/cancel": {
       "post": {
         "tags": [
@@ -8931,6 +9032,276 @@
         ],
         "summary": "Cancel Run",
         "operationId": "cancel_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/stop-cancelling": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Stop Cancelling Run",
+        "description": "Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that\nproves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox\nitem clears. A run that has not ended ends (cancelled, the reason recorded) and no\nsecond workflow starts for that segment; Oracle keeps reading the stopped workflow's\nstatus and cost on every tick until it ends, and counts its spend on the run (P3d).",
+        "operationId": "stop_cancelling_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/retry-lookup": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Lookup Run",
+        "description": "Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status\ndid not read past its search's end, or SwarmCloud answered it with 404s that prove\nnothing, or its confirmed cancel still reads CANCELLING. Read, its cost is counted\non the run and it is followed until it ends. That workflow only, at most once per\n30 s per run (429 sooner).",
+        "operationId": "retry_lookup_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/retry-import": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Import Run",
+        "description": "Retry importing a step's output (Inbox: ``imports``, ``can_retry_import``): Oracle\nstopped after its resumed advance failed 5 times in a row; the next tick tries again,\nthe count reset. Owners only; audited.",
+        "operationId": "retry_import_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/cancel-again": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Cancel Again Run",
+        "description": "Cancel again (Inbox: ``cancel_again``): a workflow an approver stopped cancelling,\nwhose spend took the ended run over its ceiling, has Oracle's cancel calls turned\nback on; its status and cost are still read until it ends, and nothing restarts\n(P3d). An owner or the approver who created the run; audited.",
+        "operationId": "cancel_again_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelAgain"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/dismiss-overrun": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Dismiss Overrun Run",
+        "description": "Clear an ended run's overrun from the Inbox (``can_dismiss_overrun``: nothing of\nthe run is left to read). The overrun stays recorded on the run; audited.",
+        "operationId": "dismiss_overrun_run",
         "security": [
           {
             "HTTPBearer": []
@@ -10409,6 +10780,23 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "name": "asked_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "me",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asked To"
             }
           },
           {
@@ -20224,6 +20612,21 @@
         ],
         "title": "Body_upload_files"
       },
+      "CancelAgain": {
+        "properties": {
+          "workflow_id": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Workflow Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_id"
+        ],
+        "title": "CancelAgain"
+      },
       "CatalogModuleDetail": {
         "properties": {
           "key": {
@@ -20733,7 +21136,10 @@
             "type": "string",
             "enum": [
               "approved",
-              "changes_requested"
+              "changes_requested",
+              "confirm",
+              "redo",
+              "continue"
             ],
             "title": "Decision"
           },
@@ -20861,6 +21267,16 @@
             "type": "boolean",
             "title": "Can Decide",
             "default": false
+          },
+          "console": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsoleAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -22590,6 +23006,147 @@
         ],
         "title": "ConsentRequestOut",
         "description": "What the consent screen shows for a pending authorization request."
+      },
+      "ConsoleAnswer": {
+        "properties": {
+          "answered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered By"
+          },
+          "on_behalf_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Behalf Of"
+          },
+          "answered_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          },
+          "via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Via"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MERGE",
+                  "NOT_YET"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "findings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          },
+          "counted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counted"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "needs": {
+            "type": "string",
+            "enum": [
+              "confirm",
+              "redo_or_continue",
+              "unreadable",
+              "unread"
+            ],
+            "title": "Needs"
+          },
+          "revise": {
+            "type": "boolean",
+            "title": "Revise",
+            "default": false
+          },
+          "redo_segment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redo Segment"
+          },
+          "redo_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redo Cost Usd"
+          },
+          "can_redo": {
+            "type": "boolean",
+            "title": "Can Redo",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "needs"
+        ],
+        "title": "ConsoleAnswer",
+        "description": "What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):\nan answer that does not count (its answerer is not an Oracle member with the\ncheckpoint's role), a counted change request the workflow had no revision step for,\nan answer Oracle could not read, or one it has not read yet (``unread``: SwarmCloud\nerrors, a 404 or a lagging record; read again on every tick)."
       },
       "CriterionInfo": {
         "properties": {
@@ -27276,6 +27833,16 @@
             "title": "Can Decide",
             "default": false
           },
+          "console": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsoleAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "flow": {
             "type": "string",
             "enum": [
@@ -27437,6 +28004,30 @@
             },
             "type": "array",
             "title": "Overruns"
+          },
+          "lookups": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "type": "array",
+            "title": "Lookups",
+            "default": []
+          },
+          "searches": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "type": "array",
+            "title": "Searches",
+            "default": []
+          },
+          "imports": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "type": "array",
+            "title": "Imports",
+            "default": []
           },
           "feedback": {
             "items": {
@@ -29868,6 +30459,35 @@
           "unmapped_sections"
         ],
         "title": "ManifestOut"
+      },
+      "McpServerRegistration": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "created",
+              "updated",
+              "unchanged"
+            ],
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "url",
+          "result"
+        ],
+        "title": "McpServerRegistration",
+        "description": "Oracle's MCP server in the runtime (``oracle``, at ORACLE_PUBLIC_URL + /mcp)."
       },
       "Me": {
         "properties": {
@@ -34111,6 +34731,82 @@
             ],
             "title": "Error"
           },
+          "stuck": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stuck"
+          },
+          "can_retry": {
+            "type": "boolean",
+            "title": "Can Retry",
+            "default": false
+          },
+          "can_stop_cancelling": {
+            "type": "boolean",
+            "title": "Can Stop Cancelling",
+            "default": false
+          },
+          "can_retry_lookup": {
+            "type": "boolean",
+            "title": "Can Retry Lookup",
+            "default": false
+          },
+          "cancel_again": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cancel Again",
+            "default": []
+          },
+          "can_dismiss_overrun": {
+            "type": "boolean",
+            "title": "Can Dismiss Overrun",
+            "default": false
+          },
+          "searching": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searching"
+          },
+          "import_failed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Failed"
+          },
+          "can_retry_import": {
+            "type": "boolean",
+            "title": "Can Retry Import",
+            "default": false
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "knobs": {
             "$ref": "#/components/schemas/KnobsOut"
           },
@@ -34201,6 +34897,11 @@
             },
             "type": "array",
             "title": "Checkpoints"
+          },
+          "token_read_only": {
+            "type": "boolean",
+            "title": "Token Read Only",
+            "default": false
           }
         },
         "type": "object",
@@ -34299,6 +35000,36 @@
         },
         "type": "object",
         "title": "RunPatch"
+      },
+      "RunProgress": {
+        "properties": {
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "now": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Now"
+          }
+        },
+        "type": "object",
+        "required": [
+          "done",
+          "total"
+        ],
+        "title": "RunProgress",
+        "description": "Segments done of the run's total, and what it does now: Home's In flight row."
       },
       "RunSummary": {
         "properties": {
@@ -34490,6 +35221,82 @@
               }
             ],
             "title": "Error"
+          },
+          "stuck": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stuck"
+          },
+          "can_retry": {
+            "type": "boolean",
+            "title": "Can Retry",
+            "default": false
+          },
+          "can_stop_cancelling": {
+            "type": "boolean",
+            "title": "Can Stop Cancelling",
+            "default": false
+          },
+          "can_retry_lookup": {
+            "type": "boolean",
+            "title": "Can Retry Lookup",
+            "default": false
+          },
+          "cancel_again": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cancel Again",
+            "default": []
+          },
+          "can_dismiss_overrun": {
+            "type": "boolean",
+            "title": "Can Dismiss Overrun",
+            "default": false
+          },
+          "searching": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searching"
+          },
+          "import_failed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Failed"
+          },
+          "can_retry_import": {
+            "type": "boolean",
+            "title": "Can Retry Import",
+            "default": false
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -34502,6 +35309,43 @@
           "created_at"
         ],
         "title": "RunSummary"
+      },
+      "RuntimeFeatures": {
+        "properties": {
+          "mcp": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "unknown"
+            ],
+            "title": "Mcp",
+            "default": "unknown"
+          },
+          "await_input": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "unknown"
+            ],
+            "title": "Await Input",
+            "default": "unknown"
+          },
+          "service_answer": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "unknown"
+            ],
+            "title": "Service Answer",
+            "default": "unknown"
+          }
+        },
+        "type": "object",
+        "title": "RuntimeFeatures",
+        "description": "Adapter v2's switches in the runtime: caller MCP (#1433), waits for a person\n(#1436), and Oracle's principal answering them."
       },
       "RuntimeStatusOut": {
         "properties": {
@@ -34538,6 +35382,22 @@
           "can_reach_oracle": {
             "type": "boolean",
             "title": "Can Reach Oracle"
+          },
+          "features": {
+            "$ref": "#/components/schemas/RuntimeFeatures",
+            "default": {
+              "mcp": "unknown",
+              "await_input": "unknown",
+              "service_answer": "unknown"
+            }
+          },
+          "feature_reasons": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Feature Reasons",
+            "default": {}
           },
           "notes": {
             "items": {
@@ -35517,6 +36377,28 @@
               }
             ],
             "title": "Note"
+          },
+          "note_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note By"
+          },
+          "not_applied": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Applied"
           },
           "state": {
             "anyOf": [

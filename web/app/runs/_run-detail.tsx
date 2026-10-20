@@ -13,6 +13,7 @@ import {
   InspectorRow,
   InspectorSection,
   LinkButton,
+  Notice,
   Page,
   PageHeader,
   Panel,
@@ -26,24 +27,29 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import {
+  CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
+  RETRY_CONFIRM,
   RUN_STATUS_LABEL,
   RunStatusBadge,
+  STOP_CANCELLING_CONFIRM,
   RunsWhere,
   SEGMENT_STATUS_KIND,
   SEGMENT_STATUS_LABEL,
   SpendBar,
   shortId,
   usd,
+  type CheckpointChoice,
   type CheckpointOut,
+  type ConsoleAnswer,
   type RunOut,
   type SegmentOut,
 } from "./_lib";
 
 const POLL_MS = 5000;
 
-type Decide = (cp: CheckpointOut, decision: "approved" | "changes_requested", note: string) => void;
+type Decide = (cp: CheckpointOut, decision: CheckpointChoice, note: string) => void;
 
 export function RunDetail({ id }: { id: string }) {
   const q = useQuery(`run|${id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })));
@@ -160,6 +166,98 @@ export function RunDetail({ id }: { id: string }) {
       <Split inspector={<RunInspector run={run} />}>
         {error && <ErrorNote>{error}</ErrorNote>}
         {run.error && <ErrorNote>{run.error}</ErrorNote>}
+        {run.stuck && (
+          <Notice
+            testId="run-stuck"
+            action={
+              mayManage && (
+                <>
+                  {run.can_retry && (
+                    <Button
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm(RETRY_CONFIRM)) {
+                          void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)));
+                        }
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  )}
+                  {run.can_stop_cancelling && (
+                    <Button
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm(STOP_CANCELLING_CONFIRM)) {
+                          void act(() => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path)));
+                        }
+                      }}
+                    >
+                      Stop cancelling
+                    </Button>
+                  )}
+                  {run.can_retry_lookup && (
+                    <Button disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path)))}>
+                      Retry lookup
+                    </Button>
+                  )}
+                  {(run.cancel_again ?? []).map((wid, _, all) => (
+                    <Button
+                      key={wid}
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm(CANCEL_AGAIN_CONFIRM)) {
+                          void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path, body: { workflow_id: wid } })));
+                        }
+                      }}
+                    >
+                      {all.length > 1 ? `Cancel again ${wid}` : "Cancel again"}
+                    </Button>
+                  ))}
+                  {run.can_dismiss_overrun && (
+                    <Button
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/dismiss-overrun", path)))}
+                    >
+                      Dismiss
+                    </Button>
+                  )}
+                </>
+              )
+            }
+          >
+            {run.stuck}
+          </Notice>
+        )}
+        {run.import_failed && (
+          <Notice
+            tone="error"
+            testId="run-import-failed"
+            action={
+              owner &&
+              run.can_retry_import && (
+                <Button disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-import", path)))}>
+                  Retry
+                </Button>
+              )
+            }
+          >
+            {run.import_failed}
+          </Notice>
+        )}
+        {run.searching && <Notice testId="run-searching">{run.searching}</Notice>}
+        {run.token_read_only && (
+          <Notice testId="run-token-read-only">
+            <span className="inline-flex items-center gap-2">
+              Agents may read Oracle, not write to it
+              <InfoTip label="read-only agents" align="start" side="bottom">
+                A checkpoint wait is open in SwarmCloud (or its answer is not read or does not count yet, or a lost submission
+                is unresolved), so the run&apos;s agents may read Oracle but their writes are refused.
+              </InfoTip>
+            </span>
+          </Notice>
+        )}
         <Panel
           title={
             <>
@@ -403,6 +501,17 @@ function SegmentItem({
                 {CP_LABEL[cp.status]}
                 {cp.status === "pending" && <span className="sr-only"> for an {cp.approver_role} or above</span>}
               </Chip>
+              {cp.console && (
+                // Answered in SwarmCloud's console; who answered and what Oracle still needs, on hover.
+                <Chip
+                  kind="warn"
+                  className="ml-1.5"
+                  data-testid="console-answer"
+                  title={`Answered in SwarmCloud by ${cp.console.answered_by ?? "someone"}: ${CONSOLE_NEEDS[cp.console.needs]}`}
+                >
+                  SwarmCloud answer
+                </Chip>
+              )}
             </span>
           ))}
         </span>
@@ -526,6 +635,11 @@ function Artifacts({ runId, seq, names }: { runId: string; seq: number; names: s
 
 function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy: boolean; onDecide: Decide; anchor?: boolean }) {
   const [note, setNote] = useState("");
+  const answer = cp.console;
+  // A counted console change request the workflow went on past: Redo or Continue only.
+  const redoOrContinue = answer?.needs === "redo_or_continue";
+  // Redo carries the console's findings, else the note: the API refuses it without either.
+  const redoBlocked = !answer?.can_redo && !note.trim();
   return (
     <div
       id={anchor ? "decide" : undefined}
@@ -545,22 +659,96 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
         </Chip>
       </div>
       {cp.note && <p className="mt-1.5 text-text2">{cp.note}</p>}
+      {answer && <ConsolePanel answer={answer} />}
       <textarea
         aria-label="Note for the agents"
-        placeholder="Note (required to request changes)"
+        placeholder={redoOrContinue ? "Note (optional, added to the findings)" : "Note (required to request changes)"}
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={2}
         className={`${INPUT} mt-2.5 placeholder:text-text2`}
       />
       <div className="mt-2 flex flex-wrap gap-2">
-        <Button variant="solid" icon="check" disabled={busy} onClick={() => onDecide(cp, "approved", note)}>
-          Approve and continue
-        </Button>
-        <Button disabled={busy || !note.trim()} onClick={() => onDecide(cp, "changes_requested", note)}>
-          Request changes
-        </Button>
+        {redoOrContinue ? (
+          <>
+            <Button variant="solid" icon="check" disabled={busy} onClick={() => onDecide(cp, "continue", note)}>
+              Continue
+            </Button>
+            <Button
+              disabled={busy || redoBlocked}
+              title={redoBlocked ? "No findings were recorded: write a note to redo" : undefined}
+              onClick={() => onDecide(cp, "redo", note)}
+            >
+              Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)}, one more segment)
+            </Button>
+          </>
+        ) : (
+          <>
+            {answer?.needs === "confirm" && (
+              <Button variant="solid" icon="check" disabled={busy} onClick={() => onDecide(cp, "confirm", note)}>
+                Confirm {answer.verdict === "MERGE" ? "approval" : "change request"}
+              </Button>
+            )}
+            <Button
+              variant={answer?.needs === "confirm" ? "secondary" : "solid"}
+              icon={answer?.needs === "confirm" ? undefined : "check"}
+              disabled={busy}
+              onClick={() => onDecide(cp, "approved", note)}
+            >
+              Approve and continue
+            </Button>
+            <Button disabled={busy || !note.trim()} onClick={() => onDecide(cp, "changes_requested", note)}>
+              Request changes
+            </Button>
+            {(answer?.needs === "unreadable" || answer?.needs === "unread") && (
+              <Button disabled={busy || redoBlocked} onClick={() => onDecide(cp, "redo", note)}>
+                Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)})
+              </Button>
+            )}
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+const CONSOLE_NEEDS: Record<ConsoleAnswer["needs"], string> = {
+  confirm:
+    "It does not count on its own: an approver confirms it or decides otherwise. Until then the run's agents may read Oracle but not write to it.",
+  redo_or_continue:
+    "The workflow had no revision step here and went on regardless. Redo runs this segment again as a new workflow with the findings; Continue keeps what ran.",
+  unreadable: "Oracle could not read the recorded verdict. Approving follows the workflow; Redo runs the segment again.",
+  unread:
+    "Oracle has not read the answer yet and reads it again each minute. Until then the run's agents may read Oracle but not write to it.",
+};
+
+/** Who answered in SwarmCloud's console and what Oracle still needs; the why sits in the (i). */
+function ConsolePanel({ answer: c }: { answer: ConsoleAnswer }) {
+  return (
+    <div className="mt-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn" data-testid="console-answer">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
+        <span>
+          Answered in SwarmCloud by <span className="font-semibold">{c.answered_by ?? "someone"}</span>
+          {c.via && ` via ${c.via}`}
+          {c.verdict && (
+            <>
+              : <span className="font-semibold">{c.verdict === "MERGE" ? "approved" : "changes requested"}</span>
+            </>
+          )}
+        </span>
+        {c.answered_at && <span className="tnum">{formatDateTime(c.answered_at)}</span>}
+        <InfoTip label="the SwarmCloud answer" align="start" side="bottom">
+          {CONSOLE_NEEDS[c.needs]}
+        </InfoTip>
+      </div>
+      {c.findings.length > 0 && (
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          {c.findings.map((f, i) => (
+            <li key={i}>{f}</li>
+          ))}
+        </ul>
+      )}
+      {c.reason && c.counted === false && <p className="mt-1">Not counted: {c.reason}.</p>}
     </div>
   );
 }
