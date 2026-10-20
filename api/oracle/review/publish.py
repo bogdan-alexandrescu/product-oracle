@@ -839,8 +839,8 @@ async def publish_check(
         blockers.append(
             _problem(
                 "superseded_version",
-                f"Version {version.number} is not the latest (version {latest} is); only "
-                "the latest version is published (company setting publish_latest_only)",
+                f"v{latest} exists: only the latest version can be published (company "
+                "setting publish_latest_only)",
             )
         )
     published = await db.scalar(
