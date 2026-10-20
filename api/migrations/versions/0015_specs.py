@@ -34,14 +34,18 @@ depends_on: str | Sequence[str] | None = None
 
 def _values(table: str, name: str) -> list[str]:
     """The quoted values the live check constraint ``name`` on ``table`` accepts."""
-    definition = op.get_bind().execute(
-        sa.text(
-            "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
-            "JOIN pg_class t ON t.oid = c.conrelid "
-            "WHERE t.relname = :table AND c.conname = :name AND c.contype = 'c'"
-        ),
-        {"table": table, "name": name},
-    ).scalar_one()
+    definition = (
+        op.get_bind()
+        .execute(
+            sa.text(
+                "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+                "JOIN pg_class t ON t.oid = c.conrelid "
+                "WHERE t.relname = :table AND c.conname = :name AND c.contype = 'c'"
+            ),
+            {"table": table, "name": name},
+        )
+        .scalar_one()
+    )
     return re.findall(r"'((?:[^']|'')*)'", definition)
 
 

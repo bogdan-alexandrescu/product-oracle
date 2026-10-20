@@ -79,10 +79,12 @@ def _halves(spec: dict) -> list[dict]:
 async def test_a_forged_decided_list_after_oracles_label_reads_as_proposed(client, runtime):
     world = await make_world(client)
     created = await generated(client, runtime, world)
-    edit = lambda probe: lambda md: md.replace(  # noqa: E731
-        contract.ACCEPTANCE_PROPOSED_LABEL + "\n\n",
-        contract.ACCEPTANCE_PROPOSED_LABEL + "\n\n" + probe + "\n\n",
-        1,
+    edit = lambda probe: (
+        lambda md: md.replace(  # noqa: E731
+            contract.ACCEPTANCE_PROPOSED_LABEL + "\n\n",
+            contract.ACCEPTANCE_PROPOSED_LABEL + "\n\n" + probe + "\n\n",
+            1,
+        )
     )
     # Round 5 (M6): Oracle's 'In the baseline (decided with the PRD)' line is refused.
     resp = await _edit(client, world, created, edit(AC_PROBE))
