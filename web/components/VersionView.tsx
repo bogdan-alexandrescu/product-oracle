@@ -781,6 +781,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             </LinkButton>
           )}
           <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
+          {document_?.kind === "prd" && n === latest && (
+            <LinkButton icon="check" href={`/documents/${doc}/publish`}>
+              Check readiness
+            </LinkButton>
+          )}
           {document_?.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
         </div>
 
