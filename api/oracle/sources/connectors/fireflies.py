@@ -630,8 +630,10 @@ class FirefliesConnector:
                     listed.append((when, entry))
                     if when and (newest_listed is None or when > newest_listed):
                         newest_listed = when
-                    if series_key(entry) in picked.series and len(aliases) < MAX_ALIASES:
-                        aliases.add(title_key(entry))
+                    key = series_key(entry)
+                    if key.startswith("cal:") and key in picked.series:
+                        if len(aliases) < MAX_ALIASES:
+                            aliases.add(title_key(entry))
                 if done:
                     break
 
