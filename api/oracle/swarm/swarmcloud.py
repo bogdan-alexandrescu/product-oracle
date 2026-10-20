@@ -18,6 +18,7 @@ place for a credential) and every run says so in its notes.
 """
 
 import asyncio
+import json
 import re
 import time
 from dataclasses import dataclass, field
@@ -43,6 +44,10 @@ NO_MCP_NOTE = (
 # Text artifacts worth bringing back; agent streams and logs stay in SwarmCloud.
 TEXT_SUFFIXES = (".md", ".yaml", ".yml", ".json", ".txt")
 MAX_ARTIFACT_BYTES = 1_000_000
+# How many text artifacts one read of a workflow downloads at most (the agent decides how
+# many it leaves), and the largest artifact listing it reads.
+MAX_ARTIFACT_FILES = 32
+MAX_LISTING_BYTES = 1_000_000
 METADATA_IDENTITY_URL = (
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity"
 )
@@ -205,6 +210,33 @@ class SwarmCloudRuntime:
             )
         return resp
 
+    async def _capped(
+        self, client: httpx.AsyncClient, path: str, cap: int, **kwargs: Any
+    ) -> bytes | None:
+        """GET ``path``, read as it arrives: None as soon as it is larger than ``cap``
+        bytes (announced or read), without reading the rest."""
+        headers = {"Authorization": await self._auth.header(client)}
+        try:
+            async with client.stream("GET", path, headers=headers, **kwargs) as resp:
+                if resp.status_code >= 400:
+                    await resp.aread()
+                    raise RuntimeUnavailable(
+                        f"SwarmCloud refused GET {path}: HTTP {resp.status_code} {_detail(resp)}"
+                    )
+                length = resp.headers.get("content-length")
+                if length and length.isdigit() and int(length) > cap:
+                    return None
+                body = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    body += chunk
+                    if len(body) > cap:
+                        return None
+                return bytes(body)
+        except httpx.HTTPError as exc:
+            raise RuntimeUnavailable(
+                f"cannot reach SwarmCloud (GET {path}): {type(exc).__name__}"
+            ) from None
+
     async def submit(self, spec: WorkflowSpec) -> str:
         body = {
             "steps": [
@@ -288,20 +320,33 @@ class SwarmCloudRuntime:
         order = [s.get("task_id") for s in (payload.get("workflow") or {}).get("steps") or []]
         task_ids = [t for t in order if t] or [t.get("id") for t in payload.get("tasks") or []]
         files: dict[str, str] = {}
+        read = 0
         async with self._client() as client:
             # Step order: a later step's file of the same name wins (the revised draft).
+            # At most MAX_ARTIFACT_FILES are downloaded, each refused past
+            # MAX_ARTIFACT_BYTES while it is read: the agent decides what it leaves.
             for task_id in task_ids:
-                listing = (await self._call(client, "GET", f"/v1/tasks/{task_id}/artifacts")).json()
-                for entry in listing.get("artifacts") or []:
-                    name = entry.get("name") or ""
+                path = f"/v1/tasks/{task_id}/artifacts"
+                raw = await self._capped(client, path, MAX_LISTING_BYTES)
+                try:
+                    listing = json.loads(raw) if raw is not None else {}
+                except ValueError:
+                    listing = {}
+                entries = listing.get("artifacts") if isinstance(listing, dict) else None
+                for entry in entries if isinstance(entries, list) else []:
+                    if not isinstance(entry, dict):
+                        continue
+                    name = str(entry.get("name") or "")
                     if entry.get("role") or not name.lower().endswith(TEXT_SUFFIXES):
                         continue
-                    resp = await self._call(
-                        client, "GET", f"/v1/tasks/{task_id}/artifacts/raw", params={"name": name}
+                    if read >= MAX_ARTIFACT_FILES:
+                        return files
+                    read += 1
+                    content = await self._capped(
+                        client, f"{path}/raw", MAX_ARTIFACT_BYTES, params={"name": name}
                     )
-                    if len(resp.content) > MAX_ARTIFACT_BYTES:
-                        continue
-                    files[name.rsplit("/", 1)[-1]] = resp.content.decode("utf-8", "replace")
+                    if content is not None:
+                        files[name.rsplit("/", 1)[-1]] = content.decode("utf-8", "replace")
         return files
 
     async def cancel(self, workflow_id: str) -> None:

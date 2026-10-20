@@ -24,13 +24,15 @@ document the run will create), ``spend_ceiling_usd``, and for prd_to_roadmap
 ``theme`` (the roadmap's).
 """
 
+import asyncio
 import copy
 import logging
 import uuid
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,6 +98,9 @@ from oracle.templates.builtins import (
 from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.tenancy import current_tenant, tenant_session
 from oracle.tenant_settings import TenantSetting
+
+if TYPE_CHECKING:
+    from oracle.members.models import MemberFollowUp
 
 log = logging.getLogger(__name__)
 
@@ -987,6 +992,9 @@ async def _roadmap_context(
 # decision): the request commits under the review gate, then submits it outside the gate
 # (:func:`submit_queued`). If that never happens, the tick submits it.
 QUEUED = "waiting to be submitted to the agent runtime"
+# How long one tick pass on one run may spend on runtime calls in all (its status, its
+# artifacts, a submission): past it the pass gives up and the next tick tries again.
+TICK_RUN_SECONDS = 60.0
 # How long a submission under way keeps the tick off its segment: past it, the process
 # that claimed it is taken to be gone and the tick submits the segment again.
 CLAIM_SECONDS = 300
@@ -1014,8 +1022,9 @@ async def _prepare(
     sdef = flow.segment(segment.name)
     art = _art(segment)
     attempt = len(art["attempts"]) + 1
-    # A retry after the runtime refused a re-run keeps the reviewer's note.
-    change_request = change_request or art.pop("pending_note", None)
+    # A retry after the runtime refused a re-run keeps the reviewer's note; it stays
+    # recorded until a submission succeeds (:func:`_submitted`).
+    change_request = change_request or art.get("pending_note")
     if segment.estimate_usd is None:
         segment.estimate_usd = flows.segment_estimate(sdef, knobs)
 
@@ -1081,6 +1090,7 @@ def _submitted(run: Run, segment: RunSegment, sub: _Submission, workflow_id: str
     entry["state"] = "running"
     art.pop("decision", None)
     art.pop("claim", None)
+    art.pop("pending_note", None)
     art["attempts"].append(entry)
     for note in runtime.notes() if not runtime.can_reach_oracle else []:
         if note not in art["notes"]:
@@ -1165,20 +1175,62 @@ async def _locked(db: AsyncSession, run_id: uuid.UUID) -> tuple[Run | None, list
     return run, segments
 
 
-async def submit_queued(db: AsyncSession, run_id: uuid.UUID) -> None:
-    """Submit the run's queued segment, after the request that queued it committed:
-    outside the review gate, and without the run's row lock held across the call.
+def _waiting(segment: RunSegment) -> bool:
+    """Pending with a reason: queued by a request (:data:`QUEUED`), or refused by the
+    runtime earlier (the error it gave). Either waits to be submitted."""
+    return segment.status == "pending" and bool(segment.error)
+
+
+async def _within[T](call: Awaitable[T], deadline: float | None) -> T:
+    """A runtime call, cut at ``deadline`` (loop time; None: the client's own timeouts).
+    Only the call is timed: a database query is never cancelled halfway."""
+    if deadline is None:
+        return await call
+    try:
+        async with asyncio.timeout_at(deadline):
+            return await call
+    except TimeoutError:
+        raise RuntimeUnavailable(
+            f"the agent runtime did not answer within the tick's {TICK_RUN_SECONDS:g} s for "
+            "this run"
+        ) from None
+
+
+def _cancel_follow_up(
+    db: AsyncSession, member_id: uuid.UUID, segment_id: uuid.UUID, workflow_id: str
+) -> "MemberFollowUp":
+    """Record the cancel of a workflow at the runtime as a follow-up, in the transaction
+    that decides it: made right after the commit, retried by the tick if it fails or the
+    process dies first (``oracle.members.service.run_follow_ups``)."""
+    from oracle.members.models import MemberFollowUp
+
+    row = MemberFollowUp(
+        id=uuid.uuid4(),
+        member_id=member_id,
+        kind="run_cancel",
+        target_id=segment_id,
+        workflow_id=workflow_id,
+    )
+    db.add(row)
+    return row
+
+
+async def submit_queued(
+    db: AsyncSession, run_id: uuid.UUID, *, deadline: float | None = None
+) -> None:
+    """Submit the run's waiting segment (:func:`_waiting`), after the request that queued
+    it committed: outside the review gate, and without the run's row lock held across
+    the call. The tick calls it too, for a segment the runtime refused before.
 
     The segment is claimed (and its run token minted) in one transaction, the runtime is
     called with nothing held, and the outcome recorded in another. If the run changed
     meanwhile (cancelled, its approval or the checkpoint decision voided by a disable),
-    the workflow the runtime started is cancelled at once; a cancel that fails is
-    retried from the tick. A refused submission waits for the tick's retry, and so does
-    one whose process died mid-call (its claim expires). Commits."""
-    from oracle.members.models import MemberFollowUp
-
+    the workflow the runtime started is cancelled at once (a follow-up recorded with that
+    decision, retried from the tick). A refused submission waits for the tick's retry,
+    and so does one whose process died mid-call or that ``deadline`` (loop time) cut
+    short: its claim expires. Commits."""
     run, segments = await _locked(db, run_id)
-    segment = next((s for s in segments if s.status == "pending" and s.error == QUEUED), None)
+    segment = next((s for s in segments if _waiting(s)), None)
     if run is None or run.status != "running" or segment is None or _claimed(segment):
         await db.rollback()
         return
@@ -1192,9 +1244,16 @@ async def submit_queued(db: AsyncSession, run_id: uuid.UUID) -> None:
     failure: RuntimeUnavailable | None = None
     workflow_id = ""
     try:
-        workflow_id = await get_runtime().submit(sub.spec)
+        workflow_id = await _within(get_runtime().submit(sub.spec), deadline)
     except RuntimeUnavailable as exc:
+        if deadline is not None and asyncio.get_running_loop().time() >= deadline:
+            # Cut short: the runtime may have started it. The claim stands until it
+            # expires, so it is not submitted twice right away.
+            raise
         failure = exc
+    except Exception as exc:  # noqa: BLE001 - recorded as a refusal, never a 500 after commit
+        log.exception("run %s: submission failed", run_id)
+        failure = RuntimeUnavailable(f"the submission failed ({type(exc).__name__})")
 
     run, segments = await _locked(db, run_id)
     segment = next((s for s in segments if s.id == segment_id), None)
@@ -1213,7 +1272,6 @@ async def submit_queued(db: AsyncSession, run_id: uuid.UUID) -> None:
         return
     if ours:
         sub.art = _art(segment)  # type: ignore[arg-type]
-        sub.art.pop("pending_note", None)
         _submitted(run, segment, sub, workflow_id)  # type: ignore[arg-type]
         await db.commit()
         return
@@ -1223,37 +1281,24 @@ async def submit_queued(db: AsyncSession, run_id: uuid.UUID) -> None:
         {"workflow_id": workflow_id, "segment_id": str(segment_id),
          "reason": "the run changed while its segment was submitted"},
     )  # fmt: skip
+    member_id = (run.created_by if run is not None else None) or run_id
+    row = _cancel_follow_up(db, member_id, segment_id, workflow_id)
     await db.commit()
-    try:
-        await get_runtime().cancel(workflow_id)
-    except RuntimeUnavailable as exc:
-        log.warning("run %s: cancel of %s failed: %s", run_id, workflow_id, exc)
-        db.add(
-            MemberFollowUp(
-                member_id=(run.created_by if run is not None else None) or run_id,
-                kind="run_cancel",
-                target_id=segment_id,
-                workflow_id=workflow_id,
-            )
-        )
-        await db.commit()
+    await cancel_at_runtime(db, [row.id])
 
 
-async def cancel_at_runtime(db: AsyncSession, workflows: list[tuple[uuid.UUID, str]]) -> None:
-    """Cancel cancelled segments' workflows (segment id, workflow id) at the runtime,
-    after the cancel committed (outside the review gate); a cancel the runtime does not
-    confirm is noted on the segment. Commits."""
-    failed: dict[uuid.UUID, str] = {}
-    for segment_id, workflow_id in workflows:
+async def cancel_at_runtime(db: AsyncSession, follow_ups: list[uuid.UUID]) -> None:
+    """Make the run_cancel follow-ups a cancel recorded (:func:`_cancel_follow_up`),
+    after it committed (outside the review gate). A cancel the runtime does not confirm
+    is noted on its segment and retried from the tick. Commits."""
+    from oracle.members import service as members_service
+
+    for follow_up_id in follow_ups:
         try:
-            await get_runtime().cancel(workflow_id)
-        except RuntimeUnavailable as exc:
-            failed[segment_id] = f"cancel not confirmed by the runtime: {exc}"
-    for segment_id, error in failed.items():
-        segment = await db.get(RunSegment, segment_id)
-        if segment is not None:
-            segment.error = error
-    await db.commit()
+            await members_service.attempt_follow_up(db, follow_up_id)
+        except Exception:  # noqa: BLE001 - the tick retries it
+            log.exception("run cancel follow-up %s could not be made", follow_up_id)
+            await db.rollback()
 
 
 def _recompute_spend(run: Run, segments: list[RunSegment]) -> None:
@@ -1429,6 +1474,30 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
     return result.model_dump(mode="json")
 
 
+async def _relocked(
+    db: AsyncSession, run: Run, segment: RunSegment, attempt: int, *, gate: bool
+) -> list[RunSegment] | None:
+    """After :func:`_advance` committed mid-way (an import runs in its own transaction):
+    take the run's row lock again (the review gate first, with ``gate``) and read the
+    run and its segments afresh into the same objects. None when the run is no longer
+    running (cancelled, by its owner or a disable of its creator, failed, paused) or the
+    segment is no longer this attempt, succeeded and being advanced: nothing more is
+    written for it, nothing opened or submitted."""
+    if gate:
+        from oracle.review import publish
+
+        await publish.gate_lock(db, shared=True)
+    fresh, segments = await _locked(db, run.id)
+    now = next((s for s in segments if s.id == segment.id), None)
+    if fresh is None or fresh.status != "running" or now is None or now.status != "succeeded":
+        return None
+    attempts = _art(now)["attempts"]
+    last = attempts[-1] if attempts else {}
+    if last.get("attempt", 1) != attempt or not last.get("advanced"):
+        return None
+    return segments
+
+
 async def _advance(
     db: AsyncSession,
     run: Run,
@@ -1436,11 +1505,17 @@ async def _advance(
     segments: list[RunSegment],
     *,
     queue: bool = False,
+    gate: bool = False,
 ) -> bool:
     """After a segment succeeded: import its draft, then open or skip its checkpoint
     (and submit the next segment, or with ``queue`` queue it: :func:`_submit`).
 
-    Returns False when this attempt of the segment was already advanced.
+    An import commits first (it runs in its own transaction), which releases the run's
+    row lock and, with ``gate`` (the caller held the review gate), the gate: both are
+    taken again and the run re-read before anything more is written (:func:`_relocked`).
+
+    Returns False when this attempt of the segment was already advanced, or the run
+    or the segment changed during an import.
     """
     flow, knobs = _flow(run), _knobs(run)
     sdef = flow.segment(segment.name)
@@ -1449,6 +1524,7 @@ async def _advance(
     if attempt.get("advanced"):
         return False
     attempt["advanced"] = True
+    number = attempt.get("attempt", 1)
     imported: dict[str, Any] | None = None
     baseline_import: dict[str, Any] | None = None
     if sdef.imports_baseline:
@@ -1460,8 +1536,11 @@ async def _advance(
             _set_art(segment, art)
             await db.commit()
             baseline_import = await _import_baseline(db, run, text)
-            # The commit released the run's row lock: take it again.
-            await db.execute(select(Run.id).where(Run.id == run.id).with_for_update())
+            # The commit released the run's row lock: take it again, read the run again.
+            fresh = await _relocked(db, run, segment, number, gate=gate)
+            if fresh is None:
+                return False
+            segments = fresh
         art["baseline_import"] = baseline_import
     items_check: dict[str, Any] | None = None
     if ITEMS_FILE in sdef.outputs:
@@ -1478,8 +1557,11 @@ async def _advance(
             _set_art(segment, art)
             await db.commit()
             imported = await _import_draft(db, run, kind, markdown)
-            # The commit released the run's row lock: take it again.
-            await db.execute(select(Run.id).where(Run.id == run.id).with_for_update())
+            # The commit released the run's row lock: take it again, read the run again.
+            fresh = await _relocked(db, run, segment, number, gate=gate)
+            if fresh is None:
+                return False
+            segments = fresh
             if imported.get("document_id"):
                 run.document_id = uuid.UUID(imported["document_id"])
                 _set_knob(run, "document_slug", None)
@@ -1568,26 +1650,65 @@ class _TickStats:
     paused: int = 0
 
 
-async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
+async def _tick_run(
+    db: AsyncSession, run_id: uuid.UUID, stats: _TickStats, deadline: float
+) -> None:
+    """One run's tick pass. The run's row lock is never held across a runtime call: the
+    run is locked and read, the transaction ends, the runtime is called (all of it
+    within ``deadline``, loop time), then the run is locked and read again and the
+    outcome written only if it still applies (the run still active, the segment still
+    running the same workflow). So a cancel, or a disable of the run's creator (which
+    holds the review gate while it waits on the run's row), never waits on SwarmCloud.
+    Commits."""
     runtime = get_runtime()
-    segments = await _segments(db, run.id)
+    run = await db.scalar(
+        select(Run)
+        .where(Run.id == run_id)
+        .with_for_update(skip_locked=True)
+        .execution_options(populate_existing=True)
+    )
+    if run is None or run.status not in ("running", "paused_overrun"):
+        await db.rollback()
+        return
+    stats.checked += 1
+    _, segments = await _locked(db, run_id)
     running = next((s for s in segments if s.status == "running"), None)
     if running is None:
-        if run.status == "running":
-            # A submission the runtime refused earlier: try again.
-            pending = next((s for s in segments if s.status == "pending" and s.error), None)
-            if pending is not None and _claimed(pending):
-                return  # a request's submission is under way (submit_queued)
-            if pending is not None:
-                await _submit(db, run, pending, segments)
-            else:
-                # Resumed after an overrun with a finished segment not yet advanced.
-                done = [s for s in segments if s.status == "succeeded"]
-                if done and await _advance(db, run, done[-1], segments):
-                    stats.advanced += 1
+        if run.status != "running":
+            await db.rollback()
+            return
+        # A submission the runtime refused earlier: try again (unless a request's
+        # submission is under way); claimed, then submitted with nothing held.
+        if any(_waiting(s) for s in segments):
+            await db.rollback()
+            await submit_queued(db, run_id, deadline=deadline)
+            return
+        # Resumed after an overrun with a finished segment not yet advanced.
+        done = [s for s in segments if s.status == "succeeded"]
+        if done and await _advance(db, run, done[-1], segments, queue=True):
+            stats.advanced += 1
+        await db.commit()
+        await submit_queued(db, run_id, deadline=deadline)
         return
 
-    status = await runtime.status(running.swarm_workflow_id)  # type: ignore[arg-type]
+    segment_id, workflow_id = running.id, running.swarm_workflow_id or ""
+    await db.commit()  # nothing held across the runtime calls
+    status = await _within(runtime.status(workflow_id), deadline)
+    files: dict[str, str] = {}
+    if status.terminal and status.state == "succeeded":
+        files = await _within(runtime.artifacts(workflow_id), deadline)
+
+    run, segments = await _locked(db, run_id)
+    running = next((s for s in segments if s.id == segment_id), None)
+    if (
+        run is None
+        or run.status not in ("running", "paused_overrun")
+        or running is None
+        or running.status != "running"
+        or running.swarm_workflow_id != workflow_id
+    ):
+        await db.rollback()  # cancelled, decided or ticked meanwhile: not ours to write
+        return
     art = _art(running)
     if art["attempts"]:
         art["attempts"][-1]["cost_usd"] = float(status.cost_usd)
@@ -1601,7 +1722,6 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
         stats.finished += 1
         running.finished_at = _now()
         if status.state == "succeeded":
-            files = await runtime.artifacts(running.swarm_workflow_id)  # type: ignore[arg-type]
             art["files"] = {**art["files"], **files}
             running.status = "succeeded"
             await revoke_run_tokens(db, run.id)
@@ -1611,6 +1731,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
             _set_art(running, art)
             await _finish(db, run, "failed", f"{running.name}: {running.error}")
             await audit.record(db, None, "run.failed", "run", run.id, {"segment": running.name})
+            await db.commit()
             return
     _set_art(running, art)
 
@@ -1626,16 +1747,23 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
             run.id,
             {"spent_usd": str(run.spent_usd), "ceiling_usd": str(ceiling)},
         )
+        await db.commit()
         return
+    advanced = False
     if run.status == "running" and running.status == "succeeded":
-        if await _advance(db, run, running, segments):
-            stats.advanced += 1
+        advanced = await _advance(db, run, running, segments, queue=True)
+        stats.advanced += advanced
+    await db.commit()
+    if advanced:
+        await submit_queued(db, run_id, deadline=deadline)
 
 
 async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
-    """Advance every active run of the session's tenant; one transaction per run."""
+    """Advance every active run of the session's tenant; within :data:`TICK_RUN_SECONDS`
+    of runtime calls per run, and never with a run's row lock held across one."""
     stats = _TickStats()
     errors: list[str] = []
+    loop = asyncio.get_running_loop()
     ids = list(
         await db.scalars(
             select(Run.id)
@@ -1643,15 +1771,10 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
             .order_by(Run.started_at, Run.id)
         )
     )
+    await db.rollback()
     for run_id in ids:
-        run = await db.scalar(select(Run).where(Run.id == run_id).with_for_update(skip_locked=True))
-        if run is None or run.status not in ("running", "paused_overrun"):
-            await db.rollback()
-            continue
-        stats.checked += 1
         try:
-            await _tick_run(db, run, stats)
-            await db.commit()
+            await _tick_run(db, run_id, stats, loop.time() + TICK_RUN_SECONDS)
         except RuntimeUnavailable as exc:
             await db.rollback()
             errors.append(f"run {run_id}: {exc}")
@@ -1703,13 +1826,20 @@ async def decide_checkpoint(
     note = (note or "").strip() or None
     if decision == "changes_requested" and not note:
         raise Invalid("say what to change: a note is required to request changes")
+    segments = await _segments(db, run.id)
+    seq = (cp.payload or {}).get("segment_seq")
+    segment = next((s for s in segments if s.seq == seq), None)
+    # Only a segment in the state its checkpoint expects is started: the checkpoint's
+    # segment succeeded, and the next one (approved) has not run.
+    later = next((s for s in segments if segment and s.seq > segment.seq), None)
+    if segment is None or segment.status != "succeeded":
+        raise RunError(f"the checkpoint's segment is {segment.status if segment else 'missing'}")
+    if decision == "approved" and later is not None and later.status != "pending":
+        raise RunError(f"the next segment is {later.status}, not waiting to start")
     cp.status = decision
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
-    segments = await _segments(db, run.id)
-    seq = (cp.payload or {}).get("segment_seq")
-    segment = next(s for s in segments if s.seq == seq)
     await audit.record(
         db,
         principal,
@@ -1720,7 +1850,7 @@ async def decide_checkpoint(
     )
     run.status = "running"
     if decision == "approved":
-        target = next((s for s in segments if s.seq > segment.seq), None)
+        target = later
         restore = "pending"
     else:
         target, restore = segment, segment.status
@@ -1792,10 +1922,11 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         raise RunError(f"run is already {run.status}")
     segments: list[RunSegment] = []
     await stop_run(db, principal, run, deferred=segments)
-    workflows = [(s.id, s.swarm_workflow_id or "") for s in segments]
+    member_id = run.created_by or run.id
+    rows = [_cancel_follow_up(db, member_id, s.id, s.swarm_workflow_id or "") for s in segments]
     await db.commit()
     # Outside the gate (taken by the route's re-check), after the cancel committed.
-    await cancel_at_runtime(db, workflows)
+    await cancel_at_runtime(db, [r.id for r in rows])
 
 
 async def stop_run(
@@ -1849,7 +1980,7 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     if not any(s.status == "running" for s in segments):
         done = [s for s in segments if s.status == "succeeded"]
         if done:
-            await _advance(db, run, done[-1], segments, queue=True)
+            await _advance(db, run, done[-1], segments, queue=True, gate=True)
     await db.commit()  # the router submits what it queued (submit_queued), outside the gate
 
 

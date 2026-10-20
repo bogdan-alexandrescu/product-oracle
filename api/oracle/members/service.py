@@ -680,6 +680,14 @@ async def _attempt(
         raise
 
 
+async def attempt_follow_up(
+    session: AsyncSession, follow_up_id: uuid.UUID
+) -> MemberFollowUp | None:
+    """Make a pending run_cancel follow-up now (the cancel that recorded it just
+    committed); a failure waits for the tick's retry. Commits."""
+    return await _attempt(session, None, None, follow_up_id, ("pending",))  # type: ignore[arg-type]
+
+
 async def _record_attempt(
     session: AsyncSession,
     principal: "Principal | None",
@@ -847,6 +855,10 @@ async def _follow_up(
     from oracle.swarm import RuntimeUnavailable, get_runtime
 
     segment = await session.get(RunSegment, row.target_id)
+    if segment is not None and segment.status in ("pending", "running"):
+        # Re-queued (or running again) since its workflow was cancelled: its error is
+        # its own now (a queued submission's marker), not this cancel's.
+        segment = None
     try:
         async with _call_deadline(deadline):
             await get_runtime().cancel(row.workflow_id or "")
