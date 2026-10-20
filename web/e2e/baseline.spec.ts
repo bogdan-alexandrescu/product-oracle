@@ -15,7 +15,7 @@ test("baseline: goals with weight, metric, target and horizon", async ({ page })
   await openBaseline(page);
   await expect(page.getByRole("tab", { name: /Graph/ })).toHaveAttribute("aria-selected", "true");
 
-  const goals = page.getByRole("list", { name: "Goals" }).getByRole("listitem");
+  const goals = page.getByRole("grid", { name: "Goals" }).getByTestId(/^goal-/);
   await expect(goals).toHaveCount(3);
 
   const activation = page.getByTestId("goal-g.activation");
@@ -25,7 +25,8 @@ test("baseline: goals with weight, metric, target and horizon", async ({ page })
   await expect(activation.locator('[data-attr="target"]')).toHaveText("45%");
   await expect(activation.locator('[data-attr="horizon"]')).toHaveText("2026-Q4");
   await expect(activation).toContainText("Confirmed");
-  await expect(activation.getByTestId("confidence")).toHaveText("0.78");
+  // Confidence is a ring, 0-100.
+  await expect(activation.getByTestId("confidence")).toHaveText("78");
   await expect(activation.getByTestId("confidence")).toHaveAttribute("data-tone", "green");
 
   const paid = page.getByTestId("goal-g.paid-conversion");
@@ -34,7 +35,7 @@ test("baseline: goals with weight, metric, target and horizon", async ({ page })
 
   // Only the proposed goal offers Confirm.
   await expect(page.getByTestId("goal-g.early-churn")).toContainText("Proposed");
-  await expect(page.getByRole("list", { name: "Goals" }).getByRole("button", { name: "Confirm" })).toHaveCount(1);
+  await expect(page.getByRole("grid", { name: "Goals" }).getByRole("button", { name: "Confirm" })).toHaveCount(1);
 });
 
 test("baseline: an approver confirms the proposed goal", async ({ page }) => {
@@ -55,16 +56,17 @@ test("baseline: an approver confirms the proposed goal", async ({ page }) => {
 test("baseline: products with their features, and an Unassigned group", async ({ page }) => {
   await openBaseline(page);
   const storefront = page.getByTestId("product-p.storefront");
-  await expect(storefront.getByRole("list", { name: "Features of Storefront" }).getByRole("listitem")).toHaveText([
+  await expect(storefront).toHaveAccessibleName("Features of Storefront");
+  await expect(storefront.getByTestId(/^feature-/)).toHaveText([
     /Guided setup/,
     /Sample data/,
     /Saved carts/,
   ]);
   const admin = page.getByTestId("product-p.admin-console");
-  await expect(admin.getByRole("listitem")).toHaveText([/Dark mode/, /Team invites/]);
+  await expect(admin.getByTestId(/^feature-/)).toHaveText([/Dark mode/, /Team invites/]);
   const unassigned = page.getByTestId("product-unassigned");
   await expect(unassigned).toContainText("Unassigned");
-  await expect(unassigned.getByRole("listitem")).toHaveText([/Usage export/]);
+  await expect(unassigned.getByTestId(/^feature-/)).toHaveText([/Usage export/]);
 
   // Flags from the trace report sit on the feature rows.
   await expect(page.getByTestId("feature-f.dark-mode").getByTestId("flag")).toHaveText(["Serves no goal"]);
@@ -160,7 +162,7 @@ test("baseline: editing a feature saves and locks it; unlock releases it", async
   await expect(edited.getByRole("status")).toContainText("now locked against agent changes");
   await expect(edited.getByTestId("lock-note")).toContainText("Locked by you");
   await expect(edited.locator('[data-attr="effort"]')).toHaveText("M");
-  await expect(edited.locator('[data-attr="status"]')).toHaveText("in_progress");
+  await expect(edited.locator('[data-attr="status"]')).toHaveText("In progress");
   await expect(row).toContainText("Sample store data");
   await expect(row).toContainText("Locked");
 
@@ -231,7 +233,7 @@ test("baseline: an approver resolves an open material conflict by picking a clai
 
   // The pick is a person's write: it locks the feature.
   await page.getByRole("tab", { name: /Graph/ }).click();
-  await expect(page.getByTestId("feature-f.saved-carts")).toContainText("in progress");
+  await expect(page.getByTestId("feature-f.saved-carts")).toContainText("In progress");
   await expect(page.getByTestId("feature-f.saved-carts")).toContainText("Locked");
 });
 
@@ -265,7 +267,7 @@ test("baseline: an approver accepts and rejects proposals", async ({ page }) => 
   await expect(drawer(page, "Guided setup").locator('[data-attr="effort"]')).toHaveText("L");
   await page.keyboard.press("Escape");
   await page.getByTestId("feature-f.dark-mode").getByRole("button", { name: "Dark mode" }).click();
-  await expect(drawer(page, "Dark mode").locator('[data-attr="status"]')).toHaveText("idea");
+  await expect(drawer(page, "Dark mode").locator('[data-attr="status"]')).toHaveText("Idea");
 });
 
 test("baseline: a viewer reads everything but sees no write buttons", async ({ page }) => {

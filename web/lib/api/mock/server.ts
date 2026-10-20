@@ -7,6 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
+import { mockUuid, seeded } from "./ids";
 import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
@@ -75,12 +76,7 @@ function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
 }
 const LATENCY_MS = 60;
 
-let counter = 0;
-function uuid(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  counter += 1;
-  return `00000000-0000-4000-8000-${String(Date.now() + counter).padStart(12, "0").slice(-12)}`;
-}
+const uuid = mockUuid;
 
 function hash(text: string): string {
   let h = 0x811c9dc5;
@@ -279,8 +275,8 @@ function seed(): Db {
     }
   }
   docs.get("usage-alerts-roadmap")!.status = "in_review";
-  db.runs = seedRuns(runsContext(db));
-  db.llm = seedLlm(llmContext(db, db.user_id, "owner"));
+  db.runs = seeded("runs", () => seedRuns(runsContext(db)));
+  db.llm = seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   return db;
 }
 
@@ -428,7 +424,7 @@ function load(): Db {
       // fall through to a fresh seed
     }
   }
-  const db = seed();
+  const db = seeded("db", seed);
   save(db);
   return db;
 }
@@ -812,7 +808,7 @@ function ensureV2(db: Db): V2Db {
   if (!db.v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
     const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
-    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
+    db.v2 = seeded("v2", () => seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id));
   }
   return db.v2;
 }
@@ -886,21 +882,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   const pool = await claudeAccountsRoute(req, p, q, me.role);
   if (pool) return pool;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
-  db.llm ??= seedLlm(llmContext(db, db.user_id, "owner"));
+  db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   const llm = llmContext(db, me.id, me.role);
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
   // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
-  if (!db.v2) {
-    const prd = db.documents.find((d) => d.kind === "prd");
-    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
-    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
-  }
+  const v2db = ensureV2(db);
   db.quality ??= seedQuality();
   const quality = await routeQuality(
     {
       db: db.quality,
-      v2: db.v2,
+      v2: v2db,
       userId: me.id,
       role: me.role,
       findVersion: (ref, n) => {
@@ -990,7 +982,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const handled = await laneF(db, req, p, m);
   if (handled) return handled;
 
-  db.runs ??= seedRuns(runsContext(db));
+  db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   if (runs) return runs;
 
@@ -1148,10 +1140,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   return notFound("Route");
 }
 
+/** One request at a time: each loads the whole db and saves it back, so two in flight would lose a write. */
+let queue: Promise<unknown> = Promise.resolve();
+
 export async function mockFetch(req: Request): Promise<Response> {
   await new Promise((r) => setTimeout(r, LATENCY_MS));
-  const db = load();
-  const res = await route(db, req);
-  save(db);
-  return res;
+  const next = queue.then(async () => {
+    const db = load();
+    const res = await route(db, req);
+    save(db);
+    return res;
+  });
+  queue = next.catch(() => undefined);
+  return next;
 }

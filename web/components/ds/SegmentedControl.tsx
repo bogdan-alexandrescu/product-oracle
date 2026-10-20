@@ -1,0 +1,85 @@
+"use client";
+
+import Link from "next/link";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
+
+export type Segment<V extends string> = {
+  value: V;
+  label: ReactNode;
+  /** A count after the label. */
+  count?: number | null;
+  /** Render as a link (route segments) instead of a button. */
+  href?: string;
+  testId?: string;
+  disabled?: boolean;
+};
+
+/**
+ * One choice of a few (v1 · v2 · v3, Brief · Full). Buttons carry aria-pressed;
+ * link segments carry aria-current. Arrow keys move between segments.
+ */
+export function SegmentedControl<V extends string>({
+  label,
+  items,
+  value,
+  onChange,
+  size = "md",
+}: {
+  /** Accessible name of the group. */
+  label: string;
+  items: Segment<V>[];
+  value: V | null | undefined;
+  onChange?: (v: V) => void;
+  size?: "sm" | "md";
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const els = [...(ref.current?.querySelectorAll<HTMLElement>("[data-seg]") ?? [])];
+    const at = els.indexOf(document.activeElement as HTMLElement);
+    if (at < 0) return;
+    e.preventDefault();
+    els[(at + (e.key === "ArrowRight" ? 1 : -1) + els.length) % els.length]?.focus();
+  };
+  const h = size === "sm" ? "h-8 px-3 text-sm" : "h-9 px-3.5 text-[15px]";
+  return (
+    <div
+      ref={ref}
+      role="group"
+      aria-label={label}
+      onKeyDown={onKey}
+      className="inline-flex max-w-full flex-none overflow-x-auto rounded-button border border-line-strong bg-surface"
+    >
+      {items.map((it) => {
+        const on = it.value === value;
+        const cls = `${h} flex items-center gap-2 border-r border-line font-medium whitespace-nowrap last:border-r-0 ${
+          on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
+        } disabled:cursor-not-allowed disabled:text-text2`;
+        const inner = (
+          <>
+            {it.label}
+            {it.count != null && <b className={`tnum font-semibold ${on ? "text-on-accent" : "text-text2"}`}>{it.count}</b>}
+          </>
+        );
+        return it.href ? (
+          <Link key={it.value} href={it.href} data-seg data-testid={it.testId} aria-current={on ? "page" : undefined} className={cls}>
+            {inner}
+          </Link>
+        ) : (
+          <button
+            key={it.value}
+            type="button"
+            data-seg
+            data-testid={it.testId}
+            aria-pressed={on}
+            disabled={it.disabled}
+            onClick={() => onChange?.(it.value)}
+            className={cls}
+          >
+            {inner}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

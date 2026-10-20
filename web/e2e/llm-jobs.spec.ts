@@ -1,10 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, section } from "./helpers";
+import { login, openSection, section, sectionAction, showAll } from "./helpers";
 
-/** The review panel's tab, in the visible version view. */
+/** The review panel's tab, in the visible version view; Feedback shows every section's items. */
 async function openTab(page: Page, name: string | RegExp) {
   await page.getByRole("tab", { name }).filter({ visible: true }).click();
+  if (name === "Feedback") await showAll(page);
 }
 
 function feedbackItem(page: Page, text: string) {
@@ -87,8 +88,8 @@ test("refine a section from an accepted suggestion: diff preview, accept, next v
   await feedbackItem(page, "how many teams asked").getByRole("button", { name: "Accept" }).click();
   await expect(feedbackItem(page, "how many teams asked").getByTestId("suggestion")).toContainText("Accepted");
 
-  const problem = section(page, "problem");
-  await problem.getByRole("button", { name: "Refine section 1. Problem" }).click();
+  const problem = await openSection(page, "problem");
+  await sectionAction(problem, "1. Problem", "Refine section 1. Problem");
   const refine = problem.getByTestId("refine-panel");
   await expect(refine.getByRole("checkbox")).toBeChecked();
   await refine.getByRole("button", { name: "Refine", exact: true }).click();
@@ -100,7 +101,7 @@ test("refine a section from an accepted suggestion: diff preview, accept, next v
   const revised = section(page, "problem");
   await expect(revised).toContainText("Seven in ten sales calls");
   // Section ids are kept; the other sections are untouched.
-  await expect(section(page, "roles")).toContainText("Three fixed roles");
+  await expect(await openSection(page, "roles")).toContainText("Three fixed roles");
 
   await openTab(page, "Feedback");
   await expect(feedbackItem(page, "how many teams asked")).toContainText("addressed in v3");
@@ -118,8 +119,8 @@ test("refine a section from an accepted suggestion: diff preview, accept, next v
 test("refine from an approver's instruction alone, editing before accepting", async ({ page }) => {
   await login(page, "approver@example.com");
   await page.goto("/documents/checkout-redesign/v/2");
-  const users = section(page, "users");
-  await users.getByRole("button", { name: /^Refine section/ }).click();
+  const users = await openSection(page, "users");
+  await sectionAction(users, "3. Users and jobs", /^Refine section/);
   const refine = users.getByTestId("refine-panel");
   await expect(refine).toContainText("No accepted suggestions on this section");
   await refine.getByLabel("Instruction (optional)").fill("Name the first-time buyer segment explicitly.");
@@ -134,12 +135,17 @@ test("refine from an approver's instruction alone, editing before accepting", as
 test("locked sections offer no refinement", async ({ page }) => {
   await login(page);
   await page.goto("/documents/team-workspaces/v/2");
-  const scope = section(page, "scope");
-  await expect(scope.getByRole("button", { name: /^Refine section/ })).toBeVisible();
+  const scope = await openSection(page, "scope");
+  await scope.getByRole("button", { name: "Actions for 3. Scope" }).click();
+  await expect(scope.getByRole("menuitem", { name: /^Refine section/ })).toBeVisible();
+  await page.keyboard.press("Escape");
   await scope.getByRole("group", { name: "Verdict for 3. Scope" }).getByRole("button", { name: "Approve" }).click();
   await scope.getByRole("button", { name: /Save: Approved/ }).click();
   await expect(scope.getByTestId("verdict-state")).toContainText("Locked");
-  await expect(scope.getByRole("button", { name: /^Refine section/ })).toHaveCount(0);
+  // A locked section offers nothing to refine; a commenter-or-above still adds evidence.
+  await scope.getByRole("button", { name: "Actions for 3. Scope" }).click();
+  await expect(scope.getByRole("menuitem", { name: /^Add evidence link/ })).toBeVisible();
+  await expect(scope.getByRole("menuitem", { name: /^Refine section/ })).toHaveCount(0);
 });
 
 test("reports on a version: write, read both tabs, export", async ({ page }) => {
@@ -167,8 +173,17 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
   test(`roles: ${email.split("@")[0]}s read suggestions and jobs but cannot act`, async ({ page }) => {
     await login(page, email);
     await page.goto("/documents/team-workspaces/v/2");
-    await expect(section(page, "problem")).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Refine section/ })).toHaveCount(0);
+    await openSection(page, "problem");
+    // A commenter's ⋯ menu offers evidence only; a viewer has no menu.
+    const actions = page.getByRole("button", { name: /^Actions for/ }).filter({ visible: true });
+    if (email.startsWith("commenter")) {
+      await actions.click();
+      await expect(page.getByRole("menuitem", { name: /^Add evidence link/ })).toBeVisible();
+      await expect(page.getByRole("menuitem", { name: /^Refine section/ })).toHaveCount(0);
+      await page.keyboard.press("Escape");
+    } else {
+      await expect(actions).toHaveCount(0);
+    }
     await openTab(page, "Feedback");
     const card = feedbackItem(page, "how many teams asked").getByTestId("suggestion");
     await expect(card).toContainText("Proposed text for #problem");
@@ -176,7 +191,8 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
     await openTab(page, "Jobs");
     const jobs = page.getByTestId("jobs-panel").filter({ visible: true });
     await expect(jobs.getByTestId("llm-job").first()).toBeVisible();
-    await expect(jobs.getByRole("button")).toHaveCount(0);
+    // No action buttons; the (i) tip is not an action.
+    await expect(jobs.locator('button:not([data-testid="info-tip"])')).toHaveCount(0);
     await expect(jobs.getByTestId("llm-job-settings").getByRole("checkbox").first()).toBeDisabled();
   });
 }
@@ -200,7 +216,7 @@ test("an owner turns a job kind off for a document", async ({ page }) => {
 test("a new comment queues review comments, and Oracle's suggestion appears on it", async ({ page }) => {
   await login(page);
   await page.goto("/documents/team-workspaces/v/2");
-  await expect(section(page, "scope")).toBeVisible();
+  await openSection(page, "scope");
   await page.evaluate(() => {
     const body = [...document.querySelectorAll<HTMLElement>('[data-section-body="scope"]')].find((el) => el.checkVisibility())!;
     const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
