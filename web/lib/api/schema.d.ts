@@ -932,6 +932,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{connection_id}/google/shared-drives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Google Shared Drives
+         * @description The Google shared drives your Google connection can see, for an owner choosing the
+         *     company's shared drives (the ``company_shared_drives`` setting, S5): docs in a picked
+         *     folder in any other shared drive are skipped. At most :data:`MAX_SHARED_DRIVES`.
+         */
+        get: operations["list_google_shared_drives"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connections/{connection_id}/notion/pages": {
         parameters: {
             query?: never;
@@ -11739,6 +11761,18 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
+        /** SharedDriveList */
+        SharedDriveList: {
+            /** Drives */
+            drives: components["schemas"]["SharedDriveOut"][];
+        };
+        /** SharedDriveOut */
+        SharedDriveOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** SlideOut */
         SlideOut: {
             /** Index */
@@ -15336,6 +15370,65 @@ export interface operations {
                 };
             };
             /** @description Drive is rate limiting, or you searched too often; retry after Retry-After seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_google_shared_drives: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedDriveList"];
+                };
+            };
+            /** @description Not a person (an API token without a user), or a read-only credential (oracle:read) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not one of your Google connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection needs reconnecting (or lacks Drive access) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Drive is rate limiting, or you asked too often */
             429: {
                 headers: {
                     [name: string]: unknown;

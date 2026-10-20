@@ -9,10 +9,12 @@ Doc in it and its sub-folders, including docs added later, so the connection hol
 ``drive.readonly`` (read access to the person's Drive), not ``drive.file``. Every id must
 look like a Drive id (:data:`DRIVE_ID`); 'root' (the whole My Drive) is refused.
 
-The sync engine adds the company's email domains (``base.COMPANY_DOMAINS``): a doc found
-in a picked folder whose owner is outside them is skipped and listed on the source, or
-pulled in and flagged (``ORACLE_DRIVE_DOCS_OWNED_OUTSIDE``; owner 2026-10-20: skipped).
-Docs picked one by one are always pulled in.
+The sync engine adds the company's email domains (``base.COMPANY_DOMAINS``) and shared
+drives (``base.COMPANY_SHARED_DRIVES``). A doc found in a picked folder that is not the
+company's is skipped and listed on the source, or pulled in and flagged
+(``ORACLE_DRIVE_DOCS_OWNED_OUTSIDE``; owner 2026-10-20: skipped): in a shared drive, when
+that drive is not one of the company's; elsewhere, when its owner is outside the domains,
+or when no domain is set (fails closed). Docs picked one by one are always pulled in.
 
 A picked doc Oracle cannot read any more (unshared, access removed, trashed, not a Google
 Doc) is reported with :class:`ItemUnavailable`, one per doc, and deleted; a picked folder
@@ -47,7 +49,7 @@ import asyncio
 import hashlib
 import json
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
@@ -58,6 +60,7 @@ import httpx
 from oracle.config import get_settings
 from oracle.sources.base import (
     COMPANY_DOMAINS,
+    COMPANY_SHARED_DRIVES,
     ConnectorAuthError,
     ConnectorBadInput,
     ConnectorConfigError,
@@ -124,8 +127,8 @@ FOLDERS_WALKED_LIMIT = (
     "Only the first {limit:,} folders in this source are listed: docs in the rest are not "
     "pulled in (what came from them before is kept). Pick smaller folders"
 )
-# The reason on every folder doc when the company's domains are unknown (fails closed).
-NO_DOMAINS = "the company's email domain is not known, so who owns it cannot be checked"
+# Why a doc in a picked folder is not the company's (S5, owner 2026-10-20).
+OUTSIDE_OWNER, OUTSIDE_DRIVE, NO_DOMAINS = "owner", "shared_drive", "no_domains"
 # 403 reasons meaning this one file cannot be read (others fail the sync).
 FILE_DENIED = {"insufficientFilePermissions", "cannotDownloadFile", "forbidden"}
 
@@ -213,32 +216,47 @@ def _domains(config: dict[str, Any]) -> list[str]:
     return sorted({str(d).strip().lower().lstrip("@") for d in value if str(d).strip()})
 
 
-def owned_outside(file: dict[str, Any], domains: list[str]) -> bool:
-    """Whether a doc's owner is outside the company's ``domains``. A doc in a shared
-    drive belongs to the drive (Drive names no owner), so it counts as inside; a doc
-    whose owner's email Drive does not show counts as outside. No domains known: every
-    doc counts as outside (the check fails closed, and the note says why)."""
-    if not domains:
-        return True
+def _shared_drives(config: dict[str, Any]) -> list[str]:
+    return sorted({str(d) for d in config.get(COMPANY_SHARED_DRIVES) or [] if str(d)})
+
+
+def owned_outside(
+    file: dict[str, Any], domains: list[str], shared_drives: Sequence[str] = ()
+) -> str | None:
+    """Why a doc is not the company's, ``None`` when it is (S5, owner 2026-10-20). A doc in
+    a shared drive belongs to the drive (Drive names no owner): the company's only when
+    the drive is one of ``shared_drives``. Any other doc by its owner's email domain; a
+    doc whose owner's email Drive does not show counts as outside, and with no
+    ``domains`` set every one does (the check fails closed, and the note says why)."""
     if file.get("driveId"):
-        return False
+        return None if file["driveId"] in shared_drives else OUTSIDE_DRIVE
+    if not domains:
+        return NO_DOMAINS
     emails = [o.get("emailAddress") or "" for o in file.get("owners") or []]
-    return not any(e.rpartition("@")[2].lower() in domains for e in emails if "@" in e)
+    inside = any(e.rpartition("@")[2].lower() in domains for e in emails if "@" in e)
+    return None if inside else OUTSIDE_OWNER
 
 
 def _outside_label(domains: list[str]) -> str:
     return " or ".join(domains[:3]) + (" …" if len(domains) > 3 else "")
 
 
-def _outside_reason(domains: list[str], skipped: bool) -> str:
-    if not domains:
-        return f"Skipped: {NO_DOMAINS}" if skipped else f"Not checked: {NO_DOMAINS}"
-    label = _outside_label(domains)
-    return f"Skipped: owned outside {label}" if skipped else f"Owned outside {label}"
+def _outside_reason(why: str, domains: list[str], skipped: bool) -> str:
+    if why == OUTSIDE_DRIVE:
+        text = "in a shared drive outside the company"
+    elif why == NO_DOMAINS:
+        text = "company domain not set"
+    else:
+        text = f"owned outside {_outside_label(domains)}"
+    return f"Skipped: {text}" if skipped else text[0].upper() + text[1:]
 
 
-def _listing_key(folders: list[str], docs: list[str], domains: list[str], policy: str) -> str:
-    raw = json.dumps([sorted(folders), sorted(docs), domains, policy])
+def _listing_key(
+    folders: list[str], docs: list[str], domains: list[str], drives: list[str], policy: str
+) -> str:
+    raw = json.dumps(
+        [sorted(folders), sorted(docs), domains, policy] + ([drives] if drives else [])
+    )
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
@@ -431,11 +449,12 @@ class GoogleDocsConnector:
         folders, docs = _options(config)
         names = config.get("names") or {}
         domains = _domains(config)
+        shared_drives = _shared_drives(config)
         policy = get_settings().drive_docs_owned_outside
         cursor = cursor or {}
         known: dict[str, str] = dict(cursor.get("files") or {})
         modified_since = cursor.get("modified_since")
-        key = _listing_key(folders, docs, domains, policy)
+        key = _listing_key(folders, docs, domains, shared_drives, policy)
         listing = dict(cursor.get("listing") or {})
         tree: dict[str, list[str]] = {
             k: list(v) for k, v in (cursor.get("tree") or {}).items() if k in folders
@@ -492,7 +511,7 @@ class GoogleDocsConnector:
                 current, protected = {}, set()
                 protect_all = False
                 all_folders = set(folders)
-                outside: dict[str, dict[str, Any]] = {}
+                outside: dict[str, tuple[dict[str, Any], str]] = {}
                 budget, folders_left = MAX_FOLDER_DOCS, MAX_FOLDERS_WALKED
                 for root in folders:
                     reason = await self._folder_problem(drive, root)
@@ -536,8 +555,9 @@ class GoogleDocsConnector:
                         if file["id"] in current or file["id"] in outside:
                             continue
                         budget -= 1
-                        if owned_outside(file, domains):
-                            outside[file["id"]] = file
+                        why = owned_outside(file, domains, shared_drives)
+                        if why:
+                            outside[file["id"]] = (file, why)
                             if policy == "skip":
                                 continue
                         current[file["id"]] = file
@@ -548,19 +568,19 @@ class GoogleDocsConnector:
                         continue
                     if doc in outside:
                         # Picked on its own: pulled in whoever owns it.
-                        current[doc] = outside.pop(doc)
+                        current[doc] = outside.pop(doc)[0]
                         continue
                     file, reason = await self._picked(drive, doc)
                     if reason:
                         notes.append({"external_id": doc, "reason": reason})
                     else:
                         current[doc] = file
-                for file_id, file in outside.items():
+                for file_id, (file, why) in outside.items():
                     skipped = policy == "skip"
                     notes.append(
                         {
                             "external_id": file_id,
-                            "reason": _outside_reason(domains, skipped),
+                            "reason": _outside_reason(why, domains, skipped),
                             "name": file.get("name"),
                             "status": "skipped" if skipped else "flagged",
                         }

@@ -108,13 +108,14 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   await expect(row).toContainText("FoldersProduct specs, Vendor research");
   await expect(row).toContainText("3 item(s)");
   // An unshared file and an unreadable folder are reported on their own (the folder's
-  // docs are kept), and docs owned outside the company are listed as skipped, with their
-  // count and names; the source is still active.
+  // docs are kept), and docs owned outside the company or in a shared drive outside it are
+  // listed as skipped, per reason, with their count and names; the source is still active.
   const notes = row.getByRole("list", { name: "Sync notes for Product docs" });
   await expect(notes.getByRole("listitem")).toHaveText([
     /No access\s*Vendor research\s*its docs are kept until you remove it/,
     /No access\s*Customer interviews Q3/,
     /Skipped: owned outside example.com\s*3 docs\s*Agency SOW 2026, Partner pricing sheet, Contractor onboarding notes/,
+    /Skipped: in a shared drive outside the company\s*1 doc\s*Joint launch plan/,
   ]);
   await expect(row).toContainText("Active");
 

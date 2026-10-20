@@ -63,10 +63,15 @@ class Drive:
         parents = [p for p, kids in self.parents.items() if file_id in kids]
         self.log.append({"fileId": file_id, "removed": removed, "file": {"parents": parents}})
 
-    def doc(self, file_id: str, name: str, folder: str | None = None, owner=PAT) -> None:
+    def doc(
+        self, file_id: str, name: str, folder: str | None = None, owner=PAT, drive_id=None
+    ) -> None:
         self.files[file_id] = {"id": file_id, "name": name, "mimeType": DOC_MIME,
                                "modifiedTime": TIME, "createdTime": TIME,
                                "owners": [owner]}  # fmt: skip
+        if drive_id:
+            # Drive names no owner for a shared drive's files.
+            self.files[file_id] |= {"driveId": drive_id, "owners": []}
         if folder:
             self.parents.setdefault(folder, []).append(file_id)
         self._change(file_id)
@@ -130,7 +135,10 @@ def drive(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _settings():
+def _settings(monkeypatch):
+    # The company's domains from the members' addresses (pat@example.com), as in local
+    # development; production never infers them (test_company_domains_are_explicit...).
+    monkeypatch.setenv("ORACLE_INFER_COMPANY_DOMAINS", "true")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -585,7 +593,7 @@ async def test_with_no_company_domain_folder_docs_are_skipped_and_say_why(tenant
     assert await _live(tenant_id, source["id"]) == {DOC_A}
     (note,) = (await _row(tenant_id, source["id"])).unavailable_items
     assert note["external_id"] == IN_FOLDER and note["status"] == "skipped"
-    assert note["reason"].startswith("Skipped: the company's email domain is not known")
+    assert note["reason"] == "Skipped: company domain not set"
 
 
 async def test_folders_walked_per_sync_are_capped_and_keep_what_came_from_the_rest(
@@ -644,3 +652,93 @@ async def test_renaming_picked_items_does_not_ask_drive_again(tenant_id, drive):
     # Changing a pick does ask Drive.
     await _patch(pat, source, {"config": {"docs": [DOC_A], "names": names}})
     assert "about" in drive.calls
+
+
+async def test_company_domains_are_explicit_and_never_inferred_by_default(tenant_id, monkeypatch):
+    """S5 (owner, 2026-10-20): ORACLE_IAP_ALLOWED_DOMAINS and the owner's setting, never
+    the members' addresses outside local development."""
+    from oracle.tenant_settings import TenantSetting
+
+    monkeypatch.delenv("ORACLE_INFER_COMPANY_DOMAINS")
+    get_settings.cache_clear()
+    await make_person(tenant_id, "pat@example.com")
+    async with tenant_session(tenant_id) as s:
+        assert await service.company_domains(s, tenant_id) == []
+        s.add(TenantSetting(key="company_email_domains", value=["corp.example"]))
+        await s.commit()
+        assert await service.company_domains(s, tenant_id) == ["corp.example"]
+    monkeypatch.setenv("ORACLE_IAP_ALLOWED_DOMAINS", '["iap.example"]')
+    get_settings.cache_clear()
+    async with tenant_session(tenant_id) as s:
+        assert await service.company_domains(s, tenant_id) == ["corp.example", "iap.example"]
+
+
+async def test_folder_docs_skipped_in_production_until_a_domain_is_set(
+    tenant_id, drive, monkeypatch
+):
+    from oracle.tenant_settings import TenantSetting
+
+    monkeypatch.delenv("ORACLE_INFER_COMPANY_DOMAINS")
+    get_settings.cache_clear()
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    pat, source = await _setup(tenant_id, drive, {"folders": [FOLDER]})
+    assert await _live(tenant_id, source["id"]) == set()
+    (note,) = (await _row(tenant_id, source["id"])).unavailable_items
+    assert note["reason"] == "Skipped: company domain not set"
+
+    async with tenant_session(tenant_id) as s:
+        s.add(TenantSetting(key="company_email_domains", value=["example.com"]))
+        await s.commit()
+    result = await _sync(pat, source)
+    assert result["outcome"] == "completed", result
+    assert await _live(tenant_id, source["id"]) == {IN_FOLDER}
+    assert (await _row(tenant_id, source["id"])).unavailable_items == []
+
+
+async def test_a_shared_drive_is_the_companys_only_when_the_owner_lists_it(tenant_id, drive):
+    """A doc in a picked folder in a shared drive not on company_shared_drives is skipped
+    and listed; once the owner lists the drive, the next sync pulls it in. A doc in that
+    drive picked on its own is always pulled in."""
+    from oracle.tenant_settings import TenantSetting
+
+    drive.folder(FOLDER, "Joint work")
+    drive.doc(IN_FOLDER, "Mine", folder=FOLDER)
+    drive.doc(OUTSIDE, "Partner plan", folder=FOLDER, drive_id="0APartner0000")
+    drive.doc(DOC_B, "Partner brief", drive_id="0APartner0000")
+    pat, source = await _setup(tenant_id, drive, {"folders": [FOLDER], "docs": [DOC_B]})
+    assert await _live(tenant_id, source["id"]) == {IN_FOLDER, DOC_B}
+    assert (await _row(tenant_id, source["id"])).unavailable_items == [
+        {
+            "external_id": OUTSIDE,
+            "reason": "Skipped: in a shared drive outside the company",
+            "name": "Partner plan",
+            "status": "skipped",
+        }
+    ]
+
+    async with tenant_session(tenant_id) as s:
+        s.add(
+            TenantSetting(
+                key="company_shared_drives", value=[{"id": "0APartner0000", "name": "Joint"}]
+            )
+        )
+        await s.commit()
+    drive.unrelated_change()
+    result = await _sync(pat, source)
+    assert result["outcome"] == "completed", result
+    assert await _live(tenant_id, source["id"]) == {IN_FOLDER, OUTSIDE, DOC_B}
+    assert (await _row(tenant_id, source["id"])).unavailable_items == []
+
+
+def test_owned_outside():
+    from oracle.sources.connectors.google_docs import owned_outside
+
+    mine = {"owners": [PAT]}
+    theirs = {"owners": [EVE]}
+    shared = {"driveId": "0AShared00000", "owners": []}
+    assert owned_outside(mine, ["example.com"]) is None
+    assert owned_outside(theirs, ["example.com"]) == "owner"
+    assert owned_outside(mine, []) == "no_domains"
+    assert owned_outside(shared, ["example.com"]) == "shared_drive"
+    assert owned_outside(shared, [], ["0AShared00000"]) is None

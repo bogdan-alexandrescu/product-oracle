@@ -3252,6 +3252,70 @@
         }
       }
     },
+    "/v1/connections/{connection_id}/google/shared-drives": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "List Google Shared Drives",
+        "description": "The Google shared drives your Google connection can see, for an owner choosing the\ncompany's shared drives (the ``company_shared_drives`` setting, S5): docs in a picked\nfolder in any other shared drive are skipped. At most :data:`MAX_SHARED_DRIVES`.",
+        "operationId": "list_google_shared_drives",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedDriveList"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a person (an API token without a user), or a read-only credential (oracle:read)"
+          },
+          "404": {
+            "description": "Not one of your Google connections"
+          },
+          "409": {
+            "description": "The connection needs reconnecting (or lacks Drive access)"
+          },
+          "429": {
+            "description": "Drive is rate limiting, or you asked too often"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/connections/{connection_id}/notion/pages": {
       "get": {
         "tags": [
@@ -36855,6 +36919,40 @@
           "is_default"
         ],
         "title": "SettingOut"
+      },
+      "SharedDriveList": {
+        "properties": {
+          "drives": {
+            "items": {
+              "$ref": "#/components/schemas/SharedDriveOut"
+            },
+            "type": "array",
+            "title": "Drives"
+          }
+        },
+        "type": "object",
+        "required": [
+          "drives"
+        ],
+        "title": "SharedDriveList"
+      },
+      "SharedDriveOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SharedDriveOut"
       },
       "SlideOut": {
         "properties": {

@@ -19,6 +19,7 @@ are free). Both live in this process: with several API instances each keeps its 
 import math
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -26,7 +27,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
-from oracle.auth.deps import READ_ONLY, TenantDB
+from oracle.auth.deps import READ_ONLY, Principal, TenantDB
 from oracle.connections import service
 from oracle.connections.providers import DRIVE_READONLY, RECONNECT_TO_CHOOSE_FILES
 from oracle.connections.router import ProviderHttp, UserPrincipal
@@ -48,6 +49,7 @@ CACHE_ENTRIES = 2000
 RATE_LIMIT = 30
 RATE_WINDOW = 60
 DEFAULT_RETRY_SECONDS = 60
+MAX_SHARED_DRIVES = 500
 BROWSE_FIELDS = (
     "nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,driveId,"
     "owners(displayName,emailAddress))"
@@ -180,10 +182,28 @@ async def list_google_drive_files(
     Read through your own Google connection. Answers are cached for a minute, and you
     may search Drive a limited number of times a minute."""
     assert principal.user_id is not None
-    if principal.read_only:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY)
     if folder is not None and not valid_id(folder):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"folder {NOT_A_DRIVE_ID}")
+    conn = await _own_google(db, connection_id, principal)
+    key = ("files", q.strip(), folder, cursor)
+
+    async def read(drive: _Drive) -> DriveFilePage:
+        page = await drive.list(
+            drive_query(q, folder), BROWSE_FIELDS, cursor, orderBy="folder,modifiedTime desc"
+        )
+        return DriveFilePage(
+            files=[_file(f) for f in page.get("files") or [] if f.get("id")],
+            next_cursor=page.get("nextPageToken") or None,
+        )
+
+    return await _read(db, http, conn, principal.user_id, key, read)
+
+
+async def _own_google(db: TenantDB, connection_id: uuid.UUID, principal: Principal) -> Any:
+    """The caller's own Google connection that can read their Drive, or the HTTP error."""
+    assert principal.user_id is not None
+    if principal.read_only:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY)
     conn = await service.get_own(db, connection_id, principal.user_id)
     if conn is None or conn.provider != "google":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Connection not found")
@@ -192,23 +212,29 @@ async def list_google_drive_files(
             status.HTTP_409_CONFLICT,
             f"{RECONNECT_TO_CHOOSE_FILES}: this Google connection cannot read your Drive",
         )
-    key = ("files", q.strip(), folder, cursor)
+    return conn
+
+
+async def _read(
+    db: TenantDB,
+    http: httpx.AsyncClient,
+    conn: Any,
+    user_id: uuid.UUID,
+    key: tuple[Any, ...],
+    read: Callable[[_Drive], Awaitable[Any]],
+) -> Any:
+    """``read`` through the connection: cached per connection and question, throttled per
+    person, Drive's errors as HTTP errors."""
     hit = _cached(conn.id, key)
     if hit is not None:
         return hit
-    _admit(principal.user_id)
+    _admit(user_id)
     try:
         credential = await service.credential_for(db, conn, http)
     except service.ConnectionUnavailable as e:
         raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
-    drive = _Drive(http, credential.access_token)
     try:
-        page = await drive.list(
-            drive_query(q, folder),
-            BROWSE_FIELDS,
-            cursor,
-            orderBy="folder,modifiedTime desc",
-        )
+        answer = await read(_Drive(http, credential.access_token))
     except ConnectorRateLimited as e:
         wait = max(1, round(e.retry_after or DEFAULT_RETRY_SECONDS))
         raise HTTPException(
@@ -229,9 +255,56 @@ async def list_google_drive_files(
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, "Google Drive could not be reached: try again"
         ) from None
-    answer = DriveFilePage(
-        files=[_file(f) for f in page.get("files") or [] if f.get("id")],
-        next_cursor=page.get("nextPageToken") or None,
-    )
     _remember(conn.id, key, answer)
     return answer
+
+
+class SharedDriveOut(BaseModel):
+    id: str
+    name: str
+
+
+class SharedDriveList(BaseModel):
+    drives: list[SharedDriveOut]
+
+
+@router.get(
+    "/connections/{connection_id}/google/shared-drives",
+    response_model=SharedDriveList,
+    responses={
+        403: {
+            "description": "Not a person (an API token without a user), or a read-only "
+            "credential (oracle:read)"
+        },
+        404: {"description": "Not one of your Google connections"},
+        409: {"description": "The connection needs reconnecting (or lacks Drive access)"},
+        429: {"description": "Drive is rate limiting, or you asked too often"},
+    },
+)
+async def list_google_shared_drives(
+    connection_id: uuid.UUID, principal: UserPrincipal, db: TenantDB, http: ProviderHttp
+) -> SharedDriveList:
+    """The Google shared drives your Google connection can see, for an owner choosing the
+    company's shared drives (the ``company_shared_drives`` setting, S5): docs in a picked
+    folder in any other shared drive are skipped. At most :data:`MAX_SHARED_DRIVES`."""
+    conn = await _own_google(db, connection_id, principal)
+    assert principal.user_id is not None
+
+    async def read(drive: _Drive) -> SharedDriveList:
+        found: dict[str, SharedDriveOut] = {}
+        token: str | None = None
+        while len(found) < MAX_SHARED_DRIVES:
+            params: dict[str, Any] = {"pageSize": 100, "fields": "nextPageToken,drives(id,name)"}
+            if token:
+                params["pageToken"] = token
+            page = (await drive.get("drives", **params)).json()
+            for d in page.get("drives") or []:
+                if valid_id(d.get("id")):
+                    found[d["id"]] = SharedDriveOut(id=d["id"], name=d.get("name") or d["id"])
+            token = page.get("nextPageToken")
+            if not token:
+                break
+        drives = sorted(found.values(), key=lambda d: d.name.lower())
+        return SharedDriveList(drives=drives[:MAX_SHARED_DRIVES])
+
+    return await _read(db, http, conn, principal.user_id, ("shared-drives",), read)

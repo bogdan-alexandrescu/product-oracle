@@ -81,7 +81,18 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   confidence_weights: {},
   blocker_risk_acceptance_role: "owner",
   blocker_risk_review_max_days: 90,
+  // S5 (owner settings, Settings > Sources > Google Drive). The API's default is []; the
+  // mock company's members are all @example.com.
+  company_email_domains: ["example.com"],
+  company_shared_drives: [],
 };
+
+/** The shared drives a mock Google connection can see. */
+export const MOCK_SHARED_DRIVES = [
+  { id: "0ADriveProductExample", name: "Product" },
+  { id: "0ADriveDesignExample", name: "Design" },
+  { id: "0ADrivePartnerAcmeExample", name: "Partner: Acme" },
+];
 
 function load(): ConnDb {
   try {
@@ -229,6 +240,11 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
 
     const row = db.connections.find((c) => c.id === p[2]);
     if (!row) return json(404, { detail: "Connection not found" });
+    if (p[3] === "google" && p[4] === "shared-drives" && m === "GET") {
+      if (row.provider !== "google") return json(404, { detail: "Not your Google connection" });
+      if (reconnectReason(row.provider, row.scopes)) return json(409, { detail: "Reconnect Google to list shared drives" });
+      return json(200, { drives: MOCK_SHARED_DRIVES });
+    }
     if (!p[3] && m === "DELETE") {
       db.connections = db.connections.filter((c) => c.id !== row.id);
       return json(204, undefined);

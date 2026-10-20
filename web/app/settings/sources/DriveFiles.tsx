@@ -268,6 +268,17 @@ function noAccessLabel(reason: string): string {
   return "No access";
 }
 
+/** Why docs in a picked folder were skipped, for the chip's title. */
+function skippedTitle(reason: string): string {
+  if (/shared drive/i.test(reason)) {
+    return "Docs in a picked folder in a shared drive that is not on the company list (Settings › Sources › Google Drive) are not pulled in";
+  }
+  if (/domain not set/i.test(reason)) {
+    return "No company email domain is set (Settings › Sources › Google Drive), so docs in picked folders are not pulled in";
+  }
+  return "Docs in a picked folder whose owner is outside the company are not pulled in";
+}
+
 /** Up to `shown` names, then "+N more"; every name is in the title. */
 function NameList({ names, shown = 4 }: { names: string[]; shown?: number }) {
   const rest = names.length - shown;
@@ -282,7 +293,8 @@ function NameList({ names, shown = 4 }: { names: string[]; shown?: number }) {
 /**
  * What the last sync of a Google Docs source reported, on its card: picked docs and folders
  * it cannot read (a folder's docs are kept until it is removed), docs in a picked folder it
- * left out because they are owned outside the company (count and names), docs it pulled in
+ * left out (owned outside the company, in a shared drive outside the company, or no company
+ * domain set; count and names per reason), docs it pulled in
  * with that warning, and a folder listing that stopped at the source's cap.
  */
 export function DriveNotes({
@@ -327,7 +339,7 @@ export function DriveNotes({
       })}
       {skipped.map(([reason, names]) => (
         <li key={reason} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-          <Chip kind="na" title="Docs in a picked folder whose owner is outside the company are not pulled in">
+          <Chip kind="na" title={skippedTitle(reason)}>
             {reason}
           </Chip>
           <span className="tnum flex-none font-medium">{names.length === 1 ? "1 doc" : `${names.length} docs`}</span>

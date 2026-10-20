@@ -24,6 +24,7 @@ from tests.sources_helpers import client_for
 
 READONLY = ["openid", "email", DRIVE_READONLY]
 PATH = "/v1/connections/{}/google/files"
+SHARED = "/v1/connections/{}/google/shared-drives"
 FILES = [
     {"id": "1FolderSpecs", "name": "Specs", "mimeType": FOLDER_MIME},
     {
@@ -190,3 +191,39 @@ async def test_an_mcp_tool_describes_what_it_lists():
     description = op.tool_description()
     assert "Google Docs and folders in your Google Drive" in description
     assert {p.name for p in op.params} >= {"connection_id", "q", "folder", "cursor"}
+
+
+async def test_shared_drives_for_choosing_the_companys(tenant_id):
+    """The shared drives a person's Google connection sees, for an owner choosing the
+    company's (S5, owner 2026-10-20): every page, sorted by name, odd ids dropped."""
+    pages = {
+        None: {"drives": [{"id": "0AProduct000", "name": "Product"}], "nextPageToken": "p2"},
+        "p2": {"drives": [{"id": "0AAcme000000", "name": "acme"}, {"id": "bad id"}]},
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url).startswith(DRIVE_URL + "drives?")
+        return httpx.Response(200, json=pages[request.url.params.get("pageToken")])
+
+    seen = use_provider_http(handler)
+    _, conn = await _pat(tenant_id)
+    sam = (await make_person(tenant_id, "sam@example.com")).user
+    async with client_for(sam) as c:
+        assert (await c.get(SHARED.format(conn.id))).status_code == 404
+    pat_client = client_for(await _person(tenant_id, "pat@example.com"))
+    async with pat_client as c:
+        resp = await c.get(SHARED.format(conn.id))
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {
+            "drives": [
+                {"id": "0AAcme000000", "name": "acme"},
+                {"id": "0AProduct000", "name": "Product"},
+            ]
+        }
+        assert (await c.get(SHARED.format(conn.id))).status_code == 200  # cached
+    assert len(seen) == 2
+
+
+async def _person(tenant_id, email):
+    async with unscoped_session() as s:
+        return await s.scalar(select(User).where(User.email == email))

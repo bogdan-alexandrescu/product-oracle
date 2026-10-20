@@ -21,9 +21,11 @@ import {
 } from "@/components/ds";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
+import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD, TEXTAREA } from "../_components/fields";
+import { CompanyDriveSettings } from "./CompanyDrive";
 import { driveConfig, driveFiles, DriveFiles, DriveNotes, ReconnectToChoose, type DriveFile } from "./DriveFiles";
 import { NotionPicker, notionRoots } from "./NotionPicker";
 
@@ -643,6 +645,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
 export default function SourceSettingsPage() {
   const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
   const kinds = useQuery("source-kinds", () => unwrap(api.GET("/v1/sources/kinds")));
+  const { role } = useMe();
   const list = sources.data ?? [];
   const errors = list.filter((s) => s.status === "error").length;
   const items = list.reduce((n, s) => n + s.item_count, 0);
@@ -726,6 +729,7 @@ export default function SourceSettingsPage() {
             </ul>
           )}
         </Panel>
+        {hasRole(role, "owner") && <CompanyDriveSettings />}
       </Split>
     </>
   );

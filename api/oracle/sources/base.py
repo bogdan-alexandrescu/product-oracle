@@ -38,6 +38,8 @@ from oracle.sources.models import ITEM_KINDS
 # email domains (oracle.sources.service.company_domains). Config keys starting with "_"
 # are refused from people.
 COMPANY_DOMAINS = "_company_domains"
+# The ids of the shared drives that are the company's, added the same way (S5).
+COMPANY_SHARED_DRIVES = "_company_shared_drives"
 
 
 class ConnectorError(Exception):

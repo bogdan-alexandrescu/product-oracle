@@ -97,8 +97,8 @@ function seed(): SourcesDb {
     connector_available: true,
   };
   // Google Docs and folders picked in the Drive picker. Since: one doc was unshared, one
-  // folder can no longer be read (its docs are kept), and three docs in a picked folder
-  // are owned outside the company, so they were skipped.
+  // folder can no longer be read (its docs are kept), three docs in a picked folder are
+  // owned outside the company and one is in a shared drive outside it, so they were skipped.
   const docs: Source = {
     id: "50000000-0000-4000-8000-000000000003",
     kind: "google_docs",
@@ -136,6 +136,13 @@ function seed(): SourcesDb {
         name,
         status: "skipped" as const,
       })),
+      // In a picked folder, but in a shared drive that is not on the company's list (S5).
+      {
+        external_id: "1DocPartnerDriveExample",
+        reason: "Skipped: in a shared drive outside the company",
+        name: "Joint launch plan",
+        status: "skipped" as const,
+      },
     ],
     reconnect_reason: null,
   };

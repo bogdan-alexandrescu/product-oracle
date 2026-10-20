@@ -8,10 +8,16 @@ The known keys and how each value is checked:
   may accept a critical hard blocker's risk or approve its feasibility scope.
 - ``blocker_risk_review_max_days`` (B4): an integer, 1-365, the latest review date of an
   accepted risk, in days from its acceptance.
+- ``company_email_domains`` (S5): the company's email domains, e.g. ``["example.com"]``.
+  A doc in a picked Drive folder whose owner is outside them is skipped; with none set
+  (here or in ORACLE_IAP_ALLOWED_DOMAINS) every doc in a picked folder is.
+- ``company_shared_drives`` (S5): ``[{"id", "name"}]``, the Google shared drives that are
+  the company's. A doc in a picked folder in any other shared drive is skipped.
 
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
+import re
 from datetime import datetime
 from typing import Annotated, Any
 
@@ -35,8 +41,15 @@ DEFAULTS: dict[str, Any] = {
     # B4 (owner, 2026-10-19): owners only, reviewed within at most 90 days.
     "blocker_risk_acceptance_role": "owner",
     "blocker_risk_review_max_days": 90,
+    # S5 (owner, 2026-10-20): explicit, never inferred in production.
+    "company_email_domains": [],
+    "company_shared_drives": [],
 }
 RISK_ACCEPTANCE_ROLES = ("approver", "owner")
+DOMAIN = re.compile(
+    r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})"
+)
+MAX_COMPANY_LIST = 100
 MAX_REVIEW_DAYS = 365
 KNOWN_KEYS = tuple(DEFAULTS)
 
@@ -137,7 +150,45 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
                 f"blocker_risk_review_max_days must be between 1 and {MAX_REVIEW_DAYS}"
             )
         return value
+    if key == "company_email_domains":
+        return validate_company_domains(value)
+    if key == "company_shared_drives":
+        return validate_shared_drives(value)
     raise KeyError(key)
+
+
+def validate_company_domains(value: Any) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(d, str) for d in value):
+        raise InvalidSetting("company_email_domains must be a list of domains")
+    if len(value) > MAX_COMPANY_LIST:
+        raise InvalidSetting(f"company_email_domains: at most {MAX_COMPANY_LIST}")
+    out: list[str] = []
+    for raw in value:
+        domain = raw.strip().lower().rpartition("@")[2]
+        if not DOMAIN.fullmatch(domain):
+            raise InvalidSetting(f"company_email_domains: {raw[:80]!r} is not a domain")
+        if domain not in out:
+            out.append(domain)
+    return out
+
+
+def validate_shared_drives(value: Any) -> list[dict[str, str]]:
+    from oracle.sources.connectors.google_docs import valid_id
+
+    if not isinstance(value, list) or len(value) > MAX_COMPANY_LIST:
+        raise InvalidSetting(
+            f"company_shared_drives must be a list of at most {MAX_COMPANY_LIST} shared drives"
+        )
+    out: dict[str, dict[str, str]] = {}
+    for drive in value:
+        if not isinstance(drive, dict) or not valid_id(drive.get("id")):
+            raise InvalidSetting("company_shared_drives: each needs the id of a shared drive")
+        name = drive.get("name")
+        if name is not None and not isinstance(name, str):
+            raise InvalidSetting("company_shared_drives: a name must be text")
+        name = (name or "").strip()[:200] or drive["id"]
+        out.setdefault(drive["id"], {"id": drive["id"], "name": name})
+    return list(out.values())
 
 
 # --- API ----------------------------------------------------------------------------

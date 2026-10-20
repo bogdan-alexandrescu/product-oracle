@@ -185,7 +185,7 @@ async def test_without_company_domains_every_folder_doc_is_skipped_and_says_why(
         "1DocPrdExample",
         "1DocNotesExample",
     }
-    assert all("domain is not known" in e.reason for e in skipped)
+    assert {e.reason for e in skipped} == {"Skipped: company domain not set"}
 
 
 async def test_full_sync_recurses_folders_and_falls_back_to_plain_text():

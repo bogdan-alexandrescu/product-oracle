@@ -41,8 +41,14 @@ class Settings(BaseSettings):
     # Google) but is never logged. Either empty: the picker is off (404).
     google_picker_app_id: str = ""
     google_picker_api_key: SecretStr = SecretStr("")
+    # Local development only: with no company email domains set (ORACLE_IAP_ALLOWED_DOMAINS
+    # or the owner's company_email_domains setting), take them from the members' email
+    # addresses. Off, the outside-owner check of Drive folders fails closed. S5 (owner,
+    # 2026-10-20): never inferred in production.
+    infer_company_domains: bool = False
     # A Google Doc inside a picked Drive folder whose owner's email domain is not one of
-    # the company's (ORACLE_IAP_ALLOWED_DOMAINS, else the members' email domains):
+    # the company's (ORACLE_IAP_ALLOWED_DOMAINS and company_email_domains), or that is in
+    # a shared drive not on company_shared_drives:
     # "skip" leaves it out and lists it on the source as 'Skipped: owned outside
     # <domain>'; "include_and_flag" pulls it in and lists it as 'Owned outside <domain>'.
     # Docs picked one by one are always pulled in. Owner, 2026-10-20 (S5): skip.

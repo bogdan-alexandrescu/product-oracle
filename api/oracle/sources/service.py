@@ -379,15 +379,28 @@ PUBLIC_MAIL_DOMAINS = frozenset(
 
 
 async def company_domains(db: AsyncSession, tenant_id: uuid.UUID) -> list[str]:
-    """The company's email domains: ``ORACLE_IAP_ALLOWED_DOMAINS`` when set, else the
-    domains of the members' email addresses (public mail providers left out)."""
+    """The company's email domains, set explicitly (S5, owner 2026-10-20):
+    ``ORACLE_IAP_ALLOWED_DOMAINS`` and the owner's ``company_email_domains`` setting.
+    Neither set: none (the outside-owner check fails closed), unless
+    ``ORACLE_INFER_COMPANY_DOMAINS`` (local development only) takes them from the members'
+    email addresses, public mail providers left out."""
+    from oracle.tenant_settings_api import get_setting
+
     configured = {d.strip().lower().lstrip("@") for d in get_settings().iap_allowed_domains}
+    configured |= {str(d).strip().lower() for d in await get_setting(db, "company_email_domains")}
     configured.discard("")
-    if configured:
+    if configured or not get_settings().infer_company_domains:
         return sorted(configured)
     emails = await db.scalars(select(User.email).where(User.tenant_id == tenant_id))
     found = {e.rpartition("@")[2].strip().lower() for e in emails if "@" in e}
     return sorted(found - PUBLIC_MAIL_DOMAINS - {""})
+
+
+async def company_shared_drives(db: AsyncSession) -> list[str]:
+    """The ids of the shared drives the owner listed as the company's (S5)."""
+    from oracle.tenant_settings_api import get_setting
+
+    return sorted({d["id"] for d in await get_setting(db, "company_shared_drives")})
 
 
 def _check_config(config: dict[str, Any]) -> None:

@@ -166,6 +166,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     if source.kind == "google_docs":
         cursor = await _drive_cursor(db, source, cursor)
         config[base.COMPANY_DOMAINS] = await service.company_domains(db, source.tenant_id)
+        config[base.COMPANY_SHARED_DRIVES] = await service.company_shared_drives(db)
     try:
         async for event in connector.sync(config, credential, cursor):
             if isinstance(event, base.ItemUpsert):
