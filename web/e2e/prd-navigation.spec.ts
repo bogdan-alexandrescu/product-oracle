@@ -28,6 +28,17 @@ async function noSidewaysScroll(page: Page) {
   expect(sw, "page scroll width").toBe(iw);
 }
 
+/** No visible text under 13 px inside `el`. */
+async function noSmallText(el: Locator) {
+  const small = await el.evaluate((root) =>
+    [...root.querySelectorAll<HTMLElement>("*")]
+      .filter((e) => e.checkVisibility() && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim()))
+      .filter((e) => parseFloat(getComputedStyle(e).fontSize) < 13)
+      .map((e) => e.textContent),
+  );
+  expect(small).toEqual([]);
+}
+
 /** The element's box lies inside the viewport. */
 async function insideViewport(page: Page, el: Locator) {
   const box = (await el.boundingBox())!;
@@ -88,6 +99,8 @@ test("outline rail: every section, grouped by chapter and folded; the current ch
   await expect(section(page, "11-3-retention-2")).toBeVisible();
   await expect(outlineRow(page, "11-3-retention-2")).toHaveAttribute("aria-current", "true");
   await expect(outlineRow(page, "11-3-retention-2")).toBeInViewport();
+  await noSmallText(rail(page));
+  await noSmallText(page.getByTestId("review-panel"));
   await noSidewaysScroll(page);
 });
 
@@ -183,6 +196,7 @@ test("switcher at 1200 px: arrows, i of M, Next to review, and a popover that cl
   await expect(popover(page).getByTestId("outline-filter")).toBeFocused();
   await expect(popover(page).getByTestId("switcher-hints")).toHaveText(/↑↓ move · ↵ open · j k next\/previous/);
   await insideViewport(page, popover(page));
+  await noSmallText(switcher(page));
   await page.keyboard.press("Escape");
   await expect(popover(page)).toHaveCount(0);
   await expect(trigger(page)).toBeFocused();
@@ -276,6 +290,11 @@ test("phone: a Sections / Review bar opens sheets that close on Escape, the scri
   const review = page.getByRole("dialog", { name: "Review" });
   await expect(review.getByRole("tab")).toHaveText([/Feedback\s*12/, /Sources\s*0/, "History"]);
   for (const tab of await review.getByRole("tab").all()) expect((await tab.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  // Every control in the sheet is a 44 px touch target, and no text is under 13 px.
+  for (const control of await review.locator("button, select, [data-testid=feedback-goto]").filter({ visible: true }).all()) {
+    expect((await control.boundingBox())!.height, await control.innerText()).toBeGreaterThanOrEqual(44);
+  }
+  await noSmallText(review);
   await page.keyboard.press("Escape");
   await expect(review).toHaveCount(0);
   await noSidewaysScroll(page);

@@ -100,7 +100,7 @@ export function Sheet({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative flex max-h-[85dvh] min-h-0 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none"
+        className="relative flex max-h-[85dvh] min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none"
       >
         <div
           data-testid="sheet-handle"
