@@ -211,32 +211,28 @@ def normalize_url(url: str) -> str:
     return urlunsplit((scheme, host, path, query, ""))
 
 
-# A ``urn:uuid:`` prefix in any case (uuid.UUID strips the lowercase one only).
-_URN_UUID = re.compile(r"^urn:uuid:", re.IGNORECASE)
+def _as_uuid(value: str | None) -> uuid.UUID | None:
+    """A UUID in any spelling uuid.UUID reads (undashed, in braces, ``urn:``, ``uuid:``,
+    ``urn:uuid:``), in any case: it reads the prefixes in lowercase only."""
+    try:
+        return uuid.UUID(str(value).strip().lower()) if value else None
+    except ValueError:
+        return None
 
 
 def external_key(value: str | None) -> str:
     """A provider's id as compared: a UUID in any spelling (undashed, uppercase, in
-    braces, ``urn:uuid:``) as its canonical form, so a Notion page id cited one way
-    matches the item stored another; anything else as is, stripped."""
+    braces, ``urn:uuid:``, any case) as its canonical form, so a Notion page id cited
+    one way matches the item stored another; anything else as is, stripped."""
     text_value = str(value or "").strip()
-    try:
-        return str(uuid.UUID(_URN_UUID.sub("", text_value)))
-    except ValueError:
-        return text_value
+    parsed = _as_uuid(text_value)
+    return str(parsed) if parsed is not None else text_value
 
 
 def _hex32(value: Any) -> Any:
-    """SQL: a stored id with dashes, braces and a ``urn:uuid:`` prefix removed,
-    lowercased; a UUID in any spelling becomes its 32 hex digits."""
-    return func.lower(func.regexp_replace(value, "^urn:uuid:|[{}-]", "", "gi"))
-
-
-def _as_uuid(value: str | None) -> uuid.UUID | None:
-    try:
-        return uuid.UUID(_URN_UUID.sub("", str(value).strip())) if value else None
-    except ValueError:
-        return None
+    """SQL: a stored id with dashes, braces and ``urn:`` / ``uuid:`` prefixes (any
+    case) removed, lowercased: what :func:`_as_uuid` reads becomes its 32 hex digits."""
+    return func.lower(func.regexp_replace(func.btrim(value), "urn:|uuid:|[{}-]", "", "gi"))
 
 
 async def revocation_record(db: AsyncSession, source_ids: list[uuid.UUID]) -> dict[str, Any]:
@@ -367,7 +363,7 @@ async def _external_items(
     if not refs:
         return []
     wanted = {ref for _, ref in refs}
-    hexes = {uuid.UUID(ref).hex for ref in wanted if _as_uuid(ref) is not None}
+    hexes = {u.hex for u in map(_as_uuid, wanted) if u is not None}
     match = SourceItem.external_id.in_(wanted)
     if hexes:
         # Stored ids are compared in canonical form too (a page id saved undashed).

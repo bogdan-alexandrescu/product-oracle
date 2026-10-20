@@ -188,9 +188,14 @@ async def tick(principal: CurrentPrincipal, db: TenantDB, http: ProviderHttp) ->
     disable still owes (``oracle tick`` calls it on a schedule)."""
     if principal.kind != "token" and principal.role != "owner":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Requires the owner role or an API token")
-    out = await service.tick(db, principal)
-    out.claude_accounts = summarise_sweep(await sweep_claude_accounts(principal.tenant_id))
-    out.llm_jobs = await run_llm_jobs(principal.tenant_id)
-    # Last, within their own time budget: they never hold up runs and jobs.
-    out.member_follow_ups = await members_service.run_follow_ups(db, principal, http)
+    try:
+        out = await service.tick(db, principal)
+        out.claude_accounts = summarise_sweep(await sweep_claude_accounts(principal.tenant_id))
+        out.llm_jobs = await run_llm_jobs(principal.tenant_id)
+    finally:
+        # Last, within their own time budget: they never hold up runs and jobs, and a
+        # failure of those never skips them.
+        await db.rollback()
+        follow_ups = await members_service.run_follow_ups(db, principal, http)
+    out.member_follow_ups = follow_ups
     return out

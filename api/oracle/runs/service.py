@@ -32,7 +32,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, confidence
@@ -1966,7 +1966,7 @@ async def _revoke_failures(db: AsyncSession) -> list[InboxRevokeFailure]:
     from oracle.auth.models import User
     from oracle.connections.providers import get_provider
     from oracle.members.models import MemberFollowUp
-    from oracle.members.service import FOLLOW_UP_OPEN, FOLLOW_UP_RETRY_WINDOW
+    from oracle.members.service import CALL_DONE, FOLLOW_UP_OPEN, FOLLOW_UP_RETRY_WINDOW
 
     rows = (
         await db.execute(
@@ -1976,6 +1976,8 @@ async def _revoke_failures(db: AsyncSession) -> list[InboxRevokeFailure]:
                 MemberFollowUp.kind == "provider_revoke",
                 MemberFollowUp.status.in_(FOLLOW_UP_OPEN),
                 MemberFollowUp.attempts > 0,
+                # Revoked, only the saving of it failed: done at the next attempt.
+                or_(MemberFollowUp.outcome.is_(None), MemberFollowUp.outcome.not_in(CALL_DONE)),
             )
             .order_by(MemberFollowUp.created_at, MemberFollowUp.id)
         )

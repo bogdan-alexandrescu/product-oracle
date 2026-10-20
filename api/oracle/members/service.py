@@ -1,8 +1,10 @@
 """Members (users of one company's Oracle) and invites. Functions flush, never commit;
 the router commits once per request. Every change writes an audit event."""
 
+import contextlib
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -457,18 +459,15 @@ async def after_disable(
     await run_follow_ups(session, principal, http, member_id=user_id)
 
 
-async def sweep_disabled(
-    session: AsyncSession, principal: "Principal | None", user_id: uuid.UUID
-) -> bool:
-    """Re-check a disabled member after the disable committed: an API token, an OAuth
-    grant or a connection of theirs still active is revoked now, as the disable would
-    have. Commits; ``True`` when something was revoked."""
+async def _left_over(
+    session: AsyncSession, user_id: uuid.UUID
+) -> tuple[list[uuid.UUID], list[uuid.UUID], list[uuid.UUID], list[uuid.UUID], set[uuid.UUID]]:
+    """What a disabled member still holds: active API tokens, OAuth grants, connections,
+    queued model jobs (requested by them or a token of theirs), and those identities."""
     from oracle.connections.models import Connection
+    from oracle.jobs.models import LlmJob
     from oracle.mcp.oauth.models import OAuthToken
 
-    user = await session.get(User, user_id)
-    if user is None or user.disabled_at is None:
-        return False
     tokens = list(
         await session.scalars(
             select(ApiToken.id).where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
@@ -482,13 +481,38 @@ async def sweep_disabled(
         )
     )
     conns = list(await session.scalars(select(Connection.id).where(Connection.user_id == user_id)))
-    if not (tokens or grants or conns):
+    acted_as = {
+        user_id,
+        *await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user_id)),
+    }
+    jobs = list(
+        await session.scalars(
+            select(LlmJob.id).where(LlmJob.status == "queued", LlmJob.requested_by.in_(acted_as))
+        )
+    )
+    return tokens, grants, conns, jobs, acted_as
+
+
+async def sweep_disabled(
+    session: AsyncSession, principal: "Principal | None", user_id: uuid.UUID
+) -> bool:
+    """Re-check a disabled member after the disable committed: an API token, an OAuth
+    grant or a connection of theirs still active is revoked now, and a model job queued
+    for them cancelled (the reporting job an import queues, say), as the disable would
+    have. Commits; ``True`` when something was revoked or cancelled."""
+    from oracle.mcp.oauth.models import OAuthToken
+
+    user = await session.get(User, user_id)
+    if user is None or user.disabled_at is None:
+        return False
+    if not any((await _left_over(session, user_id))[:4]):
         return False
     from oracle.review import publish
 
     await publish.gate_lock(session, shared=False)
     # Re-read under the gate: a restore may have committed while the sweep waited on it,
-    # and a restored member's new tokens and connections are theirs to keep.
+    # and a restored member's new tokens and connections are theirs to keep; and what
+    # is left over may have changed (the audit names what this sweep revoked).
     user = await session.scalar(
         select(User)
         .where(User.id == user_id)
@@ -498,21 +522,26 @@ async def sweep_disabled(
     if user is None or user.disabled_at is None:
         await session.rollback()
         return False
+    tokens, grants, conns, jobs, acted_as = await _left_over(session, user_id)
+    if not (tokens or grants or conns or jobs):
+        await session.rollback()
+        return False
     at = datetime.now(UTC)
     via = {"via": "member.disable.sweep", "member_id": str(user_id)}
     await session.execute(
         update(ApiToken)
-        .where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+        .where(ApiToken.id.in_(tokens))
         .values(revoked_at=at)
         .execution_options(synchronize_session=False)
     )
     await session.execute(
         update(OAuthToken)
-        .where(OAuthToken.user_id == user_id, OAuthToken.revoked_at.is_(None))
+        .where(OAuthToken.id.in_(grants))
         .values(revoked_at=at)
         .execution_options(synchronize_session=False)
     )
-    await _disconnect_all(session, principal, user, via)
+    connections, _ = await _disconnect_all(session, principal, user, via)
+    cancelled = await _cancel_llm_jobs(session, acted_as, at)
     await audit.record(
         session,
         principal,
@@ -522,7 +551,8 @@ async def sweep_disabled(
         {
             "api_tokens": [str(i) for i in tokens],
             "oauth_tokens": [str(i) for i in grants],
-            "connections": [str(i) for i in conns],
+            "connections": [str(c.id) for c in connections],
+            "llm_jobs": [str(j) for j in cancelled],
         },
     )
     await session.commit()
@@ -616,8 +646,6 @@ async def _attempt(
     credential); a failure waits a backoff, or past the retry window is marked failed,
     the copy kept. ``deadline`` (loop time): the run's budget; a call it cuts short is
     rolled back, uncounted (:class:`_BudgetSpent`)."""
-    import asyncio
-
     row = await session.scalar(
         select(MemberFollowUp)
         .where(MemberFollowUp.id == follow_up_id, MemberFollowUp.status.in_(statuses))
@@ -627,17 +655,40 @@ async def _attempt(
         await session.rollback()
         return None
     try:
-        async with asyncio.timeout_at(deadline):
-            ok, outcome, error = await _follow_up(session, row, http)
-    except TimeoutError as exc:
-        if deadline is not None and asyncio.get_running_loop().time() >= deadline:
-            await session.rollback()
-            raise _BudgetSpent from None
-        log.exception("follow-up %s (%s) failed", row.id, row.kind)
-        ok, outcome, error = False, "failed", type(exc).__name__
+        ok, outcome, error = await _follow_up(session, row, http, deadline)
+    except _BudgetSpent:
+        await session.rollback()
+        raise
     except Exception as exc:  # noqa: BLE001 - one broken call must not stop the others
         log.exception("follow-up %s (%s) failed", row.id, row.kind)
         ok, outcome, error = False, "failed", type(exc).__name__
+    try:
+        return await _record_attempt(session, principal, row, ok, outcome, error, manual)
+    except Exception:
+        await session.rollback()
+        if ok:
+            # The call succeeded: whatever failed to save, the next attempt must not
+            # make it again (a second revoke of a dead grant fails, and would show as
+            # "Couldn't revoke"); it records the success (:func:`_follow_up`).
+            await session.execute(
+                update(MemberFollowUp)
+                .where(MemberFollowUp.id == follow_up_id)
+                .values(outcome=outcome)
+                .execution_options(synchronize_session=False)
+            )
+            await session.commit()
+        raise
+
+
+async def _record_attempt(
+    session: AsyncSession,
+    principal: "Principal | None",
+    row: MemberFollowUp,
+    ok: bool,
+    outcome: str,
+    error: str | None,
+    manual: bool,
+) -> MemberFollowUp:
     now = datetime.now(UTC)
     row.attempts += 1
     row.outcome = outcome
@@ -738,12 +789,37 @@ async def dismiss_follow_up(
     return row
 
 
-async def _follow_up(
-    session: AsyncSession, row: MemberFollowUp, http: "httpx.AsyncClient"
-) -> tuple[bool, str, str | None]:
-    """Make one follow-up call: (succeeded, outcome, error)."""
+# A pending follow-up whose call succeeded but whose success failed to save (_attempt).
+CALL_DONE = (*REVOKE_DONE, "cancelled")
+
+
+@contextlib.asynccontextmanager
+async def _call_deadline(deadline: float | None) -> "AsyncIterator[None]":
+    """One network call's time: FOLLOW_UP_DEADLINE_SECONDS, cut to the run's budget
+    (``deadline``, loop time), which raises :class:`_BudgetSpent`. Only the call is
+    timed: a database query is never cancelled halfway (that can break the session)."""
     import asyncio
 
+    loop = asyncio.get_running_loop()
+    own = loop.time() + FOLLOW_UP_DEADLINE_SECONDS
+    try:
+        async with asyncio.timeout_at(own if deadline is None else min(own, deadline)):
+            yield
+    except TimeoutError:
+        if deadline is not None and loop.time() >= deadline:
+            raise _BudgetSpent from None
+        raise
+
+
+async def _follow_up(
+    session: AsyncSession,
+    row: MemberFollowUp,
+    http: "httpx.AsyncClient",
+    deadline: float | None = None,
+) -> tuple[bool, str, str | None]:
+    """Make one follow-up call: (succeeded, outcome, error)."""
+    if row.outcome in CALL_DONE:
+        return True, row.outcome, None  # made before; only its saving failed
     if row.kind == "provider_revoke":
         from oracle.connections import service as connections
         from oracle.connections.models import Connection
@@ -761,7 +837,7 @@ async def _follow_up(
             key_version=row.key_version,
         )
         try:
-            async with asyncio.timeout(FOLLOW_UP_DEADLINE_SECONDS):
+            async with _call_deadline(deadline):
                 outcome = await connections.revoke_at_provider(http, conn)
         except TimeoutError:
             return False, "failed", "the provider did not answer in time"
@@ -772,7 +848,7 @@ async def _follow_up(
 
     segment = await session.get(RunSegment, row.target_id)
     try:
-        async with asyncio.timeout(FOLLOW_UP_DEADLINE_SECONDS):
+        async with _call_deadline(deadline):
             await get_runtime().cancel(row.workflow_id or "")
     except (RuntimeUnavailable, TimeoutError) as exc:
         error = str(exc) or "the runtime did not answer in time"

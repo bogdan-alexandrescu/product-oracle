@@ -591,3 +591,202 @@ async def test_a_failed_cancel_of_a_workflow_started_for_a_changed_run_is_retrie
     assert len(runtime.cancelled) == 1
     async with tenant_session(ctx.tenant_id) as s:
         assert (await s.scalar(select(MemberFollowUp))).status == "done"
+
+
+# --- MINORS --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "spelling", ["{{URN:UUID:{u}}}", "UUID:{u}", "URN:{u}", "Uuid:{h}", "{{urn:uuid:{U}}}"]
+)
+def test_external_key_reads_every_uuid_spelling_in_any_case(spelling):
+    from oracle.review.publish import _as_uuid, external_key
+
+    u = uuid.UUID("12345678-9abc-def0-1234-56789abcdef0")
+    value = spelling.format(u=u, U=str(u).upper(), h=u.hex)
+    assert external_key(value) == str(u)
+    assert _as_uuid(value) == u
+
+
+@pytest.mark.parametrize(
+    "stored", ["uuid:{u}", "URN:{u}", "UUID:{h}", "{{URN:UUID:{u}}}", " urn:uuid:{U} "]
+)
+async def test_a_stored_id_in_any_uuid_spelling_reads_as_its_hex_in_sql(client, stored):
+    from sqlalchemy import literal
+
+    from oracle.review.publish import _hex32
+
+    ctx = await setup(client)
+    u = uuid.uuid4()
+    value = stored.format(u=u, U=str(u).upper(), h=u.hex)
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await s.scalar(select(_hex32(literal(value)))) == u.hex
+
+
+async def _disabled_with_connection(client, ctx, monkeypatch, outcome="failed"):
+    from oracle.connections import service as connections
+    from tests.test_review_v2_security_5 import _always, add_connection
+
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    await add_connection(ctx, pm.user_id, "gh-1")
+    monkeypatch.setattr(connections, "revoke_at_provider", _always(outcome))
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    return pm
+
+
+async def _due(ctx) -> None:
+    from oracle.members.models import MemberFollowUp
+
+    async with tenant_session(ctx.tenant_id) as s:
+        for row in await s.scalars(select(MemberFollowUp)):
+            row.next_attempt_at = datetime.now(UTC)
+        await s.commit()
+
+
+async def test_follow_ups_still_run_when_an_earlier_part_of_the_tick_fails(client, monkeypatch):
+    from oracle.connections import service as connections
+    from oracle.members.models import MemberFollowUp
+    from oracle.runs import router as runs_router
+    from tests.test_review_v2_security_5 import _always
+
+    ctx = await setup(client)
+    await _disabled_with_connection(client, ctx, monkeypatch)
+    await _due(ctx)
+
+    async def broken(tenant_id):
+        raise RuntimeError("the model jobs broke")
+
+    monkeypatch.setattr(runs_router, "run_llm_jobs", broken)
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("revoked"))
+    with pytest.raises(RuntimeError):
+        await client.post("/v1/internal/tick", headers=ctx.auth)
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.scalar(select(MemberFollowUp))).status == "done"
+
+
+async def test_a_successful_revoke_that_fails_to_save_is_not_shown_as_a_failure(
+    client, monkeypatch
+):
+    """The provider revoked the grant, then saving that failed: the next attempt
+    records the success without asking the provider again (a second revoke of a dead
+    grant fails), and owners never see it as "Couldn't revoke"."""
+    from oracle.connections import service as connections
+    from oracle.members import service as members
+    from oracle.members.models import MemberFollowUp
+    from tests.test_review_v2_security_5 import _always, _revoke_failures
+
+    ctx = await setup(client)
+    await _disabled_with_connection(client, ctx, monkeypatch)
+    await _due(ctx)
+    real_record = members.audit.record
+    broke: list[bool] = []
+
+    async def record_once(session, *args, **kwargs):
+        if args[1] == "connection.provider_revoke" and not broke:
+            broke.append(True)
+            raise RuntimeError("the database went away")
+        return await real_record(session, *args, **kwargs)
+
+    calls: list = []
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("revoked", calls))
+    monkeypatch.setattr(members.audit, "record", record_once)
+    await _tick(client, ctx)
+    assert broke and len(calls) == 1
+    assert await _revoke_failures(client, ctx.auth) == []
+    # The provider now refuses: the grant is gone. The next attempt does not ask it.
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("failed", calls))
+    await _due(ctx)
+    await _tick(client, ctx)
+    assert len(calls) == 1
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(MemberFollowUp))
+        assert row.status == "done" and row.outcome == "revoked" and row.ciphertext is None
+    assert await _revoke_failures(client, ctx.auth) == []
+
+
+async def test_a_budget_that_runs_out_mid_query_does_not_cut_the_query_or_fail_the_tick(
+    client, monkeypatch, runtime
+):
+    """The tick's follow-up budget runs out while a follow-up is reading the database:
+    only network calls are timed, so the query is not cancelled halfway (that can leave
+    the session unusable and the tick a 500); the tick answers."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from oracle.members import service as members
+    from oracle.members.models import MemberFollowUp
+
+    ctx = await setup(client)
+    author = await person(ctx.tenant_id, "approver", "author")
+    await _started(client, ctx, author.headers)
+    assert (await disable(client, ctx, author.user_id)).status_code == 200
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(MemberFollowUp).where(MemberFollowUp.kind == "run_cancel"))
+        row.status, row.attempts, row.next_attempt_at = "pending", 1, datetime.now(UTC)
+        await s.commit()
+    real_get = AsyncSession.get
+
+    async def slow_get(self, entity, *args, **kwargs):
+        if entity is RunSegment:
+            await self.execute(text("SELECT pg_sleep(2)"))
+        return await real_get(self, entity, *args, **kwargs)
+
+    monkeypatch.setattr(AsyncSession, "get", slow_get)
+    monkeypatch.setattr(members, "FOLLOW_UP_TICK_BUDGET_SECONDS", 0.5)
+    resp = await client.post("/v1/internal/tick", headers=ctx.auth)
+    monkeypatch.undo()
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(MemberFollowUp).where(MemberFollowUp.kind == "run_cancel"))
+        assert row.status == "done" and row.attempts == 2
+
+
+async def test_the_sweep_rereads_what_it_revokes_after_taking_the_gate(client, monkeypatch):
+    """A token created while the sweep waited on the gate is revoked and named in its
+    audit; one revoked meanwhile is not named."""
+    from oracle.members.service import sweep_disabled
+    from oracle.review import publish
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    early, _ = await member_token(ctx, pm.user_id, "slipped-in")
+    late: list[uuid.UUID] = []
+    real = publish.gate_lock
+
+    async def spy(db, *, shared):
+        monkeypatch.setattr(publish, "gate_lock", real)
+        token_id, _ = await member_token(ctx, pm.user_id, "slipped-in-later")
+        late.append(token_id)
+        await real(db, shared=shared)
+
+    monkeypatch.setattr(publish, "gate_lock", spy)
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await sweep_disabled(s, None, pm.user_id) is True
+    async with tenant_session(ctx.tenant_id) as s:
+        event = await s.scalar(
+            select(AuditEvent).where(AuditEvent.action == "member.disable_sweep")
+        )
+        assert sorted(event.data["api_tokens"]) == sorted([str(early), str(late[0])])
+
+
+async def test_the_sweep_cancels_a_job_queued_for_a_disabled_member(client):
+    """The reporting job an import queued for its requester, committed after the
+    requester's disable: the sweep cancels it."""
+    from oracle.docs.models import Document
+    from oracle.jobs.models import LlmJob
+    from oracle.members.service import sweep_disabled
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    async with tenant_session(ctx.tenant_id) as s:
+        doc_id = await s.scalar(select(Document.id).where(Document.slug == DOC))
+        job = LlmJob(kind="reporting", document_id=doc_id, requested_by=pm.user_id)
+        s.add(job)
+        await s.commit()
+        job_id = job.id
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await sweep_disabled(s, None, pm.user_id) is True
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(LlmJob, job_id)).status == "cancelled"
