@@ -109,12 +109,15 @@ export function ApproveButton({
   approvedAt,
   isLatest,
   onApproved,
+  blockedReason,
 }: {
   doc: string;
   n: number;
   approvedAt?: string | null;
   isLatest: boolean;
   onApproved: () => void;
+  /** Why the version cannot be approved now (a roadmap's marked dates, O4): Approve is disabled. */
+  blockedReason?: string;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -140,6 +143,19 @@ export function ApproveButton({
     } finally {
       setSaving(false);
     }
+  }
+
+  if (blockedReason) {
+    return (
+      <div className="flex w-full min-w-0 max-w-[min(28rem,calc(100vw-2.5rem))] flex-col items-end gap-1 max-[600px]:items-start" data-testid="approve-blocked">
+        <Button variant="primary" icon="check" disabled aria-describedby="approve-blocked-reason" title={blockedReason}>
+          Approve version
+        </Button>
+        <span id="approve-blocked-reason" className="text-right text-sm font-medium break-words text-warn max-[600px]:text-left">
+          {blockedReason}
+        </span>
+      </div>
+    );
   }
 
   if (!confirming) {

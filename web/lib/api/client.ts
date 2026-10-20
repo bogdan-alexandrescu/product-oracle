@@ -25,6 +25,7 @@ export type VersionSummary = Schemas["VersionSummary"];
 export type VersionSource = Schemas["VersionSource"];
 export type SectionOut = Schemas["SectionOut"];
 export type CitationOut = Schemas["CitationOut"];
+export type DateMarkOut = Schemas["DateMarkOut"];
 export type CommentOut = Schemas["CommentOut"];
 export type FeedbackItem = Schemas["FeedbackItemOut"];
 export type Verdict = Schemas["SectionReviewIn"]["verdict"];
