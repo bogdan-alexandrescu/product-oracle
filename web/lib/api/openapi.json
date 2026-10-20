@@ -8908,6 +8908,58 @@
         }
       }
     },
+    "/v1/runs/{run_id}/retry-import": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Import Run",
+        "description": "Retry importing a step's output (Inbox: ``imports``, ``can_retry_import``): Oracle\nstopped after its resumed advance failed 5 times in a row; the next tick tries again,\nthe count reset. Owners only; audited.",
+        "operationId": "retry_import_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runs/{run_id}/cancel-again": {
       "post": {
         "tags": [
@@ -14773,6 +14825,14 @@
             "title": "Searches",
             "default": []
           },
+          "imports": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "type": "array",
+            "title": "Imports",
+            "default": []
+          },
           "feedback": {
             "items": {
               "$ref": "#/components/schemas/InboxDocument"
@@ -18224,6 +18284,22 @@
             ],
             "title": "Searching"
           },
+          "import_failed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Failed"
+          },
+          "can_retry_import": {
+            "type": "boolean",
+            "title": "Can Retry Import",
+            "default": false
+          },
           "knobs": {
             "$ref": "#/components/schemas/KnobsOut"
           },
@@ -18658,6 +18734,22 @@
               }
             ],
             "title": "Searching"
+          },
+          "import_failed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Failed"
+          },
+          "can_retry_import": {
+            "type": "boolean",
+            "title": "Can Retry Import",
+            "default": false
           }
         },
         "type": "object",

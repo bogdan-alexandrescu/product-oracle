@@ -144,6 +144,8 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     can_retry_lookup: r.can_retry_lookup,
     cancel_again: r.cancel_again,
     can_dismiss_overrun: r.can_dismiss_overrun,
+    import_failed: r.import_failed,
+    can_retry_import: r.can_retry_import,
   };
 }
 
@@ -338,14 +340,17 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
       },
     ];
   });
+  // Runs whose output Oracle stopped trying to import (owners: Retry).
+  const imports = ctx.db.runs.filter((r) => r.can_retry_import && !FINAL.includes(r.status)).map(summary);
   return {
     checkpoints,
     approvals,
     overruns,
     lookups: [],
     searches: [],
+    imports,
     feedback,
-    total: checkpoints.length + approvals.length + overruns.length + feedback.length,
+    total: checkpoints.length + approvals.length + overruns.length + imports.length + feedback.length,
   };
 }
 
@@ -428,6 +433,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       can_retry_lookup: false,
       cancel_again: [],
       can_dismiss_overrun: false,
+      can_retry_import: false,
       knobs,
       snapshot_id: null,
       snapshot_as_of: null,
@@ -550,6 +556,12 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     Object.assign(r, { can_retry_lookup: false, stuck: null });
     return done();
   }
+  if (action === "retry-import" && m === "POST") {
+    if (!r.can_retry_import) return fail(409, "nothing to retry: no import of this run has stopped");
+    for (const s of r.segments) if (s.status === "failed") Object.assign(s, { status: "succeeded", error: null });
+    Object.assign(r, { can_retry_import: false, import_failed: null });
+    return done();
+  }
   if (action === "cancel-again" && m === "POST") {
     const { workflow_id } = await body<Schemas["CancelAgain"]>();
     if (!(r.cancel_again ?? []).includes(workflow_id)) {
@@ -618,6 +630,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
       can_retry_lookup: false,
       cancel_again: [],
       can_dismiss_overrun: false,
+      can_retry_import: false,
       knobs: k,
       snapshot_id: ctx.uuid(),
       snapshot_as_of: created_at,

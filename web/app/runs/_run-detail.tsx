@@ -195,6 +195,16 @@ export function RunDetail({ id }: { id: string }) {
               )}
             </div>
           )}
+          {run.import_failed && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900" data-testid="run-import-failed">
+              <span className="min-w-0 flex-1">{run.import_failed}</span>
+              {owner && run.can_retry_import && (
+                <Button size="sm" variant="primary" disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-import", path)))}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
           {run.searching && (
             <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="run-searching">
               {run.searching}

@@ -2483,6 +2483,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/retry-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Import Run
+         * @description Retry importing a step's output (Inbox: ``imports``, ``can_retry_import``): Oracle
+         *     stopped after its resumed advance failed 5 times in a row; the next tick tries again,
+         *     the count reset. Owners only; audited.
+         */
+        post: operations["retry_import_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/cancel-again": {
         parameters: {
             query?: never;
@@ -4557,6 +4579,11 @@ export interface components {
              * @default []
              */
             searches: components["schemas"]["RunSummary"][];
+            /**
+             * Imports
+             * @default []
+             */
+            imports: components["schemas"]["RunSummary"][];
             /** Feedback */
             feedback: components["schemas"]["InboxDocument"][];
             /** Total */
@@ -5734,6 +5761,13 @@ export interface components {
             can_dismiss_overrun: boolean;
             /** Searching */
             searching?: string | null;
+            /** Import Failed */
+            import_failed?: string | null;
+            /**
+             * Can Retry Import
+             * @default false
+             */
+            can_retry_import: boolean;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
             snapshot_id?: string | null;
@@ -5853,6 +5887,13 @@ export interface components {
             can_dismiss_overrun: boolean;
             /** Searching */
             searching?: string | null;
+            /** Import Failed */
+            import_failed?: string | null;
+            /**
+             * Can Retry Import
+             * @default false
+             */
+            can_retry_import: boolean;
         };
         /**
          * RuntimeFeatures
@@ -12441,6 +12482,37 @@ export interface operations {
         };
     };
     retry_lookup_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_import_run: {
         parameters: {
             query?: never;
             header?: never;

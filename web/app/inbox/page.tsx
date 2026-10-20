@@ -230,6 +230,27 @@ export default function InboxPage() {
             ))}
           </Section>
 
+          <Section title="Couldn't import" count={inbox.imports?.length ?? 0} testId="inbox-imports">
+            {(inbox.imports ?? []).map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+                <div className="min-w-0 flex-1">
+                  <RunLink run={r} />
+                  <div className="text-xs text-neutral-500">{r.import_failed}</div>
+                </div>
+                {r.can_retry_import && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={busy !== null}
+                    onClick={() => act(`import-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry-import", path(r.id))))}
+                  >
+                    Retry
+                  </Button>
+                )}
+              </li>
+            ))}
+          </Section>
+
           <Section title="Looking for earlier submissions" count={inbox.searches?.length ?? 0} testId="inbox-searches">
             {(inbox.searches ?? []).map((r) => (
               <li key={r.id} className="px-4 py-3 text-sm">

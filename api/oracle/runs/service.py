@@ -62,7 +62,12 @@ a found workflow whose status reads is followed (on every tick) until SwarmCloud
 ended, a confirmed cancel still winding down included. One whose status does not read
 past that (or past ``NOT_FOUND_TRIES`` bare 404s) shows in the Inbox as "Cost unknown"
 (Retry lookup reads it now), read again now and then until ``COST_UNKNOWN_SECONDS``
-later, then dropped (noted). A workflow's cost counts once, on the first attempt that
+later, then dropped (noted). A confirmed cancel that keeps reading CANCELLING has its
+cost read and counted (never "Cost unknown") until the same cap, then dropped (noted);
+one SwarmCloud no longer knows right after a confirmed cancel is read once more before
+it is taken as ended. An overrun after the end is recorded only for spend that arrived
+after it (``spent_at_end``); a dismissed one does not block a new one once the spend
+grows past it. A workflow's cost counts once, on the first attempt that
 carries it. Search results are committed on their own, before the rest of the tick. A
 confirmed cancel reads the workflow's final cost (a recorded cost is never lowered), and
 the spend is checked against the ceiling before every submission and before anything
@@ -75,8 +80,9 @@ run token's write runs (never for a read, initialize or tools/list): Oracle's re
 read and released first, then a review step no checkpoint stands for yet is read from
 SwarmCloud (:func:`run_token_hold`; one read shared by concurrent writes, bounded by
 ``HOLD_READ_SECONDS``; reached in any state, not listed or not read, it holds; a
-read-only answer is reused for up to 5 seconds, 'may write' never). A lost submission
-holds its token until it is resolved. Agents are told a fixed reason. An
+read-only answer is reused for up to 5 seconds, 'may write' never; a request joining a
+read in flight shares only a read-only answer, and on 'may write' reads for itself).
+A lost submission holds its token until it is resolved. Agents are told a fixed reason. An
 answered wait Oracle cannot read yet (SwarmCloud errors, a 404, a record that lags the
 step, or a 409 already_answered whose record does not read) is shown as ``needs: unread``
 until the answer is read; the approver rule applies then.
@@ -90,8 +96,15 @@ document the run will create), ``spend_ceiling_usd``, and for prd_to_roadmap
 ``source_version_id`` (the approved PRD version), ``template``, ``template_version`` and
 ``theme`` (the roadmap's), ``workflow``: the live v2 workflow's id, label, credential
 expiry and plan (oracle.runs.workflow), ``stuck_lookup`` (a lost submission past the
-lookup cap, for Retry), ``searches`` (submissions given up on, still looked for) and
-``post_404`` (404s that prove nothing on an answer post, counted).
+lookup cap, for Retry), ``searches`` (submissions given up on, still looked for),
+``post_404`` (404s that prove nothing on an answer post, counted), ``spent_at_end``
+(the spend when the run ended) and ``import_failed`` (a resumed advance stopped after
+``RESUME_TRIES`` failures, for an owner's Retry).
+
+An advance interrupted after its first commit (an import raised) is advanced again on
+each tick; the run's workflow is read whatever that does. Each failure is counted on the
+attempt (``resume_failures``: the error's class and when); at ``RESUME_TRIES`` the step
+fails and owners see "Couldn't import" in the Inbox with Retry.
 """
 
 import asyncio
