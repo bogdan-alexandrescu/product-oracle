@@ -25,8 +25,10 @@ async def test_a_bare_run_header_on_a_person_credential_reads_no_full_text(clien
         resp = await client.get(f"/v1/source-items/{items['a']}", headers=headers)
         assert resp.status_code == 404 or EXCERPT_A not in resp.text, (who, resp.text)
         resp = await client.get("/v1/search", params={"q": "buyers", "limit": 100}, headers=headers)
-        assert resp.status_code == 200, resp.text
-        assert str(items["a"]) not in {h["item"]["id"] for h in resp.json()["hits"]}, who
+        # A token not acting for a user has no sources at all (403): no leak either way.
+        assert resp.status_code in (200, 403), resp.text
+        if resp.status_code == 200:
+            assert str(items["a"]) not in {h["item"]["id"] for h in resp.json()["hits"]}, who
         resp = await client.get(
             f"/v1/intakes/{intake_id}/evidence",
             params={"q": "buyers", "limit": 50},
