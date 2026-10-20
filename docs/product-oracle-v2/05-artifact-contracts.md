@@ -247,9 +247,139 @@ route from the v2 mock rows.
   `affects` edge is picked up by the next change to either end.
 - **UI:** none in wave 1 (I3). The screens are listed in the lane report.
 
-## 8. Engineering specs, flows and wireframes (lane `v2-specs`, CR-09, §11.1-§11.2)
+## 8. Roadmaps, tracker alignment and product tracks (lane `v2-roadmap`, CR-11)
 
-The code is in `api/oracle/specs/`. Migration `0015_specs` (after `0014_trace`) widens two
+Build prompt §11.4, §11.1 (tracker part), §11.5 and V2b. Code in `api/oracle/roadmap/`,
+migration `0016_roadmap` (down revision `0014_blockers_snapshot`). The existing
+`prd_to_roadmap` flow, the five roadmap templates, the `roadmap_review` loop, brief/full,
+Present, themed decks and exports are unchanged ([roadmap-from-prd.md](../roadmap-from-prd.md)).
+The roadmap is still a document; its version keeps the trace lane's derived
+dependencies (§2). This lane adds rows per item.
+
+### 8.1 Tables
+
+| Table | What |
+|---|---|
+| `roadmap_items` | one row per item of a roadmap version: key, title, outcome, horizon, position; the exact PRD document, version, section key and section hash; `feature_id`, `requirement_ids`, `blocker_ids`, `depends_on`; `trace` (how each link was made); `milestone` (`date` only with `basis_ids`); `validation_gates`; `economics`; `priority`; `confidence`; freshness columns (`freshness`, `caused_by_change_id`, `stale_since`, `stale_reasons`, `reconciled_*`, `note`) |
+| `schedule_bases` | verified estimates, capacity figures and commitments: kind, `reference` (what a `date_source` names), `supports_date`, optional PRD scope and tracker record, `verified_by/at`, `status` verified or withdrawn |
+| `product_tracks` | one per PRD: started and current (latest approved) PRD version, the roadmap it follows, status (active, paused, closed), owner, the last monitoring snapshot |
+| `track_milestones` | name, horizon, `target_date` (a check constraint: no date without bases), `basis_ids`, `item_keys`, status |
+| `tracker_records` | engineering status read back (latest per tracker and issue key): state (todo, in_progress, done, cancelled, unknown), raw status, estimate, target date, observed at, the track and item key it belongs to |
+
+`change_events.subject_kind` gains `product_track` (a track's monitoring).
+
+### 8.2 How an item is traced
+
+| Link | Made from, in order (`trace[].via`) |
+|---|---|
+| PRD version and section | the run's source version (`document_versions.source_version_id`) and the item's `prd_section`, at that section's content hash |
+| feature | `feature:` in the file (`declared`); else a feature the PRD section links on that version (`section_link`, kinds implements, claims, evidences, tests); else the feature whose key is the item id (`key_match`) |
+| requirements | declared; section links; requirements `part_of` the feature (`graph`) |
+| blockers | declared; section links; constraints that `affects` or `blocks` the feature or its requirements (`graph`). Views add blockers linked later, live |
+| validation gates | declared; acceptance criteria that `verifies` the requirements; the blockers' planned or running feasibility experiments with their decision gate |
+| economics | declared; the feature's `effort`, `confidence`, `value`, `cost`; the priority score |
+
+An unknown declared key stays in `trace` with `unresolved: true`. Items arrive with the
+`roadmap.md` import (the `roadmap.items` change handler reads the run's
+`roadmap_items.yaml`); `PUT /v1/roadmaps/{doc}/versions/{n}/items` imports a file for a
+version by hand (refused whole on any problem, and for a version built from no PRD
+version; an approved version's items are pinned, 409). A version imported without a file (the feedback loop, `oracle push`) carries forward
+the previous version's items that its text still names.
+
+### 8.3 Dates (O4)
+
+Now/Next/Later on the B2 horizons is the default and needs no date. A date is accepted
+only on verified bases that support exactly that date:
+
+- item milestones: `date_source` must name a basis's `reference` (whole token, any case)
+  whose `supports_date` is the date. Otherwise `unverified_date`: the run's `items_check`
+  reports it (checkpoint on: the reviewer sees it; off: the run fails), a manual import is
+  refused, and a stored item keeps `refused_date` and never `date`;
+- track milestones: a date only in Now, with `basis_ids` that are verified, of this
+  company, for this PRD or company-wide, and support that date (422 otherwise);
+- a withdrawn basis supports nothing: milestones lose a date no other basis supports, and
+  items whose date rested on it go potentially stale.
+
+### 8.4 Item staleness
+
+The `roadmap.items` handler (registered after `trace.mark_stale`, whose
+`data.trace.entity_ids` it reads) marks items `potentially_stale` and records
+`change_events.data.roadmap` (item ids and reasons):
+
+| Change | Items marked |
+|---|---|
+| `document_version` (a PRD version imported) | traced to an earlier version of that PRD whose section hash differs or is gone (no section: any new version) |
+| `document_section` | traced to that section |
+| `requirement`, `decision`, `entity`, `blocker_status` | whose feature, requirements or blockers include the subject, a batch root, or what the trace walk found downstream; and whose PRD section links one of them |
+
+Content and trace are never rewritten. `POST /v1/roadmaps/{doc}/items/staleness`
+(approver): `review` (to `under_review`) or `reconcile` (reason required). Reconciling
+records the PRD's latest *approved* version and that section's hash as what the item was
+reconciled against (`reconciled_version_id`, `reconciled_section_hash`; never an older
+version than the item's anchor). Later PRD versions are judged against it; the PRD
+version the item was built from stays as built. The anchor before is audited. A run's
+file that cannot be stored (a malformed optional field) never aborts the roadmap version's
+import: the items are left out and the error is logged, and the checkpoint has already
+shown the problem. A carried-forward milestone keeps its date only while a verified basis
+still supports it.
+
+### 8.5 Tracker alignment (E1, read-only)
+
+`POST /v1/tracker/records` (approver) stores what was read from a tracker; Oracle writes
+nothing back. `GET /v1/roadmaps/{doc}/alignment` reports per item `aligned`, `drift`,
+`untracked` or `done`, with drift both ways: `ahead` (work started on a Next or Later
+item), `date_slip` (a tracker target after the item's earliest verified date),
+`overdue`, `cancelled`, and `unplanned` tracker work no item names. Two-way sync is behind
+`ORACLE_TRACKER_TWO_WAY_ENABLED` (default off): `POST /v1/tracks/{id}/tracker-push` is
+409 off, 501 on (no connector is verified). `GET /v1/tracks/{id}/tracker-plan` previews
+the epics and issues a connector would write (`would_write: false`).
+
+### 8.6 Product tracks (V2b)
+
+Started by the review lane's publish (`document_version`, cause `published`, handler
+`roadmap.start_track`), by storing a roadmap's items from an approved PRD version, or by
+`POST /v1/tracks`. `GET /v1/tracks/{id}` is the overview: `health` (on_track, at_risk,
+off_track, no_roadmap, paused, closed), a one-line `headline`, `counts`, `next_milestone`,
+`at_risk` (blocked, stale, slipping, with reasons), `drift`, `engineering_known`,
+`prd_moved` (a later approved PRD version than the roadmap's) and the milestones. Off track:
+a critical hard unresolved blocker on a Now item, or a slipping item of the next
+milestone. `POST /v1/tracks/{id}/monitor` and the ticker (hourly per active track) store the
+snapshot and record a `product_track` change (cause `track_monitored`, before and after)
+only when health, at-risk items, the next milestone or `prd_moved` changed. Monitoring is
+deterministic, with no model call. Re-deriving a roadmap is a `prd_to_roadmap` run in
+SwarmCloud (`POST /v1/tracks/{id}/roadmap-run` drafts it; cost gates apply).
+
+### 8.7 Routes
+
+| Operation (MCP tool) | Method and path | Role |
+|---|---|---|
+| `list_roadmap_items` | GET `/v1/roadmaps/{doc}/items` | viewer |
+| `import_roadmap_items` | PUT `/v1/roadmaps/{doc}/versions/{n}/items` | approver |
+| `act_on_roadmap_item_staleness` | POST `/v1/roadmaps/{doc}/items/staleness` | approver |
+| `get_roadmap_alignment` | GET `/v1/roadmaps/{doc}/alignment` | viewer |
+| `list_schedule_bases`, `create_schedule_basis` | GET, POST `/v1/schedule-bases` | viewer, approver |
+| `withdraw_schedule_basis` | POST `/v1/schedule-bases/{id}/withdraw` | approver |
+| `get_tracker_connector` | GET `/v1/tracker/connector` | viewer |
+| `list_tracker_records`, `import_tracker_records` | GET, POST `/v1/tracker/records` | viewer, approver |
+| `list_tracks`, `create_track` | GET, POST `/v1/tracks` | viewer, approver |
+| `get_track`, `update_track` | GET, PATCH `/v1/tracks/{id}` | viewer, approver |
+| `monitor_track` | POST `/v1/tracks/{id}/monitor` | approver |
+| `list_track_changes` | GET `/v1/tracks/{id}/changes` | viewer |
+| `create_track_roadmap_run` | POST `/v1/tracks/{id}/roadmap-run` | approver |
+| `get_track_tracker_plan` | GET `/v1/tracks/{id}/tracker-plan` | viewer |
+| `push_track_to_tracker` | POST `/v1/tracks/{id}/tracker-push` | approver (always refused) |
+| `list_track_milestones`, `create_track_milestone` | GET, POST `/v1/tracks/{id}/milestones` | viewer, approver |
+| `update_milestone` | PATCH `/v1/milestones/{id}` | approver |
+
+Every route is company-scoped (another company's id is 404, tested for each); writes are
+audited (`roadmap.items_imported`, `roadmap.items.<action>`, `schedule_basis.verified`,
+`schedule_basis.withdrawn`, `tracker.records_imported`, `track.started`, `track.updated`,
+`milestone.created`, `milestone.updated`; the handlers `roadmap.items_marked_stale`). Run
+tokens reach none of these routes. The mock API is `web/lib/api/mock/roadmap.ts`.
+
+## 9. Engineering specs, flows and wireframes (lane `v2-specs`, CR-09, §11.1-§11.2)
+
+The code is in `api/oracle/specs/`. Migration `0015_specs` (after `0016_roadmap`) widens two
 check constraints: `documents.kind` accepts `spec`, `runs.flow` accepts `prd_to_spec`.
 Everything else uses the foundation's artifact tables.
 

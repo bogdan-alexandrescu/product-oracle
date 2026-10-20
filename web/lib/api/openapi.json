@@ -495,6 +495,7 @@
           "documents"
         ],
         "summary": "Get Version Markdown",
+        "description": "The version's markdown as stored; a roadmap's date that rests on no verified basis\nnow has ``<!-- oracle: date unverified -->`` (or ``date withdrawn``) after it, which\nan import drops.",
         "operationId": "get_version_markdown",
         "security": [
           {
@@ -11719,7 +11720,8 @@
                     "composition_revision",
                     "document_version",
                     "entity",
-                    "artifact_version"
+                    "artifact_version",
+                    "product_track"
                   ],
                   "type": "string"
                 },
@@ -16785,6 +16787,1367 @@
         }
       }
     },
+    "/v1/roadmaps/{doc}/items": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Roadmap Items",
+        "description": "A roadmap version's items (default: the latest version with items), each traced to\nthe exact PRD version, section, feature and requirements, with its blocker\ndependencies, validation gates, economics, freshness and engineering status. The\nbrief view keeps the headline fields only.",
+        "operationId": "list_roadmap_items",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "brief",
+                "full"
+              ],
+              "type": "string",
+              "default": "full",
+              "title": "View"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadmapItemsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/roadmaps/{doc}/versions/{n}/items": {
+      "put": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Import Roadmap Items",
+        "description": "Store ``roadmap_items.yaml`` as a roadmap version's items (the file a\n``prd_to_roadmap`` run writes), replacing any it had. Refused (422, with the\nproblems) on any problem, a date without a verified basis included; an approved\nversion's items cannot be replaced (409).",
+        "operationId": "import_roadmap_items",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemsImport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemsImportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/roadmaps/{doc}/items/staleness": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Act On Roadmap Item Staleness",
+        "description": "Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still\nvalid, with a reason; re-anchored on the PRD's latest approved version). 409 when no\nitem is in a state the action applies to.",
+        "operationId": "act_on_roadmap_item_staleness",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemStalenessAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemStalenessOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/roadmaps/{doc}/alignment": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Roadmap Alignment",
+        "description": "The roadmap against the tracker's state, read-only (E1): per item aligned, drift\n(ahead, date slip, overdue, cancelled), untracked or done, and tracker work no item\nnames. Works without any tracker write permission.",
+        "operationId": "get_roadmap_alignment",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlignmentReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/schedule-bases": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Schedule Bases",
+        "operationId": "list_schedule_bases",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prd"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "verified",
+                    "withdrawn"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduleBasisOut"
+                  },
+                  "title": "Response List Schedule Bases"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Create Schedule Basis",
+        "description": "Record a verified estimate, capacity figure or commitment supporting a date for\none PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a\ntracker issue is matched to (``tracker_key``). The approver recording it verifies it.\nFrom a tracker record, the record's own target date must be that date, and the record\nmust be this PRD's.",
+        "operationId": "create_schedule_basis",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleBasisCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleBasisOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/schedule-bases/{basis_id}/withdraw": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Withdraw Schedule Basis",
+        "description": "Withdraw a basis: it supports nothing from now on. Milestones lose a date no other\nverified basis supports, and roadmap items whose date rested on it go potentially\nstale. 409 when already withdrawn.",
+        "operationId": "withdraw_schedule_basis",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "basis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Basis Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleBasisWithdraw"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracker/connector": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Tracker Connector",
+        "description": "The two-way tracker connector's gate: off, so Oracle makes no tracker writes.",
+        "operationId": "get_tracker_connector",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackerConnectorOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/tracker/records": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Tracker Records",
+        "operationId": "list_tracker_records",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Track Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackerRecordOut"
+                  },
+                  "title": "Response List Tracker Records"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Import Tracker Records",
+        "description": "Record engineering status read from a tracker (latest state per issue). Read-only\ntoward the tracker: Oracle stores what was read and writes nothing back. The tracks\nthe records belong to are monitored again.",
+        "operationId": "import_tracker_records",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackerRecordsImport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackerImportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracks": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Tracks",
+        "description": "Product tracks, newest first, each with its health and a one-line headline.",
+        "operationId": "list_tracks",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "active",
+                    "paused",
+                    "closed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackSummary"
+                  },
+                  "title": "Response List Tracks"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Create Track",
+        "description": "Start the track of an accepted PRD (its latest approved version; approving a PRD\nversion starts it too). A PRD has one track: 409 when it already has one; 200 with\nthat track when a concurrent start made it first.",
+        "operationId": "create_track",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackOverview"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracks/{track_id}": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Track",
+        "description": "The track's overview: health, headline, the next milestone, items at risk\n(blocked, stale or slipping), drift from engineering status where known, and\nwhether the PRD moved on since the roadmap was built.",
+        "operationId": "get_track",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackOverview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Update Track",
+        "operationId": "update_track",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackOverview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracks/{track_id}/monitor": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Monitor Track",
+        "description": "Check the track now: a ``product_track`` change event is recorded when its health,\nits items at risk or its next milestone changed since the last check.",
+        "operationId": "monitor_track",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracks/{track_id}/changes": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Track Changes",
+        "description": "The track's monitoring change events, newest first.",
+        "operationId": "list_track_changes",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Track Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackChange"
+                  },
+                  "title": "Response List Track Changes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracks/{track_id}/roadmap-run": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Create Track Roadmap Run",
+        "description": "Draft a ``prd_to_roadmap`` run (SwarmCloud) from the track's latest approved PRD\nversion into its roadmap. Nothing runs or is spent until it is estimated and started\n(the $50 owner approval and the 1.5x pause apply as for every run).",
+        "operationId": "create_track_roadmap_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/KnobsIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracks/{track_id}/tracker-plan": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Track Tracker Plan",
+        "description": "What a two-way tracker connector would create from the roadmap (an epic per Now\nand Next item, an issue per requirement): a preview, never written.",
+        "operationId": "get_track_tracker_plan",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackerPlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracks/{track_id}/tracker-push": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Push Track To Tracker",
+        "description": "Write the tracker plan to Linear or Jira. Refused: two-way sync is off (409), or\non but no connector is verified (501). Oracle makes no unattended external writes.",
+        "operationId": "push_track_to_tracker",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "501": {
+            "description": "Not Implemented"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracks/{track_id}/milestones": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Track Milestones",
+        "operationId": "list_track_milestones",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MilestoneOut"
+                  },
+                  "title": "Response List Track Milestones"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Create Track Milestone",
+        "description": "Add a milestone. Undated by default; a date only in Now and only with verified\nschedule bases that support exactly that date (422 otherwise).",
+        "operationId": "create_track_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MilestoneCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MilestoneOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/milestones/{milestone_id}": {
+      "patch": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Update Milestone",
+        "description": "Edit a milestone. Setting or keeping a date re-checks its verified bases.",
+        "operationId": "update_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MilestonePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MilestoneOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/.well-known/oauth-protected-resource": {
       "get": {
         "tags": [
@@ -17525,6 +18888,140 @@
         },
         "type": "object",
         "title": "Agreement"
+      },
+      "AlignmentItem": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone"
+          },
+          "alignment": {
+            "type": "string",
+            "enum": [
+              "aligned",
+              "drift",
+              "untracked",
+              "done"
+            ],
+            "title": "Alignment"
+          },
+          "tracker": {
+            "items": {
+              "$ref": "#/components/schemas/TrackerRecordRef"
+            },
+            "type": "array",
+            "title": "Tracker"
+          },
+          "drift": {
+            "items": {
+              "$ref": "#/components/schemas/DriftEntry"
+            },
+            "type": "array",
+            "title": "Drift"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "title",
+          "horizon",
+          "milestone",
+          "alignment",
+          "tracker",
+          "drift"
+        ],
+        "title": "AlignmentItem"
+      },
+      "AlignmentReport": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "read_only",
+            "title": "Mode",
+            "default": "read_only"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "roadmap": {
+            "$ref": "#/components/schemas/DocumentRef"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "connector": {
+            "$ref": "#/components/schemas/TrackerConnectorOut"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlignmentItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "unplanned": {
+            "items": {
+              "$ref": "#/components/schemas/DriftEntry"
+            },
+            "type": "array",
+            "title": "Unplanned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "generated_at",
+          "roadmap",
+          "track_id",
+          "connector",
+          "counts",
+          "items",
+          "unplanned"
+        ],
+        "title": "AlignmentReport",
+        "description": "The roadmap against the tracker's state, read-only: the path that works without\ntracker write permission (E1)."
       },
       "AnnotationOut": {
         "properties": {
@@ -18428,6 +19925,45 @@
         ],
         "title": "AssumptionDecisionOut"
       },
+      "AtRiskItem": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "reasons": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "title",
+          "horizon",
+          "reasons"
+        ],
+        "title": "AtRiskItem"
+      },
       "AuthorizationServerMetadata": {
         "properties": {
           "issuer": {
@@ -18928,6 +20464,77 @@
         ],
         "title": "BlockerCreate",
         "description": "A new blocker: either an existing constraint entity (``entity_id``) or a new one\n(``key`` and ``statement``)."
+      },
+      "BlockerDependency": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "blocker_status": {
+            "type": "string",
+            "title": "Blocker Status"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
+          },
+          "blocker_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker Type"
+          },
+          "resolved": {
+            "type": "boolean",
+            "title": "Resolved"
+          },
+          "critical": {
+            "type": "boolean",
+            "title": "Critical"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "key",
+          "title",
+          "status",
+          "blocker_status",
+          "resolved",
+          "critical"
+        ],
+        "title": "BlockerDependency"
       },
       "BlockerDocumentRef": {
         "properties": {
@@ -21263,7 +22870,8 @@
               "composition_revision",
               "document_version",
               "entity",
-              "artifact_version"
+              "artifact_version",
+              "product_track"
             ],
             "title": "Subject Kind"
           },
@@ -23522,6 +25130,70 @@
         ],
         "title": "CriterionInfo"
       },
+      "DateMarkOut": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "unverified",
+              "withdrawn"
+            ],
+            "title": "Status"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "bases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Bases",
+            "default": []
+          },
+          "where": {
+            "type": "string",
+            "enum": [
+              "title",
+              "heading",
+              "body"
+            ],
+            "title": "Where",
+            "default": "body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_key",
+          "text",
+          "date",
+          "status"
+        ],
+        "title": "DateMarkOut",
+        "description": "A date written in a roadmap's text, checked against its PRD's schedule bases now\n(O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next\nto the date (``unverified``, ``date withdrawn``); None for a verified date. The\ntext itself is never rewritten."
+      },
       "DeckOut": {
         "properties": {
           "document_id": {
@@ -24143,6 +25815,52 @@
         ],
         "title": "DocumentOut"
       },
+      "DocumentRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title"
+        ],
+        "title": "DocumentRef"
+      },
       "DocumentSectionLinkOut": {
         "properties": {
           "id": {
@@ -24578,6 +26296,53 @@
         },
         "type": "object",
         "title": "DraftImport"
+      },
+      "DriftEntry": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ahead",
+              "date_slip",
+              "overdue",
+              "cancelled",
+              "unplanned"
+            ],
+            "title": "Kind"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "tracker_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "detail"
+        ],
+        "title": "DriftEntry"
       },
       "EdgeCreate": {
         "properties": {
@@ -25568,6 +27333,40 @@
         },
         "type": "object",
         "title": "EntityPatch"
+      },
+      "EntityRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "key",
+          "title",
+          "status"
+        ],
+        "title": "EntityRef"
       },
       "EntityTrace": {
         "properties": {
@@ -29457,6 +31256,110 @@
         ],
         "title": "ItemOut"
       },
+      "ItemProblem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ItemProblem"
+      },
+      "ItemStalenessAction": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "review",
+              "reconcile"
+            ],
+            "title": "Action"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "item_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Item Keys"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "ItemStalenessAction"
+      },
+      "ItemStalenessOut": {
+        "properties": {
+          "changed": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Changed"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RoadmapItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changed",
+          "items"
+        ],
+        "title": "ItemStalenessOut"
+      },
       "ItemsCheck": {
         "properties": {
           "items": {
@@ -29486,6 +31389,92 @@
         ],
         "title": "ItemsCheck",
         "description": "The check of roadmap_items.yaml (oracle.runs.roadmap)."
+      },
+      "ItemsImport": {
+        "properties": {
+          "yaml": {
+            "type": "string",
+            "maxLength": 500000,
+            "minLength": 1,
+            "title": "Yaml"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "yaml"
+        ],
+        "title": "ItemsImport",
+        "description": "``roadmap_items.yaml`` for a roadmap version (the format the run writes)."
+      },
+      "ItemsImportOut": {
+        "properties": {
+          "roadmap": {
+            "$ref": "#/components/schemas/DocumentRef"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "full"
+            ],
+            "title": "View"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RoadmapItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/ItemProblem"
+            },
+            "type": "array",
+            "title": "Problems"
+          },
+          "refused_dates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Refused Dates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "roadmap",
+          "source",
+          "track_id",
+          "view",
+          "items",
+          "problems",
+          "refused_dates"
+        ],
+        "title": "ItemsImportOut"
       },
       "ItemsProblem": {
         "properties": {
@@ -31109,6 +33098,255 @@
         ],
         "title": "MemberPatch"
       },
+      "MilestoneCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon",
+            "default": "now"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "basis_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Basis Ids"
+          },
+          "item_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Item Keys"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "MilestoneCreate"
+      },
+      "MilestoneOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "track_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Track Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "basis_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Basis Ids"
+          },
+          "item_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Item Keys"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "done",
+              "dropped"
+            ],
+            "title": "Status"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "track_id",
+          "name",
+          "horizon",
+          "target_date",
+          "basis_ids",
+          "item_keys",
+          "status",
+          "lock_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MilestoneOut"
+      },
+      "MilestonePatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "now",
+                  "next",
+                  "later"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "basis_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Ids"
+          },
+          "item_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Keys"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "planned",
+                  "done",
+                  "dropped"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "MilestonePatch"
+      },
       "ModelReviewInfo": {
         "properties": {
           "report_id": {
@@ -31499,6 +33737,39 @@
         ],
         "title": "ModuleVersionSummary"
       },
+      "MonitorOut": {
+        "properties": {
+          "overview": {
+            "$ref": "#/components/schemas/TrackOverview"
+          },
+          "change_event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Event Id"
+          },
+          "changed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Changed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "overview",
+          "change_event_id",
+          "changed"
+        ],
+        "title": "MonitorOut"
+      },
       "NewSource": {
         "properties": {
           "title": {
@@ -31544,6 +33815,73 @@
           "added_at"
         ],
         "title": "NewSource"
+      },
+      "NextMilestone": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "dated": {
+            "type": "boolean",
+            "title": "Dated"
+          },
+          "bases": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Bases"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "milestone_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "horizon",
+          "target_date",
+          "dated",
+          "bases",
+          "items"
+        ],
+        "title": "NextMilestone"
       },
       "NotionPageOut": {
         "properties": {
@@ -32134,6 +34472,83 @@
           "modules"
         ],
         "title": "PackOut"
+      },
+      "PrdAnchor": {
+        "properties": {
+          "document": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "section_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Hash"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "reconciled_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciled Version"
+          },
+          "reconciled_section_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciled Section Hash"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "section_key",
+          "section_hash",
+          "link"
+        ],
+        "title": "PrdAnchor"
       },
       "PrdAnswers": {
         "properties": {
@@ -33102,6 +35517,14 @@
             },
             "type": "array",
             "title": "Blocking"
+          },
+          "dates": {
+            "items": {
+              "$ref": "#/components/schemas/DateMarkOut"
+            },
+            "type": "array",
+            "title": "Dates",
+            "default": []
           }
         },
         "type": "object",
@@ -33110,7 +35533,7 @@
           "blocking"
         ],
         "title": "PublishBlockedOut",
-        "description": "409 from approve: the PRD version may not be published (T2 publish gate, C5)."
+        "description": "409 from approve: the PRD version may not be published (T2 publish gate, C5), or\nthe roadmap version writes dates that rest on no verified basis (O4 'document dates',\nowner 2026-10-20: ``dates`` lists them)."
       },
       "PublishIn": {
         "properties": {
@@ -35191,6 +37614,284 @@
         "title": "RoadmapAnswers",
         "description": "docs/research/roadmap-formats.md, questions the template picker should ask."
       },
+      "RoadmapItemOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone"
+          },
+          "freshness": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "potentially_stale",
+              "under_review",
+              "reconciled"
+            ],
+            "title": "Freshness"
+          },
+          "stale_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Stale Reasons"
+          },
+          "stale_since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale Since"
+          },
+          "caused_by_change_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caused By Change Id"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/PrdAnchor"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/EntityRef"
+            },
+            "type": "array",
+            "title": "Requirements",
+            "default": []
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/BlockerDependency"
+            },
+            "type": "array",
+            "title": "Blockers",
+            "default": []
+          },
+          "trace": {
+            "items": {
+              "$ref": "#/components/schemas/TraceLink"
+            },
+            "type": "array",
+            "title": "Trace",
+            "default": []
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "validation_gates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Validation Gates",
+            "default": []
+          },
+          "economics": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Economics",
+            "default": {}
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "engineering": {
+            "items": {
+              "$ref": "#/components/schemas/TrackerRecordRef"
+            },
+            "type": "array",
+            "title": "Engineering",
+            "default": []
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "item_key",
+          "position",
+          "title",
+          "outcome",
+          "horizon",
+          "milestone",
+          "freshness",
+          "stale_reasons",
+          "stale_since",
+          "caused_by_change_id",
+          "prd",
+          "track_id"
+        ],
+        "title": "RoadmapItemOut"
+      },
+      "RoadmapItemsOut": {
+        "properties": {
+          "roadmap": {
+            "$ref": "#/components/schemas/DocumentRef"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "full"
+            ],
+            "title": "View"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RoadmapItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "roadmap",
+          "source",
+          "track_id",
+          "view",
+          "items"
+        ],
+        "title": "RoadmapItemsOut"
+      },
       "RunCreate": {
         "properties": {
           "flow": {
@@ -36173,6 +38874,265 @@
         ],
         "title": "RuntimeStatusOut",
         "description": "Whether Oracle reaches its agent runtime, and as which tenant (owner only)."
+      },
+      "ScheduleBasisCreate": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "estimate",
+              "capacity",
+              "commitment"
+            ],
+            "title": "Kind"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Reference"
+          },
+          "supports_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Supports Date"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "prd": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Prd"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "tracker_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Key"
+          },
+          "tracker_record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Record Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "reference",
+          "supports_date",
+          "prd"
+        ],
+        "title": "ScheduleBasisCreate",
+        "description": "A verified estimate, capacity figure or commitment. Recording it is the\nverification: the approver says this source supports this date, for this PRD's\nroadmap items (O4)."
+      },
+      "ScheduleBasisOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "estimate",
+              "capacity",
+              "commitment"
+            ],
+            "title": "Kind"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "supports_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Supports Date"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "prd_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Prd Document Id"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "tracker_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Key"
+          },
+          "tracker_record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracker Record Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "withdrawn"
+            ],
+            "title": "Status"
+          },
+          "verified_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified By"
+          },
+          "verified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Verified At"
+          },
+          "withdrawn_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn By"
+          },
+          "withdrawn_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "reference",
+          "supports_date",
+          "detail",
+          "prd_document_id",
+          "item_key",
+          "tracker_key",
+          "tracker_record_id",
+          "status",
+          "verified_by",
+          "verified_at",
+          "withdrawn_by",
+          "withdrawn_at",
+          "created_at"
+        ],
+        "title": "ScheduleBasisOut"
+      },
+      "ScheduleBasisWithdraw": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "ScheduleBasisWithdraw"
       },
       "ScopeOut": {
         "properties": {
@@ -41488,6 +44448,63 @@
         ],
         "title": "TraceGoalLink"
       },
+      "TraceLink": {
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "requirement",
+              "blocker"
+            ],
+            "title": "Target"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "via": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "declared",
+                  "section_link",
+                  "key_match",
+                  "graph"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Via"
+          },
+          "unresolved": {
+            "type": "boolean",
+            "title": "Unresolved",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "key"
+        ],
+        "title": "TraceLink"
+      },
       "TraceOutput": {
         "properties": {
           "kind": {
@@ -42061,6 +45078,1045 @@
         "title": "TraceUpstreamRef",
         "description": "A dependency's upstream: a document version (a section of it, or all of it), or a\nbaseline entity."
       },
+      "TrackChange": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "cause": {
+            "type": "string",
+            "title": "Cause"
+          },
+          "actor": {
+            "type": "string",
+            "title": "Actor"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cause",
+          "actor",
+          "data",
+          "created_at"
+        ],
+        "title": "TrackChange"
+      },
+      "TrackCreate": {
+        "properties": {
+          "prd": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prd"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prd"
+        ],
+        "title": "TrackCreate"
+      },
+      "TrackOverview": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/DocumentRef"
+          },
+          "started_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started Version"
+          },
+          "current_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version"
+          },
+          "latest_approved_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Approved Version"
+          },
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "monitored_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monitored At"
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "on_track",
+              "at_risk",
+              "off_track",
+              "no_roadmap",
+              "paused",
+              "closed"
+            ],
+            "title": "Health"
+          },
+          "headline": {
+            "type": "string",
+            "title": "Headline"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "next_milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "at_risk": {
+            "items": {
+              "$ref": "#/components/schemas/AtRiskItem"
+            },
+            "type": "array",
+            "title": "At Risk"
+          },
+          "drift": {
+            "items": {
+              "$ref": "#/components/schemas/DriftEntry"
+            },
+            "type": "array",
+            "title": "Drift"
+          },
+          "engineering_known": {
+            "type": "boolean",
+            "title": "Engineering Known"
+          },
+          "prd_moved": {
+            "type": "boolean",
+            "title": "Prd Moved"
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/MilestoneOut"
+            },
+            "type": "array",
+            "title": "Milestones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "owner_id",
+          "prd",
+          "started_version",
+          "current_version",
+          "latest_approved_version",
+          "roadmap",
+          "lock_version",
+          "created_at",
+          "monitored_at",
+          "health",
+          "headline",
+          "counts",
+          "next_milestone",
+          "at_risk",
+          "drift",
+          "engineering_known",
+          "prd_moved",
+          "milestones"
+        ],
+        "title": "TrackOverview",
+        "description": "One calm overview per track: health, the next milestone, what needs attention."
+      },
+      "TrackPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "paused",
+                  "closed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "TrackPatch"
+      },
+      "TrackSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/DocumentRef"
+          },
+          "started_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started Version"
+          },
+          "current_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version"
+          },
+          "latest_approved_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Approved Version"
+          },
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "monitored_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monitored At"
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "on_track",
+              "at_risk",
+              "off_track",
+              "no_roadmap",
+              "paused",
+              "closed"
+            ],
+            "title": "Health"
+          },
+          "headline": {
+            "type": "string",
+            "title": "Headline"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "owner_id",
+          "prd",
+          "started_version",
+          "current_version",
+          "latest_approved_version",
+          "roadmap",
+          "lock_version",
+          "created_at",
+          "monitored_at",
+          "health",
+          "headline"
+        ],
+        "title": "TrackSummary"
+      },
+      "TrackerConnectorOut": {
+        "properties": {
+          "two_way_enabled": {
+            "type": "boolean",
+            "title": "Two Way Enabled"
+          },
+          "writes_allowed": {
+            "type": "boolean",
+            "title": "Writes Allowed"
+          },
+          "read_only_alignment": {
+            "type": "boolean",
+            "title": "Read Only Alignment"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "two_way_enabled",
+          "writes_allowed",
+          "read_only_alignment",
+          "reason"
+        ],
+        "title": "TrackerConnectorOut",
+        "description": "The two-way tracker connector's gate (E1, \u00a711.1): off unless verified."
+      },
+      "TrackerImportOut": {
+        "properties": {
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/TrackerRecordOut"
+            },
+            "type": "array",
+            "title": "Records"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created",
+          "updated",
+          "records"
+        ],
+        "title": "TrackerImportOut"
+      },
+      "TrackerPlanEpic": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "prd_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Link"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/TrackerPlanIssue"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "title",
+          "horizon",
+          "description",
+          "prd_link",
+          "issues"
+        ],
+        "title": "TrackerPlanEpic"
+      },
+      "TrackerPlanIssue": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "requirement_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "TrackerPlanIssue"
+      },
+      "TrackerPlanOut": {
+        "properties": {
+          "track_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Track Id"
+          },
+          "would_write": {
+            "type": "boolean",
+            "const": false,
+            "title": "Would Write",
+            "default": false
+          },
+          "connector": {
+            "$ref": "#/components/schemas/TrackerConnectorOut"
+          },
+          "epics": {
+            "items": {
+              "$ref": "#/components/schemas/TrackerPlanEpic"
+            },
+            "type": "array",
+            "title": "Epics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "track_id",
+          "connector",
+          "epics"
+        ],
+        "title": "TrackerPlanOut",
+        "description": "What a two-way connector would create: a preview only, never written."
+      },
+      "TrackerRecordIn": {
+        "properties": {
+          "external_ref": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "External Ref"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "pattern": "^https?://"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "in_progress",
+              "done",
+              "cancelled",
+              "unknown"
+            ],
+            "title": "State"
+          },
+          "raw_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Status"
+          },
+          "estimate": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 99999999.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate"
+          },
+          "estimate_unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Unit"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "observed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed At"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "external_ref",
+          "state"
+        ],
+        "title": "TrackerRecordIn"
+      },
+      "TrackerRecordOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tracker": {
+            "type": "string",
+            "enum": [
+              "linear",
+              "jira",
+              "github",
+              "other"
+            ],
+            "title": "Tracker"
+          },
+          "external_ref": {
+            "type": "string",
+            "title": "External Ref"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "in_progress",
+              "done",
+              "cancelled",
+              "unknown"
+            ],
+            "title": "State"
+          },
+          "raw_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Status"
+          },
+          "estimate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate"
+          },
+          "estimate_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Unit"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Observed At"
+          },
+          "recorded_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tracker",
+          "external_ref",
+          "title",
+          "url",
+          "track_id",
+          "item_key",
+          "state",
+          "raw_status",
+          "estimate",
+          "estimate_unit",
+          "target_date",
+          "observed_at",
+          "recorded_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TrackerRecordOut"
+      },
+      "TrackerRecordRef": {
+        "properties": {
+          "tracker": {
+            "type": "string",
+            "enum": [
+              "linear",
+              "jira",
+              "github",
+              "other"
+            ],
+            "title": "Tracker"
+          },
+          "external_ref": {
+            "type": "string",
+            "title": "External Ref"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "in_progress",
+              "done",
+              "cancelled",
+              "unknown"
+            ],
+            "title": "State"
+          },
+          "raw_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Status"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "estimate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tracker",
+          "external_ref",
+          "state"
+        ],
+        "title": "TrackerRecordRef"
+      },
+      "TrackerRecordsImport": {
+        "properties": {
+          "tracker": {
+            "type": "string",
+            "enum": [
+              "linear",
+              "jira",
+              "github",
+              "other"
+            ],
+            "title": "Tracker"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/TrackerRecordIn"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Records"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tracker",
+          "records"
+        ],
+        "title": "TrackerRecordsImport",
+        "description": "Engineering status as read from a tracker, posted by an approver (an export, the\nCLI, an MCP client acting for them; not a run's token). Oracle stores it; it never\nwrites back."
+      },
       "UploadResult": {
         "properties": {
           "items": {
@@ -42398,6 +46454,14 @@
             },
             "type": "array",
             "title": "Citations",
+            "default": []
+          },
+          "date_marks": {
+            "items": {
+              "$ref": "#/components/schemas/DateMarkOut"
+            },
+            "type": "array",
+            "title": "Date Marks",
             "default": []
           }
         },
@@ -42741,6 +46805,36 @@
           "reset"
         ],
         "title": "WindowOut"
+      },
+      "WithdrawOut": {
+        "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/ScheduleBasisOut"
+          },
+          "undated_milestones": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Undated Milestones"
+          },
+          "stale_items": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Stale Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "basis",
+          "undated_milestones",
+          "stale_items"
+        ],
+        "title": "WithdrawOut"
       },
       "WordOp": {
         "properties": {

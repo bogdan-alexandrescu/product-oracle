@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -155,10 +155,30 @@ class SectionOut(ORM):
     spec_states: list[SpecPartState] = []
 
 
+class DateMarkOut(BaseModel):
+    """A date written in a roadmap's text, checked against its PRD's schedule bases now
+    (O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next
+    to the date (``unverified``, ``date withdrawn``); None for a verified date. The
+    text itself is never rewritten."""
+
+    section_key: str
+    text: str
+    date: date
+    status: Literal["verified", "unverified", "withdrawn"]
+    label: str | None = None
+    # The references of the bases that support it (or, withdrawn, that did).
+    bases: list[str] = []
+    # Where it is written: the front matter title (``section_key`` is ""), a section's
+    # heading or its body.
+    where: Literal["title", "heading", "body"] = "body"
+
+
 class VersionOut(VersionSummary):
     front_matter: dict[str, Any] = {}
     sections: list[SectionOut] = []
     citations: list[CitationOut] = []
+    # Roadmaps only: each date its text writes, one per date and section.
+    date_marks: list[DateMarkOut] = []
 
 
 class WordOp(BaseModel):

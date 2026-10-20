@@ -3,7 +3,7 @@ import { Fragment, type ReactNode } from "react";
 
 import { CitationChip } from "@/components/CitationChip";
 import { IGNORE_ATTR } from "@/lib/anchor";
-import type { CitationOut } from "@/lib/api/client";
+import type { CitationOut, DateMarkOut } from "@/lib/api/client";
 import type { Block, Inline } from "@/lib/markdown";
 import { sectionHash, sectionHref } from "@/lib/section-link";
 
@@ -36,6 +36,11 @@ type Ctx = {
   found: string[];
   /** Detail sections already shown in this body (a key linked twice shows once). */
   shown: Set<string>;
+  /**
+   * O4 'document dates': this section's dates that rest on no verified basis now. Each
+   * gets its marker ("unverified", "date withdrawn") after it; the text is unchanged.
+   */
+  dateMarks?: DateMarkOut[];
 };
 
 const ignore = { [IGNORE_ATTR]: "" };
@@ -107,14 +112,58 @@ function renderText(text: string, ctx: Ctx, key: string): ReactNode {
   return out;
 }
 
+function escapeRe(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** The marker after a date that rests on no verified basis (not part of the anchored text). */
+export function DateMarker({ mark }: { mark: DateMarkOut }) {
+  return (
+    <span
+      {...ignore}
+      className="date-mark"
+      data-date-mark={mark.status}
+      title={
+        mark.status === "withdrawn"
+          ? `The basis of this date (${mark.bases.join(", ")}) was withdrawn`
+          : "No verified estimate, capacity or commitment of the PRD supports this date"
+      }
+    >
+      {mark.label}
+    </span>
+  );
+}
+
+/**
+ * Text (prose, a code span or a code block) with the marker after each flagged date (O4
+ * 'document dates'). A date the text writes across emphasis or an entity is not in one
+ * text node: SectionView lists those under the heading instead (`unplacedMarks`).
+ */
+function renderMarkedText(text: string, ctx: Ctx, key: string): ReactNode {
+  const marks = (ctx.dateMarks ?? []).filter((m) => m.label && m.where !== "heading" && text.includes(m.text));
+  if (!marks.length) return renderText(text, ctx, key);
+  const byText = new Map(marks.map((m) => [m.text, m]));
+  const re = new RegExp(`(${[...byText.keys()].sort((a, b) => b.length - a.length).map(escapeRe).join("|")})`);
+  return text.split(re).map((piece, i) => {
+    if (!piece) return null;
+    const mark = i % 2 === 1 ? byText.get(piece) : undefined;
+    return (
+      <Fragment key={`${key}~${i}`}>
+        {renderText(piece, ctx, `${key}~${i}`)}
+        {mark && <DateMarker mark={mark} />}
+      </Fragment>
+    );
+  });
+}
+
 function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
   return nodes.map((n, i) => {
     const k = `${key}.${i}`;
     switch (n.t) {
       case "text":
-        return <span key={k}>{renderText(n.v, ctx, k)}</span>;
+        return <span key={k}>{renderMarkedText(n.v, ctx, k)}</span>;
       case "code":
-        return <code key={k}>{renderText(n.v, ctx, k)}</code>;
+        return <code key={k}>{renderMarkedText(n.v, ctx, k)}</code>;
       case "strong":
         return <strong key={k}>{renderInline(n.c, ctx, k)}</strong>;
       case "em":
@@ -189,6 +238,36 @@ function Detail({ keys, expand }: { keys: string[]; expand?: ExpandCtx }) {
   );
 }
 
+/** The text nodes a body renders (prose, code spans, code blocks), where a date marker can go. */
+function leaves(blocks: Block[]): string[] {
+  const out: string[] = [];
+  const walk = (nodes: Inline[]) => {
+    for (const n of nodes) {
+      if (n.t === "text" || n.t === "code") out.push(n.v);
+      else if (n.t !== "cite") walk(n.c);
+    }
+  };
+  for (const b of blocks) {
+    if (b.t === "pre") out.push(b.v);
+    else if (b.t === "table") [b.head, ...b.rows].flat().forEach(walk);
+    else if (b.t === "ul" || b.t === "ol") b.items.forEach(walk);
+    else if (b.t === "p" || b.t === "h" || b.t === "quote") walk(b.c);
+  }
+  return out;
+}
+
+/**
+ * The body's flagged dates that no single text node shows as written (a date across
+ * emphasis, an entity, or rendered differently here than in the export): listed by the
+ * section so no marker is lost.
+ */
+export function unplacedMarks(blocks: Block[], marks: DateMarkOut[] | undefined): DateMarkOut[] {
+  const flagged = (marks ?? []).filter((m) => m.label && m.where !== "heading" && m.where !== "title");
+  if (!flagged.length) return [];
+  const texts = leaves(blocks);
+  return flagged.filter((m) => !texts.some((t) => t.includes(m.text)));
+}
+
 export function MarkdownBody({
   blocks,
   highlights,
@@ -197,12 +276,23 @@ export function MarkdownBody({
   onHighlightClick,
   expand,
   markers,
+  dateMarks,
 }: Omit<Ctx, "pos" | "found" | "shown"> & {
   blocks: Block[];
   /** Shown before the block at each index (not part of the anchorable text). */
   markers?: Map<number, ReactNode>;
 }) {
-  const ctx: Ctx = { pos: 0, highlights, activeId, citations, onHighlightClick, expand, found: [], shown: new Set() };
+  const ctx: Ctx = {
+    pos: 0,
+    highlights,
+    activeId,
+    citations,
+    onHighlightClick,
+    expand,
+    found: [],
+    shown: new Set(),
+    dateMarks,
+  };
   // Renders a block, then the detail its links opened.
   const withDetail = (k: string, node: ReactNode) => {
     const keys = opened(ctx);
@@ -243,7 +333,7 @@ export function MarkdownBody({
       case "pre":
         return (
           <pre key={k}>
-            <code>{renderText(b.v, ctx, k)}</code>
+            <code>{renderMarkedText(b.v, ctx, k)}</code>
           </pre>
         );
       case "ul":

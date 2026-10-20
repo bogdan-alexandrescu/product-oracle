@@ -4,13 +4,13 @@ import { memo, useMemo, useState, type ReactNode } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { Button, Chip } from "@/components/ds";
-import { MarkdownBody, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
+import { DateMarker, MarkdownBody, unplacedMarks, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
 import { LayerChip, Menu } from "@/components/review/parts";
 import { SpecStateBadge } from "@/components/ui";
 import { IGNORE_ATTR } from "@/lib/anchor";
-import type { CitationOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
+import type { CitationOut, DateMarkOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
 import { blocksText, type Block } from "@/lib/markdown";
 
 const HEADING_CLASS: Record<number, string> = {
@@ -44,6 +44,7 @@ export const SectionView = memo(function SectionView({
   nested = false,
   showLayer = true,
   headTools,
+  dateMarks,
 }: {
   section: SectionOut;
   blocks: Block[];
@@ -68,6 +69,8 @@ export const SectionView = memo(function SectionView({
   showLayer?: boolean;
   /** Extra controls in the head, before the ⋯ menu (the phone's Comments button). */
   headTools?: ReactNode;
+  /** A roadmap's dates in this section that rest on no verified basis (O4). */
+  dateMarks?: DateMarkOut[];
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
   // E1: a spec's part states; the acceptance criteria's proposed half starts at a block.
@@ -98,6 +101,7 @@ export const SectionView = memo(function SectionView({
     return (named(section.heading) ?? named(section.body_text))?.id ?? null;
   }, [evidenceTargets, section.heading, section.body_text]);
   const canRefine = !!refine && !locked;
+  const unplaced = useMemo(() => unplacedMarks(blocks, dateMarks), [blocks, dateMarks]);
   const pick = (kind: Tool) => setTool((t) => ({ kind, n: (t?.n ?? 0) + 1 }));
   const close = () => setTool(null);
 
@@ -118,6 +122,9 @@ export const SectionView = memo(function SectionView({
           className={`min-w-0 ${nested ? HEADING_CLASS[3] : HEADING_CLASS[Math.min(section.level, 3)]} text-text`}
         >
           {section.heading}
+          {dateMarks
+            ?.filter((m) => m.label && m.where === "heading")
+            .map((m) => <DateMarker key={m.text} mark={m} />)}
         </Heading>
         <LayerChip layer={showLayer ? section.layer : null} />
         {changedLock && (
@@ -174,6 +181,17 @@ export const SectionView = memo(function SectionView({
           <SpecStateBadge state={topState} />
         </p>
       )}
+      {unplaced.length > 0 && (
+        <p className="mb-2 text-sm text-text2" data-testid="unplaced-date-marks">
+          Dates in this section:{" "}
+          {unplaced.map((m) => (
+            <span key={m.text} className="mr-2 whitespace-nowrap">
+              {m.text}
+              <DateMarker mark={m} />
+            </span>
+          ))}
+        </p>
+      )}
       <div className="doc-body" data-section-body={section.section_key}>
         <MarkdownBody
           blocks={blocks}
@@ -183,6 +201,7 @@ export const SectionView = memo(function SectionView({
           onHighlightClick={onHighlightClick}
           expand={expand}
           markers={markers.size ? markers : undefined}
+          dateMarks={dateMarks}
         />
       </div>
       {!nested && (

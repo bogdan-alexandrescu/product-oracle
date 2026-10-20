@@ -22,13 +22,13 @@ import {
 import { Kbd } from "@/components/review/parts";
 import { ReviewPanel, type PanelTab } from "@/components/review/ReviewPanel";
 import { RoleNote } from "@/components/RoleNote";
-import type { ExpandCtx, Highlight } from "@/components/MarkdownBody";
+import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
-import { api, unwrap, type CitationOut, type SectionOut, type Verdict } from "@/lib/api/client";
+import { api, unwrap, type CitationOut, type DateMarkOut, type SectionOut, type Verdict } from "@/lib/api/client";
 import { feedbackEntries, openBySection } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
 import { blocksText, parseBlocks } from "@/lib/markdown";
@@ -534,6 +534,25 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const changedLocks = new Set(
     version?.warnings.filter((w) => w.code === "locked_section_changed").flatMap((w) => w.section_keys) ?? [],
   );
+  // O4 'document dates': a roadmap's dates that rest on no verified basis now, by section.
+  const dateMarks = useMemo(() => {
+    const bySection = new Map<string, DateMarkOut[]>();
+    for (const m of version?.date_marks ?? []) {
+      if (m.label) bySection.set(m.section_key, [...(bySection.get(m.section_key) ?? []), m]);
+    }
+    return bySection;
+  }, [version]);
+  const titleMarks = (version?.date_marks ?? []).filter((m) => m.label && m.where === "title");
+  // Owner, 2026-10-20: a roadmap version cannot be approved while a date is marked.
+  const flaggedDates = [
+    ...new Map((version?.date_marks ?? []).filter((m) => m.label).map((m) => [`${m.text}|${m.label}`, m])).values(),
+  ];
+  const approveBlocked =
+    flaggedDates.length > 0
+      ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " rests" : "s rest"} on no verified schedule basis: ${flaggedDates
+          .map((m) => `${m.text} (${m.label})`)
+          .join(", ")}. Record a basis or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
+      : undefined;
   const sectionProps = (s: SectionOut) => ({
     section: s,
     blocks: parsed.get(s.section_key)!.blocks,
@@ -547,6 +566,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     onHighlightClick,
     onVerdict,
     showLayer: hasBrief,
+    dateMarks: dateMarks.get(s.section_key),
   });
   const expandFor = (origin: string): ExpandCtx => ({
     keys: expandable,
@@ -733,7 +753,18 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
         <PageHeader
           testId="doc-header"
           back={<DocCrumb doc={document_} withTitle={false} />}
-          title={document_?.title ?? "…"}
+          title={
+            titleMarks.length ? (
+              <>
+                {document_?.title ?? "…"}
+                {titleMarks.map((m) => (
+                  <DateMarker key={m.text} mark={m} />
+                ))}
+              </>
+            ) : (
+              (document_?.title ?? "…")
+            )
+          }
           suffix={<span className="font-mono">v{n}</span>}
           status={
             <>
@@ -771,6 +802,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                 n={n}
                 approvedAt={version.approved_at}
                 isLatest={n === latest}
+                blockedReason={approveBlocked}
                 onApproved={() => {
                   verQ.reload();
                   docQ.reload();
