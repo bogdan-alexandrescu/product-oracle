@@ -689,15 +689,20 @@ class FakeSwarmCloud:
     def _view(self, wf: Workflow) -> dict[str, Any]:
         tasks = []
         for s in wf.steps:
+            # Real SwarmCloud makes a task for every step at submission; a step whose
+            # dependencies have not finished is PARKED with park_reason DEPENDENCY_INCOMPLETE.
+            waiting = s.state == "PENDING"
             task: dict[str, Any] = {
                 "id": s.task_id,
-                "state": s.state,
+                "state": "PARKED" if waiting else s.state,
                 "cost_usd_total": s.cost,
                 "last_error": s.last_error,
             }
             if s.error_code:
                 task["error_code"] = s.error_code
-            if s.park_reason:
+            if waiting:
+                task["park_reason"] = "DEPENDENCY_INCOMPLETE"
+            elif s.park_reason:
                 task["park_reason"] = s.park_reason
             task["metadata"] = dict(s.metadata)
             if s.await_input and s.opened_at:
@@ -711,7 +716,12 @@ class FakeSwarmCloud:
                 "workflow_id": wf.workflow_id,
                 "state": wf.state,
                 "steps": [
-                    {"step_id": s.step_id, "task_id": s.task_id, "state": s.state} for s in wf.steps
+                    {
+                        "step_id": s.step_id,
+                        "task_id": s.task_id,
+                        "state": "PARKED" if s.state == "PENDING" else s.state,
+                    }
+                    for s in wf.steps
                 ],
             },
             "tasks": tasks,

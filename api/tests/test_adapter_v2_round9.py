@@ -41,7 +41,7 @@ from tests.test_adapter_v2 import (
 )
 from tests.test_adapter_v2 import settings as _v2_settings
 from tests.test_adapter_v2_round7 import _stopped, _wf_cost
-from tests.test_runs import as_user, get, started
+from tests.test_runs import as_user, decide, get, started, tick
 
 # The same environment as test_adapter_v2 (Oracle's public URL, default timings).
 settings = _v2_settings
@@ -752,3 +752,48 @@ def test_retrying_a_pending_cancel_is_not_named_like_cancel_again():
     Cancel again (service.cancel_again)."""
     assert callable(service._retry_pending_cancel)
     assert not hasattr(service, "_cancel_again")
+
+
+# ---------------------------------------- a step parked on its dependencies is not reached
+
+
+async def _run_token_writes(token: str) -> bool:
+    """True when the run token's propose_change was refused as held."""
+    async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
+        res = await c.call_tool(
+            "propose_change", {"body": {"op": "add", "kind": "goal", "data": {"key": "g-dep"}}}
+        )
+    if res.is_error:
+        assert "waiting for" in res.content[0].text, res.content[0].text
+    return res.is_error
+
+
+async def test_a_step_parked_on_its_dependencies_does_not_hold_the_run_token(client, owner):
+    """SwarmCloud makes a task for every step at submission; a step whose dependencies have
+    not finished is PARKED with park_reason DEPENDENCY_INCOMPLETE. That is not reached:
+    the token writes during work steps; it is held only from the open checkpoint on."""
+    _, auth = owner
+    swarm = on()
+    runtime = use(swarm)
+    swarm.steps_per_poll = 0  # the first segment's work step has not run
+    run = await started(client, auth)
+    review = swarm.workflows["wf_1"].step("baseline-review1")
+    assert review.state == "PENDING"
+    status = await runtime.status("wf_1")
+    step = status.step("baseline-review1")
+    assert (step.state, step.park_reason) == ("PARKED", "DEPENDENCY_INCOMPLETE")
+    token = token_of(swarm)
+    assert await _run_token_writes(token) is False
+
+    # The work step runs; the review step opens (AWAITING_INPUT): held.
+    swarm.steps_per_poll = None
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint"
+    assert (await runtime.status("wf_1")).step("baseline-review1").park_reason == "AWAITING_INPUT"
+    assert await _run_token_writes(token) is True
+
+    # After the decision the checkpoint is closed: released again.
+    await decide(client, auth, run)
+    service._hold_cache.clear()
+    assert await _run_token_writes(token) is False
