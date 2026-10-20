@@ -7,6 +7,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from oracle.connections import browse
 from oracle.connections.models import Connection
 from oracle.tenancy import tenant_session
 from tests.connection_helpers import (
@@ -54,8 +55,11 @@ class FakeSlack:
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         assert request.url.host == "slack.com"
-        assert request.url.path == "/api/conversations.list"
         assert request.headers["Authorization"] == f"Bearer {TOKEN}"
+        if request.url.path == "/api/auth.test":
+            # The bot-token check (cached; not a list call).
+            return httpx.Response(200, json={"ok": True, "team_id": "T0", "user_id": "U0"})
+        assert request.url.path == "/api/conversations.list"
         params = dict(request.url.params)
         self.calls.append(params)
         if self.limited:
@@ -77,7 +81,9 @@ class FakeSlack:
 def slack():
     fake = FakeSlack()
     use_provider_http(fake)
+    browse.reset()
     yield fake
+    browse.reset()
     clear_provider_http()
 
 

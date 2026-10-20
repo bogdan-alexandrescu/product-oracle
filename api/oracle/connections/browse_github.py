@@ -4,6 +4,7 @@
 and those of their organizations, most recently pushed first.
 """
 
+import re
 import uuid
 from datetime import datetime
 from typing import Annotated, Any
@@ -27,6 +28,8 @@ AFFILIATION = "owner,collaborator,organization_member"
 # this many matches or has read MAX_PAGES pages; the cursor resumes where it stopped.
 SEARCH_RESULTS = 50
 MAX_PAGES = 5
+# A page number: ASCII digits only (str.isdigit also takes "²", which int() refuses).
+PAGE_NUMBER = re.compile(r"[0-9]+")
 
 
 class GithubRepoOut(BaseModel):
@@ -80,7 +83,7 @@ def _repo(entry: dict[str, Any]) -> GithubRepoOut:
 
 def _next_page(link: dict[str, Any] | None) -> int | None:
     pages = parse_qs(urlparse((link or {}).get("url", "")).query).get("page")
-    return int(pages[0]) if pages and pages[0].isdigit() else None
+    return int(pages[0]) if pages and PAGE_NUMBER.fullmatch(pages[0]) else None
 
 
 @router.get(
@@ -110,7 +113,7 @@ async def list_github_repos(
     a limited number of times a minute."""
     page: int | None = 1
     if cursor is not None:
-        if not cursor.isdigit() or int(cursor) < 1:
+        if not PAGE_NUMBER.fullmatch(cursor) or int(cursor) < 1:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown cursor")
         page = int(cursor)
     conn, token = await open_connection(db, principal, connection_id, "github")
@@ -118,14 +121,19 @@ async def list_github_repos(
     hit = browse.cached(conn, key)
     if hit is not None:
         return hit
-    browse.admit(conn, "GitHub")
     api = _Api(http, token, API_URL)
     needle = search.strip().lower()
     want = SEARCH_RESULTS if needle else 1
     found: list[GithubRepoOut] = []
     sso_hint: str | None = None
     try:
-        for _ in range(MAX_PAGES):
+        for n in range(MAX_PAGES):
+            # Each page counts against the connection's budget; when it runs out after
+            # the first, answer what was read with the cursor to resume.
+            if n == 0:
+                browse.admit(conn, "GitHub")
+            elif not browse.admit_more(conn):
+                break
             assert page is not None
             resp = await api.get(
                 "/user/repos",

@@ -2,8 +2,10 @@
 
 Public channels and the private channels the person is in, through
 ``conversations.list`` with the user token. Direct messages (``im``, ``mpim``) are
-never asked for and dropped if Slack returns one anyway (S3). A bot token (``xoxb-``)
-is refused: it would list the private channels the bot is in, not the person's.
+never asked for and dropped if Slack returns one anyway (S3). A bot token is refused: it
+would list the private channels the bot is in, not the person's. Slack's ``auth.test``
+tells (``bot_id``), whatever the prefix (a rotated bot token reads ``xoxe.xoxb-``); its
+answer is cached per connection like a list.
 """
 
 import uuid
@@ -16,6 +18,7 @@ from pydantic import BaseModel
 from oracle.auth.deps import TenantDB
 from oracle.connections import browse
 from oracle.connections.browse import open_connection, provider_error, unreachable
+from oracle.connections.models import Connection
 from oracle.connections.router import ProviderHttp, UserPrincipal
 from oracle.sources.base import ConnectorError
 from oracle.sources.connectors.slack import _Slack, is_dm
@@ -68,6 +71,17 @@ def _channel(entry: dict[str, Any]) -> SlackChannelOut | None:
     )
 
 
+async def _is_bot(conn: Connection, slack: _Slack) -> bool:
+    """Whether the connection holds a bot token, asked of Slack at most once per
+    CACHE_SECONDS (``auth.test`` is Tier 4; it does not count against the budget)."""
+    key = ("slack/auth.test",)
+    hit = browse.cached(conn, key)
+    if hit is None:
+        hit = "bot" if (await slack.call("auth.test")).get("bot_id") else "user"
+        browse.remember(conn, key, hit)
+    return hit == "bot"
+
+
 @router.get(
     "/connections/{connection_id}/slack/channels",
     response_model=SlackChannelPage,
@@ -95,20 +109,30 @@ async def list_slack_channels(
     Answers are cached for a minute per connection, and a connection may search Slack
     a limited number of times a minute."""
     conn, token = await open_connection(db, principal, connection_id, "slack")
-    if token.startswith("xoxb-"):
-        raise HTTPException(status.HTTP_409_CONFLICT, BOT_TOKEN)
+    slack = _Slack(http, token)
+    try:
+        if await _is_bot(conn, slack):
+            raise HTTPException(status.HTTP_409_CONFLICT, BOT_TOKEN)
+    except ConnectorError as e:
+        raise await provider_error(db, conn, "Slack", e) from None
+    except (httpx.HTTPError, ValueError):
+        raise unreachable("Slack") from None
     key = ("slack/channels", search, cursor, include_archived)
     hit = browse.cached(conn, key)
     if hit is not None:
         return hit
-    browse.admit(conn, "Slack")
-    slack = _Slack(http, token)
     needle = search.strip().lstrip("#").lower()
     want = SEARCH_RESULTS if needle else 1
     found: list[SlackChannelOut] = []
     next_cursor = cursor or None
     try:
-        for _ in range(MAX_PAGES):
+        for n in range(MAX_PAGES):
+            # Each page counts against the connection's budget; when it runs out after
+            # the first, answer what was read with the cursor to resume.
+            if n == 0:
+                browse.admit(conn, "Slack")
+            elif not browse.admit_more(conn):
+                break
             page = await slack.call(
                 "conversations.list",
                 types="public_channel,private_channel",

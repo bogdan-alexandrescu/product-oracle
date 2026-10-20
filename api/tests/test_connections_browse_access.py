@@ -13,14 +13,17 @@ from sqlalchemy import select
 from oracle.auth.service import create_api_token
 from oracle.connections import browse
 from oracle.connections.models import Connection
+from oracle.runtokens import SCOPES as RUN_SCOPES
+from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
+from tests.conftest import make_tenant
 from tests.connection_helpers import (
     add_connection,
     clear_provider_http,
     make_person,
     use_provider_http,
 )
-from tests.test_mcp import mcp_client, text_of
+from tests.test_mcp import mcp_client, run_token, text_of
 
 SLACK_TOKEN = "xoxp-example-browse-token"
 GITHUB_TOKEN = "gho_example_browse_token"
@@ -44,11 +47,18 @@ class Provider:
     replace the normal answer."""
 
     def __init__(self):
+        # Every list call (``auth.test``, Slack's cached bot-token check, is kept apart).
         self.calls: list[httpx.Request] = []
+        self.auth_tests: list[httpx.Request] = []
         self.slack_answer: httpx.Response | None = None
         self.github_answer: httpx.Response | None = None
+        self.bot = False
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/auth.test":
+            self.auth_tests.append(request)
+            body = {"ok": True, "team_id": "T0EXAMPLE", "user_id": "U0PAT"}
+            return httpx.Response(200, json=body | ({"bot_id": "B0BOT"} if self.bot else {}))
         self.calls.append(request)
         if request.url.host == "slack.com":
             return self.slack_answer or httpx.Response(
@@ -179,6 +189,7 @@ async def test_the_limit_frees_up_as_the_window_moves(
 
 
 async def test_a_slack_bot_token_is_refused(client, tenant_id, alice, provider):
+    provider.bot = True
     bot = await add_connection(
         tenant_id, alice.id, "slack", bundle={"access_token": "xoxb-example-bot"}, account_id="T0B"
     )
@@ -254,3 +265,191 @@ async def test_an_mcp_client_acting_as_the_person_can_browse(
         listed = await c.call_tool("list_github_repos", {"connection_id": str(github_conn.id)})
         assert not listed.is_error, text_of(listed)
         assert listed.structured_content["repos"][0]["full_name"] == "example-org/example-app"
+
+
+# --- provider answers are not echoed ------------------------------------------------
+
+
+async def test_a_github_403_body_is_not_echoed(client, alice, github_conn, provider):
+    provider.github_answer = httpx.Response(403, json={"message": "SECRET-ish text"})
+    resp = await client.get(repos(github_conn), headers=alice.headers)
+    assert resp.status_code == 403
+    assert "SECRET-ish" not in resp.text
+    assert resp.json()["detail"] == (
+        "GitHub refused the request: your sign-in may lack access, "
+        "or an organization policy blocks it"
+    )
+
+
+async def test_a_provider_error_body_is_not_echoed(
+    client, alice, github_conn, slack_conn, provider
+):
+    provider.github_answer = httpx.Response(500, json={"message": "SECRET-ish internals"})
+    resp = await client.get(repos(github_conn), headers=alice.headers)
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "GitHub could not be read: try again"
+    provider.slack_answer = httpx.Response(200, json={"ok": False, "error": "SECRET_ish_error"})
+    resp = await client.get(channels(slack_conn), headers=alice.headers)
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "Slack could not be read: try again"
+
+
+# --- GitHub cursor ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("cursor", ["²", "0", "-1", "1a", "%EF%BC%91"])
+async def test_a_github_cursor_that_is_not_ascii_digits_is_refused(
+    client, alice, github_conn, provider, cursor
+):
+    resp = await client.get(repos(github_conn, f"?cursor={cursor}"), headers=alice.headers)
+    assert resp.status_code == 422, resp.text
+    assert provider.calls == []
+
+
+# --- every provider page counts against the limit -----------------------------------
+
+
+def endless_slack(provider: Provider):
+    """Slack pages that never match ``zzz`` and never end: p0, p1, p2, ..."""
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/auth.test":
+            return provider(request)
+        provider.calls.append(request)
+        n = int((request.url.params.get("cursor") or "p0")[1:])
+        return httpx.Response(
+            200,
+            json={
+                "ok": True,
+                "channels": CHANNELS,
+                "response_metadata": {"next_cursor": f"p{n + 1}"},
+            },
+        )
+
+    use_provider_http(answer)
+
+
+def endless_github(provider: Provider):
+    def answer(request: httpx.Request) -> httpx.Response:
+        provider.calls.append(request)
+        n = int(request.url.params.get("page", "1"))
+        link = f'<https://api.github.com/user/repos?page={n + 1}>; rel="next"'
+        return httpx.Response(200, json=REPOS, headers={"Link": link})
+
+    use_provider_http(answer)
+
+
+async def test_each_slack_page_counts_and_a_short_budget_returns_what_was_read(
+    client, alice, slack_conn, provider
+):
+    endless_slack(provider)
+    for n in range(browse.RATE_LIMIT - 3):
+        await client.get(channels(slack_conn, f"?cursor=p{100 + n}"), headers=alice.headers)
+    assert len(provider.calls) == browse.RATE_LIMIT - 3
+    # Would read MAX_PAGES (5) pages; only 3 calls are left.
+    resp = await client.get(channels(slack_conn, "?search=zzz"), headers=alice.headers)
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"channels": [], "next_cursor": "p3"}
+    assert len(provider.calls) == browse.RATE_LIMIT
+    # Nothing left: the next search is a 429 before any call.
+    resp = await client.get(channels(slack_conn, "?search=zzz&cursor=p3"), headers=alice.headers)
+    assert resp.status_code == 429
+    assert len(provider.calls) == browse.RATE_LIMIT
+
+
+async def test_each_github_page_counts_and_a_short_budget_returns_what_was_read(
+    client, alice, github_conn, provider
+):
+    endless_github(provider)
+    for n in range(browse.RATE_LIMIT - 3):
+        await client.get(repos(github_conn, f"?cursor={100 + n}"), headers=alice.headers)
+    assert len(provider.calls) == browse.RATE_LIMIT - 3
+    resp = await client.get(repos(github_conn, "?search=zzz"), headers=alice.headers)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["repos"] == [] and resp.json()["next_cursor"] == "4"
+    assert len(provider.calls) == browse.RATE_LIMIT
+    resp = await client.get(repos(github_conn, "?search=zzz&cursor=4"), headers=alice.headers)
+    assert resp.status_code == 429
+    assert len(provider.calls) == browse.RATE_LIMIT
+
+
+async def test_provider_calls_in_a_window_never_exceed_the_limit(
+    client, alice, slack_conn, github_conn, provider
+):
+    endless_slack(provider)
+    for n in range(browse.RATE_LIMIT):
+        await client.get(channels(slack_conn, f"?search=zzz{n}"), headers=alice.headers)
+    assert len(provider.calls) == browse.RATE_LIMIT
+    provider.calls.clear()
+    endless_github(provider)
+    for n in range(browse.RATE_LIMIT):
+        await client.get(repos(github_conn, f"?search=zzz{n}"), headers=alice.headers)
+    assert len(provider.calls) == browse.RATE_LIMIT
+
+
+# --- expired entries are dropped ----------------------------------------------------
+
+
+async def test_expired_cache_entries_and_call_counts_are_dropped(
+    client, alice, slack_conn, github_conn, provider, monkeypatch
+):
+    now = [10_000.0]
+    monkeypatch.setattr(browse, "_clock", lambda: now[0])
+    await client.get(channels(slack_conn), headers=alice.headers)
+    await client.get(repos(github_conn), headers=alice.headers)
+    assert {k[0] for k in browse._cache} == {slack_conn.id, github_conn.id}
+    assert set(browse._calls) == {slack_conn.id, github_conn.id}
+    now[0] += max(browse.CACHE_SECONDS, browse.RATE_WINDOW) + browse.SWEEP_SECONDS
+    # Any later browse, through another connection, sweeps them.
+    await client.get(repos(github_conn, "?search=x"), headers=alice.headers)
+    assert {k[0] for k in browse._cache} == {github_conn.id}
+    assert [k[1] for k in browse._cache] == [("github/repos", "x", 1)]
+    assert set(browse._calls) == {github_conn.id}
+    assert len(browse._calls[github_conn.id]) == 1
+
+
+# --- who may browse -----------------------------------------------------------------
+
+
+async def test_a_service_api_token_cannot_browse(
+    client, tenant_id, slack_conn, github_conn, provider
+):
+    async with tenant_session(tenant_id) as s:
+        _, raw = await create_api_token(s, "service")
+        await s.commit()
+    headers = {"Authorization": f"Bearer {raw}"}
+    assert (await client.get(channels(slack_conn), headers=headers)).status_code == 403
+    assert (await client.get(repos(github_conn), headers=headers)).status_code == 403
+    assert provider.calls == [] and provider.auth_tests == []
+
+
+async def test_a_run_token_cannot_browse(
+    client, tenant_id, alice, slack_conn, github_conn, provider
+):
+    raw = await run_token(tenant_id, list(RUN_SCOPES), created_by=alice.id)
+    headers = {"Authorization": f"Bearer {raw}"}
+    # Not a REST credential at all.
+    assert (await client.get(channels(slack_conn), headers=headers)).status_code == 401
+    assert (await client.get(repos(github_conn), headers=headers)).status_code == 401
+    # Over MCP, acting for the run's creator, the pickers are refused too.
+    set_runtime(FakeRuntime())  # run tokens from any address
+    try:
+        async with mcp_client(raw) as c:
+            for tool, conn in (
+                ("list_slack_channels", slack_conn),
+                ("list_github_repos", github_conn),
+            ):
+                result = await c.call_tool(tool, {"connection_id": str(conn.id)})
+                assert result.is_error, text_of(result)
+                assert "Refused" in text_of(result)
+    finally:
+        set_runtime(None)
+    assert provider.calls == [] and provider.auth_tests == []
+
+
+async def test_another_tenants_connection_is_not_found(client, slack_conn, github_conn, provider):
+    other = await make_tenant("Other Co")
+    mallory = await make_person(other, "mallory@example.com", "owner")
+    assert (await client.get(channels(slack_conn), headers=mallory.headers)).status_code == 404
+    assert (await client.get(repos(github_conn), headers=mallory.headers)).status_code == 404
+    assert provider.calls == [] and provider.auth_tests == []
