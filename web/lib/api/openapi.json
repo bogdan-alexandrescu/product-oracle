@@ -4666,7 +4666,7 @@
           "search"
         ],
         "summary": "Search Sources",
-        "description": "Search the user's own items (a run: also those a finding shared in full cites).\nRanked by relevance x confidence weight; ``as_of`` searches the versions pinned at\nthat time.",
+        "description": "Search the user's own items (a run: also those a finding shared in full\nreleased). Ranked by relevance x confidence weight; ``as_of`` searches the versions\npinned at that time, except a run's shared items: those are searched at the version\nsharing released only, whatever ``as_of`` says (S6, freeze at sharing).",
         "operationId": "search_sources",
         "security": [
           {
@@ -21660,6 +21660,15 @@
             "type": "array",
             "title": "Source Item Ids",
             "default": []
+          },
+          "unshared_item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Unshared Item Ids",
+            "default": []
           }
         },
         "type": "object",
@@ -21670,7 +21679,7 @@
           "sharing"
         ],
         "title": "FindingOut",
-        "description": "A finding drawn from the author's own sources and what others see of it (S6).\n\nThe author sees every finding. Anyone else sees those shared at \"counts\" or above:\nthe kind and category; from \"summary\" its line and the gap; at \"full\" the source\nitems it cites. ``summary``: the line the summary level shows, the one its author\nconfirmed or wrote, else Oracle's fixed category line. ``draft_summary``: Oracle's\ndraft, for the author only."
+        "description": "A finding drawn from the author's own sources and what others see of it (S6).\n\nThe author sees every finding. Anyone else sees those shared at \"counts\" or above:\nthe kind and category; from \"summary\" its line and the gap; at \"full\" the source\nitems it cites. ``summary``: the line the summary level shows, the one its author\nconfirmed or wrote, else Oracle's fixed category line. ``draft_summary``: Oracle's\ndraft, for the author only. At \"full\", others see the items it released when it was\nshared; ``unshared_item_ids`` (the author only): what it cites now that sharing did\nnot release (a later analysis added them; \"N new sources since you shared\", share\nit in full again to release them)."
       },
       "FindingSummaryIn": {
         "properties": {

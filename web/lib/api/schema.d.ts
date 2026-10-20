@@ -1372,9 +1372,10 @@ export interface paths {
         };
         /**
          * Search Sources
-         * @description Search the user's own items (a run: also those a finding shared in full cites).
-         *     Ranked by relevance x confidence weight; ``as_of`` searches the versions pinned at
-         *     that time.
+         * @description Search the user's own items (a run: also those a finding shared in full
+         *     released). Ranked by relevance x confidence weight; ``as_of`` searches the versions
+         *     pinned at that time, except a run's shared items: those are searched at the version
+         *     sharing released only, whatever ``as_of`` says (S6, freeze at sharing).
          */
         get: operations["search_sources"];
         put?: never;
@@ -6500,7 +6501,10 @@ export interface components {
          *     the kind and category; from "summary" its line and the gap; at "full" the source
          *     items it cites. ``summary``: the line the summary level shows, the one its author
          *     confirmed or wrote, else Oracle's fixed category line. ``draft_summary``: Oracle's
-         *     draft, for the author only.
+         *     draft, for the author only. At "full", others see the items it released when it was
+         *     shared; ``unshared_item_ids`` (the author only): what it cites now that sharing did
+         *     not release (a later analysis added them; "N new sources since you shared", share
+         *     it in full again to release them).
          */
         FindingOut: {
             /**
@@ -6538,6 +6542,11 @@ export interface components {
              * @default []
              */
             source_item_ids: string[];
+            /**
+             * Unshared Item Ids
+             * @default []
+             */
+            unshared_item_ids: string[];
         };
         /**
          * FindingSummaryIn
