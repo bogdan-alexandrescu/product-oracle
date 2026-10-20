@@ -824,11 +824,12 @@ async def _read_hold(key: _HoldKey) -> str | None:
             step = status.step(review)
             if step is None or not not_reached(step):
                 log.info(
-                    "run %s: token read-only, step %s of %s is %s",
+                    "run %s: token read-only, step %s of %s is %s (park reason %s)",
                     run_id,
                     review,
                     workflow_id,
                     step.state if step else "not listed",
+                    step.park_reason if step else None,
                 )
                 held = HOLD_DECISION
                 break

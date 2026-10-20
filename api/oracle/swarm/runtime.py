@@ -20,10 +20,12 @@ from typing import Any, Literal, Protocol, runtime_checkable
 WorkflowState = Literal["running", "succeeded", "failed", "cancelled"]
 TERMINAL: frozenset[str] = frozenset({"succeeded", "failed", "cancelled"})
 FeatureState = Literal["on", "off", "unknown"]
-# The one list of SwarmCloud step states (StepStatus.state, upper case) that mean the
-# workflow has NOT reached a step: not started yet (PENDING), or never to run (SKIPPED: a
-# gated step whose verdict did not match). Deny by default: any other state, one
-# SwarmCloud adds later, or no row for the step at all, counts as reached. A run token is
+# The one list of step states (StepStatus.state, upper case) that mean the workflow has
+# NOT reached a step. SwarmCloud has no PENDING or SKIPPED task state (a step not yet
+# runnable is PARKED with DEPENDENCY_INCOMPLETE, below); they are kept only as a
+# harmless allowance for the adapter's default and a fake runtime. The hold does not use
+# the default: a step with no task read counts as reached. Deny by default: any other
+# state, one SwarmCloud adds later, or no row for the step at all, counts as reached. A run token is
 # read-only from the moment a checkpoint's review step is reached (W5, owner 2026-10-19).
 NOT_REACHED_STATES: frozenset[str] = frozenset({"PENDING", "SKIPPED"})
 # SwarmCloud makes a task for every step at submission; one whose dependencies have not
@@ -96,7 +98,11 @@ class WorkflowSpec:
 
 def not_reached(step: "StepStatus") -> bool:
     """True when the workflow has not reached the step: not started or never to run
-    (:data:`NOT_REACHED_STATES`), or parked on its dependencies."""
+    (:data:`NOT_REACHED_STATES`), or parked on its dependencies. Fails closed: a step
+    whose task was not read, or whose wait has opened, is reached whatever its state or
+    park reason says."""
+    if not step.task_read or step.wait_opened:
+        return False
     return step.state in NOT_REACHED_STATES or (
         step.state == "PARKED" and step.park_reason == DEPENDENCY_INCOMPLETE
     )
@@ -113,6 +119,10 @@ class StepStatus:
     # The task's park_reason for a PARKED step (DEPENDENCY_INCOMPLETE: its dependencies
     # have not finished, so the workflow has not reached it; AWAITING_INPUT; ...).
     park_reason: str | None = None
+    # False when the runtime's task page had no task for the step (state is then only the
+    # adapter's default); True when metadata.await_input.opened_at is set (a wait is open).
+    task_read: bool = True
+    wait_opened: bool = False
 
 
 @dataclass(frozen=True)

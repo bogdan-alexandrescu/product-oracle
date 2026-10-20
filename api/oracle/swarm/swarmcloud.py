@@ -961,8 +961,14 @@ class SwarmCloudRuntime:
                     task_state,
                     _redact(str(task["last_error"])) if (task or {}).get("last_error") else None,
                     str(task["park_reason"])
-                    if task_state == "PARKED" and task.get("park_reason")
+                    if task_state == "PARKED" and (task or {}).get("park_reason")
                     else None,
+                    task is not None,
+                    bool(
+                        (((task or {}).get("metadata") or {}).get("await_input") or {}).get(
+                            "opened_at"
+                        )
+                    ),
                 )
             )
             if task is not None and task_state == "PARKED":
