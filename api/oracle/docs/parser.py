@@ -138,10 +138,23 @@ def _inline_text(token: Token) -> str:
 def body_text(body_md: str) -> str:
     """Plain text of a section body, as the reader sees it (citation markers removed).
 
+    A table keeps its rows: one line per row (header first, separator row dropped),
+    cells joined by ``" | "``; a literal ``|`` inside a cell is kept as ``\\|``. The
+    version diff rebuilds tables from these rows.
+
     Comment anchors (TextQuoteSelector) are relative to this text.
     """
     blocks: list[str] = []
+    row: list[str] | None = None
     for token in _md.parse(body_md):
+        if token.type == "tr_open":
+            row = []
+            continue
+        if token.type == "tr_close":
+            if row is not None and any(row):
+                blocks.append(" | ".join(row))
+            row = None
+            continue
         if token.type == "inline":
             text = _inline_text(token)
         elif token.type in ("fence", "code_block"):
@@ -149,7 +162,9 @@ def body_text(body_md: str) -> str:
         else:
             continue
         text = CITATION_STRIP_RE.sub("", text).strip()
-        if text:
+        if row is not None:
+            row.append(text.replace("|", "\\|"))
+        elif text:
             blocks.append(text)
     return "\n".join(blocks)
 

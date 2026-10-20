@@ -31606,7 +31606,8 @@
           },
           "body_text": {
             "type": "string",
-            "title": "Body Text"
+            "title": "Body Text",
+            "description": "Plain text of the body, citation markers removed. A table is one line per row (header first, no separator row), cells joined by ' | '; a literal '|' in a cell is '\\|'."
           },
           "content_hash": {
             "type": "string",
