@@ -18,6 +18,14 @@ test("safeNextPath keeps same-site paths and refuses everything that can leave t
     "%2F%2Fevil.com",
     decodeURIComponent("%2F%2Fevil.com"),
     "evil.com",
+    // Dot-segments pass a same-site check, then resolve to //evil.com (another host).
+    "/.//evil.com",
+    "/..//evil.com",
+    "/%2e//evil.com",
+    "/a/..//evil.com",
+    "/home/..//..//evil.com",
+    "/.///evil.com",
+    "/.//evil.com/path?q=1#h",
     "",
     null,
   ]) {
