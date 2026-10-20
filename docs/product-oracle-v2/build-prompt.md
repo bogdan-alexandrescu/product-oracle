@@ -36,7 +36,7 @@ Your first action is to inspect the *actual checkout HEAD*, using these source-o
 1. `docs/questions.md` — the decision log. **Owner decisions here take precedence over suggestions in this prompt**. If a new requirement conflicts with a prior decision, record a change request and request owner approval rather than silently overriding it.
 2. `docs/build-brief.md` — reuse catalogue, documented maturity, code locations, feature inventory and build process.
 3. `docs/design.md`, `docs/v1-plan.md`, `docs/mvp-app.md`, `docs/brief-and-full.md`, `docs/roadmap-from-prd.md`, `docs/llm-jobs.md` — established product/workflow contracts.
-4. `docs/swarmcloud-interface.md` and `docs/swarmcloud-requests.md` — SwarmCloud feature gates and exact payload contracts.
+4. `docs/swarmcloud-interface.md` — SwarmCloud feature gates and exact payload contracts.
 5. `api/oracle/tenancy.py`, `models.py`, `authz.py`, `sources/`, `connections/`, `baseline/`, `priorities/`, `docs/`, `templates/`, `review/`, `runs/`, `swarm/`, `jobs/`, `llm/`, `export/`, `mcp/`, `cli/`.
 6. `web/app/`, `web/components/`, `web/lib/api/`, OpenAPI generation and Playwright mock fixtures.
 7. Alembic revision history, current PRs, `ops/*.lane.md`, workflow examples, `Makefile`, tests and operational/deployment instructions.
