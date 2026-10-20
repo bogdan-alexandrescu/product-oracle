@@ -2,16 +2,21 @@
 
 Sources are owned (S3 revised): every route acts for the signed-in user, who sees and
 syncs only their own sources and items. Another user's source or item is a 404.
+
+Changing a source (adding, editing, deleting, pausing, syncing, uploading) also needs a
+role that may change things (commenter or above): a viewer, or an MCP client granted
+only ``oracle:read`` (which acts as a viewer), reads but cannot change sources.
 """
 
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func, select
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
+from oracle.authz import require_role
 from oracle.sources import items, service, store, uploads
 from oracle.sources import search as search_service
 from oracle.sources import sync as sync_engine
@@ -34,6 +39,8 @@ from oracle.sources.schemas import (
 router = APIRouter(prefix="/v1", tags=["sources"])
 
 NOT_A_USER = "Sources belong to a user: sign in (API tokens do not act for a user yet)"
+# Who may change a source: not a viewer, nor an MCP client limited to oracle:read.
+SourceWriter = Annotated[Principal, Depends(require_role("commenter"))]
 
 
 def _user(principal: Principal) -> uuid.UUID:
@@ -127,7 +134,7 @@ async def list_source_kinds(principal: CurrentPrincipal, db: TenantDB) -> list[S
     status_code=status.HTTP_201_CREATED,
     responses={429: {"description": "The provider is rate limiting; retry after Retry-After"}},
 )
-async def create_source(body: SourceCreate, principal: CurrentPrincipal, db: TenantDB) -> SourceOut:
+async def create_source(body: SourceCreate, principal: SourceWriter, db: TenantDB) -> SourceOut:
     try:
         source = await service.create_source(
             db,
@@ -153,7 +160,7 @@ async def get_source(source_id: uuid.UUID, principal: CurrentPrincipal, db: Tena
     responses={429: {"description": "The provider is rate limiting; retry after Retry-After"}},
 )
 async def update_source(
-    source_id: uuid.UUID, body: SourcePatch, principal: CurrentPrincipal, db: TenantDB
+    source_id: uuid.UUID, body: SourcePatch, principal: SourceWriter, db: TenantDB
 ) -> SourceOut:
     source = await _owned(db, principal, source_id)
     try:
@@ -164,25 +171,19 @@ async def update_source(
 
 
 @router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_source(
-    source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
-) -> Response:
+async def delete_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> Response:
     await service.delete_source(db, await _owned(db, principal, source_id), actor=principal)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/sources/{source_id}/pause", response_model=SourceOut)
-async def pause_source(
-    source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
-) -> SourceOut:
+async def pause_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SourceOut:
     source = await service.set_paused(db, await _owned(db, principal, source_id), True)
     return await _one_out(db, source)
 
 
 @router.post("/sources/{source_id}/resume", response_model=SourceOut)
-async def resume_source(
-    source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
-) -> SourceOut:
+async def resume_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SourceOut:
     source = await service.set_paused(db, await _owned(db, principal, source_id), False)
     return await _one_out(db, source)
 
@@ -195,9 +196,7 @@ async def resume_source(
         422: {"description": "No connector registered for the kind"},
     },
 )
-async def sync_source(
-    source_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
-) -> SyncResult:
+async def sync_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SyncResult:
     """Run the connector now. A rejected credential puts the source in status error;
     a rate limit stops cleanly and the next sync resumes from the saved cursor."""
     source = await _owned(db, principal, source_id)
@@ -225,7 +224,7 @@ async def sync_source(
 )
 async def upload_files(
     source_id: uuid.UUID,
-    principal: CurrentPrincipal,
+    principal: SourceWriter,
     db: TenantDB,
     files: Annotated[list[UploadFile], File(description=".md, .txt or .pdf files")],
 ) -> UploadResult:
