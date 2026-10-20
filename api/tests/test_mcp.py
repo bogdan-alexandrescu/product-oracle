@@ -190,10 +190,18 @@ def test_parity_every_operation_is_a_tool_or_listed_as_unavailable():
             assert (op.method, op.path) == (method.upper(), path)
             if op.excluded:
                 excluded.add(op.operation_id)
-    # Browser sign-in, the OAuth flow itself, and file uploads (multipart: use REST).
+    # Browser sign-in, the OAuth flow itself, file uploads (multipart: use REST), and the
+    # account operations that work from the signed-in browser only (AC1).
     oauth = {o for o in excluded if o.startswith("oauth_")}
     assert {"oauth_token", "oauth_register", "oauth_callback"} <= oauth
-    assert excluded - oauth == {"login", "logout", "upload_files"}
+    assert excluded - oauth == {
+        "login",
+        "logout",
+        "upload_files",
+        "create_personal_token",
+        "change_password",
+        "sign_out_everywhere",
+    }
 
 
 async def test_parity_over_the_wire(tenant_id):
