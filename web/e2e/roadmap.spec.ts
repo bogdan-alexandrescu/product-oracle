@@ -198,3 +198,14 @@ test("a roadmap date whose basis was withdrawn is marked in the version view; th
   expect(before.endsWith("2026-12-15")).toBe(true);
   await expect(marks.first()).toHaveAttribute("data-anchor-ignore", "");
 });
+
+test("a roadmap version with a marked date cannot be approved: Approve is disabled with the reason", async ({ page }) => {
+  // Owner, 2026-10-20: approval waits until every date marker is resolved. The mock's v1
+  // writes 2026-12-15, whose basis (ENG-413) was withdrawn.
+  await login(page);
+  await page.goto("/documents/usage-alerts-roadmap/v/1");
+  const blocked = page.getByTestId("approve-blocked").filter({ visible: true });
+  await expect(blocked.getByRole("button", { name: "Approve version" })).toBeDisabled();
+  await expect(blocked).toContainText("2026-12-15: date withdrawn");
+  await expect(blocked).toContainText("Record a basis");
+});

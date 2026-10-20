@@ -561,7 +561,8 @@ export function dateMarks(
     }
     if (sourcesLevel != null && s.level > sourcesLevel) continue;
     sourcesLevel = null;
-    const owner = ITEM_ANCHOR.exec(s.section_key)?.[1];
+    // The mock keys an item by its section (item-<key>); a draft anchors it <horizon>-<key>.
+    const owner = ITEM_ANCHOR.exec(s.section_key)?.[1] ?? s.section_key;
     const places: [Schemas["DateMarkOut"]["where"], string][] = [
       ["heading", s.heading],
       ["body", s.body_md.replace(/\]\([^)\s]*\)/g, "]()")],
