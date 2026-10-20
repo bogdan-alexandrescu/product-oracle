@@ -112,7 +112,34 @@ def test_series_title_is_linear_on_a_16_kb_title(title):
     assert best < 0.010
 
 
-def test_series_title_cuts_long_titles_and_strips_every_suffix_at_once():
+def _fastest(title: str) -> float:
+    best = float("inf")
+    for _ in range(3):
+        started = time.perf_counter()
+        series_title(title)
+        best = min(best, time.perf_counter() - started)
+    return best
+
+
+def test_series_title_does_not_backtrack_exponentially_on_repeated_dates():
+    """A regex repeating overlapping date alternatives backtracked exponentially: the
+    first title took 36 s at 21 blocks and the second doubled with every date."""
+    blocks = "a 1111-1-1" + "-1111-1-1" * 16 + "x"
+    dates = "Sync" + " 2026-10-14" * 16 + " notes"
+    assert _fastest(blocks) < 0.010
+    assert _fastest(dates) < 0.010
+    assert series_title(dates) == dates
+
+
+def test_series_title_worst_case_is_bounded():
+    """Every round strips a suffix of the capped title: the most rounds there can be."""
+    for title in ("S" + " 1" * 99, "S" + " - 1" * 49, "S" + " (1)" * 49, "S" + " #1" * 66):
+        assert len(title) <= fireflies.MAX_TITLE
+        assert _fastest(title) < 0.010, title
+        assert series_title(title) == "S"
+
+
+def test_series_title_cuts_long_titles_and_strips_every_suffix():
     assert series_title("Standup" + " 1" * 8000) == "Standup"
     assert len(series_title("x" * 5000)) <= fireflies.MAX_TITLE
     assert series_title("Sprint planning - Oct 14 (2) #3") == "Sprint planning"

@@ -203,9 +203,12 @@ _DATED = (
 )
 # Titles are cut to this many characters before their suffixes are removed.
 MAX_TITLE = 200
-# Every trailing date or number after a space or separator, in one anchored match:
-# " - Oct 14", " #12", " (10/14) #3".
-_SUFFIXES = re.compile(rf"(?:(?:\s*[-\u2013\u2014:|,]\s*|\s+)\(?{_DATED}\)?)+\s*$", re.IGNORECASE)
+# One trailing date or number after a space or separator: " - Oct 14", " #12", " (10/14)".
+# No quantifier is nested in another: series_title strips one suffix at a time.
+_SUFFIX = re.compile(rf"(?:\s*[-\u2013\u2014:|,]\s*|\s+)\(?{_DATED}\)?\s*$", re.IGNORECASE)
+# The longest suffix _SUFFIX matches, but for a run of digits: a separator (" - ", "("),
+# a weekday ("wednesday., "), a month ("september."), a day ("14th"), a year (", 2026").
+_SUFFIX_WINDOW = 64
 # Google Calendar instance ids are the recurring event's id plus the instance start
 # (_YYYYMMDDTHHMMSSZ); 'this and following' splits the series into <id>_R<start>, whose
 # instances add their own start. Either may end in "@google.com".
@@ -218,11 +221,18 @@ MAX_ALIASES = 1000
 def series_title(title: str | None) -> str:
     """The title with trailing dates and numbers removed, case kept.
 
-    The title is cut to MAX_TITLE characters first, so the cost is bounded whatever
-    Fireflies returns."""
+    Bounded whatever Fireflies returns, so it runs inline: the title is cut to MAX_TITLE
+    characters with single spaces, each round strips at least two characters (so at most
+    MAX_TITLE / 2 rounds), and each round tries _SUFFIX, which nests no quantifiers, only
+    from the last _SUFFIX_WINDOW characters. Worst case about 3 ms."""
     text = " ".join((title or "").split())[:MAX_TITLE].strip()
-    shorter = _SUFFIXES.sub("", text, count=1).strip()
-    return shorter or text or "Untitled meeting"
+    while True:
+        found = _SUFFIX.search(text, max(0, len(text) - _SUFFIX_WINDOW))
+        shorter = text[: found.start()].strip() if found else text
+        # Nothing but a suffix ("- 12") is kept as it is.
+        if shorter == text or not shorter:
+            return text or "Untitled meeting"
+        text = shorter
 
 
 def normalise_title(title: str | None) -> str:
