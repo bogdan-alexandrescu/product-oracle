@@ -4470,6 +4470,122 @@
         }
       }
     },
+    "/v1/member-follow-ups/{follow_up_id}/retry": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Retry Member Follow Up",
+        "description": "Make a provider revoke (or runtime cancel) a disable still owes now, whatever its\nbackoff or its 24 hours of retries. A success drops Oracle's copy of the credential.",
+        "operationId": "retry_member_follow_up",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "follow_up_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Follow Up Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such follow-up"
+          },
+          "409": {
+            "description": "Not open"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/member-follow-ups/{follow_up_id}/dismiss": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Dismiss Member Follow Up",
+        "description": "Stop trying a provider revoke (or runtime cancel) a disable owes: Oracle's copy of\nthe credential is dropped, and the dismissal audited.",
+        "operationId": "dismiss_member_follow_up",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "follow_up_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Follow Up Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such follow-up"
+          },
+          "409": {
+            "description": "Not open"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/connections": {
       "get": {
         "tags": [
@@ -21790,6 +21906,139 @@
         ],
         "title": "FlowSegmentOut"
       },
+      "FollowUpOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "member_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Member Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "provider_revoke",
+              "run_cancel"
+            ],
+            "title": "Kind"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "done",
+              "failed",
+              "dismissed"
+            ],
+            "title": "Status"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "done_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "dismissed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dismissed At"
+          },
+          "dismissed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dismissed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "member_id",
+          "kind",
+          "status",
+          "attempts",
+          "created_at"
+        ],
+        "title": "FollowUpOut",
+        "description": "A call a member's disable owes (a provider revoke, a runtime cancel) and how it\nstands: pending (retried by the tick), failed (no more automatic retries; Retry or\nDismiss), done, or dismissed by an owner."
+      },
       "GoalTerm": {
         "properties": {
           "goal": {
@@ -22447,6 +22696,14 @@
             "type": "array",
             "title": "Feedback"
           },
+          "revoke_failures": {
+            "items": {
+              "$ref": "#/components/schemas/InboxRevokeFailure"
+            },
+            "type": "array",
+            "title": "Revoke Failures",
+            "default": []
+          },
           "total": {
             "type": "integer",
             "title": "Total"
@@ -22461,6 +22718,125 @@
           "total"
         ],
         "title": "InboxOut"
+      },
+      "InboxRevokeFailure": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "member_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Member Id"
+          },
+          "member_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Email"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "provider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "retry_until": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Retry Until"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "member_id",
+          "title",
+          "status",
+          "attempts",
+          "created_at",
+          "retry_until"
+        ],
+        "title": "InboxRevokeFailure",
+        "description": "A provider revoke a member's disable still owes, whose last attempt did not\nrevoke (C2): retried by the tick for 24 hours, then waiting for an owner."
       },
       "IntakeAnalysis": {
         "properties": {

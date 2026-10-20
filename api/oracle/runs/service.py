@@ -63,6 +63,7 @@ from oracle.runs.schemas import (
     InboxDocument,
     InboxFeedbackItem,
     InboxOut,
+    InboxRevokeFailure,
     ItemsCheck,
     KnobsIn,
     KnobsOut,
@@ -1675,10 +1676,59 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
 
     approvals = [_summary(r, refs, None) for r in waiting_runs if r.status == "awaiting_approval"]
     overruns = [_summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"]
+    revoke_failures = await _revoke_failures(db) if owner else []
     return InboxOut(
         checkpoints=checkpoints,
         approvals=approvals,
         overruns=overruns,
         feedback=feedback,
-        total=len(checkpoints) + len(approvals) + len(overruns) + len(feedback),
+        revoke_failures=revoke_failures,
+        total=len(checkpoints)
+        + len(approvals)
+        + len(overruns)
+        + len(feedback)
+        + len(revoke_failures),
     )
+
+
+async def _revoke_failures(db: AsyncSession) -> list[InboxRevokeFailure]:
+    """Provider revokes a disable still owes whose last attempt did not revoke."""
+    from oracle.auth.models import User
+    from oracle.connections.providers import get_provider
+    from oracle.members.models import MemberFollowUp
+    from oracle.members.service import FOLLOW_UP_OPEN, FOLLOW_UP_RETRY_WINDOW
+
+    rows = (
+        await db.execute(
+            select(MemberFollowUp, User.email)
+            .outerjoin(User, User.id == MemberFollowUp.member_id)
+            .where(
+                MemberFollowUp.kind == "provider_revoke",
+                MemberFollowUp.status.in_(FOLLOW_UP_OPEN),
+                MemberFollowUp.attempts > 0,
+            )
+            .order_by(MemberFollowUp.created_at, MemberFollowUp.id)
+        )
+    ).all()
+    out = []
+    for row, email in rows:
+        provider = get_provider(row.provider or "")
+        name = provider.name if provider else (row.provider or "the provider")
+        out.append(
+            InboxRevokeFailure(
+                id=row.id,
+                member_id=row.member_id,
+                member_email=email,
+                provider=row.provider,
+                provider_name=name,
+                title=f"Couldn't revoke {email or 'a removed member'}'s {name} access at {name}",
+                status=row.status,  # type: ignore[arg-type]
+                outcome=row.outcome,
+                last_error=row.last_error,
+                attempts=row.attempts,
+                created_at=row.created_at,
+                next_attempt_at=row.next_attempt_at,
+                retry_until=row.created_at + FOLLOW_UP_RETRY_WINDOW,
+            )
+        )
+    return out

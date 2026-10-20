@@ -316,6 +316,27 @@ class InboxDocument(BaseModel):
     items: list[InboxFeedbackItem]
 
 
+class InboxRevokeFailure(BaseModel):
+    """A provider revoke a member's disable still owes, whose last attempt did not
+    revoke (C2): retried by the tick for 24 hours, then waiting for an owner."""
+
+    id: uuid.UUID
+    member_id: uuid.UUID
+    member_email: str | None = None
+    provider: str | None = None
+    provider_name: str | None = None
+    # "Couldn't revoke <member>'s <provider> access at <provider>"
+    title: str
+    # pending: still retried (next_attempt_at); failed: retries stopped (retry_until).
+    status: Literal["pending", "failed"]
+    outcome: str | None = None
+    last_error: str | None = None
+    attempts: int
+    created_at: datetime
+    next_attempt_at: datetime | None = None
+    retry_until: datetime
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Owners only: runs waiting for cost approval, and runs paused on overrun.
@@ -323,6 +344,8 @@ class InboxOut(BaseModel):
     overruns: list[RunSummary]
     # Approvers and owners: open feedback on documents they can approve.
     feedback: list[InboxDocument]
+    # Owners only: provider revokes a member's disable could not make (Retry, Dismiss).
+    revoke_failures: list[InboxRevokeFailure] = []
     total: int
 
 

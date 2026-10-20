@@ -763,7 +763,14 @@ async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
     run = await started(client, auth, depth="deep")  # awaiting approval
     assert run["status"] == "awaiting_approval"
     inbox = (await client.get("/v1/inbox", headers=viewer)).json()
-    assert inbox == {"checkpoints": [], "approvals": [], "overruns": [], "feedback": [], "total": 0}
+    assert inbox == {
+        "checkpoints": [],
+        "approvals": [],
+        "overruns": [],
+        "feedback": [],
+        "revoke_failures": [],
+        "total": 0,
+    }
     assert (await client.get("/v1/inbox", headers=auth)).json()["total"] == 2
 
 

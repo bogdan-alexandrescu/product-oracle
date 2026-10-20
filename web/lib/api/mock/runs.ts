@@ -345,6 +345,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     approvals,
     overruns,
     feedback,
+    revoke_failures: [],
     total: checkpoints.length + approvals.length + overruns.length + feedback.length,
   };
 }

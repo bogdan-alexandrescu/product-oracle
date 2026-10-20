@@ -35,7 +35,10 @@ class Invite(TenantScoped, Base):
 
 
 FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel")
-FOLLOW_UP_STATUSES = ("pending", "done", "failed")
+# pending: retried by the tick, by time; failed: still not done after the retry window,
+# no more automatic retries (an owner's Retry or Dismiss in the Inbox); done; dismissed:
+# an owner gave up on it.
+FOLLOW_UP_STATUSES = ("pending", "done", "failed", "dismissed")
 
 
 class MemberFollowUp(TenantScoped, Base):
@@ -43,7 +46,9 @@ class MemberFollowUp(TenantScoped, Base):
     connection's grant at its provider, cancelling a run segment at the runtime. Kept
     out of the disable's transaction so the company-wide review gate is never held
     across a network call; its outcome is recorded here and retried from the tick
-    (``oracle.members.service.run_follow_ups``) until it succeeds or gives up."""
+    (``oracle.members.service.run_follow_ups``), with a backoff, for 24 hours; a provider
+    revoke still not done keeps its copy of the credential and is shown to owners in the
+    Inbox (Retry, Dismiss) until it succeeds or an owner dismisses it."""
 
     __tablename__ = "member_follow_ups"
     __table_args__ = (
@@ -56,7 +61,8 @@ class MemberFollowUp(TenantScoped, Base):
     # The connection (deleted by the disable) or the run segment the call is for.
     target_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     # provider_revoke: the connection's provider, auth mode and its credential, still
-    # encrypted, kept only until the revoke is done (then cleared).
+    # encrypted, kept only until the revoke is done or an owner dismisses it (then
+    # cleared).
     provider: Mapped[str | None] = mapped_column(Text)
     auth_mode: Mapped[str | None] = mapped_column(Text)
     ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary)
@@ -69,3 +75,8 @@ class MemberFollowUp(TenantScoped, Base):
     outcome: Mapped[str | None] = mapped_column(Text)
     last_error: Mapped[str | None] = mapped_column(Text)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the tick may try a pending one again (a backoff after each failure); None: now.
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The owner who dismissed it (a user id or an API token id).
+    dismissed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)

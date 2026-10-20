@@ -1286,6 +1286,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/member-follow-ups/{follow_up_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Member Follow Up
+         * @description Make a provider revoke (or runtime cancel) a disable still owes now, whatever its
+         *     backoff or its 24 hours of retries. A success drops Oracle's copy of the credential.
+         */
+        post: operations["retry_member_follow_up"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/member-follow-ups/{follow_up_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Member Follow Up
+         * @description Stop trying a provider revoke (or runtime cancel) a disable owes: Oracle's copy of
+         *     the credential is dropped, and the dismissal audited.
+         */
+        post: operations["dismiss_member_follow_up"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connections": {
         parameters: {
             query?: never;
@@ -6560,6 +6602,55 @@ export interface components {
              */
             approver_role: "viewer" | "commenter" | "approver" | "owner";
         };
+        /**
+         * FollowUpOut
+         * @description A call a member's disable owes (a provider revoke, a runtime cancel) and how it
+         *     stands: pending (retried by the tick), failed (no more automatic retries; Retry or
+         *     Dismiss), done, or dismissed by an owner.
+         */
+        FollowUpOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Member Id
+             * Format: uuid
+             */
+            member_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "provider_revoke" | "run_cancel";
+            /** Provider */
+            provider?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "done" | "failed" | "dismissed";
+            /** Attempts */
+            attempts: number;
+            /** Outcome */
+            outcome?: string | null;
+            /** Last Error */
+            last_error?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Next Attempt At */
+            next_attempt_at?: string | null;
+            /** Done At */
+            done_at?: string | null;
+            /** Dismissed At */
+            dismissed_at?: string | null;
+            /** Dismissed By */
+            dismissed_by?: string | null;
+        };
         /** GoalTerm */
         GoalTerm: {
             /** Goal */
@@ -6786,8 +6877,61 @@ export interface components {
             overruns: components["schemas"]["RunSummary"][];
             /** Feedback */
             feedback: components["schemas"]["InboxDocument"][];
+            /**
+             * Revoke Failures
+             * @default []
+             */
+            revoke_failures: components["schemas"]["InboxRevokeFailure"][];
             /** Total */
             total: number;
+        };
+        /**
+         * InboxRevokeFailure
+         * @description A provider revoke a member's disable still owes, whose last attempt did not
+         *     revoke (C2): retried by the tick for 24 hours, then waiting for an owner.
+         */
+        InboxRevokeFailure: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Member Id
+             * Format: uuid
+             */
+            member_id: string;
+            /** Member Email */
+            member_email?: string | null;
+            /** Provider */
+            provider?: string | null;
+            /** Provider Name */
+            provider_name?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "failed";
+            /** Outcome */
+            outcome?: string | null;
+            /** Last Error */
+            last_error?: string | null;
+            /** Attempts */
+            attempts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Next Attempt At */
+            next_attempt_at?: string | null;
+            /**
+             * Retry Until
+             * Format: date-time
+             */
+            retry_until: string;
         };
         /**
          * IntakeAnalysis
@@ -13147,6 +13291,96 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_member_follow_up: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                follow_up_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowUpOut"];
+                };
+            };
+            /** @description No such follow-up */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not open */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_member_follow_up: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                follow_up_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowUpOut"];
+                };
+            };
+            /** @description No such follow-up */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not open */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

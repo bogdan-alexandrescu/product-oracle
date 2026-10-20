@@ -305,6 +305,8 @@ async def test_a_disable_calls_providers_after_it_commits_outside_the_gate(
 
 
 async def test_a_failed_provider_revoke_is_retried_from_the_tick(client, monkeypatch, provider):
+    from datetime import UTC, datetime
+
     from oracle.connections import service as connections
     from oracle.members.models import MemberFollowUp
 
@@ -323,6 +325,9 @@ async def test_a_failed_provider_revoke_is_retried_from_the_tick(client, monkeyp
     async with tenant_session(ctx.tenant_id) as s:
         [row] = (await s.scalars(select(MemberFollowUp))).all()
         assert row.status == "pending" and row.attempts == 1 and row.outcome == "failed"
+        # Round 5: retried by time, with a backoff; make it due.
+        row.next_attempt_at = datetime.now(UTC)
+        await s.commit()
     resp = await client.post("/v1/internal/tick", headers=ctx.auth)
     assert resp.status_code == 200, resp.text
     assert calls == ["github", "github"]

@@ -5,8 +5,10 @@ Inbox with Retry and Dismiss. Synthetic placeholders only."""
 
 import asyncio
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
+import httpx
 import pytest
 from sqlalchemy import select
 
@@ -15,13 +17,26 @@ from oracle.auth.models import User
 from oracle.tenancy import tenant_session
 from tests.review_v2_helpers import DOC, person, setup
 from tests.test_review_v2_security_3 import disable, member_token
-from tests.test_review_v2_security_4 import _lose_standing
+from tests.test_review_v2_security_4 import (
+    _lose_standing,
+    add_oauth_connection,
+    email_of,
+)
 
 
 @pytest.fixture(autouse=True)
 def _only_test_checks():
     with readiness.isolated_checks():
         yield
+
+
+@pytest.fixture
+def provider():
+    from tests.connection_helpers import clear_provider_http, use_provider_http
+
+    seen = use_provider_http(lambda request: httpx.Response(200, json={"ok": True}))
+    yield seen
+    clear_provider_http()
 
 
 # --- ITEM 1: owner-level writes re-check the caller under the gate --------------------
@@ -239,3 +254,342 @@ async def test_an_active_owner_still_writes_settings_and_policies(client):
     assert await _document_policy(ctx) is not None
     async with tenant_session(ctx.tenant_id) as s:
         assert (await s.get(User, owner.user_id)).disabled_at is None
+
+
+# --- ITEM 2: a provider revoke that keeps failing: 24 hours, then the Inbox -------------
+
+
+async def add_connection(ctx, user_id, account: str) -> uuid.UUID:
+    """An OAuth GitHub connection of ``user_id`` (``account``: the provider's account id)."""
+    from oracle import crypto
+    from oracle.connections.models import Connection
+
+    async with tenant_session(ctx.tenant_id) as s:
+        conn = Connection(
+            user_id=user_id,
+            provider="github",
+            auth_mode="oauth",
+            account_id=account,
+            account_label=account,
+            ciphertext=crypto.encrypt(b'{"access_token": "placeholder"}'),
+            key_version=crypto.KEY_VERSION,
+        )
+        s.add(conn)
+        await s.commit()
+        return conn.id
+
+
+def _always(outcome: str, calls: list | None = None):
+    async def revoke(http, conn):
+        if calls is not None:
+            calls.append(conn.id)
+        return outcome
+
+    return revoke
+
+
+async def _follow_up_row(ctx):
+    from oracle.members.models import MemberFollowUp
+
+    async with tenant_session(ctx.tenant_id) as s:
+        return (await s.scalars(select(MemberFollowUp))).one()
+
+
+async def _shift(ctx, *, created_hours_ago: float | None = None, due: bool = True) -> None:
+    """Move the follow-up's clock: due now, and created ``created_hours_ago`` hours ago."""
+    from datetime import UTC, datetime, timedelta
+
+    from oracle.members.models import MemberFollowUp
+
+    async with tenant_session(ctx.tenant_id) as s:
+        row = (await s.scalars(select(MemberFollowUp))).one()
+        now = datetime.now(UTC)
+        if due:
+            row.next_attempt_at = now - timedelta(seconds=1)
+        if created_hours_ago is not None:
+            row.created_at = now - timedelta(hours=created_hours_ago)
+        await s.commit()
+
+
+async def _tick(client, ctx):
+    resp = await client.post("/v1/internal/tick", headers=ctx.auth)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def _revoke_failures(client, headers) -> list[dict]:
+    resp = await client.get("/v1/inbox", headers=headers)
+    assert resp.status_code == 200, resp.text
+    return resp.json()["revoke_failures"]
+
+
+async def test_a_failing_revoke_is_retried_by_time_for_24_hours_and_keeps_its_copy(
+    client, monkeypatch, provider
+):
+    from oracle.connections import service as connections
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    await add_oauth_connection(ctx, pm.user_id)
+    calls: list = []
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("failed", calls))
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    assert len(calls) == 1
+    # Ticks in quick succession do not burn retries: the next one waits for its backoff.
+    for _ in range(6):
+        await _tick(client, ctx)
+    assert len(calls) == 1
+    row = await _follow_up_row(ctx)
+    assert row.status == "pending" and row.attempts == 1 and row.ciphertext is not None
+    # Due again: retried, still pending, the copy kept; well past 5 attempts.
+    for _ in range(6):
+        await _shift(ctx)
+        await _tick(client, ctx)
+    assert len(calls) == 7
+    row = await _follow_up_row(ctx)
+    assert row.status == "pending" and row.attempts == 7 and row.ciphertext is not None
+    # 24 hours on: retrying stops; the copy is kept for an owner's Retry or Dismiss.
+    await _shift(ctx, created_hours_ago=25)
+    await _tick(client, ctx)
+    row = await _follow_up_row(ctx)
+    assert row.status == "failed" and row.ciphertext is not None
+    await _shift(ctx)
+    await _tick(client, ctx)
+    assert len(calls) == 8  # no automatic retry after the 24 hours
+    [item] = await _revoke_failures(client, ctx.auth)
+    email = await email_of(ctx, pm.user_id)
+    assert item["title"] == f"Couldn't revoke {email}'s GitHub access at GitHub"
+    assert item["status"] == "failed" and item["outcome"] == "failed"
+
+
+@pytest.mark.parametrize("outcome", ["not_configured", "unreadable"])
+async def test_not_configured_and_unreadable_are_not_a_success(
+    client, monkeypatch, provider, outcome
+):
+    from oracle.connections import service as connections
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    await add_oauth_connection(ctx, pm.user_id)
+    monkeypatch.setattr(connections, "revoke_at_provider", _always(outcome))
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    row = await _follow_up_row(ctx)
+    assert row.status == "pending" and row.outcome == outcome and row.ciphertext is not None
+    [item] = await _revoke_failures(client, ctx.auth)
+    assert item["outcome"] == outcome
+
+
+async def test_owners_see_revoke_failures_others_do_not(client, monkeypatch, provider):
+    from oracle.connections import service as connections
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    other = await person(ctx.tenant_id, "approver", "other")
+    await add_oauth_connection(ctx, pm.user_id)
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("failed"))
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    assert len(await _revoke_failures(client, ctx.auth)) == 1
+    assert await _revoke_failures(client, other.headers) == []
+    resp = await client.get("/v1/inbox", headers=ctx.auth)
+    assert resp.json()["total"] >= 1
+
+
+async def test_retry_runs_now_and_a_success_drops_the_copy(client, monkeypatch, provider):
+    from oracle.audit import AuditEvent
+    from oracle.connections import service as connections
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    await add_oauth_connection(ctx, pm.user_id)
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("failed"))
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    await _shift(ctx, created_hours_ago=25)
+    await _tick(client, ctx)
+    [item] = await _revoke_failures(client, ctx.auth)
+    # Retry is owner-only.
+    resp = await client.post(f"/v1/member-follow-ups/{item['id']}/retry", headers=pm.headers)
+    assert resp.status_code in (401, 403)
+    calls: list = []
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("revoked", calls))
+    resp = await client.post(f"/v1/member-follow-ups/{item['id']}/retry", headers=ctx.auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "done" and resp.json()["outcome"] == "revoked"
+    assert len(calls) == 1
+    row = await _follow_up_row(ctx)
+    assert row.status == "done" and row.ciphertext is None
+    assert await _revoke_failures(client, ctx.auth) == []
+    async with tenant_session(ctx.tenant_id) as s:
+        actions = list(await s.scalars(select(AuditEvent.action)))
+    assert "connection.provider_revoke" in actions
+
+
+async def test_a_failed_retry_keeps_the_item(client, monkeypatch, provider):
+    from oracle.connections import service as connections
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    await add_oauth_connection(ctx, pm.user_id)
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("failed"))
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    [item] = await _revoke_failures(client, ctx.auth)
+    resp = await client.post(f"/v1/member-follow-ups/{item['id']}/retry", headers=ctx.auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "pending" and resp.json()["attempts"] == 2
+    row = await _follow_up_row(ctx)
+    assert row.ciphertext is not None
+    assert len(await _revoke_failures(client, ctx.auth)) == 1
+
+
+async def test_dismiss_is_owner_only_audited_and_drops_the_copy(client, monkeypatch, provider):
+    from oracle.audit import AuditEvent
+    from oracle.connections import service as connections
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    approver = await person(ctx.tenant_id, "approver", "approver")
+    await add_oauth_connection(ctx, pm.user_id)
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("failed"))
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    [item] = await _revoke_failures(client, ctx.auth)
+    url = f"/v1/member-follow-ups/{item['id']}/dismiss"
+    assert (await client.post(url, headers=approver.headers)).status_code == 403
+    assert (await _follow_up_row(ctx)).ciphertext is not None
+    resp = await client.post(url, headers=ctx.auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "dismissed"
+    row = await _follow_up_row(ctx)
+    assert row.status == "dismissed" and row.ciphertext is None and row.dismissed_at
+    assert await _revoke_failures(client, ctx.auth) == []
+    async with tenant_session(ctx.tenant_id) as s:
+        event = await s.scalar(
+            select(AuditEvent).where(AuditEvent.action == "connection.provider_revoke_dismissed")
+        )
+    assert event is not None and event.data["member_id"] == str(pm.user_id)
+    # A dismissed revoke is never tried again.
+    await _shift(ctx)
+    await _tick(client, ctx)
+    assert (await _follow_up_row(ctx)).status == "dismissed"
+    retry = await client.post(f"/v1/member-follow-ups/{item['id']}/retry", headers=ctx.auth)
+    assert retry.status_code == 409
+
+
+async def test_dismiss_by_an_owner_disabled_while_waiting_on_the_gate_is_refused(
+    client, monkeypatch, provider
+):
+    from oracle.connections import service as connections
+    from oracle.review import publish
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    caller = await person(ctx.tenant_id, "owner", "caller")
+    await add_oauth_connection(ctx, pm.user_id)
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("failed"))
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    [item] = await _revoke_failures(client, ctx.auth)
+    real = publish.gate_lock
+    fired = False
+
+    async def spy(db, *, shared):
+        nonlocal fired
+        if not fired:
+            fired = True
+            await _lose_standing(ctx, "disabled", caller.user_id)
+        await real(db, shared=shared)
+
+    monkeypatch.setattr(publish, "gate_lock", spy)
+    url = f"/v1/member-follow-ups/{item['id']}/dismiss"
+    assert (await client.post(url, headers=caller.headers)).status_code == 403
+    assert fired
+    assert (await _follow_up_row(ctx)).ciphertext is not None
+
+
+async def test_follow_ups_run_after_runs_and_jobs_within_a_time_budget(
+    client, monkeypatch, provider
+):
+    from oracle.connections import service as connections
+    from oracle.members import service as members
+    from oracle.members.models import MemberFollowUp
+    from oracle.runs import router as runs_router
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    for i in range(3):
+        await add_connection(ctx, pm.user_id, f"gh-{i}")
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("failed"))
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    async with tenant_session(ctx.tenant_id) as s:
+        for row in await s.scalars(select(MemberFollowUp)):
+            row.next_attempt_at = datetime.now(UTC)
+        await s.commit()
+
+    order: list[str] = []
+    real_tick, real_jobs = runs_router.service.tick, runs_router.run_llm_jobs
+
+    async def runs_tick(db, principal=None):
+        order.append("runs")
+        return await real_tick(db, principal)
+
+    async def jobs(tenant_id):
+        order.append("jobs")
+        return await real_jobs(tenant_id)
+
+    async def slow(http, conn):
+        order.append("revoke")
+        await asyncio.sleep(0.6)
+        return "failed"
+
+    monkeypatch.setattr(runs_router.service, "tick", runs_tick)
+    monkeypatch.setattr(runs_router, "run_llm_jobs", jobs)
+    monkeypatch.setattr(connections, "revoke_at_provider", slow)
+    monkeypatch.setattr(members, "FOLLOW_UP_TICK_BUDGET_SECONDS", 1.0)
+    started = asyncio.get_running_loop().time()
+    out = await _tick(client, ctx)
+    elapsed = asyncio.get_running_loop().time() - started
+    # Runs and jobs first; then as many follow-ups as fit in the budget, the rest wait.
+    assert order[:2] == ["runs", "jobs"]
+    assert order.count("revoke") < 3
+    assert 1 <= out["member_follow_ups"] < 3
+    assert elapsed < 1.0 + 1.5
+    # A call the budget cut short is not counted: it is due again at the next tick.
+    async with tenant_session(ctx.tenant_id) as s:
+        attempts = sorted(r.attempts for r in await s.scalars(select(MemberFollowUp)))
+    assert attempts == [1] * (3 - out["member_follow_ups"]) + [2] * out["member_follow_ups"]
+
+
+async def test_a_db_error_in_one_follow_up_rolls_it_back_and_the_others_run(
+    client, monkeypatch, provider
+):
+    from sqlalchemy import text
+
+    from oracle.connections import service as connections
+    from oracle.members import service as members
+    from oracle.members.models import MemberFollowUp
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    first = await add_connection(ctx, pm.user_id, "gh-1")
+    second = await add_connection(ctx, pm.user_id, "gh-2")
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("failed"))
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    async with tenant_session(ctx.tenant_id) as s:
+        for row in await s.scalars(select(MemberFollowUp)):
+            row.next_attempt_at = datetime.now(UTC)
+        await s.commit()
+
+    real_record = members.audit.record
+
+    async def record(session, *args, **kwargs):
+        if args[2] == "connection" and args[3] == first and args[1] == "connection.provider_revoke":
+            await session.execute(text("SELECT 1/0"))  # a real DB error: the txn aborts
+        return await real_record(session, *args, **kwargs)
+
+    monkeypatch.setattr(connections, "revoke_at_provider", _always("revoked"))
+    monkeypatch.setattr(members.audit, "record", record)
+    out = await _tick(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = {r.target_id: r for r in await s.scalars(select(MemberFollowUp))}
+    # The broken one rolled back (still pending, its copy kept); the other one ran.
+    assert rows[first].status == "pending" and rows[first].attempts == 1
+    assert rows[first].ciphertext is not None
+    assert rows[second].status == "done" and rows[second].ciphertext is None
+    assert out["member_follow_ups"] >= 1

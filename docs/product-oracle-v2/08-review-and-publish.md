@@ -93,7 +93,16 @@ ceiling); their approvals lapse. No network call is made under the gate: the rev
 the providers and the cancels at the runtime are `member_follow_ups`, made after the
 disable commits (each with a deadline), recorded (`connection.provider_revoke`,
 `run.runtime_cancel`) and retried by the tick (`POST /v1/internal/tick`,
-`member_follow_ups`) until they succeed or five attempts fail. After the commit the
+`member_follow_ups`, after the tick has advanced runs and jobs, within a bounded time per
+tick) by time: a backoff after each failure (a minute, doubling, at most an hour) for 24
+hours from the disable. Only `revoked` (or nothing of Oracle's to revoke, a pasted token)
+counts as a success: `not_configured` and `unreadable` do not. A provider revoke not done
+keeps Oracle's copy of the credential and is shown to owners in the Inbox ("Couldn't
+revoke <member>'s <provider> access at <provider>") with Retry (`POST
+/v1/member-follow-ups/{id}/retry`, runs now) and Dismiss (`POST
+/v1/member-follow-ups/{id}/dismiss`, owner only, audited
+`connection.provider_revoke_dismissed`, drops the copy); after the 24 hours it is marked
+failed and waits for one of them. After the commit the
 member is swept once more: a credential a request in flight created meanwhile is
 revoked. A provider connection is saved, and an OAuth refresh or code exchange issues
 tokens, only after the member's row is locked and re-read, so none is created for them
@@ -114,7 +123,13 @@ change that ended it. Every member-management and invite route does the same: af
 gate (invites take it shared) it re-reads the caller (`oracle.auth.service.caller_refusal`)
 and refuses with 403 a caller disabled, no longer an owner, or whose API token, OAuth
 grant or run token was revoked while the request waited, so an owner being disabled
-cannot act with a request already in flight.
+cannot act with a request already in flight. Owner- and approver-level writes outside
+member routes do too (C2 follow-up, 2026-10-19): company settings (`PUT
+/v1/settings/{key}`; `review_policy` and `publish_latest_only` take the gate
+exclusively, every other key shared), a document's review policy, spend approvals and
+the other run routes, built-in model job routes, Claude account changes, templates,
+themes, draft defaults, baseline edits and document imports take the gate (shared) and
+re-read the caller under it (`oracle.authz.require_role_now`).
 
 So, per stable section id (`{#id}`):
 

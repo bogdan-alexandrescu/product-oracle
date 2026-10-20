@@ -3,7 +3,7 @@ the router commits once per request. Every change writes an audit event."""
 
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import or_, select, update
@@ -459,10 +459,32 @@ async def sweep_disabled(
     return True
 
 
-# How often a follow-up is tried (once after the disable, then from the tick) and how
-# long one call may take in all, whatever the HTTP client's own timeouts.
-FOLLOW_UP_ATTEMPTS = 5
+# A failed follow-up is retried by time, not by tick: after each failure it waits a
+# backoff (a minute, doubling, at most an hour), for FOLLOW_UP_RETRY_WINDOW from the
+# disable. Then it is marked failed: no more automatic retries, and a provider revoke
+# keeps its copy of the credential and stays in the owners' Inbox (Retry, Dismiss).
+FOLLOW_UP_RETRY_WINDOW = timedelta(hours=24)
+FOLLOW_UP_FIRST_BACKOFF = timedelta(minutes=1)
+FOLLOW_UP_MAX_BACKOFF = timedelta(hours=1)
+# How long one call may take in all, whatever the HTTP client's own timeouts; and how
+# long one run of follow-ups (a tick's, a disable's) may take in all: the rest wait
+# for the next tick (``oracle tick`` gives the whole tick 120 seconds).
 FOLLOW_UP_DEADLINE_SECONDS = 30.0
+FOLLOW_UP_TICK_BUDGET_SECONDS = 40.0
+# The outcomes that finish a provider revoke: revoked, or nothing of Oracle's to revoke
+# (a pasted personal token). "not_configured" and "unreadable" are not a success.
+REVOKE_DONE = ("revoked", "not_applicable")
+# Still owed: retried by the tick (pending) or waiting for an owner (failed).
+FOLLOW_UP_OPEN = ("pending", "failed")
+
+
+class _BudgetSpent(Exception):
+    """The run's time budget ran out during a call; that call is not counted."""
+
+
+def follow_up_backoff(attempts: int) -> timedelta:
+    """How long a follow-up waits after its ``attempts``-th failed attempt."""
+    return min(FOLLOW_UP_FIRST_BACKOFF * 2 ** max(attempts - 1, 0), FOLLOW_UP_MAX_BACKOFF)
 
 
 async def run_follow_ups(
@@ -472,55 +494,178 @@ async def run_follow_ups(
     *,
     member_id: uuid.UUID | None = None,
 ) -> int:
-    """Make the pending follow-ups (of ``member_id``, or all of the session's tenant),
-    one transaction each, outside the review gate; record each outcome (on the row
-    and in the audit log). A failed call stays pending for the tick to retry, up to
-    :data:`FOLLOW_UP_ATTEMPTS` attempts, then is marked failed. A finished
-    ``provider_revoke`` drops its copy of the credential. Returns how many ran."""
-    stmt = select(MemberFollowUp.id).where(MemberFollowUp.status == "pending")
+    """Make the pending follow-ups that are due (of ``member_id``, or all of the
+    session's tenant), one transaction each, outside the review gate, within
+    :data:`FOLLOW_UP_TICK_BUDGET_SECONDS` in all: a call the budget cuts short is not
+    counted and waits for the next tick. A DB error in one rolls that one back; the
+    others still run. Returns how many ran (:func:`_attempt` records each outcome)."""
+    import asyncio
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + FOLLOW_UP_TICK_BUDGET_SECONDS
+    stmt = select(MemberFollowUp.id).where(
+        MemberFollowUp.status == "pending",
+        or_(
+            MemberFollowUp.next_attempt_at.is_(None),
+            MemberFollowUp.next_attempt_at <= datetime.now(UTC),
+        ),
+    )
     if member_id is not None:
         stmt = stmt.where(MemberFollowUp.member_id == member_id)
     ids = list(await session.scalars(stmt.order_by(MemberFollowUp.created_at)))
     await session.commit()
     ran = 0
     for follow_up_id in ids:
-        row = await session.scalar(
-            select(MemberFollowUp)
-            .where(MemberFollowUp.id == follow_up_id, MemberFollowUp.status == "pending")
-            .with_for_update(skip_locked=True)
-        )
-        if row is None:
+        if loop.time() >= deadline:
+            break
+        try:
+            row = await _attempt(session, principal, http, follow_up_id, ("pending",), deadline)
+        except _BudgetSpent:
+            break
+        except Exception:  # noqa: BLE001 - a DB error in one must not stop the others
+            log.exception("follow-up %s could not be recorded", follow_up_id)
             await session.rollback()
             continue
-        ran += 1
-        try:
-            ok, outcome, error = await _follow_up(session, row, http)
-        except Exception as exc:  # noqa: BLE001 - one broken call must not stop the others
-            log.exception("follow-up %s (%s) failed", row.id, row.kind)
-            ok, outcome, error = False, "failed", type(exc).__name__
-        row.attempts += 1
-        row.outcome = outcome
-        row.last_error = error
-        if ok or row.attempts >= FOLLOW_UP_ATTEMPTS:
-            row.status = "done" if ok else "failed"
-            row.done_at = datetime.now(UTC)
-            row.ciphertext = None
-        await audit.record(
-            session,
-            principal,
-            "connection.provider_revoke" if row.kind == "provider_revoke" else "run.runtime_cancel",
-            "connection" if row.kind == "provider_revoke" else "run_segment",
-            row.target_id,
-            {
-                "member_id": str(row.member_id),
-                "outcome": outcome,
-                "attempt": row.attempts,
-                "status": row.status,
-                **({"error": error} if error else {}),
-            },
-        )
-        await session.commit()
+        ran += row is not None
     return ran
+
+
+async def _attempt(
+    session: AsyncSession,
+    principal: "Principal | None",
+    http: "httpx.AsyncClient",
+    follow_up_id: uuid.UUID,
+    statuses: tuple[str, ...],
+    deadline: float | None = None,
+    *,
+    manual: bool = False,
+) -> MemberFollowUp | None:
+    """Make one follow-up's call now and record the outcome (on the row and in the audit
+    log), in one transaction; ``None`` when it is not in ``statuses`` or another worker
+    holds it. A success finishes it (a provider revoke drops its copy of the
+    credential); a failure waits a backoff, or past the retry window is marked failed,
+    the copy kept. ``deadline`` (loop time): the run's budget; a call it cuts short is
+    rolled back, uncounted (:class:`_BudgetSpent`)."""
+    import asyncio
+
+    row = await session.scalar(
+        select(MemberFollowUp)
+        .where(MemberFollowUp.id == follow_up_id, MemberFollowUp.status.in_(statuses))
+        .with_for_update(skip_locked=True)
+    )
+    if row is None:
+        await session.rollback()
+        return None
+    try:
+        async with asyncio.timeout_at(deadline):
+            ok, outcome, error = await _follow_up(session, row, http)
+    except TimeoutError as exc:
+        if deadline is not None and asyncio.get_running_loop().time() >= deadline:
+            await session.rollback()
+            raise _BudgetSpent from None
+        log.exception("follow-up %s (%s) failed", row.id, row.kind)
+        ok, outcome, error = False, "failed", type(exc).__name__
+    except Exception as exc:  # noqa: BLE001 - one broken call must not stop the others
+        log.exception("follow-up %s (%s) failed", row.id, row.kind)
+        ok, outcome, error = False, "failed", type(exc).__name__
+    now = datetime.now(UTC)
+    row.attempts += 1
+    row.outcome = outcome
+    row.last_error = error
+    if ok:
+        row.status = "done"
+        row.done_at = now
+        row.next_attempt_at = None
+        row.ciphertext = None
+    elif now >= row.created_at + FOLLOW_UP_RETRY_WINDOW:
+        # No more automatic retries; the copy stays for an owner's Retry or Dismiss.
+        row.status = "failed"
+        row.next_attempt_at = None
+    else:
+        row.status = "pending"
+        row.next_attempt_at = now + follow_up_backoff(row.attempts)
+    await audit.record(
+        session,
+        principal,
+        "connection.provider_revoke" if row.kind == "provider_revoke" else "run.runtime_cancel",
+        "connection" if row.kind == "provider_revoke" else "run_segment",
+        row.target_id,
+        {
+            "member_id": str(row.member_id),
+            "outcome": outcome,
+            "attempt": row.attempts,
+            "status": row.status,
+            **({"error": error} if error else {}),
+            **({"retried_by_owner": True} if manual else {}),
+        },
+    )
+    await session.commit()
+    return row
+
+
+async def retry_follow_up(
+    session: AsyncSession,
+    principal: "Principal",
+    follow_up_id: uuid.UUID,
+    http: "httpx.AsyncClient",
+) -> MemberFollowUp:
+    """An owner's Retry (Inbox): make the call now, whatever its backoff or retry
+    window. The caller is re-read under the gate first; the call does not hold it."""
+    await _gate(session, principal, shared=True)
+    row = await session.get(MemberFollowUp, follow_up_id)
+    if row is None:
+        raise MemberError("not_found", f"Follow-up {follow_up_id} not found")
+    if row.status not in FOLLOW_UP_OPEN:
+        raise MemberError("conflict", f"This follow-up is {row.status}; nothing to retry")
+    await session.commit()
+    done = await _attempt(session, principal, http, follow_up_id, FOLLOW_UP_OPEN, manual=True)
+    if done is None:
+        raise MemberError("conflict", "It is being tried right now, or it just finished")
+    return done
+
+
+async def dismiss_follow_up(
+    session: AsyncSession, principal: "Principal", follow_up_id: uuid.UUID
+) -> MemberFollowUp:
+    """An owner's Dismiss (Inbox): stop trying. A provider revoke's copy of the
+    credential is dropped; audited. The caller flushes; the router commits."""
+    await _gate(session, principal, shared=True)
+    row = await session.scalar(
+        select(MemberFollowUp)
+        .where(MemberFollowUp.id == follow_up_id)
+        .with_for_update(skip_locked=True)
+    )
+    if row is None:
+        if await session.get(MemberFollowUp, follow_up_id) is None:
+            raise MemberError("not_found", f"Follow-up {follow_up_id} not found")
+        raise MemberError("conflict", "It is being tried right now; look again in a minute")
+    if row.status not in FOLLOW_UP_OPEN:
+        raise MemberError("conflict", f"This follow-up is {row.status}; nothing to dismiss")
+    now = datetime.now(UTC)
+    row.status = "dismissed"
+    row.dismissed_at = now
+    row.dismissed_by = principal.id
+    row.done_at = now
+    row.next_attempt_at = None
+    row.ciphertext = None
+    await session.flush()
+    await audit.record(
+        session,
+        principal,
+        "connection.provider_revoke_dismissed"
+        if row.kind == "provider_revoke"
+        else "run.runtime_cancel_dismissed",
+        "connection" if row.kind == "provider_revoke" else "run_segment",
+        row.target_id,
+        {
+            "member_id": str(row.member_id),
+            "provider": row.provider,
+            "attempts": row.attempts,
+            "outcome": row.outcome,
+            **({"error": row.last_error} if row.last_error else {}),
+        },
+    )
+    return row
 
 
 async def _follow_up(
@@ -534,7 +679,7 @@ async def _follow_up(
         from oracle.connections.models import Connection
 
         if row.ciphertext is None:
-            return True, "unreadable", None
+            return False, "unreadable", "Oracle no longer holds a copy of the credential"
         # A detached copy of the deleted connection: what the revoke reads.
         conn = Connection(
             id=row.target_id,
@@ -550,7 +695,7 @@ async def _follow_up(
                 outcome = await connections.revoke_at_provider(http, conn)
         except TimeoutError:
             return False, "failed", "the provider did not answer in time"
-        return outcome != "failed", outcome, None
+        return outcome in REVOKE_DONE, outcome, None
 
     from oracle.runs.models import RunSegment
     from oracle.swarm import RuntimeUnavailable, get_runtime

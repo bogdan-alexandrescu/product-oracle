@@ -57,6 +57,74 @@ export interface Db {
   review_v2?: ReviewV2Db;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
+  /** Provider revokes a removed member's disable could not make (C2); seeded on first use. */
+  revoke_failures?: RevokeFailureRow[];
+}
+
+type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
+
+/** Two revokes still owed: GitHub (24 hours of retries over) and Slack (not configured, still retried). */
+function seedRevokeFailures(): RevokeFailureRow[] {
+  const member = { member_id: uuid(), member_email: "former.pm@example.com" };
+  const item = (provider: string, name: string, extra: Partial<RevokeFailureRow>): RevokeFailureRow => ({
+    id: uuid(),
+    ...member,
+    provider,
+    provider_name: name,
+    title: `Couldn't revoke ${member.member_email}'s ${name} access at ${name}`,
+    status: "pending",
+    outcome: "failed",
+    last_error: null,
+    attempts: 1,
+    created_at: "2026-10-18T09:00:00Z",
+    next_attempt_at: null,
+    retry_until: "2026-10-19T09:00:00Z",
+    ...extra,
+  });
+  return [
+    item("github", "GitHub", { status: "failed", attempts: 12, last_error: "the provider did not answer in time" }),
+    item("slack", "Slack", {
+      outcome: "not_configured",
+      attempts: 3,
+      created_at: "2026-10-19T20:00:00Z",
+      next_attempt_at: "2026-10-19T20:30:00Z",
+      retry_until: "2026-10-20T20:00:00Z",
+    }),
+  ];
+}
+
+/** Retry and Dismiss of a revoke a disable owes: owners only, as in the API. A retry succeeds,
+ * except while the provider's OAuth app is not configured. */
+function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Response | null {
+  if (p[1] !== "member-follow-ups" || req.method !== "POST") return null;
+  if (!atLeast(me.role, "owner")) return forbidden("owner");
+  db.revoke_failures ??= seedRevokeFailures();
+  const row = db.revoke_failures.find((r) => r.id === p[2]);
+  if (!row) return notFound("Follow-up");
+  if (row.dismissed) return json(409, { detail: "This follow-up is dismissed; nothing to do" });
+  const out = (status: string) => ({
+    id: row.id,
+    member_id: row.member_id,
+    kind: "provider_revoke",
+    provider: row.provider,
+    status,
+    attempts: row.attempts,
+    outcome: row.outcome,
+    last_error: row.last_error,
+    created_at: row.created_at,
+    next_attempt_at: row.next_attempt_at,
+  });
+  if (p[3] === "dismiss") {
+    row.dismissed = true;
+    return json(200, { ...out("dismissed"), dismissed_at: now(), dismissed_by: me.id });
+  }
+  if (p[3] === "retry") {
+    row.attempts += 1;
+    if (row.outcome === "not_configured") return json(200, out(row.status));
+    db.revoke_failures = db.revoke_failures.filter((r) => r.id !== row.id);
+    return json(200, { ...out("done"), outcome: "revoked", last_error: null });
+  }
+  return notFound("Route");
 }
 
 const STORAGE_KEY = "po-mock-db-v2";
@@ -989,8 +1057,20 @@ async function route(db: Db, req: Request): Promise<Response> {
   const handled = await laneF(db, req, p, m);
   if (handled) return handled;
 
+  const followUp = followUpsRoute(db, req, p, me);
+  if (followUp) return followUp;
+
   db.runs ??= seedRuns(runsContext(db));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
+  if (runs && p[1] === "inbox") {
+    // Owners also see the provider revokes a removed member's disable could not make.
+    db.revoke_failures ??= seedRevokeFailures();
+    const inbox = (await runs.json()) as Schemas["InboxOut"];
+    const failures = atLeast(me.role, "owner")
+      ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
+      : [];
+    return json(200, { ...inbox, revoke_failures: failures, total: inbox.total + failures.length });
+  }
   if (runs) return runs;
 
   if (p[1] !== "documents") return notFound("Route");

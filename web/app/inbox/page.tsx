@@ -10,6 +10,13 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { CHECKPOINT_LABEL, usd, type RunSummary } from "../runs/_lib";
 
+/** Why the last attempt did not revoke, in the owner's words. */
+function revokeOutcome(outcome: string | null | undefined, provider: string): string {
+  if (outcome === "not_configured") return `Oracle's ${provider} sign-in app is not configured`;
+  if (outcome === "unreadable") return "Oracle could not read its copy of the credential";
+  return `${provider} refused or did not answer`;
+}
+
 function Section({ title, count, children, testId }: { title: string; count: number; children: ReactNode; testId: string }) {
   if (count === 0) return null;
   return (
@@ -134,6 +141,65 @@ export default function InboxPage() {
                 </Button>
               </li>
             ))}
+          </Section>
+
+          <Section
+            title="Couldn't revoke access"
+            count={inbox.revoke_failures?.length ?? 0}
+            testId="inbox-revoke-failures"
+          >
+            {(inbox.revoke_failures ?? []).map((f) => {
+              const provider = f.provider_name ?? f.provider ?? "the provider";
+              return (
+                <li key={f.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm" data-testid="revoke-failure">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-neutral-900">{f.title}</div>
+                    <div className="text-xs text-neutral-500">
+                      {revokeOutcome(f.outcome, provider)}
+                      {f.last_error && ` (${f.last_error})`} · tried {f.attempts} time{f.attempts === 1 ? "" : "s"} ·{" "}
+                      {f.status === "pending"
+                        ? `retrying until ${formatDateTime(f.retry_until)}`
+                        : `stopped retrying ${formatDateTime(f.retry_until)}`}
+                    </div>
+                    <div className="text-xs text-neutral-500">
+                      Oracle keeps a copy of the credential until the revoke succeeds or you dismiss this. Dismiss if you
+                      revoked the access at {provider} yourself.
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      act(`retry-${f.id}`, () =>
+                        unwrap(
+                          api.POST("/v1/member-follow-ups/{follow_up_id}/retry", {
+                            params: { path: { follow_up_id: f.id } },
+                          }),
+                        ),
+                      )
+                    }
+                  >
+                    Retry
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      act(`dismiss-${f.id}`, () =>
+                        unwrap(
+                          api.POST("/v1/member-follow-ups/{follow_up_id}/dismiss", {
+                            params: { path: { follow_up_id: f.id } },
+                          }),
+                        ),
+                      )
+                    }
+                  >
+                    Dismiss
+                  </Button>
+                </li>
+              );
+            })}
           </Section>
 
           <Section title="Open feedback" count={inbox.feedback.length} testId="inbox-feedback">

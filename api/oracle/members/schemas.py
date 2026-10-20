@@ -87,3 +87,28 @@ class TokenApprovalOut(BaseModel):
     # Set once it lapsed (the token revoked, its approver demoted or disabled).
     lapsed_at: datetime | None = None
     lapse_reason: str | None = None
+
+
+FollowUpStatus = Literal["pending", "done", "failed", "dismissed"]
+
+
+class FollowUpOut(BaseModel):
+    """A call a member's disable owes (a provider revoke, a runtime cancel) and how it
+    stands: pending (retried by the tick), failed (no more automatic retries; Retry or
+    Dismiss), done, or dismissed by an owner."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    member_id: uuid.UUID
+    kind: Literal["provider_revoke", "run_cancel"]
+    provider: str | None = None
+    status: FollowUpStatus
+    attempts: int
+    outcome: str | None = None
+    last_error: str | None = None
+    created_at: datetime
+    next_attempt_at: datetime | None = None
+    done_at: datetime | None = None
+    dismissed_at: datetime | None = None
+    dismissed_by: uuid.UUID | None = None

@@ -15,6 +15,7 @@ from oracle.connections.router import ProviderHttp
 from oracle.members import service
 from oracle.members.schemas import (
     ApiTokenOut,
+    FollowUpOut,
     InviteCreate,
     InviteOut,
     InviteStatus,
@@ -175,3 +176,35 @@ async def revoke_invite(invite_id: uuid.UUID, principal: Owner, db: TenantDB) ->
     """Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409."""
     await _call(service.revoke_invite(db, principal, invite_id))
     await db.commit()
+
+
+# --- Follow-ups a disable owes (Inbox: Retry, Dismiss) ------------------------------------
+
+
+@router.post(
+    "/member-follow-ups/{follow_up_id}/retry",
+    response_model=FollowUpOut,
+    responses={404: {"description": "No such follow-up"}, 409: {"description": "Not open"}},
+)
+async def retry_member_follow_up(
+    follow_up_id: uuid.UUID, principal: Owner, db: TenantDB, http: ProviderHttp
+) -> FollowUpOut:
+    """Make a provider revoke (or runtime cancel) a disable still owes now, whatever its
+    backoff or its 24 hours of retries. A success drops Oracle's copy of the credential."""
+    row = await _call(service.retry_follow_up(db, principal, follow_up_id, http))
+    return FollowUpOut.model_validate(row)
+
+
+@router.post(
+    "/member-follow-ups/{follow_up_id}/dismiss",
+    response_model=FollowUpOut,
+    responses={404: {"description": "No such follow-up"}, 409: {"description": "Not open"}},
+)
+async def dismiss_member_follow_up(
+    follow_up_id: uuid.UUID, principal: Owner, db: TenantDB
+) -> FollowUpOut:
+    """Stop trying a provider revoke (or runtime cancel) a disable owes: Oracle's copy of
+    the credential is dropped, and the dismissal audited."""
+    row = await _call(service.dismiss_follow_up(db, principal, follow_up_id))
+    await db.commit()
+    return FollowUpOut.model_validate(row)

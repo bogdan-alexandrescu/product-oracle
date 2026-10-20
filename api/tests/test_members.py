@@ -66,6 +66,7 @@ class World:
     member_id: uuid.UUID
     invite_id: str
     token_id: uuid.UUID
+    follow_up_id: uuid.UUID
 
     def ids(self) -> dict[str, object]:
         return {
@@ -77,6 +78,7 @@ class World:
             "user_id": self.member_id,
             "invite_id": self.invite_id,
             "token_id": self.token_id,
+            "follow_up_id": self.follow_up_id,
         }
 
 
@@ -121,7 +123,14 @@ async def world(client) -> World:
     )
     assert inv.status_code == 201, inv.text
     async with tenant_session(r.tenant_id) as s:
+        from oracle.members.models import MemberFollowUp
+
         bot, _ = await create_api_token(s, "member-bot", user_id=member_id)
+        # A provider revoke a disable still owes (no copy of the credential: no call made).
+        follow_up = MemberFollowUp(
+            member_id=member_id, kind="provider_revoke", target_id=uuid.uuid4(), provider="github"
+        )
+        s.add(follow_up)
         await s.commit()
     return World(
         r.tenant_id,
@@ -132,6 +141,7 @@ async def world(client) -> World:
         member_id,
         inv.json()["id"],
         bot.id,
+        follow_up.id,
     )
 
 
@@ -187,6 +197,8 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", "/v1/invites", "owner", {}),
     ("POST", "/v1/invites", "owner", {"json": {"email": "x@example.com", "role": "viewer"}}),
     ("DELETE", "/v1/invites/{invite_id}", "owner", {}),
+    ("POST", "/v1/member-follow-ups/{follow_up_id}/retry", "owner", {}),
+    ("POST", "/v1/member-follow-ups/{follow_up_id}/dismiss", "owner", {}),
 ]
 
 
