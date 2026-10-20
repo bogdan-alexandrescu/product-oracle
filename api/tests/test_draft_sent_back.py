@@ -7,7 +7,11 @@ the import's problems, grouped in plain words, as findings; revise1 fixes the dr
 Oracle imports it again when review2 opens. Only a draft still refused then reaches the
 Inbox. The answer is Oracle's: noted on the segment and audited with actor ``oracle``,
 no checkpoint decided, no person's decision, the W5 hold kept, nothing approved. An
-earlier segment's checkpoint (one round, no revise step) is left to the person."""
+earlier segment's checkpoint (one round, no revise step) is left to the person.
+
+While the revision runs, the run reads "Revising: sent back by Oracle", not "Draft
+rejected" (``SegmentOut.sent_back``, ``RunSummary.sent_back``), and the Inbox shows it
+as a row with nothing to decide (``InboxOut.revising``, not in ``total``)."""
 
 import uuid
 from dataclasses import replace
@@ -23,6 +27,7 @@ from tests.fixtures import seed_auth
 from tests.swarmcloud_fake import FakeSwarmCloud
 from tests.test_adapter_v2 import feedback_doc, on, use
 from tests.test_adapter_v2 import settings as _v2_settings
+from tests.test_priorities import _token
 from tests.test_runs import decide, get, pending, started, tick
 
 # The same environment as test_adapter_v2 (Oracle's public URL, default timings).
@@ -73,6 +78,21 @@ async def _hold(tenant_id, run_id: str) -> str | None:
         return await service.token_hold(s, uuid.UUID(run_id))
 
 
+async def _inbox(client, auth) -> dict:
+    return (await client.get("/v1/inbox", headers=auth)).json()
+
+
+async def _listed(client, auth, run_id: str) -> dict:
+    [row] = [r for r in (await client.get("/v1/runs", headers=auth)).json() if r["id"] == run_id]
+    return row
+
+
+def _counted(inbox: dict) -> int:
+    """What the Inbox counts (``total``): a revising row is shown, never counted."""
+    kinds = ("checkpoints", "approvals", "overruns", "lookups", "imports")
+    return sum(len(inbox[k]) for k in kinds) + inbox["counts"]["new"] + inbox["counts"]["open"]
+
+
 async def test_a_refused_draft_goes_back_to_the_writer_then_to_the_person(client, owner):
     tenant_id, auth = owner
     swarm = on()
@@ -112,6 +132,21 @@ async def test_a_refused_draft_goes_back_to_the_writer_then_to_the_person(client
     assert await _audit(tenant_id, "checkpoint.changes_requested") == []
     # W5: Oracle's answer is not one that counts: the token stays read-only.
     assert await _hold(tenant_id, run["id"]) is not None
+    # Revising, not rejected: the run, the runs list and the Inbox say Oracle sent the
+    # draft back, with what it refused; nothing asks a person to decide.
+    refused = seg["draft_import"]["summary"]
+    assert refused.startswith("Oracle refused prd.md: ")
+    assert seg["sent_back"] is True
+    assert run["sent_back"] == refused and run["draft_rejected"] is None
+    row = await _listed(client, auth, run["id"])
+    assert row["sent_back"] == refused and row["draft_rejected"] is None
+    [revising] = inbox["revising"]
+    assert revising["id"] == run["id"] and revising["sent_back"] == refused
+    assert revising["status"] == "running" and revising["waiting_on"] is None
+    assert inbox["total"] == _counted(inbox)
+    # Shown to those who would decide the review: not below its approver role.
+    assert (await _inbox(client, await _token(tenant_id, "commenter")))["revising"] == []
+    assert len((await _inbox(client, await _token(tenant_id, "approver")))["revising"]) == 1
 
     # revise1 writes a draft Oracle accepts: imported when review2 opens, for the person.
     await tick(client, auth)
@@ -126,6 +161,11 @@ async def test_a_refused_draft_goes_back_to_the_writer_then_to_the_person(client
     assert len(swarm.answers) == 1
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
     assert [c["id"] for c in inbox["checkpoints"]] == [cp["id"]]
+    # The clean revision clears it: no longer revising, nothing rejected.
+    assert run["segments"][0]["sent_back"] is False
+    assert run["sent_back"] is None and run["draft_rejected"] is None
+    assert inbox["revising"] == []
+    assert (await _listed(client, auth, run["id"]))["sent_back"] is None
 
     # The person approves review2: the run ends with the revised draft.
     run = await decide(client, auth, run, "approved")
@@ -154,6 +194,11 @@ async def test_a_draft_still_refused_after_the_revision_opens_the_inbox(client, 
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
     assert [c["id"] for c in inbox["checkpoints"]] == [cp["id"]]
     assert len(await _audit(tenant_id, "run.draft_sent_back")) == 1
+    # Back with the person: Draft rejected (the revision's refusal), no longer revising.
+    seg = run["segments"][0]
+    assert seg["sent_back"] is False
+    assert run["sent_back"] is None and run["draft_rejected"] == seg["draft_import"]["summary"]
+    assert inbox["revising"] == []
 
     # The person requests changes: posted for them, and revise2 runs.
     run = await decide(client, auth, run, "changes_requested", note="Cite the Slack thread")
@@ -200,3 +245,22 @@ async def test_an_accepted_draft_is_not_answered_by_oracle(client, owner):
     assert run["status"] == "awaiting_checkpoint"
     assert pending(run)["payload"]["wait"]["step_id"] == "next_draft-review1"
     assert swarm.answers == []
+
+
+async def test_a_run_cancelled_while_revising_reads_draft_rejected(client, owner):
+    """Revising holds only while the revision can still land: once the run ends, the
+    refused draft reads as rejected again, and the Inbox row goes."""
+    tenant_id, auth = owner
+    swarm = on()
+    swarm.step_files[WRITER] = {"prd.md": BAD_PRD}
+    run = await _feedback_run(client, auth, tenant_id, swarm)
+    await tick(client, auth)
+    assert (await get(client, auth, run["id"]))["segments"][0]["sent_back"] is True
+    resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
+    assert resp.status_code == 200, resp.text
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "cancelled"
+    seg = run["segments"][0]
+    assert seg["sent_back"] is False
+    assert run["sent_back"] is None and run["draft_rejected"] == seg["draft_import"]["summary"]
+    assert (await _inbox(client, auth))["revising"] == []

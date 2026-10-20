@@ -2,16 +2,27 @@
 own baseline with ``source: oracle`` and Oracle refused it, because no prompt said which
 sources are allowed. The draft segments' task text, their step prompts and the
 push_draft tool state the contract, with the source list generated from CitationSource;
-the built-in PRD templates list ``oracle`` among the source kinds."""
+the built-in PRD templates list ``oracle`` among the source kinds. A citation's
+confidence is a number from 0 to 1: the contract says so, the import refuses any other in
+plain words, and the bounds are the ones 0019_citation_confidence stores."""
 
 from typing import get_args
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import CheckConstraint, select
 
-from oracle.docs.schemas import CitationSource
+from oracle.docs.models import Citation
+from oracle.docs.parser import CitationIn, DraftError, parse_draft
+from oracle.docs.schemas import (
+    CONFIDENCE_MAX,
+    CONFIDENCE_MIN,
+    CitationOut,
+    CitationSource,
+    citation_contract,
+)
 from oracle.mcp.curated import CURATED
 from oracle.runs import flows
+from oracle.runs.rejection import summary
 from oracle.templates import builtins
 from oracle.templates.builtins import BUILTIN_TEMPLATES, ensure_builtins
 from oracle.templates.models import Template, TemplateVersion
@@ -63,6 +74,72 @@ def test_the_source_list_follows_citation_source(monkeypatch):
 def test_push_draft_states_the_citation_contract():
     tool = next(c for c in CURATED if c.name == "push_draft")
     _says_the_contract(tool.description)
+
+
+# Confidence (owner, 2026-10-20; stored by 0019_citation_confidence): a number from 0 to 1.
+CONFIDENCE_PROBLEM = "confidence must be a number from 0 to 1"
+
+
+def test_the_contract_says_confidence_is_a_number_from_0_to_1():
+    text = citation_contract()
+    assert "confidence (a number from 0 to 1" in text, text
+    assert "confidence_note" in text and "low_confidence" in text and "item" in text
+    assert "a confidence outside 0 to 1" in text
+
+
+def test_the_bounds_are_the_ones_stored():
+    """The contract, the import's validation, the API's output and the database's check
+    (0019_citation_confidence) keep the same 0 to 1."""
+    assert (CONFIDENCE_MIN, CONFIDENCE_MAX) == (0, 1)
+    for model in (CitationIn, CitationOut):
+        bounds = {type(m).__name__: m for m in model.model_fields["confidence"].metadata}
+        assert (bounds["Ge"].ge, bounds["Le"].le) == (CONFIDENCE_MIN, CONFIDENCE_MAX)
+    [check] = [
+        c
+        for c in Citation.__table__.constraints
+        if isinstance(c, CheckConstraint) and "confidence" in str(c.sqltext)
+    ]
+    assert str(check.sqltext) == (
+        f"confidence IS NULL OR (confidence >= {CONFIDENCE_MIN} AND confidence <= {CONFIDENCE_MAX})"
+    )
+
+
+def _confidence_draft(value: str) -> str:
+    return "\n".join(
+        [
+            "---",
+            "title: Confidence",
+            "citations:",
+            "  - id: c1",
+            "    source: web",
+            "    ref: https://example.com/a",
+            f"    confidence: {value}",
+            "---",
+            "",
+            "# Confidence {#title}",
+            "",
+            "Claim [c:c1].",
+            "",
+        ]
+    )
+
+
+@pytest.mark.parametrize(("value", "stored"), [("0", 0), ("1", 1), ("0.75", 0.75), ("null", None)])
+def test_a_confidence_from_0_to_1_is_accepted(value, stored):
+    [citation] = parse_draft(_confidence_draft(value)).citations
+    assert citation.confidence == stored
+
+
+@pytest.mark.parametrize("value", ["1.5", "-0.1", "75", "high"])
+def test_a_confidence_outside_0_to_1_is_refused_in_plain_words(value):
+    with pytest.raises(DraftError) as exc:
+        parse_draft(_confidence_draft(value))
+    invalid = [p for p in exc.value.problems if p.code == "invalid_citation"]
+    assert [p.message for p in invalid] == [f"citation #1 (c1) is invalid: {CONFIDENCE_PROBLEM}"]
+    assert summary("prd.md", exc.value.problems) == (
+        f"Oracle refused prd.md: 1 citation is invalid ({CONFIDENCE_PROBLEM}); "
+        "1 reference fails because of it."
+    )
 
 
 @pytest.mark.parametrize(
