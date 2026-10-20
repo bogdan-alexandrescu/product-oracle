@@ -125,8 +125,10 @@ class SourceItemVersion(TenantScoped, Base):
     item_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("source_items.id", ondelete="CASCADE"), nullable=False
     )
-    # Copied from the item when the version is written.
+    # Copied from the item when the version is written: the title and link a share
+    # freezes with the text (S6, titles and links). A Notion link carries the title.
     title: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(Text)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     content_hash: Mapped[str] = mapped_column(Text, nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(

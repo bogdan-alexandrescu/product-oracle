@@ -29,7 +29,8 @@ async def upsert_item(
     """Create or update an item; returns it and whether a new version was written.
 
     A version is written only when the content hash differs from the current one; it
-    copies the item's title at that moment.
+    copies the item's title and link at that moment (a rename alone changes the item
+    row, never a version: what a share froze stays as it was, S6).
     """
     item = await _item(db, source, event.external_id)
     if item is None:
@@ -61,6 +62,7 @@ async def upsert_item(
         id=uuid.uuid4(),
         item_id=item.id,
         title=event.title,
+        url=event.url,
         content=event.content,
         content_hash=digest,
         # Wall-clock time, not the transaction start: a long sync commits in steps and

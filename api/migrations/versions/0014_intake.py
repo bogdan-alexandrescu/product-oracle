@@ -48,6 +48,11 @@ Security review fixes (same lane, same revision):
   ``findings`` (or list) in a stored analysis is read as empty.
 - ``proposals.status`` gains ``withdrawn`` (round 6, owner 2026-10-19): lowering a
   finding back to private withdraws the open baseline proposal its answer made.
+- ``source_item_versions.url`` (round 9, links, owner 2026-10-20): a version keeps the
+  link it was written with, as it keeps the title, so a share freezes the link too.
+  Existing versions are backfilled from their item's link, except Notion pages: their
+  link's slug carries the page's *current* title, so they get the id-only page link
+  (none when the item's id is not a page id). Fail closed.
 
 The integrator re-chains this revision in merge order (waves.md).
 
@@ -188,6 +193,23 @@ WHERE i.author_id IS NOT NULL AND jsonb_typeof(f.value) = 'object'
 ON CONFLICT DO NOTHING
 """
 TXN_SNAPSHOT = "pg_current_snapshot()::text"
+# Round 9 (links): a version's link from its item's; a Notion page's from its id only.
+NOTION_ID = "'^[0-9a-f]{32}$'"
+VERSION_URL_BACKFILL = (
+    """
+UPDATE source_item_versions v
+SET url = CASE
+    WHEN so.kind <> 'notion' THEN si.url
+    WHEN lower(replace(si.external_id, '-', '')) ~ """
+    + NOTION_ID
+    + """
+        THEN 'https://www.notion.so/' || lower(replace(si.external_id, '-', ''))
+    END
+FROM source_items si
+JOIN sources so ON so.id = si.source_id
+WHERE si.id = v.item_id
+"""
+)
 
 
 def upgrade() -> None:
@@ -421,8 +443,12 @@ def upgrade() -> None:
         op.f("ck_proposals_status"), "proposals", PROPOSAL_STATUSES_WITHDRAWN
     )
 
+    op.add_column("source_item_versions", sa.Column("url", sa.Text(), nullable=True))
+    op.execute(VERSION_URL_BACKFILL)
+
 
 def downgrade() -> None:
+    op.drop_column("source_item_versions", "url")
     # A withdrawn proposal goes back to rejected (nobody may accept it).
     op.execute("UPDATE proposals SET status = 'rejected' WHERE status = 'withdrawn'")
     op.drop_constraint(op.f("ck_proposals_status"), "proposals", type_="check")

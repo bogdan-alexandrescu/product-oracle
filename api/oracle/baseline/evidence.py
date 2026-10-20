@@ -46,12 +46,40 @@ async def withheld_from(db: AsyncSession, principal: Principal) -> set[uuid.UUID
     return await run_withheld(db, principal) or set()
 
 
+async def run_versions(
+    db: AsyncSession, principal: Principal, item_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, uuid.UUID | None]:
+    """For a run, item id -> the version released of each of ``item_ids`` ever frozen
+    by a share (S6, freeze at sharing), None where none is readable now: such an item
+    is read at that version only, or not at all, never at its current one (as
+    ``/v1/source-items/{id}``). Empty for anyone but a run."""
+    from oracle.intake.evidence import run_shared
+
+    shared = run_shared(principal)
+    if shared is None or not item_ids:
+        return {}
+    frozen_col = shared.frozen.selected_columns[0]
+    frozen = set((await db.scalars(shared.frozen.where(frozen_col.in_(item_ids)))).all())
+    released = shared.released.subquery()
+    pairs = dict(
+        (
+            await db.execute(
+                select(released.c.item_id, released.c.version_id).where(
+                    released.c.item_id.in_(frozen)
+                )
+            )
+        ).all()
+    )
+    return {i: pairs.get(i) for i in frozen}
+
+
 async def _own_item(
     db: AsyncSession, principal: Principal, item_id: uuid.UUID
 ) -> tuple[SourceItem, Source, SourceItemVersion | None]:
     """The item if the principal's user owns it; someone else's item reads as missing.
     A run reads an item a finding shared in full released at the version released only
-    (S6, freeze at sharing), and an item deleted upstream as missing."""
+    (S6, freeze at sharing), an item ever frozen with no release readable now and an
+    item deleted upstream as missing."""
     row = (
         await db.execute(
             select(SourceItem, Source)
@@ -69,13 +97,13 @@ async def _own_item(
     item, source = row
     version_id = item.current_version_id
     if principal.is_run:
-        from oracle.intake.evidence import run_shared
-
         if item.deleted_at is not None:
             raise NotFoundError("Source item not found among your sources")
-        frozen = run_shared(principal).released.subquery()  # type: ignore[union-attr]
-        released = await db.scalar(select(frozen.c.version_id).where(frozen.c.item_id == item_id))
-        version_id = released or version_id
+        frozen = await run_versions(db, principal, {item_id})
+        if item_id in frozen:
+            version_id = frozen[item_id]
+            if version_id is None:
+                raise NotFoundError("Source item not found among your sources")
     version = await db.get(SourceItemVersion, version_id) if version_id else None
     return item, source, version
 
@@ -100,7 +128,8 @@ async def attach(
     if data.source_item_id:
         item, source, version = await _own_item(db, principal, data.source_item_id)
         ev.source_item_id = item.id
-        ev.url = data.url or item.url
+        # The link as read too (S6, links): a Notion link carries the page title.
+        ev.url = data.url or (version.url if version is not None else item.url)
         # The title as read (a run: as shared, S6), never the item's current one: a
         # rename upstream never reaches evidence people read.
         ev.ref = data.ref or (version.title if version is not None else None) or item.external_id
@@ -342,6 +371,20 @@ async def present(
     # Public links were fetched anonymously: their snapshot is shown to everyone.
     snapshots = await scoring.latest_snapshots(db, [r.id for r in rows if r.kind])
     withheld = await withheld_from(db, principal) if item_ids else set()
+    # A run sees its items at the version it reads (S6, links): one ever frozen at the
+    # version released, or not at all.
+    frozen = await run_versions(db, principal, set(items))
+    version_ids = {
+        i: frozen[i] if i in frozen else item.current_version_id for i, (item, _) in items.items()
+    }
+    versions: dict[uuid.UUID, SourceItemVersion] = {}
+    if any(version_ids.values()):
+        res = await db.scalars(
+            select(SourceItemVersion).where(
+                SourceItemVersion.id.in_({v for v in version_ids.values() if v})
+            )
+        )
+        versions = {v.item_id: v for v in res.all() if version_ids.get(v.item_id) == v.id}
     out = []
     for r in rows:
         item, source = items.get(r.source_item_id, (None, None))
@@ -349,7 +392,9 @@ async def present(
             source is not None
             and principal.user_id == source.owner_user_id
             and item.id not in withheld
+            and not (item.id in frozen and frozen[item.id] is None)
         )
+        version = versions.get(item.id) if item is not None else None
         snap = snapshots.get(r.id)
         out.append(
             EvidenceOut(
@@ -369,7 +414,8 @@ async def present(
                     # The stored ref (the title as attached), never the item's current
                     # title (S6, titles).
                     title=r.ref,
-                    url=item.url,
+                    # The link of the version read, never the item's current one.
+                    url=version.url if version is not None else item.url,
                 )
                 if mine
                 else None,

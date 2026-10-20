@@ -325,3 +325,52 @@ def test_full_shares_are_frozen_at_the_pins_versions_and_null_findings_migrate(s
     }
     command.downgrade(cfg, "0013")
     command.upgrade(cfg, "0014_intake")
+
+
+def test_versions_keep_their_link_and_notion_links_lose_the_title(scratch_db):
+    """Round 9 (links, owner 2026-10-20): every existing version gets its item's link;
+    a Notion page's link carries its current title, so its versions get the id-only
+    page link instead (fail closed), and an id that is not a page id gets none."""
+    cfg = _cfg()
+    command.upgrade(cfg, "0013")
+    t, author = uuid.uuid4(), uuid.uuid4()
+    slack, notion = uuid.uuid4(), uuid.uuid4()
+    message, page, odd = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    page_id = "1f2e3d4c-5b6a-4987-8a1b-2c3d4e5f6a7b"
+    _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
+    _run(
+        "INSERT INTO users (id, tenant_id, email, password_hash, role) "
+        "VALUES (:u, :t, 'author@example.com', 'x', 'commenter')",
+        u=author,
+        t=t,
+    )
+    for source, kind in ((slack, "slack"), (notion, "notion")):
+        _run(
+            "INSERT INTO sources (id, tenant_id, owner_user_id, kind, name, status) "
+            "VALUES (:s, :t, :u, :k, :k, 'active')",
+            s=source, t=t, u=author, k=kind,
+        )  # fmt: skip
+    for item, source, external, url in (
+        (message, slack, "C1-p1", "https://chat.example.com/archives/C1/p1"),
+        (page, notion, page_id, "https://www.notion.so/Acquisition-of-Example-Corp-1f2e3d4c"),
+        (odd, notion, "not-a-page-id", "https://www.notion.so/Acquisition-of-Example-Corp"),
+    ):
+        _run(
+            "INSERT INTO source_items (id, tenant_id, source_id, external_id, kind, url) "
+            "VALUES (:i, :t, :s, :e, 'page', :u)",
+            i=item, t=t, s=source, e=external, u=url,
+        )  # fmt: skip
+        _run(
+            "INSERT INTO source_item_versions (id, tenant_id, item_id, content, content_hash) "
+            "VALUES (gen_random_uuid(), :t, :i, 'Returning buyers.', 'h')",
+            t=t, i=item,
+        )  # fmt: skip
+    command.upgrade(cfg, "0014_intake")
+    links = dict(_run("SELECT item_id, url FROM source_item_versions"))
+    assert links == {
+        message: "https://chat.example.com/archives/C1/p1",
+        page: "https://www.notion.so/1f2e3d4c5b6a49878a1b2c3d4e5f6a7b",
+        odd: None,
+    }
+    command.downgrade(cfg, "0013")
+    command.upgrade(cfg, "0014_intake")

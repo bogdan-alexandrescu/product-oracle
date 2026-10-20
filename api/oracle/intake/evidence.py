@@ -398,8 +398,10 @@ async def refs(
     for item, source in rows:
         version = versions.get(item.id)
         row = source_items.ItemRow(item, version, source.kind)
-        score = source_items.item_confidence(row, settings, now=as_of)
         owner = me is not None and source.owner_user_id == me
+        score = source_items.item_confidence(
+            row, settings, now=as_of, released=released is not None and not owner
+        )
         shown = item.id in reveal and (released is None or item.id in released)
         visible = owner or (shown and item.deleted_at is None)
         out[item.id] = EvidenceRef(
@@ -410,7 +412,8 @@ async def refs(
             confidence=score.confidence,
             fetched_at=version.fetched_at if version is not None else None,
             title=(version.title if version is not None else item.title) if visible else None,
-            url=item.url if visible else None,
+            # The link as shared or pinned (S6, links), never the item's current one.
+            url=(version.url if version is not None else item.url) if visible else None,
             data_excerpt=excerpt(version.content if version else None) if visible else None,
         )
     return out

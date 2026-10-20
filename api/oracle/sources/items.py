@@ -303,10 +303,18 @@ def is_planning_doc(item: SourceItem) -> bool:
 
 
 def item_confidence(
-    row: ItemRow, settings: dict[str, Any] | None, now: datetime | None = None
+    row: ItemRow,
+    settings: dict[str, Any] | None,
+    now: datetime | None = None,
+    *,
+    released: bool = False,
 ) -> confidence.Score:
+    """``released``: another user's item read at the version a share released (S6):
+    fresh as that version, never as the item changed upstream since."""
     item = row.item
     stamps = [t for t in (item.source_updated_at, item.occurred_at) if t is not None]
+    if released and row.version is not None:
+        stamps = [row.version.fetched_at]
     if not stamps and row.version is not None:
         stamps = [row.version.fetched_at]
     factors = confidence.Factors(
@@ -323,9 +331,16 @@ def confidence_out(score: confidence.Score, settings: dict[str, Any] | None) -> 
     return {"value": score.confidence, "breakdown": score.breakdown, "low": score.confidence < low}
 
 
+# The acl fields another user's released item keeps: none names who is on it or what
+# the channel, repository or page is called now (names change after sharing, S6).
+FOREIGN_ACL = ("visibility", "is_private", "doc_type")
+
+
 def _scalar_acl(acl: dict[str, Any]) -> dict[str, Any]:
-    """The acl without who is on it: member, participant and permission lists go."""
-    return {k: v for k, v in acl.items() if isinstance(v, str | bool | int | float)}
+    """The acl without who is on it or current names: only ``FOREIGN_ACL`` scalars."""
+    return {
+        k: v for k, v in acl.items() if k in FOREIGN_ACL and isinstance(v, str | bool | int | float)
+    }
 
 
 def item_out(
@@ -337,7 +352,7 @@ def item_out(
 ) -> dict[str, Any]:
     """``foreign``: another user's item a finding shared in full released to the caller
     (a run, S6): who wrote it, who it is shared with and when it changed upstream are
-    left out (the title and text it reads are the ones released)."""
+    left out (the title, link and text it reads are the ones released, S6)."""
     item, version = row.item, row.version
     out = {
         "id": item.id,
@@ -347,7 +362,8 @@ def item_out(
         "kind": item.kind,
         # A pinned read shows the title as it was then.
         "title": version.title if version is not None else item.title,
-        "url": item.url,
+        # The link as it was then too (S6, links): a Notion link carries the title.
+        "url": version.url if version is not None else item.url,
         "author": item.author,
         "acl": item.acl or {},
         "occurred_at": item.occurred_at,
@@ -355,7 +371,9 @@ def item_out(
         "deleted_at": item.deleted_at,
         "version_id": version.id if version is not None else None,
         "fetched_at": version.fetched_at if version is not None else None,
-        "confidence": confidence_out(item_confidence(row, settings, now), settings),
+        "confidence": confidence_out(
+            item_confidence(row, settings, now, released=foreign), settings
+        ),
     }
     if foreign:
         out.update(author=None, acl=_scalar_acl(item.acl or {}), source_updated_at=None)
