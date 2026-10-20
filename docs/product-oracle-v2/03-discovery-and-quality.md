@@ -292,7 +292,16 @@ sources, the analysis and the findings' sharing levels live in `product_intakes.
   with `attrs.proposed_blocker` (`type: unknown`, `limit_kind: other | policy`, severity:
   the gap's public importance). Only the blocker routes write `attrs.blocker`
   (`baseline.MANAGED_ATTRS`, CR-04): once the constraint is accepted, an approver makes
-  it a blocker with `POST /v1/blockers` and its `entity_id` (round 10, merge with main). An
+  it a blocker with `POST /v1/blockers` and its `entity_id` (round 10, merge with main).
+  Promote (owner, 2026-10-20): the Baseline's Proposals tab lists accepted constraints
+  still marked "Suggested blocker", and the item's inspector shows the mark; Promote to
+  blocker opens the blocker form pre-filled from the constraint (statement from its
+  title, detail from its body, which carries the answer) and the mark (type, limit kind,
+  severity, status), all editable, with the constraint's evidence, which becomes the
+  blocker's. Saving posts `entity_id` with the form (a `statement` or `detail` replaces
+  the constraint's title or body) and clears `attrs.proposed_blocker` in the same write
+  (audited `blocker.created` with `promoted: true`); the approver and owner rules are
+  unchanged, and a refused promotion leaves the mark. An
   answer to a finding shared at counts proposes only its category's fixed question
   (`attrs`: the gap's id and category; no answer text, no severity); from summary up the
   same open proposal carries the answer and severity, and lowering the level to counts

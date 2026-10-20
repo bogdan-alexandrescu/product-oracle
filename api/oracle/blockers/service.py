@@ -94,6 +94,9 @@ IMPACT_TYPES = (
 )
 EDGE_IMPACT_TYPES = ("requirement", "feature")
 UNRESOLVED = ("open", "mitigating")
+# attrs key an intake answer sets on a constraint it suggests as a blocker
+# (oracle.intake.answers, B4): the "suggested blocker" mark promoting it clears.
+PROPOSED_KEY = "proposed_blocker"
 LIVE_EXPERIMENT = ("planned", "running")
 # An experiment carrying a feasibility scope keeps it while it is one of these.
 SCOPE_EXPERIMENT = ("planned", "running", "succeeded")
@@ -618,7 +621,8 @@ async def _transition(
 
 
 async def create_blocker(db: AsyncSession, principal: Principal, body: BlockerCreate) -> Entity:
-    if (body.entity_id is None) == (body.key is None and body.statement is None):
+    # An existing constraint may take a new statement too (Promote's edited title).
+    if (body.entity_id is None) == (body.key is None):
         raise InvalidError("Give either entity_id (an existing constraint) or key and statement")
     if body.entity_id is None and (body.key is None or body.statement is None):
         raise InvalidError("A new blocker needs both a key and a statement")
@@ -644,11 +648,17 @@ async def create_blocker(db: AsyncSession, principal: Principal, body: BlockerCr
     )
     _check_classification(spec)
     writer = _writer(principal, body.reason or "blocker created")
+    suggested = False
     if body.entity_id is not None:
         entity = await require_constraint(db, body.entity_id, for_update=True)
         if "blocker" in (entity.attrs or {}):
             raise ConflictError(f"constraint:{entity.key} is already a blocker; PATCH it")
         fields: dict[str, Any] = {"attrs": {"blocker": dump(spec)}}
+        # An intake answer's suggested blocker (B4, owner 2026-10-20): promoting it
+        # clears the mark in the same write, so it is never both or neither.
+        suggested = PROPOSED_KEY in (entity.attrs or {})
+        if suggested:
+            fields["attrs"][PROPOSED_KEY] = None
         if body.statement is not None:
             fields["title"] = body.statement
         if body.detail is not None:
@@ -683,7 +693,7 @@ async def create_blocker(db: AsyncSession, principal: Principal, body: BlockerCr
         "blocker.created",
         "entity",
         entity.id,
-        {"key": entity.key, "blocker": dump(spec)},
+        {"key": entity.key, "blocker": dump(spec), **({"promoted": True} if suggested else {})},
     )
     return entity
 
