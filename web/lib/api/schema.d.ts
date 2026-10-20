@@ -11778,7 +11778,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "active" | "paused" | "error";
+            status: "active" | "paused" | "error" | "needs_attention";
             /** Last Error */
             last_error: string | null;
             /** Last Synced At */
@@ -12133,7 +12133,7 @@ export interface components {
              * Outcome
              * @enum {string}
              */
-            outcome: "completed" | "rate_limited" | "error";
+            outcome: "completed" | "rate_limited" | "error" | "superseded" | "needs_attention";
             /**
              * Upserted
              * @default 0
@@ -14972,14 +14972,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description A token Oracle will not use (a Slack bot token) */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -15115,14 +15113,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description A token Oracle will not use (a Slack bot token) */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };

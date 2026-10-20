@@ -2816,14 +2816,7 @@
             "description": "The provider rejected the token"
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "A token Oracle will not use (a Slack bot token)"
           }
         }
       }
@@ -3088,14 +3081,7 @@
             "description": "The provider rejected the token"
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "A token Oracle will not use (a Slack bot token)"
           }
         }
       }
@@ -36994,7 +36980,8 @@
             "enum": [
               "active",
               "paused",
-              "error"
+              "error",
+              "needs_attention"
             ],
             "title": "Status"
           },
@@ -38078,7 +38065,9 @@
             "enum": [
               "completed",
               "rate_limited",
-              "error"
+              "error",
+              "superseded",
+              "needs_attention"
             ],
             "title": "Outcome"
           },
