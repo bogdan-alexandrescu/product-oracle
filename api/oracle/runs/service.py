@@ -2666,7 +2666,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
         segments = await _segments(db, run.id, fresh=True)
     wf = _live(run)
     if wf is not None and (wf.get("cancel_pending") or run.status in FINAL):
-        if not await _cancel_again(db, run, wf, segments, stats) or run.status != "running":
+        if not await _retry_pending_cancel(db, run, wf, segments, stats) or run.status != "running":
             return
         wf = None  # confirmed: what was held back (a new workflow) goes on below
         # Its last cost may have crossed the ceiling: nothing is submitted over it.
@@ -2833,7 +2833,7 @@ def _rested(pending: dict[str, Any]) -> bool:
     )
 
 
-async def _cancel_again(
+async def _retry_pending_cancel(
     db: AsyncSession,
     run: Run,
     wf: dict[str, Any],

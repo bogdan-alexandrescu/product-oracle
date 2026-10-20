@@ -745,3 +745,10 @@ async def test_a_failed_read_after_gone_follows_the_cost_unknown_rules(client, o
     await _tick_errors(client, auth)
     [entry] = (await _knobs_of(tenant_id, run["id"]))["searches"]
     assert entry["id"] == "wf_1" and entry["unread"] == 1, entry
+
+
+def test_retrying_a_pending_cancel_is_not_named_like_cancel_again():
+    """The tick's retry of a cancel SwarmCloud has not confirmed is not the Inbox's
+    Cancel again (service.cancel_again)."""
+    assert callable(service._retry_pending_cancel)
+    assert not hasattr(service, "_cancel_again")
