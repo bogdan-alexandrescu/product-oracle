@@ -55,13 +55,15 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
           <label htmlFor={sinceId} className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
             Since
           </label>
-          <input
-            id={sinceId}
-            type="date"
-            value={since}
-            onChange={(e) => onChange({ ...config, since: e.target.value || undefined })}
-            className={`${INPUT} w-44 max-[600px]:flex-1`}
-          />
+          <span className="w-44 max-[600px]:flex-1">
+            <input
+              id={sinceId}
+              type="date"
+              value={since}
+              onChange={(e) => onChange({ ...config, since: e.target.value || undefined })}
+              className={INPUT}
+            />
+          </span>
         </div>
       }
     />
