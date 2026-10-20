@@ -295,7 +295,7 @@ def test_new_config():
     ("config", "match"),
     [
         ({"mode": "some"}, "mode"),
-        ({"mode": "all", "date_from": "soon"}, "ISO date"),
+        ({"mode": "all", "date_from": "soon"}, "YYYY-MM-DD"),
         ({"mode": "all", "date_from": "2026-10-02", "date_to": "2026-10-01"}, "after"),
         ({"mode": "selected"}, "at least one"),
         ({"mode": "selected", "series": "x"}, "series"),
@@ -370,9 +370,9 @@ async def test_a_new_meeting_of_a_series_is_picked_up_on_the_next_sync():
     second = await collect(conn, config, cursor)
     assert upserted(second) == ["S4"]
     assert fake.detail_ids() == ["S4"]
-    # Incremental: only the day before the newest meeting listed (P2, not picked) is
-    # listed again.
-    assert fake.list_variables()[0]["fromDate"] == "2026-10-13T14:00:00Z"
+    # Incremental: only the three days before the newest meeting listed (P2, not
+    # picked) are listed again.
+    assert fake.list_variables()[0]["fromDate"] == "2026-10-11T14:00:00Z"
 
 
 async def test_a_full_pass_deletes_what_is_no_longer_picked_and_skips_what_is_stored():
@@ -387,11 +387,10 @@ async def test_a_full_pass_deletes_what_is_no_longer_picked_and_skips_what_is_st
     assert events[-1] == CursorCheckpoint(
         {
             "since": "2026-10-12T09:00:00Z",
-            # S3 is before the next sync's window (a day before "listed").
-            "recent": {},
+            # S3 is in the next sync's window (three days before "listed").
+            "recent": {"S3": "2026-10-12T09:00:00Z"},
             # The newest meeting listed (P2, not picked).
             "listed": "2026-10-14T14:00:00Z",
-            # The series' title key, should its calendar id change.
             "selection": fingerprint(config),
         }
     )
@@ -414,7 +413,10 @@ async def test_an_incremental_sync_deletes_nothing_and_does_not_read_stored_ids(
         calls.append(1)
         return {"K1"}
 
-    cursor = {"since": "2026-10-14T14:00:00Z", "recent": {"P2": "2026-10-14T14:00:00Z"}}
+    cursor = {
+        "since": "2026-10-14T14:00:00Z",
+        "recent": {"S3": "2026-10-12T09:00:00Z", "P2": "2026-10-14T14:00:00Z"},
+    }
     events = await collect(connector(FakeFireflies(SAMPLE)), {"mode": "all"}, cursor, known=load)
     assert events == [] and calls == []
 
@@ -422,7 +424,7 @@ async def test_an_incremental_sync_deletes_nothing_and_does_not_read_stored_ids(
 async def test_an_old_pick_does_not_make_every_sync_reread_the_history(monkeypatch):
     """The position advances on the newest meeting listed, not only on picked ones."""
     monkeypatch.setattr(fireflies, "PAGE_SIZE", 50)
-    now = datetime(2026, 10, 19, 9, 0, tzinfo=UTC)
+    now = datetime.now(UTC).replace(microsecond=0) - timedelta(days=5)
     account = [
         meeting(f"M{i}", f"Meeting {i}", (now - timedelta(days=i)).isoformat()) for i in range(1000)
     ]
@@ -444,7 +446,7 @@ async def test_an_old_pick_does_not_make_every_sync_reread_the_history(monkeypat
     moved = next(e for e in reversed(third) if isinstance(e, CursorCheckpoint)).cursor
     fake.requests.clear()
     await collect(conn, config, moved, known=known("M900"))
-    assert fake.list_variables()[0]["fromDate"] == _iso(now + timedelta(days=1))
+    assert fake.list_variables()[0]["fromDate"] == _iso(now - timedelta(days=1))
 
 
 async def test_a_full_pass_that_matches_and_deletes_nothing_still_checkpoints():
@@ -454,10 +456,10 @@ async def test_a_full_pass_that_matches_and_deletes_nothing_still_checkpoints():
     events = await collect(conn, config, None, known=known())
     assert upserted(events) == [] and deleted(events) == []
     assert isinstance(events[-1], CursorCheckpoint)
-    # So the next sync is incremental: it reads only the last day again.
+    # So the next sync is incremental: it reads only the last three days again.
     fake.requests.clear()
     await collect(conn, config, events[-1].cursor, known=known())
-    assert fake.list_variables()[0]["fromDate"] == "2026-10-13T14:00:00Z"
+    assert fake.list_variables()[0]["fromDate"] == "2026-10-11T14:00:00Z"
 
 
 async def test_narrowing_deletes_even_when_an_older_sync_saved_its_position_last():
@@ -548,6 +550,131 @@ async def test_retry_after_as_an_http_date():
     with pytest.raises(ConnectorRateLimited) as raised:
         await collect(connector(FakeFireflies(SAMPLE, error=response)), {"mode": "all"})
     assert raised.value.retry_after is None
+
+
+@pytest.mark.parametrize("header", ["inf", "-inf", "nan", "Infinity", "1e400"])
+async def test_a_retry_after_that_is_no_number_of_seconds_is_ignored(header):
+    response = rate_limited()
+    response.headers["Retry-After"] = header
+    with pytest.raises(ConnectorRateLimited) as raised:
+        await collect(connector(FakeFireflies(SAMPLE, error=response)), {"mode": "all"})
+    assert raised.value.retry_after is None
+
+
+async def test_a_very_long_retry_after_is_capped_at_a_day():
+    response = rate_limited(10**12)
+    with pytest.raises(ConnectorRateLimited) as raised:
+        await collect(connector(FakeFireflies(SAMPLE, error=response)), {"mode": "all"})
+    assert raised.value.retry_after == fireflies.MAX_RETRY_AFTER
+
+
+@pytest.mark.parametrize(
+    "errors",
+    [
+        ["Too many requests"],
+        ["boom", None],
+        [{"message": "boom", "extensions": "not an object"}],
+        {"message": "boom"},
+        "boom",
+    ],
+)
+async def test_error_entries_that_are_not_objects_are_errors_not_crashes(errors):
+    fake = FakeFireflies(SAMPLE, error=httpx.Response(200, json={"errors": errors}))
+    with pytest.raises(ConnectorError):
+        await collect(connector(fake), {"mode": "all"}, known=known("S1"))
+
+
+@pytest.mark.parametrize("value", [10**20, -(10**20), "not a date", "9999-99-99"])
+async def test_an_out_of_range_date_from_fireflies_reads_as_no_date(value):
+    odd = {**meeting("Z1", "Odd", "2026-10-03T10:00:00Z"), "date": value}
+    fake = FakeFireflies([*SAMPLE, odd])
+    conn = connector(fake)
+    page = await conn.browse_meetings(CREDENTIAL, search="", date_from=None, date_to=None, skip=0)
+    assert {m.id: m.date for m in page.meetings}.get("Z1", "absent") in (None, "absent")
+    await conn.browse_series(CREDENTIAL, date_from=None, date_to=None)
+    assert "Z1" in upserted(await collect(conn, {"mode": "selected", "meetings": ["Z1"]}))
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"mode": "all", "date_to": "2026-10-31T23:00:00Z"},
+        {"mode": "all", "date_from": "2026-10-01T00:00:00"},
+        {"mode": "all", "date_to": "20261031"},
+        {"mode": "all", "date_to": "2026-10-31 "},
+        {"mode": "all", "date_to": "2026-02-30"},
+    ],
+)
+def test_picker_dates_are_plain_days(config):
+    with pytest.raises(ConnectorConfigError, match="YYYY-MM-DD"):
+        selection(config)
+
+
+async def test_a_full_pass_skips_an_out_of_order_old_meeting_and_reads_on():
+    """Fireflies is asked for meetings from date_from on: one older than that, listed out
+    of order, is skipped, not taken as the end of the list (a full pass would otherwise
+    delete everything listed after it)."""
+    fake = FakeFireflies(
+        [
+            meeting("N1", "New", "2026-10-15T10:00:00Z"),
+            meeting("OLD", "Old", "2026-09-01T10:00:00Z"),
+            meeting("N2", "Newer", "2026-10-12T10:00:00Z"),
+            meeting("N3", "Newest", "2026-10-11T10:00:00Z"),
+        ],
+        unsorted=True,
+    )
+    fake._list = lambda v: [dict(m) for m in fake.meetings][v["skip"] : v["skip"] + v["limit"]]
+    config = {"mode": "all", "date_from": "2026-10-01"}
+    events = await collect(connector(fake), config, known=known("N3"))
+    assert deleted(events) == []
+    assert upserted(events) == ["N2", "N1"]
+
+
+async def test_a_transcript_fireflies_has_not_finished_is_asked_for_again():
+    """The list shows a meeting whose transcript query answers null (still processing):
+    the position stays before it, so the next sync fetches it."""
+    fake = FakeFireflies(list(SAMPLE), processing={"S2": 1})
+    conn = connector(fake)
+    config = {"mode": "selected", "series": [STANDUP]}
+    first = await collect(conn, config)
+    assert upserted(first) == ["S1", "S3"]
+    cursor = next(e for e in reversed(first) if isinstance(e, CursorCheckpoint)).cursor
+    assert cursor["missing"] == {"S2": 1}
+    assert cursor["since"] < "2026-10-05T09:00:00Z"
+
+    second = await collect(conn, config, cursor)
+    assert upserted(second) == ["S2"]
+    cursor = next(e for e in reversed(second) if isinstance(e, CursorCheckpoint)).cursor
+    assert "missing" not in cursor
+    assert upserted(await collect(conn, config, cursor)) == []
+
+
+async def test_a_transcript_that_never_comes_is_skipped_after_a_few_syncs():
+    fake = FakeFireflies(list(SAMPLE), processing={"S2": 100})
+    conn = connector(fake)
+    config = {"mode": "selected", "series": [STANDUP]}
+    cursor = None
+    for _ in range(fireflies.MISSING_TRIES):
+        events = await collect(conn, config, cursor)
+        cursor = next(e for e in reversed(events) if isinstance(e, CursorCheckpoint)).cursor
+    assert "missing" not in cursor
+    # The position moved on to the newest meeting listed.
+    assert cursor["listed"] == "2026-10-14T14:00:00Z"
+    fake.requests.clear()
+    await collect(conn, config, cursor)
+    assert "S2" not in fake.detail_ids()
+
+
+async def test_a_meeting_dated_in_the_future_does_not_move_the_position_past_now():
+    later = datetime.now(UTC) + timedelta(days=400)
+    fake = FakeFireflies([*SAMPLE, meeting("F1", "Future", _iso(later))])
+    events = await collect(connector(fake), {"mode": "selected", "meetings": ["K1"]})
+    cursor = next(e for e in reversed(events) if isinstance(e, CursorCheckpoint)).cursor
+    assert cursor["listed"] <= _iso(datetime.now(UTC))
+    # A cursor saved in the future (before this fix) is read as now.
+    fake.requests.clear()
+    await collect(connector(fake), {"mode": "all"}, {"since": _iso(later), "recent": {}})
+    assert fake.list_variables()[0]["fromDate"] < _iso(datetime.now(UTC))
 
 
 # --- Browse -------------------------------------------------------------------------

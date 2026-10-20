@@ -30,14 +30,18 @@ only to its owner (S3).
 Cursor::
 
     {"since": "2026-10-01T09:00:00Z", "listed": "2026-10-03T15:00:00Z",
-     "recent": {"id1": "2026-10-01T09:00:00Z"}, "selection": "3f2a9c0d1e4b5a6c"}
+     "recent": {"id1": "2026-10-01T09:00:00Z"}, "missing": {"id2": 1},
+     "selection": "3f2a9c0d1e4b5a6c"}
 
 ``since`` is the date of the newest transcript synced; ``listed`` that of the newest
 meeting listed when it is later (one not picked), so the position moves on even when
 nothing new is picked and an old pick does not make every sync list the account's
-history since then. Fireflies can finish processing
-an earlier meeting after a later one, so a sync reads back ``OVERLAP`` before ``since``
-and skips the ids in ``recent`` (those synced within that window, with their dates).
+history since then. Neither goes past the time of the sync. Fireflies can finish
+processing an earlier meeting after a later one, so a sync reads back ``OVERLAP`` (three
+days) before the position and skips the ids in ``recent`` (those synced within that
+window, with their dates). A meeting listed whose transcript Fireflies does not return
+yet is counted in ``missing`` and the position stays before it, so the next sync asks
+again; after ``MISSING_TRIES`` asks it is skipped.
 
 ``selection`` is a fingerprint of the config the cursor was saved under: a cursor of
 another selection is ignored, so narrowing always gets a full pass (see below).
@@ -49,6 +53,7 @@ fetched again. The engine passes ``known`` (the source's stored ids) for this.
 
 import hashlib
 import json
+import math
 import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -74,12 +79,19 @@ from oracle.sources.base import (
 API_URL = "https://api.fireflies.ai/graphql"
 OAUTH = None
 PAGE_SIZE = 50  # the most Fireflies returns per transcripts query
-OVERLAP = timedelta(days=1)
+# Fireflies can finish a transcript days after the meeting: each sync reads back this far.
+OVERLAP = timedelta(days=3)
+# A meeting Fireflies lists but answers without a transcript is asked for again on this
+# many syncs (the position waits for it), then skipped.
+MISSING_TRIES = 3
 # The series list reads at most this many pages of meetings (rate limits: 30-60 a minute).
 SERIES_PAGES = 10
 MAX_SERIES = 200
 MAX_MEETINGS = 2000
 MAX_LABELS = 1000
+
+# Longer waits Fireflies asks for are read as this (a day).
+MAX_RETRY_AFTER = 86_400.0
 
 AUTH_CODES = {"auth_failed", "unauthorized", "unauthenticated", "forbidden", "invalid_api_key"}
 RATE_CODES = {"too_many_requests", "rate_limited", "rate_limit_exceeded"}
@@ -136,6 +148,14 @@ def _parse_date(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
+def _fireflies_date(value: Any) -> datetime | None:
+    """A date Fireflies sent; None when it is missing, unreadable or out of range."""
+    try:
+        return _parse_date(value)
+    except (ValueError, OverflowError, OSError, TypeError):
+        return None
+
+
 def _iso(value: datetime) -> str:
     spec = "milliseconds" if value.microsecond else "seconds"
     return value.astimezone(UTC).isoformat(timespec=spec).replace("+00:00", "Z")
@@ -160,14 +180,37 @@ def _config_date(config: dict[str, Any], key: str) -> datetime | None:
         raise ConnectorConfigError(f"{key} is out of range") from e
 
 
+_DAY_FORMAT = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _config_day(config: dict[str, Any], key: str) -> datetime | None:
+    """A picker date: a plain YYYY-MM-DD day, read as its start in UTC."""
+    value = config.get(key)
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str) or not _DAY_FORMAT.fullmatch(value):
+        raise ConnectorConfigError(f"{key} must be a date (YYYY-MM-DD)")
+    try:
+        day = date.fromisoformat(value)
+    except ValueError as e:
+        raise ConnectorConfigError(f"{key} must be a date (YYYY-MM-DD)") from e
+    # date_to is used as the day after it: the last representable day cannot be.
+    if day >= date.max:
+        raise ConnectorConfigError(f"{key} is out of range")
+    return datetime.combine(day, datetime.min.time(), UTC)
+
+
 def _retry_after(value: str | None) -> float | None:
     """Retry-After in seconds, or as an HTTP date; None when unreadable."""
     if not value:
         return None
     try:
-        return max(float(value), 0.0)
+        seconds = float(value)
     except ValueError:
         pass
+    else:
+        # "inf" and "nan" parse as floats.
+        return min(max(seconds, 0.0), MAX_RETRY_AFTER) if math.isfinite(seconds) else None
     try:
         when = parsedate_to_datetime(value)
     except (TypeError, ValueError, IndexError):
@@ -175,7 +218,7 @@ def _retry_after(value: str | None) -> float | None:
     if when.tzinfo is None:
         when = when.replace(tzinfo=UTC)
     wait = (when - datetime.now(UTC)).total_seconds()
-    return wait if wait > 0 else None
+    return min(wait, MAX_RETRY_AFTER) if wait > 0 else None
 
 
 def _strings(config: dict[str, Any], key: str, limit: int) -> list[str]:
@@ -284,8 +327,8 @@ def selection(config: dict[str, Any]) -> Selection:
     mode = config.get("mode")
     if mode not in ("all", "selected"):
         raise ConnectorConfigError("mode must be 'all' or 'selected'")
-    date_from = _config_date(config, "date_from") or _config_date(config, "from_date")
-    date_to = _config_date(config, "date_to")
+    date_from = _config_day(config, "date_from") or _config_date(config, "from_date")
+    date_to = _config_day(config, "date_to")
     if date_from and date_to and date_to < date_from:
         raise ConnectorConfigError("date_to must be on or after date_from")
     series = frozenset(_strings(config, "series", MAX_SERIES))
@@ -358,7 +401,7 @@ def _meeting(entry: dict[str, Any]) -> Meeting:
     return Meeting(
         id=entry["id"],
         title=entry.get("title") or "Untitled meeting",
-        date=_parse_date(entry.get("date")),
+        date=_fireflies_date(entry.get("date")),
         duration=float(duration) if isinstance(duration, int | float) else None,
         organizer=entry.get("organizer_email") or None,
         attendee_count=len(_participants(entry)),
@@ -476,24 +519,33 @@ class _Fireflies:
                 f"Fireflies answered HTTP {response.status_code} with something other than JSON"
             )
         errors = body.get("errors") or []
+        if not isinstance(errors, list):
+            errors = [errors]
+        # Entries are objects by the GraphQL spec; anything else is read as its text.
+        errors = [e if isinstance(e, dict) else {"message": str(e)} for e in errors]
         for error in errors:
-            code = str((error.get("extensions") or {}).get("code") or error.get("code") or "")
-            code = code.lower()
-            message = error.get("message") or code
+            extensions = error.get("extensions")
+            extensions = extensions if isinstance(extensions, dict) else {}
+            code = str(extensions.get("code") or error.get("code") or "").lower()
+            message = str(error.get("message") or code)
             if code == "forbidden":
                 raise FirefliesForbidden(f"Fireflies refused the request: {message}")
             if code in AUTH_CODES:
                 raise ConnectorAuthError(f"Fireflies rejected the API key: {message}")
             if code in RATE_CODES or "too many requests" in message.lower():
-                metadata = (error.get("extensions") or {}).get("metadata") or {}
-                retry_ms = metadata.get("retryAfter")
-                if retry_after is None and isinstance(retry_ms, int | float):
+                metadata = extensions.get("metadata")
+                retry_ms = metadata.get("retryAfter") if isinstance(metadata, dict) else None
+                if (
+                    retry_after is None
+                    and isinstance(retry_ms, int | float)
+                    and math.isfinite(retry_ms)
+                ):
                     # Fireflies reports retryAfter as an epoch-ms timestamp.
                     wait = retry_ms / 1000 - datetime.now(UTC).timestamp()
-                    retry_after = wait if wait > 0 else None
+                    retry_after = min(wait, MAX_RETRY_AFTER) if wait > 0 else None
                 raise ConnectorRateLimited(f"Fireflies: {message}", retry_after=retry_after)
         if response.status_code >= 400 or errors:
-            detail = errors[0].get("message") if errors else f"HTTP {response.status_code}"
+            detail = str(errors[0].get("message")) if errors else f"HTTP {response.status_code}"
             raise ConnectorError(f"Fireflies query failed: {detail}")
         data = body.get("data")
         if not isinstance(data, dict):
@@ -515,11 +567,31 @@ def fingerprint(config: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(chosen, sort_keys=True).encode()).hexdigest()[:16]
 
 
+def _clamp(value: datetime | None, now: datetime) -> datetime | None:
+    return min(value, now) if value is not None else None
+
+
+def _held(value: datetime | None, held: datetime | None) -> datetime | None:
+    """A position, kept just before ``held`` (a meeting whose transcript is missing)."""
+    if held is None or value is None:
+        return value
+    return min(value, held - timedelta(milliseconds=1))
+
+
+def _within(recent: dict[str, str], position: datetime | None) -> dict[str, str]:
+    """The ids synced within OVERLAP of the position (a sync reads back that far)."""
+    if position is None:
+        return recent
+    horizon = position - OVERLAP
+    return {i: d for i, d in recent.items() if _parse_date(d) >= horizon}
+
+
 def _cursor(
     selected: str,
     since: datetime | None,
     listed: datetime | None,
     recent: dict[str, str],
+    missing: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     cursor: dict[str, Any] = {"recent": dict(recent)}
     if since is not None:
@@ -527,6 +599,8 @@ def _cursor(
     # Only past ``since``: the newest meeting listed, when it was not picked.
     if listed is not None and (since is None or listed > since):
         cursor["listed"] = _iso(listed)
+    if missing:
+        cursor["missing"] = dict(missing)
     cursor["selection"] = selected
     return cursor
 
@@ -586,9 +660,17 @@ class FirefliesConnector:
         # fingerprint carry none and are kept.
         if cursor and cursor.get("selection", selected) != selected:
             cursor = None
-        since = _parse_date((cursor or {}).get("since"))
-        listed_before = _parse_date((cursor or {}).get("listed"))
+        now = datetime.now(UTC)
+        # A position past now (a meeting Fireflies dated in the future) would skip what
+        # is recorded until then.
+        since = _clamp(_parse_date((cursor or {}).get("since")), now)
+        listed_before = _clamp(_parse_date((cursor or {}).get("listed")), now)
         recent: dict[str, str] = dict((cursor or {}).get("recent") or {})
+        missing: dict[str, int] = {
+            i: n
+            for i, n in ((cursor or {}).get("missing") or {}).items()
+            if isinstance(n, int) and not isinstance(n, bool)
+        }
         position = max((d for d in (since, listed_before) if d), default=None)
         stop = position - OVERLAP if position else picked.date_from
         if position and picked.date_from and picked.date_from > stop:
@@ -602,19 +684,24 @@ class FirefliesConnector:
                 variables["fromDate"] = _iso(stop)
             if picked.date_to_end:
                 variables["toDate"] = _iso(picked.date_to_end - timedelta(milliseconds=1))
-            # Newest first: page until a transcript is older than the stop date.
+            # Newest first: an incremental sync pages until a transcript is older than the
+            # stop date. A full pass reads every page and skips such a transcript (it
+            # prunes what it did not list, so it must not stop on one out of order).
             listed: list[tuple[datetime | None, dict[str, Any]]] = []
             newest_listed = listed_before
             done = False
             async for page in self._pages(fireflies, variables):
                 for entry in page:
-                    when = _parse_date(entry.get("date"))
+                    when = _fireflies_date(entry.get("date"))
                     if stop and when and when < stop:
+                        if position is None:
+                            continue
                         done = True
                         break
                     listed.append((when, entry))
-                    if when and (newest_listed is None or when > newest_listed):
-                        newest_listed = when
+                    seen = _clamp(when, now)
+                    if seen and (newest_listed is None or seen > newest_listed):
+                        newest_listed = seen
                 if done:
                     break
 
@@ -626,7 +713,7 @@ class FirefliesConnector:
                 matched.add(entry["id"])
                 if entry["id"] in recent:
                     continue
-                fetch = stored is None or entry["id"] not in stored
+                fetch = stored is None or entry["id"] not in stored or entry["id"] in missing
                 pending.append((when or datetime.min.replace(tzinfo=UTC), entry, fetch))
 
             for external_id in sorted((stored or set()) - matched):
@@ -635,27 +722,48 @@ class FirefliesConnector:
             # Oldest first, so each checkpoint covers everything before it.
             pending.sort(key=lambda p: p[0])
             newest = since
+            # The oldest meeting Fireflies answered without a transcript (still being
+            # processed): the position stays before it, so the next sync asks again.
+            held: datetime | None = None
             written = cursor or None
             for when, entry, fetch in pending:
                 if fetch:
                     data = await fireflies.query(DETAIL_QUERY, id=entry["id"])
                     transcript = data.get("transcript")
-                    if transcript:
+                    if isinstance(transcript, dict) and transcript.get("id"):
+                        missing.pop(entry["id"], None)
                         yield self._item(transcript)
-                if newest is None or when > newest:
-                    newest = when
+                    else:
+                        tries = missing.get(entry["id"], 0) + 1
+                        if tries < MISSING_TRIES:
+                            missing[entry["id"]] = tries
+                            dated = when > datetime.min.replace(tzinfo=UTC)
+                            if dated and (held is None or when < held):
+                                held = when
+                            continue
+                        # Asked MISSING_TRIES times: it is skipped from now on.
+                        missing.pop(entry["id"], None)
+                if when > datetime.min.replace(tzinfo=UTC):
+                    when = _clamp(when, now)
+                    if newest is None or when > newest:
+                        newest = when
+                else:
+                    # Undated: it does not move the position; remembered as seen now.
+                    when = newest or now
                 recent[entry["id"]] = _iso(when)
-                horizon = newest - OVERLAP
-                recent = {i: d for i, d in recent.items() if _parse_date(d) >= horizon}
+                recent = _within(recent, _held(newest, held))
                 if fetch:
-                    written = _cursor(selected, newest, listed_before, recent)
+                    written = _cursor(selected, _held(newest, held), listed_before, recent, missing)
                     yield CursorCheckpoint(written)
             # The whole listing is done: the position moves to the newest meeting listed,
-            # picked or not. Written whenever it changed, deletes and all.
-            end = max((d for d in (newest, newest_listed) if d), default=None)
+            # picked or not, unless a transcript is still missing. Written whenever it
+            # changed, deletes and all.
+            end = _held(max((d for d in (newest, newest_listed) if d), default=None), held)
             if end is not None:
-                recent = {i: d for i, d in recent.items() if _parse_date(d) >= end - OVERLAP}
-            final = _cursor(selected, newest, newest_listed, recent)
+                recent = _within(recent, end)
+            final = _cursor(
+                selected, _held(newest, held), _held(newest_listed, held), recent, missing
+            )
             # The fingerprint alone is no change (cursors saved before it lack it).
             if _without_selection(final) != _without_selection(written):
                 yield CursorCheckpoint(final)
@@ -715,7 +823,7 @@ class FirefliesConnector:
         return SeriesList(series=ordered, truncated=truncated, scanned=scanned)
 
     def _item(self, transcript: dict[str, Any]) -> ItemUpsert:
-        when = _parse_date(transcript.get("date"))
+        when = _fireflies_date(transcript.get("date"))
         participants = _participants(transcript)
         return ItemUpsert(
             external_id=transcript["id"],

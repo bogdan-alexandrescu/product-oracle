@@ -149,7 +149,11 @@ async def test_full_sync_pages_newest_first_and_yields_oldest_first():
     assert events[-1] == CursorCheckpoint(
         {
             "since": "2026-10-10T15:00:00Z",
-            "recent": {"01TRANSCRIPT4": "2026-10-10T15:00:00Z"},
+            # Synced within the three days a sync reads back.
+            "recent": {
+                "01TRANSCRIPT3": "2026-10-08T09:30:00Z",
+                "01TRANSCRIPT4": "2026-10-10T15:00:00Z",
+            },
             "selection": fingerprint({}),
         }
     )
@@ -161,8 +165,9 @@ async def test_from_date_and_title_filter():
     events = await collect(connector(fake), config)
 
     assert fake.list_variables()[0]["fromDate"] == "2026-10-01T00:00:00Z"
-    # The kickoff is before from_date: paging stops there; the standup fails the filter.
-    assert len(fake.list_variables()) == 2
+    # The kickoff is before from_date: a full pass reads on past it (and skips it); the
+    # standup fails the filter.
+    assert len(fake.list_variables()) == 3
     assert fake.detail_ids() == ["01TRANSCRIPT3", "01TRANSCRIPT4"]
     assert [e.external_id for e in events if isinstance(e, ItemUpsert)] == fake.detail_ids()
 
@@ -172,7 +177,7 @@ async def test_incremental_sync_reads_back_an_overlap():
     fake = FakeFireflies({0: "list_incremental"})
     events = await collect(connector(fake), {}, cursor)
 
-    assert fake.list_variables() == [{"limit": 2, "skip": 0, "fromDate": "2026-10-07T09:30:00Z"}]
+    assert fake.list_variables() == [{"limit": 2, "skip": 0, "fromDate": "2026-10-05T09:30:00Z"}]
     # The late-processed meeting inside the overlap is picked up; the synced one is not
     # fetched again; the one before the overlap stops paging.
     assert fake.detail_ids() == ["01TRANSCRIPTL", "01TRANSCRIPT5"]
@@ -196,8 +201,14 @@ async def test_incremental_sync_reads_back_an_overlap():
 
 
 async def test_nothing_new_yields_nothing():
-    cursor = {"since": "2026-10-10T15:00:00Z", "recent": {"01TRANSCRIPT4": "2026-10-10T15:00:00Z"}}
-    fake = FakeFireflies({0: "list_page1"})
+    cursor = {
+        "since": "2026-10-10T15:00:00Z",
+        "recent": {
+            "01TRANSCRIPT3": "2026-10-08T09:30:00Z",
+            "01TRANSCRIPT4": "2026-10-10T15:00:00Z",
+        },
+    }
+    fake = FakeFireflies({0: "list_page1", 2: "list_page2"})
     assert await collect(connector(fake), {}, cursor) == []
 
 

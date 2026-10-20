@@ -49,6 +49,10 @@ class FakeFireflies:
     error: httpx.Response | None = None
     api_key: str = API_KEY
     requests: list[dict[str, Any]] = field(default_factory=list)
+    # Transcripts still being processed: answered as null this many more times.
+    processing: dict[str, int] = field(default_factory=dict)
+    # List the meetings in the order given, not newest first (out-of-order answers).
+    unsorted: bool = False
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         assert str(request.url) == API_URL
@@ -66,15 +70,18 @@ class FakeFireflies:
             return httpx.Response(200, json={"data": {"transcripts": self._list(variables)}})
         if "transcript(" in query:
             found = next((m for m in self.meetings if m["id"] == variables["id"]), None)
+            if self.processing.get(variables["id"], 0) > 0:
+                self.processing[variables["id"]] -= 1
+                found = None
             return httpx.Response(200, json={"data": {"transcript": self._detail(found)}})
         raise AssertionError(f"unexpected query {query}")
 
     def _list(self, v: dict[str, Any]) -> list[dict[str, Any]]:
-        rows = sorted(self.meetings, key=lambda m: m["date"], reverse=True)
+        rows = list(self.meetings) if self.unsorted else self._newest_first()
         if v.get("fromDate"):
-            rows = [m for m in rows if m["date"] >= ms(v["fromDate"])]
+            rows = [m for m in rows if not _dated(m) or m["date"] >= ms(v["fromDate"])]
         if v.get("toDate"):
-            rows = [m for m in rows if m["date"] <= ms(v["toDate"])]
+            rows = [m for m in rows if not _dated(m) or m["date"] <= ms(v["toDate"])]
         if v.get("keyword"):
             assert v.get("scope") == "title"
             rows = [m for m in rows if v["keyword"].lower() in m["title"].lower()]
@@ -93,11 +100,18 @@ class FakeFireflies:
             "summary": {"overview": f"About {m['title']}.", "action_items": "", "keywords": ""},
         }
 
+    def _newest_first(self) -> list[dict[str, Any]]:
+        return sorted(self.meetings, key=lambda m: m["date"] if _dated(m) else 0, reverse=True)
+
     def list_variables(self) -> list[dict[str, Any]]:
         return [r["variables"] for r in self.requests if "transcripts(" in r["query"]]
 
     def detail_ids(self) -> list[str]:
         return [r["variables"]["id"] for r in self.requests if "transcript(" in r["query"]]
+
+
+def _dated(m: dict[str, Any]) -> bool:
+    return isinstance(m["date"], int) and 0 <= m["date"] < 253_402_300_800_000
 
 
 def rate_limited(retry_after: int = 30) -> httpx.Response:
