@@ -19,6 +19,7 @@ const MAIN: Item[] = [
 
 const SETTINGS: Item[] = [
   { label: "Members", href: "/settings/members", testId: "nav-members" },
+  { label: "API tokens", href: "/settings/api-tokens", testId: "nav-api-tokens" },
   { label: "Connections", href: "/settings/connections", testId: "nav-connections" },
   { label: "Claude accounts", href: "/settings/claude-accounts", testId: "nav-claude-accounts" },
   { label: "Sources", href: "/settings/sources", testId: "nav-sources" },
@@ -73,13 +74,13 @@ export function AppNav() {
   };
 
   return (
-    <aside className="w-52 shrink-0 border-r border-neutral-200 bg-white">
-      <nav aria-label="Oracle" data-testid="app-nav" className="sticky top-0 px-3 py-4 text-sm">
-        <ul className="flex flex-col gap-0.5">{MAIN.map(row)}</ul>
-        <p className="mt-6 mb-1 px-2.5 text-xs font-medium text-neutral-500" id="app-nav-settings">
+    <aside className="w-52 shrink-0 border-r border-line bg-surface max-[600px]:w-full max-[600px]:border-r-0 max-[600px]:border-b">
+      <nav aria-label="Oracle" data-testid="app-nav" className="sticky top-0 px-3 py-4 text-sm max-[600px]:static max-[600px]:flex max-[600px]:items-center max-[600px]:gap-1 max-[600px]:overflow-x-auto max-[600px]:py-2">
+        <ul className="flex flex-col gap-0.5 max-[600px]:flex-row max-[600px]:whitespace-nowrap">{MAIN.map(row)}</ul>
+        <p className="mt-6 mb-1 px-2.5 text-xs font-medium text-neutral-500 max-[600px]:sr-only" id="app-nav-settings">
           Settings
         </p>
-        <ul className="flex flex-col gap-0.5" aria-labelledby="app-nav-settings" data-testid="nav-settings">
+        <ul className="flex flex-col gap-0.5 max-[600px]:flex-row max-[600px]:whitespace-nowrap" aria-labelledby="app-nav-settings" data-testid="nav-settings">
           {SETTINGS.map(row)}
         </ul>
       </nav>

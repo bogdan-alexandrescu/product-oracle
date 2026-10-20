@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Email domains (e.g. ["example.com"]) whose IAP users are created on first visit.
     iap_allowed_domains: list[str] = []
     iap_auto_provision: bool = True
+    # The mock/test build only: let users and invites use the reserved example domains
+    # (example.com/.org/.net, *.test, *.invalid, *.localhost). Off everywhere real, so a
+    # seed or an invite can never create admin@example.com again (account management).
+    allow_reserved_email_domains: bool = False
 
 
 @lru_cache

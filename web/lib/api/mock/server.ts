@@ -7,11 +7,21 @@ import type { Schemas } from "@/lib/api/client";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
+import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
-import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
+import {
+  DOCUMENTS,
+  MOCK_INVITES,
+  MOCK_LOGIN,
+  MOCK_MEMBERS,
+  REMOVED_MEMBER,
+  roadmapFromPrd,
+  type DocumentSeed,
+  type VersionSeed,
+} from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
@@ -59,6 +69,8 @@ export interface Db {
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded on first use. */
   revoke_failures?: RevokeFailureRow[];
+  /** Every credential by kind, changed passwords (./account.ts); seeded on first use. */
+  account?: AccountDb;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -220,7 +232,17 @@ function seed(): Db {
     disabled_at: null,
     disabled_by: null,
     status: "active" as const,
+    last_sign_in_at: m.last_sign_in_at,
+    open_tokens: 0,
   }));
+  // A member removed two days ago (C2): kept, so history keeps the name; an owner can restore.
+  db.members.push({
+    ...REMOVED_MEMBER,
+    id: uuid(),
+    disabled_by: db.user_id,
+    status: "disabled",
+    open_tokens: 0,
+  });
   db.invites = MOCK_INVITES.map((i) => ({
     ...i,
     id: uuid(),
@@ -827,8 +849,10 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   if (!atLeast(me.role, "owner")) return forbidden("owner");
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
+  const account = (db.account ??= seedAccount(db.members, uuid));
+  const out = (x: MemberRow): MemberRow => ({ ...x, open_tokens: openTokens(account, x.id) });
   if (p[1] === "members") {
-    if (!p[2] && m === "GET") return json(200, db.members);
+    if (!p[2] && m === "GET") return json(200, db.members.map(out));
     const target = db.members.find((x) => x.id === p[2]);
     if (!target) return notFound("Member");
     // A disabled owner is not another owner.
@@ -839,24 +863,29 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         return json(409, { detail: "Cannot demote the last owner; make someone else owner" });
       }
       target.role = role;
-      return json(200, target);
+      return json(200, out(target));
     }
     // Removing a member disables them (C2): the row stays; an owner can restore them.
     if ((m === "POST" && p[3] === "disable") || (m === "DELETE" && !p[3])) {
       if (target.status !== "disabled") {
+        if (target.id === me.id) {
+          return json(409, { detail: "You cannot remove yourself; another owner can remove you" });
+        }
         if (target.role === "owner" && !otherOwner) {
           return json(409, { detail: "Cannot remove the last owner; make someone else owner" });
         }
         Object.assign(target, { status: "disabled", disabled_at: now(), disabled_by: me.id });
+        // Every credential acting for them is revoked with the disable.
+        revokeMemberTokens(account, target.id, target.disabled_at!);
         for (const i of db.invites) {
           if (i.email === target.email && i.status === "open") Object.assign(i, { status: "revoked", revoked_at: now() });
         }
       }
-      return m === "DELETE" ? json(204, undefined) : json(200, target);
+      return m === "DELETE" ? json(204, undefined) : json(200, out(target));
     }
     if (m === "POST" && p[3] === "restore") {
       Object.assign(target, { status: "active", disabled_at: null, disabled_by: null });
-      return json(200, target);
+      return json(200, out(target));
     }
   }
   if (p[1] === "invites") {
@@ -950,10 +979,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "auth" && p[2] === "login" && m === "POST") {
     const { email, password } = await body<Schemas["LoginRequest"]>();
     const member = db.members.find((x) => x.email === email.trim().toLowerCase());
-    if (!member || member.status === "disabled" || password !== MOCK_LOGIN.password) {
+    db.account ??= seedAccount(db.members, uuid);
+    if (!member || member.status === "disabled" || !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       return json(401, { detail: "Invalid credentials" });
     }
     db.session = member.email;
+    member.last_sign_in_at = now();
     return json(200, meOut(db, withMockRole(member)));
   }
   if (p[1] === "auth" && p[2] === "logout" && m === "POST") {
@@ -980,6 +1011,21 @@ async function route(db: Db, req: Request): Promise<Response> {
     }
     return json(200, mine);
   }
+  const accountOut = await accountRoute(
+    {
+      db: (db.account ??= seedAccount(db.members, uuid)),
+      members: db.members,
+      me,
+      defaultPassword: MOCK_LOGIN.password,
+      uuid,
+      now,
+      endSession: () => (db.session = null),
+    },
+    req,
+    p,
+    q,
+  );
+  if (accountOut) return accountOut;
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
   // The baseline mock checks roles itself (commenters propose, approvers decide).

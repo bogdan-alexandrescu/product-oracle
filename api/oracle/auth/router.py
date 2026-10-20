@@ -1,4 +1,7 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, HTTPException, Response, status
+from sqlalchemy import update
 
 from oracle.audit import record
 from oracle.auth import service
@@ -29,6 +32,9 @@ async def login(body: LoginRequest, response: Response) -> Me:
     async with tenant_session(user.tenant_id) as s:
         principal = Principal(
             tenant_id=user.tenant_id, kind="user", role=user.role, user_id=user.id
+        )
+        await s.execute(
+            update(User).where(User.id == user.id).values(last_sign_in_at=datetime.now(UTC))
         )
         await record(s, principal, "login", "user", user.id)
         await s.commit()

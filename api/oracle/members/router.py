@@ -7,12 +7,12 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role
+from oracle.authz import not_for_runs, require_role
 from oracle.connections.router import ProviderHttp
-from oracle.members import service
+from oracle.members import service, tokens
 from oracle.members.schemas import (
     ApiTokenOut,
     FollowUpOut,
@@ -22,9 +22,14 @@ from oracle.members.schemas import (
     MemberOut,
     MemberPatch,
     TokenApprovalOut,
+    TokenKind,
 )
 
-router = APIRouter(prefix="/v1", tags=["members"], dependencies=[Depends(require_role("owner"))])
+router = APIRouter(
+    prefix="/v1",
+    tags=["members"],
+    dependencies=[Depends(not_for_runs), Depends(require_role("owner"))],
+)
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 
 _STATUS = {
@@ -33,6 +38,8 @@ _STATUS = {
     # The caller is no longer an owner, or their token or grant was revoked, by a change
     # that committed while their request waited (re-read under the gate).
     "forbidden": status.HTTP_403_FORBIDDEN,
+    # An invite to a reserved example domain outside the mock/test build.
+    "invalid": status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -46,8 +53,9 @@ async def _call[T](op: Awaitable[T]) -> T:
 @router.get("/members", response_model=list[MemberOut])
 async def list_members(db: TenantDB) -> list[MemberOut]:
     """The users of this company's Oracle, their roles, and whether each is active or
-    disabled (a removed member: kept so history keeps their name)."""
-    return [MemberOut.model_validate(u) for u in await service.list_members(db)]
+    disabled (a removed member: kept so history keeps their name), their last sign-in
+    when known, and how many credentials still act for them."""
+    return await service.members_out(db, await service.list_members(db))
 
 
 @router.patch(
@@ -60,7 +68,7 @@ async def update_member(
 ) -> MemberOut:
     user = await _call(service.set_role(db, principal, user_id, body.role))
     await db.commit()
-    return MemberOut.model_validate(user)
+    return (await service.members_out(db, [user]))[0]
 
 
 @router.post(
@@ -84,7 +92,7 @@ async def disable_member(
     await db.commit()
     # The provider and runtime calls it owes, outside the review gate (retried by the tick).
     await service.after_disable(db, principal, user.id, http)
-    return MemberOut.model_validate(user)
+    return (await service.members_out(db, [user]))[0]
 
 
 @router.post(
@@ -97,7 +105,7 @@ async def restore_member(user_id: uuid.UUID, principal: Owner, db: TenantDB) -> 
     lapsed, their tokens revoked and their connections gone: nothing else comes back."""
     user = await _call(service.restore_member(db, principal, user_id))
     await db.commit()
-    return MemberOut.model_validate(user)
+    return (await service.members_out(db, [user]))[0]
 
 
 @router.delete(
@@ -117,9 +125,18 @@ async def remove_member(
 
 
 @router.get("/api-tokens", response_model=list[ApiTokenOut])
-async def list_api_tokens(db: TenantDB) -> list[ApiTokenOut]:
-    """Every API token of this company (never the secret), revoked ones included."""
-    return [ApiTokenOut.model_validate(t) for t in await service.list_api_tokens(db)]
+async def list_api_tokens(
+    db: TenantDB,
+    kind: Annotated[TokenKind | None, Query(description="Only this kind")] = None,
+    user_id: Annotated[
+        uuid.UUID | None, Query(description="Only those acting for this member")
+    ] = None,
+) -> list[ApiTokenOut]:
+    """Every credential of this company (never the secret), revoked ones included,
+    oldest first: personal and service API tokens, run tokens and MCP clients' OAuth
+    grants, each with its kind, the member it acts for, its scopes and when it was
+    created, last used, revoked and (run tokens, grants) expires."""
+    return await tokens.list_tokens(db, kind=kind, user_id=user_id)
 
 
 @router.delete(
@@ -128,10 +145,13 @@ async def list_api_tokens(db: TenantDB) -> list[ApiTokenOut]:
     responses={404: {"description": "No such token"}},
 )
 async def revoke_api_token(token_id: uuid.UUID, principal: Owner, db: TenantDB) -> None:
-    """Revoke an API token. The approvals given through it lapse for good (section
-    verdicts and version approvals); its user's own approvals stand. Revoking twice is
-    a no-op."""
-    await _call(service.revoke_api_token(db, principal, token_id))
+    """Revoke a credential of any kind by its id: an API token, a run token or an MCP
+    client's grant (its access and refresh tokens). The approvals given through an API
+    token or a grant lapse for good (section verdicts and version approvals); its
+    member's own approvals stand, as do spend approvals and checkpoint decisions (C2: a
+    token revoke voids neither). A revoked run token ends its agents' access; the run
+    goes on. Revoking twice is a no-op."""
+    await _call(service.revoke_any_token(db, principal, token_id))
     await db.commit()
 
 

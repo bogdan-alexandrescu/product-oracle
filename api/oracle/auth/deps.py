@@ -107,7 +107,8 @@ async def _bearer_principal(raw: str) -> Principal:
         return Principal(
             tenant_id=token.tenant_id,
             kind="user",
-            role=user.role,
+            # A personal token's scope caps the user's role (oracle:read alone: viewer).
+            role=service.token_role(user.role, token.scope),
             user_id=user.id,
             token_id=token.id,
         )

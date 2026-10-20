@@ -14,16 +14,18 @@ import logging
 import secrets
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 import jwt
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.audit import record
 from oracle.auth.models import User
-from oracle.auth.service import hash_password
+from oracle.auth.service import hash_password, reserved_email
 from oracle.config import get_settings
 from oracle.members import service as members
 from oracle.models import Tenant
@@ -129,6 +131,18 @@ async def _default_tenant_id() -> uuid.UUID | None:
         return await s.scalar(select(Tenant.id).order_by(Tenant.created_at).limit(1))
 
 
+# Every request through IAP carries the assertion: a sign-in is recorded at most this often.
+SIGN_IN_RESOLUTION = timedelta(minutes=10)
+
+
+async def _signed_in(session: AsyncSession, user: User) -> None:
+    """Record a Google sign-in as the member's last sign-in (members list, My account)."""
+    now = datetime.now(UTC)
+    if user.last_sign_in_at is None or now - user.last_sign_in_at >= SIGN_IN_RESOLUTION:
+        user.last_sign_in_at = now
+        await session.commit()
+
+
 async def user_for_claims(claims: dict[str, Any]) -> User | None:
     """The default-tenant user for verified IAP claims, provisioned if allowed."""
     email = claims["email"].strip().lower()
@@ -144,6 +158,7 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
             if user.disabled_at is not None:
                 log.info("IAP sign-in for %s refused: the member is disabled", email)
                 return None
+            await _signed_in(s, user)
             return user
         settings = get_settings()
         domain = email.rsplit("@", 1)[1]
@@ -151,12 +166,21 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
         if not settings.iap_auto_provision or domain not in allowed:
             log.info("IAP sign-in for %s refused: unknown user, not provisioned", email)
             return None
+        if reserved_email(email) and not settings.allow_reserved_email_domains:
+            log.info("IAP sign-in for %s refused: a reserved example domain", email)
+            return None
         # An open invite for this email sets the role (and is accepted); otherwise the
         # company's iap_default_role setting does.
         invite = await members.claim_open_invite(s, email)
         role = invite.role if invite is not None else await members.iap_default_role(s)
         # No password sign-in for these users: the hash is of a secret nobody keeps.
-        user = User(email=email, password_hash=hash_password(secrets.token_urlsafe(32)), role=role)
+        user = User(
+            email=email,
+            password_hash=hash_password(secrets.token_urlsafe(32)),
+            role=role,
+            password_sign_in=False,
+            last_sign_in_at=datetime.now(UTC),
+        )
         s.add(user)
         try:
             await s.flush()

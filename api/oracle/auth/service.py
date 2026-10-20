@@ -21,7 +21,37 @@ if TYPE_CHECKING:
     from oracle.auth.deps import Principal
 
 TOKEN_PREFIX = "po_"
+# A new password (My account) is at least this long; sign-in accepts any old one.
+PASSWORD_MIN_LENGTH = 12
 _hasher = PasswordHasher()
+
+# Domains no real person signs in from (RFC 2606, RFC 6761): example.com/.org/.net and
+# anything under them, and the .test, .invalid and .localhost names.
+RESERVED_EMAIL_DOMAINS = ("example.com", "example.org", "example.net")
+RESERVED_EMAIL_TLDS = ("test", "invalid", "localhost")
+
+
+class ReservedEmailError(ValueError):
+    """An email at a reserved example domain, outside the mock/test build."""
+
+
+def reserved_email(email: str) -> bool:
+    """Whether ``email`` is at a reserved example domain."""
+    domain = email.strip().lower().rsplit("@", 1)[-1].rstrip(".")
+    if any(domain == d or domain.endswith("." + d) for d in RESERVED_EMAIL_DOMAINS):
+        return True
+    return domain.rsplit(".", 1)[-1] in RESERVED_EMAIL_TLDS
+
+
+def check_email_allowed(email: str) -> None:
+    """Refuse a new user or invite at a reserved example domain unless the build allows
+    them (``allow_reserved_email_domains``: tests and the mock). Existing members are
+    never checked: this guards creation only."""
+    if reserved_email(email) and not get_settings().allow_reserved_email_domains:
+        domain = email.strip().lower().rsplit("@", 1)[-1]
+        raise ReservedEmailError(
+            f"{domain} is a reserved example domain; use the person's real email address"
+        )
 
 
 def hash_password(password: str) -> str:
@@ -41,6 +71,7 @@ def hash_token(raw: str) -> str:
 
 
 async def create_user(session: AsyncSession, email: str, password: str) -> User:
+    check_email_allowed(email)
     user = User(email=email.strip().lower(), password_hash=hash_password(password), role="owner")
     session.add(user)
     await session.flush()
@@ -48,17 +79,30 @@ async def create_user(session: AsyncSession, email: str, password: str) -> User:
 
 
 async def create_api_token(
-    session: AsyncSession, name: str, *, user_id: uuid.UUID | None = None
+    session: AsyncSession,
+    name: str,
+    *,
+    user_id: uuid.UUID | None = None,
+    scope: str | None = None,
 ) -> tuple[ApiToken, str]:
     """Create a token in the session's tenant. Returns (row, raw token); show raw once.
 
-    With ``user_id`` the token acts as that user (their role and their own data).
+    With ``user_id`` the token acts as that user (their role and their own data), capped
+    by ``scope`` when given (``oracle:read`` alone acts as a viewer).
     """
     raw = TOKEN_PREFIX + secrets.token_urlsafe(32)
-    token = ApiToken(name=name, token_hash=hash_token(raw), user_id=user_id)
+    token = ApiToken(name=name, token_hash=hash_token(raw), user_id=user_id, scope=scope)
     session.add(token)
     await session.flush()
     return token, raw
+
+
+def token_role(user_role: str, scope: str | None) -> Role:
+    """The role a token for a user acts with: the user's role, capped by the token's
+    scope as for MCP clients (no ``oracle:write``: viewer). No scope: the user's role."""
+    if scope is None or "oracle:write" in scope.split():
+        return user_role  # type: ignore[return-value]
+    return "viewer"
 
 
 def may_sign_in(user: User | None) -> bool:
@@ -153,13 +197,17 @@ async def caller_refusal(session: AsyncSession, principal: "Principal", role: Ro
     if principal.token_id is not None:
         row = (
             await session.execute(
-                select(ApiToken.revoked_at, ApiToken.role).where(ApiToken.id == principal.token_id)
+                select(ApiToken.revoked_at, ApiToken.role, ApiToken.scope).where(
+                    ApiToken.id == principal.token_id
+                )
             )
         ).first()
         if row is None or row.revoked_at is not None:
             return "This API token was revoked"
         if principal.user_id is None and not has_role(row.role, role):
             return f"Requires the {role} role"
+        if principal.user_id is not None and not has_role(token_role("owner", row.scope), role):
+            return f"Requires the {role} role (this token is read-only)"
     if principal.run_token_id is not None:
         from oracle.runtokens import RunToken
 

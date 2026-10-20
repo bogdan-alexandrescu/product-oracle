@@ -44,3 +44,10 @@ export async function selectText(page: Page, key: string, text: string) {
     { key, text },
   );
 }
+
+/** Signs out from the user menu. */
+export async function signOut(page: Page) {
+  await page.getByTestId("user-menu").click();
+  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+}

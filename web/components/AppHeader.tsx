@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { resetMockData } from "@/lib/api/mock/server";
@@ -46,25 +47,70 @@ export function AppHeader() {
           </button>
         </span>
       )}
-      {email && (
-        <span className="flex items-center gap-3 text-sm">
-          <span className="text-neutral-500" data-testid="signed-in-as">
-            {email}
-          </span>
-          <button type="button" onClick={signOut} className="text-neutral-600 hover:text-neutral-900">
+      {email && <UserMenu email={email} isUser={me?.kind === "user"} onSignOut={signOut} />}
+    </HeaderShell>
+  );
+}
+
+/**
+ * The user menu: who is signed in, My account (people only: a service token has no
+ * account) and Sign out. Mirrors the design system's AppShell menu on main.
+ */
+function UserMenu({ email, isUser, onSignOut }: { email: string; isUser: boolean; onSignOut: () => void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onDown = (e: PointerEvent) => root.current && !root.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [open]);
+  const item = "flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2";
+  return (
+    <div ref={root} className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={`Account ${email}`}
+        data-testid="user-menu"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-text2 hover:bg-surface2 hover:text-text"
+      >
+        <span data-testid="signed-in-as">{email}</span>
+        <span aria-hidden>▾</span>
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          aria-label="Account"
+          className="absolute top-[calc(100%+6px)] right-0 z-50 w-64 rounded-panel border border-line bg-surface p-2 text-left text-text shadow-tip"
+        >
+          <p className="truncate px-2 pt-1 pb-2 text-[13px] text-text2">{email}</p>
+          {isUser && (
+            <Link href="/account" className={item} onClick={() => setOpen(false)} data-testid="nav-my-account">
+              My account
+            </Link>
+          )}
+          <button type="button" className={item} onClick={onSignOut}>
             Sign out
           </button>
-        </span>
+        </div>
       )}
-    </HeaderShell>
+    </div>
   );
 }
 
 export function HeaderShell({ children }: { children?: React.ReactNode }) {
   return (
-    <header className="border-b border-neutral-200 bg-white">
+    <header className="border-b border-line bg-surface">
       <nav className="mx-auto flex h-12 max-w-[1400px] items-center gap-6 px-6">
-        <Link href="/documents" className="font-semibold tracking-tight text-neutral-900">
+        <Link href="/documents" className="font-semibold tracking-tight text-text">
           Product Oracle
         </Link>
         <div className="ml-auto flex items-center gap-4">{children}</div>

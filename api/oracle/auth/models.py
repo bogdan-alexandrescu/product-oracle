@@ -2,7 +2,16 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Text, UniqueConstraint, Uuid
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    true,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
@@ -32,6 +41,13 @@ class User(TenantScoped, Base):
     # Session cookies signed before this are refused (C2): set by a disable and by a
     # restore, so a disable ends every session and a restored member signs in fresh.
     sessions_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The last password or Google (IAP) sign-in; None until the first one after this column came.
+    last_sign_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # False for members Google sign-in provisioned: their hash is of a secret nobody
+    # keeps, so there is no password to sign in with or to change.
+    password_sign_in: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
 
 
 class ApiToken(TenantScoped, Base):
@@ -49,3 +65,7 @@ class ApiToken(TenantScoped, Base):
     )
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A personal token's scopes, space-delimited as for MCP clients ("oracle:read",
+    # "oracle:write"): without oracle:write it acts as a viewer. None: every right of its
+    # role (tokens made before scopes existed, and service tokens).
+    scope: Mapped[str | None] = mapped_column(Text)
