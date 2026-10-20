@@ -69,7 +69,7 @@ export function ReviewPanel({
       action={shortcuts}
       className={
         variant === "side"
-          ? "min-[1101px]:flex min-[1101px]:max-h-[calc(100dvh-2rem)] min-[1101px]:flex-col"
+          ? "min-[1101px]:flex min-[1101px]:min-h-0 min-[1101px]:flex-col"
           : "rounded-none border-0 shadow-none max-[600px]:rounded-none"
       }
       head={

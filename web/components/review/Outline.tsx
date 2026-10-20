@@ -17,6 +17,7 @@ import { Button, FilterChips, Icon, MARK_LABEL } from "@/components/ds";
 import { Kbd, SectionMark, sectionMark } from "@/components/review/parts";
 import type { SectionOut } from "@/lib/api/client";
 import { sectionHref } from "@/lib/section-link";
+import { useViewportFit } from "@/lib/use-viewport-fit";
 
 /*
  * PRD page navigation (I3, owner 2026-10-20): the outline rail left of the section card
@@ -332,6 +333,7 @@ export function OutlineList({
               aria-current={on ? "true" : undefined}
               aria-label={`${s.heading}, ${MARK_LABEL[state]}${count ? `, ${count} open feedback` : ""}${folded ? `, ${reviewed} of ${nd.subtree.length} reviewed` : ""}`}
               title={s.heading}
+              data-own-nav
               onClick={(e) => {
                 if (!plainClick(e)) return;
                 e.preventDefault();
@@ -371,9 +373,21 @@ export function OutlineList({
 /** "N of M reviewed" and a bar. */
 export function ReviewProgress({ reviewed, total, compact = false }: { reviewed: number; total: number; compact?: boolean }) {
   return (
-    <div className={`flex min-w-0 flex-col gap-1 ${compact ? "w-36" : ""}`} data-testid="review-progress">
+    <div
+      className={`flex min-w-0 flex-col gap-1 ${compact ? "w-24" : ""}`}
+      data-testid="review-progress"
+      title={compact ? `${reviewed} of ${total} reviewed` : undefined}
+    >
       <span className="tnum text-[13px] leading-4 font-semibold text-text2">
-        <b className="font-bold text-text">{reviewed}</b> of {total} reviewed
+        {compact ? (
+          <>
+            <b className="font-bold text-text">{reviewed}</b>/{total} <span className="sr-only">reviewed</span>
+          </>
+        ) : (
+          <>
+            <b className="font-bold text-text">{reviewed}</b> of {total} reviewed
+          </>
+        )}
       </span>
       <span
         role="progressbar"
@@ -426,10 +440,14 @@ export function OutlineRail({
 }: ListProps & { filterRef: RefObject<HTMLInputElement | null>; onCollapse: () => void }) {
   const scroll = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
+  const nav = useRef<HTMLElement>(null);
+  // Sticky under the header and never taller than the viewport below its top.
+  useViewportFit(nav, "(min-width: 1280px)");
   const reviewed = props.sections.filter((s) => s.verdict).length;
   const firstRow = () => list.current?.querySelector<HTMLElement>("a[data-outline-key]");
   return (
     <nav
+      ref={nav}
       aria-label="Outline"
       data-testid="outline-rail"
       className="sticky top-4 flex max-h-[calc(100dvh-2rem)] min-h-0 w-[280px] flex-col overflow-hidden rounded-panel border border-line bg-surface shadow-panel"
@@ -583,6 +601,7 @@ export function SectionSwitcher({
         rel={dir}
         aria-label={`${dir === "prev" ? "Previous" : "Next"} section: ${s.heading}`}
         title={s.heading}
+        data-own-nav
         onClick={(e) => {
           if (!plainClick(e)) return;
           e.preventDefault();
@@ -601,7 +620,7 @@ export function SectionSwitcher({
   return (
     <div
       data-testid="section-switcher"
-      className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-panel border border-line bg-surface p-1.5 pr-3 shadow-panel"
+      className="relative flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-panel border border-line bg-surface p-1.5 pr-3 shadow-panel"
     >
       <div className="flex min-w-0 flex-1 basis-80 items-center gap-1">
         {leading}
@@ -671,12 +690,8 @@ export function SectionSwitcher({
               }}
             />
           </div>
-          <p className="flex flex-none flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2 text-[13px] text-text2" data-testid="switcher-hints">
-            <span>↑↓ move</span>
-            <span aria-hidden>·</span>
-            <span>↵ open</span>
-            <span aria-hidden>·</span>
-            <span>j k next/previous</span>
+          <p className="flex-none border-t border-line px-3 py-2 text-[13px] text-text2" data-testid="switcher-hints">
+            ↑↓ move · ↵ open · j k next/previous
           </p>
         </div>
       )}

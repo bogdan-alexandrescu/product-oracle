@@ -35,6 +35,7 @@ import { hasRole, useMe } from "@/lib/me";
 import { useDocumentView, type DocumentView } from "@/lib/preferences";
 import { keyFromHash, sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
+import { useViewportFit } from "@/lib/use-viewport-fit";
 
 type Selection = { sectionKey: string; anchor: TextQuoteSelector; rect: PageRect };
 
@@ -123,6 +124,9 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const switcherFilter = useOutlineFilter();
   const sheetFilter = useOutlineFilter();
   const railFilterRef = useRef<HTMLInputElement>(null);
+  const inspectorRef = useRef<HTMLDivElement>(null);
+  // The panel beside the section sticks and fits the viewport: its foot is always on screen.
+  useViewportFit(inspectorRef, "(min-width: 1101px)");
   // O1f: the brief or the whole version; the choice is remembered per user. A comment
   // on a section the brief does not show switches this page to the full document only.
   const [savedView, saveView] = useDocumentView();
@@ -166,7 +170,6 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   // Queries are scoped to this view: Next keeps recently visited routes mounted (hidden).
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
-  const inspectorRef = useRef<HTMLDivElement>(null);
 
   const version = verQ.data;
   const document_ = docQ.data;
@@ -483,7 +486,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const onLinkCapture = (e: MouseEvent<HTMLDivElement>) => {
     if (!plainClick(e) || e.defaultPrevented) return;
     const a = (e.target as Element).closest?.("a[href]") as HTMLAnchorElement | null;
-    if (!a || a.target === "_blank" || a.origin !== window.location.origin || !a.hash) return;
+    // Links that open their section themselves (the outline, the arrows) are left to it.
+    if (!a || a.hasAttribute("data-own-nav") || a.target === "_blank" || a.origin !== window.location.origin || !a.hash) return;
     if (a.pathname !== window.location.pathname) return;
     const key = keyFromHash(a.hash, allKeys);
     if (!key) return;
@@ -589,6 +593,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       href={sectionHref(doc, n, s.section_key)}
       rel={dir}
       aria-label={`${dir === "prev" ? "Previous" : "Next"} section: ${s.heading}`}
+      data-own-nav
       onClick={(e) => {
         if (!plainClick(e)) return;
         e.preventDefault();
@@ -825,6 +830,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                   <a
                     key={k}
                     href={sectionHref(doc, n, k)}
+                    data-own-nav
                     onClick={(e) => {
                       if (!plainClick(e)) return;
                       e.preventDefault();
@@ -933,7 +939,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             </article>
           </div>
           <div className="min-w-0 self-stretch max-[639px]:hidden">
-            <div ref={inspectorRef} className="scroll-mt-3 min-[1101px]:sticky min-[1101px]:top-4">
+            <div
+              ref={inspectorRef}
+              data-testid="review-panel-column"
+              className="scroll-mt-3 min-[1101px]:sticky min-[1101px]:top-4 min-[1101px]:flex min-[1101px]:max-h-[calc(100dvh-2rem)] min-[1101px]:flex-col"
+            >
               {panel("side")}
             </div>
           </div>
@@ -953,7 +963,6 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             data-testid="phone-sections"
             className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-button border border-line-strong px-3 text-[15px] font-semibold text-text"
           >
-            <Icon name="outline" size={20} />
             <span className="truncate">Sections</span>
             <span className="tnum flex-none text-text2">
               · {openIdx + 1}/{shownSections.length}
@@ -966,7 +975,6 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             data-testid="phone-review"
             className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-button bg-accent px-3 text-[15px] font-semibold text-on-accent"
           >
-            <Icon name="comment" size={20} />
             <span className="truncate">Review</span>
             <span className="tnum flex-none">· {openFeedback ?? "–"}</span>
           </button>

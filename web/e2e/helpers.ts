@@ -45,22 +45,42 @@ export async function selectText(page: Page, key: string, text: string) {
   );
 }
 
-/** The version view's section strip (one section is open at a time). */
+/** The version view's outline rail (>= 1280 px; one section is open at a time). */
 export function sectionStrip(page: Page): Locator {
-  return page.getByRole("navigation", { name: "Sections" }).filter({ visible: true });
+  return page.getByTestId("outline-rail").filter({ visible: true });
 }
 
-/** Opens a section of the current Brief / Full mode from the strip, and waits for its panel. */
+/** A section's row in the visible outline (rail, switcher popover or Sections sheet). */
+export function outlineRow(page: Page, key: string): Locator {
+  return page.locator(`a[data-outline-key="${key}"]`).filter({ visible: true });
+}
+
+/**
+ * Opens a section of the current Brief / Full mode from the outline, and waits for its
+ * panel. A row inside a folded chapter (or no rail, below 1280 px) is opened by its #key.
+ */
 export async function openSection(page: Page, key: string): Promise<Locator> {
-  await sectionStrip(page).locator(`a[data-strip-key="${key}"]`).click();
+  const row = outlineRow(page, key);
+  if (await row.count()) await row.first().click();
+  else await page.evaluate((k) => (window.location.hash = k), key);
   const s = section(page, key);
   await expect(s).toBeVisible();
   return s;
 }
 
-/** The review panel's comments, feedback and resolutions for every section, not only the open one. */
+/** Opens a review panel tab (Feedback, Sources, History) in the visible panel. */
+export async function openTab(page: Page, name: "Feedback" | "Sources" | "History") {
+  await page.getByRole("tab", { name: new RegExp(`^${name}`) }).filter({ visible: true }).click();
+}
+
+/** Picks a Feedback state chip (Open, Staged, Declined, Done). */
+export async function feedbackState(page: Page, state: "Open" | "Staged" | "Declined" | "Done") {
+  await page.getByTestId("feedback-state").filter({ visible: true }).getByRole("button", { name: new RegExp(`^${state}`) }).click();
+}
+
+/** The review panel's feedback for every section, not only the open one. */
 export async function showAll(page: Page) {
-  await page.getByTestId("inspector-scope").filter({ visible: true }).getByRole("button", { name: "All", exact: true }).click();
+  await page.getByTestId("inspector-scope").filter({ visible: true }).getByRole("button", { name: /^All sections/ }).click();
 }
 
 /** Picks an item from the open section's ⋯ menu. */

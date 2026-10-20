@@ -107,8 +107,9 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
   const key = item.section_key;
   const heading = key ? ctx.headings.get(key) ?? key : null;
   const mine = !!comment && ctx.userId !== null && comment.author_id === ctx.userId;
+  // A suggestion's actions are Accept / Edit / Dismiss; a comment's, Reply / Resolve.
   const commentActions =
-    comment && !ctx.readOnly && ctx.canComment ? (
+    comment && kind !== "suggestion" && !ctx.readOnly && ctx.canComment ? (
       <>
         {!replying && (
           <Button variant="ghost" icon="comment" onClick={() => setReplying(true)}>
@@ -140,12 +141,13 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
         <Chip kind={STATE_KIND[state]} data-testid="feedback-state-chip">
           {FEEDBACK_STATE_LABEL[state]}
         </Chip>
-        <span className="flex-1" />
-        <span className="flex flex-wrap items-center justify-end gap-1">
+      </div>
+      {(suggestionActions || commentActions) && (
+        <div className={`mt-2 flex flex-wrap items-center gap-1 ${suggestionActions ? "" : "-ml-2.5"}`} data-testid="feedback-actions">
           {suggestionActions}
           {commentActions}
-        </span>
-      </div>
+        </div>
+      )}
       {forms}
       {replying && comment && <ReplyForm onReply={(b) => ctx.onReply(comment.id, b)} onClose={() => setReplying(false)} />}
 
@@ -154,11 +156,13 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
           <Avatar name={mine ? "You" : "Reviewer"} initials={mine ? "Me" : "R"} tone={mine ? "me" : "default"} />
           <div className="min-w-0 flex-1">
             {placed && (
-              <button type="button" className="block w-full text-left" onClick={() => ctx.onShowComment(placed)} aria-label={`Show comment in ${placed.heading}`}>
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="min-w-0 truncate text-sm font-semibold text-accent-ink hover:underline">{placed.heading}</span>
-                  {ctx.showLayer && <LayerChip layer={placed.layer} />}
-                </span>
+              <button
+                type="button"
+                className="block w-full text-left hover:[&>span]:text-text"
+                onClick={() => ctx.onShowComment(placed)}
+                aria-label={`Show comment in ${placed.heading}`}
+              >
+                {ctx.showLayer && <LayerChip layer={placed.layer} />}
                 {placed.anchor && <Quote>{placed.anchor.exact}</Quote>}
                 {!placed.anchored && (
                   <span className="mt-1 block">
@@ -200,6 +204,7 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
         {key && heading && (
           <a
             href={sectionHref(ctx.doc, item.raised_on_version, key)}
+            data-own-nav
             onClick={(e) => {
               if (!plainClick(e)) return;
               e.preventDefault();
