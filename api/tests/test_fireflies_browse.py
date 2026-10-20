@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from oracle.connections.models import Connection
 from oracle.main import app
@@ -209,10 +209,12 @@ async def test_picked_source_syncs_and_drops_what_is_unpicked(
             json={"config": {"mode": "selected", "series": [STANDUP, PLANNING]}},
         )
         assert resp.status_code == 200, resp.text
+        # The unpicked interview went on save (owner 2026-10-20), not on the next sync.
+        assert (await _items(tenant_id, source["id"]))["K1"] is False
         fake.requests.clear()
         sync = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
         assert sync["outcome"] == "completed", sync
-        assert sync["deleted"] == 1
+        assert sync["deleted"] == 0
         assert await _items(tenant_id, source["id"]) == {
             "S1": True,
             "S2": True,
@@ -1001,3 +1003,135 @@ async def test_a_full_pick_fits_the_labels_cap(fake, connector, alice, conn):
             },
         )
     assert resp.status_code == 201, resp.text
+
+
+# --- Narrowing takes effect on save, picks included (owner S5, 2026-10-20) --------------
+
+
+async def _picked(a, conn, config):
+    resp = await a.post(
+        "/v1/sources",
+        json={"kind": "fireflies", "name": "Meetings", "connection_id": str(conn), "config": config},
+    )
+    assert resp.status_code == 201, resp.text
+    source = resp.json()
+    sync = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
+    assert sync["outcome"] == "completed", sync
+    return source
+
+
+async def _save(a, fake, source, config):
+    """PATCH the config; what Fireflies was asked for meetings meanwhile."""
+    fake.requests.clear()
+    resp = await a.patch(f"/v1/sources/{source['id']}", json={"config": config})
+    assert resp.status_code == 200, resp.text
+    return fake.list_variables(), fake.detail_ids()
+
+
+async def test_unpicking_a_meeting_deletes_it_on_save(fake, connector, tenant_id, alice, conn):
+    async with client_for(alice) as a:
+        source = await _picked(
+            a, conn, {"mode": "selected", "series": [STANDUP], "meetings": ["K1", "P1"]}
+        )
+        listed, detail = await _save(
+            a, fake, source, {"mode": "selected", "series": [STANDUP], "meetings": ["P1"]}
+        )
+        assert (listed, detail) == ([], [])
+        assert await _items(tenant_id, source["id"]) == {
+            "S1": True,
+            "S2": True,
+            "S3": True,
+            "P1": True,
+            "K1": False,
+        }
+
+
+async def test_unpicking_a_series_deletes_its_meetings_on_save(
+    fake, connector, tenant_id, alice, conn
+):
+    async with client_for(alice) as a:
+        source = await _picked(
+            a, conn, {"mode": "selected", "series": [STANDUP, PLANNING], "meetings": ["K1"]}
+        )
+        listed, detail = await _save(
+            a, fake, source, {"mode": "selected", "series": [PLANNING], "meetings": ["K1"]}
+        )
+        assert (listed, detail) == ([], [])
+        assert await _items(tenant_id, source["id"]) == {
+            "S1": False,
+            "S2": False,
+            "S3": False,
+            "P1": True,
+            "P2": True,
+            "K1": True,
+        }
+
+
+async def test_a_meeting_picked_alone_stays_when_its_series_is_unpicked(
+    fake, connector, tenant_id, alice, conn
+):
+    async with client_for(alice) as a:
+        source = await _picked(
+            a, conn, {"mode": "selected", "series": [STANDUP], "meetings": ["S2"]}
+        )
+        await _save(a, fake, source, {"mode": "selected", "meetings": ["S2"]})
+        assert await _items(tenant_id, source["id"]) == {"S1": False, "S2": True, "S3": False}
+
+
+async def test_items_of_unknown_provenance_not_shown_picked_are_swept(
+    fake, connector, tenant_id, alice, conn
+):
+    """Stored before the provenance existed (none, or no series): a pick by meeting id
+    still holds; what cannot be shown inside the new picks is deleted."""
+    async with client_for(alice) as a:
+        source = await _picked(
+            a, conn, {"mode": "selected", "series": [STANDUP], "meetings": ["K1"]}
+        )
+        async with tenant_session(tenant_id) as s:
+            await s.execute(
+                update(SourceItem)
+                .where(SourceItem.source_id == source["id"])
+                .values(provenance=None)
+            )
+            await s.commit()
+        await _save(a, fake, source, {"mode": "selected", "series": [STANDUP], "meetings": ["K1"]})
+        # Nothing changed: nothing is swept.
+        assert all((await _items(tenant_id, source["id"])).values())
+        await _save(a, fake, source, {"mode": "selected", "series": [PLANNING], "meetings": ["K1"]})
+        items = await _items(tenant_id, source["id"])
+        assert items["K1"] is True
+        assert [items[i] for i in ("S1", "S2", "S3")] == [False, False, False]
+
+
+async def test_a_save_that_does_not_change_the_selection_sweeps_nothing(
+    fake, connector, tenant_id, alice, conn
+):
+    async with client_for(alice) as a:
+        source = await _picked(a, conn, {"mode": "selected", "series": [STANDUP]})
+        await _save(
+            a,
+            fake,
+            source,
+            {"mode": "selected", "series": [STANDUP], "labels": {STANDUP: "Daily standup"}},
+        )
+        assert all((await _items(tenant_id, source["id"])).values())
+
+
+async def test_an_edit_is_checked_against_the_row_read_under_the_lock(
+    fake, connector, tenant_id, alice, conn
+):
+    """A request loaded the source, another saved a new config, then this one asks for
+    the config it loaded: that is a change from what is stored, and is written."""
+    first = {"mode": "all"}
+    second = {"mode": "all", "date_from": "2026-10-01"}
+    async with client_for(alice) as a:
+        source = await _picked(a, conn, first)
+    sid = uuid.UUID(source["id"])
+    async with tenant_session(tenant_id) as early:
+        stale = await early.get(Source, sid)
+        assert stale.config == first
+        async with tenant_session(tenant_id) as other:
+            await service.update_source(other, await other.get(Source, sid), {"config": second})
+        await service.update_source(early, stale, {"config": first})
+    async with tenant_session(tenant_id) as s:
+        assert (await s.get(Source, sid)).config == first
