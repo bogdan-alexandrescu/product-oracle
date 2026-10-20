@@ -210,3 +210,14 @@ test("Inbox: arriving marks items seen; they stay New for this visit, Open on th
   await tabs.getByRole("tab", { name: /^Open/ }).click();
   await expect(page.getByTestId("inbox-tab-open").getByTestId("inbox-feedback").locator("tr[data-row]")).toHaveCount(5);
 });
+
+test("with the Refinement switch off the build button is disabled and says why", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/clinic-outreach");
+  const refinement = page.getByTestId("llm-job-settings").getByLabel("Refinement");
+  await refinement.uncheck();
+  await expect(refinement).not.toBeChecked();
+  await page.locator('a[href$="/clinic-outreach/v/5"]').filter({ visible: true }).first().click();
+  await expect(buildButton(page)).toBeDisabled();
+  await expect(buildButton(page)).toHaveAttribute("title", "Refinement jobs are switched off");
+});

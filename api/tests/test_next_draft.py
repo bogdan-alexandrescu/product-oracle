@@ -627,3 +627,63 @@ async def test_dismissing_a_suggestion_without_declining_keeps_the_item_open(
     assert inbox["total"] == 1
     fb = await feedback(client, ctx)
     assert fb[ids["still"]]["state"] == "open"
+
+
+# --- review fixes: one build at a time, resolve closes the item, dismissed-in-build ---------
+
+
+async def test_two_concurrent_builds_queue_exactly_one_job(client, ctx, pool, fake):
+    import asyncio
+
+    await staged_setup(client, ctx, fake)
+    a, b = await asyncio.gather(
+        client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"]),
+        client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"]),
+    )
+    assert sorted([a.status_code, b.status_code]) == [201, 409], (a.text, b.text)
+    ok, refused = (a, b) if a.status_code == 201 else (b, a)
+    assert ok.json()["id"] in refused.json()["detail"]
+    async with tenant_session(ctx["tenant_id"]) as s:
+        n = await s.scalar(
+            select(func.count()).select_from(LlmJob).where(LlmJob.kind == "refinement_batch")
+        )
+    assert n == 1
+
+
+async def test_resolving_a_thread_closes_its_item_and_reopening_reopens_it(client, ctx, pool, fake):
+    ids = await staged_setup(client, ctx, fake)
+    assert (await client.get("/v1/inbox", headers=ctx["headers"])).json()["total"] == 1
+    cid = (await feedback(client, ctx))[ids["still"]]["comment_id"]
+    resp = await client.patch(
+        f"/v1/comments/{cid}", json={"resolved": True}, headers=ctx["headers"]
+    )
+    assert resp.status_code == 200, resp.text
+    inbox = (await client.get("/v1/inbox", headers=ctx["headers"])).json()
+    assert inbox["total"] == 0 and inbox["feedback"] == []
+    resp = await client.patch(
+        f"/v1/comments/{cid}", json={"resolved": False}, headers=ctx["headers"]
+    )
+    assert resp.status_code == 200, resp.text
+    assert (await client.get("/v1/inbox", headers=ctx["headers"])).json()["total"] == 1
+
+
+async def test_apply_skips_a_suggestion_dismissed_during_the_build(client, ctx, pool, fake):
+    ids = await staged_setup(client, ctx, fake)
+    job = await build(client, ctx, fake)
+    resp = await client.post(
+        f"/v1/suggestions/{ids['sol_s']}/dismiss",
+        json={"reason": "Changed my mind.", "decline": False},
+        headers=ctx["headers"],
+    )
+    assert resp.status_code == 200, resp.text
+    resp = await client.post(f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"])
+    assert resp.status_code == 201, resp.text
+    bodies = {s["section_key"]: s["body_md"] for s in resp.json()["sections"]}
+    assert bodies["goal-trace"].startswith("Serves activation")
+    assert bodies["solution"] == "A guided checklist on the first screen."
+    assert "45% finish" not in bodies["sources"]
+    fb = await feedback(client, ctx)
+    assert fb[ids["goal"]]["state"] == "done"
+    assert fb[ids["sol"]]["suggestion"]["status"] == "dismissed"
+    assert fb[ids["sol"]]["suggestion"]["applied_in_version"] is None
+    assert fb[ids["sol"]]["state"] != "done"
