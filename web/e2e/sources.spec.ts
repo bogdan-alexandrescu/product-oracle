@@ -22,6 +22,7 @@ test("settings › sources: my sources, status and last error, sync, allowlist, 
   // Edit allowlist and Delete sit in the row's More menu.
   await chat.getByRole("button", { name: "More actions for Product chat" }).click();
   await chat.getByRole("menuitem", { name: "Edit allowlist" }).click();
+  await chat.getByRole("button", { name: "Paste ids" }).click();
   await chat.getByLabel("Channel ids (one per line)").fill("C0123PRODUCT\nC0789ROADMAP");
   await chat.getByRole("button", { name: "Save allowlist" }).click();
   await expect(chat.getByRole("status")).toHaveText("Allowlist saved.");
@@ -52,7 +53,8 @@ test("settings › sources: add from my connections, upload files, delete", asyn
   await form.getByLabel("Kind").selectOption("github");
   await expect(form.getByLabel("Connection")).toHaveValue(/.+/);
   await form.getByLabel("Name").fill("Docs repo");
-  await form.getByLabel("Repositories to pull in (one per line)").fill("example-org/docs");
+  await form.getByRole("button", { name: "Paste ids" }).click();
+  await form.getByLabel("Repositories (one per line)").fill("example-org/docs");
   await form.getByRole("button", { name: "Add source" }).click();
   const docs = page.getByRole("listitem", { name: "Docs repo" });
   await expect(docs).toContainText("example-org/docs");

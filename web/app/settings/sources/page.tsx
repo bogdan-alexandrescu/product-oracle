@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ComponentType, type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import { KIND_LABEL } from "@/app/sources/_components/confidence";
 import {
@@ -24,6 +24,9 @@ import { formatDateTime } from "@/lib/format";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD, TEXTAREA } from "../_components/fields";
+import type { PickerProps } from "./_browse-list";
+import { GithubPicker } from "./_github-picker";
+import { SlackPicker } from "./_slack-picker";
 
 type Source = Schemas["SourceOut"];
 type Kind = Source["kind"];
@@ -36,6 +39,12 @@ const ALLOWLIST: Record<Exclude<Kind, "upload">, { key: string; label: string; e
   notion: { key: "pages", label: "Root page ids", example: "0123abcd…" },
   google_docs: { key: "folders", label: "Folder ids", example: "1AbC…" },
   fireflies: { key: "meetings", label: "Meeting title filters", example: "Weekly product review" },
+};
+
+// Kinds chosen in a picker (browse, search, tick) rather than typed ids (S5).
+const PICKER: Partial<Record<Kind, ComponentType<PickerProps>>> = {
+  slack: SlackPicker,
+  github: GithubPicker,
 };
 
 const STATUS_KIND: Record<Source["status"], ChipKind> = { active: "pass", paused: "na", error: "crit" };
@@ -143,11 +152,13 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
   const id = useId();
   const spec = ALLOWLIST[source.kind as Exclude<Kind, "upload">];
   const [text, setText] = useState(entries(source.config, spec.key).join("\n"));
+  const Picker = PICKER[source.kind];
+  const [picked, setPicked] = useState(source.config);
   const { act, error, busy } = useAction();
 
   async function save(e: FormEvent) {
     e.preventDefault();
-    const config = { ...source.config, [spec.key]: parseLines(text) };
+    const config = Picker ? picked : { ...source.config, [spec.key]: parseLines(text) };
     const saved = await act(() =>
       unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config } })),
     );
@@ -156,29 +167,38 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
 
   return (
     <form onSubmit={save} className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3">
-      <Field
-        label={`${spec.label} (one per line)`}
-        htmlFor={id}
-        tip={
-          <InfoTip label="saving the allowlist" align="start">
-            Saving a new allowlist syncs this source again from the start.
-          </InfoTip>
-        }
-      >
-        <textarea
-          id={id}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={4}
-          placeholder={spec.example}
-          className={`${TEXTAREA} font-mono`}
-        />
-      </Field>
+      {Picker ? (
+        <Picker connectionId={source.connection_id} config={picked} onChange={setPicked} />
+      ) : (
+        <Field
+          label={`${spec.label} (one per line)`}
+          htmlFor={id}
+          tip={
+            <InfoTip label="saving the allowlist" align="start">
+              Saving a new allowlist syncs this source again from the start.
+            </InfoTip>
+          }
+        >
+          <textarea
+            id={id}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={4}
+            placeholder={spec.example}
+            className={`${TEXTAREA} font-mono`}
+          />
+        </Field>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
-      <div>
+      <div className="flex items-center gap-1.5">
         <Button type="submit" variant="solid" disabled={busy}>
           Save allowlist
         </Button>
+        {Picker && (
+          <InfoTip label="saving the allowlist" align="start">
+            Saving a new allowlist syncs this source again from the start.
+          </InfoTip>
+        )}
       </div>
     </form>
   );
@@ -348,7 +368,9 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   const [name, setName] = useState("");
   const [connection, setConnection] = useState("");
   const [allow, setAllow] = useState("");
+  const [picked, setPicked] = useState<Record<string, unknown>>({});
   const { act, error, busy } = useAction();
+  const Picker = PICKER[kind];
   const option = kinds.find((k) => k.kind === kind);
   const usable = (option?.connections ?? []).filter((c) => c.status === "active");
   const spec = kind === "upload" ? null : ALLOWLIST[kind];
@@ -360,13 +382,14 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       kind,
       name: name.trim(),
       connection_id: spec ? connectionId : null,
-      config: spec ? { [spec.key]: parseLines(allow) } : {},
+      config: Picker ? picked : spec ? { [spec.key]: parseLines(allow) } : {},
     };
     const s = await act(() => unwrap(api.POST("/v1/sources", { body })));
     if (s) {
       onAdded(s);
       setName("");
       setAllow("");
+      setPicked({});
     }
   }
 
@@ -381,6 +404,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
             onChange={(e) => {
               setKind(e.target.value as Kind);
               setConnection("");
+              setPicked({});
             }}
             className={SELECT_FIELD}
           >
@@ -422,7 +446,8 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
           </LinkButton>
         </div>
       )}
-      {spec && usable.length > 0 && (
+      {Picker && usable.length > 0 && <Picker key={`${kind}:${connectionId}`} connectionId={connectionId} config={picked} onChange={setPicked} />}
+      {!Picker && spec && usable.length > 0 && (
         <Field label={`${spec.label} to pull in (one per line)`}>
           <textarea
             value={allow}

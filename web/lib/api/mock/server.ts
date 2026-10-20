@@ -18,6 +18,7 @@ import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeTrace } from "./trace";
@@ -894,6 +895,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
   // Company settings are the owner's, as in the API (tenant_settings_api.py).
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
+  const browse = sourceBrowseRoute(req, p, q);
+  if (browse) return browse;
   const connections = await connectionsRoute(req, p);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
