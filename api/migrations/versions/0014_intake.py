@@ -124,9 +124,12 @@ FINDINGS = _obj("i.analysis->'findings'")
 # stale items and conflict claims. An id that is not a UUID is skipped, never cast (one
 # malformed entry would abort the whole migration).
 WITHHELD_BACKFILL = (
-    f"""
+    """
 INSERT INTO intake_withheld_items (id, tenant_id, intake_id, user_id, item_id)
-SELECT gen_random_uuid(), i.tenant_id, i.id, i.author_id, x.item_id::uuid
+SELECT gen_random_uuid(), i.tenant_id, i.id, i.author_id,
+    CASE WHEN x.item_id ~* """
+    + UUID_TEXT
+    + f""" THEN x.item_id::uuid END
 FROM product_intakes i
 CROSS JOIN LATERAL (
     SELECT jsonb_array_elements_text({_arr("i.analysis->'read_item_ids'")})
@@ -150,14 +153,17 @@ ON CONFLICT DO NOTHING
 # item it cites had at the intake's pin (its last snapshot, committed then), for the
 # author's items not deleted. What cannot be determined is left out: not released.
 PINNED_VERSIONS = (
-    f"""
+    """
 SELECT DISTINCT ON (v.item_id) v.item_id, v.id AS version_id
 FROM source_item_versions v
 JOIN source_items si ON si.id = v.item_id AND si.deleted_at IS NULL
 JOIN sources so ON so.id = si.source_id AND so.owner_user_id = i.author_id
 JOIN snapshots sn ON sn.id = i.source_snapshot_ids[array_upper(i.source_snapshot_ids, 1)]
 WHERE v.item_id IN (
-        SELECT c::uuid FROM jsonb_array_elements_text({_arr("f.value->'source_item_ids'")}) c
+        SELECT CASE WHEN c ~* """
+    + UUID_TEXT
+    + f""" THEN c::uuid END
+        FROM jsonb_array_elements_text({_arr("f.value->'source_item_ids'")}) c
         WHERE c ~* """
     + UUID_TEXT
     + """)

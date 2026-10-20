@@ -241,3 +241,74 @@ async def test_another_users_item_carries_no_current_acl_field(client, fake):  #
     for out in (resp.json(), hits[str(items["a"])]):
         assert "acquisition" not in str(out["acl"])
         assert "shared" not in out["acl"]
+
+
+async def _answer_as_run(client, ctx, evidence: list[uuid.UUID]):
+    from sqlalchemy import select
+
+    from oracle.v2.models import KnowledgeGap, StakeholderQuestion
+    from tests.test_intake_sharing_round6 import MODEL_GAP
+
+    async with tenant_session(ctx.tenant_id) as s:
+        gap = await s.scalar(select(KnowledgeGap).where(KnowledgeGap.statement == MODEL_GAP))
+        q = await s.scalar(select(StakeholderQuestion).where(StakeholderQuestion.gap_id == gap.id))
+    return await client.post(
+        f"/v1/questions/{q.id}/answers",
+        json={
+            "kind": "answer",
+            "body": "Buyers retype it.",
+            "evidence_ids": [str(i) for i in evidence],
+        },
+        headers=as_run_of(ctx, "author"),
+    )
+
+
+async def test_a_run_never_cites_its_deleted_or_unreleased_items(client, fake):  # noqa: F811
+    """A run answering a question cites only what it may read: not its own item
+    deleted upstream, nor one a share froze whose release reads nothing now."""
+    from sqlalchemy import select
+
+    from oracle.intake.models import IntakeSharedItem
+    from tests.test_intake_sharing_round5 import _blocker_gap
+    from tests.test_intake_sharing_round7 import _delete
+
+    ctx, intake_id, items = await world(client, fake, hidden=False, model=_blocker_gap)
+    await share_all(client, ctx, intake_id, "full")
+    async with tenant_session(ctx.tenant_id) as s:
+        b = await s.get(SourceItem, items["b"])
+        for row in await s.scalars(
+            select(IntakeSharedItem).where(IntakeSharedItem.item_id == items["a"])
+        ):
+            row.version_id = b.current_version_id
+        await s.commit()
+    await _delete(ctx, items["old"])
+    for item in ("a", "old"):
+        resp = await _answer_as_run(client, ctx, [items[item]])
+        assert resp.status_code == 422, (item, resp.text)
+
+
+async def test_a_runs_source_list_pages_are_full(client, fake):  # noqa: F811
+    """Items a run may not read are left out before paging: a page of one is never
+    empty while a readable item follows."""
+    from sqlalchemy import select
+
+    from oracle.intake.models import IntakeSharedItem
+    from tests.test_intake_sharing_round7 import _sync
+
+    ctx, intake_id, items = await world(client, fake, hidden=False)
+    await share_all(client, ctx, intake_id, "full")
+    fresh = await _sync(ctx, items["a"], "A new thread on returning buyers.", new=True)
+    async with tenant_session(ctx.tenant_id) as s:
+        b = await s.get(SourceItem, items["b"])
+        for row in await s.scalars(
+            select(IntakeSharedItem).where(IntakeSharedItem.item_id == items["a"])
+        ):
+            row.version_id = b.current_version_id
+        a = await s.get(SourceItem, items["a"])
+        a.source_updated_at = datetime(2100, 1, 1, tzinfo=UTC)
+        source_id = a.source_id
+        await s.commit()
+    h = as_run_of(ctx, "author")
+    resp = await client.get(f"/v1/sources/{source_id}/items", params={"limit": 1}, headers=h)
+    assert resp.status_code == 200, resp.text
+    assert [x["id"] for x in resp.json()] == [str(fresh)]

@@ -23,6 +23,7 @@ from sqlalchemy import (
     Select,
     Text,
     and_,
+    case,
     cast,
     func,
     literal,
@@ -228,19 +229,41 @@ async def source_items(
     limit: int = 100,
     offset: int = 0,
     exclude: set[uuid.UUID] | None = None,
+    also: RunReads | None = None,
 ) -> list[ItemRow]:
     """A source's items (or those of ``ids``) with their current versions, newest first.
-    ``exclude``: items the caller may not read (left out before paging)."""
-    stmt = (
-        select(SourceItem, SourceItemVersion)
-        .outerjoin(SourceItemVersion, SourceItemVersion.id == SourceItem.current_version_id)
-        .where(SourceItem.source_id == source.id)
-        .order_by(
-            func.coalesce(
-                SourceItem.source_updated_at, SourceItem.occurred_at, SourceItem.created_at
-            ).desc(),
-            SourceItem.id,
+    ``exclude``: items the caller may not read (left out before paging). ``also``: a
+    run's reads (S6, as ``as_released``, before paging): an item ever frozen at the
+    version released and ordered by it, or left out if none is readable now; nothing
+    deleted upstream."""
+    newest = func.coalesce(
+        SourceItem.source_updated_at, SourceItem.occurred_at, SourceItem.created_at
+    )
+    if also is None:
+        stmt = select(SourceItem, SourceItemVersion).outerjoin(
+            SourceItemVersion, SourceItemVersion.id == SourceItem.current_version_id
         )
+    else:
+        released = also.released.subquery()
+        frozen = SourceItem.id.in_(also.frozen)
+        stmt = (
+            select(SourceItem, SourceItemVersion)
+            .outerjoin(released, released.c.item_id == SourceItem.id)
+            .outerjoin(
+                SourceItemVersion,
+                SourceItemVersion.id
+                == case((frozen, released.c.version_id), else_=SourceItem.current_version_id),
+            )
+            .where(
+                or_(~frozen, released.c.version_id.is_not(None)),
+                SourceItem.deleted_at.is_(None),
+            )
+        )
+        # A frozen item sorts by the version released, never by a change upstream since.
+        newest = case((frozen, SourceItemVersion.fetched_at), else_=newest)
+    stmt = (
+        stmt.where(SourceItem.source_id == source.id)
+        .order_by(newest.desc(), SourceItem.id)
         .limit(limit)
         .offset(offset)
     )

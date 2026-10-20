@@ -293,11 +293,11 @@ async def list_source_items(
     its title as shared (S6, owner 2026-10-19)."""
     source = await _owned(db, principal, source_id)
     shared = _shared(principal)
+    # Left out and read as released before paging, so a run's pages are full.
     rows = await items.source_items(
         db, source, include_deleted=include_deleted and shared is None, limit=limit,
-        offset=offset, exclude=await _withheld(db, principal),
+        offset=offset, exclude=await _withheld(db, principal), also=shared,
     )  # fmt: skip
-    rows = await items.as_released(db, rows, shared)
     settings = await items.confidence_settings(db)
     return [ItemOut(**items.item_out(r, settings)) for r in rows]
 

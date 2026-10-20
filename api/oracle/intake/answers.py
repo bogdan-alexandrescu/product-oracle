@@ -163,17 +163,22 @@ def next_actions(gap: Any, importance: str | None = None) -> list[NextAction]:
 async def _check_evidence(
     db: AsyncSession, principal: Principal, ids: list[uuid.UUID]
 ) -> list[uuid.UUID]:
+    from oracle.baseline.evidence import run_versions
     from oracle.intake.evidence import run_withheld
 
     me = actor_user(principal)
-    # A run never cites an item it may not read (S6): to it, the item is not its own.
+    # A run never cites an item it may not read (S6): to it, the item is not its own,
+    # nor one deleted upstream or ever frozen with no release readable now.
     withheld = (await run_withheld(db, principal) or set()) if ids else set()
+    frozen = await run_versions(db, principal, set(ids))
     for item_id in ids:
-        if (
-            me is None
-            or item_id in withheld
-            or await source_items.owned_item(db, me, item_id) is None
-        ):
+        row = None
+        if me is not None and item_id not in withheld:
+            row = await source_items.owned_item(db, me, item_id)
+        if row is not None and principal.is_run:
+            if row.item.deleted_at is not None or (item_id in frozen and frozen[item_id] is None):
+                row = None
+        if row is None:
             raise IntakeError(422, f"Evidence {item_id} is not one of your source items")
     return list(dict.fromkeys(ids))
 
