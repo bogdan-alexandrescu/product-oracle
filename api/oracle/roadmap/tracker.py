@@ -16,7 +16,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -82,6 +82,11 @@ async def import_records(
     refs = [r.external_ref for r in records]
     if len(set(refs)) != len(refs):
         raise TrackerError("an issue is listed twice")
+    # Imports of one tracker run one at a time (the upsert reads, then writes).
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:k))"),
+        {"k": f"tracker:{principal.tenant_id}:{tracker}"},
+    )
     existing = {
         r.external_ref: r
         for r in await db.scalars(

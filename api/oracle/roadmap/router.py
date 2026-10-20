@@ -409,6 +409,10 @@ async def update_track(
     if body.lock_version != track.lock_version:
         raise HTTPException(status.HTTP_409_CONFLICT, "The track changed since it was loaded")
     fields = body.model_dump(exclude_unset=True, exclude={"lock_version"})
+    if nulls := [k for k in ("title", "status") if k in fields and fields[k] is None]:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, f"{', '.join(nulls)} cannot be cleared"
+        )
     before = {k: getattr(track, k) for k in fields}
     for k, v in fields.items():
         setattr(track, k, v)
@@ -597,6 +601,20 @@ async def update_milestone(
     if body.lock_version != row.lock_version:
         raise HTTPException(status.HTTP_409_CONFLICT, "The milestone changed since it was loaded")
     fields = body.model_dump(exclude_unset=True, exclude={"lock_version"})
+    if nulls := [k for k in ("name", "horizon", "status") if k in fields and fields[k] is None]:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, f"{', '.join(nulls)} cannot be cleared"
+        )
+    if fields.get("name") and fields["name"] != row.name:
+        taken = await db.scalar(
+            select(TrackMilestone.id).where(
+                TrackMilestone.track_id == row.track_id, TrackMilestone.name == fields["name"]
+            )
+        )
+        if taken:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, f"the track already has a milestone {fields['name']!r}"
+            )
     horizon = fields.get("horizon", row.horizon)
     target = fields["target_date"] if "target_date" in fields else row.target_date
     basis_ids = fields["basis_ids"] if fields.get("basis_ids") is not None else row.basis_ids

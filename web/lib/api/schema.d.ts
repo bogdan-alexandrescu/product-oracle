@@ -10257,6 +10257,10 @@ export interface components {
             section_hash: string | null;
             /** Link */
             link: string | null;
+            /** Reconciled Version */
+            reconciled_version?: number | null;
+            /** Reconciled Section Hash */
+            reconciled_section_hash?: string | null;
         };
         /**
          * PrdAnswers

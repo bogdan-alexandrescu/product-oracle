@@ -17,8 +17,9 @@ dependencies) and marks the *items*:
 
 The handler writes only the items' freshness columns: an item's content, and an approved
 roadmap version, are never rewritten. A person settles staleness: ``review`` (under
-review) or ``reconcile`` (with a reason; the item is re-anchored on the PRD's latest
-approved version and that section's hash).
+review) or ``reconcile`` (with a reason; the PRD's latest approved version and that
+section's hash are recorded as what the item was reconciled against, and later changes
+are judged against them; the item's own trace is kept as built).
 """
 
 import uuid
@@ -113,18 +114,18 @@ async def _by_prd_version(db: AsyncSession, event: ChangeEvent, found: dict) -> 
         ).all()
     )
     rows = await db.scalars(
-        select(RoadmapItem).where(
-            RoadmapItem.prd_document_id == new.document_id,
-            RoadmapItem.prd_version_id != new.id,
-        )
+        select(RoadmapItem).where(RoadmapItem.prd_document_id == new.document_id)
     )
     for item in rows:
+        version_id, section_hash = anchor(item)
+        if version_id == new.id:
+            continue
         key = item.prd_section_key
         if key is None:
             found[item.id] = (item, f"the PRD has a new version ({new.number})")
         elif key not in hashes:
             found[item.id] = (item, f"PRD section {key} is gone in version {new.number}")
-        elif hashes[key] != item.prd_section_hash:
+        elif hashes[key] != section_hash:
             found[item.id] = (item, f"PRD section {key} changed in version {new.number}")
 
 
@@ -238,12 +239,22 @@ async def mark_items(db: AsyncSession, event: ChangeEvent) -> None:
 # --- human actions --------------------------------------------------------------------------
 
 
-async def _reanchor(db: AsyncSession, item: RoadmapItem) -> dict[str, Any]:
-    """Point a reconciled item at its PRD's latest approved version (and that
-    section's hash), when there is one at least as recent as its own."""
+def anchor(item: RoadmapItem) -> tuple[uuid.UUID | None, str | None]:
+    """The PRD version and section hash the item is judged against: what a person last
+    reconciled it with, else what it was built from."""
+    if item.reconciled_version_id is not None:
+        return item.reconciled_version_id, item.reconciled_section_hash
+    return item.prd_version_id, item.prd_section_hash
+
+
+async def _reconcile_anchor(db: AsyncSession, item: RoadmapItem) -> dict[str, Any]:
+    """Record the PRD's latest approved version (and that section's hash) as what the
+    item was reconciled against, when it is at least as recent as the item's anchor. The
+    item's own trace (the version it was built from) is never rewritten."""
+    version_id, section_hash = anchor(item)
     before = {
-        "prd_version_id": str(item.prd_version_id) if item.prd_version_id else None,
-        "prd_section_hash": item.prd_section_hash,
+        "version_id": str(version_id) if version_id else None,
+        "section_hash": section_hash,
     }
     if item.prd_document_id is None:
         return before
@@ -256,11 +267,17 @@ async def _reanchor(db: AsyncSession, item: RoadmapItem) -> dict[str, Any]:
         .order_by(DocumentVersion.number.desc())
         .limit(1)
     )
-    if latest is None:
+    current = (
+        await db.scalar(select(DocumentVersion.number).where(DocumentVersion.id == version_id))
+        if version_id
+        else None
+    )
+    if latest is None or (current is not None and latest.number < current):
         return before
-    item.prd_version_id = latest.id
+    item.reconciled_version_id = latest.id
+    item.reconciled_section_hash = None
     if item.prd_section_key:
-        item.prd_section_hash = await db.scalar(
+        item.reconciled_section_hash = await db.scalar(
             select(Section.content_hash).where(
                 Section.version_id == latest.id, Section.section_key == item.prd_section_key
             )
@@ -288,7 +305,7 @@ async def act(
     for item in targets:
         entry: dict[str, Any] = {"item": item.item_key, "id": str(item.id), "from": item.freshness}
         if action == "reconcile":
-            entry["anchor_before"] = await _reanchor(db, item)
+            entry["anchor_before"] = await _reconcile_anchor(db, item)
             item.freshness = "reconciled"
             item.reconciled_by = principal.id
             item.reconciled_at = now

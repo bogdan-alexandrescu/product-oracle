@@ -148,6 +148,10 @@ class PrdAnchor(BaseModel):
     section_hash: str | None
     # /documents/<slug>/v/<n>#<section>: opens the PRD at that section.
     link: str | None
+    # The approved PRD version (and section hash) a person reconciled the item against;
+    # staleness compares with it once set. The fields above stay as the item was built.
+    reconciled_version: int | None = None
+    reconciled_section_hash: str | None = None
 
 
 class RoadmapItemOut(BaseModel):

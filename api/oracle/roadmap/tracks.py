@@ -94,6 +94,8 @@ async def ensure_track(
     an existing track follows a later approved version. Returns (track, created)."""
     if version.approved_at is None:
         raise Invalid(f"version {version.number} of '{prd.slug}' is not approved")
+    # One track per PRD: concurrent starts (a publish and a person) wait on the PRD row.
+    await db.execute(select(Document.id).where(Document.id == prd.id).with_for_update())
     track = await track_of_prd(db, prd.id)
     created = track is None
     if track is None:

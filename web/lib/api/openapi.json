@@ -32820,6 +32820,28 @@
               }
             ],
             "title": "Link"
+          },
+          "reconciled_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciled Version"
+          },
+          "reconciled_section_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciled Section Hash"
           }
         },
         "type": "object",

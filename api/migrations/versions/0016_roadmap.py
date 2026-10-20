@@ -181,6 +181,8 @@ def upgrade() -> None:
         ),
         sa.Column("reconciled_by", sa.Uuid(), nullable=True),
         sa.Column("reconciled_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("reconciled_version_id", sa.Uuid(), nullable=True),
+        sa.Column("reconciled_section_hash", sa.Text(), nullable=True),
         sa.Column("note", sa.Text(), nullable=True),
         sa.Column(
             "updated_at",
@@ -207,6 +209,12 @@ def upgrade() -> None:
             ["caused_by_change_id"],
             ["change_events.id"],
             name=op.f("fk_roadmap_items_caused_by_change_id_change_events"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["reconciled_version_id"],
+            ["document_versions.id"],
+            name=op.f("fk_roadmap_items_reconciled_version_id_document_versions"),
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
@@ -269,6 +277,12 @@ def upgrade() -> None:
     )
     op.create_index(
         op.f("ix_roadmap_items_feature_id"), "roadmap_items", ["feature_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_roadmap_items_reconciled_version_id"),
+        "roadmap_items",
+        ["reconciled_version_id"],
+        unique=False,
     )
     op.create_index(
         op.f("ix_roadmap_items_prd_document_id"), "roadmap_items", ["prd_document_id"], unique=False
@@ -508,6 +522,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_roadmap_items_roadmap_version_id"), table_name="roadmap_items")
     op.drop_index(op.f("ix_roadmap_items_roadmap_document_id"), table_name="roadmap_items")
     op.drop_index(op.f("ix_roadmap_items_prd_version_id"), table_name="roadmap_items")
+    op.drop_index(op.f("ix_roadmap_items_reconciled_version_id"), table_name="roadmap_items")
     op.drop_index("ix_roadmap_items_prd_section", table_name="roadmap_items")
     op.drop_index(op.f("ix_roadmap_items_prd_document_id"), table_name="roadmap_items")
     op.drop_index(op.f("ix_roadmap_items_feature_id"), table_name="roadmap_items")

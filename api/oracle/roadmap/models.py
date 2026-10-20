@@ -218,5 +218,10 @@ class RoadmapItem(TenantScoped, Base):
     stale_reasons: Mapped[list[str]] = _texts()
     reconciled_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     reconciled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # What a person confirmed the item still holds against (the PRD's approved version
+    # and that section's hash). The anchor above stays as built; staleness compares
+    # with this one once set.
+    reconciled_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
+    reconciled_section_hash: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = _updated_at()

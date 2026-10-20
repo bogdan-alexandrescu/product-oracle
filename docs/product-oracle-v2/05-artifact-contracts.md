@@ -312,9 +312,16 @@ The `roadmap.items` handler (registered after `trace.mark_stale`, whose
 | `document_section` | traced to that section |
 | `requirement`, `decision`, `entity`, `blocker_status` | whose feature, requirements or blockers include the subject, a batch root, or what the trace walk found downstream; and whose PRD section links one of them |
 
-Content is never rewritten. `POST /v1/roadmaps/{doc}/items/staleness` (approver):
-`review` (to `under_review`) or `reconcile` (reason required; re-anchored on the PRD's
-latest *approved* version and that section's hash; the anchor before is audited).
+Content and trace are never rewritten. `POST /v1/roadmaps/{doc}/items/staleness`
+(approver): `review` (to `under_review`) or `reconcile` (reason required). Reconciling
+records the PRD's latest *approved* version and that section's hash as what the item was
+reconciled against (`reconciled_version_id`, `reconciled_section_hash`; never an older
+version than the item's anchor). Later PRD versions are judged against it; the PRD
+version the item was built from stays as built. The anchor before is audited. A run's
+file that cannot be stored (a malformed optional field) never aborts the roadmap version's
+import: the items are left out and the error is logged, and the checkpoint has already
+shown the problem. A carried-forward milestone keeps its date only while a verified basis
+still supports it.
 
 ### 8.5 Tracker alignment (E1, read-only)
 

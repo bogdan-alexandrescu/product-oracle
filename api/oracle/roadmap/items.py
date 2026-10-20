@@ -28,6 +28,8 @@ kept only when a verified schedule basis supports it (oracle.roadmap.schedule); 
 the item keeps the milestone's name and records the refused date.
 """
 
+import json
+import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -43,6 +45,8 @@ from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.runs import roadmap as items_file
 from oracle.runs.models import Run, RunSegment
 from oracle.v2.models import DocumentSectionLink, FeasibilityExperiment
+
+log = logging.getLogger(__name__)
 
 ITEMS_FILE = "roadmap_items.yaml"
 ITEMS_SEGMENT = "roadmap_items"
@@ -172,6 +176,11 @@ async def open_experiments(
     return list(rows)
 
 
+def json_safe(value: Any) -> Any:
+    """YAML values as JSON can store them (dates and the like become strings)."""
+    return json.loads(json.dumps(value, default=str))
+
+
 def _keys(value: Any) -> list[str]:
     if isinstance(value, str):
         return [value]
@@ -249,7 +258,8 @@ async def derive_trace(
             note("blocker", blocker, "graph")
 
     gates: list[dict[str, Any]] = []
-    for g in raw.get("validation_gates") or []:
+    declared_gates = raw.get("validation_gates")
+    for g in declared_gates if isinstance(declared_gates, list) else []:
         if isinstance(g, dict) and items_file._text(g.get("name")):
             gates.append(
                 {
@@ -284,7 +294,7 @@ async def derive_trace(
 
     economics: dict[str, Any] = {}
     if isinstance(raw.get("economics"), dict):
-        economics["declared"] = raw["economics"]
+        economics["declared"] = json_safe(raw["economics"])
     if feature is not None:
         attrs = feature.attrs or {}
         for k in ("effort", "confidence", "value", "cost"):
@@ -419,9 +429,11 @@ async def import_items(
             prd_version_id=prd_version.id if prd_version else None,
             prd_section_key=section,
             prd_section_hash=hashes.get(section) if section else None,
-            depends_on=[str(d) for d in raw.get("depends_on") or []],
+            depends_on=[
+                str(d) for d in raw.get("depends_on") or [] if not isinstance(d, dict | list)
+            ],
             milestone=_milestone(raw.get("milestone"), bases, result, key),
-            priority=raw.get("priority") if isinstance(raw.get("priority"), dict) else None,
+            priority=json_safe(raw["priority"]) if isinstance(raw.get("priority"), dict) else None,
             confidence=None if confidence is None else str(confidence),
             **derived,
         )
@@ -448,7 +460,6 @@ COPIED = (
     "blocker_ids",
     "depends_on",
     "trace",
-    "milestone",
     "validation_gates",
     "economics",
     "priority",
@@ -459,7 +470,25 @@ COPIED = (
     "stale_reasons",
     "reconciled_by",
     "reconciled_at",
+    "reconciled_version_id",
+    "reconciled_section_hash",
 )
+
+
+def recheck_date(milestone: dict[str, Any] | None, bases: list[schedule.Basis]) -> Any:
+    """A carried milestone keeps its date only while a verified basis still supports it."""
+    if not milestone or not milestone.get("date"):
+        return milestone
+    support = schedule.supporting(milestone["date"], milestone.get("date_source"), bases)
+    if support:
+        return {**milestone, "basis_ids": [str(b.id) for b in support]}
+    return {
+        **milestone,
+        "date": None,
+        "basis_ids": [],
+        "refused_date": milestone["date"],
+        "refused": schedule.UNVERIFIED,
+    }
 
 
 def _named_in(item: RoadmapItem, markdown: str) -> bool:
@@ -482,17 +511,22 @@ async def carry_forward(db: AsyncSession, version: DocumentVersion) -> int:
     if previous is None:
         return 0
     copied = 0
-    rows = await db.scalars(
-        select(RoadmapItem)
-        .where(RoadmapItem.roadmap_version_id == previous.id)
-        .order_by(RoadmapItem.position)
+    rows = list(
+        await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.roadmap_version_id == previous.id)
+            .order_by(RoadmapItem.position)
+        )
     )
+    prd_ids = {r.prd_document_id for r in rows}
+    bases = {p: await schedule.verified_bases(db, p) for p in prd_ids}
     for old in rows:
         if not _named_in(old, version.markdown):
             continue
         db.add(
             RoadmapItem(
                 **{c: getattr(old, c) for c in COPIED},
+                milestone=recheck_date(old.milestone, bases[old.prd_document_id]),
                 roadmap_document_id=version.document_id,
                 roadmap_version_id=version.id,
                 note=f"carried from version {previous.number}",
@@ -536,13 +570,16 @@ async def on_roadmap_version(
     db: AsyncSession, version: DocumentVersion, document: Document
 ) -> None:
     """A roadmap version was imported: its run's items, else carried forward."""
-    found = await run_items_file(db, document)
-    if found is not None:
-        text, run = found
-        try:
-            yaml.safe_load(text)
-        except yaml.YAMLError:
-            return
-        await import_items(db, version, text, run_id=run.id)
-        return
-    await carry_forward(db, version)
+    # Never abort the version's import: items that cannot be stored are left out, and
+    # the run's items_check already showed the file's problems at its checkpoint.
+    try:
+        async with db.begin_nested():
+            found = await run_items_file(db, document)
+            if found is not None:
+                text, run = found
+                yaml.safe_load(text)
+                await import_items(db, version, text, run_id=run.id)
+            else:
+                await carry_forward(db, version)
+    except Exception:  # noqa: BLE001 - logged; the roadmap version still imports
+        log.exception("roadmap items for %s v%s were not stored", document.slug, version.number)

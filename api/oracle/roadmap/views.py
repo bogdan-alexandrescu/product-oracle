@@ -177,7 +177,7 @@ class _Context:
             live = await items_mod.blockers_of(db, targets)
             stored = [ctx.entities[b] for b in i.blocker_ids or [] if b in ctx.entities]
             ctx.blockers[i.id] = list({e.id: e for e in [*stored, *live]}.values())
-        version_ids = {i.prd_version_id for i in rows if i.prd_version_id}
+        version_ids = {v for i in rows for v in (i.prd_version_id, i.reconciled_version_id) if v}
         if version_ids:
             for v in await db.scalars(
                 select(DocumentVersion).where(DocumentVersion.id.in_(version_ids))
@@ -231,6 +231,10 @@ def item_out(item: RoadmapItem, ctx: _Context, view: str = "full") -> RoadmapIte
             section_key=item.prd_section_key,
             section_hash=item.prd_section_hash,
             link=link,
+            reconciled_version=ctx.versions[item.reconciled_version_id].number
+            if item.reconciled_version_id in ctx.versions
+            else None,
+            reconciled_section_hash=item.reconciled_section_hash,
         ),
         track_id=item.track_id,
         note=item.note,
