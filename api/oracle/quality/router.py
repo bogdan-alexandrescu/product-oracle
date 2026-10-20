@@ -40,8 +40,6 @@ from oracle.quality.schemas import (
 from oracle.readiness import Purpose
 from oracle.v2.schemas import EvaluationReportDetail
 
-criteria.register()
-
 router = APIRouter(prefix="/v1", tags=["quality"], dependencies=[Depends(require_role("viewer"))])
 Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]

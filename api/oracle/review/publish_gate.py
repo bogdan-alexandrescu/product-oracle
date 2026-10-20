@@ -68,7 +68,6 @@ async def check(db: AsyncSession, document: Document, version: DocumentVersion) 
     )
     if latest is not None and latest != version.number:
         raise PublishBlocked(f"v{latest} exists: only the latest version can be published", [])
-    criteria.register()
     from oracle.review.publish import REVIEW_CHECK_KEY
 
     # The review invariants are what this approval gives (the publish check computes

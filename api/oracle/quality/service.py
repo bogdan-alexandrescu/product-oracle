@@ -68,8 +68,14 @@ async def evaluate(
     version: DocumentVersion,
     purpose: Purpose = "advisory",
 ) -> ReadinessReport:
-    criteria.register()
-    return await readiness.evaluate(ReadinessContext(db, document.id, version.id, purpose=purpose))
+    from oracle.review.publish import REVIEW_CHECK_KEY
+
+    # The review invariants (approvals, required sections) are the publish check's, not a
+    # quality result: counted there once, they never block the dashboard or a report.
+    keys = [r.key for r in readiness.checks() if r.key != REVIEW_CHECK_KEY]
+    return await readiness.evaluate(
+        ReadinessContext(db, document.id, version.id, purpose=purpose), keys=keys
+    )
 
 
 def _counts(statuses: list[str]) -> dict[str, int]:
