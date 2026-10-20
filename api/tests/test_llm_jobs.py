@@ -59,13 +59,13 @@ class FakeClaude:
     """Answers each job kind from a script: a dict, a callable(payload) or an exception."""
 
     def __init__(self):
-        self.script: dict[str, list] = {"review_comments": [], "reporting": [], "refinement": []}
+        self.script: dict[str, list] = {k: [] for k in prompting.CURRENT}
         self.calls: list[tuple[str, dict]] = []
         self.on_call = None
 
     @staticmethod
     def kind_of(request: LlmRequest) -> str:
-        for kind in ("review_comments", "reporting", "refinement"):
+        for kind in prompting.CURRENT:
             if request.system == prompting.current(kind)[1]:
                 return kind
         raise AssertionError("unknown prompt")

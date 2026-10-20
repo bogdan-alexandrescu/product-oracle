@@ -38,6 +38,7 @@ MAX_TOKENS = {
     "reporting": 4000,
     "refinement": 6000,
     "quality_review": 4000,
+    "refinement_batch": 16000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -586,6 +587,166 @@ async def refinement(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     }
 
 
+def _resolutions(raw: Any, asked: set[str], default_note: str) -> list[dict[str, Any]]:
+    out = []
+    for r in raw or []:
+        if isinstance(r, dict) and str(r.get("feedback_id")) in asked:
+            if any(x["feedback_id"] == str(r["feedback_id"]) for x in out):
+                continue
+            status = (
+                r.get("status") if r.get("status") in ("addressed", "declined") else "addressed"
+            )
+            note = prompting.as_str(r.get("note"), 1000) or None
+            out.append({"feedback_id": str(r["feedback_id"]), "status": status, "note": note})
+    missing = asked - {r["feedback_id"] for r in out}
+    out += [
+        {"feedback_id": fid, "status": "addressed", "note": default_note} for fid in sorted(missing)
+    ]
+    return out
+
+
+def _data_points(raw: Any) -> list[dict[str, str]]:
+    return [
+        {k: prompting.as_str(d.get(k), 300) for k in ("value", "as_of", "source")}
+        for d in raw or []
+        if isinstance(d, dict) and d.get("value")
+    ][:20]
+
+
+async def staged_suggestions(
+    s: AsyncSession, document_id: uuid.UUID, ids: list[str] | None = None
+) -> list[LlmSuggestion]:
+    """C1e: accepted section-text suggestions not applied in any draft yet, whichever
+    draft they were raised on, oldest first."""
+    stmt = select(LlmSuggestion).where(
+        LlmSuggestion.document_id == document_id,
+        LlmSuggestion.kind == "section_text",
+        LlmSuggestion.status == "accepted",
+        LlmSuggestion.applied_in_version.is_(None),
+    )
+    if ids is not None:
+        stmt = stmt.where(LlmSuggestion.id.in_([uuid.UUID(str(i)) for i in ids]))
+    return list(await s.scalars(stmt.order_by(LlmSuggestion.created_at, LlmSuggestion.id)))
+
+
+async def refinement_batch(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """C1e: every section the chosen staged suggestions touch, revised in one call."""
+    ctx = await _context(s, job)
+    suggestions = await staged_suggestions(s, ctx.document.id, job.input.get("suggestion_ids"))
+    keys = {x.section_key for x in ctx.sections}
+    skipped: list[dict[str, Any]] = []
+    usable = []
+    for x in suggestions:
+        if x.section_key not in keys:
+            skipped.append(
+                {
+                    "section_key": x.section_key,
+                    "suggestion_ids": [str(x.id)],
+                    "reason": f"the section is not in version {ctx.version.number}",
+                }
+            )
+        else:
+            usable.append(x)
+    if not usable:
+        raise JobInputError("nothing to build: no staged suggestion is left for this draft")
+    locked = sorted({x.section_key for x in usable if x.section_key in ctx.locked})
+    if locked:
+        names = ", ".join(
+            f"{x.heading} ({x.section_key})" for x in ctx.sections if x.section_key in locked
+        )
+        raise JobInputError(f"approved and locked, never changed: {names}")
+    feedback = {
+        f.id: f
+        for f in await s.scalars(
+            select(FeedbackItem).where(FeedbackItem.id.in_([x.feedback_item_id for x in usable]))
+        )
+    }
+    affected = {x.section_key for x in usable}
+    payload = {
+        "document": {**_doc(ctx), "next_version": ctx.version.number + 1},
+        "sections": [
+            {
+                "section_key": sec.section_key,
+                "level": sec.level,
+                "heading": sec.heading,
+                "body_md": sec.body_md,
+                "locked": sec.section_key in ctx.locked,
+                "affected": sec.section_key in affected,
+            }
+            for sec in ctx.sections
+        ],
+        "suggestions": [
+            {
+                "feedback_id": str(x.feedback_item_id),
+                "section_key": x.section_key,
+                "feedback": feedback[x.feedback_item_id].summary
+                if x.feedback_item_id in feedback
+                else "",
+                "raised_on_version": feedback[x.feedback_item_id].raised_on_version
+                if x.feedback_item_id in feedback
+                else x.version_number,
+                "text": x.edited_text or x.text or "",
+            }
+            for x in usable
+        ],
+    }
+    answer = await ask("refinement_batch", payload)
+    entries: dict[str, dict[str, Any]] = {}
+    for raw in answer.get("sections") or []:
+        if not isinstance(raw, dict):
+            continue
+        key = str(raw.get("section_key") or "")
+        body = raw.get("body_md")
+        if key in affected and isinstance(body, str) and body.strip():
+            entries.setdefault(key, raw)
+    if not entries:
+        raise prompting.AnswerError("the next draft has no revised section")
+
+    out_sections = []
+    for sec in ctx.sections:
+        key = sec.section_key
+        if key not in affected:
+            continue
+        mine = [x for x in usable if x.section_key == key]
+        raw = entries.get(key)
+        if raw is None:
+            skipped.append(
+                {
+                    "section_key": key,
+                    "suggestion_ids": [str(x.id) for x in mine],
+                    "reason": "Oracle returned no text for this section",
+                }
+            )
+            continue
+        heading = clean_heading(prompting.as_str(raw.get("heading")), sec.heading)
+        cleaned = prompting.clean_body(raw["body_md"], heading)
+        asked = {str(x.feedback_item_id) for x in mine}
+        out_sections.append(
+            {
+                "section_key": key,
+                "level": sec.level,
+                "heading": heading,
+                "body_md": cleaned.text,
+                "before": {"heading": sec.heading, "body_md": sec.body_md},
+                "o1c_fixes": cleaned.fixes,
+                "data_points": _data_points(raw.get("data_points")),
+                "notes": prompting.as_str(raw.get("notes"), 2000),
+                "suggestion_ids": [str(x.id) for x in mine],
+                "resolutions": _resolutions(
+                    raw.get("resolutions"), asked, "Worked into the next draft"
+                ),
+                "preview": preview_words(sec.heading, sec.body_text, heading, cleaned.text),
+            }
+        )
+    return {
+        "base_version": ctx.version.number,
+        "notes": prompting.as_str(answer.get("notes"), 3000),
+        "sections": out_sections,
+        "skipped": skipped,
+        "suggestion_ids": [str(x.id) for x in usable],
+    }
+
+
 async def quality_review(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     """CR-08 light judging; it lives with the quality criteria it judges."""
     from oracle.quality import judge
@@ -598,6 +759,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "reporting": reporting,
     "refinement": refinement,
     "quality_review": quality_review,
+    "refinement_batch": refinement_batch,
 }
 
 

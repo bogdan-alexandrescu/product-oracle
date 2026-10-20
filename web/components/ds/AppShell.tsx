@@ -7,7 +7,7 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { resetMockData } from "@/lib/api/mock/server";
 import { useMe } from "@/lib/me";
-import { loadInbox, loadMyQuestions, onWaitingChanged } from "@/lib/waiting";
+import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
 import { Mark } from "./Brand";
@@ -52,7 +52,7 @@ function useInboxCount(enabled: boolean): number | null {
     if (!enabled) return;
     let alive = true;
     Promise.all([loadInbox(), loadMyQuestions().catch(() => [])])
-      .then(([inbox, questions]) => alive && setN(inbox.total + questions.length))
+      .then(([inbox, questions]) => alive && setN(waitingCount(inbox, questions)))
       .catch(() => undefined);
     return () => {
       alive = false;

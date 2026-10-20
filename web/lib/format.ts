@@ -19,7 +19,14 @@ export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   fireflies: "Meeting notes",
   upload: "Upload",
   web: "Web",
+  oracle: "Oracle baseline",
 };
+
+/**
+ * Where a citation opens, or null when its ref is not a link: an "oracle" citation names a
+ * baseline item in free text ("baseline decision <key> ..."), shown as text.
+ */
+export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | null => (c.source === "oracle" ? null : c.ref);
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
   approved: "Approved",
@@ -41,6 +48,7 @@ export const JOB_KIND_LABEL: Record<LlmJobKind, string> = {
   reporting: "Reporting",
   refinement: "Refinement",
   quality_review: "Quality review",
+  refinement_batch: "Next draft",
 };
 
 export const JOB_STATUS_LABEL: Record<LlmJob["status"], string> = {

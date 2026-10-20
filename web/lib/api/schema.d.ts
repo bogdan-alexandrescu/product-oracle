@@ -571,6 +571,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/staged-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Staged Changes
+         * @description Accepted suggestions waiting for the next draft, from whichever draft they were
+         *     raised on, with who accepted them and when, and the build in progress if any.
+         */
+        get: operations["list_staged_changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Build Next Draft
+         * @description Build the next draft: one job rewrites every section the chosen staged suggestions
+         *     touch (default: all staged), over the latest version. Locked sections are refused
+         *     (409, naming them).
+         */
+        post: operations["build_next_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Next Draft
+         * @description The combined preview: each revised section with its word diff, notes and
+         *     resolutions. Sections are empty until the build has finished.
+         */
+        get: operations["preview_next_draft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft/{job_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Next Draft
+         * @description Apply as ONE new version, without the dropped sections (they stay staged).
+         *     Refused (409) when a newer version appeared since the build started.
+         */
+        post: operations["apply_next_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft/{job_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discard Next Draft
+         * @description Discard a build (cancel it while it runs); every staged item stays staged.
+         */
+        post: operations["discard_next_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{doc}/suggestions": {
         parameters: {
             query?: never;
@@ -2632,6 +2737,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Draft Import
+         * @description Import a segment's draft again after its import at segment end was refused
+         *     (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).
+         *     While the run waits at that segment's review: the review's approver role or above, and
+         *     nothing is decided (the review stays open for a person). After the run finished with
+         *     the review approved past the refusal: owners only, while no version from the run
+         *     exists; the run's checkpoints do not change. Imported, the run names the document and
+         *     the error is replaced by the import; refused again, by the new error (200 either way:
+         *     read ``draft_import``). 409 when there is nothing to retry (imported already, a version
+         *     from the run exists, no draft file, changes requested, the run cancelled or failed).
+         *     Audited. Not the stopped advance of ``retry_import_run``.
+         */
+        post: operations["retry_draft_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/cancel-again": {
         parameters: {
             query?: never;
@@ -2688,7 +2822,8 @@ export interface paths {
         /**
          * Decide Checkpoint
          * @description Approve a checkpoint (the next segment starts) or request changes (the segment
-         *     runs again with the note).
+         *     runs again with the note). Approving is refused (409) while the draft its segment left
+         *     is not imported (``cannot_approve``): retry the import, or request changes.
          */
         post: operations["decide_checkpoint"];
         delete?: never;
@@ -2724,7 +2859,8 @@ export interface paths {
         /**
          * Get Inbox
          * @description What waits on me: checkpoints for my role, runs waiting for an owner's approval
-         *     or overrun decision, and open feedback on documents I can approve.
+         *     or overrun decision, and feedback on documents I can approve, by state (new, open,
+         *     staged for the next draft, declined, done) with the staged rows per document.
          */
         get: operations["get_inbox"];
         put?: never;
@@ -6631,6 +6767,8 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /** Cannot Approve */
+            cannot_approve?: string | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
         };
         /** Choice */
@@ -6653,7 +6791,7 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web";
+            source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web" | "oracle";
             /** Ref */
             ref: string;
             /** Title */
@@ -8691,6 +8829,14 @@ export interface components {
              */
             updated_at: string;
             suggestion?: components["schemas"]["SuggestionOut"] | null;
+            /**
+             * State
+             * @default open
+             * @enum {string}
+             */
+            state: "open" | "staged" | "declined" | "done";
+            /** Staged For Version */
+            staged_for_version?: number | null;
         };
         /**
          * FeedbackPackage
@@ -9131,6 +9277,8 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /** Cannot Approve */
+            cannot_approve?: string | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
             /**
              * Flow
@@ -9143,6 +9291,34 @@ export interface components {
             document_slug?: string | null;
             /** Segment Title */
             segment_title?: string | null;
+        };
+        /** InboxCounts */
+        InboxCounts: {
+            /**
+             * New
+             * @default 0
+             */
+            new: number;
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+            /**
+             * Staged
+             * @default 0
+             */
+            staged: number;
+            /**
+             * Declined
+             * @default 0
+             */
+            declined: number;
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
         };
         /** InboxDocument */
         InboxDocument: {
@@ -9219,8 +9395,32 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Document Id */
+            document_id?: string | null;
+            /** Slug */
+            slug?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Latest Version */
+            latest_version?: number | null;
+            /**
+             * State
+             * @default open
+             * @enum {string}
+             */
+            state: "new" | "open" | "staged" | "declined" | "done";
+            /** Updated At */
+            updated_at?: string | null;
+            /** Resolution Note */
+            resolution_note?: string | null;
+            /** Addressed In Version */
+            addressed_in_version?: number | null;
+            /** Staged For Version */
+            staged_for_version?: number | null;
             /** Suggestion Status */
             suggestion_status?: ("open" | "accepted" | "dismissed" | "applied" | "superseded") | null;
+            /** Suggestion Kind */
+            suggestion_kind?: string | null;
         };
         /** InboxOut */
         InboxOut: {
@@ -9249,6 +9449,63 @@ export interface components {
             feedback: components["schemas"]["InboxDocument"][];
             /** Total */
             total: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["InboxFeedbackItem"][];
+            /**
+             * @default {
+             *       "new": 0,
+             *       "open": 0,
+             *       "staged": 0,
+             *       "declined": 0,
+             *       "done": 0
+             *     }
+             */
+            counts: components["schemas"]["InboxCounts"];
+            /**
+             * Staged
+             * @default []
+             */
+            staged: components["schemas"]["InboxStaged"][];
+            /**
+             * Needs Me
+             * @default 0
+             */
+            needs_me: number;
+            /** Last Seen At */
+            last_seen_at?: string | null;
+        };
+        /**
+         * InboxStaged
+         * @description 'N changes staged for draft N+1' on one document, with the build action.
+         */
+        InboxStaged: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Latest Version */
+            latest_version?: number | null;
+            /** Next Version */
+            next_version: number;
+            /** Count */
+            count: number;
+            /**
+             * Gone Count
+             * @default 0
+             */
+            gone_count: number;
+            /** Draft Job Id */
+            draft_job_id?: string | null;
+            /** Draft Job Status */
+            draft_job_status?: string | null;
         };
         /** InspectedModule */
         InspectedModule: {
@@ -10104,7 +10361,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch";
             /**
              * Document Id
              * Format: uuid
@@ -10611,6 +10868,153 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+        };
+        /** NextDraftApply */
+        NextDraftApply: {
+            /**
+             * Drop Sections
+             * @default []
+             */
+            drop_sections: string[];
+            /**
+             * Edits
+             * @default {}
+             */
+            edits: {
+                [key: string]: string;
+            };
+        };
+        /** NextDraftDataPoint */
+        NextDraftDataPoint: {
+            /** Value */
+            value: string;
+            /**
+             * As Of
+             * @default
+             */
+            as_of: string;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+        };
+        /** NextDraftFeedback */
+        NextDraftFeedback: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Summary */
+            summary: string;
+        };
+        /** NextDraftIn */
+        NextDraftIn: {
+            /** Suggestion Ids */
+            suggestion_ids?: string[] | null;
+        };
+        /**
+         * NextDraftPreview
+         * @description The combined preview of a next-draft build: one entry per revised section.
+         *
+         *     Sections are empty until the job has succeeded (``job.status`` says where it is).
+         */
+        NextDraftPreview: {
+            job: components["schemas"]["LlmJobOut"];
+            /** Base Version */
+            base_version?: number | null;
+            /** Next Version */
+            next_version?: number | null;
+            /** Latest Version */
+            latest_version?: number | null;
+            /**
+             * Stale
+             * @default false
+             */
+            stale: boolean;
+            /** Applied Version */
+            applied_version?: number | null;
+            /**
+             * Discarded
+             * @default false
+             */
+            discarded: boolean;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["NextDraftSection"][];
+            /**
+             * Skipped
+             * @default []
+             */
+            skipped: components["schemas"]["SkippedSection"][];
+        };
+        /** NextDraftResolution */
+        NextDraftResolution: {
+            /**
+             * Feedback Id
+             * Format: uuid
+             */
+            feedback_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "addressed" | "declined";
+            /** Note */
+            note?: string | null;
+        };
+        /** NextDraftSection */
+        NextDraftSection: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Before Heading */
+            before_heading: string;
+            /** Before Body Md */
+            before_body_md: string;
+            /** Body Md */
+            body_md: string;
+            /** Words */
+            words: components["schemas"]["WordOp"][];
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * O1C Fixes
+             * @default []
+             */
+            o1c_fixes: string[];
+            /**
+             * Data Points
+             * @default []
+             */
+            data_points: components["schemas"]["NextDraftDataPoint"][];
+            /**
+             * Resolutions
+             * @default []
+             */
+            resolutions: components["schemas"]["NextDraftResolution"][];
+            /**
+             * Suggestion Ids
+             * @default []
+             */
+            suggestion_ids: string[];
+            /**
+             * Feedback
+             * @default []
+             */
+            feedback: components["schemas"]["NextDraftFeedback"][];
         };
         /** NextMilestone */
         NextMilestone: {
@@ -12735,6 +13139,11 @@ export interface components {
             /** Attempts */
             attempts: components["schemas"]["SegmentAttempt"][];
             draft_import?: components["schemas"]["DraftImport"] | null;
+            /**
+             * Can Retry Draft Import
+             * @default false
+             */
+            can_retry_draft_import: boolean;
             items_check?: components["schemas"]["ItemsCheck"] | null;
             /** Started At */
             started_at?: string | null;
@@ -12760,6 +13169,18 @@ export interface components {
             is_default: boolean;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** SkippedSection */
+        SkippedSection: {
+            /** Section Key */
+            section_key?: string | null;
+            /**
+             * Suggestion Ids
+             * @default []
+             */
+            suggestion_ids: string[];
+            /** Reason */
+            reason: string;
         };
         /** SlackChannelOut */
         SlackChannelOut: {
@@ -12972,6 +13393,74 @@ export interface components {
             swapped_to: string | null;
             /** Swapped To Reason */
             swapped_to_reason: string | null;
+        };
+        /**
+         * StagedChange
+         * @description An accepted section-text suggestion not applied in any draft yet.
+         */
+        StagedChange: {
+            /**
+             * Suggestion Id
+             * Format: uuid
+             */
+            suggestion_id: string;
+            /**
+             * Feedback Item Id
+             * Format: uuid
+             */
+            feedback_item_id: string;
+            /** Section Key */
+            section_key: string;
+            /** Section Heading */
+            section_heading: string;
+            /** Feedback Summary */
+            feedback_summary: string;
+            /** Text */
+            text: string;
+            /** Accepted By */
+            accepted_by?: string | null;
+            /** Accepted By Name */
+            accepted_by_name?: string | null;
+            /** Accepted At */
+            accepted_at?: string | null;
+            /** Raised On Version */
+            raised_on_version: number;
+            /** Suggested On Version */
+            suggested_on_version: number;
+            /**
+             * Section Gone
+             * @default false
+             */
+            section_gone: boolean;
+            /**
+             * Section Locked
+             * @default false
+             */
+            section_locked: boolean;
+        };
+        /** StagedChanges */
+        StagedChanges: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Latest Version */
+            latest_version?: number | null;
+            /** Next Version */
+            next_version: number;
+            /** Items */
+            items: components["schemas"]["StagedChange"][];
+            /**
+             * Gone Count
+             * @default 0
+             */
+            gone_count: number;
+            /** Estimate Usd */
+            estimate_usd?: number | null;
+            draft_job?: components["schemas"]["LlmJobOut"] | null;
         };
         /** StakeholderAnswerOut */
         StakeholderAnswerOut: {
@@ -16020,6 +16509,175 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_staged_changes: {
+        parameters: {
+            query?: {
+                /** @description Also list staged items whose section is gone */
+                include_gone?: boolean;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StagedChanges"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    build_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextDraftIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextDraftPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextDraftApply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
                 };
             };
             /** @description Validation Error */
@@ -20389,6 +21047,38 @@ export interface operations {
             };
         };
     };
+    retry_draft_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_again_run: {
         parameters: {
             query?: never;
@@ -20526,7 +21216,10 @@ export interface operations {
     };
     get_inbox: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Record this visit as my last one (what 'new' is measured from) */
+                mark_seen?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -20540,6 +21233,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

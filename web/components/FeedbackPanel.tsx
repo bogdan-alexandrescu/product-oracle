@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type MouseEvent, type ReactNode } from "react";
 
 import { SuggestionActions, SuggestionCard, SuggestionForm, useSuggestionDecision } from "@/components/SuggestionCard";
+import { FeedbackStateChip } from "@/components/review/FeedbackState";
 import { Button, Chip, Empty } from "@/components/ds";
 import { FeedbackStatusChip, InlineError, Quote, VerdictChip } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -128,7 +129,11 @@ function SuggestionRowInner({ item, suggestion, doc, current, goTo, canDecide, o
       doc={doc}
       current={current}
       goTo={goTo}
-      actions={canDecide && (open ? <SuggestionActions d={d} /> : <TriageActions item={item} onChanged={onChanged} />)}
+      // C1e: a staged item is decided; it waits for "Build draft" in the page header.
+      actions={
+        canDecide &&
+        (open ? <SuggestionActions d={d} /> : item.state !== "staged" && <TriageActions item={item} onChanged={onChanged} />)
+      }
       form={canDecide && open && <SuggestionForm d={d} />}
     >
       <SuggestionCard suggestion={suggestion} canDecide={canDecide} editing={d.mode === "edit"} />
@@ -186,11 +191,10 @@ function Row({
     >
       <div className="flex flex-wrap items-center gap-1.5">
         {item.section_key && <SectionLink item={item} doc={doc} current={current} goTo={goTo} />}
-        <FeedbackStatusChip status={item.status} />
+        <FeedbackStateChip item={item} />
         {item.verdict ? <VerdictChip verdict={item.verdict} /> : <Chip kind="line">{item.kind === "comment" ? "Comment" : "General"}</Chip>}
         <span className="tnum ml-auto text-[13px] text-text2">
           raised on v{item.raised_on_version}
-          {item.addressed_in_version != null && ` · addressed in v${item.addressed_in_version}`}
         </span>
       </div>
       {actions && (

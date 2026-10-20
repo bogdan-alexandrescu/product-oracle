@@ -5,7 +5,7 @@
 
 export type CitationSeed = {
   id: string;
-  source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web";
+  source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web" | "oracle";
   ref: string;
   title: string;
   excerpt: string;
@@ -484,6 +484,59 @@ const CARTS_V2: SectionSeed[] = CARTS_V1.map((s) =>
     : s,
 );
 
+// C1e: a Galatia-like PRD on its fifth draft, with two accepted changes staged for draft 6
+// (F-38 Outbound check, raised on v5, and Goal trace, raised on v4), one declined, one still
+// open and one addressed in v4 (comments seeded in ./server.ts, suggestions in ./llm-jobs.ts).
+const OUTREACH_V1: SectionSeed[] = [
+  {
+    key: "title",
+    level: 1,
+    heading: "Clinic outreach PRD",
+    body: "Clinic outreach calls patients who missed a visit and books them back in, from one queue per clinic.",
+  },
+  {
+    key: "goal-trace",
+    level: 2,
+    heading: "Goal trace",
+    body: "Serves G1 activation: more new patients reach a second visit.",
+  },
+  {
+    key: "problem",
+    level: 2,
+    heading: "1. Problem",
+    body: "40% of missed visits are never rebooked. Front desks call back when they have time, from paper lists.",
+  },
+  {
+    key: "f-38",
+    level: 2,
+    heading: "F-38 Outbound check",
+    body: "After each outbound call, the agent checks the patient's consent and records the outcome.",
+  },
+  {
+    key: "metrics",
+    level: 2,
+    heading: "2. Metrics",
+    body: "- Rebooked within 14 days: 22% today, 35% target.\n- Calls per rebooking: 3.1 today.",
+  },
+  {
+    key: "sources",
+    level: 2,
+    heading: "Sources and data points",
+    body: "- Missed-visit audit, 2024.",
+  },
+];
+const OUTREACH_V3 = revise(OUTREACH_V1, {
+  problem: { body: "40% of missed visits are never rebooked. Front desks call back when they have time, from paper lists, in every pilot clinic." },
+});
+const OUTREACH_V4 = revise(OUTREACH_V3, {
+  problem: {
+    body: "40% of missed visits are never rebooked. Front desks in the three pilot clinics (Harbour, Northgate, Riverside) call back when they have time, from paper lists.",
+  },
+});
+const OUTREACH_V5 = revise(OUTREACH_V4, {
+  metrics: { body: "- Rebooked within 14 days: 22% today, 35% target.\n- Calls per rebooking: 3.1 today, 2 target." },
+});
+
 export const DOCUMENTS: DocumentSeed[] = [
   {
     slug: "checkout-redesign",
@@ -560,6 +613,19 @@ export const DOCUMENTS: DocumentSeed[] = [
       { number: 1, created_at: "2026-10-14T09:00:00Z", sections: DEPOSITS_V1, citations: [] },
       { number: 2, created_at: "2026-10-15T09:00:00Z", sections: DEPOSITS_V2, citations: [] },
       { number: 3, created_at: "2026-10-16T09:00:00Z", sections: DEPOSITS_V3, citations: [] },
+    ],
+  },
+  {
+    slug: "clinic-outreach",
+    title: "Clinic outreach PRD",
+    template: "oracle-default",
+    template_version: "1",
+    versions: [
+      { number: 1, created_at: "2026-10-06T10:00:00Z", sections: OUTREACH_V1, citations: [] },
+      { number: 2, created_at: "2026-10-07T10:00:00Z", sections: OUTREACH_V1, citations: [] },
+      { number: 3, created_at: "2026-10-08T10:00:00Z", sections: OUTREACH_V3, citations: [] },
+      { number: 4, created_at: "2026-10-09T10:00:00Z", sections: OUTREACH_V4, citations: [] },
+      { number: 5, created_at: "2026-10-10T10:00:00Z", sections: OUTREACH_V5, citations: [] },
     ],
   },
   {

@@ -109,6 +109,24 @@ def test_every_problem_is_reported():
     assert "Also missing" in missing[1].message
 
 
+def test_oracle_baseline_citations_parse():
+    # A run's writer cites Oracle's own baseline (goals, decisions, constraints,
+    # features): source 'oracle', its ref free text naming the baseline item.
+    parsed = parse_draft(draft("prd_oracle_citations.md"))
+    assert [(c.id, c.source) for c in parsed.citations] == [
+        ("o-g1", "oracle"),
+        ("o-d-ship", "oracle"),
+        ("c1", "slack"),
+    ]
+    by_id = {c.id: c for c in parsed.citations}
+    assert by_id["o-g1"].ref == "baseline goal g1 (activation), locked"
+    assert by_id["o-d-ship"].ref.startswith("baseline decision show-shipping-early (D2)")
+    assert by_id["o-g1"].title == "Goal G1: raise first-order completion"
+    by_key = {s.section_key: s for s in parsed.sections}
+    assert by_key["goal"].citation_keys == ["o-g1", "c1"]
+    assert by_key["decisions"].citation_keys == ["o-d-ship"]
+
+
 def test_text_under_heading_without_id_is_not_citation_checked():
     # Text under a heading without an id is not a section, so its citations are not
     # checked; once the id is added they are. The missing id itself is reported.
