@@ -7,6 +7,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { DEPOSITS_IDS } from "./blockers";
 import { routeEvidenceLinks } from "./public-links";
 
 type Role = Schemas["Me"]["role"];
@@ -366,6 +367,12 @@ export function seedBaseline(uuid: () => string): BaselineState {
     });
   proposal(guided, { attrs: { effort: "L" } }, "The setup review estimated more work than planned.", "2026-10-16T08:10:00Z");
   proposal(dark, { attrs: { status: "planned" } }, "Mentioned as next up in the planning call.", "2026-10-16T08:12:00Z");
+
+  // The Quillfield deposits blocker (./blockers.ts) is a baseline constraint, opened from Publish.
+  entity("constraint", "c.same-day-refund", "Same-day refund rule unanswered", {
+    body: "The card processor may not refund a deposit on the day it was taken.",
+    confidence: 0.6,
+  }).id = DEPOSITS_IDS.blocker;
 
   return s;
 }

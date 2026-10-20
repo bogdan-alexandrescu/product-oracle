@@ -7,6 +7,7 @@
  * review and track outcomes and learnings. Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { DEPOSITS_IDS } from "./blockers";
 import type { V2Db } from "./v2";
 
 type Role = Schemas["Me"]["role"];
@@ -26,6 +27,8 @@ export interface QualityContext {
   role: Role;
   /** Resolves a document (slug or id) and version number to their ids, or null. */
   findVersion: (doc: string, n: number) => { documentId: string; slug: string; versionId: string } | null;
+  /** The blockers lane's ``critical_blockers`` hard check for a document (./blockers.ts). */
+  blockerGate: (documentId: string) => { status: Status; rationale: string; evidence_ids: string[] };
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -51,8 +54,10 @@ export const CRITERIA: Schemas["CriterionInfo"][] = [
   ["third_party_support", "Supported third-party operations", "Does the PRD rely on a third-party operation the provider does not support or permit?"],
 ].map(([key, title, question], i) => ({ key, title, question, hard: i >= 10, reads: [] }));
 
-/** The fixed synthetic evaluation every version shows in mock mode. */
-const RULES: Record<string, [Status, string, string[]]> = {
+type Rule = [Status, string, string[], string[]?];
+
+/** The fixed synthetic evaluation every version shows in mock mode (but the ones below). */
+const RULES: Record<string, Rule> = {
   problem_clarity: ["pass", "The problem names its users and its pain is backed by 2 evidence.", ["problem"]],
   goal_alignment: ["pass", "Every linked feature (1) serves a confirmed goal (activation).", ["goal-trace"]],
   evidence_provenance: ["warning", "1 piece(s) of evidence are stale.", []],
@@ -66,6 +71,34 @@ const RULES: Record<string, [Status, string, string[]]> = {
   security_policy: ["not_applicable", "No security, privacy or policy requirement is linked to this PRD.", []],
   third_party_support: ["not_applicable", "The PRD relies on no third-party operation.", []],
 };
+const PASS = (rationale: string): Rule => ["pass", rationale, []];
+
+/** Per PRD (slug): the Quillfield deposits PRD as B1's Publish frame shows it, and a ready one. */
+const RULES_BY_SLUG: Record<string, Record<string, Rule>> = {
+  "online-deposits": {
+    problem_clarity: PASS("The problem names its users and its pain is backed by the no-show count."),
+    goal_alignment: ["warning", "The goals section cites G4, still proposed.", ["problem"]],
+    evidence_provenance: PASS("Evidence is fresh and confident."),
+    alternatives_tradeoffs: PASS("Two refund approaches are compared."),
+    blocker_feasibility: ["critical", "The same-day refund blocker has no workable mitigation or experiment.", ["risks"]],
+    scope_testability: ["warning", "Two acceptance criteria cannot be tested as written.", ["solution"]],
+    economics_scaling: PASS("Deposit amounts are configuration per clinic."),
+    validation_plan: PASS("No-show rate with a decision threshold."),
+    ownership_readiness: PASS("Owned, with review under way."),
+    downstream_consistency: PASS("No downstream artifact is stale."),
+    security_policy: PASS("No critical security or policy requirement failed."),
+    third_party_support: [
+      "critical",
+      "Taking a deposit through the booking calendar's API is an operation the provider does not offer.",
+      ["solution"],
+      [DEPOSITS_IDS.requirement],
+    ],
+  },
+  "visit-reminders": Object.fromEntries(
+    Object.keys(RULES).map((k) => [k, PASS(k === "security_policy" || k === "third_party_support" ? "Nothing failed." : "Meets the criterion.")]),
+  ),
+};
+const BLOCKERS_KEY = "critical_blockers";
 const STATUSES: Status[] = ["pass", "warning", "critical", "not_applicable"];
 
 export function seedQuality(): QualityDb {
@@ -94,8 +127,13 @@ function reports(ctx: QualityContext, versionId: string, evaluator: string) {
 function dashboard(ctx: QualityContext, v: { documentId: string; slug: string; versionId: string }, n: number): Schemas["ReadinessDashboard"] {
   const model = reports(ctx, v.versionId, "llm_job")[0];
   const humans = reports(ctx, v.versionId, "human");
-  const items: Schemas["ReadinessItem"][] = CRITERIA.map((c) => {
-    const [status, rationale, section_keys] = RULES[c.key];
+  const rules = RULES_BY_SLUG[v.slug] ?? RULES;
+  const gate = ctx.blockerGate(v.documentId);
+  // The blockers lane registers its hard check after the quality criteria.
+  const checks = [...CRITERIA, { key: BLOCKERS_KEY, title: "Critical blockers", question: "A readiness check registered by Oracle.", hard: true }];
+  const items: Schemas["ReadinessItem"][] = checks.map((c) => {
+    const [status, rationale, section_keys, evidence_ids = []] =
+      c.key === BLOCKERS_KEY ? [gate.status, gate.rationale, [], gate.evidence_ids] : rules[c.key];
     const mf = model && ctx.v2.evaluation_findings.find((f) => f.report_id === model.id && f.criterion === c.key);
     const human = humans.flatMap((r) =>
       ctx.v2.evaluation_findings
@@ -104,7 +142,7 @@ function dashboard(ctx: QualityContext, v: { documentId: string; slug: string; v
     );
     return {
       key: c.key, title: c.title, question: c.question, hard: c.hard, status, rationale,
-      evidence_ids: [], owner_id: ctx.userId, section_keys, error: null,
+      evidence_ids, owner_id: ctx.userId, section_keys, error: null,
       model: mf ? { status: mf.status, rationale: mf.rationale, section_keys: mf.section_keys, report_id: model.id } : null,
       human,
       agreement: {
@@ -113,11 +151,12 @@ function dashboard(ctx: QualityContext, v: { documentId: string; slug: string; v
       },
     };
   });
+  const blocking = items.filter((i) => i.hard && i.status === "critical").map((i) => i.key);
   const latest = reports(ctx, v.versionId, "rules")[0];
   return {
     document_id: v.documentId, slug: v.slug, version: n, version_id: v.versionId,
     composition_revision: null, policy: "advisory", policy_note: POLICY_NOTE,
-    evaluated_at: new Date().toISOString(), blocked: false, blocking: [],
+    evaluated_at: new Date().toISOString(), blocked: blocking.length > 0, blocking,
     counts: counts(items.map((i) => i.status)), items,
     model_review: model ? { report_id: model.id, job_id: null, model: "mock", created_at: model.created_at, label: "model_output", disclaimer: DISCLAIMER } : null,
     latest_report: latest ? { id: latest.id, created_at: latest.created_at } : null,
