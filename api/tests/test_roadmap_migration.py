@@ -193,9 +193,7 @@ def test_a_product_track_event_survives_upgrade_head_and_a_round_trip(scratch_db
     assert "product_track" in _subjects()
     command.upgrade(cfg, "head")
     assert "product_track" in _subjects()
-    assert _run("SELECT count(*) FROM change_events WHERE subject_kind = 'product_track'") == [
-        (1,)
-    ]
+    assert _run("SELECT count(*) FROM change_events WHERE subject_kind = 'product_track'") == [(1,)]
     _event(tenant, "product_track")
 
     # Below 0016 the events go with the subject, and head brings the subject back.

@@ -2501,7 +2501,11 @@ async def _advance(
     items_check: dict[str, Any] | None = None
     if ITEMS_FILE in sdef.outputs:
         try:
-            items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+            # In a savepoint: a database error while checking rolls back the check's own
+            # reads only, and the tick's transaction (the segment, the run's row lock)
+            # stays usable.
+            async with db.begin_nested():
+                items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
         except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
             log.exception("checking %s of run %s failed", ITEMS_FILE, run.id)
             items_check = {

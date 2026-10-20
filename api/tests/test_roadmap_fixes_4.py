@@ -486,3 +486,229 @@ async def test_a_withdrawn_date_on_an_unapproved_version_also_refuses_approval(
     resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
     assert resp.status_code == 409
     assert [d["status"] for d in resp.json()["dates"]] == ["withdrawn"]
+
+
+# --------------------------------------------------------------------------- minors
+
+
+async def test_a_database_error_while_checking_items_rolls_back_and_the_tick_goes_on(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    monkeypatch,
+):
+    from sqlalchemy import text
+
+    from oracle.roadmap import schedule
+
+    _, auth = owner
+    await approved_prd(client, auth)
+
+    async def broken(db, prd):
+        await db.execute(text("SELECT * FROM no_such_table"))
+
+    runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
+    run = await start(client, auth, await create(client, auth, source=PRD))
+    # The check's database read fails (as a lost connection or a bad query would).
+    monkeypatch.setattr(schedule, "verified_bases", broken)
+    await tick(client, auth)  # no tick error: the check failed, the session was rolled back
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint", run
+    from sqlalchemy import select
+
+    from oracle.runs.models import RunSegment
+    from oracle.tenancy import tenant_session
+
+    async with tenant_session(owner[0]) as s:
+        seg = await s.scalar(select(RunSegment).where(RunSegment.name == "roadmap_items"))
+    assert [p["code"] for p in seg.artifacts["items_check"]["problems"]] == ["unreadable_yaml"]
+
+
+async def test_the_runs_items_file_is_not_parsed_again_on_each_roadmap_import(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    monkeypatch,
+):
+    _, auth = owner
+    await approved_prd(client, auth)
+    parses = []
+    real = items_file.check_items
+
+    def counting(text, **kw):
+        parses.append(1)
+        return real(text, **kw)
+
+    monkeypatch.setattr(items_file, "check_items", counting)
+    runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
+    runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": ROADMAP_MD})]
+    # The run stops at its roadmap review: still active while people push new versions.
+    off = {"roadmap_items": False}
+    run = await start(
+        client, auth, await create(client, auth, source=PRD, knobs={"checkpoints": off})
+    )
+    await tick(client, auth)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint", run
+    for n in range(3):
+        md = ROADMAP_MD.replace("Make checkout predictable", f"Make checkout predictable ({n})")
+        assert (await import_draft(client, auth, md, ROADMAP)).status_code == 201
+        if n == 0:
+            # The first person's version checks the file once (it has no PRD version of
+            # its own); the next ones reuse that check.
+            after_first = len(parses)
+    assert len(parses) == after_first, "the same file was parsed again"
+    items = (
+        await client.get(f"/v1/roadmaps/{ROADMAP}/items", params={"version": 4}, headers=auth)
+    ).json()
+    assert [i["item_key"] for i in items["items"]] == ["payment-step", "shipping-step"]
+
+
+async def test_an_item_basis_counts_only_where_its_item_owns_the_date(client, owner, runtime):  # noqa: F811
+    from tests.test_roadmap import built_roadmap
+    from tests.test_roadmap_doc_dates import record
+
+    _, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    await record(client, auth, "ENG-500", "2026-12-15", item_key="shipping-step")
+    # Mentioned in the payment step's section: not the shipping step's date.
+    mention = _with_paragraph("Shipping step (shipping-step) ships 2026-12-15.")
+    assert (await import_draft(client, auth, mention, ROADMAP)).status_code == 422
+    # In the shipping step's own table row: its date.
+    row = ROADMAP_MD.replace(
+        "| [Shipping step](#next-shipping-step) | Fewer buyers drop off at shipping |",
+        "| [Shipping step](#next-shipping-step) | Ships 2026-12-15 |",
+    )
+    assert row != ROADMAP_MD
+    assert (await import_draft(client, auth, row, ROADMAP)).status_code == 201, "row"
+    # A row that only mentions it after another item's link: the first item link owns it.
+    other = ROADMAP_MD.replace(
+        "| [Payment step](#now-payment-step) | Buyers pay without re-entering their card |",
+        "| [Payment step](#now-payment-step) | After [ship](#next-shipping-step) 2026-12-15 |",
+    )
+    assert (await import_draft(client, auth, other, ROADMAP)).status_code == 422
+
+
+async def test_a_roadmap_takes_its_prd_from_its_own_link_not_from_its_text(client, owner):  # noqa: F811
+    _, auth = owner
+    await approved_prd(client, auth)
+    loose = ROADMAP_MD.replace("document: checkout-redesign-roadmap", "document: loose-roadmap")
+    without = loose.replace("prd: {document: checkout-redesign, version: 1}\n", "")
+    resp = await import_draft(client, auth, without, "loose-roadmap")
+    assert resp.status_code == 422 and "none is known" in resp.json()["errors"][0]["message"]
+    # Its front matter names its PRD: the PRD's verified ENG-412 supports the Beta date.
+    resp = await import_draft(client, auth, loose, "loose-roadmap")
+    assert resp.status_code == 201, resp.text
+
+
+async def test_start_draft_exempts_the_template_s_literal_dates_not_the_title(client, owner):  # noqa: F811
+    _, auth = owner
+    body = (
+        "---\nkind: roadmap\nbrief: [summary]\n---\n\n# Roadmap {#roadmap}\n\n"
+        "## Summary {#summary}\n\nPlanning freeze every year on Dec 15.\n\n"
+        "## Now {#now}\n\n## Sources and data points {#sources}\n"
+    )
+    resp = await client.post(
+        "/v1/templates",
+        json={"key": "dated-roadmap", "name": "Dated", "kind": "roadmap", "body": body},
+        headers=auth,
+    )
+    assert resp.status_code == 201, resp.text
+    resp = await client.post(
+        "/v1/drafts",
+        json={"kind": "roadmap", "title": "Checkout plan", "template": "dated-roadmap"},
+        headers=auth,
+    )
+    assert resp.status_code == 201, resp.text
+    slug = resp.json()["slug"]
+    # The company's literal date stays exempt in a person's next version of that section.
+    md = (await client.get(f"/v1/documents/{slug}/versions/1/markdown", headers=auth)).text
+    assert "Dec 15" in md and "<!-- oracle" not in md
+    resp = await import_draft(
+        client, auth, md.replace("## Now {#now}", "## Now {#now}\n\nSoon."), slug
+    )
+    assert resp.status_code == 201, resp.text
+    # A date the person typed in the title is theirs.
+    resp = await client.post(
+        "/v1/drafts",
+        json={"kind": "roadmap", "title": "GA Dec 16, 2026", "template": "dated-roadmap"},
+        headers=auth,
+    )
+    assert resp.status_code == 422, resp.text
+
+
+async def test_a_refinement_checks_only_the_section_it_changes(client, owner, runtime):  # noqa: F811
+    from oracle.llm import gateway
+    from tests.claude_account_helpers import add_account, window
+    from tests.test_llm_jobs import FakeClaude
+
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await _run_import(client, auth, runtime, _with_paragraph("GA 2026-12-15."))
+    await add_account(tenant_id, "personal", windows={"five_hour": window(0.2)})
+    fake = FakeClaude()
+    previous = gateway.set_transports(gateway.Transports(plan=fake, api_key=fake))
+    try:
+
+        async def refine(key: str, body: str) -> object:
+            resp = await client.post(
+                f"{VERSIONS}/{await latest()}/sections/{key}/refine",
+                json={"instruction": "Tighten it."},
+                headers=auth,
+            )
+            assert resp.status_code == 201, resp.text
+            job = resp.json()["id"]
+            fake.script["refinement"].append({"heading": None, "body_md": body})
+            for _ in range(3):
+                await client.post("/v1/internal/tick", headers=auth)
+            done = (await client.get(f"/v1/llm-jobs/{job}", headers=auth)).json()
+            assert done["status"] == "succeeded", done
+            return await client.post(f"/v1/llm-jobs/{job}/apply", json={}, headers=auth)
+
+        async def latest() -> int:
+            versions = (await client.get(VERSIONS, headers=auth)).json()
+            return max(v["number"] for v in versions)
+
+        # The summary changes; the payment step's marked date is untouched: imports.
+        resp = await refine("summary", "Payment first, then shipping.")
+        assert resp.status_code == 201, resp.text
+        # A revision of the payment step that keeps the unverified date is refused.
+        resp = await refine("now-payment-step", "GA 2026-12-15. Beta by 2026-11-30.")
+        assert resp.status_code == 422, resp.text
+    finally:
+        gateway.set_transports(previous)
+
+
+async def test_a_disabled_owner_is_refused_once_the_column_exists(client, owner):  # noqa: F811
+    from sqlalchemy import text
+
+    from oracle.auth.service import create_user
+    from oracle.db import get_engine as engine
+    from oracle.tenancy import tenant_session
+    from tests.test_tracks import track_of
+
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    track = await track_of(client, auth)
+    async with tenant_session(tenant_id) as s:
+        member = await create_user(s, "gone@example.com", "pw")
+        await s.commit()
+        member_id = member.id
+    async with engine().begin() as conn:
+        await conn.execute(text("ALTER TABLE users ADD COLUMN disabled_at timestamptz"))
+    try:
+        async with engine().begin() as conn:
+            await conn.execute(
+                text("UPDATE users SET disabled_at = now() WHERE id = :id"), {"id": member_id}
+            )
+        resp = await client.patch(
+            f"/v1/tracks/{track['id']}",
+            json={"owner_id": str(member_id), "lock_version": track["lock_version"]},
+            headers=auth,
+        )
+        assert resp.status_code == 422 and "disabled" in resp.text, resp.text
+    finally:
+        async with engine().begin() as conn:
+            await conn.execute(text("ALTER TABLE users DROP COLUMN disabled_at"))

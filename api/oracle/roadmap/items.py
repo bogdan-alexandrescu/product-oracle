@@ -29,10 +29,13 @@ kept only in Now and only when a verified schedule basis of the item's PRD suppo
 refused date. Read views re-check the date (:func:`live_milestones`).
 """
 
+import copy
+import hashlib
 import json
 import logging
 import re
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -55,6 +58,36 @@ ITEMS_SEGMENT = "roadmap_items"
 TRACING_LINKS = ("implements", "claims", "evidences", "tests")
 OPEN_EXPERIMENTS = ("planned", "running")
 ACTIVE_RUNS = ("running", "awaiting_checkpoint", "paused_overrun")
+
+# Checked items files, by (content hash, PRD version, its sections, the bases): every
+# roadmap import while a run is active stores that run's file again, and a file already
+# checked against the same inputs is not parsed again (oracle.runs.roadmap's check is
+# pure in these inputs).
+_CHECKED: "OrderedDict[tuple, items_file.ItemsCheck]" = OrderedDict()
+_CHECKED_MAX = 128
+
+
+async def _checked_items(text: str, **inputs: Any) -> items_file.ItemsCheck:
+    bases = inputs.get("date_bases")
+    sections = inputs.get("prd_sections")
+    key = (
+        hashlib.sha256(text.encode("utf-8", "replace")).hexdigest(),
+        inputs.get("prd_slug"),
+        inputs.get("prd_version"),
+        frozenset(sections) if sections is not None else None,
+        tuple(bases) if bases is not None else None,
+    )
+    found = _CHECKED.get(key)
+    if found is None:
+        found = await items_file.check_items_async(text, **inputs)
+        # A slow or failed read is not remembered: the next import tries again.
+        if not any(p["code"] in ("too_slow", "unreadable_yaml") for p in found.problems):
+            _CHECKED[key] = found
+            while len(_CHECKED) > _CHECKED_MAX:
+                _CHECKED.popitem(last=False)
+    else:
+        _CHECKED.move_to_end(key)
+    return copy.deepcopy(found)
 
 
 @dataclass
@@ -410,7 +443,7 @@ async def import_items(
             )
         )
     bases = await schedule.verified_bases(db, prd_doc.id if prd_doc else None)
-    check = await items_file.check_items_async(
+    check = await _checked_items(
         text,
         prd_slug=prd_doc.slug if prd_doc else None,
         prd_version=prd_version.number if prd_version else None,

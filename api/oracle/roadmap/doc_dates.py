@@ -895,10 +895,14 @@ async def check(
     *,
     title: str | None = None,
     ref: date | None = None,
+    exempt: set[tuple[str, str]] | None = None,
 ) -> list[Mark]:
     """Every date in the roadmap with its status against the PRD's bases now: verified,
-    withdrawn (only a withdrawn basis supported it) or unverified. Every occurrence."""
-    found = find(sections, title=title, ref=ref)
+    withdrawn (only a withdrawn basis supported it) or unverified. Every occurrence.
+    ``exempt``: (section key, date as written) pairs the company's template writes
+    (:func:`template_dates`), which are not schedule claims and are left out."""
+    skip = exempt or set()
+    found = [f for f in find(sections, title=title, ref=ref) if (f.section_key, f.text) not in skip]
     if not found:
         return []
     bases = await schedule.bases_by_status(db, prd_document_id, ("verified", "withdrawn"))
@@ -972,7 +976,35 @@ async def occurrences_for_version(
     """Every date occurrence of a stored roadmap version, re-checked now."""
     if prd is None:
         prd = await prd_of(db, version.document_id, version.source_version_id, version.front_matter)
-    return await check(db, sections, prd, title=version_title(version), ref=version_day(version))
+    return await check(
+        db,
+        sections,
+        prd,
+        title=version_title(version),
+        ref=version_day(version),
+        exempt=await version_template_dates(db, version),
+    )
+
+
+async def version_template_dates(db: AsyncSession, version: Any) -> set[tuple[str, str]]:
+    """The literal dates of the template a stored version names (its front matter's
+    template, else its document's)."""
+    from oracle.docs.models import Document
+    from oracle.docs.service import template_body
+
+    fm = getattr(version, "front_matter", None) or {}
+    named = (fm.get("template"), fm.get("template_version"))
+    if not named[0]:
+        row = (
+            await db.execute(
+                select(Document.template, Document.template_version).where(
+                    Document.id == version.document_id
+                )
+            )
+        ).first()
+        named = (row[0], row[1]) if row else (None, None)
+    body = await template_body(db, named[0], str(named[1]) if named[1] is not None else None)
+    return template_dates(body) if body else set()
 
 
 async def marks_for_version(db: AsyncSession, version: Any, sections: Sequence[Any]) -> list[Mark]:

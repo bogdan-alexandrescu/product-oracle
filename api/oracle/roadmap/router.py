@@ -16,7 +16,8 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
 from oracle.auth.deps import Principal, TenantDB
@@ -452,6 +453,30 @@ async def get_track(track_id: uuid.UUID, principal: Reader, db: TenantDB) -> Tra
     return await views.overview(db, await _track(db, track_id))
 
 
+async def _is_disabled(db: AsyncSession, member: User) -> bool:
+    """Whether a member is disabled (``users.disabled_at`` set, PR #69's member disable),
+    whichever lands first: the column read from the database when it exists there, even
+    before this code's User model maps it; the model's attribute when it does."""
+    if getattr(member, "disabled_at", None) is not None:
+        return True
+    if "disabled_at" in User.__table__.c:
+        return False
+    exists = await db.scalar(
+        text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = current_schema() AND table_name = 'users' "
+            "AND column_name = 'disabled_at')"
+        )
+    )
+    if not exists:
+        return False
+    return bool(
+        await db.scalar(
+            text("SELECT disabled_at IS NOT NULL FROM users WHERE id = :id"), {"id": member.id}
+        )
+    )
+
+
 @router.patch("/tracks/{track_id}", response_model=TrackOverview)
 async def update_track(
     track_id: uuid.UUID, body: TrackPatch, principal: Approver, db: TenantDB
@@ -473,7 +498,7 @@ async def update_track(
             )
         # A disabled member (users.disabled_at, the member disable of PR #69) owns
         # nothing new.
-        if getattr(member, "disabled_at", None) is not None:
+        if await _is_disabled(db, member):
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT, "owner_id is a disabled member"
             )

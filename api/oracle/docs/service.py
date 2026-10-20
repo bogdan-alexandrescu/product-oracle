@@ -345,14 +345,16 @@ async def _check_document_dates(
     prd_id = await doc_dates.prd_of(db, document.id, source_version_id, draft.front_matter)
     title = draft.front_matter.get("title")
     marks = await doc_dates.check(
-        db, draft.sections, prd_id, title=title if isinstance(title, str) else None
+        db,
+        draft.sections,
+        prd_id,
+        title=title if isinstance(title, str) else None,
+        exempt=doc_dates.template_dates(template_body) if template_body else None,
     )
-    exempt = doc_dates.template_dates(template_body) if template_body else set()
     bad = [
         m
         for m in doc_dates.flagged(marks)
-        if (only_sections is None or m.section_key in only_sections)
-        and (m.section_key, m.text) not in exempt
+        if only_sections is None or m.section_key in only_sections
     ]
     if not bad and not problems:
         return []
