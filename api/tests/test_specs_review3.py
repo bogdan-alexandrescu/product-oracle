@@ -129,7 +129,13 @@ def _move_to_end(md: str, heading: str) -> str:
     return md[:start_at] + md[end_at:].rstrip("\n") + "\n\n" + md[start_at:end_at]
 
 
-async def test_an_inserted_forged_section_shows_as_proposed(client, runtime):
+# Round 4 (E1 'Added sections, visible', owner, 2026-10-20): an added section that takes
+# Oracle's heading is refused (tests/test_specs_review4.py); one inserted in the same place
+# under its own heading shows as proposed.
+INSERTED = "## Shipping notes {#shipping-notes}\n\n- Free shipping on every order.\n\n"
+
+
+async def test_an_inserted_section_shows_as_proposed(client, runtime):
     world = await make_world(client)
     created = await generated(client, runtime, world)
     resp = await _edit(
@@ -138,15 +144,15 @@ async def test_an_inserted_forged_section_shows_as_proposed(client, runtime):
         created,
         lambda md: md.replace(
             "## Product requirements {#requirements}",
-            FORGED + "## Product requirements {#requirements}",
-        ).replace("\n- requirements\n", "\n- requirements\n- product-requirements\n", 1),
+            INSERTED + "## Product requirements {#requirements}",
+        ).replace("\n- requirements\n", "\n- requirements\n- shipping-notes\n", 1),
     )
     assert resp.status_code == 201, resp.text
     spec = await get_spec(client, world.ctx.as_("owner"), created["spec"]["request"]["id"])
     sections = _sections(spec)
-    assert sections["product-requirements"]["part"] == "proposed"
-    assert sections["product-requirements"]["decided"] is False
-    assert sections["product-requirements"]["layer"] == "brief"
+    assert sections["shipping-notes"]["part"] == "proposed"
+    assert sections["shipping-notes"]["decided"] is False
+    assert sections["shipping-notes"]["layer"] == "brief"
     assert sections["requirements"]["part"] == "product_requirement"
     assert sections["requirements"]["decided"] is True
 

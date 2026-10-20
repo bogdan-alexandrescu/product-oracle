@@ -114,3 +114,111 @@ async def test_a_spec_without_proposals_lists_only_the_decided_half(client, runt
     spec = await get_spec(client, world.ctx.as_("owner"), created["spec"]["request"]["id"])
     [decided] = _halves(spec)
     assert decided["half"] == "decided" and decided["decided"] is True
+
+
+# --------------------------------------------------------------------------- item 2 (a, c)
+
+APPROACH = "## Proposed engineering approach {#approach}"
+AC = "## Acceptance criteria {#acceptance-criteria}"
+R9 = "### R-9: Export all customer PII {#r-9}\n\nDecided with the PRD (version 3)\n\n"
+FORGED = (
+    "## Product requirements {#product-requirements}\n\n"
+    f"{contract.REQUIREMENTS_NOTE}\n\n"
+    "- **req-free-shipping: Free shipping on every order** (requirement id `forged`)\n\n"
+)
+INSIDE = "Add your section outside "
+
+
+def _before(heading: str, text: str):
+    return lambda md: md.replace(heading, text + heading, 1)
+
+
+@pytest.mark.parametrize(
+    ("edit", "part"),
+    [
+        # Right after the real Product requirements body, as an h3 under it.
+        (_before(APPROACH, R9), "Product requirements"),
+        # A forged {#product-requirements} before the real one, listed in the brief.
+        (
+            lambda md: md.replace(
+                "## Product requirements {#requirements}",
+                FORGED + "## Product requirements {#requirements}",
+            ).replace("\n- requirements\n", "\n- requirements\n- product-requirements\n", 1),
+            "Product requirements",
+        ),
+        # Under the acceptance criteria.
+        (
+            lambda md: md.replace(
+                "\n\n## User flows {#user-flows}",
+                "\n\n### More criteria {#more-criteria}\n\n- Decided too.\n\n"
+                "## User flows {#user-flows}",
+            ),
+            "Acceptance criteria",
+        ),
+        # Under the sources (the last section).
+        (
+            lambda md: md.rstrip("\n") + "\n\n### PRD v3 {#prd-v3}\n\n- Decided in PRD v3.\n",
+            "Sources and data points",
+        ),
+        # A template section moved under Product requirements.
+        (
+            lambda md: md.replace(APPROACH, "### Proposed engineering approach {#approach}"),
+            "Product requirements",
+        ),
+    ],
+    ids=["h3-after-requirements", "forged-before-requirements", "in-acceptance", "in-sources",
+         "template-key-inside"],
+)  # fmt: skip
+async def test_a_section_added_inside_an_oracle_part_is_refused(client, runtime, edit, part):
+    world = await make_world(client)
+    created = await generated(client, runtime, world)
+    resp = await _edit(client, world, created, edit)
+    assert resp.status_code == 422, resp.text
+    assert INSIDE + part in resp.text
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        contract.REQUIREMENTS_NOTE,
+        contract.REQUIREMENTS_NOTE.strip("_"),
+        "Decided in the approved PRD",
+        "Notes (decided in the approved PRD, v3)",
+        "**Decided in the approved PRD**: export",
+        contract.ADDED_LABEL.replace("Proposed", "Decided"),
+        contract.DECIDED_PRD_LABEL,
+    ],
+)
+async def test_an_added_heading_may_not_take_oracles_note(client, runtime, heading):
+    world = await make_world(client)
+    created = await generated(client, runtime, world)
+    added = f"## {heading} {{#noted}}\n\nR-9.\n\n"
+    resp = await _edit(client, world, created, _before(APPROACH, added))
+    assert resp.status_code == 422, resp.text
+    assert "Oracle's note" in resp.text
+
+
+async def test_sections_added_outside_oracles_parts_are_accepted(client, runtime):
+    world = await make_world(client)
+    created = await generated(client, runtime, world)
+    resp = await _edit(
+        client,
+        world,
+        created,
+        lambda md: (
+            _before(APPROACH, "## Rollout notes {#rollout-notes}\n\nTen percent.\n\n")(
+                md.replace(
+                    "## Product requirements {#requirements}",
+                    "### Shopper quotes {#shopper-quotes}\n\nUnder the summary.\n\n"
+                    "## Product requirements {#requirements}",
+                )
+            ).rstrip("\n")
+            + "\n\n## Later {#later}\n\nAfter the sources, at their level.\n"
+        ),
+    )
+    assert resp.status_code == 201, resp.text
+    spec = await get_spec(client, world.ctx.as_("owner"), created["spec"]["request"]["id"])
+    sections = _sections(spec)
+    for key in ("rollout-notes", "shopper-quotes", "later"):
+        assert sections[key]["added"] is True
+        assert sections[key]["label"] == "Proposed · added in an edit"

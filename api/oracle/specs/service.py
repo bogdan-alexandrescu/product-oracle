@@ -786,12 +786,17 @@ async def check_edit(
     markdown: str,
 ) -> None:
     """E1: an edit of a spec version (the API, ``push_draft``, ``oracle push``) may change
-    only its engineering parts and add sections. The sections Oracle writes (requirements,
+    only its engineering parts and add sections, outside Oracle's parts and not under
+    Oracle's note (:func:`contract.structure_problems`). The sections Oracle writes (requirements,
     the decided half of the acceptance criteria, sources, the title and its intro, the
     "Full version" heading), their levels, order and brief listing, the labels on the
     engineering sections and the ``spec`` front matter must read as in the version Oracle
     wrote from the PRD version, or as the version the edit replaces has them; otherwise the
     edit is refused (DraftError, 422), naming what changed."""
+    structure = [
+        ImportProblem(code=p.code, message=p.message, section_key=p.section)
+        for p in contract.structure_problems(markdown)
+    ]
     versions = await _versions(db, request.id)
     by_run = next(
         (v for v in reversed(versions) if (v.provenance or {}).get("origin") == "run"), None
@@ -815,6 +820,8 @@ async def check_edit(
         allowed.append(contract.expected_prd_parts(inputs))
     submitted = contract.prd_parts(markdown)
     if submitted in allowed:
+        if structure:
+            raise DraftError(structure)
         return
     changed = min(
         (
@@ -833,6 +840,7 @@ async def check_edit(
             )
             for key in changed or [None]
         ]
+        + structure
     )
 
 

@@ -466,6 +466,63 @@ def part_states(key: str, body: str, approved: bool) -> list[PartState]:
     return [PartState(key, part, approved, APPROVED_STATE if approved else PROPOSED_STATE)]
 
 
+# E1 'Added sections, visible' (owner, 2026-10-20): Oracle's parts an edit may not add a
+# section inside, and the note and labels an added heading may not take.
+PRD_PART_TITLES = {k: SECTIONS_BY_KEY[k].title for k in PRD_PARTS}
+_NOTE_PHRASES = ("decided in the approved prd", "decided with the prd")
+_STATE_LIKE = re.compile(r"\b(?:decided|proposed)\s*·")
+_EMPHASIS = re.compile(r"[*_`~]+")
+
+
+def _plain(text: str) -> str:
+    return " ".join(_EMPHASIS.sub("", text).lower().split())
+
+
+def structure_problems(markdown: str) -> list[Problem]:
+    """What an edit may not do with sections (every problem at once): add a section, or
+    move one, inside the subtree of Product requirements, the acceptance criteria or
+    Sources and data points, or add one whose heading is Oracle's own (a part's title, its
+    'Decided in the approved PRD' note, a state label)."""
+    try:
+        draft = parse_draft(markdown)
+    except DraftError:
+        return []
+    problems: list[Problem] = []
+    owner: tuple[str, int] | None = None
+    titles = {_plain(t): k for k, t in PRD_PART_TITLES.items()}
+    for s in draft.sections:
+        if owner is not None and s.level <= owner[1]:
+            owner = None
+        if s.section_key in PRD_PART_TITLES:
+            owner = (s.section_key, s.level)
+            continue
+        inside = owner[0] if owner is not None else None
+        if inside is None and part_of(s.section_key) == "proposed":
+            inside = titles.get(_plain(s.heading))
+        if inside is not None:
+            problems.append(
+                Problem(
+                    "section_inside_oracle_part",
+                    f"Add your section outside {PRD_PART_TITLES[inside]}: Oracle writes it "
+                    "from the approved PRD.",
+                    s.section_key,
+                )
+            )
+        elif part_of(s.section_key) == "proposed" and (
+            any(p in _plain(s.heading) for p in _NOTE_PHRASES)
+            or _STATE_LIKE.search(_plain(s.heading))
+        ):
+            problems.append(
+                Problem(
+                    "heading_takes_oracle_note",
+                    "An added section's heading may not take Oracle's note ('Decided in the "
+                    "approved PRD') or its Decided and Proposed labels.",
+                    s.section_key,
+                )
+            )
+    return problems
+
+
 def _leading_label(body: str) -> str | None:
     first = body.strip().split("\n\n", 1)[0].strip()
     return first if first in SECTION_LABELS else None
