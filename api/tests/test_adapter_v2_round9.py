@@ -16,7 +16,9 @@ from oracle.config import get_settings
 from oracle.models import AuditEvent
 from oracle.runs import service
 from oracle.runs.models import Run, RunSegment
+from oracle.swarm import RuntimeUnavailable
 from oracle.swarm.runtime import StepStatus, WorkflowStatus
+from oracle.swarm.settings import get_runtime_settings
 from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
 from tests.fixtures import seed_auth
@@ -25,8 +27,10 @@ from tests.test_adapter_v2 import (
     LB,
     _at_baseline,
     _ceiling,
+    _Clock,
     _draft_markdown,
     _inbox,
+    _knobs_of,
     _tick_errors,
     mcp_session,
     on,
@@ -399,3 +403,56 @@ async def test_curated_writes_are_refused_while_held_and_write_nothing(
     async with tenant_session(tenant_id) as s:
         assert await s.scalar(select(Document).where(Document.slug == "r9-held")) is None
         assert list(await s.scalars(select(Proposal))) == []
+
+
+# --------------------------------------------------------------------------- item 3
+
+
+async def test_a_stuck_cancel_is_not_cost_unknown_while_its_cost_reads(client, owner, monkeypatch):
+    """P3d 'Stuck cancels' (owner, 2026-10-20): a confirmed cancel that keeps reading
+    CANCELLING is dropped after 3 days with a note; until then its cost is read and
+    counted, never labelled 'cost unknown'. Only a failed read makes it unknown."""
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _at_baseline(client, auth, swarm)
+    swarm.wind_down_reads = 10**6
+    resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
+    assert resp.status_code == 200, resp.text
+    await _tick_errors(client, auth)
+    clock.forward(86400 + get_runtime_settings().step_seconds + 60)
+    swarm.workflows["wf_1"].steps[0].cost += 2.0  # spent while winding down
+    await _tick_errors(client, auth)
+    got = await get(client, auth, run["id"])
+    assert got["spent_usd"] == pytest.approx(_wf_cost(swarm, "wf_1"))
+    assert got["can_retry_lookup"] is False
+    assert "Cost unknown" not in (got["stuck"] or ""), got["stuck"]
+    [entry] = (await _knobs_of(tenant_id, run["id"]))["searches"]
+    assert not entry.get("cost_unknown"), entry
+    items = (await _inbox(client, auth))["lookups"]
+    assert all("Cost unknown" not in (i["stuck"] or "") for i in items), items
+    # A read that fails: now its cost is unknown.
+    runtime = use(swarm)
+    real = runtime.status
+
+    async def fails(workflow_id):
+        raise RuntimeUnavailable("SwarmCloud is unavailable", status=503)
+
+    monkeypatch.setattr(runtime, "status", fails)
+    await _tick_errors(client, auth)
+    got = await get(client, auth, run["id"])
+    assert got["can_retry_lookup"] is True and "Cost unknown" in got["stuck"], got["stuck"]
+    # It reads again: counted, and no longer unknown.
+    monkeypatch.setattr(runtime, "status", real)
+    clock.forward(service.STUCK_LOOKUP_SECONDS + 1)
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    await _tick_errors(client, auth)
+    got = await get(client, auth, run["id"])
+    assert got["spent_usd"] == pytest.approx(_wf_cost(swarm, "wf_1"))
+    assert "Cost unknown" not in (got["stuck"] or ""), got["stuck"]
+    # Dropped at the cap, with a note on the run.
+    clock.forward(service.COST_UNKNOWN_SECONDS + 60)
+    await _tick_errors(client, auth)
+    assert not (await _knobs_of(tenant_id, run["id"])).get("searches")
+    got = await get(client, auth, run["id"])
+    assert any("wf_1" in n and "CANCELLING" in n for n in got["notes"]), got["notes"]

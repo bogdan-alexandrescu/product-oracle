@@ -467,9 +467,7 @@ def _stuck(run: Run) -> str | None:
     unknown = _cost_unknown(run)
     if unknown is not None:
         n = unknown.get("not_found")
-        if unknown.get("winding"):
-            why = "it still reads CANCELLING although SwarmCloud confirmed its cancel"
-        elif n:
+        if n:
             why = f"SwarmCloud answered HTTP 404 {n} times without saying it does not exist"
         else:
             why = "SwarmCloud has not served its status"
@@ -480,6 +478,16 @@ def _stuck(run: Run) -> str | None:
             f"{_cost_cap(unknown).isoformat(timespec='minutes')}, and Retry lookup reads it "
             "now; the run's spend has what Oracle last read. If it still runs, cancel it in "
             "SwarmCloud's console."
+        )
+    winding = _winding(run)
+    if winding is not None:
+        return (
+            f"Workflow {winding.get('id')} (submission {winding.get('label')}) still reads "
+            "CANCELLING although SwarmCloud confirmed its cancel, since "
+            f"{str(winding.get('winding_since'))[:16]}. Oracle reads its cost on every tick "
+            "and counts it on the run until "
+            f"{_cost_cap(winding).isoformat(timespec='minutes')}, then stops with a note on "
+            "the run. If it still runs, cancel it in SwarmCloud's console."
         )
     post = knobs.get("post_404")
     if (
@@ -528,6 +536,19 @@ def _cost_unknown(run: Run) -> dict[str, Any] | None:
             e
             for e in (run.knobs or {}).get("searches") or []
             if e.get("id") and e.get("cost_unknown")
+        ),
+        None,
+    )
+
+
+def _winding(run: Run) -> dict[str, Any] | None:
+    """The first searched workflow whose confirmed cancel still reads CANCELLING past its
+    search's end, its cost read (P3d: not 'cost unknown'; dropped at its cap)."""
+    return next(
+        (
+            e
+            for e in (run.knobs or {}).get("searches") or []
+            if e.get("id") and e.get("winding") and not e.get("cost_unknown")
         ),
         None,
     )
@@ -3216,6 +3237,7 @@ async def _after_search(
                 "label": e.get("label"),
                 "reason": e.get("dropped"),
                 "cost_unknown_since": e.get("cost_unknown"),
+                "cancelling_since": e.get("winding_since"),
             },
         )
     if (ceiling := _overrun(run)) is not None:
@@ -3332,15 +3354,17 @@ def _found_apply(
                     )
                 _note(segment, said)
             return False
-        if e.get("cancelled") and _now() >= _search_end(e):
-            # Its cancel was confirmed long ago and it still reads as not ended: capped
-            # like a cost Oracle cannot read (in the Inbox, then dropped at the cap).
-            e["winding"] = True
-            e["error"] = "it still reads CANCELLING after SwarmCloud confirmed its cancel"
-            e.setdefault("cost_unknown", _now().isoformat())
-            return _under_cap(segment, e)
-        for key in ("unread", "not_found", "stuck", "error", "cost_unknown", "winding"):
+        for key in ("unread", "not_found", "stuck", "error", "cost_unknown"):
             e.pop(key, None)
+        if e.get("cancelled") and _now() >= _search_end(e):
+            # P3d 'Stuck cancels' (owner, 2026-10-20): its cancel was confirmed long ago
+            # and it still reads as not ended. Its cost reads, so it is counted and not
+            # 'cost unknown'; it is dropped at the same cap, with a note on the run.
+            e["winding"] = True
+            e.setdefault("winding_since", _now().isoformat())
+            return _under_cap(segment, e)
+        e.pop("winding", None)
+        e.pop("winding_since", None)
         return True  # still running, or winding down: read again (its cost counts)
     if (out.forgotten or (out.gone and e.get("cancelled"))) and not e.get("costed"):
         if not e.get("gone_reads"):
@@ -3367,7 +3391,8 @@ def _found_apply(
                 "Oracle stopped checking it; its cost is what Oracle last read.",
             )
         return False
-    # Nothing read this time.
+    # Nothing read this time: its cost is unknown (whether or not it was winding down).
+    e.pop("winding", None)
     e["error"] = _shown(out.error or out.unread) or "its status was not read"
     e["unread"] = int(e.get("unread") or 0) + 1
     if _not_found(out.error) or _not_found(out.unread):
@@ -3380,24 +3405,30 @@ def _found_apply(
 
 
 def _under_cap(segment: RunSegment | None, e: dict[str, Any]) -> bool:
-    """A searched workflow whose cost is unknown is kept until :func:`_cost_cap`, then
-    dropped (noted, and marked ``dropped`` for the audit)."""
-    if not e.get("cost_unknown") or _now() < _cost_cap(e):
+    """A searched workflow whose cost is unknown, or whose confirmed cancel still reads
+    CANCELLING past its search's end (its cost read and counted), is kept until
+    :func:`_cost_cap`, then dropped (noted, and marked ``dropped`` for the audit)."""
+    if not (e.get("cost_unknown") or e.get("winding")) or _now() < _cost_cap(e):
         return True
     wid, label = e["id"], e.get("label")
+    stopped = f"Oracle stopped reading it at its cap ({_cost_cap(e).isoformat(timespec='minutes')})"
     if segment is not None:
-        why = (
-            "it still read CANCELLING after SwarmCloud confirmed its cancel"
-            if e.get("winding")
-            else "SwarmCloud has not served its status"
-        )
-        _note(
-            segment,
-            f"Cost unknown for workflow {wid} (submission {label}): {why} since "
-            f"{e['cost_unknown'][:16]} ({e.get('error')}). Oracle stopped reading it at its "
-            f"cap ({_cost_cap(e).isoformat(timespec='minutes')}), and the run's spend has "
-            "what Oracle last read. If it still runs, cancel it in SwarmCloud's console.",
-        )
+        if e.get("winding") and not e.get("cost_unknown"):
+            _note(
+                segment,
+                f"Workflow {wid} (submission {label}) still read CANCELLING after SwarmCloud "
+                f"confirmed its cancel, since {str(e.get('winding_since'))[:16]}. {stopped}; "
+                f"its cost was read and counted until then (${_last_cost(segment, wid):g} "
+                "in the run's spend). If it still runs, cancel it in SwarmCloud's console.",
+            )
+        else:
+            _note(
+                segment,
+                f"Cost unknown for workflow {wid} (submission {label}): SwarmCloud has not "
+                f"served its status since {str(e.get('cost_unknown'))[:16]} "
+                f"({e.get('error')}). {stopped}, and the run's spend has what Oracle last "
+                "read. If it still runs, cancel it in SwarmCloud's console.",
+            )
     e["dropped"] = "cost_unknown_cap"
     return False
 

@@ -504,8 +504,11 @@ async def test_a_confirmed_cancel_stuck_cancelling_is_capped_like_cost_unknown(
     clock.forward(86400 + get_runtime_settings().step_seconds + 60)
     await _tick_errors(client, auth)
     [item] = (await _inbox(client, auth))["lookups"]
-    assert item["can_retry_lookup"] is True
+    # Round 9 (P3d 'Stuck cancels', owner 2026-10-20): its cost reads, so it is shown
+    # without 'Cost unknown' and Retry lookup (it is read on every tick).
+    assert item["can_retry_lookup"] is False
     assert "wf_1" in item["stuck"] and "CANCELLING" in item["stuck"], item["stuck"]
+    assert "Cost unknown" not in item["stuck"], item["stuck"]
     clock.forward(service.COST_UNKNOWN_SECONDS + 60)
     await _tick_errors(client, auth)
     assert not (await _knobs_of(tenant_id, run["id"])).get("searches")
