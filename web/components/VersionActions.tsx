@@ -147,11 +147,11 @@ export function ApproveButton({
 
   if (blockedReason) {
     return (
-      <div className="flex max-w-md flex-col items-end gap-1" data-testid="approve-blocked">
+      <div className="flex w-full min-w-0 max-w-[min(28rem,calc(100vw-2.5rem))] flex-col items-end gap-1 max-[600px]:items-start" data-testid="approve-blocked">
         <Button variant="primary" icon="check" disabled aria-describedby="approve-blocked-reason" title={blockedReason}>
           Approve version
         </Button>
-        <span id="approve-blocked-reason" className="text-right text-sm font-medium text-warn">
+        <span id="approve-blocked-reason" className="text-right text-sm font-medium break-words text-warn max-[600px]:text-left">
           {blockedReason}
         </span>
       </div>

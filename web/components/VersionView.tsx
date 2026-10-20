@@ -497,12 +497,14 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   }
   const titleMarks = (version?.date_marks ?? []).filter((m) => m.label && m.where === "title");
   // Owner, 2026-10-20: a roadmap version cannot be approved while a date is marked.
-  const flaggedDates = (version?.date_marks ?? []).filter((m) => m.label);
+  const flaggedDates = [
+    ...new Map((version?.date_marks ?? []).filter((m) => m.label).map((m) => [`${m.text}|${m.label}`, m])).values(),
+  ];
   const approveBlocked =
     flaggedDates.length > 0
-      ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " rests" : "s rest"} on no verified schedule basis (${flaggedDates
-          .map((m) => `${m.text}: ${m.label}`)
-          .join("; ")}). Record a basis for ${flaggedDates.length === 1 ? "it" : "them"} or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
+      ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " rests" : "s rest"} on no verified schedule basis: ${flaggedDates
+          .map((m) => `${m.text} (${m.label})`)
+          .join(", ")}. Record a basis or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
       : undefined;
   const sectionProps = (s: SectionOut) => ({
     section: s,
