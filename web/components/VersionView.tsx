@@ -523,7 +523,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     if (!version || !hashLink || hashLink.n !== n || !openKey || openKey !== keyFromHash(hashLink.hash, allKeys)) return;
     if (scrolledTo.current === `${n}${hashLink.hash}`) return;
     scrolledTo.current = `${n}${hashLink.hash}`;
-    if (arrivedAtFeedback.current) return;
+    // Arriving at the open feedback, the review panel scrolls to the first item instead.
+    if (arrivedAtFeedback.current) {
+      arrivedAtFeedback.current = false;
+      return;
+    }
     const panel = panelRef.current;
     if (panel && (panel.getBoundingClientRect().top < 0 || panel.getBoundingClientRect().top > window.innerHeight * 0.6)) {
       panel.scrollIntoView({ block: "start" });
