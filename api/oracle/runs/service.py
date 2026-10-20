@@ -69,6 +69,7 @@ from oracle.runs.schemas import (
     RunCreate,
     RunOut,
     RunPatch,
+    RunProgress,
     RunSummary,
     SegmentAttempt,
     SegmentEstimate,
@@ -269,7 +270,24 @@ async def _refs(db: AsyncSession, runs: list[Run]) -> _Refs:
     return _Refs(slugs, kinds, sources)
 
 
-def _summary(run: Run, refs: _Refs, waiting: Checkpoint | None) -> RunSummary:
+def _progress(run: Run, segments: list[RunSegment]) -> RunProgress:
+    flow = _flow(run)
+    now = next((s for s in segments if s.status == "running"), None) or next(
+        (s for s in segments if s.status == "pending"), None
+    )
+    return RunProgress(
+        done=sum(1 for s in segments if s.status == "succeeded"),
+        total=len(segments),
+        now=flow.segment(now.name).title if now else None,
+    )
+
+
+def _summary(
+    run: Run,
+    refs: _Refs,
+    waiting: Checkpoint | None,
+    segments: list[RunSegment] | None = None,
+) -> RunSummary:
     flow = _flow(run)
     source_id = _source_id(run)
     return RunSummary(
@@ -294,6 +312,7 @@ def _summary(run: Run, refs: _Refs, waiting: Checkpoint | None) -> RunSummary:
         finished_at=run.finished_at,
         waiting_on=waiting.kind if waiting else None,  # type: ignore[arg-type]
         error=run.error,
+        progress=_progress(run, segments) if segments is not None else None,
     )
 
 
@@ -364,7 +383,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     if run.status == "draft" or not segments or not any(s.swarm_workflow_id for s in segments):
         notes += [n for n in runtime.notes() if n not in notes]
     return RunOut(
-        **_summary(run, refs, waiting).model_dump(),
+        **_summary(run, refs, waiting, segments).model_dump(),
         knobs=KnobsOut(
             depth=knobs.depth,  # type: ignore[arg-type]
             roles=knobs.roles,
@@ -391,10 +410,17 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
         stmt = stmt.where(Run.status == status)
     runs = list(await db.scalars(stmt))
     refs = await _refs(db, runs)
-    pending = {
-        c.run_id: c for c in await _checkpoints(db, [r.id for r in runs]) if c.status == "pending"
-    }
-    return [_summary(r, refs, pending.get(r.id)) for r in runs]
+    ids = [r.id for r in runs]
+    pending = {c.run_id: c for c in await _checkpoints(db, ids) if c.status == "pending"}
+    # Every run's segments in one query, so a list never costs a call per run.
+    segments: dict[uuid.UUID, list[RunSegment]] = {i: [] for i in ids}
+    if ids:
+        rows = await db.scalars(
+            select(RunSegment).where(RunSegment.run_id.in_(ids)).order_by(RunSegment.seq)
+        )
+        for seg in rows:
+            segments[seg.run_id].append(seg)
+    return [_summary(r, refs, pending.get(r.id), segments[r.id]) for r in runs]
 
 
 async def read_artifact(db: AsyncSession, run_id: uuid.UUID, seq: int, name: str) -> str:

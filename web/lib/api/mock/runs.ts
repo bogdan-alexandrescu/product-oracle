@@ -139,6 +139,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     finished_at: r.finished_at,
     waiting_on: r.waiting_on,
     error: r.error,
+    progress: progressOf(r),
   };
 }
 
@@ -182,7 +183,14 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
   }));
 }
 
+/** Segments done of the total and what the run does now, as GET /v1/runs serves them. */
+function progressOf(r: RunOut): Schemas["RunProgress"] {
+  const now = r.segments.find((s) => s.status === "running") ?? r.segments.find((s) => s.status === "pending");
+  return { done: r.segments.filter((s) => s.status === "succeeded").length, total: r.segments.length, now: now?.title ?? null };
+}
+
 function refresh(r: RunOut) {
+  r.progress = progressOf(r);
   r.spent_usd = round2(r.segments.reduce((sum, s) => sum + s.cost_usd, 0));
   r.waiting_on = r.checkpoints.find((c) => c.status === "pending")?.kind ?? null;
   for (const c of r.checkpoints) c.can_decide = c.status === "pending";
@@ -307,8 +315,10 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
         segment_title: r.segments.find((s) => s.seq === c.segment_seq)?.title ?? null,
       })),
   );
-  const approvals = ctx.db.runs.filter((r) => r.status === "awaiting_approval").map(summary);
-  const overruns = ctx.db.runs.filter((r) => r.status === "paused_overrun").map(summary);
+  // The inbox embeds summaries without their progress, as the API does.
+  const bare = (r: RunOut) => ({ ...summary(r), progress: null });
+  const approvals = ctx.db.runs.filter((r) => r.status === "awaiting_approval").map(bare);
+  const overruns = ctx.db.runs.filter((r) => r.status === "paused_overrun").map(bare);
   const byDoc = new Map<string, FeedbackRow[]>();
   for (const f of ctx.feedback.filter((x) => x.status === "open").sort((a, b) => b.created_at.localeCompare(a.created_at))) {
     byDoc.set(f.document_id, [...(byDoc.get(f.document_id) ?? []), f]);
@@ -627,4 +637,29 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 
   for (const r of db.runs) refresh(r);
   return db;
+}
+
+/**
+ * The large-company scenario (po-mock-scenario=large): `count` more active runs, cloned from
+ * the seeded run that waits on a checkpoint; every fifth still waits on one (an Inbox
+ * line), the others are running their second segment.
+ */
+export function enlargeRuns(db: RunsDb, uuid: () => string, count: number) {
+  const model = db.runs.find((r) => r.status === "awaiting_checkpoint")!;
+  for (let i = 0; i < count; i++) {
+    const r: RunOut = JSON.parse(JSON.stringify(model));
+    r.id = uuid();
+    r.document_slug = `${model.document_slug}-${i + 1}`;
+    r.created_at = new Date(Date.parse(model.created_at) - (i + 1) * 3600_000).toISOString();
+    for (const s of r.segments) s.id = uuid();
+    if (i % 5 === 0) {
+      for (const c of r.checkpoints) Object.assign(c, { id: uuid(), run_id: r.id });
+    } else {
+      r.checkpoints = [];
+      r.status = "running";
+      r.segments[1].status = "running";
+    }
+    refresh(r);
+    db.runs.push(r);
+  }
 }

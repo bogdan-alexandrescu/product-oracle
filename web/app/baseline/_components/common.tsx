@@ -3,6 +3,8 @@ import { LockIcon } from "@/components/ui";
 import type { EntityOut, GraphOut, NodeStatus } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 
+import { byTitle } from "./order";
+
 /** Default `low` threshold of the confidence settings; the trace report carries the company's. */
 export const DEFAULT_LOW = 0.4;
 
@@ -194,8 +196,6 @@ export function targetTitle(graph: GraphOut | undefined, entityId?: string | nul
   if (edge) return `${titleOf(graph, edge.src_id)} → ${titleOf(graph, edge.dst_id)} (${edge.type.replace("_", " ")})`;
   return "—";
 }
-
-const byTitle = (a: EntityOut, b: EntityOut) => a.title.localeCompare(b.title);
 
 /** Live goals, heaviest first: the order of the ledger's goal columns and of their G1, G2 tags. */
 export function sortedGoals(graph: GraphOut | undefined): EntityOut[] {
