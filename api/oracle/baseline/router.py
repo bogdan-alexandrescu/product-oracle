@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import inspect
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role, require_role_now
+from oracle.authz import recheck_caller, require_role, require_role_now
 from oracle.baseline import conflicts, evidence, public_links, scoring, service, trace, yaml_io
 from oracle.baseline.models import Edge, Entity
 from oracle.baseline.schemas import (
@@ -53,6 +53,7 @@ from oracle.baseline.schemas import (
     YamlImportError,
     YamlImportResult,
 )
+from oracle.http import read_body
 
 router = APIRouter(prefix="/v1/baseline", tags=["baseline"])
 
@@ -671,11 +672,14 @@ async def export_yaml(principal: Reader, db: TenantDB) -> PlainTextResponse:
     },
 )
 async def import_yaml(
-    request: Request, principal: ApproverNow, db: TenantDB, run_id: uuid.UUID | None = None
+    request: Request, principal: Approver, db: TenantDB, run_id: uuid.UUID | None = None
 ) -> YamlImportResult | JSONResponse:
     """Merge a YAML graph in, idempotent by (type, key); locked items get proposals."""
+    raw = await read_body(request)
+    # The body is in before the gate is taken (and the caller re-read under it).
+    await recheck_caller(db, principal, "approver")
     try:
-        text = (await request.body()).decode("utf-8")
+        text = raw.decode("utf-8")
     except UnicodeDecodeError:
         text = None
     try:

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import require_role, require_role_now
+from oracle.authz import recheck_caller, require_role
 from oracle.docs import service
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import (
@@ -22,6 +22,7 @@ from oracle.docs.schemas import (
     VersionOut,
     VersionSummary,
 )
+from oracle.http import read_body
 from oracle.jobs import service as jobs_service
 from oracle.review.schemas import ConflictResponse
 
@@ -30,7 +31,6 @@ router = APIRouter(
     prefix="/v1/documents", tags=["documents"], dependencies=[Depends(require_role("viewer"))]
 )
 Approver = Annotated[Principal, Depends(require_role("approver"))]
-ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 
 
 def _not_found(exc: service.NotFoundError) -> HTTPException:
@@ -82,7 +82,7 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
 async def import_version(
     doc: str,
     request: Request,
-    principal: ApproverNow,
+    principal: Approver,
     db: TenantDB,
     base_version: Annotated[int | None, Query(ge=0)] = None,
 ) -> VersionOut | JSONResponse:
@@ -93,7 +93,9 @@ async def import_version(
     does not have as the latest has them, the import is a 409 naming both versions and
     those sections (never a silent overwrite). Without it the import works as before,
     and the version carries a ``base_version_missing`` note."""
-    raw = await request.body()
+    raw = await read_body(request)
+    # The body is in before the gate is taken (and the caller re-read under it).
+    await recheck_caller(db, principal, "approver")
     try:
         markdown = raw.decode("utf-8")
     except UnicodeDecodeError:
