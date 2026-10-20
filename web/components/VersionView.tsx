@@ -429,6 +429,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     [allKeys, shownSections, select],
   );
   const feedbackFocused = useCallback(() => setFeedbackFocus(false), []);
+  // Opening Feedback reads the items again: Oracle may have answered a comment meanwhile.
+  const openTab = (t: Tab) => {
+    if (t === "feedback" && tab !== "feedback") void feedbackQ.reload();
+    setTab(t);
+  };
   // A decision on an item: its counts, and the comments it may have resolved.
   const reloadFeedback = () => {
     void feedbackQ.reload();
@@ -672,7 +677,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       }
     >
       <div className="px-5 pt-1 max-[600px]:px-4">
-        <TabBar label="Review panel" size="sm" tabs={tabs} value={tab} onChange={setTab} />
+        <TabBar label="Review panel" size="sm" tabs={tabs} value={tab} onChange={openTab} />
       </div>
       <div role="tabpanel" className="px-5 py-3.5 max-[600px]:px-4 xl:max-h-[calc(100vh-330px)] xl:overflow-y-auto">
         {scoping && openSection && (

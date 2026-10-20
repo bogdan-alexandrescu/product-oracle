@@ -47,25 +47,27 @@ test("suggestion cards: classification, duplicates, edit and accept, and a pushb
 
   await expect(feedbackItem(page, "quantify the demand").getByTestId("suggestion")).toContainText("Duplicate of an earlier item");
 
-  await card.getByRole("button", { name: "Edit" }).click();
-  await card.getByLabel("Proposed section text").fill("Seven in ten sales calls with teams asked for shared editing this quarter.");
-  await card.getByRole("button", { name: "Save edit" }).click();
+  // The decision buttons and the editor sit at the top of the item.
+  await demand.getByRole("button", { name: "Edit and accept" }).click();
+  await demand.getByLabel("Proposed section text").fill("Seven in ten sales calls with teams asked for shared editing this quarter.");
+  await demand.getByRole("button", { name: "Save edit" }).click();
   await expect(card.getByTestId("suggestion-text")).toHaveText("Seven in ten sales calls with teams asked for shared editing this quarter.");
   await expect(card).toContainText("(edited)");
-  await card.getByRole("button", { name: "Accept" }).click();
+  await demand.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(card).toContainText("Accepted");
   await expect(card).toContainText("use “Refine section” on #problem");
 
   // Pushback: reasoning and sources; keeping the call needs a reason.
-  const custom = feedbackItem(page, "custom roles").getByTestId("suggestion");
+  const customItem = feedbackItem(page, "custom roles");
+  const custom = customItem.getByTestId("suggestion");
   const pushback = custom.getByTestId("pushback");
   await expect(pushback).toContainText("Oracle pushes back");
   await expect(pushback).toContainText("Confirmed goal: Team adoption");
   await expect(pushback.getByRole("link", { name: "Roles research notes" })).toHaveAttribute("href", /roles-research/);
-  await custom.getByRole("button", { name: "Keep my call" }).click();
-  const accept = custom.getByRole("button", { name: "Accept anyway" });
+  await customItem.getByRole("button", { name: "Keep my call" }).click();
+  const accept = customItem.getByRole("button", { name: "Accept anyway" });
   await expect(accept).toBeDisabled();
-  await custom.getByLabel(/Why keep your call/).fill("Two design partners need a billing-only role.");
+  await customItem.getByLabel(/Why keep your call/).fill("Two design partners need a billing-only role.");
   await accept.click();
   await expect(custom).toContainText("Kept the call: Two design partners need a billing-only role.");
 });
@@ -85,7 +87,7 @@ test("refine a section from an accepted suggestion: diff preview, accept, next v
   await login(page);
   await page.goto("/documents/team-workspaces/v/2");
   await openTab(page, "Feedback");
-  await feedbackItem(page, "how many teams asked").getByRole("button", { name: "Accept" }).click();
+  await feedbackItem(page, "how many teams asked").getByRole("button", { name: "Accept", exact: true }).click();
   await expect(feedbackItem(page, "how many teams asked").getByTestId("suggestion")).toContainText("Accepted");
 
   const problem = await openSection(page, "problem");
