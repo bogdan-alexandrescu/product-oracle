@@ -282,8 +282,8 @@ dependencies (§2). This lane adds rows per item.
 An unknown declared key stays in `trace` with `unresolved: true`. Items arrive with the
 `roadmap.md` import (the `roadmap.items` change handler reads the run's
 `roadmap_items.yaml`); `PUT /v1/roadmaps/{doc}/versions/{n}/items` imports a file for a
-version by hand (refused whole on any problem; an approved version's items are pinned,
-409). A version imported without a file (the feedback loop, `oracle push`) carries forward
+version by hand (refused whole on any problem, and for a version built from no PRD
+version; an approved version's items are pinned, 409). A version imported without a file (the feedback loop, `oracle push`) carries forward
 the previous version's items that its text still names.
 
 ### 8.3 Dates (O4)

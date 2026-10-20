@@ -139,6 +139,12 @@ async def import_roadmap_items(
     version's items cannot be replaced (409)."""
     document = await _document(db, doc, "roadmap")
     version = await _version(db, document, n)
+    if version.source_version_id is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"version {n} of '{document.slug}' was built from no PRD version: roadmap items "
+            "trace to the approved PRD version a roadmap is built from (run prd_to_roadmap)",
+        )
     if version.approved_at is not None:
         has = await db.scalar(
             select(RoadmapItem.id).where(RoadmapItem.roadmap_version_id == version.id).limit(1)
