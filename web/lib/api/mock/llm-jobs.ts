@@ -441,7 +441,7 @@ function seedOutreach(c: LlmContext) {
         version_number: 4,
         text: "Serves G2 retention: patients who missed a visit come back within 14 days.",
         rationale: "Returning patients are a retention goal.",
-        created_at: "2026-10-17T15:05:00Z",
+        created_at: "2026-10-09T15:05:00Z",
         ...accepted,
       }),
     );

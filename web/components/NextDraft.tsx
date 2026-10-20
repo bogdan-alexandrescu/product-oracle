@@ -142,6 +142,16 @@ function Sheet({
   );
 }
 
+/** "v5 → v6": the version a build starts from and the draft it makes. */
+function VersionStep({ from, to }: { from: number | null | undefined; to: number | null | undefined }) {
+  return (
+    <span className="inline-flex items-center gap-1" aria-label={`v${from} to v${to}`}>
+      v{from}
+      <Icon name="arrow" size={16} />v{to}
+    </span>
+  );
+}
+
 function HeroChip({ children, tone = "plain" }: { children: ReactNode; tone?: "plain" | "accent" }) {
   return (
     <span
@@ -244,12 +254,12 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
   const chips = (
     <>
       <HeroChip>
-        v{preview?.base_version ?? staged.latest_version} → v{preview?.next_version ?? next}
+        <VersionStep from={preview?.base_version ?? staged.latest_version} to={preview?.next_version ?? next} />
       </HeroChip>
       {job && <JobStatusChip status={job.status} />}
       {job?.cost_usd != null && (
         <HeroChip>
-          <CostFigure usd={job.cost_usd} />
+          <span className="font-mono">${job.cost_usd.toFixed(2)}</span>
         </HeroChip>
       )}
     </>
@@ -355,7 +365,7 @@ function PickStep({
       chips={
         <>
           <HeroChip>
-            v{staged.latest_version} → v{staged.next_version}
+            <VersionStep from={staged.latest_version} to={staged.next_version} />
           </HeroChip>
           <HeroChip tone="accent">
             <span data-testid="pick-count">{chosen.length}</span> of {items.length} staged

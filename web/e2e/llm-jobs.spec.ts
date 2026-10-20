@@ -54,7 +54,9 @@ test("suggestion cards: classification, duplicates, edit and accept, and a pushb
   await expect(card).toContainText("(edited)");
   await card.getByRole("button", { name: "Accept" }).click();
   await expect(card).toContainText("Accepted");
-  await expect(card).toContainText("use “Refine section” on #problem");
+  // C1e: accepted section text is staged for the next draft, not applied per item.
+  await expect(card.getByTestId("suggestion-staged")).toHaveText("Staged for the next draft");
+  await expect(demand.getByTestId("feedback-state")).toHaveText("Accepted · staged for draft 3");
 
   // Pushback: reasoning and sources; keeping the call needs a reason.
   const custom = feedbackItem(page, "custom roles").getByTestId("suggestion");
@@ -81,31 +83,35 @@ test("take Oracle's advice: the suggestion is dismissed and the feedback decline
   await expect(item).toContainText("Resolution: Custom roles in the first release work against the goal");
 });
 
-test("refine a section from an accepted suggestion: diff preview, accept, next version with resolutions", async ({ page }) => {
+test("an accepted suggestion goes into the next draft: one build, diff preview, apply, next version with resolutions", async ({ page }) => {
   await login(page);
   await page.goto("/documents/team-workspaces/v/2");
   await openTab(page, "Feedback");
   await feedbackItem(page, "how many teams asked").getByRole("button", { name: "Accept" }).click();
   await expect(feedbackItem(page, "how many teams asked").getByTestId("suggestion")).toContainText("Accepted");
 
+  // Refine section no longer picks accepted suggestions: they wait for Build draft (C1e).
   const problem = await openSection(page, "problem");
   await sectionAction(problem, "1. Problem", "Refine section 1. Problem");
-  const refine = problem.getByTestId("refine-panel");
-  await expect(refine.getByRole("checkbox")).toBeChecked();
-  await refine.getByRole("button", { name: "Refine", exact: true }).click();
-  const preview = refine.getByTestId("refine-preview");
+  await expect(problem.getByTestId("refine-panel").getByTestId("refine-staged")).toContainText("1 staged");
+  await problem.getByTestId("refine-panel").getByRole("button", { name: "Close" }).click();
+
+  await page.getByTestId("build-draft").filter({ visible: true }).click();
+  const sheet = page.getByTestId("next-draft-sheet");
+  await sheet.getByRole("button", { name: "Build draft 3" }).click();
+  const preview = sheet.getByTestId("next-draft-preview");
   await expect(preview.locator("ins").first()).toContainText("Seven in ten sales calls");
-  await preview.getByRole("button", { name: "Accept as next version" }).click();
+  await sheet.getByRole("button", { name: "Apply as draft 3" }).click();
 
   await expect(page).toHaveURL(/\/documents\/team-workspaces\/v\/3/);
-  const revised = section(page, "problem");
+  const revised = await openSection(page, "problem");
   await expect(revised).toContainText("Seven in ten sales calls");
   // Section ids are kept; the other sections are untouched.
   await expect(await openSection(page, "roles")).toContainText("Three fixed roles");
 
   await openTab(page, "Feedback");
-  await expect(feedbackItem(page, "how many teams asked")).toContainText("addressed in v3");
-  await expect(feedbackItem(page, "quantify the demand")).toContainText("addressed in v3");
+  await expect(feedbackItem(page, "how many teams asked").getByTestId("feedback-state")).toHaveText("Addressed in v3");
+  await expect(feedbackItem(page, "quantify the demand").getByTestId("feedback-state")).toHaveText("Addressed in v3");
   await expect(feedbackItem(page, "how many teams asked").getByTestId("suggestion")).toContainText("Applied");
 
   // The new version's reports were queued and written.
@@ -122,8 +128,8 @@ test("refine from an approver's instruction alone, editing before accepting", as
   const users = await openSection(page, "users");
   await sectionAction(users, "3. Users and jobs", /^Refine section/);
   const refine = users.getByTestId("refine-panel");
-  await expect(refine).toContainText("No accepted suggestions on this section");
-  await refine.getByLabel("Instruction (optional)").fill("Name the first-time buyer segment explicitly.");
+  await expect(refine.getByTestId("refine-staged")).toHaveCount(0);
+  await refine.getByLabel("Instruction").fill("Name the first-time buyer segment explicitly.");
   await refine.getByRole("button", { name: "Refine", exact: true }).click();
   await refine.getByRole("button", { name: "Edit first" }).click();
   await refine.getByLabel("Your edit of the section body").fill("First-time buyers on mobile are the segment that matters most.");

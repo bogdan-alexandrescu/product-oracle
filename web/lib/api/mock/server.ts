@@ -321,17 +321,17 @@ function seed(): Db {
     section_key: "problem",
     anchor: { exact: "in every pilot clinic", prefix: "from paper lists, ", suffix: "." },
     body: "Name the clinics in the pilot.",
-  }, at("2026-10-16T12:00:00Z"));
+  }, at("2026-10-08T12:00:00Z"));
   for (const f of db.feedback) {
     if (f.summary === "Name the clinics in the pilot.") {
-      Object.assign(f, { status: "addressed", addressed_in_version: 4, resolution_note: "The three pilot clinics are named in the problem.", updated_at: "2026-10-17T10:00:00Z" });
+      Object.assign(f, { status: "addressed", addressed_in_version: 4, resolution_note: "The three pilot clinics are named in the problem.", updated_at: "2026-10-09T10:00:00Z" });
     }
   }
   addComment(db, ver("clinic-outreach", 4), {
     section_key: "goal-trace",
     anchor: { exact: "Serves G1 activation", prefix: "", suffix: ": more new patients" },
     body: "Trace this to G2 retention, not activation: these are returning patients.",
-  }, at("2026-10-17T15:00:00Z"));
+  }, at("2026-10-09T15:00:00Z"));
   const o5 = ver("clinic-outreach", 5);
   addComment(db, o5, {
     section_key: "f-38",

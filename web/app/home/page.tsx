@@ -7,7 +7,7 @@ import { Chip, Empty, Icon, LinkButton, Notice, Page, PageHeader, Panel, Split }
 import { api, unwrap } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
+import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged, waitingCount } from "@/lib/waiting";
 
 import { CountChip, inboxNeeds, NeedTable, questionNeeds, type Need } from "../inbox/_needs";
 import { goalViews, historyOf, shownGoals, type Point } from "./_goals";
@@ -113,7 +113,7 @@ export default function HomePage() {
   const reviews = needs?.feedback ?? [];
   const shownNeeds = pickNeeds([...decisions, ...reviews], questions, MAX_NEEDS);
   // The rail badge's count: the Inbox's rows and the questions asked of me.
-  const waiting = inbox ? inbox.total + questions.length : undefined;
+  const waiting = inbox ? waitingCount(inbox, questions) : undefined;
   const openItems = new Map((inbox?.feedback ?? []).map((d) => [d.document_id, d.open_count]));
 
   const nothingInFlight = flights !== undefined && flights.length === 0;

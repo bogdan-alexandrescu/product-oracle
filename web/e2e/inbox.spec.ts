@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { login } from "./helpers";
 
-test("inbox lists checkpoints, cost approvals, overruns and open feedback", async ({ page }) => {
+test("inbox lists checkpoints, cost approvals, overruns and feedback by state", async ({ page }) => {
   await login(page);
   await page.getByTestId("nav-inbox").click();
   await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
@@ -12,9 +12,10 @@ test("inbox lists checkpoints, cost approvals, overruns and open feedback", asyn
   await expect(checkpoints).toContainText("Baseline proposal");
   await expect(page.getByTestId("inbox-approvals")).toContainText("usage-alerts-v2");
   await expect(page.getByTestId("inbox-overruns")).toContainText("Spent $14.20 of $9.00 estimated");
-  const feedback = page.getByTestId("inbox-feedback");
+  // Feedback has its own panel, by state (C1e): New is the default tab.
+  const feedback = page.getByTestId("inbox-tab-new");
   await expect(feedback).toContainText("Checkout redesign PRD");
-  await expect(feedback).toContainText("open item");
+  await expect(feedback).toContainText("Should the most recently used address be selected by default?");
 
   // Approve the cost from the inbox: the run starts and leaves the list.
   await page.getByTestId("inbox-approvals").getByRole("button", { name: "Approve $53.00" }).click();
@@ -26,7 +27,7 @@ test("inbox lists checkpoints, cost approvals, overruns and open feedback", asyn
 
   // Row actions are outline, like every other row action; filled is for the page's primary.
   await expect(checkpoints.getByRole("link", { name: "Decide" }).first()).toHaveAttribute("data-variant", "secondary");
-  await expect(feedback.getByRole("link", { name: /^Resolve/ }).first()).toHaveAttribute("data-variant", "secondary");
+  await expect(feedback.getByRole("link", { name: /^Review/ }).first()).toHaveAttribute("data-variant", "secondary");
 
   // Decide goes to the run, at the decision.
   await checkpoints.getByRole("link", { name: "Decide" }).first().click();

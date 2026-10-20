@@ -611,11 +611,11 @@ export const DOCUMENTS: DocumentSeed[] = [
     template: "oracle-default",
     template_version: "1",
     versions: [
-      { number: 1, created_at: "2026-10-14T10:00:00Z", sections: OUTREACH_V1, citations: [] },
-      { number: 2, created_at: "2026-10-15T10:00:00Z", sections: OUTREACH_V1, citations: [] },
-      { number: 3, created_at: "2026-10-16T10:00:00Z", sections: OUTREACH_V3, citations: [] },
-      { number: 4, created_at: "2026-10-17T10:00:00Z", sections: OUTREACH_V4, citations: [] },
-      { number: 5, created_at: "2026-10-18T10:00:00Z", sections: OUTREACH_V5, citations: [] },
+      { number: 1, created_at: "2026-10-06T10:00:00Z", sections: OUTREACH_V1, citations: [] },
+      { number: 2, created_at: "2026-10-07T10:00:00Z", sections: OUTREACH_V1, citations: [] },
+      { number: 3, created_at: "2026-10-08T10:00:00Z", sections: OUTREACH_V3, citations: [] },
+      { number: 4, created_at: "2026-10-09T10:00:00Z", sections: OUTREACH_V4, citations: [] },
+      { number: 5, created_at: "2026-10-10T10:00:00Z", sections: OUTREACH_V5, citations: [] },
     ],
   },
   {

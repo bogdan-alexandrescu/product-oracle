@@ -24,6 +24,20 @@ function shared<T>(key: string, load: () => Promise<T>): Promise<T> {
 
 export const loadInbox = () => shared("inbox", () => unwrap(api.GET("/v1/inbox")));
 
+type Inbox = Awaited<ReturnType<typeof loadInbox>>;
+
+/**
+ * What waits on me, as the rail badge, Home and /inbox count it: checkpoints, cost
+ * approvals, overruns, the feedback that needs me (new and open items; C1e: staged,
+ * declined and done do not) and the questions asked of me.
+ */
+export function waitingCount(inbox: Inbox, questions: readonly unknown[]): number {
+  return inbox.checkpoints.length + inbox.approvals.length + inbox.overruns.length + (inbox.needs_me ?? 0) + questions.length;
+}
+
+/** Records this Inbox visit as my last one (C1e: what "new" is measured from next time). */
+export const markInboxSeen = () => unwrap(api.GET("/v1/inbox", { params: { query: { mark_seen: true } } }));
+
 /** Questions still open and asked of me; the API filters, so none is cut off by its page size. */
 export const loadMyQuestions = () =>
   shared("my-questions", () => unwrap(api.GET("/v1/questions", { params: { query: { asked_to: "me", status: "asked", limit: 500 } } })));

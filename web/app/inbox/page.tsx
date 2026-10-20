@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
+import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged, waitingCount } from "@/lib/waiting";
 
 import type { InboxOut } from "../runs/_lib";
 import { CountChip, inboxNeeds, NeedTable, questionNeeds, type Act } from "./_needs";
+import { FeedbackStates } from "./_states";
 
 type Question = Schemas["StakeholderQuestionOut"];
 
@@ -20,9 +21,16 @@ export default function InboxPage() {
   const docsQ = useQuery("inbox|documents", () => unwrap(api.GET("/v1/documents")));
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // C1e: my previous visit, read once on arrival; what was new then stays New for this visit.
+  const arrivalQ = useQuery("inbox|arrival", () => loadInbox().then((d) => d.last_seen_at ?? null));
+  const arrived = !arrivalQ.loading && !arrivalQ.error;
+  useEffect(() => {
+    // After the first render with the arrival's states: this visit becomes my last one.
+    if (arrived) void markInboxSeen().catch(() => undefined);
+  }, [arrived]);
   const inbox = q.data;
   const questions = questionsQ.data ?? [];
-  const waiting = inbox ? inbox.total + questions.length : undefined;
+  const waiting = inbox ? waitingCount(inbox, questions) : undefined;
 
   async function act(key: string, call: () => Promise<unknown>) {
     setBusy(key);
@@ -51,14 +59,17 @@ export default function InboxPage() {
         </div>
       )}
       {inbox && (
-        <Needs
-          inbox={inbox}
-          questions={questions}
-          questionsError={questionsQ.error}
-          docs={docsQ.data ?? []}
-          busy={busy}
-          act={act}
-        />
+        <div className="flex flex-col gap-4">
+          <FeedbackStates inbox={inbox} seenBefore={arrived ? arrivalQ.data : undefined} />
+          <Needs
+            inbox={inbox}
+            questions={questions}
+            questionsError={questionsQ.error}
+            docs={docsQ.data ?? []}
+            busy={busy}
+            act={act}
+          />
+        </div>
       )}
     </Page>
   );
@@ -79,9 +90,12 @@ function Needs({
   busy: string | null;
   act: Act;
 }) {
-  const { checkpoints, approvals, overruns, feedback } = inboxNeeds(inbox, busy, act);
+  // Feedback has its own panel by state (FeedbackStates); this one holds the rest.
+  const { checkpoints, approvals, overruns } = inboxNeeds(inbox, busy, act);
   const asked = questionNeeds(questions, docs);
-  const total = inbox.total + asked.length;
+  const total = checkpoints.length + approvals.length + overruns.length + asked.length;
+  // Only feedback waits: its panel says so; no "Nothing waiting" beside it.
+  if (total === 0 && !questionsError && (inbox.needs_me ?? 0) > 0) return null;
 
   return (
     <Panel
@@ -92,7 +106,6 @@ function Needs({
           <>
             {checkpoints.length > 0 && <CountChip label="Checkpoints" n={checkpoints.length} />}
             {approvals.length + overruns.length > 0 && <CountChip label="Cost" n={approvals.length + overruns.length} />}
-            {feedback.length > 0 && <CountChip label="Feedback" n={feedback.length} />}
             {asked.length > 0 && <CountChip label="Questions" n={asked.length} />}
           </>
         )
@@ -118,7 +131,6 @@ function Needs({
           <NeedTable title="Checkpoints" testId="inbox-checkpoints" rows={checkpoints} />
           <NeedTable title="Cost approvals" testId="inbox-approvals" rows={approvals} />
           <NeedTable title="Paused on overrun" testId="inbox-overruns" rows={overruns} />
-          <NeedTable title="Open feedback" testId="inbox-feedback" rows={feedback} />
           <NeedTable title="Questions" testId="inbox-questions" rows={asked} />
         </>
       )}
