@@ -133,9 +133,18 @@ async def verified_bases(db: AsyncSession, prd_document_id: uuid.UUID | None) ->
 
 
 def _names(reference: str, text: str) -> bool:
-    """Whether ``text`` names ``reference`` as a whole token, case-insensitively."""
-    pattern = r"(?<![A-Za-z0-9])" + re.escape(reference.strip()) + r"(?![A-Za-z0-9])"
-    return bool(reference.strip()) and re.search(pattern, text, re.IGNORECASE) is not None
+    """Whether ``text`` names ``reference`` as an exact token, case-insensitively: not
+    inside a longer key (``ENG-41`` is not named by ``ENG-41-2``, ``ENG-41.2``,
+    ``A-ENG-41`` or ``ENG-412``); trailing punctuation (``ENG-41.``) is not part of it."""
+    ref = reference.strip()
+    if not ref:
+        return False
+    pattern = (
+        r"(?<![A-Za-z0-9_])(?<![A-Za-z0-9][-./])"
+        + re.escape(ref)
+        + r"(?![A-Za-z0-9_])(?![-./][A-Za-z0-9])"
+    )
+    return re.search(pattern, text, re.IGNORECASE) is not None
 
 
 def as_date(value: Any) -> date | None:
@@ -163,6 +172,54 @@ def supporting(
         for b in bases
         if b.supports_date == day and b.covers(item_key) and _names(b.reference, date_source)
     ]
+
+
+async def recheck_tracker_milestones(db: AsyncSession, refs: Iterable[str]) -> list[uuid.UUID]:
+    """Tracker records were (re-)matched: a verified basis for one of these tracker keys
+    now covers the items its issue is matched to now. A track milestone keeps such a
+    basis only while it still covers every item the milestone lists, and loses its date
+    when no basis is left. Returns the milestones that lost their date. The caller
+    commits."""
+    from oracle.roadmap.models import TrackMilestone
+
+    refs = set(refs)
+    if not refs:
+        return []
+    affected = list(
+        await db.scalars(
+            select(ScheduleBasis).where(
+                ScheduleBasis.status == "verified", ScheduleBasis.tracker_key.in_(refs)
+            )
+        )
+    )
+    if not affected:
+        return []
+    scopes: dict[uuid.UUID, frozenset[str] | None] = {}
+    for prd in {b.prd_document_id for b in affected}:
+        for b in await verified_bases(db, prd):
+            scopes[b.id] = b.item_keys
+    ids = [b.id for b in affected]
+    undated: list[uuid.UUID] = []
+    for m in await db.scalars(
+        select(TrackMilestone)
+        .where(TrackMilestone.basis_ids.overlap(ids))
+        .order_by(TrackMilestone.id)
+        .with_for_update()
+    ):
+        keys = set(m.item_keys or [])
+        kept = [
+            b
+            for b in m.basis_ids
+            if b not in scopes or scopes[b] is None or (keys and keys <= scopes[b])
+        ]
+        if kept == list(m.basis_ids):
+            continue
+        m.basis_ids = kept
+        if not kept and m.target_date is not None:
+            m.target_date = None
+            undated.append(m.id)
+    await db.flush()
+    return undated
 
 
 async def withdraw(

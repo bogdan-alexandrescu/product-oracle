@@ -191,11 +191,13 @@ async def test_schedule_bases(client, owner):  # noqa: F811
     # Every basis belongs to a PRD: approved_prd recorded ENG-412 for this one.
     assert [b["reference"] for b in listed] == ["Q1 launch", "ENG-412"]
 
-    # From a tracker record: the record's own target date must agree.
+    # From a tracker record: the record's own target date must agree, and the record
+    # must be this PRD's (on its track; round 3: a track-less record is refused).
+    track = await track_of(client, auth)
     resp = await client.post(
         "/v1/tracker/records",
         json={"tracker": "linear", "records": [{"external_ref": "ENG-9", "state": "in_progress",
-                                                "target_date": day}]},
+                                                "target_date": day, "track_id": track["id"]}]},
         headers=auth,
     )  # fmt: skip
     record_id = resp.json()["records"][0]["id"]

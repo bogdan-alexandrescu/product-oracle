@@ -241,6 +241,18 @@ async def list_schedule_bases(
     return list(await db.scalars(query))
 
 
+async def _record_is_prds(db, record: TrackerRecord, prd: Document) -> bool:
+    """Whether a track-less tracker record is matched to a roadmap item of this PRD."""
+    if not record.item_key:
+        return False
+    found = await db.scalar(
+        select(RoadmapItem.id)
+        .where(RoadmapItem.prd_document_id == prd.id, RoadmapItem.item_key == record.item_key)
+        .limit(1)
+    )
+    return found is not None
+
+
 @router.post("/schedule-bases", response_model=ScheduleBasisOut, status_code=201)
 async def create_schedule_basis(
     body: ScheduleBasisCreate, principal: Approver, db: TenantDB
@@ -272,6 +284,13 @@ async def create_schedule_basis(
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 f"tracker record {record.external_ref} belongs to another PRD's track",
+            )
+        if track is None and not await _record_is_prds(db, record, prd):
+            # On no track: only an item of this PRD's roadmap ties the record to it.
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                f"tracker record {record.external_ref} is on no track and matched to no "
+                f"roadmap item of {prd.slug}; match it to this PRD's track first",
             )
     row = ScheduleBasis(
         kind=body.kind,
@@ -446,11 +465,17 @@ async def update_track(
             status.HTTP_422_UNPROCESSABLE_CONTENT, f"{', '.join(nulls)} cannot be cleared"
         )
     if fields.get("owner_id") is not None:
-        member = await db.scalar(select(User.id).where(User.id == fields["owner_id"]))
+        member = await db.scalar(select(User).where(User.id == fields["owner_id"]))
         if member is None:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 "owner_id is not a member of this company",
+            )
+        # A disabled member (users.disabled_at, the member disable of PR #69) owns
+        # nothing new.
+        if getattr(member, "disabled_at", None) is not None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, "owner_id is a disabled member"
             )
     before = {k: getattr(track, k) for k in fields}
     for k, v in fields.items():

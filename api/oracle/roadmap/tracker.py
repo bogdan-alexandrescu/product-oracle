@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.config import get_settings
+from oracle.roadmap import schedule
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackerRecord
 from oracle.roadmap.schemas import (
     DriftEntry,
@@ -123,13 +124,22 @@ async def import_records(
             updated += 1
         rows.append(row)
     await db.flush()
+    # A basis for one of these issues now covers the items it is matched to now: the
+    # track milestones resting on it are checked again.
+    undated = await schedule.recheck_tracker_milestones(db, refs)
     await audit.record(
         db,
         principal,
         "tracker.records_imported",
         "tracker_record",
         None,
-        {"tracker": tracker, "created": created, "updated": updated, "refs": refs[:50]},
+        {
+            "tracker": tracker,
+            "created": created,
+            "updated": updated,
+            "refs": refs[:50],
+            "undated_milestones": [str(i) for i in undated],
+        },
     )
     return created, updated, rows
 
