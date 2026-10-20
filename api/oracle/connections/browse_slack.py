@@ -18,7 +18,7 @@ from oracle.connections import browse
 from oracle.connections.browse import open_connection, provider_error, unreachable
 from oracle.connections.router import ProviderHttp, UserPrincipal
 from oracle.sources.base import ConnectorError
-from oracle.sources.connectors.slack import _Slack
+from oracle.sources.connectors.slack import _Slack, is_dm
 
 router = APIRouter(prefix="/v1", tags=["connections"])
 
@@ -49,7 +49,11 @@ class SlackChannelPage(BaseModel):
 
 
 def _channel(entry: dict[str, Any]) -> SlackChannelOut | None:
-    if entry.get("is_im") or entry.get("is_mpim") or str(entry.get("id", "")).startswith("D"):
+    if (
+        entry.get("is_im")
+        or entry.get("is_mpim")
+        or is_dm(str(entry.get("id", "")), entry.get("name"))
+    ):
         return None
     if not entry.get("id"):
         return None

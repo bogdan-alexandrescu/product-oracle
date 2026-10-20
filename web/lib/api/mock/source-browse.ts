@@ -2,7 +2,8 @@
  * Mock of the source pickers' browse endpoints (mock mode only): the Slack channels and
  * GitHub repos a connection can read, paged and searchable as in
  * oracle/connections/browse_slack.py and browse_github.py. Searching "ratelimit" answers
- * 429, so the picker's retry message can be exercised.
+ * 429, so the picker's retry message can be exercised; searching GitHub for "sso" answers
+ * as GitHub does when an organization's SAML single sign-on hides its repos.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -107,7 +108,11 @@ export function sourceBrowseRoute(req: Request, p: string[], q: URLSearchParams)
     if (search === "ratelimit") return json(429, { detail: "GitHub is busy: try again in 60 seconds" }, { "Retry-After": "60" });
     const all = REPOS.filter((r) => `${r.full_name} ${r.description ?? ""}`.toLowerCase().includes(search));
     const { items, next } = page(all, q);
-    return json(200, { repos: items, next_cursor: next });
+    const sso_hint =
+      search === "sso"
+        ? "1 organization hides its repositories until you authorize this GitHub sign-in for their single sign-on (SAML): on GitHub, open Settings > Applications (or your token's Configure SSO) and authorize it, then reload"
+        : null;
+    return json(200, { repos: items, next_cursor: next, sso_hint });
   }
   return null;
 }

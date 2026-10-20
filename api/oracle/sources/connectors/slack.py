@@ -58,6 +58,18 @@ OAUTH = {
 # How far before the cursor a sync looks for threads with new replies (seconds).
 THREAD_LOOKBACK = 14 * 24 * 3600
 PAGE_SIZE = 200
+# Channels one source may allowlist.
+MAX_CHANNELS = 100
+# From this many channels, validate reads conversations.list (a page holds up to
+# LIST_PAGE_SIZE) instead of one conversations.info per channel, so a long allowlist
+# does not run into Slack's per-method rate limit.
+BATCH_FROM = 5
+LIST_PAGE_SIZE = 1000
+LIST_MAX_PAGES = 20
+# The dates a range may use (days, UTC).
+FIRST_DAY = date(2000, 1, 1)
+LAST_DAY = date(2100, 12, 31)
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TITLE_LENGTH = 80
 
 AUTH_ERRORS = {
@@ -102,28 +114,42 @@ def _ts_shift(ts: str, seconds: int) -> str:
     return f"{max(float(ts) - seconds, 0):.6f}"
 
 
+def is_dm(channel_id: str, name: str | None = None) -> bool:
+    """A direct message by its id (``D...`` in any case or spacing) or a group DM by its
+    name (``mpdm-...``, how Slack names legacy multi-person DMs)."""
+    return channel_id.strip().upper().startswith("D") or (name or "").startswith("mpdm-")
+
+
 def _channels(config: dict[str, Any]) -> list[str]:
+    """The allowlisted channel ids, trimmed, in order, without repeats."""
     channels = config.get("channels")
     if not isinstance(channels, list) or not channels:
         raise ConnectorConfigError("allowlist at least one channel id")
-    if not all(isinstance(c, str) and c for c in channels):
+    if not all(isinstance(c, str) and c.strip() for c in channels):
         raise ConnectorConfigError("channel ids must be strings")
-    for channel in channels:
-        if channel.startswith("D"):
+    ids = list(dict.fromkeys(c.strip() for c in channels))
+    if len(ids) > MAX_CHANNELS:
+        raise ConnectorConfigError(f"allowlist at most {MAX_CHANNELS} channels")
+    for channel in ids:
+        if is_dm(channel):
             raise ConnectorConfigError(f"{channel} is a direct message: DMs are never ingested")
-    return channels
+    return ids
 
 
 def _day(config: dict[str, Any], key: str) -> date | None:
+    """``config[key]`` as a day: exactly YYYY-MM-DD, from FIRST_DAY to LAST_DAY."""
     value = config.get(key)
     if value is None:
         return None
     try:
-        day = date.fromisoformat(value) if isinstance(value, str) else None
+        ok = isinstance(value, str) and _DATE_RE.match(value)
+        day = date.fromisoformat(value) if ok else None
     except ValueError:
         day = None
-    if day is None:
-        raise ConnectorConfigError(f"{key} must be a date (YYYY-MM-DD)")
+    if day is None or not FIRST_DAY <= day <= LAST_DAY:
+        raise ConnectorConfigError(
+            f"{key} must be a date (YYYY-MM-DD) from {FIRST_DAY} to {LAST_DAY}"
+        )
     return day
 
 
@@ -211,11 +237,28 @@ class _Slack:
             if e.error == "channel_not_found":
                 raise ConnectorConfigError(f"channel {channel} not found or not visible") from e
             raise
-        if info.get("is_im") or info.get("is_mpim"):
-            raise ConnectorConfigError(f"{channel} is a direct message: DMs are never ingested")
-        if not (info.get("is_channel") or info.get("is_group") or info.get("is_private")):
-            raise ConnectorConfigError(f"{channel} is not a public or private channel")
-        return info
+        return _check_channel(channel, info)
+
+    async def listed(self, wanted: set[str]) -> dict[str, dict[str, Any]]:
+        """The channels of ``wanted`` that ``conversations.list`` shows (public ones and
+        the private ones the token's user is in), reading until all are found."""
+        found: dict[str, dict[str, Any]] = {}
+        cursor = None
+        for _ in range(LIST_MAX_PAGES):
+            page = await self.call(
+                "conversations.list",
+                types="public_channel,private_channel",
+                exclude_archived="false",
+                limit=LIST_PAGE_SIZE,
+                **({"cursor": cursor} if cursor else {}),
+            )
+            for entry in page.get("channels") or []:
+                if entry.get("id") in wanted:
+                    found[entry["id"]] = entry
+            cursor = (page.get("response_metadata") or {}).get("next_cursor")
+            if not cursor or len(found) == len(wanted):
+                break
+        return found
 
     async def user_name(self, user: str) -> str:
         if user not in self.users:
@@ -249,6 +292,14 @@ class _Slack:
         if any(files):
             text = f"{text}\n[files: {', '.join(f for f in files if f)}]".strip()
         return text
+
+
+def _check_channel(channel: str, info: dict[str, Any]) -> dict[str, Any]:
+    if info.get("is_im") or info.get("is_mpim") or is_dm(channel, info.get("name")):
+        raise ConnectorConfigError(f"{channel} is a direct message: DMs are never ingested")
+    if not (info.get("is_channel") or info.get("is_group") or info.get("is_private")):
+        raise ConnectorConfigError(f"{channel} is not a public or private channel")
+    return info
 
 
 class SlackApiError(ConnectorError):
@@ -310,8 +361,12 @@ class SlackConnector:
         _until(config)
         async with self._session(credential) as slack:
             await slack.call("auth.test")
+            listed = await slack.listed(set(channels)) if len(channels) >= BATCH_FROM else {}
             for channel in channels:
-                await slack.conversation(channel)
+                if channel in listed:
+                    _check_channel(channel, listed[channel])
+                else:
+                    await slack.conversation(channel)
 
     async def sync(
         self,

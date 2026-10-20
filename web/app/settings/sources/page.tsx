@@ -428,7 +428,15 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       </div>
       {spec && usable.length > 0 && (
         <Field label="Connection">
-          <select value={connectionId} onChange={(e) => setConnection(e.target.value)} className={SELECT_FIELD}>
+          <select
+            value={connectionId}
+            onChange={(e) => {
+              setConnection(e.target.value);
+              // Picks belong to the account they were listed from; the date range stays.
+              setPicked((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== spec?.key)));
+            }}
+            className={SELECT_FIELD}
+          >
             {usable.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.account_label ?? c.id}

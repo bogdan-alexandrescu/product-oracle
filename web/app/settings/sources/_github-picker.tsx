@@ -28,6 +28,7 @@ export function GithubPicker({ connectionId, config, onChange }: PickerProps) {
     );
     return {
       next: page.next_cursor,
+      notice: page.sso_hint,
       items: page.repos.map((r) => ({
         id: r.full_name,
         label: r.full_name,

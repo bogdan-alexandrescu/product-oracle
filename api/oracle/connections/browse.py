@@ -101,7 +101,7 @@ async def open_connection(
     if conn is None or conn.provider != provider:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Connection not found")
     try:
-        credential = await service.credential_for(db, conn)
+        credential = await service.credential_for(db, conn, touch=False)
     except service.ConnectionUnavailable as e:
         raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
     return conn, credential.access_token

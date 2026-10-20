@@ -896,6 +896,9 @@ export interface paths {
         /**
          * List Slack Channels
          * @description Public channels and the private channels you are in, by name; never DMs.
+         *
+         *     Answers are cached for a minute per connection, and a connection may search Slack
+         *     a limited number of times a minute.
          */
         get: operations["list_slack_channels"];
         put?: never;
@@ -916,6 +919,9 @@ export interface paths {
         /**
          * List Github Repos
          * @description Repos your GitHub sign-in can read, matched on owner/name and description.
+         *
+         *     Answers are cached for a minute per connection, and a connection may search GitHub
+         *     a limited number of times a minute.
          */
         get: operations["list_github_repos"];
         put?: never;
@@ -7965,6 +7971,8 @@ export interface components {
             repos: components["schemas"]["GithubRepoOut"][];
             /** Next Cursor */
             next_cursor: string | null;
+            /** Sso Hint */
+            sso_hint?: string | null;
         };
         /** GoalTerm */
         GoalTerm: {
@@ -14759,6 +14767,13 @@ export interface operations {
                     "application/json": components["schemas"]["SlackChannelPage"];
                 };
             };
+            /** @description Slack refused the request (the connection stays usable) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Not one of your Slack connections */
             404: {
                 headers: {
@@ -14766,7 +14781,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The connection needs reconnecting */
+            /** @description The connection needs reconnecting, or holds a bot token */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14782,7 +14797,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Slack is rate limiting; retry after Retry-After seconds */
+            /** @description Slack is rate limiting, or this connection searched too often; retry after Retry-After seconds */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -14814,6 +14829,13 @@ export interface operations {
                     "application/json": components["schemas"]["GithubRepoPage"];
                 };
             };
+            /** @description GitHub refused the request (the connection stays usable) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Not one of your GitHub connections */
             404: {
                 headers: {
@@ -14837,7 +14859,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description GitHub is rate limiting; retry after Retry-After seconds */
+            /** @description GitHub is rate limiting, or this connection searched too often; retry after Retry-After seconds */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -15349,6 +15371,13 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The provider is rate limiting; retry after Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     list_source_kinds: {
@@ -15463,6 +15492,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description The provider is rate limiting; retry after Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

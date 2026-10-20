@@ -27,7 +27,8 @@ export type BrowseItem = {
   hint?: string | null;
 };
 
-export type BrowsePage = { items: BrowseItem[]; next: string | null };
+/** `notice`: what the provider left out of the list (GitHub's SSO partial results). */
+export type BrowsePage = { items: BrowseItem[]; next: string | null; notice?: string | null };
 
 const SEARCH_DELAY_MS = 250;
 
@@ -106,6 +107,7 @@ export function BrowseList({
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<BrowseItem[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -127,6 +129,7 @@ export function BrowseList({
       setSeen((prev) => ({ ...prev, ...Object.fromEntries(page.items.map((it) => [it.id, it])) }));
       setItems((prev) => (cursor && prev ? [...prev, ...page.items] : page.items));
       setNext(page.next);
+      if (!cursor || page.notice) setNotice(page.notice ?? null);
     } catch (e) {
       if (mine !== run.current) return;
       setError(message(e));
@@ -217,6 +220,11 @@ export function BrowseList({
                 Retry
               </Button>
             </div>
+          )}
+          {notice && !error && (
+            <p role="note" className="border-b border-line bg-warn-bg px-3 py-2 text-sm font-medium text-warn">
+              {notice}
+            </p>
           )}
           <ul aria-label={label} aria-busy={busy} className="max-h-72 overflow-y-auto">
             {extraPicks.map((it) => (

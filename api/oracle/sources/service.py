@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import changes
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
+from oracle.connections.providers import get_provider
 from oracle.sources import base
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
 from oracle.v2 import links
@@ -47,6 +48,14 @@ class ConflictError(Exception):
 
 class InvalidError(Exception):
     """The request cannot be carried out as asked (answered 422)."""
+
+
+class RateLimitedError(Exception):
+    """The provider asked to slow down while checking a config (answered 429)."""
+
+    def __init__(self, message: str, retry_after: int):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 _loaded = False
@@ -181,6 +190,13 @@ async def _validate(
     credential = await _read_credential(db, conn) if conn is not None else None
     try:
         await connector.validate(config, credential)
+    except base.ConnectorRateLimited as e:
+        wait = max(1, round(e.retry_after)) if e.retry_after else 60
+        provider = get_provider(KIND_PROVIDER[kind] or "")
+        name = provider.name if provider else kind
+        raise RateLimitedError(
+            f"{name} is busy checking the selection: try again in {wait} seconds", wait
+        ) from None
     except base.ConnectorAuthError as e:
         raise InvalidError(f"The connection was rejected: {redact(str(e), credential)}") from None
     except base.ConnectorError as e:

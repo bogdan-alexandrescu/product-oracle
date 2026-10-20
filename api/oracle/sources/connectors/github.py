@@ -55,9 +55,12 @@ OAUTH = {
 }
 
 PER_PAGE = 100
+# Repos one source may allowlist.
+MAX_REPOS = 100
 # Files larger than this are skipped (docs this size are generated, not written).
 MAX_FILE_BYTES = 1_000_000
-_REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*)/[A-Za-z0-9._-]+$")
+# The owner may hold underscores: Enterprise Managed Users log in as ``name_shortcode``.
+_REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_-]*)/[A-Za-z0-9._-]+$")
 _README_RE = re.compile(r"^readme(\.[A-Za-z0-9]+)?$", re.IGNORECASE)
 _DOC_RE = re.compile(r"^docs/.+\.(md|markdown)$", re.IGNORECASE)
 # Item kind -> the ``include`` entry that brings it in.
@@ -88,6 +91,8 @@ def _parse_config(config: dict[str, Any]) -> tuple[list[str], set[str]]:
         if not isinstance(repo, str) or not _REPO_RE.match(repo.strip()):
             raise ConnectorConfigError(f"not a repo name (owner/name): {repo!r}")
         unique.setdefault(repo.strip().lower(), repo.strip())
+    if len(unique) > MAX_REPOS:
+        raise ConnectorConfigError(f"allowlist at most {MAX_REPOS} repos")
     include = config.get("include")
     if include is None:
         include = list(INCLUDE)

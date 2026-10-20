@@ -43,6 +43,26 @@ class GithubRepoPage(BaseModel):
     repos: list[GithubRepoOut]
     # Pass back as ``cursor`` for more; null at the end.
     next_cursor: str | None
+    # Set when GitHub left out organizations whose SAML single sign-on this sign-in has
+    # not been authorized for (``X-GitHub-SSO: partial-results``).
+    sso_hint: str | None = None
+
+
+def _sso_hint(header: str | None) -> str | None:
+    """``partial-results; organizations=21955855,20582480`` -> what the picker shows."""
+    if not header or not header.strip().lower().startswith("partial-results"):
+        return None
+    orgs = header.partition("organizations=")[2].split(";")[0]
+    count = len([o for o in orgs.split(",") if o.strip()])
+    who = {
+        0: "Some organizations hide their repositories",
+        1: "1 organization hides its repositories",
+    }.get(count, f"{count} organizations hide their repositories")
+    return (
+        f"{who} until you authorize this GitHub sign-in for their single sign-on (SAML): "
+        "on GitHub, open Settings > Applications (or your token's Configure SSO) and "
+        "authorize it, then reload"
+    )
 
 
 def _repo(entry: dict[str, Any]) -> GithubRepoOut:
@@ -103,6 +123,7 @@ async def list_github_repos(
     needle = search.strip().lower()
     want = SEARCH_RESULTS if needle else 1
     found: list[GithubRepoOut] = []
+    sso_hint: str | None = None
     try:
         for _ in range(MAX_PAGES):
             assert page is not None
@@ -116,6 +137,7 @@ async def list_github_repos(
                     "page": page,
                 },
             )
+            sso_hint = sso_hint or _sso_hint(resp.headers.get("X-GitHub-SSO"))
             for entry in resp.json():
                 repo = _repo(entry)
                 text = f"{repo.full_name} {repo.description or ''}".lower()
@@ -129,6 +151,6 @@ async def list_github_repos(
         raise await provider_error(db, conn, "GitHub", e) from None
     except (httpx.HTTPError, ValueError):
         raise unreachable("GitHub") from None
-    answer = GithubRepoPage(repos=found, next_cursor=str(page) if page else None)
+    answer = GithubRepoPage(repos=found, next_cursor=str(page) if page else None, sso_hint=sso_hint)
     browse.remember(conn, key, answer)
     return answer

@@ -154,3 +154,27 @@ test("slack picker: a date range, since and until", async ({ page }) => {
   await expect(edit.getByLabel("Since")).toHaveValue("2026-03-01");
   await expect(edit.getByLabel("Until")).toHaveValue("");
 });
+
+test("github picker: repos hidden by an organization's SSO read as a hint", async ({ page }) => {
+  const form = await addForm(page, "github");
+  const picker = form.getByRole("group", { name: "GitHub repositories" });
+  await expect(picker.getByRole("note")).toHaveCount(0);
+  await picker.getByLabel("Search repositories").fill("sso");
+  await expect(picker.getByRole("note")).toContainText("1 organization hides its repositories");
+  await expect(picker.getByRole("note")).toContainText("single sign-on (SAML)");
+  await picker.getByLabel("Search repositories").fill("docs");
+  await expect(picker.getByRole("note")).toHaveCount(0);
+});
+
+test("add form: changing the connection clears the picks, keeps the dates", async ({ page }) => {
+  const form = await addForm(page, "slack");
+  const picker = form.getByRole("group", { name: "Slack channels" });
+  await picker.getByRole("checkbox", { name: "#product" }).check();
+  await picker.getByLabel("Since").fill("2026-01-01");
+  await expect(picker.getByTestId("picked-count")).toHaveText("1 selected");
+
+  await form.getByLabel("Connection").selectOption({ label: "Partner workspace" });
+  await expect(picker.getByTestId("picked-count")).toHaveText("0 selected");
+  await expect(picker.getByRole("checkbox", { name: "#product" })).not.toBeChecked();
+  await expect(picker.getByLabel("Since")).toHaveValue("2026-01-01");
+});

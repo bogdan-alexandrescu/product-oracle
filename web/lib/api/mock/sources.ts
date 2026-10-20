@@ -19,7 +19,10 @@ interface SourcesDb {
 export const SOURCES_STORAGE_KEY = "po-mock-sources-v1";
 
 const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
-  slack: [{ id: "c0000000-0000-4000-8000-000000000001", account_label: "Example Co chat", status: "active" }],
+  slack: [
+    { id: "c0000000-0000-4000-8000-000000000001", account_label: "Example Co chat", status: "active" },
+    { id: "c0000000-0000-4000-8000-000000000003", account_label: "Partner workspace", status: "active" },
+  ],
   github: [{ id: "c0000000-0000-4000-8000-000000000002", account_label: "example-org", status: "active" }],
   notion: [],
   fireflies: [],

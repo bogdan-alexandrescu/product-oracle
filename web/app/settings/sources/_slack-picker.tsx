@@ -60,39 +60,35 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
       load={load}
       extra={
         <div className="flex min-w-0 flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="flex items-center gap-2 max-[600px]:w-full">
-              <label htmlFor={sinceId} className={`${LABEL} w-10 max-[600px]:w-12`}>
+          <div className="grid max-w-96 grid-cols-2 gap-2.5">
+            <span className="flex min-w-0 flex-col gap-1.5">
+              <label htmlFor={sinceId} className={LABEL}>
                 Since
               </label>
-              <span className="w-44 max-[600px]:flex-1">
-                <input
-                  id={sinceId}
-                  type="date"
-                  value={since}
-                  max={until || undefined}
-                  aria-describedby={hintId}
-                  onChange={(e) => onChange({ ...config, since: e.target.value || undefined })}
-                  className={INPUT}
-                />
-              </span>
+              <input
+                id={sinceId}
+                type="date"
+                value={since}
+                max={until || undefined}
+                aria-describedby={hintId}
+                onChange={(e) => onChange({ ...config, since: e.target.value || undefined })}
+                className={INPUT}
+              />
             </span>
-            <span className="flex items-center gap-2 max-[600px]:w-full">
-              <label htmlFor={untilId} className={`${LABEL} w-10 max-[600px]:w-12`}>
+            <span className="flex min-w-0 flex-col gap-1.5">
+              <label htmlFor={untilId} className={LABEL}>
                 Until
               </label>
-              <span className="w-44 max-[600px]:flex-1">
-                <input
-                  id={untilId}
-                  type="date"
-                  value={until}
-                  min={since || undefined}
-                  aria-invalid={backwards || undefined}
-                  aria-describedby={hintId}
-                  onChange={(e) => onChange({ ...config, until: e.target.value || undefined })}
-                  className={INPUT}
-                />
-              </span>
+              <input
+                id={untilId}
+                type="date"
+                value={until}
+                min={since || undefined}
+                aria-invalid={backwards || undefined}
+                aria-describedby={hintId}
+                onChange={(e) => onChange({ ...config, until: e.target.value || undefined })}
+                className={`${INPUT} aria-invalid:border-crit`}
+              />
             </span>
           </div>
           {backwards ? (

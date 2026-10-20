@@ -43,6 +43,12 @@ def _user(principal: Principal) -> uuid.UUID:
 
 
 def _http(exc: Exception) -> HTTPException:
+    if isinstance(exc, service.RateLimitedError):
+        return HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            str(exc),
+            headers={"Retry-After": str(exc.retry_after)},
+        )
     if isinstance(exc, service.NotFoundError):
         return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
     if isinstance(exc, service.ConflictError | sync_engine.SyncRefused):
@@ -54,6 +60,7 @@ _ERRORS = (
     service.NotFoundError,
     service.ConflictError,
     service.InvalidError,
+    service.RateLimitedError,
     sync_engine.SyncRefused,
 )
 
@@ -114,7 +121,12 @@ async def list_source_kinds(principal: CurrentPrincipal, db: TenantDB) -> list[S
     return out
 
 
-@router.post("/sources", response_model=SourceOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/sources",
+    response_model=SourceOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={429: {"description": "The provider is rate limiting; retry after Retry-After"}},
+)
 async def create_source(body: SourceCreate, principal: CurrentPrincipal, db: TenantDB) -> SourceOut:
     try:
         source = await service.create_source(
@@ -135,7 +147,11 @@ async def get_source(source_id: uuid.UUID, principal: CurrentPrincipal, db: Tena
     return await _one_out(db, await _owned(db, principal, source_id))
 
 
-@router.patch("/sources/{source_id}", response_model=SourceOut)
+@router.patch(
+    "/sources/{source_id}",
+    response_model=SourceOut,
+    responses={429: {"description": "The provider is rate limiting; retry after Retry-After"}},
+)
 async def update_source(
     source_id: uuid.UUID, body: SourcePatch, principal: CurrentPrincipal, db: TenantDB
 ) -> SourceOut:

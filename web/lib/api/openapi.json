@@ -3106,7 +3106,7 @@
           "connections"
         ],
         "summary": "List Slack Channels",
-        "description": "Public channels and the private channels you are in, by name; never DMs.",
+        "description": "Public channels and the private channels you are in, by name; never DMs.\n\nAnswers are cached for a minute per connection, and a connection may search Slack\na limited number of times a minute.",
         "operationId": "list_slack_channels",
         "security": [
           {
@@ -3177,14 +3177,17 @@
               }
             }
           },
+          "403": {
+            "description": "Slack refused the request (the connection stays usable)"
+          },
           "404": {
             "description": "Not one of your Slack connections"
           },
           "409": {
-            "description": "The connection needs reconnecting"
+            "description": "The connection needs reconnecting, or holds a bot token"
           },
           "429": {
-            "description": "Slack is rate limiting; retry after Retry-After seconds"
+            "description": "Slack is rate limiting, or this connection searched too often; retry after Retry-After seconds"
           },
           "422": {
             "description": "Validation Error",
@@ -3205,7 +3208,7 @@
           "connections"
         ],
         "summary": "List Github Repos",
-        "description": "Repos your GitHub sign-in can read, matched on owner/name and description.",
+        "description": "Repos your GitHub sign-in can read, matched on owner/name and description.\n\nAnswers are cached for a minute per connection, and a connection may search GitHub\na limited number of times a minute.",
         "operationId": "list_github_repos",
         "security": [
           {
@@ -3266,6 +3269,9 @@
               }
             }
           },
+          "403": {
+            "description": "GitHub refused the request (the connection stays usable)"
+          },
           "404": {
             "description": "Not one of your GitHub connections"
           },
@@ -3273,7 +3279,7 @@
             "description": "The connection needs reconnecting"
           },
           "429": {
-            "description": "GitHub is rate limiting; retry after Retry-After seconds"
+            "description": "GitHub is rate limiting, or this connection searched too often; retry after Retry-After seconds"
           },
           "422": {
             "description": "Validation Error",
@@ -4091,6 +4097,9 @@
               }
             }
           },
+          "429": {
+            "description": "The provider is rate limiting; retry after Retry-After"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -4242,6 +4251,9 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "The provider is rate limiting; retry after Retry-After"
           },
           "422": {
             "description": "Validation Error",
@@ -26410,6 +26422,17 @@
               }
             ],
             "title": "Next Cursor"
+          },
+          "sso_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sso Hint"
           }
         },
         "type": "object",
