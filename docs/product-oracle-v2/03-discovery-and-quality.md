@@ -95,6 +95,24 @@ limits, configurability and scaling (`categories.CATEGORIES`).
   (`evidence.run_shared`), whoever owns them, and the intake summary shows a run no
   title or excerpt of a withheld item. To give agents a private source, its author
   shares every finding of its intake in full.
+- Freeze at sharing (owner, 2026-10-19, round 7): sharing a finding in full releases
+  exactly the (item, version) pairs it cites at that moment, each at the version the
+  intake read at its pin (`analysis.findings[id].frozen`, mirrored in
+  `intake_shared_items.version_id`). Items a later analysis adds, and newer versions,
+  stay withheld (added to `intake_withheld_items`) until the author shares the finding
+  in full again, which releases what it cites then. `FindingOut.unshared_item_ids` tells
+  the author what is new since they shared. Every run route reads a shared item at its
+  released version only: `/v1/source-items/{id}`, `/v1/search` (whatever `as_of` says),
+  `/intakes/{id}/evidence`, the summary's refs and baseline evidence a run attaches;
+  people see the released version's excerpt too. An item deleted upstream is no longer
+  readable or searchable by runs nor shown to people. If two releases of one item
+  differ, the sources routes serve the newest released version, an intake's own
+  routes the version that intake released.
+- Lowering stays consistent (round 7): a re-analysis brings open baseline proposals
+  down to their finding's level as setting the level does (private withdraws them); a
+  withdrawn proposal keeps only the category's question. Deciding and withdrawing take
+  the proposal row `FOR UPDATE`, so an accept and a withdraw never both win
+  (`baseline.proposal.withdrawn`, `baseline.proposal.withdraw_skipped` audited).
 
 ## 3. Untrusted content
 
