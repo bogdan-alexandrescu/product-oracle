@@ -56,6 +56,8 @@ export interface TraceContext {
   documents: TraceDoc[];
   versions: TraceVersion[];
   entities: TraceEntity[];
+  /** Baseline edges, to walk a linked entity up to the goals it serves. */
+  edges?: { src_id: string; dst_id: string; type: string; status: string }[];
   userId: string;
   role: Role;
   now: () => string;
@@ -70,6 +72,30 @@ function json(status: number, body: unknown): Response {
 }
 const notFound = (what: string) => json(404, { detail: `${what} not found` });
 const atLeast = (role: Role, min: Role) => ROLE_ORDER.indexOf(role) >= ROLE_ORDER.indexOf(min);
+
+/** Edges that lead towards goals, as the API's trace walks them (oracle.trace.graph). */
+const UPSTREAM = new Set(["supports", "derives_from", "part_of", "verifies"]);
+
+/** A section's goals: linked goals, and the confirmed goals its linked entities serve, by key. */
+function sectionGoals(ctx: TraceContext, linked: TraceEntity[]): Schemas["TraceEntityRef"][] {
+  const goals = new Map<string, TraceEntity>();
+  for (const start of linked) {
+    if (start.type === "goal") goals.set(start.id, start);
+    const seen = new Set([start.id]);
+    const queue = [start.id];
+    while (queue.length) {
+      const at = queue.shift()!;
+      for (const e of ctx.edges ?? []) {
+        if (e.src_id !== at || e.status === "rejected" || !UPSTREAM.has(e.type) || seen.has(e.dst_id)) continue;
+        seen.add(e.dst_id);
+        queue.push(e.dst_id);
+        const dst = ctx.entities.find((x) => x.id === e.dst_id);
+        if (dst?.type === "goal" && dst.status === "confirmed") goals.set(dst.id, dst);
+      }
+    }
+  }
+  return [...goals.values()].sort((a, b) => a.key.localeCompare(b.key)).map(entityRef);
+}
 
 function entityRef(e: TraceEntity): Schemas["TraceEntityRef"] {
   return { id: e.id, type: e.type, key: e.key, title: e.title, status: e.status, locked: e.locked, confidence: e.confidence ?? null };
@@ -233,7 +259,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
           return {
             section_key: s.section_key, heading: s.heading, level: s.level, layer: s.layer, section_hash: s.content_hash, links,
             entities: ctx.entities.filter((e) => links.some((l) => l.target.type === "entity" && l.target.id === e.id)).map(entityRef),
-            goals: [],
+            goals: sectionGoals(ctx, ctx.entities.filter((e) => links.some((l) => l.target.type === "entity" && l.target.id === e.id))),
             downstream: describe(ctx, onVersion.filter((x) => x.upstream_section_key === s.section_key)),
           };
         }),
