@@ -53,6 +53,7 @@ fetched again. The engine passes ``known`` (the source's stored ids) for this.
 
 import hashlib
 import json
+import logging
 import math
 import re
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -68,6 +69,7 @@ from oracle.sources.base import (
     ConnectorAuthError,
     ConnectorConfigError,
     ConnectorError,
+    ConnectorForbidden,
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemDelete,
@@ -75,6 +77,8 @@ from oracle.sources.base import (
     SyncEvent,
     register,
 )
+
+log = logging.getLogger(__name__)
 
 API_URL = "https://api.fireflies.ai/graphql"
 OAUTH = None
@@ -89,12 +93,24 @@ MISSING_TRIES = 3
 SERIES_PAGES = 4
 MAX_SERIES = 200
 MAX_MEETINGS = 2000
-MAX_LABELS = 1000
+# The picker keeps a label for each pick only.
+MAX_LABELS = MAX_SERIES + MAX_MEETINGS
+# The longest calendar id read as a series (longer ones are in no series), meeting id
+# picked, and label (the title the picker showed).
+MAX_CALENDAR_ID = 512
+MAX_SERIES_KEY = len("cal:") + MAX_CALENDAR_ID
+MAX_MEETING_ID = 256
+MAX_LABEL = 500
 # Fireflies' keyword search takes at most this many characters.
 MAX_SEARCH = 255
 
 # Longer waits Fireflies asks for are read as this (a day).
 MAX_RETRY_AFTER = 86_400.0
+
+# The dates a meeting can have. A sync skips a meeting dated outside them (positions are
+# computed back from dates: one near year 1 would overflow on every sync).
+EARLIEST = datetime(2000, 1, 1, tzinfo=UTC)
+LATEST = datetime(2200, 1, 1, tzinfo=UTC)
 
 AUTH_CODES = {"auth_failed", "unauthorized", "unauthenticated", "forbidden", "invalid_api_key"}
 RATE_CODES = {"too_many_requests", "rate_limited", "rate_limit_exceeded"}
@@ -154,9 +170,22 @@ def _parse_date(value: Any) -> datetime | None:
 def _fireflies_date(value: Any) -> datetime | None:
     """A date Fireflies sent; None when it is missing, unreadable or out of range."""
     try:
-        return _parse_date(value)
+        parsed = _parse_date(value)
     except (ValueError, OverflowError, OSError, TypeError):
         return None
+    return parsed if parsed is None or EARLIEST <= parsed < LATEST else None
+
+
+def _out_of_range(value: Any) -> bool:
+    """Whether Fireflies sent a date, but one no meeting can have (see EARLIEST)."""
+    return value not in (None, "") and _fireflies_date(value) is None
+
+
+def _cursor_date(value: Any) -> datetime | None:
+    """A date of a saved cursor; None (no position) when unreadable or out of range."""
+    if not isinstance(value, str):
+        return None
+    return _fireflies_date(value)
 
 
 def _iso(value: datetime) -> str:
@@ -224,12 +253,14 @@ def _retry_after(value: str | None) -> float | None:
     return min(wait, MAX_RETRY_AFTER) if wait > 0 else None
 
 
-def _strings(config: dict[str, Any], key: str, limit: int) -> list[str]:
+def _strings(config: dict[str, Any], key: str, limit: int, length: int | None = None) -> list[str]:
     value = config.get(key) or []
     if not isinstance(value, list) or not all(isinstance(v, str) and v.strip() for v in value):
         raise ConnectorConfigError(f"{key} must be a list of strings")
     if len(value) > limit:
         raise ConnectorConfigError(f"{key} takes at most {limit} entries")
+    if length is not None and any(len(v.strip()) > length for v in value):
+        raise ConnectorConfigError(f"{key} entries take at most {length} characters")
     return [v.strip() for v in value]
 
 
@@ -279,9 +310,12 @@ def series_title(title: str | None) -> str:
 
 def series_key(entry: dict[str, Any]) -> str | None:
     """The calendar series a transcript belongs to; None without a calendar id."""
-    calendar = _GOOGLE_DOMAIN.sub("", str(entry.get("calendar_id") or "").strip())
+    calendar = entry.get("calendar_id")
+    if not isinstance(calendar, str) or len(calendar) > MAX_CALENDAR_ID + len("@google.com"):
+        return None
+    calendar = _GOOGLE_DOMAIN.sub("", calendar.strip())
     calendar = _INSTANCE.sub("", calendar) or calendar
-    return f"cal:{calendar}" if calendar else None
+    return f"cal:{calendar}" if calendar and len(calendar) <= MAX_CALENDAR_ID else None
 
 
 # --- Config -------------------------------------------------------------------------
@@ -334,10 +368,10 @@ def selection(config: dict[str, Any]) -> Selection:
     date_to = _config_day(config, "date_to")
     if date_from and date_to and date_to < date_from:
         raise ConnectorConfigError("date_to must be on or after date_from")
-    series = frozenset(_strings(config, "series", MAX_SERIES))
+    series = frozenset(_strings(config, "series", MAX_SERIES, MAX_SERIES_KEY))
     if not all(key.startswith("cal:") for key in series):
         raise ConnectorConfigError("series takes calendar series keys (cal:...)")
-    meetings = frozenset(_strings(config, "meetings", MAX_MEETINGS))
+    meetings = frozenset(_strings(config, "meetings", MAX_MEETINGS, MAX_MEETING_ID))
     if mode == "selected" and not series and not meetings:
         raise ConnectorConfigError("pick at least one series or meeting, or take all meetings")
     labels = config.get("labels") or {}
@@ -347,6 +381,11 @@ def selection(config: dict[str, Any]) -> Selection:
         raise ConnectorConfigError("labels must map strings to strings")
     if len(labels) > MAX_LABELS:
         raise ConnectorConfigError(f"labels takes at most {MAX_LABELS} entries")
+    if any(len(k) > MAX_SERIES_KEY or len(v) > MAX_LABEL for k, v in labels.items()):
+        raise ConnectorConfigError(
+            f"labels take keys of at most {MAX_SERIES_KEY} and titles of at most "
+            f"{MAX_LABEL} characters"
+        )
     titles = _strings(config, "title_contains", MAX_MEETINGS)
     return Selection(
         mode=mode,
@@ -403,10 +442,10 @@ def _meeting(entry: dict[str, Any]) -> Meeting:
     duration = entry.get("duration")
     return Meeting(
         id=entry["id"],
-        title=entry.get("title") or "Untitled meeting",
+        title=(entry.get("title") or "Untitled meeting")[:MAX_LABEL],
         date=_fireflies_date(entry.get("date")),
         duration=float(duration) if isinstance(duration, int | float) else None,
-        organizer=entry.get("organizer_email") or None,
+        organizer=_text(entry.get("organizer_email")),
         attendee_count=len(_participants(entry)),
         series_key=series_key(entry),
         series_title=series_title(entry.get("title")),
@@ -423,6 +462,21 @@ def _range(date_from: date | None, date_to: date | None) -> dict[str, Any]:
         end = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), UTC)
         variables["toDate"] = _iso(end - timedelta(milliseconds=1))
     return variables
+
+
+def _text(value: Any) -> str | None:
+    """An optional text field Fireflies sent; None when missing or not text."""
+    return value if isinstance(value, str) and value else None
+
+
+def _well_formed(entry: Any) -> bool:
+    """A transcript with a text id and, when it has one, a text title."""
+    return (
+        isinstance(entry, dict)
+        and isinstance(entry.get("id"), str)
+        and bool(entry["id"])
+        and isinstance(entry.get("title"), str | None)
+    )
 
 
 def _api_key(credential: dict[str, Any] | None) -> str:
@@ -491,7 +545,7 @@ def _participants(transcript: dict[str, Any]) -> list[str]:
     return list(seen)
 
 
-class FirefliesForbidden(ConnectorAuthError):
+class FirefliesForbidden(ConnectorForbidden):
     """Fireflies refused one request ("forbidden"): the key may lack access to it (a
     plan or team permission), which does not mean the key itself was revoked."""
 
@@ -559,9 +613,19 @@ class _Fireflies:
         """One page of the transcripts list. A missing list is an error, never an empty
         page: a full pass would otherwise delete everything stored."""
         page = (await self.query(LIST_QUERY, **variables)).get("transcripts")
-        if not isinstance(page, list) or not all(isinstance(e, dict) and e.get("id") for e in page):
+        if not isinstance(page, list) or not all(isinstance(e, dict) for e in page):
             raise ConnectorError("Fireflies answered without a list of transcripts")
         return page
+
+
+def _listed(page: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The page's transcripts with a text id and title; the others are skipped (noted)."""
+    kept = [e for e in page if _well_formed(e)]
+    if len(kept) < len(page):
+        log.warning(
+            "skipped %d Fireflies transcript(s) without a text id or title", len(page) - len(kept)
+        )
+    return kept
 
 
 def fingerprint(config: dict[str, Any]) -> str:
@@ -586,7 +650,12 @@ def _within(recent: dict[str, str], position: datetime | None) -> dict[str, str]
     if position is None:
         return recent
     horizon = position - OVERLAP
-    return {i: d for i, d in recent.items() if _parse_date(d) >= horizon}
+    kept = {}
+    for i, d in recent.items():
+        when = _cursor_date(d)
+        if when is not None and when >= horizon:
+            kept[i] = d
+    return kept
 
 
 def _cursor(
@@ -666,9 +735,13 @@ class FirefliesConnector:
         now = datetime.now(UTC)
         # A position past now (a meeting Fireflies dated in the future) would skip what
         # is recorded until then.
-        since = _clamp(_parse_date((cursor or {}).get("since")), now)
-        listed_before = _clamp(_parse_date((cursor or {}).get("listed")), now)
-        recent: dict[str, str] = dict((cursor or {}).get("recent") or {})
+        since = _clamp(_cursor_date((cursor or {}).get("since")), now)
+        listed_before = _clamp(_cursor_date((cursor or {}).get("listed")), now)
+        recent: dict[str, str] = {
+            i: d
+            for i, d in dict((cursor or {}).get("recent") or {}).items()
+            if _cursor_date(d) is not None
+        }
         missing: dict[str, int] = {
             i: n
             for i, n in ((cursor or {}).get("missing") or {}).items()
@@ -693,8 +766,13 @@ class FirefliesConnector:
             listed: list[tuple[datetime | None, dict[str, Any]]] = []
             newest_listed = listed_before
             done = False
+            out_of_range = 0
             async for page in self._pages(fireflies, variables):
-                for entry in page:
+                for entry in _listed(page):
+                    if _out_of_range(entry.get("date")):
+                        # Dated before EARLIEST (or after LATEST): skipped, never synced.
+                        out_of_range += 1
+                        continue
                     when = _fireflies_date(entry.get("date"))
                     if stop and when and when < stop:
                         if position is None:
@@ -707,6 +785,8 @@ class FirefliesConnector:
                         newest_listed = seen
                 if done:
                     break
+            if out_of_range:
+                log.warning("skipped %d Fireflies transcript(s) dated out of range", out_of_range)
 
             matched: set[str] = set()
             pending: list[tuple[datetime, dict[str, Any], bool]] = []
@@ -735,7 +815,11 @@ class FirefliesConnector:
                     transcript = data.get("transcript")
                     if isinstance(transcript, dict) and transcript.get("id"):
                         missing.pop(entry["id"], None)
-                        yield self._item(transcript)
+                        if _well_formed(transcript):
+                            yield self._item(transcript)
+                        else:
+                            # Not stored, and not asked again: noted, then passed by.
+                            log.warning("skipped a Fireflies transcript without a text title")
                     else:
                         tries = missing.get(entry["id"], 0) + 1
                         if tries < MISSING_TRIES:
@@ -788,7 +872,7 @@ class FirefliesConnector:
         async with self._session(credential) as fireflies:
             page = await fireflies.transcripts(**variables)
         return MeetingPage(
-            meetings=[_meeting(e) for e in page],
+            meetings=[_meeting(e) for e in _listed(page)],
             next_skip=skip + PAGE_SIZE if len(page) >= PAGE_SIZE else None,
         )
 
@@ -803,7 +887,7 @@ class FirefliesConnector:
         truncated = False
         async with self._session(credential) as fireflies:
             async for page in self._pages(fireflies, _range(date_from, date_to), SERIES_PAGES):
-                for entry in page:
+                for entry in _listed(page):
                     scanned += 1
                     m = _meeting(entry)
                     if m.series_key is None:
@@ -833,8 +917,8 @@ class FirefliesConnector:
             external_id=transcript["id"],
             kind="transcript",
             title=transcript.get("title") or "Untitled meeting",
-            url=transcript.get("transcript_url"),
-            author=transcript.get("organizer_email"),
+            url=_text(transcript.get("transcript_url")),
+            author=_text(transcript.get("organizer_email")),
             content=_content(transcript),
             acl={"participants": participants},
             occurred_at=when,

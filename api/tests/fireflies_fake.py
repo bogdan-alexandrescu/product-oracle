@@ -53,6 +53,8 @@ class FakeFireflies:
     processing: dict[str, int] = field(default_factory=dict)
     # List the meetings in the order given, not newest first (out-of-order answers).
     unsorted: bool = False
+    # Transcripts whose detail Fireflies refuses (HTTP 403).
+    forbidden: set[str] = field(default_factory=set)
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         assert str(request.url) == API_URL
@@ -69,6 +71,8 @@ class FakeFireflies:
         if "transcripts(" in query:
             return httpx.Response(200, json={"data": {"transcripts": self._list(variables)}})
         if "transcript(" in query:
+            if variables["id"] in self.forbidden:
+                return httpx.Response(403, json={"errors": [{"message": "forbidden"}]})
             found = next((m for m in self.meetings if m["id"] == variables["id"]), None)
             if self.processing.get(variables["id"], 0) > 0:
                 self.processing[variables["id"]] -= 1

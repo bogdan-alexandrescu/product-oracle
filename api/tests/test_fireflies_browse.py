@@ -11,7 +11,15 @@ from sqlalchemy import select
 from oracle.connections.models import Connection
 from oracle.main import app
 from oracle.sources import base, fireflies_browse, service
-from oracle.sources.connectors.fireflies import FirefliesConnector
+from oracle.sources.connectors.fireflies import (
+    MAX_LABEL,
+    MAX_LABELS,
+    MAX_MEETING_ID,
+    MAX_MEETINGS,
+    MAX_SERIES,
+    MAX_SERIES_KEY,
+    FirefliesConnector,
+)
 from oracle.sources.models import Source, SourceItem
 from oracle.tenancy import tenant_session
 from tests.connection_helpers import clear_provider_http, use_provider_http
@@ -396,7 +404,11 @@ async def test_an_out_of_range_date_is_a_422(fake, alice, conn, path):
         {"mode": "all", "date_to": "9999-12-31"},
         {"mode": "all", "date_from": 5},
         {"mode": "all", "date_from": True},
-        {"mode": "all", "labels": {f"m{i}": "x" for i in range(1001)}},
+        {"mode": "all", "labels": {f"m{i}": "x" for i in range(MAX_LABELS + 1)}},
+        {"mode": "all", "labels": {"m1": "x" * (MAX_LABEL + 1)}},
+        {"mode": "all", "labels": {"m" * (MAX_SERIES_KEY + 1): "x"}},
+        {"mode": "selected", "series": ["cal:" + "x" * (MAX_SERIES_KEY - 3)]},
+        {"mode": "selected", "meetings": ["m" * (MAX_MEETING_ID + 1)]},
     ],
 )
 async def test_a_source_with_a_bad_date_or_too_many_labels_is_a_422(
@@ -692,3 +704,285 @@ async def test_mcp_clients_acting_as_the_person_can_browse(fake, tenant_id, alic
         assert [m["id"] for m in meetings.structured_content["meetings"]][:2] == ["P2", "S3"]
         series = await c.call_tool("list_fireflies_series", {"connection_id": str(conn)})
         assert not series.is_error, series
+
+
+# --- Round 4: what a sync starts from, its failures, odd answers ----------------------
+
+
+async def _source(a, conn, config=None) -> uuid.UUID:
+    resp = await a.post(
+        "/v1/sources",
+        json={
+            "kind": "fireflies",
+            "name": "Meetings",
+            "connection_id": str(conn),
+            "config": config or {"mode": "all"},
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    return uuid.UUID(resp.json()["id"])
+
+
+def _recording(connector, monkeypatch) -> list[dict]:
+    """The connector's sync calls (config, credential, cursor), as it received them."""
+    calls: list[dict] = []
+    original = connector.sync
+
+    async def recorded(config, credential, cursor, **kw):
+        calls.append({"config": config, "credential": credential, "cursor": cursor})
+        async for event in original(config, credential, cursor, **kw):
+            yield event
+
+    monkeypatch.setattr(connector, "sync", recorded)
+    return calls
+
+
+async def test_a_connection_switch_before_the_sync_starts_is_superseded(
+    fake, connector, monkeypatch, tenant_id, alice, conn
+):
+    """The router loads the source, another request switches its connection (and resets
+    the cursor), then the sync starts: it must not run the old account's position (the
+    loaded row's cursor) under the new connection."""
+    from oracle.sources import router as sources_router
+
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        assert (await a.post(f"/v1/sources/{source_id}/sync")).json()["outcome"] == "completed"
+        async with tenant_session(tenant_id) as s:
+            assert (await s.get(Source, source_id)).cursor is not None
+
+        calls = _recording(connector, monkeypatch)
+        loaded = sources_router._owned
+
+        async def owned_then_switched(db, principal, sid):
+            source = await loaded(db, principal, sid)
+            await _change_source(tenant_id, sid, alice, "connection")
+            return source
+
+        monkeypatch.setattr(sources_router, "_owned", owned_then_switched)
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert sync["outcome"] == "superseded", sync
+        # Nothing ran with the old cursor, and none was saved.
+        assert calls == []
+        async with tenant_session(tenant_id) as s:
+            source = await s.get(Source, source_id)
+            assert source.cursor is None
+            assert source.connection_id != conn
+            new_conn = source.connection_id
+
+        # The next sync runs the new connection from the start.
+        monkeypatch.setattr(sources_router, "_owned", loaded)
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert sync["outcome"] == "completed", sync
+        assert len(calls) == 1 and calls[0]["cursor"] is None
+        async with tenant_session(tenant_id) as s:
+            source = await s.get(Source, source_id)
+            assert source.connection_id == new_conn and source.cursor is not None
+
+
+async def test_the_sync_runs_what_the_database_holds_at_its_start(
+    fake, connector, monkeypatch, tenant_id, alice, conn
+):
+    """Config, connection and cursor come from one read at the start, not the caller's
+    copy: a cursor the database reset is not resurrected by a stale in-memory row."""
+    from oracle.sources import router as sources_router
+
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        assert (await a.post(f"/v1/sources/{source_id}/sync")).json()["outcome"] == "completed"
+        calls = _recording(connector, monkeypatch)
+        loaded = sources_router._owned
+
+        async def owned_then_reset(db, principal, sid):
+            source = await loaded(db, principal, sid)
+            async with tenant_session(tenant_id) as s:
+                (await s.get(Source, sid)).cursor = None
+                await s.commit()
+            return source
+
+        monkeypatch.setattr(sources_router, "_owned", owned_then_reset)
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert sync["outcome"] == "completed", sync
+        assert calls[0]["cursor"] is None
+        assert calls[0]["config"] == {"mode": "all"}
+
+
+@pytest.mark.parametrize("failure", ["rate_limited", "error", "auth"])
+async def test_a_failure_after_the_source_changed_is_superseded(
+    fake, connector, monkeypatch, tenant_id, alice, conn, failure
+):
+    """A sync that fails after the source's connection changed reports superseded and
+    writes nothing on the source; a rejected credential marks the connection the sync
+    used, not the one the source points at now."""
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+
+        async def failing(config, credential, cursor, **kw):
+            await _change_source(tenant_id, source_id, alice, "connection")
+            if failure == "rate_limited":
+                raise base.ConnectorRateLimited("slow down", retry_after=30)
+            if failure == "auth":
+                raise base.ConnectorAuthError("Fireflies rejected the API key")
+            raise base.ConnectorError("Fireflies query failed")
+            yield  # pragma: no cover
+
+        monkeypatch.setattr(connector, "sync", failing)
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert sync["outcome"] == "superseded", sync
+        async with tenant_session(tenant_id) as s:
+            source = await s.get(Source, source_id)
+            assert source.status == "active"
+            assert source.last_error is None
+            new_conn = await s.get(Connection, source.connection_id)
+            old_conn = await s.get(Connection, conn)
+            assert new_conn.status == "active"
+            assert old_conn.status == ("expired" if failure == "auth" else "active")
+
+
+async def test_a_rejected_key_marks_the_connection_the_sync_used(
+    fake, connector, tenant_id, alice, conn
+):
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        fake.error = httpx.Response(401, json={"errors": [{"message": "bad key"}]})
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+    assert sync["outcome"] == "error", sync
+    async with tenant_session(tenant_id) as s:
+        assert (await s.get(Source, source_id)).status == "error"
+        assert (await s.get(Connection, conn)).status == "expired"
+
+
+async def test_a_403_on_one_transcript_fails_the_source_not_the_connection(
+    fake, connector, tenant_id, alice, conn
+):
+    fake.forbidden = {"K1"}
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+    assert sync["outcome"] == "error", sync
+    assert "refused" in sync["error"]
+    async with tenant_session(tenant_id) as s:
+        source = await s.get(Source, source_id)
+        assert source.status == "error"
+        assert "refused" in source.last_error
+        connection = await s.get(Connection, conn)
+        assert connection.status == "active" and connection.last_error is None
+
+
+@pytest.mark.parametrize(
+    "when", ["0001-01-02T00:00:00Z", "0001-01-01T00:00:00Z", "1999-12-31T00:00:00Z"]
+)
+async def test_a_transcript_dated_near_year_one_is_skipped_not_fatal(
+    fake, connector, tenant_id, alice, conn, when
+):
+    fake.meetings.append(meeting("Y1", "Year one", when))
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        for _ in range(2):
+            sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+            assert sync["outcome"] == "completed", sync
+    items = await _items(tenant_id, source_id)
+    assert "Y1" not in items
+    assert set(items) == {m["id"] for m in SAMPLE}
+
+
+async def test_a_cursor_dated_near_year_one_does_not_overflow(
+    fake, connector, tenant_id, alice, conn
+):
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        async with tenant_session(tenant_id) as s:
+            source = await s.get(Source, source_id)
+            source.cursor = {
+                "since": "0001-01-02T00:00:00Z",
+                "listed": "0001-01-01T00:00:00Z",
+                "recent": {"Z1": "0001-01-01T00:00:00Z", "Z2": "not a date"},
+            }
+            await s.commit()
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+    assert sync["outcome"] == "completed", sync
+    assert set(await _items(tenant_id, source_id)) == {m["id"] for m in SAMPLE}
+
+
+ODD = [
+    {**meeting("N1", "x", "2026-10-03T09:00:00Z"), "id": 12345},
+    {**meeting("N2", "x", "2026-10-03T10:00:00Z"), "title": {"text": "Weekly"}},
+    {**meeting("N3", "x", "2026-10-03T11:00:00Z"), "title": ["Weekly"]},
+    {**meeting("N4", "x", "2026-10-03T12:00:00Z"), "id": None},
+    {**meeting("N5", "x", "2026-10-03T13:00:00Z"), "calendar_id": "c" * 5000},
+]
+
+
+@pytest.mark.parametrize("path", ["meetings", "series"])
+async def test_a_transcript_with_a_non_text_id_or_title_is_skipped_on_browse(
+    fake, alice, conn, path
+):
+    fake.meetings.extend(ODD)
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/connections/{conn}/fireflies/{path}")
+    assert resp.status_code == 200, resp.text
+    if path == "meetings":
+        ids = [m["id"] for m in resp.json()["meetings"]]
+        assert set(ids) == {m["id"] for m in SAMPLE} | {"N5"}
+        # A calendar id too long to be a series key: the meeting is in no series.
+        assert next(m for m in resp.json()["meetings"] if m["id"] == "N5")["series_key"] is None
+    else:
+        keys = [s["key"] for s in resp.json()["series"]]
+        assert all(len(k) <= MAX_SERIES_KEY for k in keys)
+
+
+async def test_a_transcript_with_a_non_text_id_or_title_is_skipped_on_sync(
+    fake, connector, tenant_id, alice, conn
+):
+    fake.meetings.extend(ODD)
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+    assert sync["outcome"] == "completed", sync
+    assert set(await _items(tenant_id, source_id)) == {m["id"] for m in SAMPLE} | {"N5"}
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        httpx.ConnectError("connection refused"),
+        httpx.ReadTimeout("timed out"),
+        httpx.RemoteProtocolError("reset"),
+    ],
+)
+async def test_a_network_error_while_browsing_is_a_fixed_502(alice, conn, error):
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise error
+
+    use_provider_http(unreachable)
+    fireflies_browse.reset_limits()
+    try:
+        async with client_for(alice) as a:
+            resp = await a.get(f"/v1/connections/{conn}/fireflies/meetings")
+    finally:
+        clear_provider_http()
+        fireflies_browse.reset_limits()
+    assert resp.status_code == 502, resp.text
+    assert resp.json()["detail"] == fireflies_browse.UNREACHABLE
+
+
+async def test_a_full_pick_fits_the_labels_cap(fake, connector, alice, conn):
+    """The picker saves a label per pick: the most series and meetings it can pick, each
+    labelled, is a valid config."""
+    config = {
+        "mode": "selected",
+        "series": [f"cal:s{i}" for i in range(MAX_SERIES)],
+        "meetings": [f"m{i}" for i in range(MAX_MEETINGS)],
+    }
+    config["labels"] = {k: "A title" for k in config["series"] + config["meetings"]}
+    async with client_for(alice) as a:
+        resp = await a.post(
+            "/v1/sources",
+            json={
+                "kind": "fireflies",
+                "name": "Full",
+                "connection_id": str(conn),
+                "config": config,
+            },
+        )
+    assert resp.status_code == 201, resp.text

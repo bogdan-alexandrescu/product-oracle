@@ -104,16 +104,16 @@ async def _read_credential(db: AsyncSession, conn: Connection) -> dict[str, Any]
         raise InvalidError(f"{e}") from None
 
 
-async def mark_connection_rejected(db: AsyncSession, source: Source, error: str) -> None:
-    """A provider rejected the credential during a sync: mark the user's connection
-    expired with the error, so Settings > Connections offers Reconnect. Commits."""
-    if source.connection_id is None:
+async def mark_connection_rejected(
+    db: AsyncSession, connection_id: uuid.UUID | None, owner_id: uuid.UUID, error: str
+) -> None:
+    """A provider rejected the credential of ``connection_id`` (the one a sync used)
+    during a sync: mark the user's connection expired with the error, so Settings >
+    Connections offers Reconnect. Commits."""
+    if connection_id is None:
         return
     conn = await db.scalar(
-        select(Connection).where(
-            Connection.id == source.connection_id,
-            Connection.user_id == source.owner_user_id,
-        )
+        select(Connection).where(Connection.id == connection_id, Connection.user_id == owner_id)
     )
     if conn is not None:
         await connections.mark_failure(db, conn, "expired", error)
@@ -131,17 +131,17 @@ async def owned_connection(
 
 
 async def credential_for(
-    db: AsyncSession, source: Source
+    db: AsyncSession, source: Source, connection_id: uuid.UUID | None = None
 ) -> tuple[dict[str, Any] | None, Connection | None]:
-    """The decrypted credential of the source's connection (``None`` for uploads)."""
+    """The decrypted credential of the source's connection (``None`` for uploads), or of
+    ``connection_id`` when given (the connection a sync read when it started)."""
     if KIND_PROVIDER[source.kind] is None:
         return None, None
-    if source.connection_id is None:
+    connection_id = connection_id or source.connection_id
+    if connection_id is None:
         raise InvalidError("This source has no connection: pick one of your connections")
     try:
-        credential = await connections.get_credential(
-            db, source.connection_id, source.owner_user_id
-        )
+        credential = await connections.get_credential(db, connection_id, source.owner_user_id)
     except connections.ConnectionUnavailable as e:
         if e.status is None:
             raise NotFoundError("Connection not found") from None

@@ -26,6 +26,7 @@ from collections.abc import Awaitable, Callable, Hashable
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import delete, select
@@ -36,7 +37,7 @@ from oracle.connections.models import Connection
 from oracle.connections.router import ProviderHttp, UserPrincipal
 from oracle.sources import base
 from oracle.sources.connectors import fireflies
-from oracle.sources.connectors.fireflies import FirefliesConnector, FirefliesForbidden, Meeting
+from oracle.sources.connectors.fireflies import FirefliesConnector, Meeting
 from oracle.sources.models import BrowseCall
 from oracle.sources.service import InvalidError, _read_credential, redact
 
@@ -49,6 +50,7 @@ CALLS_PER_DAY = 25
 # The most Fireflies calls one series list makes.
 SERIES_CALLS = fireflies.SERIES_PAGES
 LIMIT_REACHED = "Fireflies limit reached, try later"
+UNREACHABLE = "Fireflies could not be reached: try again in a moment"
 _WINDOWS = (
     (timedelta(minutes=1), CALLS_PER_MINUTE, "a minute"),
     (timedelta(days=1), CALLS_PER_DAY, "a day"),
@@ -211,7 +213,7 @@ async def _browse(db: TenantDB, conn: Connection, call):
             + (f"Try again in {_later(wait)}." if wait else "Try again in a minute."),
             wait,
         ) from None
-    except FirefliesForbidden:
+    except base.ConnectorForbidden:
         # The key may lack access to this (a plan or team permission): the connection
         # itself still works, so it is not marked expired.
         raise HTTPException(
@@ -230,6 +232,9 @@ async def _browse(db: TenantDB, conn: Connection, call):
     except base.ConnectorError as e:
         # Redacted like a sync's error: Fireflies may echo the key back.
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, redact(str(e), credential)) from None
+    except httpx.HTTPError:
+        # A network failure (refused, timed out, reset): a fixed text, never the error's.
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, UNREACHABLE) from None
 
 
 def _check_range(date_to: date | None) -> None:
