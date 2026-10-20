@@ -4,10 +4,11 @@ Each evidence row is scored from oracle.confidence.Factors:
 
 - source and item kind from its source item; public-link evidence counts as its
   ``kind`` (``notion``, ``google_docs`` or ``web``); "manual" for free-standing evidence;
-- latest timestamp: the evidence's retrieved_at (for a source item, when the version
-  it was taken from was fetched; never the item's current times, S6), else its newest
-  version's fetch time; for a public link, the page's stated last change, else when it
-  was last fetched;
+- latest timestamp: for a source item, its updated / occurred time as it was when the
+  evidence was taken (no later than the evidence's retrieved_at, else that), recorded
+  by the first scoring and kept, never the item's times as it changed upstream since
+  (S6); for a public link, the page's stated last change, else when it was last
+  fetched; else the evidence's retrieved_at;
 - mentions: distinct sources (source items and public links) behind the same entity
   or edge;
 - goal contribution: the highest ``supports`` contribution from the entity (for an
@@ -145,6 +146,28 @@ def _dec(value: float | None) -> Decimal | None:
     return None if value is None else Decimal(str(round(value, 3)))
 
 
+def _item_latest(ev: Evidence, item: SourceItem, fetched: datetime | None) -> datetime | None:
+    """How fresh a source item's evidence is: as the item was when the evidence was
+    taken, never as it changed upstream since (S6: the score is shown to everyone, the
+    item only to its owner). The first scoring records it in the evidence's inputs and
+    every later one reuses it; that first one takes the item's update or occurrence
+    time no later than the evidence's ``retrieved_at`` (the version it quotes), else
+    that ``retrieved_at``."""
+    recorded = ((ev.confidence_factors or {}).get("inputs") or {}).get("latest_at")
+    if isinstance(recorded, str):
+        try:
+            return datetime.fromisoformat(recorded)
+        except ValueError:
+            pass
+    taken = ev.retrieved_at
+    stamps = [
+        t
+        for t in (item.source_updated_at, item.occurred_at)
+        if t is not None and (taken is None or t <= taken)
+    ]
+    return max(stamps) if stamps else (taken or fetched)
+
+
 async def rescore_targets(
     db: AsyncSession,
     *,
@@ -187,10 +210,7 @@ async def rescore_targets(
             if ev.kind:
                 latest = link_latest(snapshots.get(ev.id), ev.retrieved_at)
             elif item is not None:
-                # As fresh as the version the evidence was taken from, never as the
-                # item changed upstream since: the score is shown to everyone, and
-                # the item is private to its owner (S6).
-                latest = ev.retrieved_at or fetched
+                latest = _item_latest(ev, item, fetched)
             else:
                 latest = ev.retrieved_at
             factors = confidence.Factors(
