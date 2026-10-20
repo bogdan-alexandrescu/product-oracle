@@ -712,4 +712,10 @@ async def approve_version(
             "already_approved": already,
         },
     )
+    if document.kind == "prd":
+        # V2b, T2: approving a PRD version publishes it; a published PRD starts (or
+        # advances) its product track.
+        from oracle.roadmap import tracks
+
+        await tracks.ensure_track(session, document, version, actor=principal, cause="approved")
     return document, version

@@ -48,6 +48,7 @@ from oracle.config import get_settings
 from oracle.db import get_engine
 from oracle.jobs import worker as llm_jobs
 from oracle.models import Tenant
+from oracle.roadmap import views as track_views
 from oracle.runs import service as runs_service
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.ticker import idtoken
@@ -177,6 +178,17 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
         await _sweep_if_due(tenant_id, out)
     except Exception:
         log.exception("run ticker: the Claude account sweep failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Product tracks (CR-11): an hourly deterministic check, no model call.
+        failed: list[uuid.UUID] = []
+        async with tenant_session(tenant_id) as db:
+            await track_views.monitor_due(db, failed=failed)
+            await db.commit()
+        if failed:
+            failures.add(tenant_id)
+    except Exception:
+        log.exception("run ticker: track monitoring failed for company %s", tenant_id)
         failures.add(tenant_id)
 
 

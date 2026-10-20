@@ -87,6 +87,22 @@ class ExportVersion:
     # v2 (§7, §16.9): each section's internal claim-to-source links, for the appendix
     # only ({"key", "links": [{"claim", "label", "kind", "confidence"}]}).
     evidence_links: list[dict] = field(default_factory=list)
+    # A roadmap (O4 'document dates'): the sections as stored, and the dates marked now
+    # (unverified, withdrawn) that ``sections`` carry a marker after.
+    stored_sections: list[Section] = field(default_factory=list)
+    date_marks: list = field(default_factory=list)
+
+    @property
+    def title(self) -> str:
+        """The document's title, with the marker after a flagged date it writes (when it
+        is this version's title)."""
+        from oracle.roadmap import doc_dates
+
+        title = self.document.title
+        mine = [m for m in self.date_marks if m.where == "title"]
+        if mine and title == doc_dates.version_title(self.version):
+            return doc_dates.annotate(title, mine).replace("**", "")
+        return title
 
     @property
     def source_label(self) -> str | None:
@@ -279,7 +295,10 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
     latest = await db.scalar(
         select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == document.id)
     )
-    ordered = sorted(version.sections, key=lambda s: s.ordinal)
+    stored = sorted(version.sections, key=lambda s: s.ordinal)
+    ordered, marks = stored, []
+    if document.kind == "roadmap":
+        ordered, marks = await _marked_dates(db, version, stored)
     ev = ExportVersion(
         document=document,
         version=version,
@@ -287,6 +306,8 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
         citations=list(version.citations),
         latest_number=latest or version.number,
         all_sections=ordered,
+        stored_sections=stored,
+        date_marks=marks,
     )
     if version.source_version_id is not None:
         from oracle.docs.service import version_sources
@@ -298,6 +319,46 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
     ev.evidence_links = await appendix_links(db, version)
     await _resolve_theme(db, ev)
     return ev
+
+
+async def _marked_dates(
+    db: AsyncSession, version: DocumentVersion, sections: list[Section]
+) -> tuple[list[Section], list]:
+    """A roadmap's sections with the marker after each date that rests on no verified
+    basis now (``[unverified]``, ``[date withdrawn]``, O4 'document dates'), at the exact
+    span the date check found, and those flagged dates. Unsaved copies: the stored,
+    approved text is never changed."""
+    from oracle.roadmap import doc_dates
+
+    marks = doc_dates.flagged(await doc_dates.occurrences_for_version(db, version, sections))
+    if not marks:
+        return sections, []
+    by_section: dict[tuple[str, str], list] = {}
+    for m in marks:
+        by_section.setdefault((m.section_key, m.where), []).append(m)
+    out = []
+    for s in sections:
+        heads = by_section.get((s.section_key, "heading"))
+        bodies = by_section.get((s.section_key, "body"))
+        if not heads and not bodies:
+            out.append(s)
+            continue
+        out.append(
+            Section(
+                id=s.id,
+                version_id=s.version_id,
+                section_key=s.section_key,
+                ordinal=s.ordinal,
+                level=s.level,
+                heading=doc_dates.annotate(s.heading, heads or []),
+                body_md=doc_dates.annotate(s.body_md, bodies or []),
+                body_text=s.body_text,
+                content_hash=s.content_hash,
+                citation_keys=list(s.citation_keys or []),
+                layer=s.layer,
+            )
+        )
+    return out, marks
 
 
 async def _resolve_theme(db: AsyncSession, ev: ExportVersion) -> None:
@@ -478,7 +539,7 @@ def build_context(ev: ExportVersion) -> dict:
     headings = {r.key: r.heading for r in sections}
     v = ev.version
     return {
-        "title": ev.document.title,
+        "title": ev.title,
         "slug": ev.document.slug,
         "number": v.number,
         "status": ev.status,
@@ -754,7 +815,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         body_classes.append("appendix-break")
     running = running_header(theme.css)
     return {
-        "title": ev.document.title,
+        "title": ev.title,
         "slug": ev.document.slug,
         "kind": ev.document.kind,
         "number": v.number,
@@ -788,7 +849,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         # The theme repeats the header on every PDF page: themed.css keeps it short enough
         # for the page's top margin (stored theme copies included, so it lives here).
         "running_header": running,
-        "header_title": _cap(ev.document.title, HEADER_TEXT_MAX) if running else None,
+        "header_title": _cap(ev.title, HEADER_TEXT_MAX) if running else None,
         "header_source_label": _header_source(ev.source) if running else None,
         "layer": ev.layer,
         "layer_label": ev.layer_label,
@@ -825,10 +886,15 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
     """The stored markdown with a banner comment.
 
     The comment goes after the YAML front matter (front matter must stay first), so
-    the export can still be re-imported.
+    the export can still be re-imported. A roadmap's flagged dates carry an HTML comment
+    after each (``<!-- oracle: date unverified -->``), which the import drops.
     """
+    from oracle.roadmap import doc_dates
+
     banner = f"<!-- {banner_line(ev)} -->\n"
-    markdown = ev.version.markdown
+    markdown = doc_dates.annotate_markdown(
+        ev.version.markdown, ev.stored_sections or ev.sections, ev.date_marks
+    )
     if markdown.startswith("---"):
         m = re.compile(r"^---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)", re.S | re.M).match(
             markdown

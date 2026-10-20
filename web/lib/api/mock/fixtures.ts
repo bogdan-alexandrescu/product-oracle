@@ -459,7 +459,17 @@ export function roadmapFromPrd(prd: {
       { key: h.key, level: 2, heading: h.heading, body: h.body },
       ...items
         .filter((i) => i.horizon.key === h.key)
-        .map((i) => ({ key: i.key, level: 3, heading: i.title, body: `From the PRD: [${i.from.heading}](${link(i.from.key)}).` })),
+        .map((i, n) => ({
+          key: i.key,
+          level: 3,
+          heading: i.title,
+          // O4: the first Now item carries dated milestones, each on a schedule basis
+          // (mock roadmap.ts seeds ENG-412 verified and ENG-413 withdrawn).
+          body:
+            h.key === "now" && n === 0
+              ? `Beta by 2026-11-30 (ENG-412 estimate); GA by 2026-12-15 (ENG-413 estimate). From the PRD: [${i.from.heading}](${link(i.from.key)}).`
+              : `From the PRD: [${i.from.heading}](${link(i.from.key)}).`,
+        })),
     ]),
     { key: "sources", level: 2, heading: "Sources and data points", body: `- [${prd.title} v${prd.version}](${link()})` },
   ];
