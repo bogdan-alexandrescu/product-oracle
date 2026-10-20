@@ -16,7 +16,7 @@ from typing import Any
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from oracle import safe_yaml
 from oracle.config import get_settings
@@ -62,6 +62,19 @@ class CitationIn(BaseModel):
     title: str | None = None
     excerpt: str | None = None
     retrieved_at: datetime | None = None
+    # What the writer computed for this citation (owner decision 2026-10-20). ``item`` is
+    # kept as written: the import checks it against the company's source items and drops
+    # one it does not have with a warning, never a refusal.
+    item: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    # Why there is no score, or how it was reached ("owner decision, locked").
+    confidence_note: str | None = None
+    low_confidence: bool = False
+
+    @field_validator("item", mode="before")
+    @classmethod
+    def _item_as_text(cls, value: Any) -> str | None:
+        return _optional_str(value)
 
 
 @dataclass

@@ -59,7 +59,9 @@ def scratch_db():
 def test_chains_on_the_citation_source_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    # 0019_citation_confidence chains on it; still a single head.
+    assert script.get_heads() == ["0019_citation_confidence"]
+    assert script.get_revision("0019_citation_confidence").down_revision == REVISION
 
 
 def test_upgrade_creates_the_table_and_downgrade_drops_it(scratch_db):
