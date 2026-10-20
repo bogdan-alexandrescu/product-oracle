@@ -187,13 +187,15 @@ async def test_full_sync_messages_threads_and_pagination():
 
     assert events[-1] == CursorCheckpoint(
         {
+            "range": {},
             "channels": {
                 "C0PRODUCT": {
+                    "name": "product",
                     "oldest": "1760000300.000300",
                     "threads": {"1760000200.000200": "1760000260.000600"},
                     "messages": ["1760000100.000100", "1760000300.000300"],
                 }
-            }
+            },
         }
     )
     # Two history pages, one replies call, each user looked up once.
@@ -234,6 +236,7 @@ async def test_incremental_sync_updates_threads_with_new_replies():
     assert edited.source_updated_at == datetime.fromtimestamp(1760000410, UTC)
     # A cursor from before deletes were tracked: the messages it covers count as known.
     assert events[-1].cursor["channels"]["C0PRODUCT"] == {
+        "name": "product",
         "oldest": "1760000400.000400",
         "threads": {"1760000200.000200": "1760000350.000700"},
         "messages": ["1760000100.000100", "1760000300.000300", "1760000400.000400"],
@@ -255,6 +258,7 @@ async def test_checkpoint_per_channel_keeps_other_channels():
     assert events[-1].cursor["channels"] == {
         "C0OTHER": {"oldest": "1750000000.000000", "threads": {}},
         "C0ROADMAP": {
+            "name": "roadmap",
             "oldest": "1760000500.000500",
             "threads": {},
             "messages": ["1760000500.000500"],

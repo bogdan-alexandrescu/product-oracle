@@ -19,7 +19,9 @@ by its thread.
 
 Cursor::
 
-    {"channels": {"C1": {"oldest": "1700000000.000100",
+    {"range": {"since": "2026-01-01"},
+     "channels": {"C1": {"name": "general",
+                         "oldest": "1700000000.000100",
                          "threads": {"1699990000.000200": "1700000100.000300"},
                          "messages": ["1699990500.000400"],
                          "walk": {...}}}}
@@ -33,6 +35,20 @@ that the window no longer lists was deleted in Slack, and is deleted here too.
 History is read newest first, one page at a time, with a checkpoint after each page:
 ``walk`` (the window being read, the newest message of it, the oldest one handled so far
 and Slack's cursor for the next page) lets an interrupted sync resume inside a channel.
+
+``range`` is the date range the cursor was read under. When the selection changes
+(:meth:`SlackConnector.rescope_cursor`), a channel still selected keeps its state as it is
+if the range is the same; otherwise it keeps ``messages`` and ``threads`` (what upstream
+deletes are compared against), drops ``oldest`` and ``walk`` and is marked ``refetch``:
+its whole range is read again, every message and thread counts as not yet pulled in (so
+each is upserted again, unchanged content writing no new version, and threads are clipped
+to the new ``until``), and the flag is cleared only by the save that ends the window.
+Channels no longer selected lose their state.
+
+A private channel the person left or was removed from can no longer be read: the sync
+goes on with the other channels and the source ends needing attention, naming it
+(:class:`~oracle.sources.base.Attention`). Its items and state stay until the person
+removes it from the allowlist (which deletes them) or rejoins it.
 """
 
 import copy
@@ -45,10 +61,12 @@ from typing import Any
 import httpx
 
 from oracle.sources.base import (
+    Attention,
     ConnectorAuthError,
     ConnectorConfigError,
     ConnectorError,
     ConnectorForbidden,
+    ConnectorNeedsAttention,
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemDelete,
@@ -85,6 +103,15 @@ BOT_TOKEN = (
     "This Slack connection holds a bot token, which reads the bot's channels rather than "
     "yours: reconnect Slack with your own sign-in or a user token (xoxp-)"
 )
+
+# What a sync says of a source whose connection holds a bot token (S5: each person
+# connects their own account). Its items are kept.
+BOT_TOKEN_SYNC = (
+    "Reconnect with your own Slack account: this connection holds a bot token, which "
+    "reads the bot's channels rather than yours. The items already pulled in are kept"
+)
+# A channel the token's user cannot read any more.
+GONE_ERRORS = {"channel_not_found", "not_in_channel", "is_archived"}
 
 AUTH_ERRORS = {
     "invalid_auth",
@@ -189,6 +216,11 @@ def _until(config: dict[str, Any]) -> float | None:
     return _midnight(day + timedelta(days=1))
 
 
+def _range_of(config: dict[str, Any]) -> dict[str, str]:
+    """The date range of a config as the cursor records it."""
+    return {k: config[k] for k in ("since", "until") if config.get(k) is not None}
+
+
 def _token(credential: dict[str, Any] | None) -> str:
     token = (credential or {}).get("token")
     if not token:
@@ -249,9 +281,12 @@ class _Slack:
             info = (await self.call("conversations.info", channel=channel))["channel"]
         except SlackApiError as e:
             if e.error == "channel_not_found":
-                raise ConnectorConfigError(f"channel {channel} not found or not visible") from e
+                raise ChannelGone(f"channel {channel} not found or not visible") from e
             raise
-        return _check_channel(channel, info)
+        info = _check_channel(channel, info)
+        if (info.get("is_private") or info.get("is_group")) and info.get("is_member") is False:
+            raise ChannelGone(f"you are no longer in the private channel {channel}")
+        return info
 
     async def listed(self, wanted: set[str]) -> dict[str, dict[str, Any]]:
         """The channels of ``wanted`` that ``conversations.list`` shows (public ones and
@@ -316,6 +351,12 @@ def _check_channel(channel: str, info: dict[str, Any]) -> dict[str, Any]:
     return info
 
 
+class ChannelGone(ConnectorConfigError):
+    """The token's user cannot read the channel any more (a private channel they left or
+    were removed from, or one deleted). ``validate`` refuses it; ``sync`` goes on without
+    it and the source needs attention."""
+
+
 class SlackApiError(ConnectorError):
     def __init__(self, method: str, error: str):
         super().__init__(f"Slack {method} failed: {error}")
@@ -364,6 +405,13 @@ class SlackConnector:
         _since(config)
         _until(config)
 
+    def normalize_config(self, config: dict[str, Any]) -> dict[str, Any]:
+        """Channel ids stripped, without repeats, sorted."""
+        channels = config.get("channels")
+        if not isinstance(channels, list) or not all(isinstance(c, str) for c in channels):
+            return dict(config)
+        return {**config, "channels": sorted({c.strip() for c in channels})}
+
     def scope(self, config: dict[str, Any]) -> Scope:
         """Still selected: in an allowlisted channel, started inside the date range (a
         thread by its first message; its replies after ``until`` are clipped when it is
@@ -378,9 +426,30 @@ class SlackConnector:
     def rescope_cursor(
         self, old_cursor: dict[str, Any] | None, new_config: dict[str, Any]
     ) -> dict[str, Any] | None:
-        """A new range or channel list: read every channel again from the start (unchanged
-        content writes no new version; threads are clipped to the new ``until``)."""
-        return None
+        """Per channel still selected: its state as it is when the range is the same,
+        else what deletes are compared against (``messages``, ``threads``) with
+        ``refetch`` set, so the whole new range is read again. Channels removed lose
+        their state. A cursor without ``range`` (saved before it was kept) counts as of
+        another range."""
+        old = old_cursor or {}
+        new_range = _range_of(new_config)
+        same_range = "range" in old and old["range"] == new_range
+        previous = old.get("channels") or {}
+        kept: dict[str, Any] = {}
+        for channel in _channels(new_config):
+            entry = previous.get(channel)
+            if not entry:
+                continue
+            if same_range:
+                kept[channel] = copy.deepcopy(entry)
+                continue
+            kept[channel] = {
+                **({"name": entry["name"]} if entry.get("name") else {}),
+                "threads": dict(entry.get("threads") or {}),
+                "messages": list(entry.get("messages") or []),
+                "refetch": True,
+            }
+        return {"range": new_range, "channels": kept} if kept else None
 
     async def _person(self, slack: _Slack) -> dict[str, Any]:
         """``auth.test``, refusing a bot token (``bot_id`` is set for bots, whatever the
@@ -389,6 +458,16 @@ class SlackConnector:
         if identity.get("bot_id"):
             raise ConnectorConfigError(BOT_TOKEN)
         return identity
+
+    async def _person_syncing(self, slack: _Slack) -> dict[str, Any]:
+        """``_person`` for a sync: a source on a bot-token connection needs its owner to
+        reconnect (its items are kept), it does not fail as an error."""
+        try:
+            return await self._person(slack)
+        except ConnectorConfigError as e:
+            if str(e) == BOT_TOKEN:
+                raise ConnectorNeedsAttention(BOT_TOKEN_SYNC) from None
+            raise
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         channels = _channels(config)
@@ -412,17 +491,30 @@ class SlackConnector:
         channels = _channels(config)
         since, until = _since(config), _until(config)
         state: dict[str, Any] = {
+            "range": _range_of(config),
             "channels": {
                 k: copy.deepcopy(v) for k, v in ((cursor or {}).get("channels") or {}).items()
-            }
+            },
         }
         async with self._session(credential) as slack:
-            base = (await self._person(slack)).get("url") or ""
+            base = (await self._person_syncing(slack)).get("url") or ""
             if base and not base.endswith("/"):
                 base += "/"
             for channel in channels:
-                async for event in self._sync_channel(slack, base, channel, state, since, until):
-                    yield event
+                try:
+                    async for event in self._sync_channel(
+                        slack, base, channel, state, since, until
+                    ):
+                        yield event
+                except ChannelGone:
+                    # Its items and state stay; the other channels are still read.
+                    name = (state["channels"].get(channel) or {}).get("name")
+                    label = f"#{name} ({channel})" if name else channel
+                    yield Attention(
+                        f"Slack channel {label} can no longer be read with your account "
+                        "(you left it or were removed): remove it from this source, or "
+                        "rejoin it in Slack."
+                    )
 
     async def _sync_channel(
         self,
@@ -441,6 +533,8 @@ class SlackConnector:
             "is_private": bool(info.get("is_private") or info.get("is_group")),
         }
         previous = state["channels"].get(channel) or {}
+        # After a selection change: read the whole range again (see rescope_cursor).
+        refetch = bool(previous.get("refetch"))
         oldest: str | None = previous.get("oldest")
         threads: dict[str, str] = dict(previous.get("threads") or {})
         # Cursors from before deletes were tracked list no plain messages: those count
@@ -464,13 +558,17 @@ class SlackConnector:
             }
 
         def known(ts: str) -> bool:
+            if refetch:
+                return False
             if ts in messages or ts in threads:
                 return True
             return not tracked and oldest is not None and float(ts) <= float(oldest)
 
         def save() -> CursorCheckpoint:
             state["channels"][channel] = {
+                "name": name,
                 **({"oldest": oldest} if oldest is not None else {}),
+                **({"refetch": True} if refetch else {}),
                 "threads": dict(threads),
                 "messages": sorted(messages, key=float),
                 **({"walk": dict(walk)} if walk is not None else {}),
@@ -483,12 +581,17 @@ class SlackConnector:
         if walk["latest"] is not None:
             params["latest"] = walk["latest"]
         while True:
-            page = await slack.call(
-                "conversations.history",
-                limit=PAGE_SIZE,
-                **params,
-                **({"cursor": walk["next"]} if walk["next"] else {}),
-            )
+            try:
+                page = await slack.call(
+                    "conversations.history",
+                    limit=PAGE_SIZE,
+                    **params,
+                    **({"cursor": walk["next"]} if walk["next"] else {}),
+                )
+            except SlackApiError as e:
+                if e.error in GONE_ERRORS:
+                    raise ChannelGone(f"channel {channel} can no longer be read") from e
+                raise
             listed = [m for m in page.get("messages") or [] if m.get("ts")]
             next_cursor = (page.get("response_metadata") or {}).get("next_cursor") or None
             # This page covers [its oldest message, the previous page's oldest) of the
@@ -556,6 +659,7 @@ class SlackConnector:
             oldest = walk["high"]
         walk = None
         tracked = True
+        refetch = False
         yield save()
 
     async def _message(

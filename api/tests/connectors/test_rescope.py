@@ -49,6 +49,44 @@ def test_notion_keeps_page_ids_only():
     assert NotionConnector().rescope_cursor(None, {"roots": ["p1"]}) is None
 
 
-def test_slack_starts_over():
-    old = {"channels": {"C1": {"oldest": "1.0", "threads": {}}}}
-    assert SlackConnector().rescope_cursor(old, {"channels": ["C1"]}) is None
+def test_slack_keeps_what_deletes_are_compared_against_and_refetches():
+    """A new range (or a cursor saved before ranges were kept): the channels still
+    selected keep messages and threads, lose oldest and walk, and read everything again."""
+    old = {
+        "channels": {
+            "C1": {
+                "name": "general",
+                "oldest": "3.0",
+                "threads": {"1.0": "2.0"},
+                "messages": ["3.0"],
+                "walk": {"from": None},
+            },
+            "C2": {"oldest": "5.0", "threads": {}, "messages": ["5.0"]},
+        }
+    }
+    assert SlackConnector().rescope_cursor(old, {"channels": ["C1", "C3"]}) == {
+        "range": {},
+        "channels": {
+            "C1": {
+                "name": "general",
+                "threads": {"1.0": "2.0"},
+                "messages": ["3.0"],
+                "refetch": True,
+            }
+        },
+    }
+    assert SlackConnector().rescope_cursor(None, {"channels": ["C1"]}) is None
+
+
+def test_slack_keeps_a_channel_untouched_when_the_range_did_not_change():
+    entry = {"oldest": "3.0", "threads": {}, "messages": ["3.0"]}
+    old = {"range": {"since": "2025-01-01"}, "channels": {"C1": entry, "C2": entry}}
+    config = {"channels": ["C1", "C3"], "since": "2025-01-01"}
+    assert SlackConnector().rescope_cursor(old, config) == {
+        "range": {"since": "2025-01-01"},
+        "channels": {"C1": entry},
+    }
+    # A later since: refetched.
+    later = SlackConnector().rescope_cursor(old, {**config, "since": "2025-02-01"})
+    assert later["channels"]["C1"]["refetch"] is True
+    assert "oldest" not in later["channels"]["C1"]

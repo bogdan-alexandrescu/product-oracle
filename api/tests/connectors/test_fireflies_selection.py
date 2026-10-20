@@ -462,23 +462,38 @@ async def test_a_full_pass_that_matches_and_deletes_nothing_still_checkpoints():
     assert fake.list_variables()[0]["fromDate"] == "2026-10-11T14:00:00Z"
 
 
-async def test_narrowing_deletes_even_when_an_older_sync_saved_its_position_last():
-    """A sync still running under the old selection when the source is narrowed saves
-    its cursor after the reset: the next sync must still see the selection changed."""
+async def test_narrowing_rescopes_to_a_full_pass_and_new_labels_keep_the_position():
+    """After the selection changed the engine asks rescope_cursor what still holds: a
+    narrower pick gets a full pass (which deletes), new labels alone keep the position."""
     fake = FakeFireflies(SAMPLE)
     conn = connector(fake)
     wide = {"mode": "selected", "series": [STANDUP], "meetings": ["K1"]}
     first = await collect(conn, wide, None, known=known())
-    stale = next(e for e in reversed(first) if isinstance(e, CursorCheckpoint)).cursor
+    wide_cursor = next(e for e in reversed(first) if isinstance(e, CursorCheckpoint)).cursor
 
     narrow = {"mode": "selected", "series": [STANDUP], "labels": {STANDUP: "Standup"}}
-    events = await collect(conn, narrow, stale, known=known("S1", "S2", "S3", "K1"))
+    assert conn.rescope_cursor(wide_cursor, narrow) is None
+    events = await collect(conn, narrow, None, known=known("S1", "S2", "S3", "K1"))
     assert deleted(events) == ["K1"]
     # Labels only name things for the web UI: they change no selection.
     cursor = next(e for e in reversed(events) if isinstance(e, CursorCheckpoint)).cursor
     relabelled = {**narrow, "labels": {STANDUP: "Daily standup"}}
-    again = await collect(conn, relabelled, cursor, known=known("S1", "S2", "S3"))
+    kept = conn.rescope_cursor(cursor, relabelled)
+    assert kept == cursor
+    again = await collect(conn, relabelled, kept, known=known("S1", "S2", "S3"))
     assert again == []
+
+
+def test_the_scope_is_the_date_range():
+    conn = connector(FakeFireflies(SAMPLE))
+    scope = conn.scope({"mode": "all", "date_from": "2026-10-10", "date_to": "2026-10-12"})
+    assert scope.groups is None
+    assert scope.occurred_from == datetime(2026, 10, 10, tzinfo=UTC)
+    assert scope.occurred_before == datetime(2026, 10, 13, tzinfo=UTC)
+    assert conn.normalize_config({"mode": "selected", "meetings": [" B", "A", "B"]}) == {
+        "mode": "selected",
+        "meetings": ["A", "B"],
+    }
 
 
 async def test_legacy_title_rule_still_filters():

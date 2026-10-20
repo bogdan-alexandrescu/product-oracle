@@ -64,7 +64,8 @@ MAX_REPOS = 100
 # Files larger than this are skipped (docs this size are generated, not written).
 MAX_FILE_BYTES = 1_000_000
 # The owner may hold underscores: Enterprise Managed Users log in as ``name_shortcode``.
-_REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_-]*)/[A-Za-z0-9._-]+$")
+# The name may not be "." or ".." (a path segment, not a repo: /repos/owner/.. is /repos).
+_REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_-]*)/(?!\.{1,2}$)[A-Za-z0-9._-]+$")
 _README_RE = re.compile(r"^readme(\.[A-Za-z0-9]+)?$", re.IGNORECASE)
 _DOC_RE = re.compile(r"^docs/.+\.(md|markdown)$", re.IGNORECASE)
 # What a repo's cursor keeps when the selection changes (see rescope_cursor).
@@ -350,6 +351,20 @@ class GithubConnector:
         """The rules a saved config must still meet (repo names, the repo cap)."""
         _parse_config(config)
 
+    def normalize_config(self, config: dict[str, Any]) -> dict[str, Any]:
+        """Repos stripped, without repeats (case-insensitively), sorted; include sorted."""
+        out = dict(config)
+        repos = config.get("repos")
+        if isinstance(repos, list) and all(isinstance(r, str) for r in repos):
+            unique: dict[str, str] = {}
+            for repo in repos:
+                unique.setdefault(repo.strip().lower(), repo.strip())
+            out["repos"] = [unique[k] for k in sorted(unique)]
+        include = config.get("include")
+        if isinstance(include, list) and all(isinstance(i, str) for i in include):
+            out["include"] = sorted(set(include))
+        return out
+
     def scope(self, config: dict[str, Any]) -> Scope:
         """Still selected: from an allowlisted repo, of a kind still included."""
         repos, include = _parse_config(config)
@@ -463,8 +478,11 @@ class GithubConnector:
         files = {path: sha for path, (_, sha, _) in wanted.items()}
         if truncated:
             # A truncated tree may omit files that still exist: keep them, retry next time.
+            # Every file it lists was read again above, so the refetch is done (a tree
+            # truncated every time must not re-read every blob on every sync).
             state["files"] = {**known, **files}
             state.pop("tree_sha", None)
+            state.pop("refetch", None)
             return
         for path in sorted(known.keys() - files.keys()):
             yield ItemDelete(external_id=f"{repo.key}:file:{path}")

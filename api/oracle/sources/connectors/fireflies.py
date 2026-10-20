@@ -43,12 +43,16 @@ window, with their dates). A meeting listed whose transcript Fireflies does not 
 yet is counted in ``missing`` and the position stays before it, so the next sync asks
 again; after ``MISSING_TRIES`` asks it is skipped.
 
-``selection`` is a fingerprint of the config the cursor was saved under: a cursor of
-another selection is ignored, so narrowing always gets a full pass (see below).
+``selection`` is a fingerprint of what the config selects (``labels`` aside), so a
+change of labels alone keeps the position (:meth:`FirefliesConnector.rescope_cursor`).
 
-A pass without a position (a new source, or one whose config changed) lists the whole date
-range: stored items no longer picked are deleted, stored items still picked are not
-fetched again. The engine passes ``known`` (the source's stored ids) for this.
+When the selection changed, the engine (oracle.sources.sync) first deletes the stored
+items outside the new date range (:meth:`FirefliesConnector.scope`), then the cursor is
+rescoped to none: a pass without a position (a new source, or one whose config changed)
+lists the whole date range: stored items no longer picked are deleted, stored items still
+picked are not fetched again. The engine passes ``known`` (the source's stored ids) for
+this. A sync still running when the source changes saves nothing more (the engine's
+writes are conditional), so a cursor of another selection never reaches ``sync``.
 """
 
 import hashlib
@@ -74,6 +78,7 @@ from oracle.sources.base import (
     CursorCheckpoint,
     ItemDelete,
     ItemUpsert,
+    Scope,
     SyncEvent,
     register,
 )
@@ -703,6 +708,34 @@ class FirefliesConnector:
         async with httpx.AsyncClient(timeout=60) as client:
             yield _Fireflies(client, api_key)
 
+    def check_config(self, config: dict[str, Any]) -> None:
+        """The rules a saved config must still meet (the caps, the dates)."""
+        selection(config)
+
+    def normalize_config(self, config: dict[str, Any]) -> dict[str, Any]:
+        """Picked series and meetings stripped, without repeats, sorted."""
+        out = dict(config)
+        for key in ("series", "meetings", "title_contains"):
+            value = config.get(key)
+            if isinstance(value, list) and all(isinstance(v, str) for v in value):
+                out[key] = sorted({v.strip() for v in value})
+        return out
+
+    def scope(self, config: dict[str, Any]) -> Scope:
+        """Still selected, as far as stored items tell: dated inside the date range.
+        Which series and meetings are picked is checked by the full pass (``known``)."""
+        picked = selection(config)
+        return Scope(occurred_from=picked.date_from, occurred_before=picked.date_to_end)
+
+    def rescope_cursor(
+        self, old_cursor: dict[str, Any] | None, new_config: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Another selection: start over with a full pass, which deletes what is no longer
+        picked. New labels alone (they only name things) keep the position."""
+        if old_cursor and old_cursor.get("selection") == fingerprint(new_config):
+            return old_cursor
+        return None
+
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         selection(config)
         async with self._session(credential) as fireflies:
@@ -731,12 +764,6 @@ class FirefliesConnector:
     ) -> AsyncIterator[SyncEvent]:
         picked = selection(config)
         selected = fingerprint(config)
-        # Saved under another selection (a sync that was still running when the source
-        # was narrowed saves its cursor after the reset): start over with a full pass,
-        # which deletes what the selection no longer takes. Cursors from before the
-        # fingerprint carry none and are kept.
-        if cursor and cursor.get("selection", selected) != selected:
-            cursor = None
         now = datetime.now(UTC)
         # A position past now (a meeting Fireflies dated in the future) would skip what
         # is recorded until then.
