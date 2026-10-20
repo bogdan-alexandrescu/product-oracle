@@ -23,10 +23,9 @@ async function feedbackTab(page: Page) {
 
 const item = (page: Page, text: string) => page.getByTestId("feedback-item").filter({ visible: true, hasText: text });
 
-/** The versions the switcher offers. */
-async function versionNumbers(page: Page): Promise<string[]> {
-  const switcher = page.getByRole("link", { name: /^v\d+$/ }).filter({ visible: true });
-  return (await switcher.allTextContents()).map((t) => t.trim());
+/** The versions the switcher offers are exactly these (retries until they are). */
+async function expectVersions(page: Page, versions: string[]) {
+  await expect(page.getByRole("link", { name: /^v\d+$/ }).filter({ visible: true })).toHaveText(versions);
 }
 
 test("accepting a suggestion stages it for the next draft", async ({ page }) => {
@@ -47,7 +46,7 @@ test("accepting a suggestion stages it for the next draft", async ({ page }) => 
   await expect(open.getByTestId("feedback-state")).toHaveText("Accepted · staged for draft 6");
   await expect(open.getByTestId("suggestion-staged")).toBeVisible();
   // Nothing was applied: still on v5, and the build action counts it.
-  expect(await versionNumbers(page)).toEqual(["v1", "v2", "v3", "v4", "v5"]);
+  await expectVersions(page, ["v1", "v2", "v3", "v4", "v5"]);
   await expect(buildButton(page).getByTestId("build-draft-count")).toHaveText("· 3 staged");
 });
 
@@ -79,7 +78,7 @@ test("build draft 6: one job, one combined preview, apply makes exactly one vers
   await expect(reports.getByRole("tab", { name: "What changed since v5" })).toHaveAttribute("aria-selected", "true");
   await expect(reports.getByRole("region", { name: "What changed" })).toContainText("F-38 Outbound check");
   await expect(reports.getByRole("region", { name: "What changed" })).toContainText("Goal trace");
-  expect(await versionNumbers(page)).toEqual(["v1", "v2", "v3", "v4", "v5", "v6"]);
+  await expectVersions(page, ["v1", "v2", "v3", "v4", "v5", "v6"]);
   await expect(await openSection(page, "f-38")).toContainText("Before each outbound call is placed");
   await expect(await openSection(page, "goal-trace")).toContainText("Serves G2 retention");
   await expect(buildButton(page)).toHaveCount(0);
@@ -101,7 +100,7 @@ test("dropping a section from the preview keeps its item staged for the draft af
   await s.getByRole("button", { name: "Apply as draft 6" }).click();
   await expect(page).toHaveURL(/\/documents\/clinic-outreach\/v\/6/);
 
-  expect(await versionNumbers(page)).toEqual(["v1", "v2", "v3", "v4", "v5", "v6"]);
+  await expectVersions(page, ["v1", "v2", "v3", "v4", "v5", "v6"]);
   await expect(await openSection(page, "f-38")).toContainText("After each outbound call");
   await expect(buildButton(page)).toContainText("Build draft 7");
   await expect(buildButton(page).getByTestId("build-draft-count")).toHaveText("· 1 staged");
@@ -118,7 +117,7 @@ test("discarding a build keeps everything staged", async ({ page }) => {
   await expect(sheet(page).getByTestId("next-draft-preview")).toBeVisible();
   await sheet(page).getByRole("button", { name: "Discard" }).click();
   await expect(sheet(page)).toHaveCount(0);
-  expect(await versionNumbers(page)).toEqual(["v1", "v2", "v3", "v4", "v5"]);
+  await expectVersions(page, ["v1", "v2", "v3", "v4", "v5"]);
   await expect(buildButton(page).getByTestId("build-draft-count")).toHaveText("· 2 staged");
 });
 
