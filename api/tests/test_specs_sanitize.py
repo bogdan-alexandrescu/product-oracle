@@ -403,3 +403,37 @@ def test_words_in_text_and_class_names_do_not_refuse_a_wireframe():
 def test_newer_css_fetching_functions_are_refused(css):
     assert sanitize_wireframe(f"<style>{css}</style><p>x</p>", title="x").blocked
     assert sanitize_svg(f"{SVG_HEAD}<style>{css}</style></svg>", title="x").blocked
+
+
+@pytest.mark.parametrize(
+    "tail",
+    ["<a " * 2000, "<!--" * 2000, "</a a=" * 500, "<!doctype" * 500, "<![CDATA[" * 500, "<?" * 500],
+)
+def test_markup_that_never_closes_is_refused_before_parsing(tail):
+    """Unclosed constructs at the end are the input that makes HTMLParser quadratic on
+    unpatched Pythons (CVE-2025-6069): refused before the parser sees them."""
+    out = sanitize_wireframe("<p>x</p>" + tail, title="x")
+    assert not out.safe and out.content == ""
+    assert any("never closes" in b for b in out.blocked), out.blocked
+
+
+def test_text_after_the_last_tag_is_fine():
+    out = sanitize_wireframe("<p>x</p> trailing words &amp; more", title="x")
+    assert out.safe, out.blocked
+
+
+def test_an_accepted_design_file_is_never_over_the_served_limit():
+    """The limit applies to the stored (sanitised) file too: escaping can grow it, and the
+    download route serves nothing over MAX_FILE_BYTES."""
+    from oracle.specs.design import MAX_FILE_BYTES
+
+    reqs, sections = [str(uuid.uuid4())], ["s-1"]
+    grows = "<p id='cost'>" + "&" * (MAX_FILE_BYTES - 100) + "</p>"
+    bundle = json.loads(design_json(reqs, sections, screens=2))
+    bundle["wireframes"][0]["html"] = grows
+    bundle["wireframes"][0]["annotations"] = []
+    check = check_design(
+        json.dumps(bundle), prd_sections=set(sections), requirement_ids=set(reqs), screens=2
+    )
+    assert any(p.code == "file_too_large" for p in check.problems), check.problems
+    assert all(o.size_bytes <= MAX_FILE_BYTES for o in check.flows + check.wireframes)

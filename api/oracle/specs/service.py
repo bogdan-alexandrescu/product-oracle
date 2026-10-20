@@ -362,12 +362,35 @@ async def _run_request(db: AsyncSession, run: Run) -> ArtifactRequest | None:
     return await db.get(ArtifactRequest, uuid.UUID(raw))
 
 
+def _regeneration_for(request: ArtifactRequest, run: Run | None) -> dict[str, Any] | None:
+    """The proposed regeneration ``run`` carries out, if it is one: its PRD version and
+    sections apply to the request only when its run imports."""
+    regen = (request.params or {}).get("regeneration") or {}
+    if run is None or regen.get("run_id") != str(run.id) or not regen.get("prd_version_id"):
+        return None
+    return regen
+
+
+async def _apply_regeneration(db: AsyncSession, request: ArtifactRequest, run: Run) -> None:
+    regen = _regeneration_for(request, run)
+    if regen is None:
+        return
+    for r in await _family(db, request):
+        r.source_version_id = uuid.UUID(regen["prd_version_id"])
+        r.section_keys = list(regen["section_keys"])
+
+
 async def _inputs(
     db: AsyncSession,
     request: ArtifactRequest,
     run: Run | None,
     source_version_id: uuid.UUID | None = None,
 ) -> tuple[contract.SpecInputs, Document, DocumentVersion]:
+    section_keys = list(request.section_keys)
+    regen = _regeneration_for(request, run)
+    if regen is not None and source_version_id is None:
+        source_version_id = uuid.UUID(regen["prd_version_id"])
+        section_keys = list(regen["section_keys"])
     version = await db.get(DocumentVersion, source_version_id or request.source_version_id)
     if version is None:
         raise Invalid("the PRD version this spec is built from no longer exists")
@@ -405,7 +428,7 @@ async def _inputs(
         prd_slug=prd.slug,
         prd_title=prd.title,
         prd_version=version.number,
-        sections=tuple((k, sections[k]) for k in request.section_keys if k in sections),
+        sections=tuple((k, sections[k]) for k in section_keys if k in sections),
         requirements=reqs,
         capability_map=cmap is not None,
         prd_approved_at=version.approved_at,
@@ -547,6 +570,9 @@ async def import_spec(
             inputs, prd, version = await _inputs(s, request, run_row or run)
         except Invalid as exc:
             return {"error": str(exc)}
+        # A proposed regeneration moves the request to its PRD version now, as it imports.
+        await _apply_regeneration(s, request, run_row or run)
+        await s.flush()
         provenance = _provenance(run_row or run, request, version)
         params = request.params or {}
         # Plain ids: a refused import rolls the session back and expires its objects.
@@ -615,6 +641,9 @@ async def import_spec(
         # Fresh objects after import_draft's commit.
         request = await s.get(ArtifactRequest, request_id)
         assert request is not None
+        # Again: a refused spec import rolled the session back.
+        run_row = await s.get(Run, run.id)
+        await _apply_regeneration(s, request, run_row or run)
         design_status = "skipped"
         if params.get("design", True):
             check = check_design(
@@ -1147,6 +1176,11 @@ async def regenerate(
     current = await db.get(DocumentVersion, request.source_version_id)
     assert current is not None
     prd, version = await _approved_prd(db, str(request.source_document_id), body.prd_version)
+    if version.number < current.number:
+        raise Invalid(
+            f"{prd.slug} v{version.number} is older than v{current.number}, the version this "
+            "spec is built from: regenerate from it or a newer approved version"
+        )
     run = await db.get(Run, request.run_id) if request.run_id else None
     if run is not None and run.status not in ("succeeded", "failed", "cancelled"):
         raise SpecError(f"run {run.id} is still {run.status}: finish or cancel it first")
@@ -1169,13 +1203,16 @@ async def regenerate(
     ]
     reasons = list(dict.fromkeys(r for v in stale_views for r in v.reasons))
     params = request.params or {}
-    for r in await _family(db, request):
-        r.source_version_id = version.id
-        r.section_keys = kept
-        r.status = "queued"
-    request.params = {**(request.params or {}), "regeneration": {
-        "reason": body.reason, "reasons": reasons[:20], "from_prd_version": current.number,
-    }}  # fmt: skip
+    # Nothing on the request changes until the run imports (_apply_regeneration): a
+    # proposal that is never started, or is cancelled, leaves the spec as it was.
+    regeneration = {
+        "reason": body.reason,
+        "reasons": reasons[:20],
+        "from_prd_version": current.number,
+        "prd_version": version.number,
+        "prd_version_id": str(version.id),
+        "section_keys": kept,
+    }
     document_id = params.get("document_id")
     try:
         run_id = await runs_service.create_run(
@@ -1195,6 +1232,7 @@ async def regenerate(
         raise Invalid(str(exc)) from exc
     for r in await _family(db, request):
         r.run_id = run_id
+    request.params = {**params, "regeneration": {**regeneration, "run_id": str(run_id)}}
     await audit.record(
         db,
         principal,

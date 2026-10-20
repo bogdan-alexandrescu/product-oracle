@@ -324,6 +324,21 @@ async def record_design(
     and its dependencies on the PRD sections and requirements they link. The caller
     commits."""
     content_hash = _sha("\n".join(f"{o.name}:{o.sha256}" for o in outputs))
+    # The same design from the same PRD version is recorded once (a second advance of
+    # the run, a retried import): the version already recorded is returned.
+    existing = await db.scalar(
+        select(ArtifactVersion)
+        .where(
+            ArtifactVersion.request_id == request.id,
+            ArtifactVersion.content_hash == content_hash,
+            ArtifactVersion.source_version_id == source_version_id,
+            ArtifactVersion.status.not_in(("superseded", "rejected")),
+        )
+        .order_by(ArtifactVersion.number.desc())
+        .limit(1)
+    )
+    if existing is not None:
+        return existing
     av = ArtifactVersion(
         request_id=request.id,
         number=await next_number(db, request.id),

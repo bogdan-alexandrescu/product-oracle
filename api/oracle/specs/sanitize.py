@@ -365,11 +365,30 @@ class _HtmlRebuilder(HTMLParser):
         return "".join(self.out)
 
 
+def _never_closes(candidate: str) -> str | None:
+    """Markup left open at the end (``<a ``, ``<!--``, ``<!``, ``<?``, ``<![CDATA[``...) is
+    what makes HTMLParser quadratic on unpatched Pythons (CVE-2025-6069): refused before
+    the parser reads it. Linear."""
+    pos = candidate.find("<!--")
+    while pos != -1:
+        end = candidate.find("-->", pos + 4)
+        if end == -1:
+            return "markup that never closes: a comment with no -->"
+        pos = candidate.find("<!--", end + 3)
+    tail = candidate[candidate.rfind(">") + 1 :]
+    if re.search(r"<[A-Za-z!?/]", tail):
+        return "markup that never closes: a tag, declaration or comment with no >"
+    return None
+
+
 def sanitize_wireframe(
     candidate: str, *, title: str, annotations: list[tuple[str, str]] | None = None
 ) -> Sanitized:
     """A static, offline, grayscale HTML page from an agent's wireframe. ``annotations``
     (label, note) are listed in a static footer, numbered as the review shows them."""
+    unclosed = _never_closes(candidate)
+    if unclosed:
+        return Sanitized("", blocked=[unclosed])
     parser = _HtmlRebuilder()
     try:
         parser.feed(candidate)

@@ -20,9 +20,11 @@ from tests.fixtures import draft
 from tests.specs_helpers import (
     PRD,
     design_json,
+    get_run,
     get_spec,
     import_md,
     make_world,
+    pending,
     request_spec,
     spec_md,
     start,
@@ -297,3 +299,95 @@ async def test_with_no_engineering_approvers_the_requester_approves_their_own_sp
         f"/v1/documents/{PRD}/versions/1/approve", headers=world.ctx.as_("approver")
     )
     assert resp.status_code == 200
+
+
+# --------------------------------------------------------------------------- minors
+
+
+async def test_regenerate_changes_nothing_until_its_run_imports(client, runtime):
+    world = await make_world(client)
+    owner, approver = world.ctx.as_("owner"), world.ctx.as_("approver")
+    created = await generated(client, runtime, world)
+    request_id = created["spec"]["request"]["id"]
+    run = await get_run(client, owner, created["run_id"])
+    await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{pending(run)['id']}/decide",
+        json={"decision": "approved"},
+        headers=owner,
+    )
+    before = (await get_spec(client, owner, request_id))["request"]
+    v2 = draft("prd_v1.md").replace("wallet payments", "wallet and bank payments")
+    assert (await import_md(client, owner, v2)).status_code == 201
+    await client.post(f"/v1/documents/{PRD}/versions/2/approve", headers=owner)
+    resp = await client.post(
+        f"/v1/spec-requests/{request_id}/regenerate", json={"reason": "v2"}, headers=approver
+    )
+    assert resp.status_code == 201, resp.text
+    proposal = resp.json()
+    after = (await get_spec(client, owner, request_id))["request"]
+    for key in ("source_version_id", "section_keys", "status"):
+        assert after[key] == before[key], key
+    # Cancelled, the proposal leaves the request as it was.
+    resp = await client.post(f"/v1/runs/{proposal['run_id']}/cancel", headers=approver)
+    assert resp.status_code == 200, resp.text
+    assert (await get_spec(client, owner, request_id))["request"]["source_version_id"] == (
+        before["source_version_id"]
+    )
+    # A run that imports moves the request to the PRD version it was built from.
+    resp = await client.post(
+        f"/v1/spec-requests/{request_id}/regenerate", json={"reason": "v2"}, headers=approver
+    )
+    assert resp.status_code == 201, resp.text
+    runtime.script["spec_draft"] = [
+        Outcome(artifacts={"spec.md": spec_md(), "design.json": design_json(world.reqs, SECTIONS)})
+    ]
+    await start(client, approver, resp.json()["run_id"])
+    await tick(client, owner)
+    spec = await get_spec(client, owner, request_id)
+    assert spec["latest_version"] == 2
+    assert spec["request"]["source_version_id"] != before["source_version_id"]
+    assert spec["versions"][1]["artifact_version"]["provenance"]["prd_version"] == 2
+    # Never back to an older approved version.
+    resp = await client.post(
+        f"/v1/spec-requests/{request_id}/regenerate", json={"prd_version": 1}, headers=approver
+    )
+    assert resp.status_code == 422, resp.text
+    assert "older" in resp.json()["detail"]
+
+
+async def test_record_design_does_not_record_the_same_design_twice(client, runtime):
+    from oracle.auth.deps import Principal  # noqa: F401
+    from oracle.specs import lineage
+    from oracle.specs.design import check_design
+    from oracle.v2.models import ArtifactRequest
+
+    world = await make_world(client)
+    created = await generated(client, runtime, world)
+    flow_request_id = created["spec"]["request"]["params"]["design_request_ids"]["user_flow"]
+    check = check_design(
+        design_json(world.reqs, SECTIONS),
+        prd_sections=set(SECTIONS) | {"s-1"},
+        requirement_ids=set(world.reqs),
+    )
+    assert check.flows
+    async with tenant_session(world.ctx.tenant_id) as s:
+        request = await s.get(ArtifactRequest, uuid.UUID(flow_request_id))
+        before = (
+            await s.scalars(select(ArtifactVersion).where(ArtifactVersion.request_id == request.id))
+        ).all()
+        assert len(before) == 1
+        av = await lineage.record_design(
+            s,
+            None,
+            request,
+            check.flows,
+            source_version_id=world.prd_v1,
+            provenance={"run_id": created["run_id"]},
+            prd_version_id=world.prd_v1,
+        )
+        await s.commit()
+        assert av.id == before[0].id
+        rows = (
+            await s.scalars(select(ArtifactVersion).where(ArtifactVersion.request_id == request.id))
+        ).all()
+        assert len(rows) == 1 and rows[0].status != "superseded"

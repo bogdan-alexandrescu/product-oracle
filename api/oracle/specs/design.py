@@ -259,6 +259,15 @@ def check_design(
                 )
         if not sanitized.safe:
             continue
+        # What is stored is what is served: escaping and Oracle's page can grow a file.
+        if len(sanitized.content.encode("utf-8")) > MAX_FILE_BYTES:
+            _err(
+                out,
+                "file_too_large",
+                f"{item.name} is over {MAX_FILE_BYTES} bytes once sanitised",
+                where,
+            )
+            continue
         checked = CheckedOutput(
             kind="user_flow" if ext == "svg" else "wireframe",
             name=item.name,
