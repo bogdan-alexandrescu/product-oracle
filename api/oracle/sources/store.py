@@ -2,11 +2,12 @@
 
 import hashlib
 import uuid
+from collections.abc import Callable
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle.sources.base import ItemDelete, ItemUpsert
+from oracle.sources.base import ItemDelete, ItemUpsert, StoredItem
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 
 
@@ -80,3 +81,25 @@ async def delete_item(db: AsyncSession, source: Source, event: ItemDelete) -> bo
     item.deleted_at = func.clock_timestamp()
     await db.flush()
     return True
+
+
+async def delete_out_of_scope(
+    db: AsyncSession, source: Source, in_scope: Callable[[StoredItem], bool]
+) -> int:
+    """Mark deleted every live item ``in_scope`` rejects; returns how many."""
+    rows = await db.scalars(
+        select(SourceItem).where(SourceItem.source_id == source.id, SourceItem.deleted_at.is_(None))
+    )
+    gone = 0
+    for item in rows.all():
+        stored = StoredItem(
+            external_id=item.external_id,
+            kind=item.kind,
+            occurred_at=item.occurred_at,
+            acl=dict(item.acl or {}),
+        )
+        if not in_scope(stored):
+            item.deleted_at = func.clock_timestamp()
+            gone += 1
+    await db.flush()
+    return gone

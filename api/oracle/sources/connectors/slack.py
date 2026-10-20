@@ -2,6 +2,8 @@
 
 credential ``{"token"}`` (a user or bot token); config ``{"channels": [channel ids],
 "since"?: "YYYY-MM-DD"}``. With ``since``, no message posted before that day (UTC) is read.
+Narrowing the config (a later ``since``, a removed channel) deletes the items now outside
+it on the next sync (:meth:`SlackConnector.in_scope`).
 
 Direct messages are never ingested (S3): ``D...`` ids and conversations Slack reports as
 ``is_im`` or ``is_mpim`` are refused by ``validate`` and again by ``sync``.
@@ -38,6 +40,7 @@ from oracle.sources.base import (
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemUpsert,
+    StoredItem,
     SyncEvent,
     register,
 )
@@ -265,6 +268,15 @@ class SlackConnector:
             return
         async with httpx.AsyncClient(timeout=30) as client:
             yield _Slack(client, token)
+
+    def in_scope(self, config: dict[str, Any], item: StoredItem) -> bool:
+        """Still selected: in an allowlisted channel and, for a thread, started on or
+        after ``since`` (its replies may come later)."""
+        channel, _, ts = item.external_id.partition(":")
+        if channel not in _channels(config):
+            return False
+        since = _since(config)
+        return since is None or not ts or float(ts) >= since
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         channels = _channels(config)

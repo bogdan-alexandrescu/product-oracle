@@ -73,8 +73,16 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         return await _fail(db, source, stats, "The connection was removed: pick another one")
 
     cursor = dict(source.cursor) if source.cursor else None
+    config = dict(source.config)
+    in_scope = getattr(connector, "in_scope", None)
     try:
-        async for event in connector.sync(dict(source.config), credential, cursor):
+        if cursor is None and in_scope is not None:
+            # The first sync after a config change: drop what the selection no longer
+            # covers. Committed with the first checkpoint, so a failed sync retries it.
+            stats.deleted += await store.delete_out_of_scope(
+                db, source, lambda item: in_scope(config, item)
+            )
+        async for event in connector.sync(config, credential, cursor):
             if isinstance(event, base.ItemUpsert):
                 _, written = await store.upsert_item(db, source, event)
                 stats.upserted += 1

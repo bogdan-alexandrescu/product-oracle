@@ -10,7 +10,8 @@ import { BrowseList, listOf, type BrowsePage, type PickerProps } from "./_browse
 
 /**
  * Slack source picker (S5): public channels and the private ones you are in, never DMs;
- * writes `{channels, since}`. `since` (a day) keeps older messages out.
+ * writes `{channels, since}`. Only messages from `since` (a day, UTC) on are read; moving
+ * it later deletes the older ones already pulled in, on the next sync.
  */
 export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
   const sinceId = useId();

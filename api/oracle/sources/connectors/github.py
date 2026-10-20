@@ -11,6 +11,9 @@ The cursor keeps one entry per repo (keyed by the lowercased ``owner/name``):
   files are not fetched and removed ones are deleted;
 - ``issues_since``: the ``updated_at`` of the newest issue or pull request seen;
 - ``releases`` / ``milestones``: the ids seen, so removed ones are deleted.
+
+A config change resets the cursor; the next sync first deletes the items of repos and
+kinds no longer selected (:meth:`GithubConnector.in_scope`).
 """
 
 import base64
@@ -35,6 +38,7 @@ from oracle.sources.base import (
     CursorCheckpoint,
     ItemDelete,
     ItemUpsert,
+    StoredItem,
     SyncEvent,
     register,
 )
@@ -56,6 +60,15 @@ MAX_FILE_BYTES = 1_000_000
 _REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*)/[A-Za-z0-9._-]+$")
 _README_RE = re.compile(r"^readme(\.[A-Za-z0-9]+)?$", re.IGNORECASE)
 _DOC_RE = re.compile(r"^docs/.+\.(md|markdown)$", re.IGNORECASE)
+# Item kind -> the ``include`` entry that brings it in.
+_KIND_INCLUDE = {
+    "readme": "readme",
+    "doc": "docs",
+    "issue": "issues",
+    "pull_request": "pull_requests",
+    "release": "releases",
+    "milestone": "milestones",
+}
 
 
 def _token(credential: dict[str, Any] | None) -> str:
@@ -321,6 +334,13 @@ class GithubConnector:
         if resp.status_code == 404:
             raise ConnectorConfigError(f"{repo} was not found or is not readable with this token")
         return _Repo.from_api(repo.lower(), resp.json())
+
+    def in_scope(self, config: dict[str, Any], item: StoredItem) -> bool:
+        """Still selected: from an allowlisted repo, of a kind still included."""
+        repos, include = _parse_config(config)
+        repo = item.external_id.split(":", 1)[0]
+        wanted = _KIND_INCLUDE.get(item.kind)
+        return repo in {r.lower() for r in repos} and (wanted is None or wanted in include)
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         repos, _ = _parse_config(config)

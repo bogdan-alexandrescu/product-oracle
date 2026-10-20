@@ -175,7 +175,7 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
           htmlFor={id}
           tip={
             <InfoTip label="saving the allowlist" align="start">
-              Saving a new allowlist syncs this source again from the start.
+              Saving a new allowlist syncs this source again from the start. What it no longer covers (a removed channel or repo, messages outside a narrower date range) is deleted on that sync.
             </InfoTip>
           }
         >
@@ -196,7 +196,7 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
         </Button>
         {Picker && (
           <InfoTip label="saving the allowlist" align="start">
-            Saving a new allowlist syncs this source again from the start.
+            Saving a new allowlist syncs this source again from the start. What it no longer covers (a removed channel or repo, messages outside a narrower date range) is deleted on that sync.
           </InfoTip>
         )}
       </div>

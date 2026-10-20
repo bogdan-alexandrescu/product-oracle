@@ -10,6 +10,11 @@ A connector is stateless and does no database work. The sync engine
 - :class:`CursorCheckpoint` is a resumable position: everything yielded before it is
   stored, then the cursor is saved, so an interrupted sync resumes from there.
 
+A connector may also define ``in_scope(config, item: StoredItem) -> bool``. On the first
+sync after the config changed (the cursor is reset then), the engine deletes the stored
+items it answers ``False`` for: narrowing a source (a later start date, a removed
+channel or repo) removes what now falls outside it (S5, owner 2026-10-19).
+
 Connectors never yield direct messages (S3 Visibility); ``acl`` records who can see an
 item in the source.
 
@@ -88,6 +93,16 @@ class CursorCheckpoint:
 
 
 SyncEvent = ItemUpsert | ItemDelete | CursorCheckpoint
+
+
+@dataclass(frozen=True)
+class StoredItem:
+    """What ``in_scope`` is shown of an item already pulled in."""
+
+    external_id: str
+    kind: str
+    occurred_at: datetime | None
+    acl: dict[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable
