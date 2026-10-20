@@ -135,7 +135,7 @@ test("sections: the inspector shows the open section's comments first; All shows
   await page.getByTestId("inspector-scope").filter({ visible: true }).getByRole("button", { name: "This section" }).click();
   const feedback = page.getByTestId("feedback-item").filter({ visible: true });
   await expect(feedback.first()).toBeVisible();
-  for (const item of await feedback.all()) await expect(item).toContainText("#roles");
+  for (const item of await feedback.all()) await expect(item).toContainText("§roles");
 });
 
 test("sections: on a phone, one section per screen, Comments one tap away, no sideways scroll", async ({ page }) => {

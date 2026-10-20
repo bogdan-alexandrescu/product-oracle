@@ -8,20 +8,20 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
-import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
-import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeTrace } from "./trace";
-import { routeV2, seedV2, type V2Db } from "./v2";
+import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
@@ -70,6 +70,15 @@ export interface Db {
 const STORAGE_KEY = "po-mock-db-v2";
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
+/**
+ * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
+ * new company (members only, no goals, documents, runs or questions); "large" as a big one
+ * (30 goals, 50 more active runs, questions asked of the signed-in member); "suggestions" as the
+ * default company plus a PRD with three open Oracle suggestions (fleet-next).
+ */
+export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+/** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
+export const MOCK_FAIL_KEY = "po-mock-fail";
 const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
 
 /** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
@@ -131,6 +140,127 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
       retrieved_at: c.retrieved_at,
     })),
   };
+}
+
+/** A new company: the members and their invites, nothing else yet. */
+function seedEmpty(): Db {
+  const db: Db = {
+    session: null,
+    tenant_id: uuid(),
+    user_id: uuid(),
+    members: [],
+    invites: [],
+    documents: [],
+    versions: [],
+    comments: [],
+    reviews: [],
+    feedback: [],
+    baseline: { entities: [], edges: [], evidence: [], conflicts: [], proposals: [], revisions: [] },
+    runs: { runs: [], artifacts: {} },
+    v2: emptyV2(),
+  };
+  db.members = MOCK_MEMBERS.map((m) => ({ ...m, id: m.email === MOCK_LOGIN.email ? db.user_id : uuid() }));
+  return db;
+}
+
+/** A big company: Home must stay within a fixed number of calls however much there is. */
+function seedLarge(): Db {
+  const db = seed();
+  enlargeBaseline(db.baseline, uuid, 27);
+  db.runs = seeded("runs", () => seedRuns(runsContext(db)));
+  enlargeRuns(db.runs, uuid, 50);
+  const v2 = ensureV2(db);
+  const model = v2.questions[0];
+  for (let i = 1; i <= 4; i++) {
+    const at = new Date(Date.parse(model.created_at) + i * 60_000).toISOString();
+    v2.questions.push({ ...model, id: uuid(), prompt: `Which clinics open first in region ${i}?`, priority: 10 + i, created_at: at, updated_at: at });
+  }
+  // Asked of someone else: not the signed-in member's to answer.
+  const other = db.members.find((m) => m.id !== db.user_id)!;
+  v2.questions.push({ ...model, id: uuid(), prompt: "Who owns the pricing page?", asked_to: other.id, created_at: model.created_at, updated_at: model.created_at });
+  return db;
+}
+
+/**
+ * The default company plus a PRD whose open feedback is three Oracle change requests on
+ * feature sections (none on the first section) and one item already addressed: what the
+ * Inbox's feedback row leads to.
+ */
+function seedSuggestions(): Db {
+  const db = seed();
+  const doc: DocumentRow = {
+    id: uuid(),
+    slug: FLEET_DOC.slug,
+    title: FLEET_DOC.title,
+    status: "in_review",
+    kind: "prd",
+    template: FLEET_DOC.template ?? null,
+    template_version: FLEET_DOC.template_version ?? null,
+    theme: null,
+    created_at: FLEET_DOC.versions[0].created_at,
+    updated_at: FLEET_DOC.versions.at(-1)!.created_at,
+  };
+  db.documents.push(doc);
+  for (const v of FLEET_DOC.versions) db.versions.push(buildVersion(doc, v));
+  const v1 = findVersion(db, doc, 1)!;
+  const v2 = findVersion(db, doc, 2)!;
+  addComment(db, v1, {
+    section_key: "problem",
+    anchor: { exact: "so many are out when the driver comes", prefix: "arrive, ", suffix: "." },
+    body: "How many first attempts fail today? Put the number in.",
+  }, { created_at: "2026-10-17T11:00:00Z" });
+  Object.assign(db.feedback.at(-1)!, {
+    status: "addressed",
+    addressed_in_version: 2,
+    resolution_note: "Added the failed first-attempt rate.",
+    updated_at: "2026-10-19T09:00:00Z",
+  });
+  const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
+  FLEET_SUGGESTIONS.forEach((x, i) => {
+    const created_at = `2026-10-19T10:0${i}:00Z`;
+    const f: FeedbackRow = {
+      id: uuid(),
+      document_id: doc.id,
+      raised_on_version: 2,
+      kind: "general",
+      comment_id: null,
+      section_review_id: null,
+      section_key: x.key,
+      summary: x.summary,
+      anchor: null,
+      verdict: null,
+      status: "open",
+      addressed_in_version: null,
+      resolution_note: null,
+      created_at,
+      updated_at: created_at,
+    };
+    db.feedback.push(f);
+    llm.suggestions.push({
+      id: uuid(),
+      document_id: doc.id,
+      feedback_item_id: f.id,
+      job_id: null,
+      version_number: v2.number,
+      classification: "change_request",
+      group_key: null,
+      duplicate_of: null,
+      kind: "section_text",
+      section_key: x.key,
+      text: x.text,
+      edited_text: null,
+      rationale: x.rationale,
+      pushback: null,
+      status: "open",
+      override_reason: null,
+      decided_by: null,
+      decided_at: null,
+      applied_in_version: null,
+      created_at,
+      updated_at: created_at,
+    });
+  });
+  return db;
 }
 
 function seed(): Db {
@@ -344,6 +474,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     userId: db.user_id,
     feedback: db.feedback,
     documents: db.documents,
+    suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     latestVersion: (id) => {
       const doc = db.documents.find((d) => d.id === id);
       const vs = doc ? docVersions(db, doc) : [];
@@ -427,7 +558,11 @@ function load(): Db {
       // fall through to a fresh seed
     }
   }
-  const db = seeded("db", seed);
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  const db = seeded(
+    "db",
+    scenario === "empty" ? seedEmpty : scenario === "large" ? seedLarge : scenario === "suggestions" ? seedSuggestions : seed,
+  );
   save(db);
   return db;
 }
@@ -806,12 +941,39 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   return notFound("Route");
 }
 
+/**
+ * The PRDs in review trace to the baseline: their goal-trace and scope sections link the
+ * goals and features they serve, so Home and the trace show goal tags.
+ */
+function goalLinks(db: Db): V2Db["section_links"] {
+  const out: V2Db["section_links"] = [];
+  const link = (slug: string, section: string, entityKey: string) => {
+    const doc = findDocument(db, slug);
+    const v = doc && docVersions(db, doc).at(-1);
+    const e = db.baseline.entities.find((x) => x.key === entityKey);
+    if (!doc || !v || !e || !v.sections.some((s) => s.section_key === section)) return;
+    out.push({
+      id: uuid(), document_id: doc.id, version_id: v.id, section_key: section, section_hash: null, composition_revision: null,
+      module_key: null, kind: "implements", entity_id: e.id, evidence_id: null, source_item_id: null, precision: "section",
+      claim: null, created_by: null, created_at: v.created_at,
+    });
+  };
+  link("checkout-redesign", "goal-trace", "g.activation");
+  link("checkout-redesign", "goal-trace", "g.paid-conversion");
+  link("team-workspaces", "scope", "f.team-invites");
+  return out;
+}
+
 /** The v2 rows, seeded on first use against the first mock PRD. */
 function ensureV2(db: Db): V2Db {
   if (!db.v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
     const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
-    db.v2 = seeded("v2", () => seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id));
+    db.v2 = seeded("v2", () => {
+      const v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
+      v2.section_links.push(...goalLinks(db));
+      return v2;
+    });
   }
   return db.v2;
 }
@@ -875,6 +1037,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         documents: db.documents,
         versions: db.versions,
         entities: db.baseline.entities,
+        edges: db.baseline.edges,
         userId: me.id,
         role: me.role,
         now,
@@ -986,7 +1149,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "feedback" && p[2] && m === "PATCH") {
     const f = db.feedback.find((x) => x.id === p[2]);
     if (!f) return notFound("Feedback item");
-    Object.assign(f, await body<Schemas["FeedbackPatch"]>(), { updated_at: now() });
+    const patch = await body<Schemas["FeedbackPatch"]>();
+    // As the API: reopening clears the version it was addressed in, unless one is given.
+    if (patch.status === "open" && !("addressed_in_version" in patch)) patch.addressed_in_version = null;
+    Object.assign(f, patch, { updated_at: now() });
     return json(200, f);
   }
 
@@ -996,7 +1162,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents };
   const blockers = await routeBlockers(blockerContext, ensureBlockers(db), req, p, q);
   if (blockers) return blockers;
-  const v2 = routeV2(v2Db, req, p, q);
+  const v2 = routeV2(v2Db, req, p, q, me.id);
   if (v2) return v2;
 
   const handled = await laneF(db, req, p, m);
@@ -1038,7 +1204,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       .filter((f) => f.document_id === doc.id)
       .filter((f) => !status || f.status === status)
       .filter((f) => !version || f.raised_on_version === Number(version))
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      // As the API: by the version raised on, then age.
+      .sort((a, b) => a.raised_on_version - b.raised_on_version || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
       .map((f) => withSuggestion(db.llm, f));
     return json(200, items);
   }
@@ -1172,7 +1339,14 @@ async function route(db: Db, req: Request): Promise<Response> {
 let queue: Promise<unknown> = Promise.resolve();
 
 export async function mockFetch(req: Request): Promise<Response> {
+  // Every call, in order: tests count them (Home's call budget).
+  const url = new URL(req.url);
+  const log = ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ??= []);
+  log.push(`${req.method} ${url.pathname}${url.search}`);
   await new Promise((r) => setTimeout(r, LATENCY_MS));
+  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_FAIL_KEY)) {
+    return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
+  }
   const next = queue.then(async () => {
     const db = load();
     const res = await route(db, req);

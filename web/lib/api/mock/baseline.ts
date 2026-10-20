@@ -24,6 +24,8 @@ export interface BaselineState {
   evidence: EvidenceRow[];
   conflicts: ConflictRow[];
   proposals: ProposalRow[];
+  /** Goal revisions as GET .../revisions serves them: each month's `current`; absent in older saved data. */
+  revisions?: Schemas["RevisionOut"][];
 }
 
 export type BaselineCaller = { userId: string; role: Role };
@@ -68,7 +70,7 @@ export function scored(f: Factors, latestAt: string) {
 }
 
 export function seedBaseline(uuid: () => string): BaselineState {
-  const s: BaselineState = { entities: [], edges: [], evidence: [], conflicts: [], proposals: [] };
+  const s: BaselineState = { entities: [], edges: [], evidence: [], conflicts: [], proposals: [], revisions: [] };
   const t0 = "2026-10-12T09:00:00Z";
 
   const entity = (
@@ -153,20 +155,41 @@ export function seedBaseline(uuid: () => string): BaselineState {
   // Goals: two confirmed, one still proposed (and served by nothing yet).
   const activation = entity("goal", "g.activation", "Raise activation", {
     body: "More new accounts reach their first successful order in the first week.",
-    attrs: { weight: 0.5, metric: "Accounts that finish setup within 7 days", target: "45%", horizon: "2026-Q4" },
+    attrs: { weight: 0.5, metric: "Accounts that finish setup within 7 days", target: "45%", horizon: "2026-Q4", current: "38%" },
     confidence: 0.78,
   });
   const paid = entity("goal", "g.paid-conversion", "Grow paid conversion", {
     body: "More trial accounts move to a paid plan.",
-    attrs: { weight: 0.3, metric: "Trial to paid rate", target: "12%", horizon: "2027-H1" },
+    attrs: { weight: 0.3, metric: "Trial to paid rate", target: "12%", horizon: "2027-H1", current: "9.4%" },
     confidence: 0.66,
   });
-  entity("goal", "g.early-churn", "Cut early churn", {
+  const churn = entity("goal", "g.early-churn", "Cut early churn", {
     body: "Fewer accounts leave in their first three months.",
-    attrs: { weight: 0.2, metric: "Accounts lost in the first 90 days", target: "below 8%", horizon: "2027-H1" },
+    attrs: { weight: 0.2, metric: "Accounts lost in the first 90 days", target: "below 8%", horizon: "2027-H1", current: "11%" },
     status: "proposed",
     confidence: 0.45,
   });
+  // Each goal's metric, read monthly: the revisions that set `current`, as the API records them.
+  const history = (goal: EntityRow, values: string[]) => {
+    values.forEach((current, i) => {
+      const at = new Date(Date.UTC(2026, 10 - values.length + i, 12, 9)).toISOString();
+      const attrs = { ...goal.attrs, current };
+      const before = i === 0 ? null : { type: goal.type, key: goal.key, title: goal.title, body: goal.body, attrs: { ...goal.attrs, current: values[i - 1] }, status: goal.status };
+      s.revisions!.push({
+        id: uuid(),
+        entity_id: goal.id,
+        edge_id: null,
+        before,
+        after: { type: goal.type, key: goal.key, title: goal.title, body: goal.body, attrs, status: goal.status },
+        actor: "import",
+        reason: "Monthly metric import",
+        created_at: at,
+      });
+    });
+  };
+  history(activation, ["31%", "33%", "32%", "35%", "34%", "36%", "38%"]);
+  history(paid, ["11.2%", "10.8%", "10.5%", "10.1%", "9.9%", "9.6%", "9.4%"]);
+  history(churn, ["12%", "11%"]);
 
   // Products.
   const storefront = entity("product", "p.storefront", "Storefront", { body: "The shop builder new accounts start with." });
@@ -634,7 +657,14 @@ export async function routeBaseline(
         Object.assign(e, { locked: false, locked_by: null, locked_at: null });
         return json(200, entityOut(e));
       }
-      if (action === "revisions" && m === "GET") return json(200, []);
+      if (action === "revisions" && m === "GET") {
+        // Newest first, as the API lists them.
+        const mine = (s.revisions ?? []).filter((r) => r.entity_id === e.id);
+        const limit = q.get("limit");
+        if (limit != null && !(Number(limit) >= 1 && Number(limit) <= 500)) return fail(422, "limit");
+        const newest = [...mine].sort((a, b) => b.created_at.localeCompare(a.created_at));
+        return json(200, limit == null ? newest : newest.slice(0, Number(limit)));
+      }
     }
 
     if (head === "proposals" && !id && m === "GET") {
@@ -709,4 +739,32 @@ export async function routeBaseline(
     throw e;
   }
   return json(501, { detail: "This baseline route is not available in mock mode" });
+}
+
+/**
+ * The large-company scenario (po-mock-scenario=large): `extra` more goals after the seeded
+ * ones, each with a current value and three monthly revisions, so Home is measured against
+ * a company with many goals.
+ */
+export function enlargeBaseline(s: BaselineState, uuid: () => string, extra: number) {
+  const model = s.entities.find((e) => e.type === "goal")!;
+  for (let i = 1; i <= extra; i++) {
+    const values = [100 + i, 110 + i, 120 + i].map(String);
+    const attrs = { weight: 0.1 - i / 1000, metric: `Clinics live in region ${i}`, target: `${200 + i * 10} clinics`, current: values[2] };
+    const goal: EntityRow = { ...model, id: uuid(), key: `g.region-${i}`, title: `Region ${String(i).padStart(2, "0")} clinics`, attrs, status: "confirmed" };
+    s.entities.push(goal);
+    values.forEach((current, n) => {
+      const after = { type: goal.type, key: goal.key, title: goal.title, body: goal.body, attrs: { ...attrs, current }, status: goal.status };
+      s.revisions!.push({
+        id: uuid(),
+        entity_id: goal.id,
+        edge_id: null,
+        before: null,
+        after,
+        actor: "import",
+        reason: "Monthly metric import",
+        created_at: new Date(Date.UTC(2026, 7 + n, 12, 9)).toISOString(),
+      });
+    });
+  }
 }

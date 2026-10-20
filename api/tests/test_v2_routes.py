@@ -160,3 +160,58 @@ async def test_legacy_documents_and_templates_load_as_before(client):
             "/v1/template-module-assignments", params={"template_id": t["id"]}, headers=owner
         )
         assert resp.json() == []
+
+
+async def test_questions_asked_of_me_are_never_cut_off(client):
+    """GET /v1/questions?asked_to=me: the Inbox's Questions group and the rail badge (I3)."""
+    from datetime import UTC, datetime, timedelta
+
+    from oracle.tenancy import tenant_session
+    from oracle.v2 import models as m
+
+    ctx = await make_ctx()
+    seeded = await seed_v2(ctx.tenant_id)
+    viewer, owner = ctx.users["viewer"], ctx.users["owner"]
+    old = datetime(2026, 1, 1, tzinfo=UTC)
+    async with tenant_session(ctx.tenant_id) as s:
+        mine = m.StakeholderQuestion(
+            intake_id=seeded.ids["product_intakes"], category="success_metric",
+            prompt="Which metric?", status="asked", asked_to=viewer.id, created_at=old,
+        )  # fmt: skip
+        s.add(mine)
+        # 100 newer questions asked of someone else fill the default page.
+        s.add_all(
+            m.StakeholderQuestion(
+                intake_id=seeded.ids["product_intakes"],
+                category="success_metric",
+                prompt=f"Question {i}",
+                status="asked",
+                asked_to=owner.id,
+                created_at=old + timedelta(days=1, minutes=i),
+            )  # fmt: skip
+            for i in range(100)
+        )
+        await s.commit()
+        mine_id = str(mine.id)
+
+    listed = (await client.get("/v1/questions", headers=ctx.as_("viewer"))).json()
+    assert len(listed) == 100 and mine_id not in {q["id"] for q in listed}
+
+    resp = await client.get(
+        "/v1/questions", params={"asked_to": "me", "status": "asked"}, headers=ctx.as_("viewer")
+    )
+    assert resp.status_code == 200, resp.text
+    assert [q["id"] for q in resp.json()] == [mine_id]
+    theirs = (
+        await client.get("/v1/questions", params={"asked_to": "me"}, headers=ctx.as_("owner"))
+    ).json()
+    assert len(theirs) == 100 and {q["asked_to"] for q in theirs} == {str(owner.id)}
+    # An API token acts for no person: nothing is asked of it, never the unassigned ones.
+    token = await client.get("/v1/questions", params={"asked_to": "me"}, headers=ctx.as_("token"))
+    assert token.status_code == 200 and token.json() == []
+    # Only "me": another person's id is not a filter this route takes.
+    bad = await client.get(
+        "/v1/questions", params={"asked_to": str(owner.id)}, headers=ctx.as_("viewer")
+    )
+    assert bad.status_code == 422
+    assert (await client.get("/v1/questions", params={"asked_to": "me"})).status_code == 401
