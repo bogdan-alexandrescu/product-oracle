@@ -648,6 +648,66 @@ async def test_feedback_loop_imports_the_next_version(client, owner, runtime):
     assert run["status"] == "succeeded"
 
 
+async def test_inbox_feedback_says_what_waits_and_where_the_first_item_is(client, owner):
+    from datetime import UTC, datetime, timedelta
+
+    from oracle.jobs.models import LlmSuggestion
+
+    tenant_id, auth = owner
+    assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
+    t0 = datetime(2026, 10, 19, 9, 0, tzinfo=UTC)
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document))
+
+        def item(key, minutes, kind="general", status="open"):
+            f = FeedbackItem(
+                document_id=doc.id,
+                raised_on_version=1,
+                kind=kind,
+                section_key=key,
+                summary=f"About {key}",
+                status=status,
+                created_at=t0 + timedelta(minutes=minutes),
+            )
+            s.add(f)
+            return f
+
+        later, first, third = item("metrics", 5), item("problem", 1), item("goal", 9)
+        accepted = item("solution", 12)
+        item("solution", 14, kind="comment")
+        item(None, 0)  # open, no section: counted, never the first link
+        item("problem", -5, status="addressed")  # closed: not in the inbox
+        await s.flush()
+        decided = [(later, "open"), (first, "open"), (third, "open"), (accepted, "accepted")]
+        for f, status in decided:
+            s.add(
+                LlmSuggestion(
+                    document_id=doc.id,
+                    feedback_item_id=f.id,
+                    version_number=1,
+                    classification="change_request",
+                    kind="section_text",
+                    section_key=f.section_key,
+                    text="New text",
+                    status=status,
+                )
+            )
+        await s.commit()
+
+    inbox = (await client.get("/v1/inbox", headers=auth)).json()
+    row = inbox["feedback"][0]
+    # C1e: the accepted section-text suggestion is staged for the next draft, so its item
+    # is not open feedback; it is in the document's staged row instead.
+    assert row["open_count"] == 5
+    counts = {"suggestions": 3, "accepted": 0, "comments": 1, "verdicts": 0, "other": 1}
+    assert row["counts"] == counts
+    assert row["first_section_key"] == "problem"
+    by_key = {(i["section_key"], i["kind"]): i for i in row["items"]}
+    assert by_key[("metrics", "general")]["suggestion_status"] == "open"
+    assert by_key[("solution", "comment")]["suggestion_status"] is None
+    assert [r["count"] for r in inbox["staged"]] == [1]
+
+
 async def test_a_rejected_draft_waits_at_review_and_reruns(client, owner, runtime):
     tenant_id, auth = owner
     runtime.script["prd_draft"] = [Outcome(artifacts={"prd.md": BAD_PRD})]

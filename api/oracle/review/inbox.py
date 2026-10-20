@@ -116,6 +116,7 @@ async def feedback_states(
             InboxFeedbackItem(
                 id=f.id,
                 summary=f.summary,
+                kind=f.kind,  # type: ignore[arg-type]
                 section_key=f.section_key,
                 raised_on_version=f.raised_on_version,
                 created_at=f.created_at,
@@ -130,7 +131,7 @@ async def feedback_states(
                 staged_for_version=(latest.get(f.document_id) or 0) + 1
                 if state == "staged"
                 else None,
-                suggestion_status=s.status if s else None,
+                suggestion_status=s.status if s else None,  # type: ignore[arg-type]
                 suggestion_kind=s.kind if s else None,
             )
         )

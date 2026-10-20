@@ -640,3 +640,106 @@ export const MOCK_MEMBERS = [
 ] as const;
 
 export const MOCK_INVITES = [{ email: "new.hire@example.com", role: "commenter", created_at: "2026-10-15T09:00:00Z" }] as const;
+
+/*
+ * The "suggestions" scenario (MOCK_SCENARIO_KEY): a PRD whose open feedback is three Oracle
+ * change requests on feature sections further down, none on the first section, plus one
+ * item already addressed. The Inbox's feedback row leads here.
+ */
+const FLEET_FEATURES: [string, string, string][] = [
+  ["f-31", "F-31 Route planner", "Dispatchers plan a day of stops on one map and drag stops between drivers."],
+  ["f-32", "F-32 Live arrival times", "Each customer sees a live arrival window that moves with the driver."],
+  ["f-33", "F-33 Proof of delivery", "Drivers take a photo and a signature at the door; both attach to the order."],
+  ["f-34", "F-34 Failed delivery flow", "A driver marks a stop as failed with a reason; the customer picks a new slot."],
+  ["f-35", "F-35 Driver shift summary", "At the end of a shift each driver sees stops done, distance and time on the road."],
+  ["f-36", "F-36 Depot handover", "Returned parcels are scanned back in at the depot and leave the driver's list."],
+];
+
+const fleetSections = (problem: string): SectionSeed[] => [
+  {
+    key: "summary",
+    level: 2,
+    heading: "Summary",
+    body: "The next version of the delivery app for small fleets: plan routes, keep customers informed, close every stop with proof.",
+  },
+  { key: "problem", level: 2, heading: "Problem", body: problem },
+  { key: "features", level: 2, heading: "Features", body: "Six features, in delivery order." },
+  ...FLEET_FEATURES.map(([key, heading, body]) => ({ key, level: 3, heading, body })),
+  {
+    key: "metrics",
+    level: 2,
+    heading: "Metrics",
+    body: "- First-attempt delivery rate up from 88% to 94%.\n- Support contacts per 100 deliveries down by a third.",
+  },
+];
+
+export const FLEET_DOC: DocumentSeed = {
+  slug: "fleet-next",
+  title: "Fleet next version — PRD",
+  template: "oracle-default",
+  template_version: "1",
+  versions: [
+    {
+      number: 1,
+      created_at: "2026-10-17T09:00:00Z",
+      sections: fleetSections("Customers do not know when a parcel will arrive, so many are out when the driver comes."),
+      citations: [],
+    },
+    {
+      number: 2,
+      created_at: "2026-10-19T09:00:00Z",
+      sections: fleetSections(
+        "Customers do not know when a parcel will arrive, so many are out when the driver comes: 12% of first attempts fail today.",
+      ),
+      citations: [],
+    },
+  ],
+};
+
+/** Oracle's proposed text for the three open change requests: long on purpose, as in real drafts. */
+export const FLEET_SUGGESTIONS: { key: string; summary: string; rationale: string; text: string }[] = [
+  {
+    key: "f-33",
+    summary: "Say what happens when the customer is not home and nobody can sign.",
+    rationale: "Proof of delivery has no path for a safe-place drop; two reviewers asked for one.",
+    text: [
+      "Drivers take a photo and a signature at the door; both attach to the order and show in the customer's tracking page within a minute.",
+      "",
+      "When nobody answers, the driver may leave the parcel in a safe place the customer named at checkout (porch, side gate, neighbour). The app asks for a photo that shows the parcel and the door number, and records the GPS position. A signature is not asked for.",
+      "",
+      "When the customer named no safe place, the parcel is not left: the stop goes to the failed delivery flow (F-34).",
+      "",
+      "Orders flagged as age-restricted or high value never use a safe place; the app hides the option.",
+      "",
+      "Dispatchers see every safe-place drop in the day's list with its photo, so a complaint can be checked in seconds.",
+    ].join("\n"),
+  },
+  {
+    key: "f-34",
+    summary: "Limit how many times a customer can move a failed delivery.",
+    rationale: "Without a limit, one order can bounce between slots for a week; ops asked for a cap.",
+    text: [
+      "A driver marks a stop as failed with one of five reasons: nobody home, wrong address, refused, access problem, damaged.",
+      "",
+      "The customer gets a message within five minutes with a link to pick a new slot in the next three days. The first new slot is free; a second one is offered once more; after that the parcel goes back to the depot and the customer collects it there.",
+      "",
+      "Wrong address and refused skip the new slot and go straight to customer support, who call within one working day.",
+      "",
+      "Each failed attempt is counted against the first-attempt delivery rate, so the metric matches what customers see.",
+    ].join("\n"),
+  },
+  {
+    key: "f-36",
+    summary: "Depot handover needs a count check before the driver leaves.",
+    rationale: "Scans alone miss parcels that never left the van; a count at handover catches them.",
+    text: [
+      "Returned parcels are scanned back in at the depot and leave the driver's list.",
+      "",
+      "Before the driver can end the shift, the app shows how many parcels should come back and how many were scanned. A mismatch blocks the end of the shift until a depot lead confirms it with a note.",
+      "",
+      "Parcels scanned at the depot go back into the next day's planning pool, at the top of the list, so they leave first the next morning.",
+      "",
+      "The depot lead sees open mismatches on the dashboard until each one is closed.",
+    ].join("\n"),
+  },
+];

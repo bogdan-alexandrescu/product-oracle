@@ -16,6 +16,10 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   const feedback = page.getByTestId("inbox-tab-new");
   await expect(feedback).toContainText("Checkout redesign PRD");
   await expect(feedback).toContainText("Should the most recently used address be selected by default?");
+  // And each document's open feedback, with what waits, in Needs you.
+  const open = page.getByTestId("inbox-feedback");
+  await expect(open).toContainText("Checkout redesign PRD");
+  await expect(open).toContainText("1 comment to resolve");
 
   // Approve the cost from the inbox: the run starts and leaves the list.
   await page.getByTestId("inbox-approvals").getByRole("button", { name: "Approve $53.00" }).click();

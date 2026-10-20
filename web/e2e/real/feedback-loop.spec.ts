@@ -82,6 +82,19 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   // Error notices are <p role="alert">; Next's route announcer is the only other alert.
   await expect(page.locator("main p[role=alert], [data-testid^=home] p[role=alert]")).toHaveCount(0);
 
+  // The Inbox row says what waits and opens the review panel on the open items, at the first.
+  await page.goto("/inbox");
+  const row = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Team invoices PRD" });
+  await expect(row).toContainText("1 comment to resolve · 1 section verdict to address");
+  await row.getByRole("link", { name: "Review feedback Team invoices PRD" }).click();
+  await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/v/1\\?feedback=open#solution$`));
+  const review = page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
+  await expect(review.getByRole("tab", { name: /^Feedback\s*2$/ })).toHaveAttribute("aria-selected", "true");
+  await expect(review.getByLabel("Filter by status")).toHaveValue("open");
+  const open = review.getByTestId("feedback-item");
+  await expect(open).toHaveCount(2);
+  await expect(open.first().getByRole("button", { name: "Resolve", exact: true })).toBeInViewport();
+
   // v2 answers both items.
   const byKind = (kind: string) => items.find((i) => i.kind === kind)!.id;
   const v2 = (await readFile(path.join(FIXTURES, "draft_v2.md"), "utf8"))

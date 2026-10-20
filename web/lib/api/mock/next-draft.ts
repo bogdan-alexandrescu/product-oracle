@@ -368,6 +368,7 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
     items.push({
       id: f.id,
       summary: f.summary,
+      kind: f.kind,
       section_key: f.section_key ?? null,
       raised_on_version: f.raised_on_version,
       created_at: f.created_at,

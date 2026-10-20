@@ -90,12 +90,10 @@ function Needs({
   busy: string | null;
   act: Act;
 }) {
-  // Feedback has its own panel by state (FeedbackStates); this one holds the rest.
-  const { checkpoints, approvals, overruns } = inboxNeeds(inbox, busy, act);
+  // Feedback by state has its own panel (FeedbackStates); here, each document's open feedback.
+  const { checkpoints, approvals, overruns, feedback } = inboxNeeds(inbox, busy, act);
   const asked = questionNeeds(questions, docs);
-  const total = checkpoints.length + approvals.length + overruns.length + asked.length;
-  // Only feedback waits: its panel says so; no "Nothing waiting" beside it.
-  if (total === 0 && !questionsError && (inbox.needs_me ?? 0) > 0) return null;
+  const total = checkpoints.length + approvals.length + overruns.length + feedback.length + asked.length;
 
   return (
     <Panel
@@ -106,6 +104,7 @@ function Needs({
           <>
             {checkpoints.length > 0 && <CountChip label="Checkpoints" n={checkpoints.length} />}
             {approvals.length + overruns.length > 0 && <CountChip label="Cost" n={approvals.length + overruns.length} />}
+            {feedback.length > 0 && <CountChip label="Feedback" n={feedback.length} />}
             {asked.length > 0 && <CountChip label="Questions" n={asked.length} />}
           </>
         )
@@ -131,6 +130,7 @@ function Needs({
           <NeedTable title="Checkpoints" testId="inbox-checkpoints" rows={checkpoints} />
           <NeedTable title="Cost approvals" testId="inbox-approvals" rows={approvals} />
           <NeedTable title="Paused on overrun" testId="inbox-overruns" rows={overruns} />
+          <NeedTable title="Open feedback" testId="inbox-feedback" rows={feedback} />
           <NeedTable title="Questions" testId="inbox-questions" rows={asked} />
         </>
       )}

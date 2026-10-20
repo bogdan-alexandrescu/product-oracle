@@ -43,7 +43,7 @@ test("accepting a suggestion stages it for the next draft", async ({ page }) => 
   const open = item(page, "outbound check works");
   await expect(open.getByTestId("feedback-state")).toHaveText("Open");
 
-  await open.getByRole("button", { name: "Accept" }).click();
+  await open.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(open.getByTestId("feedback-state")).toHaveText("Accepted · staged for draft 6");
   await expect(open.getByTestId("suggestion-staged")).toBeVisible();
   // Nothing was applied: still on v5, and the build action counts it.

@@ -5,7 +5,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from oracle.docs.schemas import DocumentKind, VersionSource
-from oracle.jobs.schemas import LlmJobsTick
+from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
+from oracle.review.schemas import FeedbackKind
 
 Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap"]
 Depth = Literal["quick", "standard", "deep"]
@@ -317,6 +318,7 @@ InboxState = Literal["new", "open", "staged", "declined", "done"]
 class InboxFeedbackItem(BaseModel):
     id: uuid.UUID
     summary: str
+    kind: FeedbackKind
     section_key: str | None = None
     raised_on_version: int
     created_at: datetime
@@ -331,9 +333,26 @@ class InboxFeedbackItem(BaseModel):
     resolution_note: str | None = None
     addressed_in_version: int | None = None
     staged_for_version: int | None = None
-    # Oracle's live suggestion, when there is one (open: "Review suggestions").
-    suggestion_status: str | None = None
+    # The status of Oracle's live suggestion on the item, if it has one (open: "Review
+    # suggestions").
+    suggestion_status: SuggestionStatus | None = None
     suggestion_kind: str | None = None
+
+
+class InboxFeedbackCounts(BaseModel):
+    """What a document's open items wait for; the five add up to ``open_count``."""
+
+    # Oracle suggestions to accept or dismiss.
+    suggestions: int = 0
+    # Accepted suggestions on open items (C1e: staged section text is not open feedback,
+    # so this is zero unless an item stays open for another reason).
+    accepted: int = 0
+    # Comments to resolve.
+    comments: int = 0
+    # Section verdicts (changes requested, rejected) to address.
+    verdicts: int = 0
+    # General items.
+    other: int = 0
 
 
 class InboxDocument(BaseModel):
@@ -342,6 +361,10 @@ class InboxDocument(BaseModel):
     title: str
     latest_version: int | None = None
     open_count: int
+    counts: InboxFeedbackCounts = Field(default_factory=InboxFeedbackCounts)
+    # The section of the first open item in the review panel's order (raised on, created),
+    # so the Inbox can link straight to it.
+    first_section_key: str | None = None
     items: list[InboxFeedbackItem]
 
 

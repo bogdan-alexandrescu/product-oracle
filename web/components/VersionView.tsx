@@ -27,7 +27,7 @@ import {
 } from "@/components/ds";
 import { Kbd, TabBar } from "@/components/review/parts";
 import { RoleNote } from "@/components/RoleNote";
-import { FeedbackPanel, ResolutionPanel } from "@/components/FeedbackPanel";
+import { FeedbackPanel, ResolutionPanel, type GoTo } from "@/components/FeedbackPanel";
 import { JobsPanel } from "@/components/JobsPanel";
 import { BuildDraftButton } from "@/components/NextDraft";
 import { ReportsPanel } from "@/components/ReportsPanel";
@@ -37,7 +37,7 @@ import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
-import { api, unwrap, type CitationOut, type SectionOut, type Verdict } from "@/lib/api/client";
+import { api, unwrap, type CitationOut, type FeedbackStatus, type SectionOut, type Verdict } from "@/lib/api/client";
 import { formatDate, formatDateTime, SOURCE_LABEL, VERDICT_LABEL } from "@/lib/format";
 import { blocksText, parseBlocks } from "@/lib/markdown";
 import { hasRole, useMe } from "@/lib/me";
@@ -127,6 +127,13 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const commentsQ = useQuery(`comments|${doc}|${n}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}/comments", { params: { path: { doc, n } } })),
   );
+  // Every feedback item on the document: the Feedback tab filters them, and the tab and the
+  // header count the open ones.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const feedbackQ = useQuery(`feedback|${doc}|${refreshKey}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}/feedback", { params: { path: { doc } } })),
+    { keepPrevious: true },
+  );
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [composing, setComposing] = useState<Selection | null>(null);
@@ -136,8 +143,12 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "reports",
   );
   const [tab, setTab] = useState<Tab>(landedOnReports ? "reports" : "comments");
-  const [scope, setScope] = useState<Scope>("section");
-  const [refreshKey, setRefreshKey] = useState(0);
+  // Null until the reader picks: the open section, or All on Feedback when only other sections have open items.
+  const [scope, setScope] = useState<Scope | null>(null);
+  const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus | "">("");
+  // A link with ?feedback=open (the Inbox's): open the Feedback tab at the first open item, once.
+  const [feedbackFocus, setFeedbackFocus] = useState(false);
+  const arrivedAtFeedback = useRef(false);
   // O1f: the brief or the whole version; the choice is remembered per user. A comment
   // on a section the brief does not show switches this page to the full document only.
   const [savedView, saveView] = useDocumentView();
@@ -152,12 +163,20 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   useEffect(() => {
     const h = window.location.hash || null;
     scrolledTo.current = null;
+    const toFeedback = new URLSearchParams(window.location.search).get("feedback") === "open";
+    arrivedAtFeedback.current = toFeedback;
     // Next writes an in-app navigation's URL, #hash included, only once the new page has
     // committed, so the hash cannot be read while rendering: read it here. This also runs
     // when Next shows a kept route again.
     /* eslint-disable react-hooks/set-state-in-effect */
     setHash(h);
     setHashLink(h ? { n, hash: h } : null);
+    if (toFeedback) {
+      setTab("feedback");
+      setScope("all");
+      setFeedbackStatus("open");
+      setFeedbackFocus(true);
+    }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [doc, n]);
   // Back and forward between sections, and plain #links (a warning's section).
@@ -403,6 +422,29 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
 
   const bump = () => setRefreshKey((k) => k + 1);
 
+  // A feedback item's section link opens the section here (the full document when the brief hides it).
+  const goTo: GoTo = useMemo(
+    () => ({
+      keys: allKeys,
+      open: (key: string) => {
+        if (!shownSections.some((s) => s.section_key === key)) setViewOverride("full");
+        select(key);
+      },
+    }),
+    [allKeys, shownSections, select],
+  );
+  const feedbackFocused = useCallback(() => setFeedbackFocus(false), []);
+  // Opening Feedback reads the items again: Oracle may have answered a comment meanwhile.
+  const openTab = (t: Tab) => {
+    if (t === "feedback" && tab !== "feedback") void feedbackQ.reload();
+    setTab(t);
+  };
+  // A decision on an item: its counts, and the comments it may have resolved.
+  const reloadFeedback = () => {
+    void feedbackQ.reload();
+    void commentsQ.reload();
+  };
+
   const onVerdict = useCallback(
     async (key: string, verdict: Verdict, note: string) => {
       await unwrap(
@@ -486,6 +528,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     if (!version || !hashLink || hashLink.n !== n || !openKey || openKey !== keyFromHash(hashLink.hash, allKeys)) return;
     if (scrolledTo.current === `${n}${hashLink.hash}`) return;
     scrolledTo.current = `${n}${hashLink.hash}`;
+    // Arriving at the open feedback, the review panel scrolls to the first item instead.
+    if (arrivedAtFeedback.current) {
+      arrivedAtFeedback.current = false;
+      return;
+    }
     const panel = panelRef.current;
     if (panel && (panel.getBoundingClientRect().top < 0 || panel.getBoundingClientRect().top > window.innerHeight * 0.6)) {
       panel.scrollIntoView({ block: "start" });
@@ -524,7 +571,18 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const reviewedCount = version?.sections.filter((s) => s.verdict).length ?? 0;
   const reviewedShown = shownSections.filter((s) => s.verdict).length;
   const openComments = placed.filter((c) => !c.resolved_at).length;
-  const scoped = scope === "all" || !scopeKeys ? null : scopeKeys;
+  const feedback = feedbackQ.data;
+  // C1e: staged items wait for the next draft, not for a decision: not open here.
+  const openFeedback = feedback?.filter((f) => f.status === "open" && f.state !== "staged") ?? [];
+  const inScope = (keys: ReadonlySet<string>) => (f: { section_key?: string | null }) => !!f.section_key && keys.has(f.section_key);
+  // Feedback shows All while the open section has no open item and other sections do.
+  const feedbackScope: Scope =
+    scope ?? (scopeKeys && openFeedback.length > 0 && !openFeedback.some(inScope(scopeKeys)) ? "all" : "section");
+  const shownScope = tab === "feedback" ? feedbackScope : (scope ?? "section");
+  const scoped = shownScope === "all" || !scopeKeys ? null : scopeKeys;
+  const feedbackScoped = feedbackScope === "all" || !scopeKeys ? null : scopeKeys;
+  const scopedOpenFeedback = feedbackScoped ? openFeedback.filter(inScope(feedbackScoped)).length : openFeedback.length;
+  const openSuggestions = openFeedback.filter((f) => f.suggestion?.status === "open").length;
   const scopedComments = scoped ? placed.filter((c) => scoped.has(c.section_key)) : placed;
   const scopedOpen = scopedComments.filter((c) => !c.resolved_at).length;
   const sectionOpen = scopeKeys ? placed.filter((c) => !c.resolved_at && scopeKeys.has(c.section_key)).length : 0;
@@ -533,7 +591,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
 
   const tabs: { id: Tab; label: string; count?: number | null }[] = [
     { id: "comments", label: "Comments", count: commentsQ.data ? scopedOpen : null },
-    { id: "feedback", label: "Feedback" },
+    { id: "feedback", label: "Feedback", count: feedback ? scopedOpenFeedback : null },
     { id: "resolutions", label: "Resolutions" },
     ...(version && version.citations.length > 0 ? [{ id: "sources" as const, label: "Sources", count: version.citations.length }] : []),
     { id: "reports", label: "Reports" },
@@ -610,12 +668,13 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       }
       head={
         version && (
-          <dl className="mt-2.5 flex flex-wrap gap-x-7 gap-y-2">
+          <dl className="mt-2.5 grid grid-cols-2 gap-x-7 gap-y-2">
             {(
               [
                 ["Reviewed", `${reviewedCount}/${version.sections.length}`, "stat-reviewed"],
                 ["Locked", lockedCount, "stat-locked"],
                 ["Open comments", commentsQ.data ? openComments : "–", "stat-open-comments"],
+                ["Open suggestions", feedback ? openSuggestions : "–", "stat-open-suggestions"],
               ] as const
             ).map(([label, value, testId]) => (
               <div key={label} data-testid={testId} className="flex flex-col-reverse">
@@ -628,7 +687,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       }
     >
       <div className="px-5 pt-1 max-[600px]:px-4">
-        <TabBar label="Review panel" size="sm" tabs={tabs} value={tab} onChange={setTab} />
+        <TabBar label="Review panel" size="sm" tabs={tabs} value={tab} onChange={openTab} />
       </div>
       <div role="tabpanel" className="px-5 py-3.5 max-[600px]:px-4 xl:max-h-[calc(100vh-330px)] xl:overflow-y-auto">
         {scoping && openSection && (
@@ -636,7 +695,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             <SegmentedControl<Scope>
               label="Show"
               size="sm"
-              value={scope}
+              value={shownScope}
               onChange={setScope}
               items={[
                 { value: "section", label: "This section" },
@@ -665,9 +724,22 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             />
           ))}
         {tab === "feedback" && (
-          <FeedbackPanel doc={doc} current={n} versions={versions} refreshKey={refreshKey} sectionKeys={scoped} />
+          <FeedbackPanel
+            doc={doc}
+            current={n}
+            versions={versions}
+            items={feedback}
+            error={feedbackQ.error}
+            reload={reloadFeedback}
+            status={feedbackStatus}
+            onStatus={setFeedbackStatus}
+            sectionKeys={scoped}
+            goTo={goTo}
+            focus={feedbackFocus && !!version}
+            onFocused={feedbackFocused}
+          />
         )}
-        {tab === "resolutions" && <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} sectionKeys={scoped} />}
+        {tab === "resolutions" && <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} sectionKeys={scoped} goTo={goTo} />}
         {tab === "sources" && version && (
           <ol className="flex flex-col" aria-label="Sources" data-testid="sources-list">
             {version.citations.map((c, i) => (
