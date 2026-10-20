@@ -29,6 +29,7 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
 
   // The reviewer comments inline and gives two section verdicts.
   await login(page);
+  await page.goto("/documents");
   await page.getByRole("link", { name: "Team invoices PRD" }).click();
   await page.getByRole("link", { name: "Version 1" }).click();
   await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/v/1$`));
