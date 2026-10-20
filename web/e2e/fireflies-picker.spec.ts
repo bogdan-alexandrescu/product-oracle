@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
+import { SOURCES_STORAGE_KEY } from "../lib/api/mock/sources";
 import { login } from "./helpers";
 
 async function openAdd(page: Page): Promise<{ form: Locator; picker: Locator }> {
@@ -188,15 +189,14 @@ test("fireflies picker: at the most series a source takes, no more can be picked
   await page.goto("/settings/sources");
   await expect(page.getByRole("listitem", { name: "Customer calls" })).toBeVisible();
   // A source saved with 200 picked series (the API's MAX_SERIES).
-  await page.evaluate(() => {
-    const key = "po-mock-sources-v1";
+  await page.evaluate((key) => {
     const db = JSON.parse(localStorage.getItem(key)!);
     const calls = db.sources.find((s: { name: string }) => s.name === "Customer calls");
     const series = Array.from({ length: 200 }, (_, i) => `cal:picked${i}`);
     const labels = Object.fromEntries(series.map((k, i) => [k, `Picked series ${i}`]));
     calls.config = { mode: "selected", series, meetings: [], labels };
     localStorage.setItem(key, JSON.stringify(db));
-  });
+  }, SOURCES_STORAGE_KEY);
   await page.reload();
   const row = page.getByRole("listitem", { name: "Customer calls" });
   await expect(row.getByTestId("fireflies-included")).toContainText("200 series");
