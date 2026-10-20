@@ -393,7 +393,9 @@ async def test_curated_writes_are_refused_while_held_and_write_nothing(
         async def status(workflow_id):
             read = await real(workflow_id)
             steps = tuple(
-                replace(s, state="PARKED") if s.step_id == "baseline-review1" else s
+                replace(s, state="PARKED", park_reason=None)
+                if s.step_id == "baseline-review1"
+                else s
                 for s in read.steps
             )
             return replace(read, steps=steps)
@@ -761,7 +763,15 @@ async def _run_token_writes(token: str) -> bool:
     """True when the run token's propose_change was refused as held."""
     async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
         res = await c.call_tool(
-            "propose_change", {"body": {"op": "add", "kind": "goal", "data": {"key": "g-dep"}}}
+            "propose_change",
+            {
+                "body": {
+                    "op": "create",
+                    "kind": "entity",
+                    "fields": {"type": "goal", "key": "g-dep", "title": "Dep"},
+                    "reason": "seen",
+                }
+            },
         )
     if res.is_error:
         assert "waiting for" in res.content[0].text, res.content[0].text
@@ -793,7 +803,28 @@ async def test_a_step_parked_on_its_dependencies_does_not_hold_the_run_token(cli
     assert (await runtime.status("wf_1")).step("baseline-review1").park_reason == "AWAITING_INPUT"
     assert await _run_token_writes(token) is True
 
-    # After the decision the checkpoint is closed: released again.
+    # After the decision the checkpoint is closed and the next segment's work step is
+    # running (its review is parked on it): released again.
+    swarm.steps_per_poll = 0
     await decide(client, auth, run)
     service._hold_cache.clear()
     assert await _run_token_writes(token) is False
+
+
+@pytest.mark.parametrize(
+    ("state", "reason", "reached"),
+    [
+        ("PENDING", None, False),
+        ("SKIPPED", None, False),
+        ("PARKED", "DEPENDENCY_INCOMPLETE", False),
+        ("PARKED", "AWAITING_INPUT", True),
+        ("PARKED", "CREDENTIAL_MISSING", True),
+        ("PARKED", None, True),
+        ("RUNNING", "DEPENDENCY_INCOMPLETE", True),
+        ("SUCCEEDED", None, True),
+    ],
+)
+def test_not_reached_counts_a_step_parked_on_its_dependencies(state, reason, reached):
+    from oracle.swarm.runtime import not_reached
+
+    assert not_reached(StepStatus("s", "t", state, park_reason=reason)) is not reached
