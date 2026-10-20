@@ -675,8 +675,6 @@ SOURCES_KEY = "sources"
 # A roadmap's machine-readable layout block is for the renderer, not the reader.
 HIDDEN_ROADMAP_SECTIONS = {"layout"}
 NO_GOAL_PHRASE = "serves no confirmed goal"
-# Template guidance: shown while drafting, never in an export.
-_COMMENT = re.compile(r"<!--.*?-->", re.S)
 _REQ_ID = re.compile(r"(<(?:li|td)>(?:<p>)?)(R\d{1,4})\b")
 _PASS_FAIL = re.compile(r"<td>\s*(pass(?:ed)?|fail(?:ed)?|\u2713|\u2717)\s*</td>", re.IGNORECASE)
 
@@ -826,7 +824,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
             # Roadmap items (cards) that say they serve no confirmed goal get the flag.
             flagged=ev.document.kind == "roadmap"
             and s.level == 3
-            and NO_GOAL_PHRASE in _COMMENT.sub("", s.body_md or "").lower(),
+            and NO_GOAL_PHRASE in layers.strip_comments(s.body_md or "").lower(),
         )
 
     def _body_md(s: Section, strip: bool) -> str:
