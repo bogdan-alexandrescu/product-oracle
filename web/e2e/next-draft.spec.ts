@@ -221,3 +221,39 @@ test("with the Refinement switch off the build button is disabled and says why",
   await expect(buildButton(page)).toBeDisabled();
   await expect(buildButton(page)).toHaveAttribute("title", "Refinement jobs are switched off");
 });
+
+test("staged changes carry into the next draft: an approval that closes their items does not hide them", async ({ page }) => {
+  // UI test finding E4 (owner, 2026-10-20): an accepted suggestion not applied in any draft
+  // stays Staged until a draft applies it or someone discards it.
+  await login(page);
+  // As approving draft 5 did on the deployed app: the two staged changes' items closed.
+  await page.evaluate(() => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    for (const f of db.feedback as { summary: string }[]) {
+      if (f.summary.includes("G2 retention") || f.summary.includes("before the call is placed")) {
+        Object.assign(f, { status: "addressed", addressed_in_version: 5, resolution_note: "Covered in v5." });
+      }
+    }
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+
+  await page.goto(DOC);
+  await expect(buildButton(page).getByTestId("build-draft-count")).toHaveText("· 2 staged");
+  await feedbackTab(page);
+  const states = page.getByTestId("feedback-state").filter({ visible: true });
+  // The panel's Staged filter counts what the build action counts; Done keeps only v4's item.
+  await expect(states.getByRole("button", { name: /^Staged/ })).toHaveText(/Staged\s*2/);
+  await expect(states.getByRole("button", { name: /^Done/ })).toHaveText(/Done\s*1/);
+  await feedbackState(page, "Staged");
+  await expect(chip(page, "G2 retention")).toHaveText("Staged");
+  await expect(chip(page, "before the call is placed")).toHaveText("Staged");
+
+  // The Inbox's Staged tab lists both, under the same "2 changes staged for draft 6".
+  await page.goto("/inbox");
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Staged/ }).click();
+  const rows = page.getByTestId("inbox-tab-staged").locator("tr[data-row]").filter({ hasText: "Clinic outreach" });
+  await expect(rows.getByTestId("staged-row-label")).toHaveText("2 changes staged for draft 6");
+  await expect(rows.filter({ hasText: "#goal-trace" })).toContainText("Draft 6");
+  await expect(rows.filter({ hasText: "#f-38" })).toContainText("Draft 6");
+});

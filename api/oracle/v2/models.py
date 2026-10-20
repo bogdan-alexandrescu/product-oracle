@@ -33,6 +33,7 @@ from sqlalchemy import (
     Uuid,
     false,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -54,6 +55,8 @@ GAP_STATUSES = (
     "under_investigation",
     "asked",
     "answered",
+    # A critical gap answered below the owner role, waiting for review (B4).
+    "answered_pending_review",
     "validated",
     "deferred",
     "accepted_risk",
@@ -369,6 +372,17 @@ class KnowledgeGap(TenantScoped, Base):
         CheckConstraint(_all_in("impact", IMPACT_AREAS), name="impact"),
         CheckConstraint(CONFIDENCE_RANGE, name="confidence"),
         CheckConstraint("intake_id IS NOT NULL OR document_id IS NOT NULL", name="subject"),
+        CheckConstraint(
+            "importance_basis IS NULL OR importance_basis IN ('brief', 'person')",
+            name="importance_basis",
+        ),
+        # Rule-made rows from before their importance basis was recorded: read by
+        # /v1/gaps?importance= (oracle.intake.views); the next analysis records it.
+        Index(
+            "ix_knowledge_gaps_legacy_importance",
+            "intake_id",
+            postgresql_where=text("rule_key IS NOT NULL AND importance_basis IS NULL"),
+        ),
     )
 
     intake_id: Mapped[uuid.UUID | None] = _fk("product_intakes")
@@ -392,6 +406,14 @@ class KnowledgeGap(TenantScoped, Base):
     entity_ids: Mapped[list[uuid.UUID]] = _uuids()
     section_keys: Mapped[list[str]] = _texts()
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # The category key of a rule-made gap (the intake engine's own, one per category);
+    # None for a gap a person or the model wrote. Its statement text may change in
+    # code; this does not (S6: model-written gaps are private, rule-made ones are not).
+    rule_key: Mapped[str | None] = mapped_column(Text)
+    # Where the importance comes from: "brief" (the engine, from the brief and public
+    # facts; refreshed by each analysis) or "person" (someone set it; kept). None: a row
+    # from before this was recorded, whose importance others read from the brief (S6).
+    importance_basis: Mapped[str | None] = mapped_column(Text)
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
     updated_at: Mapped[datetime] = _updated_at()

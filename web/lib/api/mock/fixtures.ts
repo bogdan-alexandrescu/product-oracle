@@ -13,6 +13,11 @@ export type CitationSeed = {
   /** E1: a source an edit added to a spec version (listed under "Added sources"). */
   added?: boolean;
   state_label?: string;
+  /** What the writer computed (change D): the source item it read, its confidence 0-1 or a note. */
+  item?: string;
+  confidence?: number | null;
+  confidence_note?: string;
+  low_confidence?: boolean;
 };
 
 export type SectionSeed = { key: string; level: number; heading: string; body: string };
@@ -49,6 +54,7 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     title: "#product thread on checkout drop-off",
     excerpt: "Most users who abandon do it at the shipping step, usually right after the cost appears.",
     retrieved_at: "2026-10-16T13:10:00Z",
+    confidence: 0.82,
   },
   {
     id: "c2",
@@ -57,6 +63,9 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     title: "Customer interview 07 (transcript)",
     excerpt: "I didn't know what shipping would cost until the last screen, so I went back to compare.",
     retrieved_at: "2026-10-15T09:42:00Z",
+    confidence: 0.35,
+    confidence_note: "one interview, not corroborated",
+    low_confidence: true,
   },
   {
     id: "c3",
@@ -65,6 +74,9 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     title: "Q4 goals: activation and retention",
     excerpt: "G1: raise first-order completion from 61% to 70% by the end of Q4.",
     retrieved_at: "2026-10-14T16:05:00Z",
+    // No score: the note shows instead. Its angle brackets are text, never markup.
+    confidence: null,
+    confidence_note: "owner decision (confirmed, locked) <G1>; not evidence-scored",
   },
   {
     id: "c4",
@@ -73,6 +85,8 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     title: "Address form loses state on back navigation",
     excerpt: "Navigating back from payment clears every field in the address form.",
     retrieved_at: "2026-10-16T11:30:00Z",
+    item: "7d0c6f3e-2b4a-4e8f-9c1d-3a5b7e9f1c2d",
+    confidence: 0.75,
   },
   {
     id: "c5",

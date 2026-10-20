@@ -3,7 +3,8 @@
 Source items are private to their owner (S3, revised 2026-10-17). Evidence copies the
 excerpt, url and ref out of the item, so everyone can read the claim's support; the
 item itself (its id, title, source) is shown only to its owner. Everyone else gets
-``source_item_private``.
+``source_item_private``. A run token never cites or reads an item its user's intakes
+withhold from runs (S6): such an item is missing to it.
 
 Public-link evidence (the owner, 2026-10-17) is different: a commenter or anyone above
 cites a public page by its URL, Oracle fetches it without any credential
@@ -12,13 +13,14 @@ everyone sees the snapshot too. Refreshing fetches it again and rescores.
 """
 
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes
+from oracle import audit, changes, confidence
 from oracle.auth.deps import Principal
 from oracle.authz import has_role
 from oracle.baseline import public_links, scoring, service
@@ -33,16 +35,129 @@ from oracle.baseline.schemas import (
     SourceItemRef,
 )
 from oracle.baseline.service import ConflictError, ForbiddenError, InvalidError, NotFoundError
-from oracle.sources.models import Source, SourceItem, SourceItemVersion
+from oracle.sources.models import Snapshot, Source, SourceItem, SourceItemVersion
 from oracle.v2 import links
 
 EXCERPT_CHARS = 500
 
 
+async def withheld_from(db: AsyncSession, principal: Principal) -> set[uuid.UUID]:
+    """Items a run token may not read, copy or quote (S6, ``run_withheld``): to it they
+    are missing, like another user's."""
+    from oracle.intake.evidence import run_withheld
+
+    return await run_withheld(db, principal) or set()
+
+
+async def run_versions(
+    db: AsyncSession, principal: Principal, item_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, uuid.UUID | None]:
+    """For a run, item id -> the version released of each of ``item_ids`` ever frozen
+    by a share (S6, freeze at sharing), None where none is readable now: such an item
+    is read at that version only, or not at all, never at its current one (as
+    ``/v1/source-items/{id}``). Empty for anyone but a run."""
+    from oracle.intake.evidence import run_shared
+
+    shared = run_shared(principal)
+    if shared is None or not item_ids:
+        return {}
+    frozen_col = shared.frozen.selected_columns[0]
+    frozen = set((await db.scalars(shared.frozen.where(frozen_col.in_(item_ids)))).all())
+    released = shared.released.subquery()
+    pairs = dict(
+        (
+            await db.execute(
+                select(released.c.item_id, released.c.version_id).where(
+                    released.c.item_id.in_(frozen)
+                )
+            )
+        ).all()
+    )
+    return {i: pairs.get(i) for i in frozen}
+
+
+def as_read(principal: Principal, stored: float | None, rows: list[EvidenceOut]) -> float | None:
+    """An entity's or edge's confidence as ``present`` gave its evidence: for a run, the
+    aggregate of its evidence as of the run's pin; for people, the stored one."""
+    if not principal.is_run:
+        return stored
+    value = confidence.aggregate([r.confidence for r in rows if r.confidence is not None])
+    return None if value is None else round(value, 3)
+
+
+async def run_pin(db: AsyncSession, principal: Principal) -> Snapshot | None:
+    """The snapshot the principal's run pinned when it started; None for anyone but a
+    run, and for a run that pinned none."""
+    if not principal.is_run:
+        return None
+    from oracle.runs.models import Run
+
+    return await db.scalar(
+        select(Snapshot).join(Run, Run.snapshot_id == Snapshot.id).where(Run.id == principal.run_id)
+    )
+
+
+class RunView:
+    """What a run reads as the confidence of entities and edges (S6, owner 2026-10-20):
+    each evidence row as of the run's pin (``scoring.as_of_pin``, through ``present``),
+    aggregated as the detail routes do. One shared helper for every output builder; build
+    it with ``run_view`` (None for people, who read the stored live value, and for a run
+    that pinned no snapshot, which keeps reading the stored value)."""
+
+    def __init__(
+        self,
+        rows: dict[tuple[str, uuid.UUID], list[float | None]],
+        by_evidence: dict[uuid.UUID, float | None] | None = None,
+    ) -> None:
+        self.rows = rows
+        self.by_evidence = by_evidence or {}
+
+    def scores(self, kind: str, target_id: uuid.UUID) -> list[float | None]:
+        return self.rows.get((kind, target_id), [])
+
+    def confidence(self, kind: str, target_id: uuid.UUID) -> float | None:
+        value = confidence.aggregate([c for c in self.scores(kind, target_id) if c is not None])
+        return None if value is None else round(value, 3)
+
+
+async def run_view(
+    db: AsyncSession,
+    principal: Principal | None,
+    *,
+    entity_ids: Iterable[uuid.UUID] = (),
+    edge_ids: Iterable[uuid.UUID] = (),
+) -> RunView | None:
+    """Batched: one evidence read for all the ids, however many (no N+1 over a graph)."""
+    if principal is None or not principal.is_run:
+        return None
+    entity_ids, edge_ids = list(entity_ids), list(edge_ids)
+    if not entity_ids and not edge_ids:
+        return RunView({})
+    if await run_pin(db, principal) is None:
+        return None
+    stmt = select(Evidence).where(
+        or_(Evidence.entity_id.in_(entity_ids), Evidence.edge_id.in_(edge_ids))
+    )
+    rows = list((await db.scalars(stmt)).all())
+    shown = await present(db, principal, rows)
+    by_row = {r.id: r for r in rows}
+    grouped: dict[tuple[str, uuid.UUID], list[float | None]] = {}
+    for ev in shown:
+        row = by_row[ev.id]
+        if row.entity_id is not None:
+            grouped.setdefault(("entity", row.entity_id), []).append(ev.confidence)
+        if row.edge_id is not None:
+            grouped.setdefault(("edge", row.edge_id), []).append(ev.confidence)
+    return RunView(grouped, {ev.id: ev.confidence for ev in shown})
+
+
 async def _own_item(
     db: AsyncSession, principal: Principal, item_id: uuid.UUID
 ) -> tuple[SourceItem, Source, SourceItemVersion | None]:
-    """The item if the principal's user owns it; someone else's item reads as missing."""
+    """The item if the principal's user owns it; someone else's item reads as missing.
+    A run reads an item a finding shared in full released at the version released only
+    (S6, freeze at sharing), an item ever frozen with no release readable now and an
+    item deleted upstream as missing."""
     row = (
         await db.execute(
             select(SourceItem, Source)
@@ -50,14 +165,24 @@ async def _own_item(
             .where(SourceItem.id == item_id)
         )
     ).first()
-    if row is None or principal.user_id is None or row[1].owner_user_id != principal.user_id:
+    if (
+        row is None
+        or principal.user_id is None
+        or row[1].owner_user_id != principal.user_id
+        or item_id in await withheld_from(db, principal)
+    ):
         raise NotFoundError("Source item not found among your sources")
     item, source = row
-    version = (
-        await db.get(SourceItemVersion, item.current_version_id)
-        if item.current_version_id
-        else None
-    )
+    version_id = item.current_version_id
+    if principal.is_run:
+        if item.deleted_at is not None:
+            raise NotFoundError("Source item not found among your sources")
+        frozen = await run_versions(db, principal, {item_id})
+        if item_id in frozen:
+            version_id = frozen[item_id]
+            if version_id is None:
+                raise NotFoundError("Source item not found among your sources")
+    version = await db.get(SourceItemVersion, version_id) if version_id else None
     return item, source, version
 
 
@@ -81,8 +206,11 @@ async def attach(
     if data.source_item_id:
         item, source, version = await _own_item(db, principal, data.source_item_id)
         ev.source_item_id = item.id
-        ev.url = data.url or item.url
-        ev.ref = data.ref or item.title or item.external_id
+        # The link as read too (S6, links): a Notion link carries the page title.
+        ev.url = data.url or (version.url if version is not None else item.url)
+        # The title as read (a run: as shared, S6), never the item's current one: a
+        # rename upstream never reaches evidence people read.
+        ev.ref = data.ref or (version.title if version is not None else None) or item.external_id
         if not data.excerpt and version is not None:
             ev.excerpt = version.content[:EXCERPT_CHARS]
         ev.retrieved_at = data.retrieved_at or (version.fetched_at if version else None)
@@ -336,7 +464,9 @@ async def refresh_link(
 async def present(
     db: AsyncSession, principal: Principal, rows: list[Evidence]
 ) -> list[EvidenceOut]:
-    """Evidence as the principal may see it: the item only for its owner."""
+    """Evidence as the principal may see it: the item only for its owner. People read
+    the live confidence; a run reads it as of its pinned snapshot (S6, owner
+    2026-10-20, ``scoring.as_of_pin``)."""
     item_ids = {r.source_item_id for r in rows if r.source_item_id}
     items: dict[uuid.UUID, tuple[SourceItem, Source]] = {}
     if item_ids:
@@ -348,10 +478,36 @@ async def present(
         items = {item.id: (item, source) for item, source in res.all()}
     # Public links were fetched anonymously: their snapshot is shown to everyone.
     snapshots = await scoring.latest_snapshots(db, [r.id for r in rows if r.kind])
+    withheld = await withheld_from(db, principal) if item_ids else set()
+    # A run sees an item ever frozen at the version released (S6, links), or not at all.
+    frozen = await run_versions(db, principal, set(items))
+    versions: dict[uuid.UUID, SourceItemVersion] = {}
+    if released := {v for v in frozen.values() if v}:
+        res = await db.scalars(select(SourceItemVersion).where(SourceItemVersion.id.in_(released)))
+        versions = {v.item_id: v for v in res.all()}
+
+    def mine(item: SourceItem | None, source: Source | None) -> bool:
+        return (
+            item is not None
+            and source is not None
+            and principal.user_id == source.owner_user_id
+            and item.id not in withheld
+            and not (item.id in frozen and frozen[item.id] is None)
+            # A run never reads an item deleted upstream, frozen or not (S6).
+            and not (principal.is_run and item.deleted_at is not None)
+        )
+
+    pin = await run_pin(db, principal)
+    pinned = await scoring.as_of_pin(db, rows, pin) if pin is not None else {}
     out = []
     for r in rows:
         item, source = items.get(r.source_item_id, (None, None))
-        mine = source is not None and principal.user_id == source.owner_user_id
+        shown = mine(item, source)
+        score, factors = pinned.get(r.id) or (
+            float(r.confidence) if r.confidence is not None else None,
+            r.confidence_factors or {},
+        )
+        version = versions.get(item.id) if item is not None else None
         snap = snapshots.get(r.id)
         out.append(
             EvidenceOut(
@@ -368,15 +524,20 @@ async def present(
                     source_id=source.id,
                     source_kind=source.kind,
                     kind=item.kind,
-                    title=item.title,
-                    url=item.url,
+                    # The stored ref (the title as attached), never the item's current
+                    # title (S6, titles).
+                    title=r.ref,
+                    # An item a run reads as released: the link released (S6,
+                    # links). Otherwise the link as it is now (a rename writes no
+                    # version; owners are never frozen).
+                    url=version.url if version is not None else item.url,
                 )
-                if mine
+                if shown
                 else None,
-                source_item_private=item is not None and not mine,
-                confidence=float(r.confidence) if r.confidence is not None else None,
-                confidence_factors=r.confidence_factors or {},
-                scored_at=r.scored_at,
+                source_item_private=item is not None and not shown,
+                confidence=score,
+                confidence_factors=factors,
+                scored_at=pin.as_of if pin is not None and r.id in pinned else r.scored_at,
                 created_at=r.created_at,
                 kind=r.kind,
                 note=r.note,

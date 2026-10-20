@@ -85,6 +85,7 @@ async def make_item(
         version = SourceItemVersion(
             item_id=item.id,
             title=title,
+            url=url,
             content=content,
             content_hash=hashlib.sha256(content.encode()).hexdigest(),
         )

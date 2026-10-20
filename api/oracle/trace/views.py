@@ -187,7 +187,9 @@ async def _sections_linking(db: AsyncSession, entity_ids: list[uuid.UUID]) -> li
     ]
 
 
-async def entity_trace(db: AsyncSession, entity: Entity) -> EntityTrace:
+async def entity_trace(
+    db: AsyncSession, entity: Entity, principal: Principal | None = None
+) -> EntityTrace:
     # Rejected items are not part of the trace: a rejected node shows no chain.
     active = entity.status != "rejected"
     g = (
@@ -199,9 +201,9 @@ async def entity_trace(db: AsyncSession, entity: Entity) -> EntityTrace:
     flags: list[str] = []
     priority = None
     if entity.type == "feature":
-        report = await baseline_trace.report(db)
+        report = await baseline_trace.report(db, principal)
         flags = next((f.flags for f in report.features if f.id == entity.id), [])
-        ranking = await priorities.compute(db, "goal_weighted")
+        ranking = await priorities.compute(db, "goal_weighted", principal)
         priority = next((f for f in ranking.features if f.entity_id == str(entity.id)), None)
     elif entity.type in GOAL_TRACED and not goals and active:
         flags = ["serves_no_goal"]

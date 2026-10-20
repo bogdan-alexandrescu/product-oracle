@@ -91,9 +91,11 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
     assert script.get_revision("0014_blockers_snapshot").down_revision == "0015_section_table_rows"
     assert script.get_revision("0016_roadmap").down_revision == "0014_blockers_snapshot"
     assert script.get_revision("0016_refinement_batch").down_revision == "0016_roadmap"
-    oracle_source = script.get_revision("0017_citation_source_oracle")
-    assert oracle_source.down_revision == "0016_refinement_batch"
-    assert script.get_revision("0015_specs").down_revision == "0017_citation_source_oracle"
+    assert script.get_revision("0017_citation_source_oracle").down_revision == (
+        "0016_refinement_batch"
+    )
+    assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
+    assert script.get_revision("0015_specs").down_revision == "0014_intake"
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):

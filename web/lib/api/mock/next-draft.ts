@@ -59,11 +59,15 @@ const latestOf = (ctx: LlmContext, docId: string) => versionsOf(ctx, docId).at(-
 export const isStaged = (s: Suggestion | null | undefined): boolean =>
   !!s && s.kind === "section_text" && s.status === "accepted" && s.applied_in_version == null;
 
-/** C1e: open / staged / declined / done, from the item's status and its live suggestion. */
+/**
+ * C1e: open / staged / declined / done, from the item's status and its live suggestion.
+ * Staged first, as the API (owner, 2026-10-20): an accepted change carries into the next
+ * draft until a draft applies it or someone discards it, even once its item is closed.
+ */
 export function feedbackState(status: Feedback["status"], s: Suggestion | null | undefined): Schemas["FeedbackItemOut"]["state"] {
+  if (isStaged(s)) return "staged";
   if (status === "declined") return "declined";
   if (status !== "open") return "done";
-  if (isStaged(s)) return "staged";
   if (s?.status === "applied") return "done";
   return "open";
 }
@@ -149,7 +153,7 @@ function strip(body: string) {
 /** The "model": every affected section rewritten from its staged suggestions. */
 export function runBatch(ctx: LlmContext, job: Job, v: Version): BatchOutput {
   const ids = (job.input.suggestion_ids as string[] | undefined) ?? [];
-  const used = staged(ctx, job.document_id, ids);
+  const used = staged(ctx, job.document_id ?? "", ids);
   const keys = new Set(v.sections.map((s) => s.section_key));
   const skipped: BatchOutput["skipped"] = used
     .filter((s) => !keys.has(s.section_key ?? ""))
@@ -199,7 +203,7 @@ export function runBatch(ctx: LlmContext, job: Job, v: Version): BatchOutput {
 function preview(ctx: LlmContext, job: Job): Schemas["NextDraftPreview"] {
   const out = (job.output ?? null) as BatchOutput | null;
   const base = (job.input.version as number | undefined) ?? null;
-  const latest = latestOf(ctx, job.document_id)?.number ?? null;
+  const latest = latestOf(ctx, job.document_id ?? "")?.number ?? null;
   const done = job.status === "succeeded" && out;
   return {
     job,

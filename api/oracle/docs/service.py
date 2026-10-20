@@ -35,6 +35,7 @@ from oracle.docs.schemas import (
 )
 from oracle.review import service as review_service
 from oracle.review.models import SectionReview
+from oracle.sources.models import SourceItem
 from oracle.templates.builtins import BUILTIN_TEMPLATES_BY_KEY
 from oracle.templates.models import Template, TemplateVersion
 
@@ -451,6 +452,33 @@ async def _check_document_dates(
     ]
 
 
+async def _citation_items(
+    db: AsyncSession, draft: ParsedDraft
+) -> tuple[dict[str, uuid.UUID], list[VersionWarning]]:
+    """The source item each citation names, when this company has it (the session is
+    tenant-scoped, so another company's item is not found). Any other value is dropped
+    with an ``unknown_citation_item`` warning naming the sections that cite it; never a
+    refusal: the citation itself is kept."""
+    named = {c.id: c.item for c in draft.citations if c.item is not None}
+    ids = {key: uuid.UUID(value) for key, value in named.items() if is_uuid(value)}
+    found = (
+        set(await db.scalars(select(SourceItem.id).where(SourceItem.id.in_(set(ids.values())))))
+        if ids
+        else set()
+    )
+    warnings = [
+        VersionWarning(
+            code="unknown_citation_item",
+            message=f"citation '{key}' names source item '{value}', which this company "
+            "does not have; the citation is kept without it",
+            section_keys=[s.section_key for s in draft.sections if key in s.citation_keys],
+        )
+        for key, value in named.items()
+        if ids.get(key) not in found
+    ]
+    return {key: item for key, item in ids.items() if item in found}, warnings
+
+
 def _document_mismatch(slug: str, draft: ParsedDraft) -> DraftError:
     return DraftError(
         [
@@ -625,6 +653,9 @@ async def import_draft(
                     )
                 )
 
+    items, item_warnings = await _citation_items(db, draft)
+    warnings += item_warnings
+
     # O1f: the brief layer, from the draft, else its template's markers, else a
     # "Full version" heading.
     template_brief = None
@@ -686,6 +717,10 @@ async def import_draft(
             title=c.title,
             excerpt=c.excerpt,
             retrieved_at=c.retrieved_at,
+            item_id=items.get(c.id),
+            confidence=c.confidence,
+            confidence_note=c.confidence_note,
+            low_confidence=c.low_confidence,
         )
         for c in draft.citations
     )

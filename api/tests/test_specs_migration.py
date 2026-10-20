@@ -51,7 +51,7 @@ def scratch_db():
 
 def test_0015_specs_chains_after_main_head():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_revision("0015_specs").down_revision == "0017_citation_source_oracle"
+    assert script.get_revision("0015_specs").down_revision == "0014_intake"
     assert script.get_heads() == ["0015_specs"]
 
 
@@ -75,7 +75,7 @@ def _run_row(t, flow: str) -> None:
 
 def test_upgrade_allows_specs_and_downgrade_removes_them(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0017_citation_source_oracle")
+    command.upgrade(cfg, "0014_intake")
     t = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     prd = _doc(t, "prd")
@@ -91,7 +91,7 @@ def test_upgrade_allows_specs_and_downgrade_removes_them(scratch_db):
     with pytest.raises(Exception, match="ck_documents_kind"):
         _doc(t, "memo")
 
-    command.downgrade(cfg, "0017_citation_source_oracle")
+    command.downgrade(cfg, "0014_intake")
     assert _run("SELECT id FROM documents") == [(prd,)]
     assert _run("SELECT flow FROM runs") == [("prd_to_roadmap",)]
     assert spec not in [r[0] for r in _run("SELECT id FROM documents")]

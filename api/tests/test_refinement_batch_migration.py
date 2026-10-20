@@ -57,9 +57,13 @@ def scratch_db():
 def test_chains_on_the_roadmap_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0016_roadmap"
-    # 0017_citation_source_oracle chains on it, and 0015_specs on that; still a single head.
-    assert script.get_heads() == ["0015_specs"]
+    # 0017_citation_source_oracle chains on it, then 0018_runtime_features,
+    # 0019_citation_confidence, the intake lane's 0014_intake and v2-specs 0015_specs;
+    # one head.
     assert script.get_revision("0017_citation_source_oracle").down_revision == REVISION
+    assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
+    assert script.get_revision("0015_specs").down_revision == "0014_intake"
+    assert script.get_heads() == ["0015_specs"]
 
 
 def test_extends_the_live_check_and_keeps_other_kinds(scratch_db):
