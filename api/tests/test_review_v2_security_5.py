@@ -593,3 +593,81 @@ async def test_a_db_error_in_one_follow_up_rolls_it_back_and_the_others_run(
     assert rows[first].ciphertext is not None
     assert rows[second].status == "done" and rows[second].ciphertext is None
     assert out["member_follow_ups"] >= 1
+
+
+# --- MINORS --------------------------------------------------------------------------
+
+
+async def test_the_sweep_rechecks_the_member_under_the_gate(client, monkeypatch):
+    """A restore that commits while the sweep waits on the gate: nothing of the restored
+    member's is revoked."""
+    from oracle.auth.models import ApiToken
+    from oracle.members.service import sweep_disabled
+    from oracle.review import publish
+    from tests.test_review_v2_security_3 import restore
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    token_id, _ = await member_token(ctx, pm.user_id, "slipped-in")
+    real = publish.gate_lock
+
+    async def spy(db, *, shared):
+        monkeypatch.setattr(publish, "gate_lock", real)
+        assert (await restore(client, ctx, pm.user_id)).status_code == 200
+        await real(db, shared=shared)
+
+    monkeypatch.setattr(publish, "gate_lock", spy)
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await sweep_disabled(s, None, pm.user_id) is False
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(ApiToken, token_id)).revoked_at is None
+
+
+async def test_a_disable_waits_for_a_locked_queued_job_and_cancels_it(client):
+    from oracle.docs.models import Document
+    from oracle.jobs.models import LlmJob
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    async with tenant_session(ctx.tenant_id) as s:
+        doc_id = await s.scalar(select(Document.id).where(Document.slug == DOC))
+        job = LlmJob(kind="reporting", document_id=doc_id, requested_by=pm.user_id)
+        s.add(job)
+        await s.commit()
+        job_id = job.id
+    held = asyncio.Event()
+
+    async def hold():
+        # A worker looking at the job (its claim locks the row briefly).
+        async with tenant_session(ctx.tenant_id) as s:
+            await s.scalar(select(LlmJob).where(LlmJob.id == job_id).with_for_update())
+            held.set()
+            await asyncio.sleep(0.5)
+            await s.rollback()
+
+    holder = asyncio.create_task(hold())
+    await held.wait()
+    assert (await disable(client, ctx, pm.user_id)).status_code == 200
+    await holder
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(LlmJob, job_id)).status == "cancelled"
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "URN:UUID:{u}",
+        "Urn:Uuid:{u}",
+        "urn:uuid:{U}",
+        "URN:UUID:{{{U}}}",
+        "  URN:UUID:{h}  ",
+    ],
+)
+def test_external_key_accepts_any_case_urn_prefix(spelling):
+    from oracle.review.publish import _as_uuid, external_key
+
+    u = uuid.UUID("12345678-9abc-def0-1234-56789abcdef0")
+    value = spelling.format(u=u, U=str(u).upper(), h=u.hex)
+    assert external_key(value) == str(u)
+    assert _as_uuid(value) == u

@@ -211,13 +211,17 @@ def normalize_url(url: str) -> str:
     return urlunsplit((scheme, host, path, query, ""))
 
 
+# A ``urn:uuid:`` prefix in any case (uuid.UUID strips the lowercase one only).
+_URN_UUID = re.compile(r"^urn:uuid:", re.IGNORECASE)
+
+
 def external_key(value: str | None) -> str:
     """A provider's id as compared: a UUID in any spelling (undashed, uppercase, in
     braces, ``urn:uuid:``) as its canonical form, so a Notion page id cited one way
     matches the item stored another; anything else as is, stripped."""
     text_value = str(value or "").strip()
     try:
-        return str(uuid.UUID(text_value))
+        return str(uuid.UUID(_URN_UUID.sub("", text_value)))
     except ValueError:
         return text_value
 
@@ -230,7 +234,7 @@ def _hex32(value: Any) -> Any:
 
 def _as_uuid(value: str | None) -> uuid.UUID | None:
     try:
-        return uuid.UUID(str(value).strip()) if value else None
+        return uuid.UUID(_URN_UUID.sub("", str(value).strip())) if value else None
     except ValueError:
         return None
 

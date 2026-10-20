@@ -20,7 +20,9 @@ made after it commits and retried by the tick.
 
 Backfill: approvals given by people already below approver lapse for good (reason
 "demoted before this change"), as a demotion now lapses them; before, a re-promotion
-would have revived them. See docs/product-oracle-v2/08-review-and-publish.md.
+would have revived them; each section whose approval lapsed asks for re-review when its
+document's policy says so, as a lapse does at runtime. See
+docs/product-oracle-v2/08-review-and-publish.md.
 
 The integrator re-chains this revision onto the head in merge order.
 
@@ -174,6 +176,29 @@ def _lapse_approvals_of_demoted() -> None:
         ),
         {"reason": DEMOTED_REASON},
     ).all()
+    # As a runtime lapse does (oracle.review.state.lapse_approvals): each section whose
+    # approval lapsed asks for re-review when its document's effective policy says so
+    # (its own policy, else the company's review_policy, else the default: yes). No
+    # notification is sent for the backfill.
+    if reviews:
+        bind.execute(
+            sa.text(
+                "INSERT INTO section_review_states (id, tenant_id, document_id, section_key, "
+                "rereview_requested_at) "
+                "SELECT gen_random_uuid(), x.tenant_id, x.document_id, x.section_key, now() "
+                "FROM (SELECT DISTINCT r.tenant_id, v.document_id, r.section_key "
+                "FROM section_reviews r JOIN document_versions v ON v.id = r.version_id "
+                "WHERE CAST(r.id AS text) = ANY(:ids)) x "
+                "LEFT JOIN document_review_policies p ON p.document_id = x.document_id "
+                "LEFT JOIN tenant_settings s ON s.tenant_id = x.tenant_id "
+                "AND s.key = 'review_policy' "
+                "WHERE COALESCE(p.rereview_on_change, "
+                "CAST(s.value ->> 'rereview_on_change' AS boolean), true) "
+                "ON CONFLICT (document_id, section_key) "
+                "DO UPDATE SET rereview_requested_at = now()"
+            ),
+            {"ids": [str(r.id) for r in reviews]},
+        )
     documents = sorted({str(r.document_id) for r in versions})
     if documents:
         bind.execute(

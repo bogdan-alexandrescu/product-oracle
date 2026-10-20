@@ -165,3 +165,39 @@ def test_upgrade_lapses_approvals_of_members_demoted_before_it(scratch_db):
     # The downgrade guard still refuses while an approval is lapsed.
     with pytest.raises(RuntimeError, match="lapsed"):
         command.downgrade(cfg, "0014_review")
+
+
+@pytest.mark.parametrize("rereview_on_change", [None, True, False])
+def test_upgrade_requests_rereview_like_a_runtime_lapse(scratch_db, rereview_on_change):
+    """A lapsed section approval asks for re-review when the document's effective policy
+    says so (its own policy, else the company's, else the default: yes), as
+    oracle.review.state.lapse_approvals does at runtime."""
+    cfg = _cfg()
+    command.upgrade(cfg, "0014_review")
+    ids = _populate()
+    if rereview_on_change is not None:
+        _run(
+            "INSERT INTO document_review_policies (id, tenant_id, document_id, "
+            "rereview_on_change) VALUES (gen_random_uuid(), :t, :d, :r)",
+            t=ids["tenant"],
+            d=ids["doc_a"],
+            r=rereview_on_change,
+        )
+    # doc_b has a state row already (an owner), but no lapsed section approval.
+    _run(
+        "INSERT INTO section_review_states (id, tenant_id, document_id, section_key, "
+        "owner_id) VALUES (gen_random_uuid(), :t, :d, 'goal', :o)",
+        t=ids["tenant"],
+        d=ids["doc_b"],
+        o=ids["approver"],
+    )
+    command.upgrade(cfg, "0014_member_disable")
+    states = {
+        (r[0], r[1]): r[2]
+        for r in _run(
+            "SELECT document_id, section_key, rereview_requested_at IS NOT NULL "
+            "FROM section_review_states"
+        )
+    }
+    assert states.get((ids["doc_a"], "goal"), False) is (rereview_on_change is not False)
+    assert states[(ids["doc_b"], "goal")] is False

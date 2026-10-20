@@ -127,9 +127,13 @@ def read_session_cookie(value: str) -> SessionCookie | None:
 
 def session_is_current(user: User | None, signed_at: datetime) -> bool:
     """Whether a session cookie signed at ``signed_at`` signs ``user`` in: they may sign
-    in, and it was signed after their last disable or restore (C2: a disable ends every
-    session, a restored member signs in fresh). A cookie without its own issue time has
-    the signature's whole seconds, so it counts only from the second after."""
+    in now (active, in this company), and the cookie was signed at or after their
+    ``sessions_valid_after`` (set by a disable and by a restore; C2: a disable ends every
+    session, a restored member signs in fresh). ``signed_at`` is the cookie's own issue
+    time in microseconds; a cookie made before it carried one (``read_session_cookie``)
+    has only the signature's time, truncated to whole seconds, so such a cookie signed
+    in the same second as a disable or restore is refused (it counts from the next whole
+    second)."""
     if not may_sign_in(user):
         return False
     after = user.sessions_valid_after  # type: ignore[union-attr]

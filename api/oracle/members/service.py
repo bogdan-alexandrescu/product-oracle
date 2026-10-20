@@ -281,16 +281,20 @@ async def _cancel_llm_jobs(
     session: AsyncSession, requesters: set[uuid.UUID], at: datetime
 ) -> list[uuid.UUID]:
     """Cancel the queued built-in model jobs the removed member requested: nothing more
-    is spent for them. A job already running finishes (its call is under way)."""
+    is spent for them. A job already running finishes (its call is under way). A job a
+    worker is claiming right now is waited for (a claim holds its row for a moment), not
+    skipped: it is cancelled if still queued, or finishes if the claim started it."""
     from oracle.jobs.models import LlmJob
 
     jobs = list(
         await session.scalars(
             select(LlmJob)
             .where(LlmJob.status == "queued", LlmJob.requested_by.in_(requesters))
-            .with_for_update(skip_locked=True)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
     )
+    jobs = [j for j in jobs if j.status == "queued"]
     for job in jobs:
         job.status = "cancelled"
         job.error = "Its requester was removed from this company"
@@ -428,6 +432,17 @@ async def sweep_disabled(
     from oracle.review import publish
 
     await publish.gate_lock(session, shared=False)
+    # Re-read under the gate: a restore may have committed while the sweep waited on it,
+    # and a restored member's new tokens and connections are theirs to keep.
+    user = await session.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if user is None or user.disabled_at is None:
+        await session.rollback()
+        return False
     at = datetime.now(UTC)
     via = {"via": "member.disable.sweep", "member_id": str(user_id)}
     await session.execute(
