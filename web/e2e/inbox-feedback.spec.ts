@@ -1,9 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, section } from "./helpers";
+import { feedbackState, login, section } from "./helpers";
 
 /*
- * The Inbox's feedback row leads to the items it counts (owner report, 2026-10-20): the
+ * The Inbox's feedback row leads to the items it counts (owner report, 2026-10-20). Since the
+ * PRD page navigation (I3, 2026-10-20) the review panel's Feedback tab filters by state chips
+ * (Open / Staged / Declined / Done) and scope chips (This section / All sections). The
  * "suggestions" mock has a PRD (fleet-next v2) whose open feedback is three Oracle change
  * requests on f-33, f-34 and f-36, none on the first section, plus one addressed item.
  */
@@ -17,6 +19,8 @@ async function suggestions(page: Page) {
 const panel = (page: Page) => page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
 const items = (page: Page) => page.getByTestId("feedback-item").filter({ visible: true });
 const item = (page: Page, key: string) => items(page).filter({ has: page.locator(`[data-section-link="${key}"]`) });
+const pressed = (scope: ReturnType<typeof panel>, group: string, name: RegExp) =>
+  expect(scope.getByTestId(group).getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
 
 test("inbox: the feedback row says what waits and links to the first open item", async ({ page }) => {
   await suggestions(page);
@@ -51,20 +55,19 @@ test("arriving from the inbox: Feedback, All + Open, at the first open item with
   await expect(page.getByTestId("document-sections").filter({ visible: true })).toHaveAttribute("data-open", "f-33");
   const review = panel(page);
   await expect(review.getByRole("tab", { name: /^Feedback\s*3$/ })).toHaveAttribute("aria-selected", "true");
-  await expect(review.getByTestId("inspector-scope").getByRole("button", { name: "All", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(review.getByLabel("Filter by status")).toHaveValue("open");
+  await pressed(review, "inspector-scope", /^All sections/);
+  await pressed(review, "feedback-state", /^Open/);
   await expect(items(page)).toHaveCount(3);
 
-  // The header counts suggestions next to comments.
-  await expect(review.getByTestId("stat-open-comments")).toContainText("0");
-  await expect(review.getByTestId("stat-open-suggestions")).toContainText("3");
+  // The header counts open feedback (comments, suggestions and change requests, one definition).
+  await expect(review.getByTestId("stat-open-feedback")).toContainText("3");
 
   // The first open item is in view, its actions at its top.
   const first = item(page, "f-33");
   await expect(first.getByRole("button", { name: "Accept", exact: true })).toBeInViewport();
   await expect(first.getByRole("button", { name: "Edit and accept" })).toBeInViewport();
   await expect(first.getByRole("button", { name: "Dismiss", exact: true })).toBeInViewport();
-  await expect(first.locator('[data-section-link="f-33"]')).toHaveText("Go to §f-33");
+  await expect(first.locator('[data-section-link="f-33"]')).toHaveText("Go to F-33 Proof of delivery");
   const actionsTop = (await first.getByRole("button", { name: "Accept", exact: true }).boundingBox())!.y;
   const textTop = (await first.getByTestId("suggestion-text").boundingBox())!.y;
   expect(actionsTop).toBeLessThan(textTop);
@@ -132,17 +135,22 @@ test("Feedback tab: counts open items, and shows All when the open section has n
   const tab = review.getByRole("tab", { name: /^Feedback\s*3$/ });
   await expect(tab).toBeVisible();
   await tab.click();
-  await expect(review.getByTestId("inspector-scope").getByRole("button", { name: "All", exact: true })).toHaveAttribute("aria-pressed", "true");
-  // All statuses: the three open items and the addressed one.
-  await expect(items(page)).toHaveCount(4);
-  await expect(page.getByText("No feedback")).toHaveCount(0);
+  await pressed(review, "inspector-scope", /^All sections/);
+  // Open first: the three open items; Done holds the addressed one.
+  await expect(items(page)).toHaveCount(3);
+  await expect(page.getByTestId("feedback-empty")).toHaveCount(0);
+  await feedbackState(page, "Done");
+  await expect(items(page)).toHaveCount(1);
+  await feedbackState(page, "Open");
 
   // A section with its own item narrows to it, as before.
   await page.goto("/documents/fleet-next/v/2#f-34");
   await panel(page).getByRole("tab", { name: /^Feedback/ }).click();
-  await expect(panel(page).getByTestId("inspector-scope").getByRole("button", { name: "This section" })).toHaveAttribute("aria-pressed", "true");
+  await pressed(panel(page), "inspector-scope", /^This section/);
   await expect(items(page)).toHaveCount(1);
-  await expect(panel(page).getByRole("tab", { name: /^Feedback\s*1$/ })).toBeVisible();
+  // The tab counts all open feedback; the scope chip counts this section's.
+  await expect(panel(page).getByRole("tab", { name: /^Feedback\s*3$/ })).toBeVisible();
+  await expect(panel(page).getByTestId("inspector-scope").getByRole("button", { name: /^This section/ })).toHaveText(/This section\s*1/);
 });
 
 test("comment feedback items: Resolve and Reopen at the top", async ({ page }) => {
@@ -153,14 +161,15 @@ test("comment feedback items: Resolve and Reopen at the top", async ({ page }) =
   const resolve = comment.getByRole("button", { name: "Resolve", exact: true });
   await expect(resolve).toBeInViewport();
   await resolve.click();
-  // Open only: the resolved item leaves the list; All statuses shows it addressed, with Reopen.
+  // Open only: the resolved item leaves the list; Done shows it, with Reopen.
   await expect(items(page)).toHaveCount(0);
-  await panel(page).getByLabel("Filter by status").selectOption("");
+  await feedbackState(page, "Done");
   const done = item(page, "s-5-3").filter({ hasText: "most recently used address" });
-  await expect(done).toContainText("Addressed");
+  await expect(done.getByTestId("feedback-state-chip")).toHaveText("Done");
   await done.getByRole("button", { name: "Reopen" }).click();
-  await expect(done).toContainText("Open");
-  await expect(done.getByRole("button", { name: "Resolve", exact: true })).toBeVisible();
+  await expect(done).toHaveCount(0);
+  await feedbackState(page, "Open");
+  await expect(item(page, "s-5-3").getByRole("button", { name: "Resolve", exact: true })).toBeVisible();
 });
 
 test("phone: arriving from the inbox shows the first open item and its actions", async ({ page }) => {

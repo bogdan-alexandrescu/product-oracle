@@ -168,10 +168,11 @@ test("a roadmap version names its PRD, and its PRD links open the PRD view at th
   await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
 
   const link = (await openSection(page, "brief-items")).getByRole("link", { name: "1. Behaviour" });
-  await expect(link).toHaveAttribute("href", "/documents/usage-alerts/v/1#s-behaviour");
+  // One section link form everywhere (sectionHref): #key; the older #s-key still opens it.
+  await expect(link).toHaveAttribute("href", "/documents/usage-alerts/v/1#behaviour");
   await expect(link).not.toHaveAttribute("target", "_blank");
   await link.click();
-  await expect(page).toHaveURL(/\/documents\/usage-alerts\/v\/1#s-behaviour$/);
+  await expect(page).toHaveURL(/\/documents\/usage-alerts\/v\/1#behaviour$/);
   await expect(section(page, "behaviour")).toBeVisible();
 
   // Present mode carries the provenance on the deck.

@@ -579,3 +579,51 @@ async def test_the_batch_job_kind_is_allowed_by_the_database(client, ctx, pool, 
     async with tenant_session(ctx["tenant_id"]) as s:
         kinds = set(await s.scalars(select(LlmJob.kind)))
     assert "refinement_batch" in kinds
+
+
+async def test_inbox_total_counts_each_new_or_open_item(client, ctx, pool, fake):
+    """Owner, 2026-10-20: the badge counts each new or open item (= New + Open), never
+    staged, declined or done; one open rule, so the document row leaves staged items out."""
+    ids = await staged_setup(client, ctx, fake)
+    second = await comment(client, ctx, "solution", "Who owns the checklist?")
+    inbox = (await client.get("/v1/inbox", headers=ctx["headers"])).json()
+    counts = inbox["counts"]
+    assert (counts["new"], counts["staged"], counts["declined"]) == (2, 2, 1)
+    # Two open items on one document count two, not one per document.
+    assert inbox["total"] == counts["new"] + counts["open"] == 2
+    [doc] = inbox["feedback"]
+    assert {i["id"] for i in doc["items"]} == {ids["still"], second}
+    assert doc["counts"]["accepted"] == 0
+    # The first open item's section, never a staged one's (goal-trace, solution's goal).
+    assert doc["first_section_key"] in ("problem", "solution")
+    assert ids["goal"] not in {i["id"] for i in doc["items"]}
+
+
+async def test_inbox_document_with_only_staged_items_has_no_open_row(client, ctx, pool, fake):
+    ids = await staged_setup(client, ctx, fake)
+    resp = await client.post(
+        f"/v1/suggestions/{ids['still_s']}/accept", json={}, headers=ctx["headers"]
+    )
+    assert resp.status_code == 200, resp.text
+    inbox = (await client.get("/v1/inbox", headers=ctx["headers"])).json()
+    assert inbox["feedback"] == [] and inbox["total"] == 0 and inbox["needs_me"] == 0
+    [row] = inbox["staged"]
+    assert row["count"] == 3
+
+
+async def test_dismissing_a_suggestion_without_declining_keeps_the_item_open(
+    client, ctx, pool, fake
+):
+    """Owner, 2026-10-20: dismissing Oracle's suggestion is not declining the reviewer's point."""
+    ids = await staged_setup(client, ctx, fake)
+    resp = await client.post(
+        f"/v1/suggestions/{ids['still_s']}/dismiss",
+        json={"reason": "Not this wording.", "decline": False},
+        headers=ctx["headers"],
+    )
+    assert resp.status_code == 200, resp.text
+    inbox = (await client.get("/v1/inbox", headers=ctx["headers"])).json()
+    assert {i["id"]: i["state"] for i in inbox["items"]}[ids["still"]] == "new"
+    assert inbox["total"] == 1
+    fb = await feedback(client, ctx)
+    assert fb[ids["still"]]["state"] == "open"

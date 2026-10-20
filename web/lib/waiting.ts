@@ -27,12 +27,13 @@ export const loadInbox = () => shared("inbox", () => unwrap(api.GET("/v1/inbox")
 type Inbox = Awaited<ReturnType<typeof loadInbox>>;
 
 /**
- * What waits on me, as the rail badge, Home and /inbox count it: checkpoints, cost
- * approvals, overruns, the feedback that needs me (new and open items; C1e: staged,
- * declined and done do not) and the questions asked of me.
+ * What waits on me, as the rail badge, Home and /inbox count it: each new or open item
+ * (owner, 2026-10-20), so the Inbox's New + Open tabs. The API's total counts checkpoints,
+ * cost approvals, overruns, stuck runs, couldn't-import and new or open feedback items
+ * (staged, declined and done never); the questions asked of me are added here.
  */
 export function waitingCount(inbox: Inbox, questions: readonly unknown[]): number {
-  return inbox.checkpoints.length + inbox.approvals.length + inbox.overruns.length + (inbox.needs_me ?? 0) + questions.length;
+  return inbox.total + questions.length;
 }
 
 /** Records this Inbox visit as my last one (C1e: what "new" is measured from next time). */

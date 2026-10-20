@@ -6,6 +6,7 @@ owner or the approver who created a run cancels it; a checkpoint is decided by i
 ``approver_role`` or above. The tick takes an owner or an API token.
 """
 
+import asyncio
 import time
 import uuid
 from collections.abc import Awaitable
@@ -21,19 +22,23 @@ from oracle.claude_accounts.sweep import sweep_if_due as sweep_claude_accounts_i
 from oracle.jobs.worker import run_pending as run_llm_jobs
 from oracle.runs import service
 from oracle.runs.schemas import (
+    CancelAgain,
     CheckpointDecision,
     EstimateOut,
     FlowCatalog,
     InboxOut,
+    McpServerRegistration,
     RunCreate,
     RunOut,
     RunPatch,
     RunStatus,
     RunSummary,
+    RuntimeFeatures,
     RuntimeStatusOut,
     TickOut,
 )
-from oracle.swarm import RuntimeUnavailable, get_runtime
+from oracle.swarm import Features, RuntimeUnavailable, get_runtime
+from oracle.swarm.runtime import MCP_SERVER
 from oracle.swarm.settings import get_runtime_settings
 from oracle.ticker import router as scheduler_tick
 
@@ -52,9 +57,13 @@ async def _call[T](op: Awaitable[T]) -> T:
 
 @router.get("/runtime/status", response_model=RuntimeStatusOut)
 async def runtime_status(_: Owner) -> RuntimeStatusOut:
-    """Call the agent runtime as Oracle and report what it answers: reachable, and as which
-    tenant. Owner only. Never shows a credential."""
+    """Call the agent runtime as Oracle and report what it answers: reachable, as which
+    tenant, and which adapter v2 features are on (mcp, await_input, service_answer: on,
+    off or unknown; read briefly cached, never longer than the runtime's timeout). Owner
+    only. Never shows a credential."""
     runtime = get_runtime()
+    # Both calls at once: each holds its own deadline, so the answer takes at most one.
+    me, feats = await asyncio.gather(runtime.whoami(), runtime.features(), return_exceptions=True)
     out = RuntimeStatusOut(
         runtime=runtime.name,
         auth=get_runtime_settings().swarmcloud_auth if runtime.name == "swarmcloud" else None,
@@ -62,14 +71,35 @@ async def runtime_status(_: Owner) -> RuntimeStatusOut:
         can_reach_oracle=runtime.can_reach_oracle,
         notes=runtime.notes(),
     )
-    try:
-        me = await runtime.whoami()
-    except RuntimeUnavailable as exc:
-        out.error = str(exc)
+    if isinstance(feats, Features):
+        out.features = RuntimeFeatures(**feats.as_dict())
+        out.feature_reasons = {
+            k: v for k, v in feats.reasons.items() if getattr(feats, k, "on") != "on"
+        }
+    elif isinstance(feats, BaseException) and not isinstance(feats, RuntimeUnavailable):
+        raise feats
+    if isinstance(me, RuntimeUnavailable):
+        out.error = str(me)
         return out
+    if isinstance(me, BaseException):
+        raise me
     out.reachable = True
     out.tenant_id = me.get("tenant_id")
     return out
+
+
+@router.post("/runtime/mcp-server", response_model=McpServerRegistration)
+async def register_mcp_server(_: Owner) -> McpServerRegistration:
+    """Register Oracle's MCP server in the agent runtime, idempotently: created when
+    missing, its URL updated when ORACLE_PUBLIC_URL changed, else unchanged. Runs do this
+    on their own before the first run token is sent; this is for owners and the
+    switch-on check. Owner only."""
+    url = get_runtime_settings().public_url.rstrip("/") + "/mcp"
+    try:
+        result = await get_runtime().ensure_mcp_server(url)
+    except RuntimeUnavailable as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+    return McpServerRegistration(name=MCP_SERVER, url=url, result=result)  # type: ignore[arg-type]
 
 
 @router.get("/flows", response_model=FlowCatalog)
@@ -134,9 +164,68 @@ async def resume_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) -> RunOu
     return await service.read_run(db, run_id, principal)
 
 
+@router.post("/runs/{run_id}/retry", response_model=RunOut)
+async def retry_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+    """Retry a run whose lost submission Oracle could neither find nor rule out (Inbox:
+    lookups): looked up once more, else the segment is submitted again."""
+    await _call(service.retry(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
 @router.post("/runs/{run_id}/cancel", response_model=RunOut)
 async def cancel_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
     await _call(service.cancel(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
+@router.post("/runs/{run_id}/stop-cancelling", response_model=RunOut)
+async def stop_cancelling_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+    """Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that
+    proves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox
+    item clears. A run that has not ended ends (cancelled, the reason recorded) and no
+    second workflow starts for that segment; Oracle keeps reading the stopped workflow's
+    status and cost on every tick until it ends, and counts its spend on the run (P3d)."""
+    await _call(service.stop_cancelling(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
+@router.post("/runs/{run_id}/retry-lookup", response_model=RunOut)
+async def retry_lookup_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+    """Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status
+    did not read past its search's end, or SwarmCloud answered it with 404s that prove
+    nothing, or its confirmed cancel still reads CANCELLING. Read, its cost is counted
+    on the run and it is followed until it ends. That workflow only, at most once per
+    30 s per run (429 sooner)."""
+    await _call(service.retry_lookup(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
+@router.post("/runs/{run_id}/retry-import", response_model=RunOut)
+async def retry_import_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) -> RunOut:
+    """Retry importing a step's output (Inbox: ``imports``, ``can_retry_import``): Oracle
+    stopped after its resumed advance failed 5 times in a row; the next tick tries again,
+    the count reset. Owners only; audited."""
+    await _call(service.retry_import(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
+@router.post("/runs/{run_id}/cancel-again", response_model=RunOut)
+async def cancel_again_run(
+    run_id: uuid.UUID, body: CancelAgain, principal: Approver, db: TenantDB
+) -> RunOut:
+    """Cancel again (Inbox: ``cancel_again``): a workflow an approver stopped cancelling,
+    whose spend took the ended run over its ceiling, has Oracle's cancel calls turned
+    back on; its status and cost are still read until it ends, and nothing restarts
+    (P3d). An owner or the approver who created the run; audited."""
+    await _call(service.cancel_again(db, principal, run_id, body.workflow_id))
+    return await service.read_run(db, run_id, principal)
+
+
+@router.post("/runs/{run_id}/dismiss-overrun", response_model=RunOut)
+async def dismiss_overrun_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+    """Clear an ended run's overrun from the Inbox (``can_dismiss_overrun``: nothing of
+    the run is left to read). The overrun stays recorded on the run; audited."""
+    await _call(service.dismiss_overrun(db, principal, run_id))
     return await service.read_run(db, run_id, principal)
 
 

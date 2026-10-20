@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
-import yaml
+from oracle import safe_yaml
 
 HORIZONS = ("now", "next", "later")
 CONFIDENCES = ("high", "medium", "low")
@@ -73,8 +73,8 @@ def check_items(
     """Parse and check ``roadmap_items.yaml`` against the source PRD version."""
     out = ItemsCheck()
     try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
+        data = safe_yaml.load(text)
+    except safe_yaml.SafeYamlError as exc:
         out.add("invalid_yaml", f"roadmap_items.yaml is not valid YAML: {exc}")
         return out
     if not isinstance(data, dict):

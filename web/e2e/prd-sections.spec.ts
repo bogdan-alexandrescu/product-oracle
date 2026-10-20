@@ -1,15 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, openSection, section, sectionStrip, showAll } from "./helpers";
+import { login, openSection, outlineRow, section, sectionStrip, showAll } from "./helpers";
 
-// I3 (2026-10-19): the PRD page shows ONE SECTION AT A TIME. The strip picks the open
-// section, the URL hash keeps it, arrows at the panel's foot and [ ] step through.
+// I3 (2026-10-19): the PRD page shows ONE SECTION AT A TIME. The outline rail picks the open
+// section (2026-10-20), the URL hash keeps it, arrows at the panel's foot and [ ] step through.
 
 /** The section panels on screen (Next keeps recently visited routes mounted but hidden). */
 const shown = (page: Page) => page.locator("section[data-section-key]").filter({ visible: true });
-const stripItem = (page: Page, key: string) => sectionStrip(page).locator(`a[data-strip-key="${key}"]`);
+const stripItem = (page: Page, key: string) => outlineRow(page, key);
 
-test("sections: the strip, the hash, the arrows, back / forward and [ ] switch the one open section", async ({ page }) => {
+test("sections: the outline, the hash, the arrows, back / forward and [ ] switch the one open section", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
   // The first unreviewed section opens by default, alone.
@@ -86,22 +86,21 @@ test("sections: one review bar on screen; evidence and refine sit in the ⋯ men
   await expect(page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").first()).toBeVisible();
 });
 
-test("sections: reviewing the open section ticks it in the strip and counts it", async ({ page }) => {
+test("sections: reviewing the open section marks it in the outline and counts it", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
-  const count = page.getByTestId("sections-count").filter({ visible: true });
-  await expect(count).toHaveText(/Sections \d+\/11/);
-  const before = Number((await count.innerText()).match(/(\d+)\//)![1]);
+  const count = sectionStrip(page).getByTestId("review-progress");
+  await expect(count).toHaveText(/\d+ of 11 reviewed/);
+  const before = Number((await count.innerText()).match(/(\d+) of/)![1]);
   const users = await openSection(page, "users");
-  await expect(stripItem(page, "users").getByTestId("strip-tick")).toHaveCount(0);
+  await expect(stripItem(page, "users")).toHaveAttribute("data-state", "none");
 
   const bar = users.getByTestId("review-bar");
   await bar.getByRole("button", { name: "Approve" }).click();
   await bar.getByRole("button", { name: /^Save/ }).click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
-  await expect(stripItem(page, "users").getByTestId("strip-tick")).toBeVisible();
-  await expect(stripItem(page, "users")).toHaveAttribute("data-reviewed", "true");
-  await expect(count).toHaveText(`Sections ${before + 1}/11`);
+  await expect(stripItem(page, "users")).toHaveAttribute("data-state", "approved");
+  await expect(count).toHaveText(`${before + 1} of 11 reviewed`);
   // The reviewed section stays open.
   await expect(section(page, "users")).toBeVisible();
   await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "true");
@@ -135,17 +134,19 @@ test("sections: the inspector shows the open section's comments first; All shows
   await page.getByTestId("inspector-scope").filter({ visible: true }).getByRole("button", { name: "This section" }).click();
   const feedback = page.getByTestId("feedback-item").filter({ visible: true });
   await expect(feedback.first()).toBeVisible();
-  for (const item of await feedback.all()) await expect(item).toContainText("§roles");
+  for (const item of await feedback.all()) await expect(item.getByTestId("feedback-goto")).toHaveAttribute("href", /#roles$/);
 });
 
-test("sections: on a phone, one section per screen, Comments one tap away, no sideways scroll", async ({ page }) => {
+test("sections: on a phone, one section per screen, Review one tap away, no sideways scroll", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await page.goto("/documents/team-workspaces/v/2#problem");
   await expect(section(page, "problem")).toBeVisible();
   await expect(page.getByTestId("review-bar").filter({ visible: true })).toHaveCount(1);
-  const button = section(page, "problem").getByRole("button", { name: "Comments on this section: 2" });
-  await button.click();
-  await expect(page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true })).toBeInViewport();
+  await page.getByTestId("phone-review").click();
+  const sheet = page.getByRole("dialog", { name: "Review" });
+  await expect(sheet.getByRole("complementary", { name: "Review panel" })).toBeInViewport();
+  await expect(sheet.getByTestId("comment")).toHaveCount(2);
+  await page.keyboard.press("Escape");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });

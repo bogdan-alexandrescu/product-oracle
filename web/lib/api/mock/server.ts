@@ -10,6 +10,7 @@ import { plainText } from "@/lib/markdown";
 import { mockUuid, seeded } from "./ids";
 import { enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
+import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
@@ -78,7 +79,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
  * new company (members only, no goals, documents, runs or questions); "large" as a big one
  * (30 goals, 50 more active runs, questions asked of the signed-in member); "suggestions" as the
- * default company plus a PRD with three open Oracle suggestions (fleet-next).
+ * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
+ * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -264,6 +266,66 @@ function seedSuggestions(): Db {
       updated_at: created_at,
     });
   });
+  return db;
+}
+
+/** The default seed plus one PRD of 100+ sections in nested chapters (./big-prd.ts). */
+function seedBigPrd(): Db {
+  const db = seed();
+  const row: DocumentRow = {
+    id: uuid(),
+    slug: BIG_PRD.slug,
+    title: BIG_PRD.title,
+    status: "in_review",
+    kind: "prd",
+    template: BIG_PRD.template ?? null,
+    template_version: BIG_PRD.template_version ?? null,
+    theme: null,
+    created_at: BIG_PRD.versions[0].created_at,
+    updated_at: BIG_PRD.versions[0].created_at,
+  };
+  db.documents.push(row);
+  const v = buildVersion(row, BIG_PRD.versions[0]);
+  db.versions.push(v);
+  const at = "2026-10-19T10:00:00Z";
+  for (const [key, r] of Object.entries(BIG_PRD_REVIEWS)) addReview(db, v, key, r, { created_at: at });
+  const comments = BIG_PRD_COMMENTS.map(([key, exact, text], i) => {
+    const plain = v.sections.find((s) => s.section_key === key)!.body_text;
+    const start = plain.indexOf(exact);
+    const anchor = { exact, prefix: plain.slice(Math.max(0, start - 32), start), suffix: plain.slice(start + exact.length, start + exact.length + 32) };
+    return addComment(db, v, { section_key: key, anchor, body: text }, { created_at: `2026-10-19T11:${String(10 + i).padStart(2, "0")}:00Z` });
+  });
+  const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
+  for (const s of BIG_PRD_SUGGESTIONS) {
+    const c = comments.find((x) => x.body === s.comment)!;
+    llm.suggestions.push({
+      id: uuid(),
+      document_id: row.id,
+      feedback_item_id: c.feedback_item_id!,
+      job_id: null,
+      version_number: 1,
+      classification: "change_request",
+      group_key: null,
+      duplicate_of: null,
+      kind: "section_text",
+      section_key: c.section_key,
+      text: s.text,
+      edited_text: null,
+      rationale: s.rationale,
+      pushback: null,
+      status: s.status,
+      override_reason: null,
+      decided_by: s.status === "open" ? null : db.user_id,
+      decided_at: s.status === "open" ? null : at,
+      applied_in_version: null,
+      created_at: at,
+      updated_at: at,
+    });
+    // Dismissed with "decline the feedback".
+    if (s.status === "dismissed") Object.assign(db.feedback.find((f) => f.id === c.feedback_item_id)!, { status: "declined", resolution_note: "Kept as written." });
+  }
+  // One resolved thread: Done.
+  comments.find((c) => c.body.startsWith("List the shortcuts"))!.resolved_at = at;
   return db;
 }
 
@@ -497,7 +559,8 @@ function withInboxStates(
   return {
     ...base,
     feedback,
-    total: base.checkpoints.length + base.approvals.length + base.overruns.length + feedback.length,
+    // Every new or open item, as the API: = the Inbox's New + Open tabs (owner, 2026-10-20).
+    total: base.total + states.needs_me,
     ...states,
     last_seen_at: seen,
   };
@@ -641,7 +704,11 @@ function load(): Db {
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
   const db = seeded(
     "db",
-    scenario === "empty" ? seedEmpty : scenario === "large" ? seedLarge : scenario === "suggestions" ? seedSuggestions : seed,
+    scenario === "empty" ? seedEmpty : scenario === "large" ? seedLarge : scenario === "suggestions"
+        ? seedSuggestions
+        : scenario === "big-prd"
+          ? seedBigPrd
+          : seed,
   );
   save(db);
   return db;

@@ -22,6 +22,7 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
+import { sectionHref } from "@/lib/section-link";
 
 type Readiness = Schemas["ReadinessDashboard"];
 type Item = Schemas["ReadinessItem"];
@@ -61,7 +62,7 @@ type Block = {
  */
 function blocksOf(doc: string, n: number, readiness: Readiness, strategy: Schemas["DocumentBlockerStrategy"] | undefined): Block[] {
   const entity = (id: string | undefined) => (id ? `/baseline?entity=${id}` : null);
-  const section = (key: string | undefined) => (key ? `/documents/${doc}/v/${n}#${key}` : null);
+  const section = (key: string | undefined) => (key ? sectionHref(doc, n, key) : null);
   // The gating blockers first, then the other refusals in the verdict's order.
   const keys = [...readiness.blocking].sort((a, b) => Number(b === BLOCKERS_CHECK) - Number(a === BLOCKERS_CHECK));
   return keys.flatMap((key): Block[] => {

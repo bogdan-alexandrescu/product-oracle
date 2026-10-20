@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { ADMIN, login, openSection, section, sectionStrip, selectText } from "./helpers";
+import { ADMIN, feedbackState, login, openSection, outlineRow, section, sectionStrip, selectText } from "./helpers";
 
 test("login: rejects a wrong password, then signs in", async ({ page }) => {
   await page.goto("/documents");
@@ -30,10 +30,11 @@ test("open a version: sections in order with citation chips", async ({ page }) =
   await page.getByRole("link", { name: "Version 2" }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
 
-  // One section at a time: the strip lists them in order, the first unreviewed one is open.
+  // One section at a time: the outline lists them in order, the first unreviewed one is open.
   const headings = page.locator("section[data-section-key] :is(h1,h2,h3)").filter({ visible: true });
   await expect(headings).toHaveText(["Checkout redesign PRD"]);
-  await expect(sectionStrip(page).locator("a[data-strip-key]")).toHaveText([
+  await sectionStrip(page).getByRole("button", { name: "Unfold 5. Proposed flow" }).click();
+  await expect(sectionStrip(page).getByTestId("outline-name")).toHaveText([
     "Checkout redesign PRD",
     "1. Goal trace",
     "2. Problem",
@@ -77,14 +78,12 @@ test("add an anchored comment that survives reload", async ({ page }) => {
   await page.reload();
   const markAfter = section(page, "scope").locator("mark.hl-comment");
   await expect(markAfter).toHaveText("the order review page");
-  const comment = page.getByTestId("comment").filter({ hasText: "separate step or a summary panel" });
-  await expect(comment).toContainText("4. Scope");
+  const comment = page.getByTestId("feedback-item").filter({ hasText: "separate step or a summary panel" });
+  await expect(comment.getByTestId("feedback-goto")).toHaveText("Go to 4. Scope");
 
-  // The comment is also an open feedback item.
-  await page.getByRole("tab", { name: "Feedback" }).click();
-  await page.getByLabel("Filter by status").selectOption("open");
-  await page.getByLabel("Filter by version").selectOption("2");
-  await expect(page.getByTestId("feedback-item").filter({ hasText: "summary panel" })).toBeVisible();
+  // The comment is also an open feedback item, raised on v2.
+  await expect(comment.getByTestId("feedback-state-chip")).toHaveText("Open");
+  await expect(comment).toContainText("raised on v2");
 });
 
 test("set a section verdict; approval shows the section as locked", async ({ page }) => {
@@ -105,9 +104,9 @@ test("set a section verdict; approval shows the section as locked", async ({ pag
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
   await expect(bar.getByTestId("verdict-state")).toContainText("Locked");
 
-  // The changes-requested item was superseded by the approval.
-  await page.getByRole("tab", { name: "Feedback" }).click();
-  await page.getByLabel("Filter by status").selectOption("superseded");
+  // The changes-requested item was superseded by the approval: it is Done.
+  await page.getByRole("tab", { name: /^Feedback/ }).click();
+  await feedbackState(page, "Done");
   await expect(page.getByTestId("feedback-item").filter({ hasText: "support agent's main job" })).toBeVisible();
 
   await page.reload();
@@ -122,7 +121,7 @@ test("switch versions with the version switcher", async ({ page }) => {
   await page.getByRole("group", { name: "Version" }).getByRole("link", { name: "v1", exact: true }).click();
   await expect(page).toHaveURL(/\/v\/1$/);
   await openSection(page, "rollout");
-  await expect(sectionStrip(page).locator('a[data-strip-key="s-5-3"]')).toHaveCount(0);
+  await expect(outlineRow(page, "s-5-3")).toHaveCount(0);
   await expect(page.getByText("You are viewing an earlier version.")).toBeVisible();
   // v1 carries the earlier review: the goal trace was approved.
   await expect((await openSection(page, "goal-trace")).getByTestId("verdict-state")).toContainText("Locked");

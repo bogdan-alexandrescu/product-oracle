@@ -3,16 +3,13 @@
 import { useEffect, useState } from "react";
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
+import { TabBar } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
+import { api, unwrap } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged, waitingCount } from "@/lib/waiting";
+import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged } from "@/lib/waiting";
 
-import type { InboxOut } from "../runs/_lib";
-import { CountChip, inboxNeeds, NeedTable, questionNeeds, type Act } from "./_needs";
-import { FeedbackStates } from "./_states";
-
-type Question = Schemas["StakeholderQuestionOut"];
+import { allNeeds, NeedTable, questionNeeds, STATE_TABS, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 
 export default function InboxPage() {
   const q = useQuery("inbox", loadInbox);
@@ -30,7 +27,6 @@ export default function InboxPage() {
   }, [arrived]);
   const inbox = q.data;
   const questions = questionsQ.data ?? [];
-  const waiting = inbox ? waitingCount(inbox, questions) : undefined;
 
   async function act(key: string, call: () => Promise<unknown>) {
     setBusy(key);
@@ -48,6 +44,10 @@ export default function InboxPage() {
     }
   }
 
+  const seenBefore = arrived ? arrivalQ.data : inbox?.last_seen_at;
+  const rows = inbox ? allNeeds(inbox, questionNeeds(questions, docsQ.data ?? []), busy, act, seenBefore) : null;
+  const waiting = rows ? waitingNeeds(rows).length : undefined;
+
   return (
     <Page>
       <PageHeader title="Inbox" status={waiting != null && waiting > 0 && <Chip kind="acc">{waiting} waiting</Chip>} />
@@ -58,82 +58,72 @@ export default function InboxPage() {
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
-      {inbox && (
-        <div className="flex flex-col gap-4">
-          <FeedbackStates inbox={inbox} seenBefore={arrived ? arrivalQ.data : undefined} />
-          <Needs
-            inbox={inbox}
-            questions={questions}
-            questionsError={questionsQ.error}
-            docs={docsQ.data ?? []}
-            busy={busy}
-            act={act}
-          />
-        </div>
-      )}
+      {inbox && rows && <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} />}
     </Page>
   );
 }
 
-function Needs({
-  inbox,
-  questions,
-  questionsError,
-  docs,
-  busy,
-  act,
-}: {
-  inbox: InboxOut;
-  questions: Question[];
-  questionsError: string | null;
-  docs: DocumentSummary[];
-  busy: string | null;
-  act: Act;
-}) {
-  // Feedback by state has its own panel (FeedbackStates); here, each document's open feedback.
-  const { checkpoints, approvals, overruns, feedback } = inboxNeeds(inbox, busy, act);
-  const asked = questionNeeds(questions, docs);
-  const total = checkpoints.length + approvals.length + overruns.length + feedback.length + asked.length;
+/** The groups a tab draws, in order; each is one table under its own label. */
+const GROUPS: { id: NeedGroup; title: string }[] = [
+  { id: "checkpoints", title: "Checkpoints" },
+  { id: "approvals", title: "Cost approvals" },
+  { id: "overruns", title: "Paused on overrun" },
+  { id: "lookups", title: "Stuck runs" },
+  { id: "imports", title: "Couldn't import" },
+  { id: "feedback", title: "Feedback" },
+  { id: "questions", title: "Questions" },
+  { id: "searches", title: "Looking for earlier submissions" },
+];
 
+/**
+ * ONE Inbox (owner, 2026-10-20): every kind of item in a single list with state tabs, New
+ * first (the default on arrival), each item drawn once. New + Open is what the rail badge
+ * counts.
+ */
+function InboxTabs({
+  rows,
+  waiting,
+  questionsError,
+}: {
+  rows: ReturnType<typeof allNeeds>;
+  waiting: number;
+  questionsError: string | null;
+}) {
+  const [tab, setTab] = useState<InboxState>("new");
+  const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).length;
+  const shown = rows.filter((r) => r.state === tab);
+  const label = STATE_TABS.find((t) => t.id === tab)!.label;
   return (
-    <Panel
-      title="Needs you"
-      count={total}
-      tools={
-        total > 0 && (
-          <>
-            {checkpoints.length > 0 && <CountChip label="Checkpoints" n={checkpoints.length} />}
-            {approvals.length + overruns.length > 0 && <CountChip label="Cost" n={approvals.length + overruns.length} />}
-            {feedback.length > 0 && <CountChip label="Feedback" n={feedback.length} />}
-            {asked.length > 0 && <CountChip label="Questions" n={asked.length} />}
-          </>
-        )
-      }
-    >
+    <Panel title="Needs you" count={waiting} testId="inbox-needs">
+      <div className="px-4 pt-1 max-[600px]:px-3" data-testid="inbox-state-tabs">
+        <TabBar
+          label="Inbox by state"
+          tabs={STATE_TABS.map((t) => ({ id: t.id, label: t.label, count: count(t.id) }))}
+          value={tab}
+          onChange={setTab}
+        />
+      </div>
       {questionsError && (
         <div className="px-4 pt-3" data-testid="inbox-questions-error">
           <ErrorNote>{questionsError}</ErrorNote>
         </div>
       )}
-      {total === 0 ? (
-        !questionsError && (
+      <div role="tabpanel" aria-label={label} data-testid={`inbox-tab-${tab}`}>
+        {shown.length === 0 ? (
           <Empty>
-            Nothing waiting{" "}
-            <InfoTip label="the inbox" align="start">
-              Checkpoints that need a decision, such as a run waiting for budget approval or a draft ready for review, land
-              here, with the questions asked of you.
-            </InfoTip>
+            Nothing {label.toLowerCase()}{" "}
+            {tab === "new" && (
+              <InfoTip label="the inbox" align="start">
+                Checkpoints that need a decision, cost approvals, feedback to review and the questions asked of you land here.
+              </InfoTip>
+            )}
           </Empty>
-        )
-      ) : (
-        <>
-          <NeedTable title="Checkpoints" testId="inbox-checkpoints" rows={checkpoints} />
-          <NeedTable title="Cost approvals" testId="inbox-approvals" rows={approvals} />
-          <NeedTable title="Paused on overrun" testId="inbox-overruns" rows={overruns} />
-          <NeedTable title="Open feedback" testId="inbox-feedback" rows={feedback} />
-          <NeedTable title="Questions" testId="inbox-questions" rows={asked} />
-        </>
-      )}
+        ) : (
+          GROUPS.map((g) => (
+            <NeedTable key={g.id} title={g.title} testId={`inbox-${g.id}`} rows={shown.filter((r) => r.group === g.id)} />
+          ))
+        )}
+      </div>
     </Panel>
   );
 }

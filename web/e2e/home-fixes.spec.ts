@@ -130,22 +130,24 @@ test("Questions asked of me: rail badge, Home and the Inbox count the same", asy
   await openHome(page);
   const badge = page.getByTestId("nav-inbox-badge");
   await expect(page.getByTestId("home-needs").getByText("Questions 2")).toBeVisible();
-  await expect(page.getByText("10 waiting")).toBeVisible();
-  await expect(badge).toHaveText("10");
-  await expect(page.getByTestId("home-needs").getByTestId("panel-count")).toHaveText("10");
+  await expect(page.getByText("7 waiting")).toBeVisible();
+  await expect(badge).toHaveText("7");
+  await expect(page.getByTestId("home-needs").getByTestId("panel-count")).toHaveText("7");
 
   await page.getByTestId("nav-inbox").click();
   await expect(page).toHaveURL(/\/inbox$/);
   // Next keeps Home mounted but hidden: only the visible page counts.
-  await expect(page.getByText("10 waiting").filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("7 waiting").filter({ visible: true })).toBeVisible();
   const questions = page.getByTestId("inbox-questions");
+  // The seed asks me two: a v2 question and the deposits PRD's blocker question.
   await expect(questions.locator("tr[data-row]")).toHaveCount(2);
-  const row = questions.locator("tr[data-row]").filter({ hasText: "Which metric shows repeat checkout got faster?" });
+  await expect(questions).toContainText("Same-day cancellation refund?");
+  const row = questions.locator("tr[data-row]").filter({ hasText: "Which metric" });
   await expect(row).toContainText("Which metric shows repeat checkout got faster?");
   await expect(row).toContainText("Asked you");
   await expect(row.getByRole("link", { name: "Open Checkout redesign PRD" })).toHaveAttribute("href", "/documents/checkout-redesign");
   await expect(page.getByText("Questions 2").filter({ visible: true })).toBeVisible();
-  await expect(badge).toHaveText("10");
+  await expect(badge).toHaveText("7");
 });
 
 test("Questions asked of me: Home shows one with 7 or more inbox items, and only mine", async ({ page }) => {
@@ -169,12 +171,12 @@ test("Questions asked of me: Home shows one with 7 or more inbox items, and only
 test("Questions asked of me: the badge re-reads after an action on Home", async ({ page }) => {
   await openHome(page);
   const badge = page.getByTestId("nav-inbox-badge");
-  await expect(badge).toHaveText("10");
+  await expect(badge).toHaveText("7");
   const rows = page.getByTestId("home-needs-table").locator("tr[data-row]");
   await rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" }).click();
   // No navigation: the badge follows Home.
-  await expect(page.getByText("9 waiting")).toBeVisible();
-  await expect(badge).toHaveText("9");
+  await expect(page.getByText("6 waiting")).toBeVisible();
+  await expect(badge).toHaveText("6");
   await expect(page).toHaveURL(/\/home$/);
 });
 
@@ -189,9 +191,9 @@ test("Home reloads the questions asked of me after an action", async ({ page }) 
   );
   const rows = page.getByTestId("home-needs-table").locator("tr[data-row]");
   await rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" }).click();
-  // Home shows at most seven lines (the newest question may not fit); its count has it.
+  await expect(rows.filter({ hasText: "Which plan do pilots get?" })).toHaveCount(1);
   await expect(page.getByTestId("home-needs").getByText("Questions 3")).toBeVisible();
-  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("10");
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("7");
 });
 
 test("Questions asked of me: a failing call shows the block's error, never an empty list", async ({ page }) => {

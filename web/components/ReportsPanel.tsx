@@ -10,6 +10,7 @@ import { api, unwrap, type FeedbackStatus } from "@/lib/api/client";
 import { formatDate, formatDateTime, NO_ACCOUNT_REASON } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+import { sectionHref } from "@/lib/section-link";
 
 type Tab = "resolution" | "changes";
 
@@ -146,7 +147,7 @@ export function ReportsPanel({
             <ul className="flex flex-col">
               {c.sections.map((sec) => (
                 <li key={sec.section_key} className="border-b border-line py-2 text-sm leading-5 last:border-b-0">
-                  <a href={`#s-${sec.section_key}`} className="font-semibold text-accent-ink hover:underline">
+                  <a href={sectionHref(doc, n, sec.section_key)} className="font-semibold text-accent-ink hover:underline">
                     {sec.heading}
                   </a>{" "}
                   <span className="text-[13px] text-text2">({sec.status})</span>

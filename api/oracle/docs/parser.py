@@ -14,11 +14,12 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
-import yaml
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from oracle import safe_yaml
+from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.schemas import CitationSource, ImportProblem
 from oracle.review.schemas import Resolution
@@ -180,14 +181,14 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
         )
         return {}
     try:
-        data = yaml.safe_load(yaml_text) or {}
-    except yaml.YAMLError as exc:
-        mark = getattr(exc, "problem_mark", None)
+        data = safe_yaml.load(yaml_text) or {}
+    except safe_yaml.SafeYamlError as exc:
+        # Invalid or refused (oracle.safe_yaml): too large, too deep, anchors, tags...
         problems.append(
             ImportProblem(
                 code="invalid_front_matter",
                 message=f"front matter is not valid YAML: {exc}",
-                line=mark.line + 2 if mark else None,
+                line=exc.line + 1 if exc.line else None,
             )
         )
         return {}
@@ -359,6 +360,12 @@ def _check_citations(
 
 def parse_draft(markdown: str) -> ParsedDraft:
     """Parse and validate a draft. Raises :class:`DraftError` listing every problem."""
+    # The request body is capped (413); a run's file is not, so the draft is too.
+    limit = get_settings().max_body_bytes
+    if len(markdown.encode("utf-8")) > limit:
+        raise DraftError(
+            [ImportProblem(code="draft_too_large", message=f"draft is larger than {limit} bytes")]
+        )
     text = normalize(markdown)
     problems: list[ImportProblem] = []
 
