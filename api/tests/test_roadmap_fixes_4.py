@@ -15,6 +15,7 @@ from oracle.docs.parser import MAX_DRAFT_BYTES, DraftError, parse_draft
 from oracle.runs import flows
 from oracle.runs import roadmap as items_file
 from oracle.swarm import Outcome
+from tests.fixtures import import_draft
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     ITEMS,
     PRD,
@@ -230,3 +231,258 @@ async def test_a_runs_prd_md_probe_fails_the_import_not_the_tick(client, owner, 
     run = await get(client, auth, run["id"])
     assert run["status"] == "failed", run
     assert "prd.md was rejected" in run["error"] and "invalid_front_matter" in run["error"]
+
+
+# --------------------------------------------------------------------------- M1
+
+# Each a way to write 2026-12-15 (no basis of the PRD supports it) that a reader sees as
+# that date. ENG-412 supports 2026-11-30 only.
+DATE_PROBES = [
+    "GA 15/12/2026.",
+    "GA 12/15/2026 (US).",
+    "GA 2026/12/15 slash.",
+    "GA 15.12.2026 dotted.",
+    "GA 2026.12.15 dotted.",
+    "GA 2026-12-15T09:00Z cutover.",
+    "GA 20261215 compact.",
+    "GA Dec 15 yearless.",
+    "GA the 15th of December.",
+    "GA Dec 15, 2026 nbsp.",
+    "GA 2026‑12‑15 nb-hyphen.",
+    "GA 2026-12-​15 zero-width.",
+    "GA ２０２６-12-15 fullwidth.",
+    "GA Dec&nbsp;15, 2027 entity.",
+    "GA **Dec** 16,\n2026 emphasis.",
+    "GA `2026-12-17` code.",
+    "GA <https://example.com/2026-12-18> autolink.",
+    "GA [plan](see 2026-12-19) spaced destination.",
+    "GA Q4/Dec 20, 2026 slash-before.",
+    "GA.Dec 21, 2026 dot-before.",
+    "GA 22-Dec-2026 hyphenated.",
+    "GA 12/23/26 short year.",
+    "GA Dec 24\\, 2026 escape.",
+    "GA 2026&#45;12&#45;25 numeric entity.",
+    "GA *Dec 26, 2026* emphasis.",
+]
+
+
+def _with_paragraph(text: str, md: str = ROADMAP_MD) -> str:
+    heading = "### Payment step {#now-payment-step}\n\n"
+    assert heading in md
+    return md.replace(heading, heading + text + "\n\n", 1)
+
+
+async def test_every_probe_is_refused_on_a_person_s_import(client, owner, runtime):  # noqa: F811
+    from tests.test_roadmap import built_roadmap
+
+    _, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    for probe in DATE_PROBES:
+        resp = await import_draft(client, auth, _with_paragraph(probe), ROADMAP)
+        assert resp.status_code == 422, (probe, resp.text)
+        assert {e["code"] for e in resp.json()["errors"]} == {"unverified_date"}, probe
+    # The control: the verified date, and month or quarter phrases, import.
+    ok = _with_paragraph("Beta 30 Nov 2026, GA in Q4 2026 or December 2026.")
+    assert (await import_draft(client, auth, ok, ROADMAP)).status_code == 201
+
+
+async def _run_import(client, auth, runtime, markdown: str) -> dict:  # noqa: F811
+    runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
+    runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": markdown})]
+    off = {"roadmap_items": False, "roadmap_review": False}
+    run = await start(
+        client, auth, await create(client, auth, source=PRD, knobs={"checkpoints": off})
+    )
+    await tick(client, auth)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "succeeded", run
+    return run
+
+
+async def test_every_probe_is_a_warning_and_a_marker_on_a_run_s_import(client, owner, runtime):  # noqa: F811
+    _, auth = owner
+    await approved_prd(client, auth)
+    await _run_import(client, auth, runtime, _with_paragraph("\n\n".join(DATE_PROBES)))
+    version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
+    warnings = [w for w in version["warnings"] if w["code"] == "unverified_date"]
+    assert len(warnings) == len(DATE_PROBES), [w["message"] for w in warnings]
+    flagged = [m for m in version["date_marks"] if m["status"] == "unverified"]
+    assert len(flagged) == len(DATE_PROBES)
+    assert all(m["label"] == "unverified" for m in flagged)
+    # The verified Beta date stays unmarked.
+    assert ("2026-11-30", "verified") in {(m["text"], m["status"]) for m in version["date_marks"]}
+    # Each probe's marker is in the markdown, right after the date.
+    md = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
+    assert md.count("<!-- oracle: date unverified -->") == len(DATE_PROBES)
+    for after in (
+        "GA 20261215 <!-- oracle: date unverified --> compact.",
+        "GA `2026-12-17` <!-- oracle: date unverified --> code.",
+        "<https://example.com/2026-12-18> <!-- oracle: date unverified --> autolink.",
+        "GA Q4/Dec 20, 2026 <!-- oracle: date unverified --> slash-before.",
+        "GA.Dec 21, 2026 <!-- oracle: date unverified --> dot-before.",
+        "GA *Dec 26, 2026* <!-- oracle: date unverified --> emphasis.",
+        "GA **Dec** 16,\n2026 <!-- oracle: date unverified --> emphasis.",
+    ):
+        assert after in md, after
+
+
+ROADMAP = "checkout-redesign-roadmap"
+VERSIONS = f"/v1/documents/{ROADMAP}/versions"
+
+
+async def test_title_notes_and_layout_text_are_read_but_layout_yaml_and_sources_are_not(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    from tests.test_roadmap import built_roadmap
+
+    _, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    titled = ROADMAP_MD.replace("title: Checkout roadmap", "title: Checkout GA Dec 15, 2026")
+    resp = await import_draft(client, auth, titled, ROADMAP)
+    assert resp.status_code == 422 and "the title" in resp.json()["errors"][0]["message"]
+    noted = _with_paragraph("Payment first.\n\n```notes\nSay GA is 2026-12-15.\n```")
+    resp = await import_draft(client, auth, noted, ROADMAP)
+    assert resp.status_code == 422, resp.text
+    layout = (
+        "## Layout {#layout}\n\nLanes fixed until 2026-12-15.\n\n```yaml\nlanes: [now]\n```\n\n"
+    )
+    laid = ROADMAP_MD.replace(
+        "## Sources and data points {#sources}", layout + "## Sources and data points {#sources}"
+    )
+    resp = await import_draft(client, auth, laid, ROADMAP)
+    assert resp.status_code == 422, resp.text
+    # The layout's YAML is for the renderer; the Sources section is evidence.
+    quiet = laid.replace("Lanes fixed until 2026-12-15.", "Lanes fixed.").replace(
+        "lanes: [now]", "lanes: [now]\nfrozen: 2026-12-15"
+    )
+    quiet = quiet.replace("- Beta date: ENG-412 estimate [c:c1]", "- Retrieved 2026-12-15 [c:c1]")
+    assert (await import_draft(client, auth, quiet, ROADMAP)).status_code == 201
+
+
+async def test_sources_must_be_the_last_part(client, owner, runtime):  # noqa: F811
+    from tests.test_roadmap import built_roadmap
+
+    _, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    moved = ROADMAP_MD.replace(
+        "## Sources and data points {#sources}\n\n- Beta date: ENG-412 estimate [c:c1]\n",
+        "",
+    ).replace(
+        "## Later {#later}\n",
+        "## Sources and data points {#sources}\n\n- Beta date: ENG-412 estimate [c:c1]\n\n"
+        "## Later {#later}\n\nGA 2026-12-15.\n",
+    )
+    resp = await import_draft(client, auth, moved, ROADMAP)
+    assert resp.status_code == 422
+    codes = [e["code"] for e in resp.json()["errors"]]
+    # Refused for its place, and the date after it is read (not exempt).
+    assert codes == ["sources_not_last", "unverified_date"], codes
+    # A sub-section of sources stays exempt.
+    sub = ROADMAP_MD + "\n### Retrieval log {#sources-log}\n\nRead 2026-12-15.\n"
+    assert (await import_draft(client, auth, sub, ROADMAP)).status_code == 201
+
+
+# --------------------------------------------------------------------------- M2
+
+
+async def test_markers_sit_after_the_exact_span_everywhere(client, owner, runtime):  # noqa: F811
+    _, auth = owner
+    await approved_prd(client, auth)
+    await _run_import(
+        client,
+        auth,
+        runtime,
+        _with_paragraph("Beta Q4/Dec 15, 2026 and Beta.Dec 15, 2026; also `2026-12-15`."),
+    )
+    marker = "<!-- oracle: date unverified -->"
+    md = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
+    assert (
+        f"Beta Q4/Dec 15, 2026 {marker} and Beta.Dec 15, 2026 {marker}; also `2026-12-15` "
+        f"{marker}." in md
+    )
+    export = (await client.get(f"{VERSIONS}/1/export", params={"format": "md"}, headers=auth)).text
+    assert export.count(marker) == 3
+    html = (await client.get(f"{VERSIONS}/1/export", params={"format": "html"}, headers=auth)).text
+    assert html.count("Dec 15, 2026 <strong>[unverified]</strong>") == 2
+    assert "<code>2026-12-15</code> <strong>[unverified]</strong>" in html
+    deck = (await client.get(f"{VERSIONS}/1/deck", headers=auth)).json()
+    text = " ".join(e["html"] for s in deck["slides"] for e in s["expand"]) + " ".join(
+        s["html"] for s in deck["slides"]
+    )
+    assert "Dec 15, 2026 <strong>[unverified]</strong>" in text
+
+    # The marked markdown parses as the stored text (the import drops the comments), and
+    # the export parses as a draft.
+    from oracle.docs.parser import parse_draft
+
+    stored = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
+    assert parse_draft(md).content_hash == stored["content_hash"]
+    assert marker not in parse_draft(export).markdown
+
+
+async def test_mcp_markdown_carries_the_markers_and_date_marks(client, owner, runtime):  # noqa: F811
+    from tests.test_mcp import api_token, mcp_client, text_of
+
+    tid, auth = owner
+    await approved_prd(client, auth)
+    await _run_import(client, auth, runtime, _with_paragraph("GA 2026-12-15."))
+    token = await api_token(tid, "owner")
+    async with mcp_client(token) as c:
+        out = await c.call_tool("get_document_markdown", {"doc": ROADMAP, "version": 1})
+        assert not out.is_error, text_of(out)
+        assert (
+            "GA 2026-12-15 <!-- oracle: date unverified -->." in out.structured_content["markdown"]
+        )
+        marks = out.structured_content["date_marks"]
+        assert [(m["text"], m["label"]) for m in marks] == [("2026-12-15", "unverified")]
+        assert "date_marks" in text_of(out)
+
+
+async def test_approval_is_refused_while_a_date_is_marked(client, owner, runtime):  # noqa: F811
+    _, auth = owner
+    await approved_prd(client, auth)
+    await _run_import(client, auth, runtime, _with_paragraph("GA 2026-12-15."))
+    resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
+    assert resp.status_code == 409, resp.text
+    body = resp.json()
+    assert "2026-12-15" in body["detail"]
+    assert [(d["text"], d["status"]) for d in body["dates"]] == [("2026-12-15", "unverified")]
+    assert [b["key"] for b in body["blocking"]] == ["unverified_date"]
+    # Resolved by a basis: the marker goes and the version can be approved.
+    resp = await client.post(
+        "/v1/schedule-bases",
+        json={"kind": "estimate", "reference": "ENG-900", "supports_date": "2026-12-15",
+              "prd": PRD},
+        headers=auth,
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
+    assert resp.status_code == 200, resp.text
+
+
+async def test_a_withdrawn_date_on_an_unapproved_version_also_refuses_approval(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    _, auth = owner
+    await approved_prd(client, auth)
+    await _run_import(client, auth, runtime, ROADMAP_MD)
+    (eng,) = [
+        b
+        for b in (await client.get("/v1/schedule-bases", headers=auth)).json()
+        if b["reference"] == "ENG-412"
+    ]
+    resp = await client.post(
+        f"/v1/schedule-bases/{eng['id']}/withdraw", json={"reason": "re-estimated"}, headers=auth
+    )
+    assert resp.status_code == 200, resp.text
+    resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
+    assert resp.status_code == 409
+    assert [d["status"] for d in resp.json()["dates"]] == ["withdrawn"]
