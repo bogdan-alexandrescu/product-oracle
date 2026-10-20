@@ -226,6 +226,12 @@ async def create_request(
     if unknown:
         raise Invalid(f"sections not in {prd.slug} v{version.number}: {', '.join(unknown)}")
     linked = await _linked_sections(db, prd.id, version.id, [e.id for e in entities])
+    # E1: the spec lists under "Decided in the approved PRD" only requirements that PRD
+    # version adopted (a section link on it, or a document-wide one).
+    outside = [e.key for e in entities if not linked.get(e.id)]
+    if outside:
+        verb = "is" if len(outside) == 1 else "are"
+        raise Invalid(f"{', '.join(outside)} {verb} not in PRD v{version.number}")
     wanted = set(body.section_keys) | {k for ks in linked.values() for k in ks if k in keys}
     if not wanted:
         raise Invalid(
