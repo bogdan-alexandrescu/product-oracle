@@ -59,11 +59,15 @@ const latestOf = (ctx: LlmContext, docId: string) => versionsOf(ctx, docId).at(-
 export const isStaged = (s: Suggestion | null | undefined): boolean =>
   !!s && s.kind === "section_text" && s.status === "accepted" && s.applied_in_version == null;
 
-/** C1e: open / staged / declined / done, from the item's status and its live suggestion. */
+/**
+ * C1e: open / staged / declined / done, from the item's status and its live suggestion.
+ * Staged first, as the API (owner, 2026-10-20): an accepted change carries into the next
+ * draft until a draft applies it or someone discards it, even once its item is closed.
+ */
 export function feedbackState(status: Feedback["status"], s: Suggestion | null | undefined): Schemas["FeedbackItemOut"]["state"] {
+  if (isStaged(s)) return "staged";
   if (status === "declined") return "declined";
   if (status !== "open") return "done";
-  if (isStaged(s)) return "staged";
   if (s?.status === "applied") return "done";
   return "open";
 }

@@ -148,6 +148,11 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
       title: c.title,
       excerpt: c.excerpt,
       retrieved_at: c.retrieved_at,
+      // A mock company has no source items: the writer's item id shows as given.
+      item_id: c.item ?? null,
+      confidence: c.confidence ?? null,
+      confidence_note: c.confidence_note ?? null,
+      low_confidence: c.low_confidence ?? false,
     })),
   };
 }
@@ -596,6 +601,10 @@ function importSections(
       title: c.title ?? "",
       excerpt: c.excerpt ?? "",
       retrieved_at: c.retrieved_at ?? "",
+      item: c.item_id ?? undefined,
+      confidence: c.confidence,
+      confidence_note: c.confidence_note ?? undefined,
+      low_confidence: c.low_confidence,
     })),
   });
   db.versions.push(v);
@@ -954,7 +963,11 @@ function versionMarkdown(doc: DocumentRow, v: VersionRow): string {
   const cites = v.citations
     .map(
       (c) =>
-        `  - id: ${c.cite_key}\n    source: ${c.source}\n    ref: ${c.ref}\n    title: ${JSON.stringify(c.title ?? "")}\n    excerpt: ${JSON.stringify(c.excerpt ?? "")}`,
+        `  - id: ${c.cite_key}\n    source: ${c.source}\n    ref: ${c.ref}\n    title: ${JSON.stringify(c.title ?? "")}\n    excerpt: ${JSON.stringify(c.excerpt ?? "")}` +
+        (c.item_id ? `\n    item: ${c.item_id}` : "") +
+        (c.confidence != null ? `\n    confidence: ${c.confidence}` : "") +
+        (c.confidence_note ? `\n    confidence_note: ${JSON.stringify(c.confidence_note)}` : "") +
+        (c.low_confidence ? "\n    low_confidence: true" : ""),
     )
     .join("\n");
   const head = `---\ndocument: ${doc.slug}\ntitle: ${doc.title}\n${v.snapshot ? `snapshot: ${v.snapshot}\n` : ""}citations:\n${cites || "  []"}\n---\n`;

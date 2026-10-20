@@ -39,7 +39,7 @@ from oracle.runs.schemas import (
     RuntimeStatusOut,
     TickOut,
 )
-from oracle.swarm import Features, RuntimeUnavailable, get_runtime
+from oracle.swarm import Features, RuntimeUnavailable, get_runtime, load_learned
 from oracle.swarm.runtime import MCP_SERVER
 from oracle.swarm.settings import get_runtime_settings
 from oracle.ticker import router as scheduler_tick
@@ -107,6 +107,8 @@ async def register_mcp_server(_: Owner) -> McpServerRegistration:
 @router.get("/flows", response_model=FlowCatalog)
 async def list_flows(principal: CurrentPrincipal) -> FlowCatalog:
     """The built-in flows with their segments, checkpoints, agent roles and cost table."""
+    # The runtime notes say what the runtime can do: as every instance learned it.
+    await load_learned(get_runtime())
     return service.flow_catalog()
 
 

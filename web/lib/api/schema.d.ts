@@ -7192,6 +7192,17 @@ export interface components {
             excerpt?: string | null;
             /** Retrieved At */
             retrieved_at?: string | null;
+            /** Item Id */
+            item_id?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Confidence Note */
+            confidence_note?: string | null;
+            /**
+             * Low Confidence
+             * @default false
+             */
+            low_confidence: boolean;
         };
         /** ClaimIn */
         ClaimIn: {

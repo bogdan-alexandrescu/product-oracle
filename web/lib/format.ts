@@ -28,6 +28,19 @@ export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
  */
 export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | null => (c.source === "oracle" ? null : c.ref);
 
+/**
+ * What a citation's writer said of it: its confidence as "0.75", else (no score) its note,
+ * e.g. "owner decision, locked"; null when it says neither.
+ */
+export const citationConfidence = (c: Pick<CitationOut, "confidence" | "confidence_note">): string | null =>
+  c.confidence != null ? c.confidence.toFixed(2) : c.confidence_note?.trim() || null;
+
+/** The source with the citation's confidence beside it: "GitHub · 0.75". */
+export const citationSourceLabel = (c: Pick<CitationOut, "source" | "confidence" | "confidence_note">): string => {
+  const confidence = citationConfidence(c);
+  return confidence ? `${SOURCE_LABEL[c.source]} · ${confidence}` : SOURCE_LABEL[c.source];
+};
+
 export const VERDICT_LABEL: Record<Verdict, string> = {
   approved: "Approved",
   changes_requested: "Changes requested",

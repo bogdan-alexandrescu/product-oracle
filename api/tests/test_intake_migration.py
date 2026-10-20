@@ -51,7 +51,7 @@ def scratch_db():
 
 def test_0014_intake_chains_after_mains_head():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_revision("0014_intake").down_revision == "0017_citation_source_oracle"
+    assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
     assert script.get_heads() == ["0014_intake"]
 
 
