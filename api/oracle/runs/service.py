@@ -120,7 +120,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, confidence, safe_yaml
+from oracle import audit, confidence
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -135,6 +135,7 @@ from oracle.priorities.models import PrioritySnapshot
 from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
+from oracle.roadmap import schedule
 from oracle.runs import flows, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
@@ -1509,7 +1510,9 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         for e in sorted(entities.values(), key=lambda e: e.key)
         if e.type == "goal" and e.status == "confirmed"
     ]
+    bases = await schedule.verified_bases(db, version.document_id)
     return flows.SourceContext(
+        schedule_bases=[b.as_json() for b in bases],
         slug=document.slug if document else str(version.document_id),
         title=document.title if document else "",
         version=version.number,
@@ -2379,6 +2382,8 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
                 theme=knobs.get("theme"),
                 template=template,
                 source_version_id=source_id,
+                # A run's draft is kept: its unverified dates are marked and recorded.
+                unverified_dates="mark",
             )
         except DraftError as exc:
             problems = "; ".join(f"[{p.code}] {p.message}" for p in exc.problems)
@@ -2499,7 +2504,24 @@ async def _advance(
         art["baseline_import"] = baseline_import
     items_check: dict[str, Any] | None = None
     if ITEMS_FILE in sdef.outputs:
-        items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+        try:
+            # In a savepoint: a database error while checking rolls back the check's own
+            # reads only, and the tick's transaction (the segment, the run's row lock)
+            # stays usable.
+            async with db.begin_nested():
+                items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+        except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
+            log.exception("checking %s of run %s failed", ITEMS_FILE, run.id)
+            items_check = {
+                "items": 0,
+                "by_horizon": {},
+                "problems": [
+                    {
+                        "code": "unreadable_yaml",
+                        "message": f"{ITEMS_FILE} could not be checked ({type(exc).__name__})",
+                    }
+                ],
+            }
         art["items_check"] = items_check
     if sdef.imports_draft:
         kind = await _target_kind(db, run)
@@ -2668,19 +2690,21 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
             "by_horizon": {},
             "problems": [{"code": "missing_file", "message": f"the segment left no {ITEMS_FILE}"}],
         }
-    slug = version = None
+    slug = version = prd_id = None
     keys: set[str] | None = None
     source_id = _source_id(run)
     if source_id is not None:
         source = (await docs_service.version_sources(db, [source_id])).get(source_id)
         if source is not None:
-            slug, version = source.slug, source.version
+            slug, version, prd_id = source.slug, source.version, source.document_id
             keys = set(
                 await db.scalars(select(Section.section_key).where(Section.version_id == source_id))
             )
-    # Off the event loop: the run's file is untrusted text (oracle.safe_yaml).
-    check = await safe_yaml.run_parse(
-        roadmap.check_items, text, prd_slug=slug, prd_version=version, prd_sections=keys
+    # CR-11: a date only with a verified estimate, capacity or commitment behind it.
+    bases = await schedule.verified_bases(db, prd_id)
+    # In a worker thread with a time cap: agent output never holds the event loop.
+    check = await roadmap.check_items_async(
+        text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
     )
     return check.as_json()
 

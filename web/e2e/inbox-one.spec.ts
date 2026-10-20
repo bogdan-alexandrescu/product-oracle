@@ -56,6 +56,11 @@ test("staged items wait for the next draft: Build draft N+1, and the link opens 
   await expect(staged.getByTestId("staged-row-label")).toHaveText("2 changes staged for draft 6");
   await expect(staged.getByTestId("inbox-build-draft")).toHaveText("Build draft 6");
   expect(await tabCount(page, "Staged")).toBe(2);
+  // One group per document: a single Build draft, and each staged item listed once under it.
+  await expect(staged.getByRole("link", { name: /^Build draft/ })).toHaveCount(1);
+  await expect(staged.locator("tr[data-row]")).toHaveCount(3);
+  const itemTexts = (await staged.locator("tr[data-row]").allInnerTexts()).slice(1).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(new Set(itemTexts).size).toBe(itemTexts.length);
   await staged.getByTestId("staged-row-label").click();
   await expect(page).toHaveURL(/\/v\/5\?feedback=staged/);
   const state = page.getByTestId("feedback-state").filter({ visible: true });
@@ -67,6 +72,11 @@ test("a second visit: what was new is Open; Home's Needs you lists the same New 
   await login(page);
   await page.goto("/inbox");
   await expect(tab(page, "New")).toContainText("10");
+  // The visit is recorded after the page has drawn (mark_seen); leaving before the mock has
+  // saved it would make the next visit another first one.
+  await expect
+    .poll(() => page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("po-mock-db-v2") ?? "{}").inbox_seen ?? {}).length))
+    .toBeGreaterThan(0);
   await page.goto("/home");
   const needs = page.getByTestId("home-needs");
   await expect(needs.getByTestId("panel-count")).toHaveText("10");

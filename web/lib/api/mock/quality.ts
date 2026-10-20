@@ -183,7 +183,7 @@ export function publishRefusal(
   latest: number,
   blockerTitle: (id: string) => string | undefined,
 ): Schemas["PublishBlockedOut"] | null {
-  if (n !== latest) return { detail: `v${latest} exists: only the latest version can be published`, blocking: [] };
+  if (n !== latest) return { detail: `v${latest} exists: only the latest version can be published`, blocking: [], dates: [] };
   const verdict = dashboard(ctx, v, n, "publish");
   if (!verdict.blocked) return null;
   const blocking = verdict.items
@@ -195,7 +195,7 @@ export function publishRefusal(
       }) : [];
       return named.length ? named : [{ key: i.key, id: i.key, title: i.title, rationale: i.rationale }];
     });
-  return { detail: `${blocking.length} block${blocking.length === 1 ? "" : "s"}: ${blocking.map((b) => b.title).join(", ")}`, blocking };
+  return { detail: `${blocking.length} block${blocking.length === 1 ? "" : "s"}: ${blocking.map((b) => b.title).join(", ")}`, blocking, dates: [] };
 }
 
 function storeReport(

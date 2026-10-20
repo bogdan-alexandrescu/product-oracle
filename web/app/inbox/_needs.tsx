@@ -256,8 +256,9 @@ export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undef
       at: live ? f.created_at : f.updated_at,
       action:
         state === "staged" ? (
-          <LinkButton href={`/documents/${slug}/v/${latest}?${BUILD_PARAM}=1`} aria-label={`Build draft ${f.staged_for_version} with ${f.summary}`}>
-            Build draft {f.staged_for_version}
+          // One Build draft per document (its group row above); the item only opens itself.
+          <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`}>
+            Open
           </LinkButton>
         ) : live ? (
           <LinkButton href={href} aria-label={`${verb}: ${f.summary}`}>
@@ -270,7 +271,22 @@ export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undef
         ),
     };
   });
-  return [...staged, ...items];
+  // One group per document on Staged: its row (the single Build draft), then its staged items.
+  const grouped = new Set<string>();
+  const out: StatedNeed[] = [];
+  for (const row of staged) {
+    out.push(row);
+    const docId = row.key.slice("staged-".length);
+    for (const f of inbox.items ?? []) {
+      if (f.document_id !== docId) continue;
+      const it = items.find((i) => i.key === f.id);
+      if (it && it.state === "staged") {
+        out.push({ ...it, kind: "Staged change" });
+        grouped.add(it.key);
+      }
+    }
+  }
+  return [...out, ...items.filter((i) => !grouped.has(i.key))];
 }
 
 const path = (id: string) => ({ params: { path: { run_id: id } } });

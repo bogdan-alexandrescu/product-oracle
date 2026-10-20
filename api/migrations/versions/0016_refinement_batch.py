@@ -9,7 +9,7 @@ Inbox's last visit is a user preference (``inbox_last_seen_at``).
 The downgrade deletes the batch jobs (the old check would refuse them).
 
 Revision ID: 0016_refinement_batch
-Revises: 0014_blockers_snapshot
+Revises: 0016_roadmap
 """
 
 import re
@@ -19,7 +19,7 @@ from alembic import op
 from sqlalchemy import text
 
 revision: str = "0016_refinement_batch"
-down_revision: str | None = "0014_blockers_snapshot"
+down_revision: str | None = "0016_roadmap"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

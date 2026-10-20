@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from oracle.docs.schemas import DocumentStatus, Layer, Verdict, VersionSummary
+from oracle.docs.schemas import DateMarkOut, DocumentStatus, Layer, Verdict, VersionSummary
 from oracle.jobs.schemas import SuggestionOut
 
 FeedbackStatus = Literal["open", "addressed", "declined", "superseded"]
@@ -154,8 +154,11 @@ class PublishBlock(BaseModel):
 
 
 class PublishBlockedOut(BaseModel):
-    """409 from approve: the PRD version may not be published (T2 publish gate, C5)."""
+    """409 from approve: the PRD version may not be published (T2 publish gate, C5), or
+    the roadmap version writes dates that rest on no verified basis (O4 'document dates',
+    owner 2026-10-20: ``dates`` lists them)."""
 
     # "<N> blocks: <titles>", or "v<M> exists: ..." when the version is not the latest.
     detail: str
     blocking: list[PublishBlock]
+    dates: list[DateMarkOut] = []

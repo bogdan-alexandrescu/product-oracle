@@ -54,14 +54,14 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_chains_on_main_head():
+def test_chains_on_the_roadmap_head():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_revision(REVISION).down_revision == "0014_blockers_snapshot"
+    assert script.get_revision(REVISION).down_revision == "0016_roadmap"
     assert script.get_heads() == [REVISION]
 
 
 def test_extends_the_live_check_and_keeps_other_kinds(scratch_db):
-    command.upgrade(_cfg(), "0014_blockers_snapshot")
+    command.upgrade(_cfg(), "0016_roadmap")
     # Another lane's kind, added after 0013, must survive.
     _run("ALTER TABLE llm_jobs DROP CONSTRAINT ck_llm_jobs_kind")
     _run(
@@ -72,6 +72,6 @@ def test_extends_the_live_check_and_keeps_other_kinds(scratch_db):
     check = _check()
     for kind in ("review_comments", "quality_review", "other_lane", "refinement_batch"):
         assert f"'{kind}'" in check
-    command.downgrade(_cfg(), "0014_blockers_snapshot")
+    command.downgrade(_cfg(), "0016_roadmap")
     check = _check()
     assert "'refinement_batch'" not in check and "'other_lane'" in check

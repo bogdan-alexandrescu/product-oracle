@@ -65,7 +65,7 @@ export function BuildDraftButton({ doc }: { doc: string }) {
   if (refinementOff && !job) {
     return (
       <Button
-        variant="primary"
+        variant="secondary"
         icon="doc"
         disabled
         title="Refinement jobs are switched off"
@@ -78,7 +78,7 @@ export function BuildDraftButton({ doc }: { doc: string }) {
   }
   return (
     <>
-      <Button variant="primary" icon="doc" onClick={() => setOpen(true)} data-testid="build-draft" aria-haspopup="dialog">
+      <Button variant="secondary" icon="doc" onClick={() => setOpen(true)} data-testid="build-draft" aria-haspopup="dialog">
         {label}
         {count > 0 && (
           <span className="tnum font-semibold opacity-85" data-testid="build-draft-count">
