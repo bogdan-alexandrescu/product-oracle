@@ -30,10 +30,10 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-import yaml
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import safe_yaml
 from oracle.auth.deps import Principal
 from oracle.baseline import scoring, service
 from oracle.baseline.models import EDGE_TYPES, ENTITY_TYPES, NODE_STATUSES, Edge, Entity, Evidence
@@ -124,17 +124,32 @@ async def export(db: AsyncSession, principal: Principal) -> str:
         "entities": [entity_doc(e) for e in entities],
         "edges": [edge_doc(e) for e in edges],
     }
-    return yaml.safe_dump(data, sort_keys=False, allow_unicode=True, width=100)
+    return safe_yaml.dump(data, sort_keys=False, allow_unicode=True, width=100)
 
 
 # --- import ---------------------------------------------------------------------------------
 
 
+# baseline.yaml is a whole graph: larger caps than a draft's front matter.
+MAX_TEXT_CHARS = 10_000_000
+MAX_NODES = 1_000_000
+
+
 def _parse(text: str) -> dict[str, Any]:
+    """baseline.yaml through the one safe loader (:mod:`oracle.safe_yaml`). The YAML 1.1
+    booleans (``locked: yes``) still read as booleans here, as they always have."""
     try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as e:
-        raise YamlInvalid([ImportIssue(code="invalid_yaml", message=str(e))]) from None
+        data = safe_yaml.load(
+            text,
+            name="baseline.yaml",
+            max_text_chars=MAX_TEXT_CHARS,
+            max_scalar_chars=100_000,
+            max_nodes=MAX_NODES,
+            yaml11_booleans=True,
+        )
+    except safe_yaml.SafeYamlError as e:
+        code = "invalid_yaml" if e.code in ("invalid_yaml", "unreadable_yaml") else e.code
+        raise YamlInvalid([ImportIssue(code=code, message=e.message)]) from None
     if data is None:
         data = {}
     if not isinstance(data, dict):
@@ -290,7 +305,10 @@ async def import_yaml(
 ) -> YamlImportResult:
     """Merge ``text`` in. ``origin`` is ``import`` (a person's file) or ``agent`` (a run's
     baseline.yaml); either way locked items get proposals instead of changes."""
-    data = _parse(text)
+    try:
+        data = await safe_yaml.run_parse(_parse, text, name="baseline.yaml")
+    except safe_yaml.ParseTimeout as e:
+        raise YamlInvalid([ImportIssue(code=e.code, message=e.message)]) from None
     problems = _validate(data)
     if problems:
         raise YamlInvalid(problems)

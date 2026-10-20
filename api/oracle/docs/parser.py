@@ -14,11 +14,11 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
-import yaml
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from oracle import safe_yaml
 from oracle.docs import layers
 from oracle.docs.schemas import CitationSource, ImportProblem
 from oracle.review.schemas import Resolution
@@ -30,6 +30,10 @@ CITATION_RE = re.compile(r"\[c:([^\]\s]+)\]")
 # A citation marker plus the horizontal space before it, removed from body_text.
 CITATION_STRIP_RE = re.compile(r"[ \t]*\[c:[^\]\s]+\]")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+# A draft is at most this large (POST /versions refuses a larger body with 413).
+MAX_DRAFT_BYTES = 1_000_000
+FRONT_MATTER_SCALAR_CHARS = 100_000
 
 _md = MarkdownIt("commonmark", {"html": False}).enable("table")
 
@@ -169,6 +173,15 @@ def body_text(body_md: str) -> str:
     return "\n".join(blocks)
 
 
+def load_front_matter(yaml_text: str) -> Any:
+    """A draft's (or a template's) front matter through the one safe loader
+    (:mod:`oracle.safe_yaml`): no aliases, tags or duplicate keys, bounded size and
+    depth, ``yes``/``no`` stay strings. Its first line is line 2 of the file."""
+    return safe_yaml.load(
+        yaml_text, name="front matter", max_scalar_chars=FRONT_MATTER_SCALAR_CHARS, line_offset=1
+    )
+
+
 def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) -> dict[str, Any]:
     if yaml_text is None:
         problems.append(
@@ -180,15 +193,10 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
         )
         return {}
     try:
-        data = yaml.safe_load(yaml_text) or {}
-    except yaml.YAMLError as exc:
-        mark = getattr(exc, "problem_mark", None)
+        data = load_front_matter(yaml_text) or {}
+    except safe_yaml.SafeYamlError as exc:
         problems.append(
-            ImportProblem(
-                code="invalid_front_matter",
-                message=f"front matter is not valid YAML: {exc}",
-                line=mark.line + 2 if mark else None,
-            )
+            ImportProblem(code="invalid_front_matter", message=exc.message, line=exc.line)
         )
         return {}
     if not isinstance(data, dict):
@@ -358,7 +366,19 @@ def _check_citations(
 
 
 def parse_draft(markdown: str) -> ParsedDraft:
-    """Parse and validate a draft. Raises :class:`DraftError` listing every problem."""
+    """Parse and validate a draft. Raises :class:`DraftError` listing every problem.
+
+    CPU-bound: async callers run it with :func:`parse_draft_async`."""
+    size = len(markdown.encode("utf-8", "replace"))
+    if size > MAX_DRAFT_BYTES:
+        raise DraftError(
+            [
+                ImportProblem(
+                    code="too_large",
+                    message=f"the draft is {size} bytes, over {MAX_DRAFT_BYTES}",
+                )
+            ]
+        )
     text = normalize(markdown)
     problems: list[ImportProblem] = []
 
@@ -401,6 +421,15 @@ def parse_draft(markdown: str) -> ParsedDraft:
         content_hash=sha256(text),
         brief=layers.marked_brief(fm),
     )
+
+
+async def parse_draft_async(markdown: str) -> ParsedDraft:
+    """:func:`parse_draft` on the parse pool (:func:`oracle.safe_yaml.run_parse`), at most
+    ``PARSE_SECONDS``: the event loop never parses a draft."""
+    try:
+        return await safe_yaml.run_parse(parse_draft, markdown, name="the draft")
+    except safe_yaml.ParseTimeout as exc:
+        raise DraftError([ImportProblem(code="too_slow", message=exc.message)]) from exc
 
 
 def is_uuid(value: str) -> bool:

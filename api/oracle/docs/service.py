@@ -18,7 +18,7 @@ from oracle.auth.deps import Principal
 from oracle.docs import layers
 from oracle.docs.diff import diff_sections
 from oracle.docs.models import DOCUMENT_KINDS, Citation, Document, DocumentVersion, Section
-from oracle.docs.parser import DraftError, ParsedDraft, is_uuid, parse_draft
+from oracle.docs.parser import DraftError, ParsedDraft, is_uuid, parse_draft_async
 from oracle.docs.schemas import (
     CitationOut,
     DiffOut,
@@ -381,7 +381,7 @@ async def import_draft(
     Raises :class:`DraftError` (422), :class:`NotFoundError` (404, ``doc`` is an
     unknown id) or :class:`ImportConflictError` (409, lost a concurrent import race).
     """
-    draft = parse_draft(markdown)
+    draft = await parse_draft_async(markdown)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template
 

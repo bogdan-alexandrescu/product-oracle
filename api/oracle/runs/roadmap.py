@@ -30,29 +30,28 @@ covers the item and supports exactly that date: a date with no verified estimate
 capacity or commitment behind it is refused (``unverified_date``).
 
 The file is agent output. It is read by :func:`load_items_yaml` on every path (the run's
-checkpoint, a run's import, a person's import), which refuses, as an
-:class:`ItemsYamlError` and never any other exception: YAML aliases and anchors
-(``yaml.safe_load`` shares an alias's node, so a few hundred bytes can expand to
-gigabytes once copied to JSON or text); explicit tags; numbers in any form but plain
-decimal (YAML 1.1 base-60 ``1:1:1...`` is quadratic to build, and Python refuses
-``int()`` of more than 4,300 digits), NaN and infinities; values longer than
-``MAX_SCALAR_CHARS``, nesting deeper than ``MAX_DEPTH`` (a few hundred ``[`` overflow the
-composer's recursion), more than ``MAX_NODES`` nodes, and a file larger than
-``MAX_STORED_BYTES`` once parsed. Async callers use :func:`check_items_async`, which
-parses in a worker thread, at most ``PARSE_SECONDS``: a bad file is a failed check, never
-a stalled event loop or a tick exception.
+checkpoint, a run's import, a person's import), through the one safe loader
+(:mod:`oracle.safe_yaml`), which refuses, as an :class:`ItemsYamlError` and never any
+other exception: YAML aliases and anchors (``yaml.safe_load`` shares an alias's node, so
+a few hundred bytes can expand to gigabytes once copied to JSON or text); explicit tags;
+duplicate keys; numbers in any form but plain decimal (YAML 1.1 base-60 ``1:1:1...`` is
+quadratic to build, and Python refuses ``int()`` of more than 4,300 digits), NaN and
+infinities; values longer than ``MAX_SCALAR_CHARS``, nesting deeper than ``MAX_DEPTH`` (a
+few hundred ``[`` overflow the composer's recursion), more than ``MAX_NODES`` nodes, and a
+file larger than ``MAX_STORED_BYTES`` once parsed. The YAML 1.1 words
+``yes``/``no``/``on``/``off`` are strings, as in YAML 1.2 (a title ``NO`` stays ``NO``).
+Async callers use :func:`check_items_async`, which parses on the parse pool
+(:func:`oracle.safe_yaml.run_parse`), at most ``PARSE_SECONDS``: a bad file is a failed
+check, never a stalled event loop or a tick exception.
 """
 
-import asyncio
 import json
-import math
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
-import yaml
-
+from oracle import safe_yaml
 from oracle.roadmap.schedule import Basis, supporting
 
 HORIZONS = ("now", "next", "later")
@@ -105,172 +104,30 @@ class ItemsYamlError(ValueError):
         self.code = code
 
 
-class _ItemsResolver(yaml.resolver.BaseResolver):
-    """The implicit types roadmap_items.yaml may use, each cheap to build: null, the
-    booleans, plain decimal integers and floats of a bounded length, ISO dates and
-    timestamps, and the merge key. No YAML 1.1 base-60, octal, hex, binary or ``_``
-    forms: those stay strings (``1:30`` is text)."""
-
-
-_ItemsResolver.add_implicit_resolver(
-    "tag:yaml.org,2002:bool",
-    re.compile(r"^(?:yes|Yes|YES|no|No|NO|true|True|TRUE|false|False|FALSE|on|On|ON|off|Off|OFF)$"),
-    list("yYnNtTfFoO"),
-)
-_ItemsResolver.add_implicit_resolver(
-    "tag:yaml.org,2002:int", re.compile(r"^[-+]?(?:0|[1-9][0-9]{0,17})$"), list("-+0123456789")
-)
-_ItemsResolver.add_implicit_resolver(
-    "tag:yaml.org,2002:float",
-    re.compile(
-        r"^(?:[-+]?(?:[0-9]{1,18}\.[0-9]{0,18}|\.[0-9]{1,18})(?:[eE][-+]?[0-9]{1,3})?"
-        r"|[-+]?[0-9]{1,18}[eE][-+]?[0-9]{1,3}"
-        r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"
-    ),
-    list("-+0123456789."),
-)
-_ItemsResolver.add_implicit_resolver("tag:yaml.org,2002:merge", re.compile(r"^(?:<<)$"), ["<"])
-_ItemsResolver.add_implicit_resolver(
-    "tag:yaml.org,2002:null", re.compile(r"^(?:~|null|Null|NULL|)$"), ["~", "n", "N", ""]
-)
-_ItemsResolver.add_implicit_resolver(
-    "tag:yaml.org,2002:timestamp",
-    re.compile(
-        r"^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}"
-        r"|[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:[Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}"
-        r"(?:\.[0-9]{0,9})?(?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::[0-9]{2})?))?)$"
-    ),
-    list("0123456789"),
-)
-
-# A plain scalar that looks like a number but has more digits than any count or score.
-_NUMBERISH = re.compile(r"[-+]?[0-9][0-9_:.,eE+-]*")
-
-
-class _ItemsLoader(
-    yaml.reader.Reader,
-    yaml.scanner.Scanner,
-    yaml.parser.Parser,
-    yaml.composer.Composer,
-    yaml.constructor.SafeConstructor,
-    _ItemsResolver,
-):
-    """A safe loader without aliases, anchors or explicit tags, with the bounded
-    implicit types above, a node budget, and caps on scalar length and nesting depth,
-    all checked before a node is built."""
-
-    def __init__(self, stream: str) -> None:
-        yaml.reader.Reader.__init__(self, stream)
-        yaml.scanner.Scanner.__init__(self)
-        yaml.parser.Parser.__init__(self)
-        yaml.composer.Composer.__init__(self)
-        yaml.constructor.SafeConstructor.__init__(self)
-        _ItemsResolver.__init__(self)
-        self._nodes = 0
-        self._depth = 0
-
-    def compose_node(self, parent: Any, index: Any) -> Any:
-        event = self.peek_event()
-        where = f"{event.start_mark.line + 1}:{event.start_mark.column + 1}"
-        if isinstance(event, yaml.AliasEvent) or getattr(event, "anchor", None):
-            raise ItemsYamlError(
-                "yaml_alias",
-                f"roadmap_items.yaml uses a YAML anchor or alias ({where}); write each value "
-                "out in full",
-            )
-        if getattr(event, "tag", None) not in (None, "!"):
-            raise ItemsYamlError(
-                "yaml_tag",
-                f"roadmap_items.yaml uses the explicit YAML tag {event.tag} ({where}); write "
-                "plain values",
-            )
-        self._nodes += 1
-        if self._nodes > MAX_NODES:
-            raise ItemsYamlError(
-                "too_large", f"roadmap_items.yaml has more than {MAX_NODES} YAML nodes"
-            )
-        if isinstance(event, yaml.ScalarEvent):
-            _check_scalar(event.value, plain=event.implicit[0], where=where)
-            return super().compose_node(parent, index)
-        nested = isinstance(event, yaml.SequenceStartEvent | yaml.MappingStartEvent)
-        if nested:
-            self._depth += 1
-            if self._depth > MAX_DEPTH:
-                raise ItemsYamlError(
-                    "too_deep",
-                    f"roadmap_items.yaml nests lists or mappings more than {MAX_DEPTH} "
-                    f"levels deep ({where})",
-                )
-        try:
-            return super().compose_node(parent, index)
-        finally:
-            if nested:
-                self._depth -= 1
-
-
-def _check_scalar(value: str, *, plain: bool, where: str) -> None:
-    if len(value) > MAX_SCALAR_CHARS:
-        raise ItemsYamlError(
-            "too_large",
-            f"roadmap_items.yaml has a value of {len(value)} characters ({where}), over "
-            f"{MAX_SCALAR_CHARS}",
-        )
-    if plain and _NUMBERISH.fullmatch(value) and sum(c.isdigit() for c in value) > MAX_DIGITS:
-        raise ItemsYamlError(
-            "invalid_number",
-            f"roadmap_items.yaml has a number with more than {MAX_DIGITS} digits ({where})",
-        )
-
-
-def _non_finite(data: Any, path: str = "") -> str | None:
-    """The path of the first NaN or infinite number in ``data``, if any."""
-    stack: list[tuple[Any, str]] = [(data, path)]
-    while stack:
-        value, at = stack.pop()
-        if isinstance(value, float) and not math.isfinite(value):
-            return at or "(top)"
-        if isinstance(value, dict):
-            stack.extend((v, f"{at}.{k}" if at else str(k)) for k, v in value.items())
-        elif isinstance(value, list):
-            stack.extend((v, f"{at}[{n}]") for n, v in enumerate(value))
-    return None
-
-
 def _parse(text: str) -> Any:
-    if len(text) > MAX_TEXT_CHARS:
-        raise ItemsYamlError(
-            "too_large", f"roadmap_items.yaml is {len(text)} characters, over {MAX_TEXT_CHARS}"
-        )
-    # Before the YAML reader: an over-long unbroken token (the base-60 probe) is refused
-    # in one linear pass instead of being scanned character by character.
-    longest = max(map(len, text.split()), default=0)
-    if longest > MAX_SCALAR_CHARS:
-        raise ItemsYamlError(
-            "too_large",
-            f"roadmap_items.yaml has a value of {longest} characters, over {MAX_SCALAR_CHARS}",
-        )
-    loader = _ItemsLoader(text)
     try:
-        return loader.get_single_data()
-    finally:
-        loader.dispose()
+        return safe_yaml.load(
+            text,
+            name="roadmap_items.yaml",
+            max_text_chars=MAX_TEXT_CHARS,
+            max_scalar_chars=MAX_SCALAR_CHARS,
+            max_depth=MAX_DEPTH,
+            max_nodes=MAX_NODES,
+        )
+    except safe_yaml.SafeYamlError as exc:
+        raise ItemsYamlError(exc.code, exc.message) from exc
 
 
 def load_items_yaml(text: str) -> Any:
-    """Parse roadmap_items.yaml the one safe way (:class:`_ItemsLoader`): at most
+    """Parse roadmap_items.yaml the one safe way (:func:`oracle.safe_yaml.load`): at most
     ``MAX_TEXT_CHARS`` characters, ``MAX_NODES`` nodes, ``MAX_DEPTH`` levels,
-    ``MAX_SCALAR_CHARS`` per value and ``MAX_STORED_BYTES`` as JSON, finite numbers only.
-    Raises :class:`ItemsYamlError` and nothing else: a YAML error, and any other failure
-    to read the file (a recursion, a number Python will not convert, memory), is a
-    refusal with its code."""
+    ``MAX_SCALAR_CHARS`` per value and ``MAX_STORED_BYTES`` as JSON, finite numbers only,
+    no duplicate keys; ``yes``/``no``/``on``/``off`` stay strings. Raises
+    :class:`ItemsYamlError` and nothing else: a YAML error, and any other failure to read
+    the file (a recursion, a number Python will not convert, memory), is a refusal with
+    its code."""
     try:
         data = _parse(text)
-        bad = _non_finite(data)
-        if bad is not None:
-            raise ItemsYamlError(
-                "non_finite_number",
-                f"roadmap_items.yaml has NaN or an infinite number at {bad}; write a finite number",
-            )
         size = len(json.dumps(data, default=str).encode())
         if size > MAX_STORED_BYTES:
             raise ItemsYamlError(
@@ -280,10 +137,6 @@ def load_items_yaml(text: str) -> Any:
         return data
     except ItemsYamlError:
         raise
-    except yaml.YAMLError as exc:
-        raise ItemsYamlError(
-            "invalid_yaml", f"roadmap_items.yaml is not valid YAML: {exc}"
-        ) from exc
     except Exception as exc:  # noqa: BLE001 - agent output: every failure is a refusal
         raise ItemsYamlError(
             "unreadable_yaml",
@@ -421,10 +274,10 @@ async def check_items_async(text: str, **kwargs: Any) -> ItemsCheck:
     (every company's requests and ticks) never waits on agent output. A check that takes
     longer, or fails in any way, is a problem, never an exception."""
     try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(check_items, text, **kwargs), timeout=PARSE_SECONDS
+        return await safe_yaml.run_parse(
+            lambda: check_items(text, **kwargs), name="roadmap_items.yaml", seconds=PARSE_SECONDS
         )
-    except TimeoutError:
+    except safe_yaml.ParseTimeout:
         out = ItemsCheck()
         out.add(
             "too_slow",

@@ -20,7 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
@@ -208,7 +208,21 @@ async def _theme_keys(db: AsyncSession) -> set[str]:
 async def validate_template(
     db: AsyncSession, body: str, required_sections: list[str] | None = None
 ) -> TemplateValidateOut:
-    check = validation.check_template(body, theme_keys=await _theme_keys(db))
+    theme_keys = await _theme_keys(db)
+    try:
+        check = await safe_yaml.run_parse(
+            lambda: validation.check_template(body, theme_keys=theme_keys), name="the template"
+        )
+    except safe_yaml.ParseTimeout as exc:
+        return TemplateValidateOut(
+            valid=False,
+            problems=[Problem(code="too_slow", message=exc.message)],
+            warnings=[],
+            brief_sections=[],
+            section_keys=[],
+            suggested_theme=None,
+            suggest_when=None,
+        )
     problems = list(check.problems)
     if required_sections is not None:
         problems += validation.check_required_sections(required_sections, check)

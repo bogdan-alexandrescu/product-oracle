@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.docs import service
-from oracle.docs.parser import DraftError
+from oracle.docs.parser import MAX_DRAFT_BYTES, DraftError
 from oracle.docs.schemas import (
     DiffOut,
     DocumentKind,
@@ -22,6 +22,7 @@ from oracle.docs.schemas import (
     VersionOut,
     VersionSummary,
 )
+from oracle.http import read_capped
 from oracle.jobs import service as jobs_service
 
 # Every route needs at least a viewer; importing a version needs an approver.
@@ -63,6 +64,7 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
     status_code=status.HTTP_201_CREATED,
     responses={
         200: {"model": VersionOut, "description": "Same content as an existing version"},
+        413: {"description": f"Body over {MAX_DRAFT_BYTES} bytes"},
         422: {"model": ImportErrorResponse, "description": "Draft rejected"},
     },
     openapi_extra={
@@ -75,8 +77,9 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
 async def import_version(
     doc: str, request: Request, principal: Approver, db: TenantDB
 ) -> VersionOut | JSONResponse:
-    """Import a draft (markdown + YAML front matter). Creates the document on first import."""
-    raw = await request.body()
+    """Import a draft (markdown + YAML front matter). Creates the document on first import.
+    A body over ``MAX_DRAFT_BYTES`` (1 MB) is refused with 413 before it is read in full."""
+    raw = await read_capped(request, MAX_DRAFT_BYTES)
     try:
         markdown = raw.decode("utf-8")
     except UnicodeDecodeError:
