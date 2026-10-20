@@ -323,16 +323,34 @@ async def _run_document_refusal(caller: McpCaller, doc: str) -> str | None:
     name = own.slug if own is not None else own_slug
     mine = f" ('{name}')" if name else " (this run has none)"
     return f"Refused: a run token pushes drafts only to its own run's document{mine}, not '{doc}'."
+def _writes(method: str, needed: str | None) -> bool:
+    """Whether a call writes: any method but GET, or any scope but a read scope."""
+    return method.upper() != "GET" or (needed is not None and not needed.startswith("read:"))
 
 
 async def call_operation(
-    app: FastAPI, caller: McpCaller, op: Operation, args: dict[str, Any]
+    app: FastAPI,
+    caller: McpCaller,
+    op: Operation,
+    args: dict[str, Any],
+    *,
+    check_scopes: bool = True,
 ) -> RestResponse:
-    """Run ``op`` as ``caller`` through the app; raise ToolError when it may not run."""
-    if not scopes.allowed(caller.scopes, op.method, op.path):
-        needed = scopes.required_scope(op.method, op.path)
+    """Run ``op`` as ``caller`` through the app; raise ToolError when it may not run.
+    ``check_scopes=False`` only for a curated tool that pins the call to the caller's own
+    run (the REST role checks still apply)."""
+    needed = scopes.required_scope(op.method, op.path)
+    if check_scopes and not scopes.allowed(caller.scopes, op.method, op.path):
         reason = f"needs the {needed} scope" if needed else "is not available to run tokens"
         raise ToolError(f"Refused: {op.method} {op.path} {reason}.")
+    if caller.kind == "run" and caller.run_id is not None and _writes(op.method, needed):
+        # W5: decided now, just before the write, not when the request started: the
+        # run's token is read-only while a checkpoint wait is open in SwarmCloud.
+        from oracle.runs.service import run_token_hold
+
+        held = await run_token_hold(caller.tenant_id, caller.run_id)
+        if held:
+            raise ToolError(f"Refused (HTTP 403): {op.method} {op.path}: {held}.")
     path, query, body, media = _build_request(op, args)
     if caller.kind == "run" and scopes.required_scope(op.method, op.path) == "write:drafts":
         refusal = await _run_document_refusal(caller, str(args.get("doc") or ""))

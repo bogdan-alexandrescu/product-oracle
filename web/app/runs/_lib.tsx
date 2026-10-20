@@ -5,6 +5,8 @@ export type RunOut = Schemas["RunOut"];
 export type RunSummary = Schemas["RunSummary"];
 export type RunStatus = RunSummary["status"];
 export type CheckpointOut = Schemas["CheckpointOut"];
+export type ConsoleAnswer = NonNullable<CheckpointOut["console"]>;
+export type CheckpointChoice = Schemas["CheckpointDecision"]["decision"];
 export type CheckpointKind = CheckpointOut["kind"];
 export type SegmentOut = Schemas["SegmentOut"];
 export type FlowCatalog = Schemas["FlowCatalog"];
@@ -80,6 +82,16 @@ export const SEGMENT_STATUS_LABEL: Record<SegmentOut["status"], string> = {
 };
 
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
+
+/** Asked before Retry on a lost submission: if the lost one landed, both run (and are paid for) until Oracle finds and cancels it. */
+export const RETRY_CONFIRM =
+  "This can start a paid duplicate run: if the lost submission landed, it runs too until Oracle finds it, cancels it and counts its cost. Retry?";
+
+/** Asked before Stop cancelling: the run ends, and Oracle still counts the workflow's spend until SwarmCloud stops it. */
+export const STOP_CANCELLING_CONFIRM = "Stop cancelling? The run ends; its spend still counts until SwarmCloud stops it.";
+
+/** Asked before Cancel again on a stopped workflow over the run's ceiling: Oracle's cancel calls resume; nothing restarts. */
+export const CANCEL_AGAIN_CONFIRM = "Cancel again? Oracle cancels this workflow again; nothing restarts.";
 
 const usdFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 

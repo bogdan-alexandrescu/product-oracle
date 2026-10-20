@@ -14,6 +14,7 @@ from oracle.blockers.router import router as blockers_router
 from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
 from oracle.config import get_settings
+from oracle.connections.notion_pages import router as notion_pages_router
 from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
@@ -37,6 +38,7 @@ from oracle.review.router import router as review_router
 from oracle.runs.router import router as runs_router
 from oracle.sources.router import router as sources_router
 from oracle.specs.router import router as specs_router
+from oracle.swarm import close_runtime
 from oracle.templates.router import router as templates_router
 from oracle.tenant_settings_api import router as settings_router
 from oracle.ticker.router import HARD_LIMIT_SECONDS
@@ -84,6 +86,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+    await close_runtime()
     await dispose_engine()
 
 
@@ -129,6 +132,7 @@ def create_app() -> FastAPI:
     # v1 lanes add their routes to these (empty until then).
     app.include_router(members_router)
     app.include_router(connections_router)
+    app.include_router(notion_pages_router)
     app.include_router(settings_router)
     app.include_router(claude_accounts_router)
     app.include_router(sources_router)

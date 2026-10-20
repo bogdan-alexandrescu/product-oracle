@@ -9,6 +9,7 @@ import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, LayerBadge, Loading, SpecStateBadge } from "@/components/ui";
 import { api, unwrap, type SectionDiff } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
+import { sectionHref } from "@/lib/section-link";
 
 const STATUS: Record<SectionDiff["status"], { label: string; kind: ChipKind }> = {
   added: { label: "Added", kind: "pass" },
@@ -245,7 +246,7 @@ function DiffSection({ d, doc, to, showLayer }: { d: SectionDiff; doc: string; t
           <span className="min-w-0 truncate font-mono text-[13px] text-text2">#{d.section_key}</span>
           {d.status !== "removed" && (
             <Link
-              href={`/documents/${doc}/v/${to}#s-${d.section_key}`}
+              href={sectionHref(doc, to, d.section_key)}
               className="flex-none text-sm font-medium text-accent-ink hover:underline"
             >
               View

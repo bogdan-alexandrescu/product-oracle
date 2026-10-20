@@ -14,7 +14,7 @@ test("inbox lists checkpoints, cost approvals, overruns and open feedback", asyn
   await expect(page.getByTestId("inbox-overruns")).toContainText("Spent $14.20 of $9.00 estimated");
   const feedback = page.getByTestId("inbox-feedback");
   await expect(feedback).toContainText("Checkout redesign PRD");
-  await expect(feedback).toContainText("open item");
+  await expect(feedback).toContainText("1 comment to resolve");
 
   // Approve the cost from the inbox: the run starts and leaves the list.
   await page.getByTestId("inbox-approvals").getByRole("button", { name: "Approve $53.00" }).click();
@@ -26,7 +26,7 @@ test("inbox lists checkpoints, cost approvals, overruns and open feedback", asyn
 
   // Row actions are outline, like every other row action; filled is for the page's primary.
   await expect(checkpoints.getByRole("link", { name: "Decide" }).first()).toHaveAttribute("data-variant", "secondary");
-  await expect(feedback.getByRole("link", { name: /^Resolve/ }).first()).toHaveAttribute("data-variant", "secondary");
+  await expect(feedback.getByRole("link", { name: /^Review/ }).first()).toHaveAttribute("data-variant", "secondary");
 
   // Decide goes to the run, at the decision.
   await checkpoints.getByRole("link", { name: "Decide" }).first().click();
@@ -41,4 +41,30 @@ test("inbox: cancel a run paused on overrun", async ({ page }) => {
   await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
   await page.goto("/runs");
   await expect(page.getByTestId("run-row").filter({ hasText: "team-workspaces" })).toContainText("Cancelled");
+});
+
+test("inbox: retry importing a run's output Oracle stopped trying to import", async ({ page }) => {
+  await login(page);
+  // A run whose resumed advance failed five times: its step failed, owners see it.
+  await page.evaluate(() => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    const run = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
+    run.status = "running";
+    run.checkpoints = [];
+    run.segments[0].status = "failed";
+    run.segments[0].error = "Couldn't import its output: DataError on 5 tries in a row.";
+    run.import_failed =
+      "Couldn't import team-onboarding's output: DataError on 5 tries in a row, and Oracle stopped trying.";
+    run.can_retry_import = true;
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.goto("/inbox");
+  const imports = page.getByTestId("inbox-imports");
+  await expect(imports).toContainText("Couldn't import team-onboarding's output: DataError");
+  await imports.getByRole("link").click();
+  await expect(page.getByTestId("run-import-failed")).toContainText("DataError");
+  await page.goto("/inbox");
+  await page.getByTestId("inbox-imports").getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByTestId("inbox-imports")).toHaveCount(0);
 });

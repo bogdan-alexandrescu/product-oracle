@@ -53,6 +53,7 @@ from oracle.baseline.schemas import (
     YamlImportError,
     YamlImportResult,
 )
+from oracle.http import read_capped_body
 
 router = APIRouter(prefix="/v1/baseline", tags=["baseline"])
 
@@ -660,6 +661,7 @@ async def export_yaml(principal: Reader, db: TenantDB) -> PlainTextResponse:
     response_model=YamlImportResult,
     responses={
         403: {"model": YamlImportError, "description": "A change the caller's role may not make"},
+        413: {"description": "File larger than 1 MiB (ORACLE_MAX_BODY_BYTES)"},
         422: {"model": YamlImportError, "description": "File rejected"},
     },
     openapi_extra={
@@ -674,7 +676,7 @@ async def import_yaml(
 ) -> YamlImportResult | JSONResponse:
     """Merge a YAML graph in, idempotent by (type, key); locked items get proposals."""
     try:
-        text = (await request.body()).decode("utf-8")
+        text = (await read_capped_body(request)).decode("utf-8")
     except UnicodeDecodeError:
         text = None
     try:
