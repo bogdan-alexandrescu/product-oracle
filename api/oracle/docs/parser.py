@@ -39,6 +39,9 @@ DATE_MARK_COMMENT_RE = re.compile(
     r"|# oracle: date (?:unverified|withdrawn)$)",
     re.M,
 )
+# The banner line a markdown export writes after the front matter
+# (oracle.export.render.render_markdown), dropped on import with the markers above.
+EXPORT_BANNER_RE = re.compile(r"^<!-- Product Oracle export: [^\n]*? -->\n", re.M)
 # A draft is at most this large (POST /versions refuses a larger body with 413).
 MAX_DRAFT_BYTES = 1_000_000
 FRONT_MATTER_SCALAR_CHARS = 100_000
@@ -387,7 +390,7 @@ def parse_draft(markdown: str) -> ParsedDraft:
                 )
             ]
         )
-    text = normalize(DATE_MARK_COMMENT_RE.sub("", markdown))
+    text = normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
     problems: list[ImportProblem] = []
 
     yaml_text, body, offset = split_front_matter(text)
