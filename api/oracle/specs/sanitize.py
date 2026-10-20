@@ -17,11 +17,16 @@ attributes, so what is stored is only what Oracle wrote out. Findings come in tw
 
 Every rebuilt document is then checked again by :func:`static_problems`, the same check
 the tests apply. The download route also serves it with a sandboxing CSP.
+
+Every check is linear in the size of the file (an agent's file must not stall the API):
+sizes are checked before any pattern runs, and no pattern can backtrack over a run of
+'<', spaces or names (possessive quantifiers, scans by position instead of lazy ``.*?``).
 """
 
 import html
 import re
 import xml.etree.ElementTree as ET
+from bisect import bisect_left
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 
@@ -50,6 +55,10 @@ LOWFI_CSS = (
 
 MAX_NODES = 5000
 MAX_DEPTH = 32
+# The largest design file, as handed in and as stored (escaping can grow it).
+MAX_FILE_BYTES = 200_000
+# The longest url() target read: an in-document reference is an element id.
+_MAX_REF = 256
 
 
 @dataclass
@@ -59,6 +68,8 @@ class Sanitized:
     removed: list[str] = field(default_factory=list)
     # Element ids and data-annotation targets present in the content.
     targets: set[str] = field(default_factory=set)
+    # Over MAX_FILE_BYTES as handed in or once sanitised: nothing was checked or kept.
+    too_large: bool = False
 
     @property
     def safe(self) -> bool:
@@ -67,8 +78,8 @@ class Sanitized:
 
 # --- CSS ---------------------------------------------------------------------------------
 
-_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
-_CSS_URL = re.compile(r"url\s*\(\s*(['\"]?)(.*?)\1\s*\)", re.I | re.S)
+_CSS_URL_OPEN = re.compile(r"url\s*+\(", re.I)
+_LOCAL_REF = re.compile(r"#[A-Za-z][\w.-]*")
 _CSS_BANNED = (
     "@import",
     "@font-face",
@@ -103,13 +114,44 @@ def css_unescape(text: str) -> str:
     return _CSS_ESCAPE.sub(one, text)
 
 
+def _strip_css_comments(css: str) -> str:
+    """``css`` without its ``/* */`` comments (an unclosed one is left as it is). Linear."""
+    out: list[str] = []
+    pos = 0
+    while (start := css.find("/*", pos)) != -1:
+        end = css.find("*/", start + 2)
+        if end == -1:
+            break
+        out.append(css[pos:start])
+        pos = end + 2
+    out.append(css[pos:])
+    return "".join(out)
+
+
+def _css_urls(css: str) -> list[str]:
+    """The target of every ``url(`` in ``css``, unquoted, up to the next ``)`` (or the end:
+    an unclosed url( still fetches). A target over _MAX_REF characters is cut and never
+    reads as local. Linear: the closing parenthesis is found by position, not by
+    backtracking."""
+    closes = [i for i, c in enumerate(css) if c == ")"]
+    out = []
+    for m in _CSS_URL_OPEN.finditer(css):
+        k = bisect_left(closes, m.end())
+        end = closes[k] if k < len(closes) else len(css)
+        raw = css[m.end() : min(end, m.end() + _MAX_REF)].strip()
+        if len(raw) >= 2 and raw[0] in "'\"" and raw[-1] == raw[0]:
+            raw = raw[1:-1].strip()
+        out.append(raw if end - m.end() <= _MAX_REF else raw + "...")
+    return out
+
+
 def css_problems(css: str, *, local_urls: bool = False) -> list[str]:
     """What in a stylesheet or ``style`` attribute could run code or fetch. ``local_urls``
     allows ``url(#id)`` (SVG markers and gradients)."""
     out: list[str] = []
     # Checked as written and with comments removed: a comment marker inside a string
     # must not hide anything (a{content:"/*"} b{...} c{content:"*/"}).
-    for text in (css, _CSS_COMMENT.sub("", css)):
+    for text in (css, _strip_css_comments(css)):
         if "\\" in text:
             out.append("CSS escape sequences are not allowed")
         if "<" in text:
@@ -122,9 +164,8 @@ def css_problems(css: str, *, local_urls: bool = False) -> list[str]:
             out.append("CSS 'behavior' is not allowed")
         if re.search(r"@(?!media\b)", lowered):
             out.append("CSS at-rules other than @media are not allowed")
-        for m in _CSS_URL.finditer(text):
-            target = m.group(2).strip()
-            if not (local_urls and re.fullmatch(r"#[A-Za-z][\w.-]*", target)):
+        for target in _css_urls(text):
+            if not (local_urls and _LOCAL_REF.fullmatch(target)):
                 out.append(f"CSS url({target[:40]}) would fetch a resource")
     return list(dict.fromkeys(out))
 
@@ -386,6 +427,8 @@ def sanitize_wireframe(
 ) -> Sanitized:
     """A static, offline, grayscale HTML page from an agent's wireframe. ``annotations``
     (label, note) are listed in a static footer, numbered as the review shows them."""
+    if len(candidate.encode("utf-8")) > MAX_FILE_BYTES:
+        return Sanitized("", blocked=[f"over {MAX_FILE_BYTES} bytes"], too_large=True)
     unclosed = _never_closes(candidate)
     if unclosed:
         return Sanitized("", blocked=[unclosed])
@@ -416,8 +459,17 @@ def sanitize_wireframe(
         + f"<style>{LOWFI_CSS}</style></head>"
         f'<body><main data-oracle-wireframe="1">{body}</main>{notes}</body></html>\n'
     )
-    out = Sanitized(content, parser.blocked, parser.removed, parser.targets)
-    out.blocked += [p for p in static_problems(content, "html") if p not in out.blocked]
+    return _checked(Sanitized(content, parser.blocked, parser.removed, parser.targets), "html")
+
+
+def _checked(out: Sanitized, kind: str) -> Sanitized:
+    """The final check of a rebuilt file, once its size (as served) is known to be in
+    bounds."""
+    if len(out.content.encode("utf-8")) > MAX_FILE_BYTES:
+        return Sanitized(
+            "", blocked=[f"over {MAX_FILE_BYTES} bytes once sanitised"], too_large=True
+        )
+    out.blocked += [p for p in static_problems(out.content, kind) if p not in out.blocked]
     return out
 
 
@@ -451,6 +503,8 @@ def _local(name: str) -> tuple[str | None, str]:
 
 def sanitize_svg(candidate: str, *, title: str) -> Sanitized:
     """A static, offline, grayscale SVG from an agent's flow diagram."""
+    if len(candidate.encode("utf-8")) > MAX_FILE_BYTES:
+        return Sanitized("", blocked=[f"over {MAX_FILE_BYTES} bytes"], too_large=True)
     if _DECL.search(candidate):
         return Sanitized("", blocked=["DOCTYPE or entity declarations are not allowed"])
     try:
@@ -553,54 +607,85 @@ def sanitize_svg(candidate: str, *, title: str) -> Sanitized:
         clean.insert(0, t)
     ET.register_namespace("", SVG_NS)
     content = ET.tostring(clean, encoding="unicode") + "\n"
-    out = Sanitized(content, blocked, removed, targets)
-    out.blocked += [p for p in static_problems(content, "svg") if p not in out.blocked]
-    return out
+    return _checked(Sanitized(content, blocked, removed, targets), "svg")
 
 
 # --- the final check (also what the tests assert) ---------------------------------------
 
+# Each runs on a piece that is already one tag or one stylesheet (see static_problems), so
+# none needs a leading '<[^>]*' (which backtracked over runs of '<'), and every repeat is
+# possessive: linear.
 _STATIC_CHECKS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("a script element", re.compile(r"<\s*script", re.I)),
-    ("an event handler attribute", re.compile(r"<[^>]*[\s/\"'] on[a-z]+\s*=", re.I | re.X)),
-    ("a script URL", re.compile(r"(java|vb)script\s*:", re.I)),
+    ("a script element", re.compile(r"<\s*+script", re.I)),
+    ("an event handler attribute", re.compile(r"[\s/\"']on[a-z]++\s*+=", re.I)),
+    ("a script URL", re.compile(r"(?:java|vb)script\s*+:", re.I)),
     (
         "an external URL",
         re.compile(
-            r"(src|href|action|formaction|xlink:href)\s*=\s*['\"]?\s*"
+            r"(?:src|href|action|formaction|xlink:href)\s*+=\s*+['\"]?+\s*+"
             r"(?!#)[^'\"\s>]",
             re.I,
         ),
     ),  # fmt: skip
     (
         "a frame, object or embed",
-        re.compile(r"<\s*(iframe|frame|object|embed|applet|portal)\b", re.I),
+        re.compile(r"<\s*+(?:iframe|frame|object|embed|applet|portal)\b", re.I),
     ),  # fmt: skip
     (
         "an image or media element",
-        re.compile(r"<\s*(img|image|video|audio|source|picture)\b", re.I),
+        re.compile(r"<\s*+(?:img|image|video|audio|source|picture)\b", re.I),
     ),  # fmt: skip
-    ("a stylesheet link or base", re.compile(r"<\s*(link|base)\b", re.I)),
-    ("a refresh", re.compile(r"http-equiv\s*=\s*['\"]?refresh", re.I)),
+    ("a stylesheet link or base", re.compile(r"<\s*+(?:link|base)\b", re.I)),
+    ("a refresh", re.compile(r"http-equiv\s*+=\s*+['\"]?+refresh", re.I)),
     ("a foreignObject", re.compile(r"foreignObject", re.I)),
     ("a CSS import", re.compile(r"@import", re.I)),
 )
-_ANY_URL = re.compile(r"url\s*\(\s*['\"]?\s*(?!#)", re.I)
+# A CSS url() whose target is not an in-document reference: url(#a), url('#a') and
+# url("#a") are local (in a serialised SVG attribute the quote is &quot;).
+_ANY_URL = re.compile(r"url\s*+\(\s*+(?:(?:['\"]|&quot;)\s*+)?+(?!#)", re.I)
 # What a browser reads as markup or CSS: tags (quoted attribute values may hold '>') and
 # the text of <style> elements, not text: 'javascript: links are disabled' is only words.
-_TAG = re.compile(r"""<(?:[^>"']|"[^"]*"|'[^']*')*>?""")
-_STYLE_TEXT = re.compile(r"<style\b[^>]*>(.*?)(?:</style\s*>|$)", re.I | re.S)
-_ATTR = re.compile(r"""([^\s=/<>"']+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)""")
+_TAG = re.compile(r"""<(?:[^>"']|"[^"]*+"|'[^']*+')*+>?""")
+_STYLE_OPEN = re.compile(r"<style\b", re.I)
+_STYLE_CLOSE = re.compile(r"</style\s*+>", re.I)
+# An attribute starts where a name starts (not inside a longer name).
+_ATTR = re.compile(r"""(?<![^\s=/<>"'])([^\s=/<>"']++)\s*+=\s*+("[^"]*+"|'[^']*+'|[^\s>]++)""")
+
+
+def _style_texts(content: str) -> list[str]:
+    """The text of every ``<style ...>`` element, up to its ``</style>`` or the end, as a
+    browser reads it. Linear: tag ends and closing tags are found by position."""
+    ends = [m.start() for m in re.finditer(">", content)]
+    closes = [(m.start(), m.end()) for m in _STYLE_CLOSE.finditer(content)]
+    starts = [c[0] for c in closes]
+    out: list[str] = []
+    done = 0
+    for m in _STYLE_OPEN.finditer(content):
+        if m.start() < done:
+            continue
+        k = bisect_left(ends, m.end())
+        if k == len(ends):
+            break
+        body = ends[k] + 1
+        j = bisect_left(starts, body)
+        if j == len(closes):
+            out.append(content[body:])
+            break
+        out.append(content[body : closes[j][0]])
+        done = closes[j][1]
+    return out
 
 
 def static_problems(content: str, kind: str) -> list[str]:
     """What in a design output could run or fetch; empty when it is static and offline.
     Checks the markup (tags, attribute values and stylesheets), as written, with entities
     decoded (&#114;efresh is a refresh) and with CSS escapes read (\\75rl( is url()."""
-    tags, styles = _TAG.findall(content), _STYLE_TEXT.findall(content)
+    if len(content.encode("utf-8")) > MAX_FILE_BYTES:
+        return [f"is over {MAX_FILE_BYTES} bytes: not checked"]
+    tags, styles = _TAG.findall(content), _style_texts(content)
     # Fails closed: text that decodes to a tag (&lt;script&gt;) is read as one too.
     whole = html.unescape(content)
-    pieces = tags + styles + _TAG.findall(whole) + _STYLE_TEXT.findall(whole)
+    pieces = tags + styles + _TAG.findall(whole) + _style_texts(whole)
     decoded = [html.unescape(p) for p in pieces]
     readings = pieces + decoded + [css_unescape(p) for p in decoded if "\\" in p]
     out = [f"contains {what}" for what, rx in _STATIC_CHECKS if any(rx.search(p) for p in readings)]

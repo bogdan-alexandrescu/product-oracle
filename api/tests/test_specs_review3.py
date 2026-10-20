@@ -9,6 +9,8 @@
 3. The static check of design files is linear.
 """
 
+import json
+import time
 import uuid
 
 import pytest
@@ -428,3 +430,110 @@ async def test_a_regeneration_whose_spec_import_fails_leaves_the_request_on_its_
     assert after["latest_version"] == 1
     assert after["request"]["source_version_id"] == before["source_version_id"]
     assert after["request"]["section_keys"] == before["section_keys"]
+
+
+# --------------------------------------------------------------------------- item 3
+
+LIMIT = 200_000
+
+
+def _svg(body: str) -> str:
+    return f'<svg xmlns="http://www.w3.org/2000/svg">{body}</svg>'
+
+
+def _fill(unit: str, around: tuple[str, str] = ("", ""), size: int = LIMIT) -> str:
+    """``unit`` repeated to a file of about ``size`` bytes inside ``around``."""
+    room = size - len(around[0]) - len(around[1]) - 64
+    return around[0] + unit * (room // len(unit)) + around[1]
+
+
+# Each payload is (kind, content): the reviewer's two, then the worst cases we found at
+# the 200 KB limit, one for each check that used to backtrack.
+SLOW_PAYLOADS = {
+    "reviewer-lt-runs-40k": ("static", "<<" * 20_000 + ">"),
+    "reviewer-svg-text-160k": ("svg", _svg("<text>" + "&lt;" * 40_000 + "</text>")),
+    "lt-runs": ("html", _fill("<<", ("", ">"))),
+    "lt-runs-static": ("static", _fill("<<", ("", ">"))),
+    "escaped-lt-svg": ("svg", _fill("&lt;", (_svg("<text>")[:-6], "</text></svg>"))),
+    "escaped-lt-html": ("html", _fill("&lt;", ("<p>", "</p>"))),
+    "unclosed-style-tags": ("html", _fill("&lt;style ", ("<p>", "</p>"))),
+    "src-then-spaces": ("html", _fill(" ", ("<p>&lt;x src=", "&gt;</p>"))),
+    "url-then-spaces": ("svg", _fill(" ", (_svg("<style>a{b:url(")[:-6], "#a)}</style></svg>"))),
+    "unclosed-urls-css": ("svg", _fill("url(", (_svg("<style>")[:-6], "</style></svg>"))),
+    "unclosed-comments-css": ("svg", _fill("/* ", (_svg("<style>")[:-6], "</style></svg>"))),
+    "long-attribute-name": ("static", _fill("a", ("<p ", ">"))),
+    "quoted-name-run": ("html", _fill("a", ('<p title="&quot;', '">x</p>'))),
+    "event-handler-runs": ("html", _fill('&lt;p "on', ("<p>", "</p>"))),
+    "unclosed-quotes": ("html", _fill('&lt;"', ("<p>", "</p>"))),
+}
+
+
+@pytest.mark.parametrize("name", list(SLOW_PAYLOADS))
+def test_the_static_check_is_linear(name):
+    from oracle.specs.sanitize import sanitize_svg, sanitize_wireframe, static_problems
+
+    kind, content = SLOW_PAYLOADS[name]
+    assert len(content.encode()) <= LIMIT
+    started = time.perf_counter()
+    if kind == "static":
+        static_problems(content, "html")
+        static_problems(content, "svg")
+    elif kind == "svg":
+        sanitize_svg(content, title="x")
+    else:
+        sanitize_wireframe(content, title="x")
+    elapsed = time.perf_counter() - started
+    assert elapsed < 1.0, f"{name}: {elapsed:.1f}s"
+
+
+def test_a_worst_case_design_bundle_is_checked_in_under_a_second():
+    from oracle.specs.design import check_design
+
+    reqs, sections = [str(uuid.uuid4())], ["s-1"]
+    bundle = json.loads(design_json(reqs, sections, screens=2))
+    bundle["flows"][0]["svg"] = SLOW_PAYLOADS["escaped-lt-svg"][1]
+    bundle["wireframes"][0]["html"] = SLOW_PAYLOADS["lt-runs"][1]
+    bundle["wireframes"][1]["html"] = SLOW_PAYLOADS["escaped-lt-html"][1]
+    started = time.perf_counter()
+    check_design(json.dumps(bundle), prd_sections=set(sections), requirement_ids=set(reqs))
+    assert time.perf_counter() - started < 1.0
+
+
+def test_quoted_local_css_references_are_local():
+    from oracle.specs.sanitize import sanitize_svg, static_problems
+
+    for ref in ("url(#arrow)", "url('#arrow')", 'url("#arrow")', "url( '#arrow' )"):
+        svg = _svg(
+            '<defs><marker id="arrow"><path d="M0,0 L1,1"/></marker></defs>'
+            f'<line x1="0" y1="0" x2="1" y2="1" marker-end="{ref.replace(chr(34), "&quot;")}"/>'
+        )
+        out = sanitize_svg(svg, title="x")
+        assert out.safe, (ref, out.blocked)
+        assert not static_problems(out.content, "svg"), ref
+    for ref in ("url('http://x/a')", 'url("//x/a")', "url( x )"):
+        out = sanitize_svg(_svg(f'<rect fill="{ref.replace(chr(34), "&quot;")}"/>'), title="x")
+        assert not out.safe, ref
+
+
+async def test_the_design_check_runs_off_the_event_loop_with_a_time_cap(
+    client, runtime, monkeypatch
+):
+    from oracle.specs import service
+
+    def stalls(*args, **kwargs):
+        time.sleep(5)
+        raise AssertionError("not reached in time")
+
+    monkeypatch.setattr(service, "check_design", stalls)
+    monkeypatch.setattr(service, "DESIGN_CHECK_SECONDS", 0.2, raising=False)
+    world = await make_world(client)
+    owner = world.ctx.as_("owner")
+    started = time.perf_counter()
+    created = await generated(client, runtime, world)
+    assert time.perf_counter() - started < 4
+    run = await get_run(client, owner, created["run_id"])
+    imported = pending(run)["payload"]["import"]
+    assert imported["version"] == 1
+    assert [p["code"] for p in imported["design"]["problems"]] == ["design_check_timeout"]
+    spec = await get_spec(client, owner, created["spec"]["request"]["id"])
+    assert spec["request"]["status"] == "partial"

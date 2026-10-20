@@ -14,6 +14,7 @@ Nothing is ever rewritten: a stale spec, flow or wireframe gets a proposed regen
 (a draft run), never an automatic one.
 """
 
+import asyncio
 import json
 import uuid
 from datetime import UTC, datetime
@@ -39,7 +40,8 @@ from oracle.runs.models import Run
 from oracle.runs.schemas import RunCreate
 from oracle.specs import contract, lineage
 from oracle.specs.capabilities import capability_map
-from oracle.specs.design import MAX_FILE_BYTES, check_design
+from oracle.specs.contract import Problem
+from oracle.specs.design import MAX_FILE_BYTES, DesignCheck, check_design
 from oracle.specs.sanitize import DOWNLOAD_CSP
 from oracle.specs.schemas import (
     AnnotationOut,
@@ -71,6 +73,9 @@ from oracle.v2.models import (
 from oracle.v2.schemas import ArtifactRequestOut, ArtifactReviewEventOut, ArtifactVersionOut
 
 FLOW = "prd_to_spec"
+# The design check (parse, sanitise, static check) runs in a worker thread, never in the
+# event loop; past this many seconds the import fails it cleanly.
+DESIGN_CHECK_SECONDS = 20.0
 
 
 class SpecError(Exception):
@@ -697,7 +702,7 @@ async def import_spec(
                 "recorded either"
             }
         elif params.get("design", True):
-            check = check_design(
+            check = await _check_design_off_loop(
                 files.get("design.json"),
                 prd_sections={k for k, _ in await _section_keys(s, version_id)},
                 requirement_ids={r.id for r in inputs.requirements},
@@ -743,6 +748,24 @@ async def import_spec(
             request.status = "failed"
         await s.commit()
     return out
+
+
+async def _check_design_off_loop(text: str | None, **kwargs: Any) -> DesignCheck:
+    """:func:`check_design` in a worker thread, capped at DESIGN_CHECK_SECONDS: a design
+    that takes longer is refused (the thread is left to finish on its own)."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(check_design, text, **kwargs), timeout=DESIGN_CHECK_SECONDS
+        )
+    except TimeoutError:
+        return DesignCheck(
+            problems=[
+                Problem(
+                    "design_check_timeout",
+                    f"design.json took over {DESIGN_CHECK_SECONDS:g} seconds to check: refused",
+                )
+            ]
+        )
 
 
 async def _section_keys(db: AsyncSession, version_id: uuid.UUID) -> list[tuple[str, str]]:

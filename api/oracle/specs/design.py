@@ -27,10 +27,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from oracle.specs.contract import Problem
-from oracle.specs.sanitize import Sanitized, sanitize_svg, sanitize_wireframe
+from oracle.specs.sanitize import MAX_FILE_BYTES, Sanitized, sanitize_svg, sanitize_wireframe
 
 MAX_BUNDLE_BYTES = 1_000_000
-MAX_FILE_BYTES = 200_000
 # O2: 2-4 key screens; at least one flow, at most four.
 MIN_SCREENS, MAX_SCREENS = 2, 4
 MAX_FLOWS = 4
@@ -226,6 +225,14 @@ def check_design(
             if ext == "svg"
             else sanitize_wireframe(body, title=item.title, annotations=labels)
         )
+        if sanitized.too_large:
+            _err(
+                out,
+                "file_too_large",
+                f"{item.name} is over {MAX_FILE_BYTES} bytes once sanitised",
+                where,
+            )
+            continue
         for b in sanitized.blocked:
             _err(out, "unsafe_content", f"{item.name}: {b}", where)
         ids: set[str] = set()
