@@ -186,14 +186,22 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
   await expect(retry).toBeVisible();
   // Only the segment whose draft was refused offers it.
   await expect(page.getByRole("button", { name: "Retry import" })).toHaveCount(1);
+  // The review cannot be approved without a draft; changes can still be requested.
+  const review = prd.getByTestId("checkpoint-prd_review");
+  await expect(review.getByRole("button", { name: "Approve and continue" })).toBeDisabled();
+  await expect(review.getByTestId("cannot-approve")).toHaveText("The draft was not imported: retry import, or request changes.");
+  await review.getByLabel("Note for the agents").fill("Fix the citations");
+  await expect(review.getByRole("button", { name: "Request changes" })).toBeEnabled();
 
   await retry.click();
   await expect(prd).toContainText("Imported as guest-checkout v1");
   await expect(prd).not.toContainText("Draft not imported");
   await expect(retry).toHaveCount(0);
-  // Nothing is decided: the review still waits for a person.
+  // Nothing is decided: the review still waits for a person, who may approve it now.
   await expect(prd.getByTestId("checkpoint-waiting")).toBeVisible();
   await expect(status(page)).toHaveText("Waiting for review");
+  await expect(review.getByRole("button", { name: "Approve and continue" })).toBeEnabled();
+  await expect(review.getByTestId("cannot-approve")).toHaveCount(0);
 
   await prd.getByRole("link", { name: "guest-checkout v1" }).click();
   await expect(page).toHaveURL(/\/documents\/guest-checkout\/v\/1$/);

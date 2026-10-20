@@ -6,9 +6,14 @@ run waits at its review with no draft imported. POST
 that now accepts it, or a cause that went away), for the checkpoint's approver role or
 above, while that checkpoint is pending. The SwarmCloud wait is untouched: the person
 still decides at the checkpoint.
+
+Approving that review is refused while the draft is not imported (owner, 2026-10-20);
+a run whose review was approved before that finished without a document, and an owner
+retries its import after the run finished.
 """
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -18,6 +23,8 @@ from oracle.docs.models import Citation, Document, DocumentVersion
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import ImportProblem
 from oracle.models import AuditEvent
+from oracle.runs import flows
+from oracle.runs.models import Checkpoint, Run
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
 from tests.fixtures import draft, seed_auth
@@ -27,6 +34,7 @@ from tests.test_runs import BAD_PRD, as_user, decide, get, pending, started, tic
 OFF = {"baseline_confirm": False, "feature_set": False, "priority_order": False}
 ORACLE_PRD = draft("prd_oracle_citations.md")
 OLDER = "citation #1 (o-g1) is invalid: source"
+NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
 
 
 @pytest.fixture
@@ -72,6 +80,27 @@ async def _rejected(
     return run
 
 
+async def _approved_while_refused(tenant_id, run_id: str) -> None:
+    """The live case: the review was approved while its draft was refused (before approval
+    was refused for that), so the run finished with no document."""
+    async with tenant_session(tenant_id) as s:
+        run = await s.get(Run, uuid.UUID(run_id))
+        cp = await s.scalar(
+            select(Checkpoint).where(Checkpoint.run_id == run.id, Checkpoint.status == "pending")
+        )
+        cp.status, cp.decided_at = "approved", datetime.now(UTC)
+        run.status, run.finished_at = "succeeded", datetime.now(UTC)
+        await s.commit()
+
+
+async def _decide(client, headers, run, decision="approved", note=None):
+    return await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{pending(run)['id']}/decide",
+        json={"decision": decision, "note": note},
+        headers=headers,
+    )
+
+
 async def _retried(tenant_id) -> list[AuditEvent]:
     async with tenant_session(tenant_id) as s:
         return list(
@@ -91,6 +120,7 @@ async def test_a_rejected_draft_is_imported_by_retry(client, owner, runtime, mon
     assert seg["can_retry_draft_import"] is True
     assert run["document_id"] is None
     assert OLDER in pending(run)["payload"]["import"]["error"]
+    assert pending(run)["cannot_approve"] == NOT_IMPORTED
 
     resp = await client.post(_retry_url(run), headers=auth)
     assert resp.status_code == 200, resp.text
@@ -104,6 +134,7 @@ async def test_a_rejected_draft_is_imported_by_retry(client, owner, runtime, mon
     assert run["document_id"] == imp["document_id"]
     cp = pending(run)
     assert cp["payload"]["import"]["version"] == 1 and "error" not in cp["payload"]["import"]
+    assert cp["cannot_approve"] is None
     # Nothing is decided: the person still decides at the review.
     assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "prd_review"
     assert any("retried importing prd.md" in n for n in run["notes"])
@@ -141,6 +172,7 @@ async def test_a_draft_still_rejected_keeps_the_new_error(client, owner, runtime
     after = seg["draft_import"]["error"]
     assert after != before and "prd.md was rejected" in after and "front_matter" in after
     assert pending(run)["payload"]["import"] == {"error": after}
+    assert pending(run)["cannot_approve"] == NOT_IMPORTED
     # Still waiting, still retryable, no document.
     assert seg["can_retry_draft_import"] is True
     assert run["status"] == "awaiting_checkpoint" and run["document_id"] is None
@@ -176,22 +208,104 @@ async def test_a_segment_that_left_no_draft_is_refused(client, owner, runtime, m
     assert resp.status_code == 409 and "prd.md" in resp.json()["detail"]
 
 
-async def test_refused_once_the_review_is_decided(client, owner, runtime, monkeypatch):
+async def test_refused_once_changes_are_requested(client, owner, runtime, monkeypatch):
     tenant_id, auth = owner
     # Changes requested: the segment runs again; its old review is decided.
     run = await _rejected(client, auth, runtime, monkeypatch)
     run = await decide(client, auth, run, "changes_requested", "Fix the citations")
+    assert run["status"] == "running"
     assert run["segments"][3]["can_retry_draft_import"] is False
     resp = await client.post(_retry_url(run), headers=auth)
     assert resp.status_code == 409, resp.text
+    assert await _retried(tenant_id) == []
 
-    # Approved as it is: the run finished.
-    done = await _rejected(client, auth, runtime, monkeypatch, document="other-prd")
-    done = await decide(client, auth, done)
-    assert done["status"] == "succeeded"
-    assert done["segments"][3]["can_retry_draft_import"] is False
-    resp = await client.post(_retry_url(done), headers=auth)
-    assert resp.status_code == 409, resp.text
+
+async def test_approve_is_refused_while_the_draft_is_not_imported(
+    client, owner, runtime, monkeypatch
+):
+    tenant_id, auth = owner
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    assert pending(run)["cannot_approve"] == NOT_IMPORTED
+    # Every path is the one decide: the web, the Inbox and MCP (decide_checkpoint).
+    for headers in (auth, await as_user(tenant_id, "approver")):
+        resp = await _decide(client, headers, run)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["detail"] == NOT_IMPORTED
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint" and pending(run)["status"] == "pending"
+    assert run["document_id"] is None
+    async with tenant_session(tenant_id) as s:
+        actions = set(await s.scalars(select(AuditEvent.action)))
+    assert "checkpoint.approved" not in actions
+    # Request changes stays allowed: the segment runs again with the note.
+    resp = await _decide(client, auth, run, "changes_requested", "Fix the citations")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "running"
+
+
+async def test_after_the_run_finished_an_owner_retries(client, owner, runtime, monkeypatch):
+    tenant_id, auth = owner
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    await _approved_while_refused(tenant_id, run["id"])
+
+    # Owners only once the run finished: an approver may not.
+    approver = await as_user(tenant_id, "approver")
+    seen = await get(client, approver, run["id"])
+    assert seen["status"] == "succeeded" and seen["document_id"] is None
+    assert seen["segments"][3]["can_retry_draft_import"] is False
+    resp = await client.post(_retry_url(run), headers=approver)
+    assert resp.status_code == 403, resp.text
+    assert "owner" in resp.json()["detail"]
+
+    run = await get(client, auth, run["id"])
+    assert run["segments"][3]["can_retry_draft_import"] is True
+    resp = await client.post(_retry_url(run), headers=auth)
+    assert resp.status_code == 200, resp.text
+    run = resp.json()
+    imp = run["segments"][3]["draft_import"]
+    assert imp["error"] is None and (imp["slug"], imp["version"]) == ("example-prd", 1)
+    assert run["document_id"] == imp["document_id"]
+    assert run["segments"][3]["can_retry_draft_import"] is False
+    # Nothing about the run's checkpoints changes; the import is recorded on the review.
+    assert run["status"] == "succeeded"
+    review = next(c for c in run["checkpoints"] if c["kind"] == "prd_review")
+    assert review["status"] == "approved" and review["payload"]["import"]["version"] == 1
+    assert any("retried importing prd.md" in n for n in run["notes"])
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == "example-prd"))
+        # The new version goes through the document's own review.
+        assert doc is not None and doc.status == "draft"
+    (event,) = await _retried(tenant_id)
+    assert event.data["version"] == 1 and OLDER in event.data["previous_error"]
+
+    # Idempotent: a version from this run exists now.
+    again = await client.post(_retry_url(run), headers=auth)
+    assert again.status_code == 409 and "nothing to retry" in again.json()["detail"]
+    assert len(await _retried(tenant_id)) == 1
+
+
+async def test_refused_on_a_cancelled_or_failed_run(client, owner, runtime, monkeypatch):
+    tenant_id, auth = owner
+    cancelled = await _rejected(client, auth, runtime, monkeypatch)
+    resp = await client.post(f"/v1/runs/{cancelled['id']}/cancel", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["segments"][3]["can_retry_draft_import"] is False
+    resp = await client.post(_retry_url(cancelled), headers=auth)
+    assert resp.status_code == 409 and "cancelled" in resp.json()["detail"]
+
+    # With the review off, a refused draft fails the run.
+    _older_oracle(monkeypatch)
+    runtime.script["prd_draft"] = [Outcome(artifacts={"prd.md": ORACLE_PRD})]
+    off = dict.fromkeys(flows.FLOWS["baseline_to_prd"].checkpoints, False)
+    failed = await started(client, auth, document="other-prd", checkpoints=off)
+    for _ in range(4):
+        await tick(client, auth)
+    monkeypatch.undo()
+    failed = await get(client, auth, failed["id"])
+    assert failed["status"] == "failed" and failed["segments"][3]["draft_import"]["error"]
+    assert failed["segments"][3]["can_retry_draft_import"] is False
+    resp = await client.post(_retry_url(failed), headers=auth)
+    assert resp.status_code == 409 and "failed" in resp.json()["detail"]
     assert await _retried(tenant_id) == []
 
 
