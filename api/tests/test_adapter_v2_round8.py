@@ -398,9 +398,12 @@ async def test_the_cap_drop_is_audited_and_keeps_the_overrun(client, owner, monk
     swarm = on()
     clock = _Clock(monkeypatch)
     run = await _stopped(client, auth, tenant_id, swarm, clock)
-    await _ceiling(tenant_id, run["id"], str(run["spent_usd"] - 0.5))
+    # Round 9: only spend that arrives after the end is an overrun after the end.
+    await _ceiling(tenant_id, run["id"], str(run["spent_usd"] + 0.5))
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
     runtime = use(swarm)
     real = runtime.status
+    await _tick_errors(client, auth)
 
     async def status(workflow_id):
         if workflow_id == "wf_1":

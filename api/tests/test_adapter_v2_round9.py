@@ -541,3 +541,58 @@ async def test_cancel_again_who_and_which_run(client, owner, monkeypatch):
     assert resp.status_code == 409, resp.text
     assert len(await _audits(tenant_id, "run.cancel_again")) == 1
     assert len((await get(client, auth, run["id"]))["notes"]) == notes
+
+
+# --------------------------------------------------------------------------- item 5
+
+
+async def test_an_overrun_from_before_the_end_is_not_recorded_as_after_the_end(
+    client, owner, monkeypatch
+):
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _at_baseline(client, auth, swarm)
+    # Over its ceiling before it ends: cancelled before a tick pauses it.
+    await _ceiling(tenant_id, run["id"], str(run["spent_usd"] - 0.5))
+    swarm.html_404_cancel = True
+    resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
+    assert resp.status_code == 200, resp.text
+    for _ in range(service.NOT_FOUND_TRIES):
+        clock.forward(service.STUCK_LOOKUP_SECONDS + 1)
+        await _tick_errors(client, auth)
+    resp = await client.post(f"/v1/runs/{run['id']}/stop-cancelling", headers=auth)
+    assert resp.status_code == 200, resp.text
+    await _tick_errors(client, auth)  # the stopped workflow read: nothing new spent
+    assert "overrun_after_end" not in await _knobs_of(tenant_id, run["id"])
+    assert await _audits(tenant_id, "run.overrun_after_end") == []
+    # Spend that arrives after the end is recorded, saying it was over already.
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    await _tick_errors(client, auth)
+    over = (await _knobs_of(tenant_id, run["id"]))["overrun_after_end"]
+    assert float(over["spent_usd"]) == pytest.approx(_wf_cost(swarm, "wf_1"))
+    got = await get(client, auth, run["id"])
+    assert any("already" in n and "when it ended" in n for n in got["notes"]), got["notes"]
+
+
+async def test_a_dismissed_overrun_does_not_block_a_new_one(client, owner, monkeypatch):
+    tenant_id, auth = owner
+    swarm = on()
+    clock = _Clock(monkeypatch)
+    run = await _over_after_stop(client, auth, tenant_id, swarm, clock)
+    knobs = await _knobs_of(tenant_id, run["id"])
+    first = knobs["overrun_after_end"]
+    dismissed = {**first, "dismissed_at": "2026-10-20T10:00:00+00:00"}
+    await _edit_run(tenant_id, run["id"], knobs={"overrun_after_end": dismissed})
+    # No new spend: nothing new is recorded.
+    await _tick_errors(client, auth)
+    assert (await _knobs_of(tenant_id, run["id"]))["overrun_after_end"] == dismissed
+    # Spend grows past the last recorded amount: recorded again, shown again.
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    await _tick_errors(client, auth)
+    over = (await _knobs_of(tenant_id, run["id"]))["overrun_after_end"]
+    assert not over.get("dismissed_at")
+    assert float(over["spent_usd"]) > float(first["spent_usd"])
+    assert len(await _audits(tenant_id, "run.overrun_after_end")) == 2
+    got = await get(client, auth, run["id"])
+    assert got["cancel_again"] == ["wf_1"]

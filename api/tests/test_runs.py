@@ -769,6 +769,7 @@ async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
         "overruns": [],
         "lookups": [],
         "searches": [],
+        "imports": [],
         "feedback": [],
         "total": 0,
     }

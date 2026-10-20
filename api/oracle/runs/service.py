@@ -2198,6 +2198,7 @@ async def _finish(
     # SwarmCloud does not confirm leaves the workflow attached: the tick cancels it again
     # and keeps reading its cost.
     await _detach(db, run, cancel=status != "succeeded", state=state, done=done)
+    _set_knob(run, "spent_at_end", str(run.spent_usd or 0))
     await revoke_run_tokens(db, run.id)
 
 
@@ -3243,8 +3244,26 @@ async def _after_search(
     if (ceiling := _overrun(run)) is not None:
         if run.status in _SPENDING:
             await _pause_overrun(db, run, ceiling, stats)
-        elif run.status in FINAL and not (run.knobs or {}).get("overrun_after_end"):
+        elif run.status in FINAL and _new_overrun_after_end(run, ceiling):
             await _overrun_after_end(db, run, ceiling, target)
+
+
+def _new_overrun_after_end(run: Run, ceiling: Decimal) -> bool:
+    """Whether an ended run's spend over its ceiling is an overrun after its end to
+    record: spend that arrived after the end (past the spend it ended with, when that was
+    over the ceiling already: an earlier overrun keeps its own kind and wording), and
+    past the last one recorded. One recorded and not dismissed is shown already; a
+    dismissed one does not block a new one once the spend grows past it."""
+    knobs = run.knobs or {}
+    at_end = knobs.get("spent_at_end")
+    if at_end is not None and run.spent_usd <= Decimal(str(at_end)):
+        return False
+    over = knobs.get("overrun_after_end")
+    if not isinstance(over, dict):
+        return True
+    return bool(over.get("dismissed_at")) and run.spent_usd > Decimal(
+        str(over.get("spent_usd") or 0)
+    )
 
 
 def _usd_text(value: Any) -> str:
@@ -3259,28 +3278,40 @@ async def _overrun_after_end(
     overrun is recorded, audited and shown in the Inbox, with Cancel again for a stopped
     workflow that still runs, until an owner or the run's creator dismisses it (once
     nothing is left to read). Kept on the run after that."""
-    running = [str(e["id"]) for e in (run.knobs or {}).get("searches") or [] if e.get("id")]
-    _set_knob(
-        run,
-        "overrun_after_end",
-        {
-            "spent_usd": str(run.spent_usd),
-            "ceiling_usd": str(ceiling),
-            "at": _now().isoformat(),
-            "running": running,
-        },
-    )
+    knobs = run.knobs or {}
+    running = [str(e["id"]) for e in knobs.get("searches") or [] if e.get("id")]
+    record: dict[str, Any] = {
+        "spent_usd": str(run.spent_usd),
+        "ceiling_usd": str(ceiling),
+        "at": _now().isoformat(),
+        "running": running,
+    }
+    at_end = knobs.get("spent_at_end")
+    already = at_end is not None and Decimal(str(at_end)) > ceiling
+    if already:
+        record["spent_at_end"] = str(at_end)
+    previous = knobs.get("overrun_after_end")
+    if isinstance(previous, dict) and previous.get("dismissed_at"):
+        record["earlier"] = [*(previous.get("earlier") or []), previous]
+    _set_knob(run, "overrun_after_end", record)
     if segment is not None:
         still = (
             f"workflow {', '.join(running)} still runs in SwarmCloud"
             if running
             else "the last read of a workflow it no longer drives found it"
         )
-        _note(
-            segment,
-            f"After the run ended its spend reached {_usd_text(run.spent_usd)}, over its "
-            f"{_usd_text(ceiling)} ceiling: {still}.",
-        )
+        if already:
+            said = (
+                f"The run was already over its {_usd_text(ceiling)} ceiling when it ended "
+                f"({_usd_text(at_end)}); after it ended its spend grew to "
+                f"{_usd_text(run.spent_usd)}: {still}."
+            )
+        else:
+            said = (
+                f"After the run ended its spend reached {_usd_text(run.spent_usd)}, over its "
+                f"{_usd_text(ceiling)} ceiling: {still}."
+            )
+        _note(segment, said)
     await audit.record(
         db,
         None,
@@ -4838,6 +4869,7 @@ async def _end_stopped(
     _set_knob(run, "post_404", None)
     run.status = "cancelled"
     run.finished_at = _now()
+    _set_knob(run, "spent_at_end", str(run.spent_usd or 0))
     run.error = (
         f"Stop cancelling ended the run: Oracle no longer cancels workflow {wf.get('id')}, "
         "and its spend still counts on the run until SwarmCloud stops it."
