@@ -176,10 +176,46 @@ def test_the_subject_check_keeps_other_lanes_values(scratch_db):
     assert _subjects() == before | {"member", "product_track"}
 
 
+def test_a_product_track_event_survives_upgrade_head_and_a_round_trip(scratch_db):
+    """The guard for every migration after 0016 (PR #84's 0014_review among them): with a
+    product_track change event in the table, ``upgrade head`` must keep the subject (a
+    migration that rebuilds the check from a fixed list fails here), and a downgrade to
+    0016 and back to head must too."""
+    cfg = _cfg()
+    command.upgrade(cfg, REVISION)
+    tenant = uuid.uuid4()
+    _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
+    _event(tenant, "product_track")
+
+    command.upgrade(cfg, "head")
+    assert "product_track" in _subjects()
+    command.downgrade(cfg, REVISION)
+    assert "product_track" in _subjects()
+    command.upgrade(cfg, "head")
+    assert "product_track" in _subjects()
+    assert _run("SELECT count(*) FROM change_events WHERE subject_kind = 'product_track'") == [
+        (1,)
+    ]
+    _event(tenant, "product_track")
+
+    # Below 0016 the events go with the subject, and head brings the subject back.
+    command.downgrade(cfg, "0014_blockers_snapshot")
+    assert "product_track" not in _subjects()
+    command.upgrade(cfg, "head")
+    _event(tenant, "product_track")
+
+
+def test_the_migration_imports_no_application_code():
+    """A migration runs as written forever: it must not import oracle modules that can
+    change after it ships (0016 carries a frozen copy of oracle.migration_checks)."""
+    source = (API_DIR / "migrations" / "versions" / "0016_roadmap.py").read_text()
+    assert "from oracle" not in source and "import oracle" not in source
+
+
 def test_the_model_lists_every_subject_the_migrated_check_allows(scratch_db):
     from oracle.v2.models import CHANGE_SUBJECTS
 
-    command.upgrade(_cfg(), REVISION)
+    command.upgrade(_cfg(), "head")
     assert _subjects() == set(CHANGE_SUBJECTS)
 
 

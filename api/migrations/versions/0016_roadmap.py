@@ -13,24 +13,67 @@ Revision ID: 0016_roadmap
 Revises: 0014_blockers_snapshot
 """
 
+import re
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-from oracle.migration_checks import add_check_values, remove_check_values
-
 revision: str = "0016_roadmap"
 down_revision: str | None = "0014_blockers_snapshot"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Only this lane's subject: the check keeps whatever other lanes' migrations added
-# (oracle.migration_checks reads it from pg_constraint). oracle.v2.models.CHANGE_SUBJECTS
-# stays the one list of every subject.
+# Only this lane's subject: the check keeps whatever other lanes' migrations added (read
+# from pg_constraint at upgrade time). oracle.v2.models.CHANGE_SUBJECTS stays the one list
+# of every subject.
 SUBJECTS = ("product_track",)
 SUBJECT_CHECK = ("change_events", "ck_change_events_subject_kind", "subject_kind")
+
+
+# --- oracle.migration_checks, frozen here as of this revision ----------------------------
+# A migration must not import application code that can change after it ships; this is
+# that module's behaviour, copied.
+
+_VALUE = re.compile(r"'((?:[^']|'')*)'")
+
+
+def check_values(table: str, constraint: str) -> list[str]:
+    """The values a ``column IN (...)`` check constraint allows now, in its order."""
+    definition = op.get_bind().scalar(
+        sa.text(
+            "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+            "JOIN pg_class t ON t.oid = c.conrelid "
+            "WHERE c.conname = :name AND t.relname = :table AND c.contype = 'c'"
+        ),
+        {"name": constraint, "table": table},
+    )
+    if definition is None:
+        raise RuntimeError(f"check constraint {constraint} on {table} not found")
+    return [v.replace("''", "'") for v in _VALUE.findall(definition)]
+
+
+def _replace(table: str, constraint: str, column: str, values: list[str]) -> None:
+    listed = ", ".join("'" + v.replace("'", "''") + "'" for v in values)
+    op.drop_constraint(op.f(constraint), table, type_="check")
+    op.create_check_constraint(op.f(constraint), table, f"{column} IN ({listed})")
+
+
+def add_check_values(table: str, constraint: str, column: str, values: tuple[str, ...]) -> None:
+    """Allow ``values`` too, keeping every value the constraint already allows."""
+    now = check_values(table, constraint)
+    missing = [v for v in values if v not in now]
+    if missing:
+        _replace(table, constraint, column, now + missing)
+
+
+def remove_check_values(table: str, constraint: str, column: str, values: tuple[str, ...]) -> None:
+    """Stop allowing ``values`` only, keeping every other value the constraint allows."""
+    now = check_values(table, constraint)
+    kept = [v for v in now if v not in values]
+    if kept != now:
+        _replace(table, constraint, column, kept)
 
 
 def upgrade() -> None:
