@@ -6,17 +6,20 @@ Each evidence row is scored from oracle.confidence.Factors:
   ``kind`` (``notion``, ``google_docs`` or ``web``); "manual" for free-standing evidence;
 - latest timestamp: the item's updated / occurred time, else its newest version's
   fetch time, else the evidence's retrieved_at; for a public link, the page's stated
-  last change, else when it was last fetched;
+  last change, else when it was last fetched. People read this live score, which
+  decays as the source ages and follows it as it changes; a run reads freshness frozen
+  and scored as of its pinned snapshot instead (``as_of_pin``, S6, owner 2026-10-20);
 - mentions: distinct sources (source items and public links) behind the same entity
   or edge;
 - goal contribution: the highest ``supports`` contribution from the entity (for an
   edge, its source entity) to a confirmed goal; a goal itself counts 3;
 - planning document: the item's acl (or acl.attrs) ``doc_type`` is ``planning``.
 
-The row keeps the confidence, the inputs, each factor's value and weight, and when it
-was scored. An entity's or edge's confidence is ``confidence.aggregate`` of its
-evidence (None without evidence). Weights come from the ``confidence_weights``
-company setting.
+The row keeps the confidence, the inputs, each factor's value and weight, when it was
+scored and, for a source item, the item's time as it was when the evidence was taken
+(``taken_latest_at``, recorded once: what a run reads). An entity's or edge's
+confidence is ``confidence.aggregate`` of its evidence (None without evidence).
+Weights come from the ``confidence_weights`` company setting.
 """
 
 import uuid
@@ -32,11 +35,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import confidence
 from oracle.baseline.models import Edge, Entity, Evidence, EvidenceLinkSnapshot
-from oracle.sources.models import Source, SourceItem, SourceItemVersion
+from oracle.sources.models import Snapshot, Source, SourceItem, SourceItemVersion
 from oracle.tenant_settings import TenantSetting
 
 SETTINGS_KEY = "confidence_weights"
 FREE_STANDING_KIND = "manual"
+# confidence_factors key: a source item's freshness timestamp as it was when the
+# evidence was taken, recorded by the first scoring and kept (what a run reads).
+TAKEN_KEY = "taken_latest_at"
 
 
 async def company_weights(db: AsyncSession) -> dict[str, Any]:
@@ -202,11 +208,16 @@ async def rescore_targets(
             inputs = asdict(factors)
             inputs["latest_at"] = latest.isoformat() if latest else None
             ev.confidence = _dec(result.confidence)
-            ev.confidence_factors = {
+            factors_out: dict[str, Any] = {
                 "inputs": inputs,
                 "breakdown": result.breakdown,
                 "weights": {k: v["weight"] for k, v in result.breakdown.items()},
             }
+            if item is not None and not ev.kind:
+                # What a run reads, recorded once (as_of_pin).
+                taken = _taken_latest(ev, item)
+                factors_out[TAKEN_KEY] = taken.isoformat() if taken else None
+            ev.confidence_factors = factors_out
             ev.scored_at = now
 
     for model, ids in ((Entity, entity_ids), (Edge, edge_ids)):
@@ -217,6 +228,93 @@ async def rescore_targets(
             row.confidence = _dec(confidence.aggregate(scores))
     await db.flush()
     return len(evidence), len(entity_ids), len(edge_ids)
+
+
+def _taken_latest(ev: Evidence, item: SourceItem | None) -> datetime | None:
+    """A source item's freshness timestamp as it was when the evidence was taken: the
+    item's update or occurrence time no later than the evidence's ``retrieved_at`` (the
+    version it quotes), else that ``retrieved_at``. The first scoring records it
+    (``taken_latest_at``) and every later one keeps it, so an upstream change since
+    never moves it: what a run reads (``as_of_pin``)."""
+    recorded = (ev.confidence_factors or {}).get(TAKEN_KEY)
+    if isinstance(recorded, str):
+        try:
+            return datetime.fromisoformat(recorded)
+        except ValueError:
+            pass
+    taken = ev.retrieved_at
+    if item is None:
+        return taken
+    stamps = [
+        t
+        for t in (item.source_updated_at, item.occurred_at)
+        if t is not None and (taken is None or t <= taken)
+    ]
+    return max(stamps) if stamps else taken
+
+
+async def as_of_pin(
+    db: AsyncSession, rows: list[Evidence], pin: Snapshot
+) -> dict[uuid.UUID, tuple[float, dict[str, Any]]]:
+    """Evidence id -> (confidence, factors) as a run reads them (S6, owner 2026-10-20):
+    freshness frozen and scored as of the run's pinned snapshot, so a run's score stays
+    as it was when it started however its sources age or change since (people read the
+    live score). A source item counts its time as it was when the evidence was taken
+    (``_taken_latest``, never the item's times as it changed upstream since); a public
+    link the newest page snapshot fetched by the pin; free-standing evidence its
+    ``retrieved_at``. The other factors are the stored ones; rows never scored are left
+    out."""
+    scored = [r for r in rows if (r.confidence_factors or {}).get("inputs")]
+    if not scored:
+        return {}
+    as_of = pin.as_of
+    settings = await company_weights(db)
+    unrecorded = {
+        r.source_item_id
+        for r in scored
+        if r.source_item_id and not r.kind and TAKEN_KEY not in r.confidence_factors
+    }
+    items = await _items(db, unrecorded)
+    links: dict[uuid.UUID, EvidenceLinkSnapshot] = {}
+    if link_ids := [r.id for r in scored if r.kind]:
+        snaps = await db.scalars(
+            select(EvidenceLinkSnapshot)
+            .where(
+                EvidenceLinkSnapshot.evidence_id.in_(link_ids),
+                EvidenceLinkSnapshot.fetched_at <= as_of,
+            )
+            .order_by(EvidenceLinkSnapshot.fetched_at, EvidenceLinkSnapshot.created_at)
+        )
+        links = {s.evidence_id: s for s in snaps.all()}
+    out: dict[uuid.UUID, tuple[float, dict[str, Any]]] = {}
+    for ev in scored:
+        inputs = dict(ev.confidence_factors["inputs"])
+        if ev.kind:
+            latest = link_latest(links.get(ev.id), ev.retrieved_at)
+        elif ev.source_item_id:
+            latest = _taken_latest(ev, items.get(ev.source_item_id, (None,))[0])
+        else:
+            latest = ev.retrieved_at
+        factors = confidence.Factors(
+            source_kind=inputs.get("source_kind") or FREE_STANDING_KIND,
+            item_kind=inputs.get("item_kind"),
+            latest_at=latest,
+            mentions=int(inputs.get("mentions") or 1),
+            goal_contribution=inputs.get("goal_contribution"),
+            planning_doc=bool(inputs.get("planning_doc")),
+        )
+        result = confidence.score(factors, settings, now=as_of)
+        inputs["latest_at"] = latest.isoformat() if latest else None
+        out[ev.id] = (
+            round(result.confidence, 3),
+            {
+                "inputs": inputs,
+                "breakdown": result.breakdown,
+                "weights": {k: v["weight"] for k, v in result.breakdown.items()},
+                "as_of": as_of.isoformat(),
+            },
+        )
+    return out
 
 
 async def preview_link(

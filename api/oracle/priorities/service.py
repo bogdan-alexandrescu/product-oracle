@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
+from oracle.baseline import evidence as baseline_evidence
 from oracle.baseline import scoring as baseline_scoring
 from oracle.baseline.models import Edge, Entity, Evidence
 from oracle.priorities.models import PrioritySnapshot
@@ -42,7 +43,9 @@ def _contribution(value: Any) -> int | None:
     return None if number is None else int(min(3, max(0, round(number))))
 
 
-async def load_features(db: AsyncSession, *, rescore: bool = True) -> list[FeatureInput]:
+async def load_features(
+    db: AsyncSession, *, rescore: bool = True, principal: Principal | None = None
+) -> list[FeatureInput]:
     """Features (not rejected) with their confirmed-goal links, evidence and dependencies.
 
     Scores unscored evidence in the session (flushed, not committed); ``rescore=False``
@@ -96,11 +99,20 @@ async def load_features(db: AsyncSession, *, rescore: bool = True) -> list[Featu
     unscored = {ev.entity_id for ev in evidence if ev.confidence is None}
     if unscored and rescore:
         await baseline_scoring.rescore_targets(db, entity_ids=unscored)
+    # A run reads every score as of its pin, as the entity detail does (S6).
+    view = await baseline_evidence.run_view(db, principal, entity_ids=list(inputs))
+    if view is not None:
+        for f in features.values():
+            inputs[f.id].stored_confidence = view.confidence("entity", f.id)
     for ev in evidence:
         inputs[ev.entity_id].evidence.append(  # type: ignore[index]
             EvidenceRef(
                 id=str(ev.id),
-                confidence=float(ev.confidence) if ev.confidence is not None else None,
+                confidence=(
+                    view.by_evidence.get(ev.id)
+                    if view is not None
+                    else (float(ev.confidence) if ev.confidence is not None else None)
+                ),
                 ref=ev.url or ev.ref,
             )
         )
@@ -110,8 +122,10 @@ async def load_features(db: AsyncSession, *, rescore: bool = True) -> list[Featu
     return sorted(inputs.values(), key=lambda f: f.key)
 
 
-async def compute(db: AsyncSession, method: str) -> PriorityRanking:
-    result = rank(await load_features(db), method)
+async def compute(
+    db: AsyncSession, method: str, principal: Principal | None = None
+) -> PriorityRanking:
+    result = rank(await load_features(db, principal=principal), method)
     features = [RankedFeature.model_validate(r) for r in result["features"]]
     return PriorityRanking(
         method=result["method"],

@@ -21,6 +21,7 @@ import { inboxStates, isStaged } from "./next-draft";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { routeIntake } from "./intake";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { dateMarks, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeTrace } from "./trace";
@@ -1275,6 +1276,17 @@ async function route(db: Db, req: Request): Promise<Response> {
     q,
   );
   if (modules) return modules;
+  // Intake, gaps, questions and answers (CR-03) check roles themselves: commenters
+  // answer and propose, approvers decide, owners accept a critical risk.
+  if (["intakes", "gaps", "questions", "intake-proposals"].includes(p[1])) {
+    const createRun = (input: Schemas["RunCreate"]) => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const run = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(input) });
+      return routeRuns({ ...runsContext(db), db: db.runs }, run, ["v1", "runs"]).then((r) => r ?? notFound("Route"));
+    };
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun }, req, p, q);
+    if (intake) return intake;
+  }
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
     m === "GET"
@@ -1328,7 +1340,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
   const v2Db = ensureV2(db);
   // Blocker strategy routes (CR-04): writes on the v2 option, experiment and event rows.
-  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents };
+  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents, baseline: db.baseline };
   const blockers = await routeBlockers(blockerContext, ensureBlockers(db), req, p, q);
   if (blockers) return blockers;
   const v2 = routeV2(v2Db, req, p, q, me.id);

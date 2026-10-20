@@ -153,7 +153,7 @@ function strip(body: string) {
 /** The "model": every affected section rewritten from its staged suggestions. */
 export function runBatch(ctx: LlmContext, job: Job, v: Version): BatchOutput {
   const ids = (job.input.suggestion_ids as string[] | undefined) ?? [];
-  const used = staged(ctx, job.document_id, ids);
+  const used = staged(ctx, job.document_id ?? "", ids);
   const keys = new Set(v.sections.map((s) => s.section_key));
   const skipped: BatchOutput["skipped"] = used
     .filter((s) => !keys.has(s.section_key ?? ""))
@@ -203,7 +203,7 @@ export function runBatch(ctx: LlmContext, job: Job, v: Version): BatchOutput {
 function preview(ctx: LlmContext, job: Job): Schemas["NextDraftPreview"] {
   const out = (job.output ?? null) as BatchOutput | null;
   const base = (job.input.version as number | undefined) ?? null;
-  const latest = latestOf(ctx, job.document_id)?.number ?? null;
+  const latest = latestOf(ctx, job.document_id ?? "")?.number ?? null;
   const done = job.status === "succeeded" && out;
   return {
     job,

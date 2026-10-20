@@ -5,11 +5,12 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { Button, Chip, GoalTag, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
 import { INPUT, Loading } from "@/components/ui";
-import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut } from "@/lib/api/client";
+import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
+import { LIMIT_LABEL, PromoteForm, suggestedBlocker } from "./PromoteBlocker";
 import {
   ConfidenceRing,
   contributionOf,
@@ -64,6 +65,8 @@ type Props = {
   onOpen: (id: string) => void;
   /** Called after a write, so the lists behind the drawer refresh. */
   onChanged: () => void;
+  /** Open on the Promote to blocker form (a suggested blocker's Promote, B4). */
+  promote?: boolean;
 };
 
 /**
@@ -81,12 +84,14 @@ export function EntityDrawer({
   onClose,
   onOpen,
   onChanged,
+  promote = false,
 }: Props) {
   const q = useQuery(`baseline-entity:${entity.id}`, () =>
     unwrap(api.GET("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: entity.id } } })),
   );
   const onAuth = useAuthRedirect();
   const [editing, setEditing] = useState(false);
+  const [promoting, setPromoting] = useState(promote && canWrite);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -152,6 +157,15 @@ export function EntityDrawer({
       return "Saved. The item is now locked against agent changes.";
     });
 
+  const promoteBlocker = (body: Schemas["BlockerCreate"]) =>
+    write(async () => {
+      await unwrap(api.POST("/v1/blockers", { body }));
+      setPromoting(false);
+      return "Promoted to a blocker. The suggested-blocker mark is cleared.";
+    });
+
+  const suggestion = suggestedBlocker(d ?? entity);
+  const blocker = (d ?? entity).type === "constraint" && !!(d ?? entity).attrs?.blocker;
   const links = d ? [...d.edges_out, ...d.edges_in].filter((e) => e.status !== "rejected").length : undefined;
   const evidence = d?.evidence.length ?? entity.evidence_count;
   const proposals = d?.open_proposals;
@@ -172,6 +186,16 @@ export function EntityDrawer({
             <NodeStatusBadge status={(d ?? entity).status} hero />
             <DeliveryChip value={(d ?? entity).type === "feature" ? (d ?? entity).attrs?.status : undefined} hero />
             <LockBadge entity={d ?? entity} meId={meId} hero />
+            {suggestion && (
+              <Chip kind="warn" hero data-testid="suggested-blocker">
+                Suggested blocker
+              </Chip>
+            )}
+            {blocker && (
+              <Chip kind="crit" hero>
+                Blocker
+              </Chip>
+            )}
           </>
         }
         action={
@@ -220,7 +244,17 @@ export function EntityDrawer({
               </InspectorSection>
             )}
 
-            {editing ? (
+            {promoting && suggestion ? (
+              <InspectorSection label="Promote to blocker">
+                <PromoteForm
+                  entity={d}
+                  low={low}
+                  busy={busy}
+                  onCancel={() => setPromoting(false)}
+                  onSave={promoteBlocker}
+                />
+              </InspectorSection>
+            ) : editing ? (
               <InspectorSection label="Edit">
                 <EditForm entity={d} busy={busy} onCancel={() => setEditing(false)} onSave={save} />
               </InspectorSection>
@@ -230,6 +264,39 @@ export function EntityDrawer({
                   <InspectorSection label="Description">
                     <p className="line-clamp-4 whitespace-pre-line text-text2" title={d.body}>
                       {d.body}
+                    </p>
+                  </InspectorSection>
+                )}
+                {suggestion && (
+                  <InspectorSection
+                    label="Suggested blocker"
+                    tools={
+                      canWrite && (
+                        <Button
+                          disabled={busy}
+                          onClick={() => {
+                            setNotice(null);
+                            setEditing(false);
+                            setPromoting(true);
+                          }}
+                        >
+                          Promote to blocker
+                        </Button>
+                      )
+                    }
+                  >
+                    <p className="text-text2">
+                      An intake answer suggests this is a blocker. Nothing gates publishing until an approver promotes
+                      it.
+                    </p>
+                    <p className="mt-1.5 text-sm" data-testid="suggestion">
+                      {[
+                        suggestion.severity && `${suggestion.severity} severity`,
+                        suggestion.type && `${suggestion.type} type`,
+                        suggestion.limit_kind && LIMIT_LABEL[suggestion.limit_kind],
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </p>
                   </InspectorSection>
                 )}
@@ -281,7 +348,7 @@ export function EntityDrawer({
               )}
             </InspectorSection>
 
-            {canWrite && !editing && (
+            {canWrite && !editing && !(promoting && suggestion) && (
               <InspectorSection>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -303,7 +370,8 @@ export function EntityDrawer({
 }
 
 function Attrs({ attrs }: { attrs: Record<string, unknown> }) {
-  const entries = Object.entries(attrs ?? {});
+  // The suggested-blocker mark has its own section.
+  const entries = Object.entries(attrs ?? {}).filter(([k]) => k !== "proposed_blocker");
   if (entries.length === 0) return null;
   return (
     <InspectorSection label="Attributes">

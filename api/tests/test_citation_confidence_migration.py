@@ -121,7 +121,9 @@ def _cite(t, v, key: str, **cols) -> None:
 def test_chains_on_the_citation_source_oracle_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    # The intake lane's 0014_intake chains on it; one head.
+    assert script.get_heads() == ["0014_intake"]
+    assert script.get_revision("0014_intake").down_revision == REVISION
 
 
 def test_upgrade_adds_the_columns_and_the_downgrade_drops_them(scratch_db):

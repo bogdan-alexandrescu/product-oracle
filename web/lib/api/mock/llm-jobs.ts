@@ -64,6 +64,7 @@ const LABEL: Record<Job["kind"], string> = {
   review_comments: "Review comments",
   reporting: "Reporting",
   refinement: "Refinement",
+  intake_analysis: "Intake analysis",
   quality_review: "Quality review",
   refinement_batch: "Refinement",
 };

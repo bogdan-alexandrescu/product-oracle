@@ -118,7 +118,10 @@ async def list_blockers(
 
 @router.post("/blockers", response_model=BlockerStrategy, status_code=status.HTTP_201_CREATED)
 async def create_blocker(principal: Approver, db: TenantDB, body: BlockerCreate) -> BlockerStrategy:
-    """Record a blocker: an existing constraint entity (``entity_id``), or a new one."""
+    """Record a blocker: an existing constraint entity (``entity_id``), or a new one.
+    Promoting a constraint an intake answer suggested as a blocker (its
+    ``attrs.proposed_blocker``, the "suggested blocker" mark, B4) clears that mark in the
+    same write; the form is pre-filled from the constraint and the mark."""
     try:
         entity = await service.create_blocker(db, principal, body)
     except service.BlockerError as e:

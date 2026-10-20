@@ -8,7 +8,11 @@ inspectable here and listed in the Sources and data points appendix of exports
 
 Visibility follows today's rules (AUD-9): baseline evidence and entities are visible to
 everyone in the company, a source item only to the user whose source it is. Others see
-that a source item backs the claim, and its kind, not what it says.
+that a source item backs the claim, and its kind, not what it says. A run (S6) reads a
+source item as it reads it everywhere else: one its user's intakes withhold, one
+deleted upstream, or one ever frozen by sharing with no release readable now is
+restricted; one a share released shows the title and link released, never the item's
+current ones.
 """
 
 import uuid
@@ -18,9 +22,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
+from oracle.baseline.evidence import run_versions, withheld_from
 from oracle.baseline.models import Entity, Evidence
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
-from oracle.sources.models import Source, SourceItem
+from oracle.sources.models import Source, SourceItem, SourceItemVersion
 from oracle.trace.schemas import (
     EvidenceCitation,
     EvidenceInspector,
@@ -85,6 +90,19 @@ async def targets(
             e.id: e for e in (await db.scalars(select(Entity).where(Entity.id.in_(ent_ids))))
         }
     user_id = principal.user_id if principal is not None else None
+    # A run reads an item as everywhere else (S6): withheld, deleted or frozen with no
+    # release readable now is restricted; a released one is read at that version.
+    withheld: set[uuid.UUID] = set()
+    released: dict[uuid.UUID, SourceItemVersion] = {}
+    frozen: dict[uuid.UUID, uuid.UUID | None] = {}
+    if principal is not None and principal.is_run and items:
+        withheld = await withheld_from(db, principal)
+        frozen = await run_versions(db, principal, set(items))
+        if version_ids := {v for v in frozen.values() if v}:
+            rows = await db.scalars(
+                select(SourceItemVersion).where(SourceItemVersion.id.in_(version_ids))
+            )
+            released = {v.item_id: v for v in rows}
     out: dict[uuid.UUID, SectionLinkTarget] = {}
     for lk in links:
         if lk.evidence_id in evidence:
@@ -95,12 +113,21 @@ async def targets(
             )  # fmt: skip
         elif lk.source_item_id in items:
             item, source = items[lk.source_item_id]
+            title, url = item.title, item.url
             readable = user_id is not None and source.owner_user_id == user_id
+            if principal is not None and principal.is_run:
+                if item.id in withheld or item.deleted_at is not None:
+                    readable = False
+                elif item.id in frozen:
+                    version = released.get(item.id)
+                    readable = version is not None
+                    if version is not None:
+                        title, url = version.title, version.url
             out[lk.id] = SectionLinkTarget(
                 type="source_item",
                 id=item.id,
-                title=item.title if readable else None,
-                url=item.url if readable else None,
+                title=title if readable else None,
+                url=url if readable else None,
                 source_kind=source.kind,
                 restricted=not readable,
             )

@@ -12,6 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import confidence
+from oracle.auth.deps import Principal
+from oracle.baseline import evidence as baseline_evidence
 from oracle.baseline import scoring
 from oracle.baseline.models import Edge, Entity, Evidence
 from oracle.baseline.schemas import (
@@ -31,7 +33,7 @@ def _num(value) -> float | None:
         return None
 
 
-async def report(db: AsyncSession) -> TraceReport:
+async def report(db: AsyncSession, principal: Principal | None = None) -> TraceReport:
     low = float(confidence.merged(await scoring.company_weights(db))["low"])
     entities = (
         await db.scalars(
@@ -67,6 +69,13 @@ async def report(db: AsyncSession) -> TraceReport:
     )
     for entity_id, conf in rows.all():
         scores[entity_id].append(None if conf is None else float(conf))
+    # A run reads every score as of its pin, as the entity detail does (S6).
+    view = await baseline_evidence.run_view(db, principal, entity_ids=[e.id for e in entities])
+    if view is not None:
+        scores = defaultdict(list, {f.id: view.scores("entity", f.id) for f in features})
+
+    def shown(e: Entity) -> float | None:
+        return view.confidence("entity", e.id) if view is not None else _num(e.confidence)
 
     out_features = []
     goal_features: dict = defaultdict(list)
@@ -86,7 +95,7 @@ async def report(db: AsyncSession) -> TraceReport:
                 key=f.key,
                 title=f.title,
                 status=f.status,
-                confidence=_num(f.confidence),
+                confidence=shown(f),
                 evidence_count=len(evidence),
                 goals=[
                     TraceGoalLink(goal_id=g.id, key=g.key, title=g.title, contribution=c)
@@ -107,7 +116,7 @@ async def report(db: AsyncSession) -> TraceReport:
             title=g.title,
             status=g.status,
             weight=_num((g.attrs or {}).get("weight")),
-            confidence=_num(g.confidence),
+            confidence=shown(g),
             features=sorted(goal_features[g.id], key=lambda x: -x.contribution),
             coverage=sum(x.contribution for x in goal_features[g.id]),
         )

@@ -82,7 +82,7 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
     # Lanes add 0014_<lane> on top of 0013 (waves.md); the integrator re-chains them in
     # merge order so the chain stays linear, one head.
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0019_citation_confidence"]
+    assert script.get_heads() == ["0014_intake"]
     assert script.get_revision("0013").down_revision == "0012"
     assert script.get_revision("0014_quality").down_revision == "0013"
     assert script.get_revision("0014_usage_retry_at").down_revision == "0014_quality"
@@ -90,6 +90,11 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
     assert script.get_revision("0015_section_table_rows").down_revision == "0014_trace"
     assert script.get_revision("0014_blockers_snapshot").down_revision == "0015_section_table_rows"
     assert script.get_revision("0016_roadmap").down_revision == "0014_blockers_snapshot"
+    assert script.get_revision("0016_refinement_batch").down_revision == "0016_roadmap"
+    assert script.get_revision("0017_citation_source_oracle").down_revision == (
+        "0016_refinement_batch"
+    )
+    assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):

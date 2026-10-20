@@ -60,6 +60,7 @@ export const JOB_KIND_LABEL: Record<LlmJobKind, string> = {
   review_comments: "Review comments",
   reporting: "Reporting",
   refinement: "Refinement",
+  intake_analysis: "Intake analysis",
   quality_review: "Quality review",
   refinement_batch: "Next draft",
 };
