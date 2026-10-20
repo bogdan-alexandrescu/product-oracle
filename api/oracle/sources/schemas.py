@@ -30,6 +30,12 @@ class SourcePatch(BaseModel):
 class UnavailableItem(BaseModel):
     external_id: str
     reason: str
+    # The item's name when the source config does not name it (a doc found in a folder).
+    name: str | None = None
+    # unavailable: cannot be read; skipped: left out on purpose (e.g. a doc in a picked
+    # folder owned outside the company); flagged: pulled in with a warning; limited: a
+    # folder listing stopped at the source's cap.
+    status: Literal["unavailable", "skipped", "flagged", "limited"] = "unavailable"
 
 
 class SourceOut(ORM):
@@ -46,7 +52,8 @@ class SourceOut(ORM):
     item_count: int = 0
     # False while no connector is registered for the kind (sync answers 422).
     connector_available: bool = True
-    # Allowlisted items the last completed sync could not read (unshared, removed).
+    # Allowlisted items the last completed sync could not read (unshared, removed), or
+    # left out or flagged on purpose (see UnavailableItem.status).
     unavailable_items: list[UnavailableItem] = Field(default_factory=list)
     # Set when the source's connection should be signed in again, e.g. a Google
     # connection without drive.readonly: "Reconnect to choose files".
@@ -73,8 +80,10 @@ class SourceKindOut(BaseModel):
 class SyncResult(BaseModel):
     source_id: uuid.UUID
     # completed: ran to the end; rate_limited: stopped cleanly, resumes from the saved
-    # cursor; error: the source is now in status error (see error).
-    outcome: Literal["completed", "rate_limited", "error"]
+    # cursor; error: the source is now in status error (see error); superseded: the
+    # source's settings or connection were changed while it ran, so nothing more was
+    # saved and the next sync uses the new ones.
+    outcome: Literal["completed", "rate_limited", "error", "superseded"]
     upserted: int = 0
     versions_written: int = 0
     deleted: int = 0

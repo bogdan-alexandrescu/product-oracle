@@ -1,6 +1,7 @@
 """Settings, read from the environment (prefix ``ORACLE_``) or a ``.env`` file."""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,6 +41,12 @@ class Settings(BaseSettings):
     # Google) but is never logged. Either empty: the picker is off (404).
     google_picker_app_id: str = ""
     google_picker_api_key: SecretStr = SecretStr("")
+    # A Google Doc inside a picked Drive folder whose owner's email domain is not one of
+    # the company's (ORACLE_IAP_ALLOWED_DOMAINS, else the members' email domains):
+    # "skip" leaves it out and lists it on the source as 'Skipped: owned outside
+    # <domain>'; "include_and_flag" pulls it in and lists it as 'Owned outside <domain>'.
+    # Docs picked one by one are always pulled in. Owner decision pending (2026-10-20).
+    drive_docs_owned_outside: Literal["skip", "include_and_flag"] = "skip"
 
 
 @lru_cache

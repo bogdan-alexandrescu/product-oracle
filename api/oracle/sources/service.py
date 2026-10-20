@@ -14,6 +14,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import changes
+from oracle.auth.models import User
+from oracle.config import get_settings
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.connections.providers import (
@@ -53,6 +55,10 @@ class ConflictError(Exception):
 
 class InvalidError(Exception):
     """The request cannot be carried out as asked (answered 422)."""
+
+
+class BadRequestError(InvalidError):
+    """The config is malformed, e.g. an id that is not one (answered 400)."""
 
 
 _loaded = False
@@ -226,12 +232,23 @@ async def _validate(
     connector = connector_for(kind)
     if connector is None:
         raise InvalidError(CONNECTOR_UNAVAILABLE)
+    check = getattr(connector, "check_config", None)
+    if check is not None:
+        # The shape and ids first: nothing is sent to the provider for a bad id.
+        try:
+            check(config)
+        except base.ConnectorBadInput as e:
+            raise BadRequestError(str(e)) from None
+        except base.ConnectorError as e:
+            raise InvalidError(str(e)) from None
     problem = scope_problem(kind, config, conn)
     if problem:
         raise InvalidError(problem)
     credential = await _read_credential(db, conn) if conn is not None else None
     try:
         await connector.validate(config, credential)
+    except base.ConnectorBadInput as e:
+        raise BadRequestError(redact(str(e), credential)) from None
     except base.ConnectorAuthError as e:
         raise InvalidError(f"The connection was rejected: {redact(str(e), credential)}") from None
     except base.ConnectorError as e:
@@ -299,6 +316,7 @@ async def create_source(
     connection_id: uuid.UUID | None,
     config: dict[str, Any],
 ) -> Source:
+    _check_config(config)
     conn = await _check_connection(db, user_id, kind, connection_id)
     await _validate(db, kind, config, conn)
     source = Source(
@@ -314,25 +332,40 @@ async def create_source(
     return source
 
 
-async def _narrowed_cursor(db: AsyncSession, source: Source) -> dict[str, Any] | None:
-    """The cursor to keep when a source's allowlist changes (same connection).
+# Mail providers anyone can sign up with: a member's address there says nothing about
+# which documents are the company's.
+PUBLIC_MAIL_DOMAINS = frozenset(
+    {
+        "gmail.com",
+        "googlemail.com",
+        "outlook.com",
+        "hotmail.com",
+        "live.com",
+        "yahoo.com",
+        "icloud.com",
+        "me.com",
+        "proton.me",
+        "protonmail.com",
+    }
+)
 
-    Narrowing a source deletes what now falls outside it on the next sync (S5, 'Browse
-    access and narrowing'). Google Docs: the connector deletes every known file it no
-    longer finds under the allowlist, so the known files stay, with every live item
-    added (those an earlier edit dropped from the cursor, timed "" so they are read
-    again). Other kinds sync from the start."""
-    if source.kind != "google_docs":
-        return None
-    known = {str(k): str(v) for k, v in ((source.cursor or {}).get("files") or {}).items()}
-    live = await db.scalars(
-        select(SourceItem.external_id).where(
-            SourceItem.source_id == source.id, SourceItem.deleted_at.is_(None)
-        )
-    )
-    for external_id in live:
-        known.setdefault(external_id, "")
-    return {"files": known} if known else None
+
+async def company_domains(db: AsyncSession, tenant_id: uuid.UUID) -> list[str]:
+    """The company's email domains: ``ORACLE_IAP_ALLOWED_DOMAINS`` when set, else the
+    domains of the members' email addresses (public mail providers left out)."""
+    configured = {d.strip().lower().lstrip("@") for d in get_settings().iap_allowed_domains}
+    configured.discard("")
+    if configured:
+        return sorted(configured)
+    emails = await db.scalars(select(User.email).where(User.tenant_id == tenant_id))
+    found = {e.rpartition("@")[2].strip().lower() for e in emails if "@" in e}
+    return sorted(found - PUBLIC_MAIL_DOMAINS - {""})
+
+
+def _check_config(config: dict[str, Any]) -> None:
+    reserved = sorted(k for k in config if str(k).startswith("_"))
+    if reserved:
+        raise InvalidError(f"Unknown setting {reserved[0]!r}: names starting with _ are Oracle's")
 
 
 async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any]) -> Source:
@@ -341,16 +374,20 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
     if reconnect or reconfigure:
         connection_id = changes["connection_id"] if reconnect else source.connection_id
         config = changes["config"] if reconfigure else source.config
+        _check_config(config)
         conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
         # Validating reads the credential, which commits: change nothing before it.
         await _validate(db, source.kind, config, conn)
         # A new account: sync from the start. A new allowlist: what left it is deleted
         # on the next sync. Unchanged content writes no new versions, so a full pass is
-        # cheap in storage.
-        cursor = None if reconnect else await _narrowed_cursor(db, source)
+        # cheap in storage. Google Docs keeps its cursor for a new allowlist (it lists
+        # the folders again when the allowlist changes); either way the sync engine
+        # deletes what the stored items have and the new allowlist does not
+        # (oracle.sources.sync), and a sync still running saves nothing more.
+        if reconnect or source.kind != "google_docs":
+            source.cursor = None
         source.connection_id = connection_id
         source.config = config
-        source.cursor = cursor
         source.unavailable_items = []
         if source.status == "error":
             source.status = "active"

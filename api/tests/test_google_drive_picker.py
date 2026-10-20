@@ -320,7 +320,9 @@ async def test_unreadable_items_are_reported_not_a_source_failure(tenant_id, doc
     assert result["outcome"] == "completed"
     assert result["upserted"] == 1
     reason = "No access: the file was unshared or removed"
-    expected = [{"external_id": "1DocGone", "reason": reason}]
+    expected = [
+        {"external_id": "1DocGone", "reason": reason, "name": None, "status": "unavailable"}
+    ]
     assert result["unavailable"] == expected
     assert result["source"]["status"] == "active"
     assert again["unavailable_items"] == expected
