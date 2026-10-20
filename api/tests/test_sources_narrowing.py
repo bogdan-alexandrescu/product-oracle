@@ -1,6 +1,7 @@
 """Narrowing a source (S5, owner 2026-10-19): a later start date, a removed channel or
 a removed repo deletes what was already pulled in and now falls outside the selection,
-on the next sync. Widening again brings it back. The delete is soft (owner, 2026-10-20):
+when the source is saved (owner 2026-10-20: narrowing takes effect on save; the next
+sync deletes nothing more). Widening again brings it back. The delete is soft (owner, 2026-10-20):
 ``deleted_at`` is set and the stored versions stay.
 
 The real Slack and GitHub connectors run against httpx.MockTransport providers.
@@ -107,9 +108,12 @@ async def sync(a, source: dict) -> dict:
     return resp.json()
 
 
-async def narrow(a, source: dict, config: dict) -> None:
+async def narrow(a, source: dict, config: dict) -> list[str]:
+    """Save a new config; what the save itself deleted."""
+    before = set(await removed(a, source))
     resp = await a.patch(f"/v1/sources/{source['id']}", json={"config": config})
     assert resp.status_code == 200, resp.text
+    return sorted(set(await removed(a, source)) - before)
 
 
 async def live(a, source: dict) -> list[str]:
@@ -133,9 +137,10 @@ async def test_a_later_since_deletes_older_messages(a, tenant_id, alice, slack):
     await sync(a, source)
     assert len(await live(a, source)) == 4
 
-    await narrow(a, source, {"channels": BOTH, "since": "2025-10-04"})
+    on_save = await narrow(a, source, {"channels": BOTH, "since": "2025-10-04"})
+    assert len(on_save) == 2
     result = await sync(a, source)
-    assert result["deleted"] == 2
+    assert result["deleted"] == 0
     assert await live(a, source) == [
         f"C0PRODUCT:{ts('2025-10-05')}",
         f"C0PRODUCT:{ts('2025-10-10')}",
@@ -177,9 +182,10 @@ async def test_an_earlier_until_deletes_later_messages_but_keeps_threads_in_rang
     await sync(a, source)
     assert len(await live(a, source)) == 4
 
-    await narrow(a, source, {"channels": BOTH, "until": "2025-10-06"})
+    on_save = await narrow(a, source, {"channels": BOTH, "until": "2025-10-06"})
+    assert len(on_save) == 1
     result = await sync(a, source)
-    assert result["deleted"] == 1
+    assert result["deleted"] == 0
     assert await removed(a, source) == [f"C0PRODUCT:{ts('2025-10-10')}"]
     assert f"C0PRODUCT:{parent['ts']}" in await live(a, source)
 
@@ -188,9 +194,10 @@ async def test_removing_a_channel_deletes_its_messages(a, tenant_id, alice, slac
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     await sync(a, source)
 
-    await narrow(a, source, {"channels": ["C0PRODUCT"]})
+    on_save = await narrow(a, source, {"channels": ["C0PRODUCT"]})
+    assert len(on_save) == 1
     result = await sync(a, source)
-    assert result["deleted"] == 1
+    assert result["deleted"] == 0
     assert await removed(a, source) == [f"C0ROADMAP:{ts('2025-10-03')}"]
     assert len(await live(a, source)) == 3
 
@@ -215,9 +222,10 @@ async def test_removing_a_repo_deletes_its_items(a, tenant_id, alice, github):
     await sync(a, source)
     assert await live(a, source) == ONE + TWO
 
-    await narrow(a, source, {**config, "repos": ["example-org/one"]})
+    on_save = await narrow(a, source, {**config, "repos": ["example-org/one"]})
+    assert len(on_save) == 2
     result = await sync(a, source)
-    assert result["deleted"] == 2
+    assert result["deleted"] == 0
     assert await live(a, source) == ONE
     assert await removed(a, source) == TWO
 
@@ -281,7 +289,8 @@ async def test_a_rate_limit_after_narrowing_keeps_the_sweep(a, tenant_id, alice,
     await sync(a, source)
 
     await narrow(a, source, {"channels": ["C0PRODUCT"]})
-    slack.limited = {"conversations.replies"}
+    # The channel still selected keeps its cursor (same range): only history is read.
+    slack.limited = {"conversations.history"}
     result = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
     assert result["outcome"] == "rate_limited"
     assert await removed(a, source) == [f"C0ROADMAP:{ts('2025-10-03')}"]

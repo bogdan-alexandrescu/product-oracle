@@ -280,11 +280,12 @@ ALL_IDS = {"S1", "S2", "S3", "P1", "P2", "K1", "O1"}
         ),
     ],
 )
-async def test_narrowing_deletes_what_falls_outside_on_the_next_sync(
+async def test_narrowing_deletes_what_falls_outside(
     fake, connector, tenant_id, alice, conn, before, after, kept
 ):
-    """Owner, 2026-10-19: narrowing a source deletes what was already pulled in and now
-    falls outside it on the next sync."""
+    """Owner, 2026-10-19 and 2026-10-20: narrowing a source deletes what was already
+    pulled in and now falls outside it, taking effect on save as far as stored items show
+    (the date range), the rest on the next sync."""
     async with client_for(alice) as a:
         resp = await a.post(
             "/v1/sources",
@@ -305,9 +306,15 @@ async def test_narrowing_deletes_what_falls_outside_on_the_next_sync(
 
         resp = await a.patch(f"/v1/sources/{source_id}", json={"config": after})
         assert resp.status_code == 200, resp.text
+        # On save (owner 2026-10-20) what the date range leaves out; the picks, which only
+        # Fireflies can tell, on the next sync's full pass.
+        saved = {i for i, live in (await _items(tenant_id, source_id)).items() if live}
+        assert kept <= saved
+        if all(after.get(k) == before.get(k) for k in ("mode", "series", "meetings")):
+            assert saved == kept
         sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
         assert sync["outcome"] == "completed", sync
-        assert sync["deleted"] == len(stored - kept)
+        assert sync["deleted"] == len(saved - kept)
         items = await _items(tenant_id, source_id)
         assert {i for i, live in items.items() if live} == kept
         assert {i for i, live in items.items() if not live} == stored - kept

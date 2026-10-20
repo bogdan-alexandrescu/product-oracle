@@ -67,9 +67,7 @@ def test_the_migration_follows_0015_on_a_single_head():
     # status and browse calls follow that, in merge order, on the single head.
     assert script.get_revision("0016_roadmap").down_revision == REVISION
     assert script.get_revision("0016_source_needs_attention").down_revision == "0016_roadmap"
-    assert (
-        script.get_revision("0016_browse_calls").down_revision == "0016_source_needs_attention"
-    )
+    assert script.get_revision("0016_browse_calls").down_revision == "0016_source_needs_attention"
     assert script.get_heads() == ["0016_browse_calls"]
 
 
