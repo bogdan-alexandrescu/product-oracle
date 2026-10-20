@@ -533,6 +533,9 @@ async def test_a_confirmed_cancel_later_read_as_gone_has_ended(client, owner):
     swarm.gone_reads_after_cancel = 0
     swarm._gone_reads = 100  # SwarmCloud forgot it
     await _tick_errors(client, auth)
+    # Round 9: its cost is read once more before it is taken as ended.
+    assert (await _knobs_of(tenant_id, run["id"])).get("searches")
+    await _tick_errors(client, auth)
     assert not (await _knobs_of(tenant_id, run["id"])).get("searches")
     assert (await _inbox(client, auth))["lookups"] == []
     run = await get(client, auth, run["id"])

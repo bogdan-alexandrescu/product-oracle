@@ -673,3 +673,75 @@ def test_the_old_client_is_closed_when_the_event_loop_changes():
     asyncio.run(call())
     assert clients[0] is not clients[1]
     assert clients[0].is_closed and not clients[1].is_closed
+
+
+# --------------------------------------------------------------------------- item 7
+
+
+async def _cancel(client, auth, run) -> None:
+    resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
+    assert resp.status_code == 200, resp.text
+
+
+async def test_gone_right_after_a_confirmed_cancel_reads_the_cost_once_more(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _at_baseline(client, auth, swarm)
+    swarm.gone_reads_after_cancel = 1  # the read right after the cancel: 404 not_found
+    await _cancel(client, auth, run)
+    swarm.workflows["wf_1"].steps[0].cost += 1.0  # spent before the cancel took
+    await _tick_errors(client, auth)
+    got = await get(client, auth, run["id"])
+    assert got["spent_usd"] == pytest.approx(_wf_cost(swarm, "wf_1"))
+    assert not (await _knobs_of(tenant_id, run["id"])).get("searches")
+
+
+async def test_gone_on_a_searched_cancelled_workflow_reads_once_more_even_if_costed(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _at_baseline(client, auth, swarm)
+    swarm.wind_down_reads = 1
+    await _cancel(client, auth, run)
+    [entry] = (await _knobs_of(tenant_id, run["id"]))["searches"]
+    assert entry["cancelled"] and entry["costed"]
+    swarm._gone_reads = 1
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    await _tick_errors(client, auth)
+    assert (await _knobs_of(tenant_id, run["id"])).get("searches"), "read once more"
+    await _tick_errors(client, auth)
+    got = await get(client, auth, run["id"])
+    assert got["spent_usd"] == pytest.approx(_wf_cost(swarm, "wf_1"))
+    assert not (await _knobs_of(tenant_id, run["id"])).get("searches")
+
+
+async def test_gone_on_the_ticks_read_after_a_confirmed_cancel_reads_once_more(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _at_baseline(client, auth, swarm)
+    swarm.fail_reads_after_cancel = 1  # confirmed, its last cost not read
+    await _cancel(client, auth, run)
+    assert (await _knobs_of(tenant_id, run["id"]))["workflow"]["cancel_pending"]["confirmed"]
+    swarm._gone_reads = 1
+    swarm.workflows["wf_1"].steps[0].cost += 1.0
+    await _tick_errors(client, auth)
+    await _tick_errors(client, auth)
+    got = await get(client, auth, run["id"])
+    assert got["spent_usd"] == pytest.approx(_wf_cost(swarm, "wf_1"))
+    assert not (await _knobs_of(tenant_id, run["id"])).get("searches")
+
+
+async def test_a_failed_read_after_gone_follows_the_cost_unknown_rules(client, owner, monkeypatch):
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _at_baseline(client, auth, swarm)
+    swarm.gone_reads_after_cancel = 1
+    await _cancel(client, auth, run)
+    runtime = use(swarm)
+
+    async def fails(workflow_id):
+        raise RuntimeUnavailable("SwarmCloud is unavailable", status=503)
+
+    monkeypatch.setattr(runtime, "status", fails)
+    await _tick_errors(client, auth)
+    [entry] = (await _knobs_of(tenant_id, run["id"]))["searches"]
+    assert entry["id"] == "wf_1" and entry["unread"] == 1, entry

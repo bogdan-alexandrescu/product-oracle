@@ -1706,7 +1706,7 @@ class _Cancelled:
     final: WorkflowStatus | None = None
     unread: RuntimeUnavailable | None = None
     # The cancel was confirmed, then SwarmCloud no longer knew the workflow (its
-    # enveloped 404): it ended, its cost what Oracle last read.
+    # enveloped 404): its cost is read once more, then it is taken as ended.
     forgotten: bool = False
 
 
@@ -1792,6 +1792,8 @@ async def _apply_cancel(
         return False
     if out.error is None and out.final is not None and not out.final.terminal:
         _read_on(run, wf, costed=True)
+    elif out.forgotten and wf.get("id"):
+        _read_once_more(run, wf)
     await _end_workflow(db, run, wf, state)
     return True
 
@@ -1812,6 +1814,20 @@ def _read_on(run: Run, wf: dict[str, Any], *, costed: bool = False) -> None:
         cancelled=True,
         costed=costed,
     )
+
+
+def _read_once_more(run: Run, wf: dict[str, Any]) -> None:
+    """A workflow SwarmCloud no longer knows (its enveloped 404) right after confirming
+    its cancel: its cost is read once more (``searches``, the next tick) before it is
+    taken as ended, so what it spent since Oracle's last read is counted. A second 404
+    ends it; a read that fails follows the cost-unknown rules (:func:`_found_apply`)."""
+    _read_on(run, wf)
+    entries = copy.deepcopy((run.knobs or {}).get("searches") or [])
+    for e in entries:
+        if e.get("id") == wf["id"]:
+            e["gone_reads"] = 1
+            e["error"] = "SwarmCloud did not know it right after confirming its cancel"
+    _set_knob(run, "searches", entries)
 
 
 def _count_not_found(marker: dict[str, Any], pending: dict[str, Any], hit: bool) -> None:
@@ -2858,6 +2874,11 @@ async def _cancel_again(
     try:
         status = await runtime.status(wf["id"])
     except RuntimeUnavailable as exc:
+        if exc.gone and pending.get("confirmed"):
+            # Its cancel was confirmed: read once more before it is taken as ended.
+            _read_once_more(run, wf)
+            await _end_workflow(db, run, wf, state)
+            return True
         if exc.gone:
             await _give_up(db, run, wf, state)
             return True
@@ -3397,13 +3418,14 @@ def _found_apply(
         e.pop("winding", None)
         e.pop("winding_since", None)
         return True  # still running, or winding down: read again (its cost counts)
-    if (out.forgotten or (out.gone and e.get("cancelled"))) and not e.get("costed"):
-        if not e.get("gone_reads"):
-            # Right after its cancel, before Oracle read its cost: SwarmCloud may lag, so
-            # it is read once more.
-            e["gone_reads"] = 1
-            e["error"] = "SwarmCloud did not know it right after confirming its cancel"
-            return True
+    if (out.forgotten or (out.gone and e.get("cancelled"))) and not e.get("gone_reads"):
+        # After its confirmed cancel SwarmCloud does not know it: its cost is read once
+        # more before it is taken as ended, so that what it spent since Oracle's last
+        # read (up to the cancel) is counted, and SwarmCloud may lag. That read failing,
+        # the cost-unknown rules apply.
+        e["gone_reads"] = 1
+        e["error"] = "SwarmCloud did not know it right after confirming its cancel"
+        return True
     if out.forgotten or (out.gone and e.get("cancelled")):
         if segment is not None:
             _note(
@@ -3472,8 +3494,8 @@ async def _read_found(
     cost counted in the run's spend. Returns True to keep it: until its status reads
     terminal (a confirmed cancel still winding down is read on, its cost counted, until
     :func:`_search_end`; past it, it is capped like a cost unknown), or SwarmCloud says
-    it does not exist (after a confirmed cancel: it ended, its last read cost counted,
-    noted; one whose cost Oracle never read is read once more first). When nothing could be
+    it does not exist (after a confirmed cancel: read once more first, then it ended,
+    its last read cost counted, noted). When nothing could be
     read, 404s that prove nothing are counted; past :data:`NOT_FOUND_TRIES` of them, or
     past :func:`_search_end`, its cost is unknown: shown in the Inbox (Retry lookup) and
     read again now and then until :func:`_cost_cap`, then dropped (noted, audited)."""
