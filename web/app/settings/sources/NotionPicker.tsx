@@ -77,7 +77,7 @@ function PageIcon({ page }: { page: NotionPage }) {
   const src = notionIconUrl(page.icon);
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt="" referrerPolicy="no-referrer" className={`${box} object-cover`} data-testid="page-icon-img" />;
+    return <img src={src} alt="" referrerPolicy="no-referrer" className={`${box} object-cover`} />;
   }
   if (page.icon && isEmoji(page.icon))
     return <span aria-hidden className={`${box} text-[16px] leading-none`}>{page.icon}</span>;
