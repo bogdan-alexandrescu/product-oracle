@@ -440,12 +440,17 @@ mark.hl-pending {
   font-weight: 600;
   white-space: nowrap;
   vertical-align: 0.1em;
-  background: var(--color-amber-100);
-  color: var(--color-amber-900);
+  background: var(--warn-bg);
+  color: var(--warn);
+  border: 1px solid currentColor;
 }
 .date-mark[data-date-mark="withdrawn"] {
-  background: var(--color-rose-100);
-  color: var(--color-rose-900);
+  background: var(--crit-bg);
+  color: var(--crit);
+}
+pre .date-mark,
+code .date-mark {
+  font-family: var(--font-sans, inherit);
 }
 
 /* Word-level diff. */

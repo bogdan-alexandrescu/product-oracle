@@ -1210,6 +1210,19 @@ async function route(db: Db, req: Request): Promise<Response> {
       );
       if (refusal) return json(409, refusal);
     }
+    // O4 'document dates' (owner, 2026-10-20): not while a date of the roadmap is marked.
+    if (doc.kind === "roadmap" && db.roadmap && !v.approved_at) {
+      const marked = dateMarks(db.roadmap, v.source?.document_id, v.sections).filter((d) => d.label);
+      if (marked.length) {
+        return json(409, {
+          detail: `${marked.length} date${marked.length === 1 ? " rests" : "s rest"} on no verified basis: ${marked
+            .map((d) => `${d.text} (${d.section_key}: ${d.label})`)
+            .join(", ")}`,
+          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: d.text, rationale: `${d.text} is marked ${d.label}` })),
+          dates: marked,
+        });
+      }
+    }
     v.approved_at = now();
     doc.status = "approved";
     doc.updated_at = v.approved_at;

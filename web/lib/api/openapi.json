@@ -309,7 +309,7 @@
           "documents"
         ],
         "summary": "Import Version",
-        "description": "Import a draft (markdown + YAML front matter). Creates the document on first import.",
+        "description": "Import a draft (markdown + YAML front matter). Creates the document on first import.\nA body over ``MAX_DRAFT_BYTES`` (1 MB) is refused with 413 before it is read in full.",
         "operationId": "import_version",
         "security": [
           {
@@ -350,6 +350,9 @@
                 }
               }
             }
+          },
+          "413": {
+            "description": "Body over 1000000 bytes"
           },
           "422": {
             "description": "Draft rejected",
@@ -491,6 +494,7 @@
           "documents"
         ],
         "summary": "Get Version Markdown",
+        "description": "The version's markdown as stored; a roadmap's date that rests on no verified basis\nnow has ``<!-- oracle: date unverified -->`` (or ``date withdrawn``) after it, which\nan import drops.",
         "operationId": "get_version_markdown",
         "security": [
           {
@@ -24609,6 +24613,16 @@
             "type": "array",
             "title": "Bases",
             "default": []
+          },
+          "where": {
+            "type": "string",
+            "enum": [
+              "title",
+              "heading",
+              "body"
+            ],
+            "title": "Where",
+            "default": "body"
           }
         },
         "type": "object",
@@ -34522,6 +34536,14 @@
             },
             "type": "array",
             "title": "Blocking"
+          },
+          "dates": {
+            "items": {
+              "$ref": "#/components/schemas/DateMarkOut"
+            },
+            "type": "array",
+            "title": "Dates",
+            "default": []
           }
         },
         "type": "object",
@@ -34530,7 +34552,7 @@
           "blocking"
         ],
         "title": "PublishBlockedOut",
-        "description": "409 from approve: the PRD version may not be published (T2 publish gate, C5)."
+        "description": "409 from approve: the PRD version may not be published (T2 publish gate, C5), or\nthe roadmap version writes dates that rest on no verified basis (O4 'document dates',\nowner 2026-10-20: ``dates`` lists them)."
       },
       "PublishIn": {
         "properties": {

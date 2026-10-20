@@ -537,13 +537,15 @@ export function trackRunBody(ctx: RoadmapContext, db: RoadmapDb, trackId: string
 
 // --- O4 'document dates' ---------------------------------------------------------------
 
-const ISO_DATE = /(?<![\w/.-])(\d{4})-(\d{2})-(\d{2})(?![\w-])/g;
+const ISO_DATE = /(?<![0-9])(\d{4})-(\d{2})-(\d{2})(?![0-9])/g;
 const MARK_RANK = { withdrawn: 0, unverified: 1, verified: 2 } as const;
+const ITEM_ANCHOR = /^(?:now|next|later)-(.+)$/;
 
 /**
  * The dates a roadmap version's text writes, each checked against its PRD's schedule
- * bases now (oracle.roadmap.doc_dates, simplified: ISO dates; a basis with an item key
- * counts where the section names it). One mark per date and section, worst status.
+ * bases now (oracle.roadmap.doc_dates, simplified: ISO dates in headings and bodies; a
+ * basis with an item key counts in that item's own section). One mark per date and
+ * section, worst status; Sources and data points (and its sub-sections) are not read.
  */
 export function dateMarks(
   db: RoadmapDb,
@@ -559,25 +561,31 @@ export function dateMarks(
     }
     if (sourcesLevel != null && s.level > sourcesLevel) continue;
     sourcesLevel = null;
-    const text = `${s.heading}\n${s.body_md.replace(/\]\([^)\n]*\)/g, "]()")}`;
-    for (const m of text.matchAll(ISO_DATE)) {
-      const day = m[0];
-      const covers = (b: Basis) =>
-        b.prd_document_id === prdId && b.supports_date === day && (!b.item_key || s.section_key.endsWith(b.item_key));
-      const verified = db.bases.filter((b) => b.status === "verified" && covers(b));
-      const withdrawn = db.bases.filter((b) => b.status === "withdrawn" && covers(b));
-      const status = verified.length ? "verified" : withdrawn.length ? "withdrawn" : "unverified";
-      const mark: Schemas["DateMarkOut"] = {
-        section_key: s.section_key,
-        text: day,
-        date: day,
-        status,
-        label: status === "verified" ? null : status === "withdrawn" ? "date withdrawn" : "unverified",
-        bases: (verified.length ? verified : withdrawn).map((b) => b.reference),
-      };
-      const key = `${s.section_key}|${day}`;
-      const had = out.get(key);
-      if (!had || MARK_RANK[status] < MARK_RANK[had.status]) out.set(key, mark);
+    const owner = ITEM_ANCHOR.exec(s.section_key)?.[1];
+    const places: [Schemas["DateMarkOut"]["where"], string][] = [
+      ["heading", s.heading],
+      ["body", s.body_md.replace(/\]\([^)\s]*\)/g, "]()")],
+    ];
+    for (const [where, text] of places) {
+      for (const m of text.matchAll(ISO_DATE)) {
+        const day = m[0];
+        const covers = (b: Basis) => b.prd_document_id === prdId && b.supports_date === day && (!b.item_key || b.item_key === owner);
+        const verified = db.bases.filter((b) => b.status === "verified" && covers(b));
+        const withdrawn = db.bases.filter((b) => b.status === "withdrawn" && covers(b));
+        const status = verified.length ? "verified" : withdrawn.length ? "withdrawn" : "unverified";
+        const mark: Schemas["DateMarkOut"] = {
+          section_key: s.section_key,
+          text: day,
+          date: day,
+          status,
+          label: status === "verified" ? null : status === "withdrawn" ? "date withdrawn" : "unverified",
+          bases: (verified.length ? verified : withdrawn).map((b) => b.reference),
+          where,
+        };
+        const key = `${s.section_key}|${day}`;
+        const had = out.get(key);
+        if (!had || MARK_RANK[status] < MARK_RANK[had.status]) out.set(key, mark);
+      }
     }
   }
   return [...out.values()];

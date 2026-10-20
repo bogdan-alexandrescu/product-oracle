@@ -133,9 +133,13 @@ export function DateMarker({ mark }: { mark: DateMarkOut }) {
   );
 }
 
-/** Text with the marker after each flagged date (O4 'document dates'). */
+/**
+ * Text (prose, a code span or a code block) with the marker after each flagged date (O4
+ * 'document dates'). A date the text writes across emphasis or an entity is not in one
+ * text node: SectionView lists those under the heading instead (`unplacedMarks`).
+ */
 function renderMarkedText(text: string, ctx: Ctx, key: string): ReactNode {
-  const marks = (ctx.dateMarks ?? []).filter((m) => m.label && text.includes(m.text));
+  const marks = (ctx.dateMarks ?? []).filter((m) => m.label && m.where !== "heading" && text.includes(m.text));
   if (!marks.length) return renderText(text, ctx, key);
   const byText = new Map(marks.map((m) => [m.text, m]));
   const re = new RegExp(`(${[...byText.keys()].sort((a, b) => b.length - a.length).map(escapeRe).join("|")})`);
@@ -158,7 +162,7 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
       case "text":
         return <span key={k}>{renderMarkedText(n.v, ctx, k)}</span>;
       case "code":
-        return <code key={k}>{renderText(n.v, ctx, k)}</code>;
+        return <code key={k}>{renderMarkedText(n.v, ctx, k)}</code>;
       case "strong":
         return <strong key={k}>{renderInline(n.c, ctx, k)}</strong>;
       case "em":
@@ -233,6 +237,36 @@ function Detail({ keys, expand }: { keys: string[]; expand?: ExpandCtx }) {
   );
 }
 
+/** The text nodes a body renders (prose, code spans, code blocks), where a date marker can go. */
+function leaves(blocks: Block[]): string[] {
+  const out: string[] = [];
+  const walk = (nodes: Inline[]) => {
+    for (const n of nodes) {
+      if (n.t === "text" || n.t === "code") out.push(n.v);
+      else if (n.t !== "cite") walk(n.c);
+    }
+  };
+  for (const b of blocks) {
+    if (b.t === "pre") out.push(b.v);
+    else if (b.t === "table") [b.head, ...b.rows].flat().forEach(walk);
+    else if (b.t === "ul" || b.t === "ol") b.items.forEach(walk);
+    else if (b.t === "p" || b.t === "h" || b.t === "quote") walk(b.c);
+  }
+  return out;
+}
+
+/**
+ * The body's flagged dates that no single text node shows as written (a date across
+ * emphasis, an entity, or rendered differently here than in the export): listed by the
+ * section so no marker is lost.
+ */
+export function unplacedMarks(blocks: Block[], marks: DateMarkOut[] | undefined): DateMarkOut[] {
+  const flagged = (marks ?? []).filter((m) => m.label && m.where !== "heading" && m.where !== "title");
+  if (!flagged.length) return [];
+  const texts = leaves(blocks);
+  return flagged.filter((m) => !texts.some((t) => t.includes(m.text)));
+}
+
 export function MarkdownBody({
   blocks,
   highlights,
@@ -279,7 +313,7 @@ export function MarkdownBody({
           case "pre":
             return (
               <pre key={k}>
-                <code>{renderText(b.v, ctx, k)}</code>
+                <code>{renderMarkedText(b.v, ctx, k)}</code>
               </pre>
             );
           case "ul":

@@ -144,6 +144,7 @@ export interface paths {
         /**
          * Import Version
          * @description Import a draft (markdown + YAML front matter). Creates the document on first import.
+         *     A body over ``MAX_DRAFT_BYTES`` (1 MB) is refused with 413 before it is read in full.
          */
         post: operations["import_version"];
         delete?: never;
@@ -176,7 +177,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Version Markdown */
+        /**
+         * Get Version Markdown
+         * @description The version's markdown as stored; a roadmap's date that rests on no verified basis
+         *     now has ``<!-- oracle: date unverified -->`` (or ``date withdrawn``) after it, which
+         *     an import drops.
+         */
         get: operations["get_version_markdown"];
         put?: never;
         post?: never;
@@ -7324,6 +7330,12 @@ export interface components {
              * @default []
              */
             bases: string[];
+            /**
+             * Where
+             * @default body
+             * @enum {string}
+             */
+            where: "title" | "heading" | "body";
         };
         /**
          * DeckOut
@@ -10899,13 +10911,20 @@ export interface components {
         };
         /**
          * PublishBlockedOut
-         * @description 409 from approve: the PRD version may not be published (T2 publish gate, C5).
+         * @description 409 from approve: the PRD version may not be published (T2 publish gate, C5), or
+         *     the roadmap version writes dates that rest on no verified basis (O4 'document dates',
+         *     owner 2026-10-20: ``dates`` lists them).
          */
         PublishBlockedOut: {
             /** Detail */
             detail: string;
             /** Blocking */
             blocking: components["schemas"]["PublishBlock"][];
+            /**
+             * Dates
+             * @default []
+             */
+            dates: components["schemas"]["DateMarkOut"][];
         };
         /** PublishIn */
         PublishIn: {
@@ -14859,6 +14878,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["VersionOut"];
                 };
+            };
+            /** @description Body over 1000000 bytes */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Draft rejected */
             422: {

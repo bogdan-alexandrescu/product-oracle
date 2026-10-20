@@ -4,7 +4,7 @@ import { memo, useMemo, useState, type ReactNode } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { Button, Chip } from "@/components/ds";
-import { DateMarker, MarkdownBody, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
+import { DateMarker, MarkdownBody, unplacedMarks, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
 import { LayerChip, Menu } from "@/components/review/parts";
@@ -82,6 +82,7 @@ export const SectionView = memo(function SectionView({
     return (named(section.heading) ?? named(section.body_text))?.id ?? null;
   }, [evidenceTargets, section.heading, section.body_text]);
   const canRefine = !!refine && !locked;
+  const unplaced = useMemo(() => unplacedMarks(blocks, dateMarks), [blocks, dateMarks]);
   const pick = (kind: Tool) => setTool((t) => ({ kind, n: (t?.n ?? 0) + 1 }));
   const close = () => setTool(null);
 
@@ -103,7 +104,7 @@ export const SectionView = memo(function SectionView({
         >
           {section.heading}
           {dateMarks
-            ?.filter((m) => m.label && section.heading.includes(m.text))
+            ?.filter((m) => m.label && m.where === "heading")
             .map((m) => <DateMarker key={m.text} mark={m} />)}
         </Heading>
         <LayerChip layer={showLayer ? section.layer : null} />
@@ -156,6 +157,17 @@ export const SectionView = memo(function SectionView({
           )}
         </span>
       </div>
+      {unplaced.length > 0 && (
+        <p className="mb-2 text-sm text-text2" data-testid="unplaced-date-marks">
+          Dates in this section:{" "}
+          {unplaced.map((m) => (
+            <span key={m.text} className="mr-2 whitespace-nowrap">
+              {m.text}
+              <DateMarker mark={m} />
+            </span>
+          ))}
+        </p>
+      )}
       <div className="doc-body" data-section-body={section.section_key}>
         <MarkdownBody
           blocks={blocks}

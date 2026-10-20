@@ -30,7 +30,7 @@ import { RoleNote } from "@/components/RoleNote";
 import { FeedbackPanel, ResolutionPanel } from "@/components/FeedbackPanel";
 import { JobsPanel } from "@/components/JobsPanel";
 import { ReportsPanel } from "@/components/ReportsPanel";
-import type { ExpandCtx, Highlight } from "@/components/MarkdownBody";
+import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
@@ -495,6 +495,15 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   for (const m of version?.date_marks ?? []) {
     if (m.label) dateMarks.set(m.section_key, [...(dateMarks.get(m.section_key) ?? []), m]);
   }
+  const titleMarks = (version?.date_marks ?? []).filter((m) => m.label && m.where === "title");
+  // Owner, 2026-10-20: a roadmap version cannot be approved while a date is marked.
+  const flaggedDates = (version?.date_marks ?? []).filter((m) => m.label);
+  const approveBlocked =
+    flaggedDates.length > 0
+      ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " rests" : "s rest"} on no verified schedule basis (${flaggedDates
+          .map((m) => `${m.text}: ${m.label}`)
+          .join("; ")}). Record a basis for ${flaggedDates.length === 1 ? "it" : "them"} or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
+      : undefined;
   const sectionProps = (s: SectionOut) => ({
     section: s,
     blocks: parsed.get(s.section_key)!.blocks,
@@ -727,7 +736,18 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
         <PageHeader
           testId="doc-header"
           back={<DocCrumb doc={document_} withTitle={false} />}
-          title={document_?.title ?? "…"}
+          title={
+            titleMarks.length ? (
+              <>
+                {document_?.title ?? "…"}
+                {titleMarks.map((m) => (
+                  <DateMarker key={m.text} mark={m} />
+                ))}
+              </>
+            ) : (
+              (document_?.title ?? "…")
+            )
+          }
           suffix={<span className="font-mono">v{n}</span>}
           status={
             <>
@@ -765,6 +785,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                 n={n}
                 approvedAt={version.approved_at}
                 isLatest={n === latest}
+                blockedReason={approveBlocked}
                 onApproved={() => {
                   verQ.reload();
                   docQ.reload();
