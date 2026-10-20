@@ -4,6 +4,7 @@
  * scoring, so the UI's badge and breakdown can be exercised.
  */
 import type { Schemas } from "@/lib/api/client";
+import { FIREFLIES_CONNECTION_ID } from "./fireflies";
 import { mockUuid, seeded } from "./ids";
 
 type Source = Schemas["SourceOut"];
@@ -22,7 +23,7 @@ const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
   slack: [{ id: "c0000000-0000-4000-8000-000000000001", account_label: "Example Co chat", status: "active" }],
   github: [{ id: "c0000000-0000-4000-8000-000000000002", account_label: "example-org", status: "active" }],
   notion: [],
-  fireflies: [],
+  fireflies: [{ id: FIREFLIES_CONNECTION_ID, account_label: "pat@example.com", status: "active" }],
   google: [],
 };
 const PROVIDER: Record<Source["kind"], string | null> = {
@@ -38,7 +39,7 @@ const AVAILABLE: Record<Source["kind"], boolean> = {
   github: true,
   slack: true,
   notion: false,
-  fireflies: false,
+  fireflies: true,
   google_docs: false,
 };
 // Source factor per kind, as in oracle.confidence DEFAULTS.
@@ -86,6 +87,21 @@ function seed(): SourcesDb {
     item_count: 1,
     connector_available: true,
   };
+  // Saved before the meeting picker: a title rule.
+  const calls: Source = {
+    id: "50000000-0000-4000-8000-000000000003",
+    kind: "fireflies",
+    name: "Customer calls",
+    connection_id: FIREFLIES_CONNECTION_ID,
+    config: { from_date: "2026-09-01", title_contains: ["Customer interview"] },
+    status: "active",
+    last_error: null,
+    last_synced_at: "2026-10-17T08:00:00Z",
+    created_at: "2026-10-10T09:10:00Z",
+    updated_at: "2026-10-17T08:00:00Z",
+    item_count: 0,
+    connector_available: true,
+  };
   const item = (source: Source, external_id: string, kind: string, title: string, content: string, freshness: number): Item => ({
     id: uuid(),
     source_id: source.id,
@@ -106,7 +122,7 @@ function seed(): SourcesDb {
     content,
   });
   return {
-    sources: [chat, repo],
+    sources: [chat, repo, calls],
     items: [
       item(repo, "readme", "readme", "README", "The onboarding checklist guides new accounts through setup in five steps.", 0.95),
       item(chat, "m1", "message", "Customer question", "Customers keep asking whether the onboarding checklist can be skipped.", 0.4),
