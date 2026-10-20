@@ -4,6 +4,10 @@ The known keys and how each value is checked:
 
 - ``iap_default_role``: one of the roles; the role of a Google sign-in without an invite.
 - ``confidence_weights``: overrides of ``oracle.confidence.DEFAULTS``, same shape.
+- ``blocker_risk_acceptance_role`` (B4): ``approver`` or ``owner``, the lowest role that
+  may accept a critical hard blocker's risk or approve its feasibility scope.
+- ``blocker_risk_review_max_days`` (B4): an integer, 1-365, the latest review date of an
+  accepted risk, in days from its acceptance.
 
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
@@ -28,7 +32,12 @@ from oracle.tenant_settings import TenantSetting
 DEFAULTS: dict[str, Any] = {
     "iap_default_role": "commenter",
     "confidence_weights": {},
+    # B4 (owner, 2026-10-19): owners only, reviewed within at most 90 days.
+    "blocker_risk_acceptance_role": "owner",
+    "blocker_risk_review_max_days": 90,
 }
+RISK_ACCEPTANCE_ROLES = ("approver", "owner")
+MAX_REVIEW_DAYS = 365
 KNOWN_KEYS = tuple(DEFAULTS)
 
 
@@ -114,6 +123,20 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         return value
     if key == "confidence_weights":
         return validate_confidence_weights(value)
+    if key == "blocker_risk_acceptance_role":
+        if value not in RISK_ACCEPTANCE_ROLES:
+            raise InvalidSetting(
+                f"blocker_risk_acceptance_role must be one of {', '.join(RISK_ACCEPTANCE_ROLES)}"
+            )
+        return value
+    if key == "blocker_risk_review_max_days":
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise InvalidSetting("blocker_risk_review_max_days must be a whole number of days")
+        if not 1 <= value <= MAX_REVIEW_DAYS:
+            raise InvalidSetting(
+                f"blocker_risk_review_max_days must be between 1 and {MAX_REVIEW_DAYS}"
+            )
+        return value
     raise KeyError(key)
 
 
