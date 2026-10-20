@@ -17,7 +17,7 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   // Only follow same-site paths.
-  const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/documents";
+  const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/home";
 
   // Already signed in (e.g. by Google IAP in front of the app): skip the form.
   useEffect(() => {

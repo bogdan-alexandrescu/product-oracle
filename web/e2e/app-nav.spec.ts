@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { login } from "./helpers";
+import { ADMIN, login } from "./helpers";
 
 const DESTINATIONS = [
   ["nav-home", "Home", "/home"],
@@ -26,7 +26,8 @@ test("app shell: hidden when signed out, the rail lists the nine destinations on
     await expect(nav.getByTestId(id)).toContainText(label);
   }
 
-  // On /documents the PRDs entry is the active one.
+  // Signing in lands on Home; on /documents the PRDs entry is the active one.
+  await page.goto("/documents");
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
   // Inbox carries its count as a badge.
   await expect(nav.getByTestId("nav-inbox-badge")).toHaveText(/^\d+$/);
@@ -95,6 +96,7 @@ for (const scheme of ["light", "dark"] as const) {
   test(`rail (${scheme}): SwarmCloud's colours, the same in both themes`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await login(page);
+    await page.goto("/documents");
     const nav = page.getByTestId("app-nav");
     await expect(nav).toHaveCSS("background-image", "linear-gradient(rgb(11, 58, 122), rgb(6, 16, 30))");
     const prds = nav.getByTestId("nav-prds");
@@ -280,4 +282,17 @@ test("a roadmap document's pages highlight Roadmap; a PRD's highlight PRDs", asy
   const tabs = page.getByTestId("tab-bar");
   await expect(tabs.getByTestId("tab-roadmap")).toHaveAttribute("aria-current", "page");
   await expect(tabs.getByTestId("tab-prds")).not.toHaveAttribute("aria-current", "page");
+});
+
+test("sign-in lands on Home; a deep link's next path still wins", async ({ page }) => {
+  await login(page);
+  await expect(page).toHaveURL(/\/home$/);
+
+  await page.context().clearCookies();
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/login?next=/runs");
+  await page.getByLabel("Email").fill(ADMIN.email);
+  await page.getByLabel("Password").fill(ADMIN.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/runs$/);
 });

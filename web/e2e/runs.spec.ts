@@ -216,6 +216,7 @@ test("cancel a run: it asks in the page, never in a browser dialog; going back d
   });
   await openRuns(page);
   await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   const before = await status(page).textContent();
   const cancel = page.getByTestId("run-cancel").filter({ visible: true });
   const ask = page.getByRole("alertdialog", { name: "Cancel run" });
