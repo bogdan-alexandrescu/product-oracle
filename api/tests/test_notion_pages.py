@@ -376,8 +376,19 @@ async def test_service_api_tokens_may_not_list_notion_pages(
     assert notion_http.requests == []
 
 
+@pytest.fixture
+def local_runtime():
+    """A local runtime, so the run token is not refused earlier by the egress check
+    (as test_mcp.py does); the refusal under test is the tool's own."""
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
+
+
 async def test_a_run_token_is_refused_list_notion_pages_over_mcp(
-    tenant_id, alice, notion_conn, notion_http
+    tenant_id, alice, notion_conn, notion_http, local_runtime
 ):
     from tests.test_mcp import mcp_client, run_token, text_of
 
