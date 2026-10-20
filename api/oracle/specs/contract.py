@@ -22,14 +22,25 @@ sections in contract order with a "proposed" label on each engineering approach 
 and Sources and data points (Oracle's provenance). Pure functions, no database.
 """
 
+import html
 import re
+import unicodedata
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
+from markdown_it import MarkdownIt
 
-from oracle.docs.parser import CITATION_STRIP_RE, DraftError, parse_draft, split_front_matter
+from oracle.docs.parser import (
+    CITATION_STRIP_RE,
+    DraftError,
+    ParsedDraft,
+    parse_draft,
+    split_front_matter,
+)
+from oracle.docs.schemas import ImportProblem
 from oracle.runs.flows import prd_link
 
 Part = Literal[
@@ -120,9 +131,29 @@ def sections_for(depth: str) -> list[SpecSection]:
     return [s for s in SECTIONS if depth in s.depths]
 
 
-def part_of(section_key: str) -> Part:
+def template_keys(depth: object) -> frozenset[str]:
+    """The keys of the sections Oracle writes for a spec of ``depth``: the template's
+    sections for that depth, the title and the "Full version" heading. Any other key was
+    added in an edit (E1, owner, 2026-10-20: a template section a tech brief does not have,
+    e.g. Architecture, is an added section). An unknown depth reads as a brief, the
+    smaller set, so nothing is reported Decided by mistake."""
+    d = depth if isinstance(depth, str) and depth in DEPTHS else "brief"
+    return frozenset([TITLE_ID, FULL_ID, *(s.key for s in sections_for(d))])
+
+
+def keys_of(front_matter: dict[str, Any] | None) -> frozenset[str]:
+    """:func:`template_keys` for a spec version, from its front matter's ``spec.depth``
+    (which an edit may not change)."""
+    spec = (front_matter or {}).get("spec")
+    return template_keys(spec.get("depth") if isinstance(spec, dict) else None)
+
+
+def part_of(section_key: str, keys: Collection[str] | None = None) -> Part:
     """The part a section of a spec version belongs to: the title and the "Full version"
-    heading are context; a section the template does not have is proposed."""
+    heading are context; a section the version Oracle wrote does not have (``keys``, see
+    :func:`template_keys`; the whole template when not given) is proposed."""
+    if keys is not None and section_key not in keys:
+        return "proposed"
     s = SECTIONS_BY_KEY.get(section_key)
     if s is not None:
         return s.part
@@ -219,14 +250,27 @@ def _agent_bodies(text: str, problems: list[Problem]) -> dict[str, str]:
     its PRD."""
     _, body, _ = split_front_matter(text.replace("\r\n", "\n"))
     body = CITATION_STRIP_RE.sub("", body)
-    wrapped = "---\ntitle: spec\n---\n\n" + body.strip() + "\n"
+    # Only blank lines are stripped: stripping spaces would turn an indented code line
+    # followed by '---' into a setext heading (M1).
+    wrapped = "---\ntitle: spec\n---\n\n" + body.strip("\n") + "\n"
     try:
         draft = parse_draft(wrapped)
     except DraftError as exc:
         for p in exc.problems:
             problems.append(Problem(p.code, f"spec.md: {p.message}"))
         return {}
-    return {s.section_key: s.body_md.strip() for s in draft.sections}
+    return {s.section_key: s.body_md.strip("\n") for s in draft.sections}
+
+
+_INLINE_SPECIAL = re.compile(r"([\\`*_\[\]<>#|~!&{}])")
+
+
+def escape_inline(text: str) -> str:
+    """Baseline text (a requirement's title or statement, an acceptance criterion) as one
+    line of literal markdown: whitespace collapsed (no line can open a code fence, a list
+    or a heading) and markdown's special characters escaped (no '<!--', link or
+    emphasis)."""
+    return _INLINE_SPECIAL.sub(r"\\\1", " ".join(text.split()))
 
 
 def _requirements_body(inputs: SpecInputs) -> str:
@@ -238,18 +282,20 @@ def _requirements_body(inputs: SpecInputs) -> str:
     )
     lines.append("")
     for r in inputs.requirements:
-        lines.append(f"- **{r.key}: {r.title}** (requirement id `{r.id}`)")
-        if r.statement:
-            lines.append(f"  {r.statement.strip()}")
+        lines.append(
+            f"- **{escape_inline(r.key)}: {escape_inline(r.title)}** (requirement id `{r.id}`)"
+        )
+        if r.statement and r.statement.strip():
+            lines.append(f"  {escape_inline(r.statement)}")
         for key in r.section_keys:
             link = prd_link(inputs.prd_slug, inputs.prd_version, key)
-            lines.append(f"  PRD section: [{headings.get(key, key)}]({link})")
+            lines.append(f"  PRD section: [{escape_inline(headings.get(key, key))}]({link})")
     covered = [k for k, _ in inputs.sections]
     if covered:
         lines += ["", "PRD sections this spec covers:", ""]
         for key in covered:
             link = prd_link(inputs.prd_slug, inputs.prd_version, key)
-            lines.append(f"- [{headings[key]}]({link})")
+            lines.append(f"- [{escape_inline(headings[key])}]({link})")
     return "\n".join(lines)
 
 
@@ -258,7 +304,7 @@ def _acceptance_body(inputs: SpecInputs, proposed: str | None) -> str:
     decided = [(r, a) for r in inputs.requirements for a in r.acceptance]
     if decided:
         lines += ["In the baseline (decided with the PRD):", ""]
-        lines += [f"- {r.key}: {a}" for r, a in decided]
+        lines += [f"- {escape_inline(r.key)}: {escape_inline(a)}" for r, a in decided]
     else:
         lines.append("The baseline records no acceptance criteria for these requirements yet.")
     if proposed:
@@ -328,7 +374,7 @@ def compose(agent_md: str, inputs: SpecInputs) -> Composed:
         if s.written_by != "agent":
             continue
         text = bodies.get(s.key, "")
-        if not text:
+        if not text.strip():
             problems.append(
                 Problem("missing_section", f"spec.md needs a non-empty '{s.title}' {{#{s.key}}}",
                         s.key)
@@ -390,8 +436,49 @@ def compose(agent_md: str, inputs: SpecInputs) -> Composed:
             body = f"{NO_MAP_NOTE}\n\n{bodies[s.key]}"
         else:
             body = bodies[s.key]
-        out += [f"## {s.title} {{#{s.key}}}", "", body.strip(), ""]
-    return Composed("\n".join(out).rstrip() + "\n", problems)
+        out += [f"## {s.title} {{#{s.key}}}", "", body.strip("\n"), ""]
+    markdown = "\n".join(out).rstrip() + "\n"
+    # M1: what Oracle imports is checked like an edit: exactly the sections Oracle wrote,
+    # in order (an agent's body can not open a section of its own), and the structure
+    # rules (no raw HTML, no label or note copied into a body).
+    after = composed_problems(markdown, inputs.depth)
+    if after:
+        return Composed(None, problems + after)
+    return Composed(markdown, problems)
+
+
+def expected_keys(depth: str) -> list[str]:
+    """The section keys of a version :func:`compose` writes for ``depth``, in order."""
+    wanted = sections_for(depth)
+    return [
+        TITLE_ID,
+        *(s.key for s in wanted if s.brief),
+        FULL_ID,
+        *(s.key for s in wanted if not s.brief),
+    ]
+
+
+def composed_problems(markdown: str, depth: str) -> list[Problem]:
+    """What is wrong with a composed spec version: it does not parse, its section keys are
+    not exactly :func:`expected_keys` in order, or it breaks a structure rule."""
+    try:
+        draft = parse_draft(markdown)
+    except DraftError as exc:
+        return [Problem(p.code, f"spec.md: {p.message}", p.section_key) for p in exc.problems]
+    keys = [s.section_key for s in draft.sections]
+    out: list[Problem] = []
+    if keys != expected_keys(depth):
+        extra = [k for k in keys if k not in expected_keys(depth)]
+        out.append(
+            Problem(
+                "section_structure",
+                "spec.md changes the spec's sections"
+                + (f" (it opens {', '.join(extra)})" if extra else "")
+                + ": write each section's body as markdown under its own heading, with no "
+                "heading of a deeper section's level 1-3 (setext or indented ones included)",
+            )
+        )
+    return out + structure_problems(markdown, draft)
 
 
 # E1 (owner, 2026-10-19): the sections Oracle writes from the approved PRD. An edit of a
@@ -444,25 +531,27 @@ class PartState:
     decided: bool
     label: str
     half: Literal["decided", "proposed"] | None = None
-    # The template does not have the section: an edit added it.
+    # The version Oracle wrote does not have the section: an edit added it.
     added: bool = False
 
 
-def part_states(key: str, body: str, approved: bool) -> list[PartState]:
+def part_states(key: str, body: str, approved: bool, keys: Collection[str]) -> list[PartState]:
     """The decided/proposed state of a section of a spec version whose approach is
     ``approved`` (or not): decided only for the sections Oracle locks (its own parts),
     else once approved, and never for a section an edit added or for proposed acceptance
-    criteria. The summary is decided like the engineering parts."""
+    criteria. ``keys`` are the sections of the version Oracle wrote (:func:`keys_of`): any
+    other section was added in an edit, whatever its key or title (E1, owner, 2026-10-20).
+    The summary is decided like the engineering parts."""
+    if key not in keys:
+        return [PartState(key, "proposed", False, ADDED_LABEL, added=True)]
     if key == "acceptance-criteria":
         out = [PartState(key, "product_requirement", True, DECIDED_PRD_LABEL, "decided")]
         if split_acceptance(body)[1] is not None:
             out.append(PartState(key, "proposed", False, PROPOSED_ACCEPTANCE_STATE, "proposed"))
         return out
-    part = part_of(key)
+    part = part_of(key, keys)
     if key in ORACLE_PARTS:
         return [PartState(key, part, True, DECIDED_PRD_LABEL)]
-    if part == "proposed":
-        return [PartState(key, part, False, ADDED_LABEL, added=True)]
     return [PartState(key, part, approved, APPROVED_STATE if approved else PROPOSED_STATE)]
 
 
@@ -472,68 +561,136 @@ UNLABELLED = (TITLE_ID, FULL_ID)
 
 
 def state_line(label: str) -> str:
-    """A state label as the exports and the markdown show it: a paragraph of its own."""
+    """A state label as the markdown shows it: a paragraph of its own. (The HTML, PDF and
+    slide exports render it as an element no body can produce, :mod:`oracle.export`.)"""
     return f"**{label}**"
 
 
 _STATE_LINES = frozenset(state_line(label) for label in STATE_LABELS)
 
-
-def labelled_body(key: str, body: str, approved: bool) -> str:
-    """A section's body with its state labels: at the top, and for the acceptance
-    criteria also before the proposed half (an export renders this)."""
-    if key in UNLABELLED:
-        return body
-    states = part_states(key, body, approved)
-    if len(states) > 1:
-        decided, proposed = split_acceptance(body)
-        body = (
-            f"{decided}\n\n{state_line(states[1].label)}\n\n{ACCEPTANCE_PROPOSED_LABEL}"
-            f"\n\n{proposed}"
-        )
-    return f"{state_line(states[0].label)}\n\n{body}".rstrip()
+# E1 (owner, 2026-10-20): citations added in an edit are listed apart from Oracle's
+# Sources. The served markdown names them in a YAML comment above ``citations:``.
+ADDED_SOURCES = "Added sources"
+ADDED_SOURCES_COMMENT = f"# {ADDED_SOURCES} · {ADDED_LABEL} (not Oracle's Sources):"
 
 
-def label_markdown(markdown: str, approved: bool) -> str:
-    """A spec version's markdown with every section's state label after its heading (and
-    before the proposed acceptance criteria). :func:`strip_state_labels` undoes it, so the
-    markdown imports back as the same version."""
-    try:
-        draft = parse_draft(markdown)
-    except DraftError:
-        return markdown
+def section_states(draft: ParsedDraft, approved: bool) -> dict[str, list[PartState]]:
+    """Each labelled section's states, by key, for a parsed spec version."""
+    keys = keys_of(draft.front_matter)
+    return {
+        s.section_key: part_states(s.section_key, s.body_md, approved, keys)
+        for s in draft.sections
+        if s.section_key not in UNLABELLED
+    }
+
+
+def _refuse(code: str, message: str, key: str | None = None) -> DraftError:
+    return DraftError([ImportProblem(code=code, message=message, section_key=key)])
+
+
+def _fenced_lines(body: str, offset: int) -> set[int]:
+    """0-based lines (of the whole file) inside code blocks, fenced or indented."""
+    out: set[int] = set()
+    for tok in _HTML_MD.parse(body):
+        if tok.type in ("fence", "code_block") and tok.map:
+            out.update(range(tok.map[0] + offset, tok.map[1] + offset))
+    return out
+
+
+def label_markdown(
+    markdown: str, approved: bool, oracle_citations: Collection[str] | None = None
+) -> str:
+    """A spec version's markdown with every section's state label at the start of its
+    body (the parser's body line) and before the proposed acceptance criteria, and the
+    citations an edit added named in a comment above ``citations:`` (those not in
+    ``oracle_citations``; all of them when it is None). :func:`strip_state_labels` undoes
+    it, so the markdown imports back as the same version. Fails closed: a version that
+    does not parse, or whose section headings are not top-level ATX headings, raises
+    :class:`DraftError` rather than being served unlabelled."""
+    draft = parse_draft(markdown)
     lines = draft.markdown.split("\n")
+    states = section_states(draft, approved)
     inserts: list[tuple[int, list[str]]] = []
-    starts = [s.line - 1 for s in draft.sections] + [len(lines)]
-    for i, s in enumerate(draft.sections):
-        if s.section_key in UNLABELLED:
+    ends = [s.line - 1 for s in draft.sections[1:]] + [len(lines)]
+    for s, end in zip(draft.sections, ends, strict=True):
+        if not s.markup.startswith("#") or s.nesting:
+            raise _refuse(
+                "heading_not_atx",
+                f"section '{s.section_key}' is not a top-level '#' heading: the version "
+                "can not carry its state labels",
+                s.section_key,
+            )
+        if s.section_key not in states:
             continue
-        head = starts[i] + (0 if lines[starts[i]].lstrip().startswith("#") else 1)
-        states = part_states(s.section_key, s.body_md, approved)
-        inserts.append((head + 1, ["", state_line(states[0].label)]))
-        if len(states) > 1:
-            at = next(
+        found = states[s.section_key]
+        at = s.body_line - 1
+        inserts.append((at, ["", state_line(found[0].label)]))
+        if len(found) > 1:
+            split = next(
                 (
                     j
-                    for j in range(head + 1, starts[i + 1])
-                    if lines[j] == ACCEPTANCE_PROPOSED_LABEL and lines[j - 1] == ""
+                    for j in range(at, end)
+                    if lines[j] == ACCEPTANCE_PROPOSED_LABEL and j > 0 and lines[j - 1] == ""
                 ),
                 None,
             )
-            if at is not None:
-                inserts.append((at, [state_line(states[1].label), ""]))
-    for at, new in sorted(inserts, reverse=True):
+            if split is None:
+                raise _refuse(
+                    "acceptance_split",
+                    "the proposed acceptance criteria have no place for their label",
+                    s.section_key,
+                )
+            inserts.append((split, [state_line(found[1].label), ""]))
+    added = _added_citation_ids(draft, oracle_citations)
+    if added:
+        at = _citations_key_line(lines)
+        if at is None:
+            raise _refuse("citations_unlabelled", "the added sources can not be labelled")
+        inserts.append((at, [f"{ADDED_SOURCES_COMMENT} {', '.join(added)}"]))
+    for at, new in sorted(inserts, key=lambda i: i[0], reverse=True):
         lines[at:at] = new
     return "\n".join(lines)
 
 
+def _added_citation_ids(draft: ParsedDraft, oracle: Collection[str] | None) -> list[str]:
+    return [c.id for c in draft.citations if oracle is None or c.id not in oracle]
+
+
+def _citations_key_line(lines: list[str]) -> int | None:
+    """The 0-based line of the front matter's top-level ``citations:`` key."""
+    if not lines or lines[0].strip() != "---":
+        return None
+    for i in range(1, len(lines)):
+        if lines[i].strip() in ("---", "..."):
+            return None
+        if re.match(r"^['\"]?citations['\"]?\s*:", lines[i]):
+            return i
+    return None
+
+
+def added_citations(
+    front_matter: dict[str, Any] | None, oracle: Collection[str] | None
+) -> set[str]:
+    """The ids of a spec version's citations an edit added (not in ``oracle``, the
+    citations of the version Oracle wrote; all of them when None)."""
+    raw = (front_matter or {}).get("citations")
+    ids = {str(c.get("id")) for c in raw if isinstance(c, dict)} if isinstance(raw, list) else set()
+    return ids if oracle is None else ids - set(oracle)
+
+
 def strip_state_labels(markdown: str) -> str:
-    """The markdown without Oracle's state labels (each with the blank line before it):
-    they are shown, never stored, whoever wrote them."""
-    lines = markdown.replace("\r\n", "\n").split("\n")
+    """The markdown without Oracle's state labels (each with the blank line before it) and
+    its Added sources comment: they are shown, never stored, whoever wrote them. Lines
+    inside code blocks are left alone."""
+    text = markdown.replace("\r\n", "\n")
+    lines = text.split("\n")
+    fm, body, offset = split_front_matter(text)
+    fenced = _fenced_lines(body, offset)
     out: list[str] = []
-    for line in lines:
-        if line.strip() in _STATE_LINES:
+    for i, line in enumerate(lines):
+        if fm is not None and 0 < i < offset - 1 and line.startswith(ADDED_SOURCES_COMMENT):
+            continue
+        if i >= offset and i not in fenced and line.strip() in _STATE_LINES:
             if out and not out[-1].strip():
                 out.pop()
             continue
@@ -544,17 +701,83 @@ def strip_state_labels(markdown: str) -> str:
 # E1 'Added sections, visible' (owner, 2026-10-20): Oracle's parts an edit may not add a
 # section inside, and the note and labels an added heading may not take.
 PRD_PART_TITLES = {k: SECTIONS_BY_KEY[k].title for k in PRD_PARTS}
-_NOTE_PHRASES = ("decided in the approved prd", "decided with the prd")
-_STATE_LIKE = re.compile(r"\b(?:decided|proposed)\s*·")
+
+# M4: text compared with Oracle's titles, notes and labels is normalised first: HTML
+# entities decoded, NFKC, format characters (soft hyphen, zero-width ones, BOM) dropped,
+# markdown rendered to its plain text, look-alike Cyrillic and Greek letters folded to
+# Latin, lower case.
+_PLAIN_MD = MarkdownIt("commonmark", {"html": False}).enable("strikethrough")
+_HTML_MD = MarkdownIt("commonmark", {"html": True}).enable("table")
 _EMPHASIS = re.compile(r"[*_`~]+")
+_CONFUSABLES = str.maketrans(
+    {
+        # Cyrillic
+        "а": "a", "в": "b", "е": "e", "ё": "e", "к": "k", "м": "m", "н": "h", "о": "o",
+        "р": "p", "с": "c", "т": "t", "у": "y", "х": "x", "і": "i", "ї": "i", "ј": "j",
+        "ѕ": "s", "ԁ": "d", "ӏ": "l", "ԛ": "q", "ԝ": "w", "ɡ": "g", "һ": "h", "п": "n",
+        "г": "r", "ь": "b",
+        # Greek
+        "α": "a", "β": "b", "ε": "e", "η": "n", "ι": "i", "κ": "k", "ν": "v", "ο": "o",
+        "ρ": "p", "τ": "t", "υ": "u", "χ": "x", "γ": "y", "ϲ": "c", "ς": "c", "μ": "u",
+        "δ": "d", "ω": "w",
+        # Latin look-alikes
+        "ı": "i", "ȷ": "j", "ℓ": "l",
+    }
+)  # fmt: skip
 
 
-def _plain(text: str) -> str:
-    return " ".join(_EMPHASIS.sub("", text).lower().split())
+def _visible(text: str) -> str:
+    for _ in range(3):
+        decoded = html.unescape(text)
+        if decoded == text:
+            break
+        text = decoded
+    text = unicodedata.normalize("NFKC", text)
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
 
 
-_COMMENT = re.compile(r"<!--.*?-->", re.S)
-_HEADING_LINE = re.compile(r"^ {0,3}#{1,6}(?:\s|$)", re.M)
+def _inline_plain(text: str) -> str:
+    out: list[str] = []
+    for block in _PLAIN_MD.parseInline(text):
+        for tok in block.children or []:
+            if tok.type in ("text", "code_inline", "html_inline"):
+                out.append(tok.content)
+            elif tok.type in ("softbreak", "hardbreak"):
+                out.append(" ")
+            elif tok.type == "image":
+                out.append(tok.content)
+    return "".join(out)
+
+
+def normalised(text: str) -> str:
+    """Text as compared with Oracle's titles, notes and labels (M4)."""
+    plain = _visible(_inline_plain(_visible(text)))
+    plain = _EMPHASIS.sub("", plain).lower().translate(_CONFUSABLES)
+    return " ".join(plain.split())
+
+
+def _squashed(text: str) -> str:
+    """:func:`normalised`, letters and digits only ('P.R.D.' reads as 'prd')."""
+    return re.sub(r"[\W_]+", "", normalised(text))
+
+
+# A leading 'decided' or 'proposed' followed by any separator (a dot, bullet, dash,
+# colon...) reads as a state label.
+_LABEL_START = re.compile(r"^[\W_]*(?:decided|proposed)\s*[^\w\s]")
+_LIST_MARKER = re.compile(r"^\s*(?:(?:>|[-*+]|\d{1,9}[.)])\s*)+")
+# Oracle's notes and labels, squashed: no body line or added heading may take them.
+_NOTES = ("decidedintheapprovedprd", "decidedwiththeprd", "inthebaselinedecidedwiththeprd")
+_LABELS_SQUASHED = tuple(_squashed(label) for label in STATE_LABELS)
+
+
+def _takes_label(text: str, anywhere: bool) -> bool:
+    plain = normalised(_LIST_MARKER.sub("", text))
+    squashed = re.sub(r"[\W_]+", "", plain)
+    if _LABEL_START.match(plain):
+        return True
+    if anywhere:
+        return any(n in squashed for n in _NOTES + _LABELS_SQUASHED)
+    return squashed.startswith(_NOTES + _LABELS_SQUASHED)
 
 
 def _comment_spans(text: str) -> bool:
@@ -566,26 +789,89 @@ def _comment_spans(text: str) -> bool:
     return "<!--" in rest or "-->" in rest
 
 
-def structure_problems(markdown: str) -> list[Problem]:
-    """What an edit may not do with sections (every problem at once): add a section, or
-    move one, inside the subtree of Product requirements, the acceptance criteria or
-    Sources and data points, add one whose heading is Oracle's own (a part's title, its
-    'Decided in the approved PRD' note, a state label), or leave an HTML comment open
-    across sections."""
-    try:
-        draft = parse_draft(markdown)
-    except DraftError:
-        return []
+_COMMENT = re.compile(r"<!--.*?-->", re.S)
+_HEADING_LINE = re.compile(r"^ {0,3}#{1,6}(?:\s|$)", re.M)
+
+
+def _editable_text(key: str, body: str) -> str:
+    """The text of a section an edit may change: all of it, or for the acceptance
+    criteria the proposed half (the decided half is Oracle's)."""
+    if key == "acceptance-criteria":
+        return split_acceptance(body)[1] or ""
+    return body
+
+
+def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[Problem]:
+    """What an edit (or a run's import) may not do with a spec's structure, every problem
+    at once:
+
+    - a section heading that is not a top-level ATX '#' heading (setext, or inside a list
+      or block quote), or a raw HTML block anywhere (comments, <details>, <script>...);
+    - a section added, or moved, inside the subtree of Product requirements, the
+      acceptance criteria or Sources and data points, or one of Oracle's parts under an
+      added level-1 heading;
+    - a template section's title changed (only bodies are editable);
+    - a heading that takes a PRD part's title, Oracle's note ('Decided in the approved
+      PRD') or a state label, or a body line (in a part an edit may change) that starts
+      with a state label or Oracle's note, in any spelling (:func:`normalised`);
+    - an HTML comment left open across sections."""
+    if draft is None:
+        try:
+            draft = parse_draft(markdown)
+        except DraftError:
+            return []
+    keys = keys_of(draft.front_matter)
     problems: list[Problem] = []
+    _, body, offset = split_front_matter(draft.markdown)
+    starts = [(s.line, s.section_key) for s in draft.sections]
+
+    def section_at(line: int) -> str | None:
+        return next((k for start, k in reversed(starts) if start <= line), None)
+
+    seen_html: set[str | None] = set()
+    for tok in _HTML_MD.parse(body):
+        if tok.type == "html_block" and tok.map:
+            key = section_at(tok.map[0] + offset + 1)
+            if key not in seen_html:
+                seen_html.add(key)
+                problems.append(
+                    Problem(
+                        "raw_html",
+                        "A spec may not hold raw HTML blocks (comments, <details>, <script>, "
+                        "<pre>...): write it as markdown.",
+                        key,
+                    )
+                )
     owner: tuple[str, int] | None = None
-    titles = {_plain(t): k for k, t in PRD_PART_TITLES.items()}
+    level_one: str | None = None
+    titles = {_squashed(t): k for k, t in PRD_PART_TITLES.items()}
     for s in draft.sections:
+        if not s.markup.startswith("#") or s.nesting:
+            problems.append(
+                Problem(
+                    "heading_not_atx",
+                    "Section headings are top-level '#' headings: no setext underline, none "
+                    "inside a list or block quote.",
+                    s.section_key,
+                )
+            )
         if _comment_spans(f"{s.heading}\n{s.body_md}"):
             problems.append(
                 Problem(
                     "comment_across_sections",
-                    "An HTML comment opens and closes within one section: it may not hide a "
+                    "A comment must open and close within one section: it may not hide a "
                     "heading or run into the next section.",
+                    s.section_key,
+                )
+            )
+        if s.level == 1:
+            level_one = s.section_key
+        elif s.section_key in ORACLE_PARTS and level_one not in (None, *UNLABELLED):
+            problems.append(
+                Problem(
+                    "oracle_part_under_added_section",
+                    f"'{s.heading}' is Oracle's: it stays under Oracle's headings, not under "
+                    "an added level-1 section.",
                     s.section_key,
                 )
             )
@@ -594,9 +880,21 @@ def structure_problems(markdown: str) -> list[Problem]:
         if s.section_key in PRD_PART_TITLES:
             owner = (s.section_key, s.level)
             continue
+        if s.section_key in ORACLE_PARTS:
+            continue
+        template = SECTIONS_BY_KEY.get(s.section_key)
+        if template is not None and s.heading != template.title:
+            problems.append(
+                Problem(
+                    "template_title_changed",
+                    f"Template section titles can't be changed: '{s.section_key}' is "
+                    f"'{template.title}'. Only its body is editable.",
+                    s.section_key,
+                )
+            )
         inside = owner[0] if owner is not None else None
-        if inside is None and part_of(s.section_key) == "proposed":
-            inside = titles.get(_plain(s.heading))
+        if inside is None and s.section_key not in keys:
+            inside = titles.get(_squashed(s.heading))
         if inside is not None:
             problems.append(
                 Problem(
@@ -606,15 +904,26 @@ def structure_problems(markdown: str) -> list[Problem]:
                     s.section_key,
                 )
             )
-        elif part_of(s.section_key) == "proposed" and (
-            any(p in _plain(s.heading) for p in _NOTE_PHRASES)
-            or _STATE_LIKE.search(_plain(s.heading))
-        ):
+        elif _takes_label(s.heading, anywhere=True):
             problems.append(
                 Problem(
                     "heading_takes_oracle_note",
-                    "An added section's heading may not take Oracle's note ('Decided in the "
+                    "A section's heading may not take Oracle's note ('Decided in the "
                     "approved PRD') or its Decided and Proposed labels.",
+                    s.section_key,
+                )
+            )
+    for s in draft.sections:
+        if s.section_key in ORACLE_PARTS and s.section_key != "acceptance-criteria":
+            continue
+        text = _editable_text(s.section_key, s.body_md)
+        if any(_takes_label(line, anywhere=False) for line in text.split("\n")):
+            problems.append(
+                Problem(
+                    "body_takes_oracle_label",
+                    "A line may not start with a Decided or Proposed label or Oracle's note "
+                    "('Decided in the approved PRD', 'In the baseline (decided with the "
+                    "PRD)'): Oracle shows each part's state itself.",
                     s.section_key,
                 )
             )
@@ -630,13 +939,19 @@ def prd_parts(markdown: str) -> dict[str, object]:
     """What of a spec version Oracle writes and an edit may not change: (level, heading,
     body) of each of Oracle's sections, their order, the ones the brief lists, the labels
     on the engineering sections and the assumptions, and the front matter's ``spec``
-    block (source and requirement ids) and title."""
+    block (source and requirement ids), title, template and template version."""
     try:
         draft = parse_draft(markdown)
     except DraftError:
         return {}
     fm = draft.front_matter or {}
-    out: dict[str, object] = {"front_matter": fm.get("spec"), "title": fm.get("title")}
+    keys = keys_of(fm)
+    out: dict[str, object] = {
+        "front_matter": fm.get("spec"),
+        "title": fm.get("title"),
+        "template": fm.get("template"),
+        "template_version": fm.get("template_version"),
+    }
     order: list[str] = []
     labels: set[tuple[str, str]] = set()
     for s in draft.sections:
@@ -646,13 +961,40 @@ def prd_parts(markdown: str) -> dict[str, object]:
                 body = split_acceptance(body)[0]
             out[s.section_key] = (s.level, s.heading, body)
             order.append(s.section_key)
-        part = part_of(s.section_key)
+        part = part_of(s.section_key, keys)
         if part in ("engineering_approach", "assumption"):
             labels.add((part, _leading_label(body) or ""))
     out["order"] = tuple(order)
     out["brief"] = tuple(k for k in draft.brief or [] if k in ORACLE_PARTS)
     out["labels"] = tuple(sorted(labels))
     return out
+
+
+def oracle_citations(markdown: str) -> dict[str, dict[str, Any]]:
+    """The citations of a version Oracle wrote, by id, as its front matter has them."""
+    try:
+        draft = parse_draft(markdown)
+    except DraftError:
+        return {}
+    raw = (draft.front_matter or {}).get("citations")
+    if not isinstance(raw, list):
+        return {}
+    return {str(c["id"]): c for c in raw if isinstance(c, dict) and "id" in c}
+
+
+def citation_problems(markdown: str, oracle: dict[str, dict[str, Any]]) -> list[Problem]:
+    """E1 (owner, 2026-10-20): an edit may add citations (listed as Added sources) but
+    may not change or remove Oracle's."""
+    mine = oracle_citations(markdown)
+    return [
+        Problem(
+            "oracle_citation_changed",
+            f"Citation '{cid}' is one of Oracle's Sources: an edit may add citations, not "
+            "change or remove Oracle's.",
+        )
+        for cid, c in oracle.items()
+        if mine.get(cid) != c
+    ]
 
 
 def expected_prd_parts(inputs: SpecInputs) -> dict[str, object]:

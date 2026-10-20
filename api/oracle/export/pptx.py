@@ -169,11 +169,29 @@ def _textbox(slide, left, top, width, height, *, wrap=True):
     return frame
 
 
+def _add_state(slide, s: Slide, style: dict, top) -> int:
+    """E1: a spec's state label as a styled run of its own above the body (bold, in the
+    accent colour, its own text box), never as body text. Returns the new top."""
+    if not s.state:
+        return top
+    height = Inches(0.45)
+    frame = _textbox(slide, MARGIN, top, WIDTH - 2 * MARGIN, height)
+    _write_runs(
+        frame.paragraphs[0],
+        [Run(s.state, bold=True)],
+        14,
+        style["body"],
+        style["mono"],
+        style["accent"],
+    )
+    return top + height
+
+
 def _add_body(slide, s: Slide, deck: Deck, style: dict) -> None:
     blocks = parse_blocks(s.body_md)
     size = 16 if s.dense else 20
-    top = BODY_TOP
     width = WIDTH - 2 * MARGIN
+    top = _add_state(slide, s, style, BODY_TOP)
     pending: list[Para] = []
 
     def flush_text() -> None:
@@ -286,7 +304,8 @@ def deck_to_pptx(deck: Deck) -> bytes:
                 style["heading"],
             )
             if s.kind == "sources":
-                frame = _textbox(slide, MARGIN, BODY_TOP, width, Inches(5))
+                top = _add_state(slide, s, style, BODY_TOP)
+                frame = _textbox(slide, MARGIN, top, width, Inches(5))
                 for i, (number, src_title, kind, retrieved) in enumerate(s.sources):
                     para = frame.paragraphs[0] if i == 0 else frame.add_paragraph()
                     para.space_after = Pt(6)

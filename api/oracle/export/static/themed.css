@@ -202,3 +202,18 @@ body.appendix-break .sources-appendix { break-before: page; border-top: none; }
 .doc-header .banner-layer { font-weight: 600; color: var(--color-accent); }
 .doc-header .banner-source a { color: inherit; }
 .detail-ref { color: inherit; }
+
+/* E1: a spec part's state (an element no body markdown can produce). */
+.spec-state {
+  display: inline-block;
+  margin: 0 0 0.6em;
+  padding: 0.15em 0.7em;
+  border-radius: 999px;
+  font-family: var(--font-body, sans-serif);
+  font-size: 0.85em;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.spec-state-decided { background: #e7f6ec; color: #17663a; }
+.spec-state-proposed { background: #fdf3dc; color: #7a4d00; }
+.spec-state-added { background: #fdf3dc; color: #7a4d00; border: 1px dashed #b7791f; }

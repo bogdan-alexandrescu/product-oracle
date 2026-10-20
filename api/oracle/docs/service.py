@@ -251,6 +251,7 @@ async def _spec_states(
     from oracle.specs import contract, lineage
 
     approved = await lineage.approach_approved(db, version)
+    keys = contract.keys_of(version.front_matter)
     return {
         s.section_key: [
             SpecPartState(
@@ -260,7 +261,7 @@ async def _spec_states(
                 half=p.half,
                 starts_at=contract.ACCEPTANCE_PROPOSED_LABEL if p.half == "proposed" else None,
             )
-            for p in contract.part_states(s.section_key, s.body_md, approved)
+            for p in contract.part_states(s.section_key, s.body_md, approved, keys)
         ]
         for s in sections
         if s.section_key not in contract.UNLABELLED
@@ -269,12 +270,35 @@ async def _spec_states(
 
 async def spec_markdown(db: AsyncSession, version: DocumentVersion) -> str:
     """A version's markdown as it is served (GET .../markdown, MCP get_document_markdown,
-    the markdown export): a spec version's carries its state labels (E1)."""
+    the markdown export, the feedback package): a spec version's carries its state labels
+    and names its added sources (E1). It fails closed: a spec version that can not carry
+    its labels raises DraftError rather than being served without them."""
     if not await is_spec_version(db, version):
         return version.markdown
     from oracle.specs import contract, lineage
 
-    return contract.label_markdown(version.markdown, await lineage.approach_approved(db, version))
+    return contract.label_markdown(
+        version.markdown,
+        await lineage.approach_approved(db, version),
+        await lineage.oracle_citation_keys(db, version),
+    )
+
+
+async def _citations_out(
+    db: AsyncSession, version: DocumentVersion, citations: list[Citation]
+) -> list[CitationOut]:
+    """A version's citations; a spec version's added in an edit carry ``added`` and the
+    'Proposed · added in an edit' label (E1, owner, 2026-10-20)."""
+    out = [CitationOut.model_validate(c) for c in citations]
+    if not out or not await is_spec_version(db, version):
+        return out
+    from oracle.specs import contract, lineage
+
+    oracle = await lineage.oracle_citation_keys(db, version)
+    for c in out:
+        if oracle is None or c.cite_key not in oracle:
+            c.added, c.state_label = True, contract.ADDED_LABEL
+    return out
 
 
 async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut:
@@ -308,7 +332,7 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
             )
             for s in sections
         ],
-        citations=[CitationOut.model_validate(c) for c in citations],
+        citations=await _citations_out(db, version, citations),
     )
 
 

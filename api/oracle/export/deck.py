@@ -33,6 +33,7 @@ from oracle.export.render import (
     _jinja,
     _themed_markdown,
     absolute_doc_links,
+    section_body_html,
     sources_keys,
     token_vars,
     unlink_missing,
@@ -70,6 +71,10 @@ class Slide:
     # Sources slides: (number, title, kind, retrieved) rows.
     sources: list[tuple[int, str, str, str]] = field(default_factory=list)
     dense: bool = False
+    # E1: a spec's state label for the slide (the PPTX shows it as a styled run; the
+    # HTML has it in body_html) and its kind ("decided", "proposed" or "added").
+    state: str | None = None
+    state_kind: str | None = None
 
 
 @dataclass
@@ -147,6 +152,10 @@ def _banner(ev: ExportVersion) -> str:
     return " · ".join(parts)
 
 
+def _state_kind(state) -> str:
+    return "added" if state.added else ("decided" if state.decided else "proposed")
+
+
 def build_deck(ev: ExportVersion) -> Deck:
     """Slides for ``ev`` (already restricted to the brief layer by ``apply_layer``)."""
     appendix = sources_keys(ev.all_sections)
@@ -168,13 +177,20 @@ def build_deck(ev: ExportVersion) -> Deck:
             for sub in layers.subtree(refs, key):
                 d = by_key[sub]
                 level = min(max(d.level, 2), 4)
+                body_html = section_body_html(
+                    ev,
+                    sub,
+                    layers.slide_body(d.body_md or ""),
+                    lambda text: str(_render_md(text, all_keys)),
+                )
                 parts.append(
                     f'<section class="expand-section" data-section-key="{escape(sub)}">'
                     f"<h{level}>{escape(_plain_heading(d))}</h{level}>"
-                    f"{_render_md(layers.slide_body(d.body_md or ''), all_keys)}</section>"
+                    f"{body_html}</section>"
                 )
             expand.append(ExpandItem(key, _plain_heading(by_key[key]), Markup("".join(parts))))
         rows = body.count("\n|")
+        states = ev.spec_states.get(s.section_key) or []
         slides.append(
             Slide(
                 index=len(slides) + 1,
@@ -183,9 +199,15 @@ def build_deck(ev: ExportVersion) -> Deck:
                 body_md=body,
                 section_key=s.section_key,
                 notes=layers.presenter_notes(s.body_md or ""),
-                body_html=_render_md(body, on_slides),
+                body_html=Markup(
+                    section_body_html(
+                        ev, s.section_key, body, lambda text: str(_render_md(text, on_slides))
+                    )
+                ),
                 expand=expand,
                 dense=len(body) > DENSE_CHARS or rows > DENSE_ROWS,
+                state=states[0].label if states else None,
+                state_kind=_state_kind(states[0]) if states else None,
             )
         )
 
@@ -208,14 +230,31 @@ def build_deck(ev: ExportVersion) -> Deck:
             )
             for i, k in enumerate(k for k in order if k in by_cite)
         ]
-        chunks = [rows[i : i + SOURCES_PER_SLIDE] for i in range(0, len(rows), SOURCES_PER_SLIDE)]
-        for i, chunk in enumerate(chunks):
-            heading = "Sources and data points" + (
-                f" ({i + 1}/{len(chunks)})" if len(chunks) > 1 else ""
-            )
-            slides.append(
-                Slide(index=len(slides) + 1, kind="sources", heading=heading, sources=chunk)
-            )
+        keys = [k for k in order if k in by_cite]
+        # E1: a spec's citations added in an edit get their own slides, labelled, never
+        # inside Oracle's Sources.
+        lists = [
+            ("Sources and data points", None, [r for r, k in zip(rows, keys, strict=True)
+                                               if k not in ev.added_citations]),
+            ("Added sources", ev.added_label, [r for r, k in zip(rows, keys, strict=True)
+                                               if k in ev.added_citations]),
+        ]  # fmt: skip
+        for title, label, listed in lists:
+            chunks = [
+                listed[i : i + SOURCES_PER_SLIDE] for i in range(0, len(listed), SOURCES_PER_SLIDE)
+            ]
+            for i, chunk in enumerate(chunks):
+                heading = title + (f" ({i + 1}/{len(chunks)})" if len(chunks) > 1 else "")
+                slides.append(
+                    Slide(
+                        index=len(slides) + 1,
+                        kind="sources",
+                        heading=heading,
+                        sources=chunk,
+                        state=label,
+                        state_kind="added" if label else None,
+                    )
+                )
 
     theme = ev.theme
     tokens = (theme.tokens or {}) if theme is not None else {}

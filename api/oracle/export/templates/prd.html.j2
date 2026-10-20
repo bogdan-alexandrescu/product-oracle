@@ -52,6 +52,26 @@
   </ol>
 </footer>
 {% endif %}
+{% if added_footnotes %}
+{# E1: citations added in a spec edit, outside Oracle's Sources. #}
+<footer class="citations added-sources">
+  <h2 id="added-sources">Added sources</h2>
+  <p class="spec-state spec-state-added" data-spec-state="added">{{ added_label }}</p>
+  <ol class="footnotes">
+  {% for f in added_footnotes %}
+    <li id="fn-{{ f.number }}" value="{{ f.number }}" data-cite-key="{{ f.key }}">
+      <span class="fn-title">
+        {%- if f.href %}<a href="{{ f.href }}">{{ f.title }}</a>{% else %}{{ f.title }}{% endif -%}
+      </span>
+      <span class="fn-source">{{ f.source }}</span>
+      {% if f.retrieved_at %}<span class="fn-retrieved">retrieved {{ f.retrieved_at }}</span>{% endif %}
+      <span class="fn-ref">{{ f.ref }}</span>
+      {% if f.backref %}<a class="fn-back" href="#{{ f.backref }}" aria-label="Back to text">↩</a>{% endif %}
+    </li>
+  {% endfor %}
+  </ol>
+</footer>
+{% endif %}
 {% if evidence_links %}
 <footer class="citations evidence-appendix">
   <h2 id="sources-evidence-links">Evidence links by section</h2>

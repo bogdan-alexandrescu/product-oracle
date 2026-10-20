@@ -89,6 +89,19 @@ class ExportVersion:
     evidence_links: list[dict] = field(default_factory=list)
     # The markdown the export serves, when it is not the stored one (a spec's, labelled).
     markdown: str | None = None
+    # E1: a spec version's states by section key (oracle.specs.contract.PartState), shown
+    # as elements no body can produce, and the citations an edit added (Added sources).
+    spec_states: dict[str, list] = field(default_factory=dict)
+    added_citations: set[str] = field(default_factory=set)
+
+    @property
+    def added_label(self) -> str | None:
+        """The state label of the Added sources list (a spec's only)."""
+        if not self.added_citations:
+            return None
+        from oracle.specs.contract import ADDED_LABEL
+
+        return ADDED_LABEL
 
     @property
     def source_label(self) -> str | None:
@@ -306,20 +319,53 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
 
 async def _label_spec(db: AsyncSession, ev: ExportVersion) -> None:
     """E1: every export of a spec version (HTML, PDF, slides, PPTX, markdown) shows each
-    part's decided/proposed state, and 'Proposed · added in an edit' on a section an edit
-    added. The labels go on copies of the sections, never on the stored rows."""
+    part's decided/proposed state, 'Proposed · added in an edit' on a section an edit
+    added, and the citations an edit added in their own Added sources list. The HTML,
+    PDF and slides render each label as an element a body can not produce (bodies render
+    without raw HTML), never as body markdown; the markdown carries it as a line."""
     from oracle.specs import contract, lineage
 
     approved = await lineage.approach_approved(db, ev.version)
-    columns = [c.key for c in Section.__table__.columns]
-    labelled = []
-    for s in ev.all_sections:
-        copy = Section(**{c: getattr(s, c) for c in columns})
-        copy.body_md = contract.labelled_body(s.section_key, s.body_md or "", approved)
-        labelled.append(copy)
-    ev.all_sections = labelled
-    ev.sections = list(labelled)
-    ev.markdown = contract.label_markdown(ev.version.markdown, approved)
+    oracle = await lineage.oracle_citation_keys(db, ev.version)
+    keys = contract.keys_of(ev.version.front_matter)
+    ev.spec_states = {
+        s.section_key: contract.part_states(s.section_key, s.body_md or "", approved, keys)
+        for s in ev.all_sections
+        if s.section_key not in contract.UNLABELLED
+    }
+    ev.added_citations = {
+        c.cite_key for c in ev.citations if oracle is None or c.cite_key not in oracle
+    }
+    ev.markdown = contract.label_markdown(ev.version.markdown, approved, oracle)
+
+
+def state_html(state) -> str:
+    """A spec part's state label as an export shows it: a classed element of its own."""
+    kind = "added" if state.added else ("decided" if state.decided else "proposed")
+    return (
+        f'<p class="spec-state spec-state-{kind}" data-spec-state="{kind}">'
+        f"{escape(state.label)}</p>"
+    )
+
+
+def section_body_html(ev: ExportVersion, key: str, text: str, render) -> str:
+    """A section's body rendered by ``render`` (markdown -> HTML, without raw HTML), with
+    a spec's state labels inserted as elements: at the top and, for the acceptance
+    criteria, before the proposed half."""
+    states = ev.spec_states.get(key)
+    if not states:
+        return render(text)
+    if len(states) > 1:
+        from oracle.specs.contract import ACCEPTANCE_PROPOSED_LABEL, split_acceptance
+
+        decided, proposed = split_acceptance(text)
+        return (
+            state_html(states[0])
+            + render(decided)
+            + state_html(states[1])
+            + render(f"{ACCEPTANCE_PROPOSED_LABEL}\n\n{proposed or ''}")
+        )
+    return state_html(states[0]) + render(text)
 
 
 async def _resolve_theme(db: AsyncSession, ev: ExportVersion) -> None:
@@ -473,7 +519,15 @@ def build_context(ev: ExportVersion) -> dict:
                 # Guidance comments and presenter notes are never exported.
                 body=Markup(
                     absolute_doc_links(
-                        unlink_missing(md.render(layers.slide_body(s.body_md), env), present)
+                        unlink_missing(
+                            section_body_html(
+                                ev,
+                                s.section_key,
+                                layers.slide_body(s.body_md),
+                                lambda text: md.render(text, env),
+                            ),
+                            present,
+                        )
                     )
                 ),
             )
@@ -500,6 +554,9 @@ def build_context(ev: ExportVersion) -> dict:
     headings = {r.key: r.heading for r in sections}
     v = ev.version
     return {
+        # E1: a spec's citations added in an edit, listed apart from Oracle's Sources.
+        "added_footnotes": [f for f in footnotes if f.key in ev.added_citations],
+        "added_label": ev.added_label,
         "title": ev.document.title,
         "slug": ev.document.slug,
         "number": v.number,
@@ -510,7 +567,7 @@ def build_context(ev: ExportVersion) -> dict:
         "snapshot": v.snapshot,
         "has_title_section": any(s.level == 1 for s in ev.sections),
         "sections": sections,
-        "footnotes": footnotes,
+        "footnotes": [f for f in footnotes if f.key not in ev.added_citations],
         "evidence_links": [
             {"key": e["key"], "heading": headings[e["key"]], "links": e["links"]}
             for e in ev.evidence_links
@@ -687,7 +744,17 @@ def build_themed_context(ev: ExportVersion) -> dict:
             heading=Markup(md.renderInline(heading, env)),
             body=Markup(
                 absolute_doc_links(
-                    unlink_missing(_decorate(md.render(_body_md(s, md is plain), env)), present)
+                    unlink_missing(
+                        _decorate(
+                            section_body_html(
+                                ev,
+                                s.section_key,
+                                _body_md(s, md is plain),
+                                lambda text: md.render(text, env),
+                            )
+                        ),
+                        present,
+                    )
                 )
             ),
             # Roadmap items (cards) that say they serve no confirmed goal get the flag.
@@ -729,7 +796,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
     headings = {r.key: r.heading for r in rendered}
     by_section = []
     for s in body:
-        keys = [k for k in s.citation_keys or [] if k in by_key]
+        # Oracle's Sources list only Oracle's citations; added ones have their own list.
+        keys = [k for k in s.citation_keys or [] if k in by_key and k not in ev.added_citations]
         if keys:
             by_section.append(
                 {
@@ -761,6 +829,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
         )
         for key, number in sorted(numbers.items(), key=lambda kv: kv[1])
     ]
+    added_source_list = [f for f in source_list if f.key in ev.added_citations]
+    source_list = [f for f in source_list if f.key not in ev.added_citations]
 
     v = ev.version
     body_classes = [
@@ -804,6 +874,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "by_section": by_section,
         "evidence_links": evidence_links,
         "source_list": source_list,
+        "added_source_list": added_source_list,
+        "added_label": ev.added_label,
         "css": Markup(themed_stylesheet()),
         "token_css": Markup(token_css(tokens)),
         "theme_css": Markup(theme.css or ""),

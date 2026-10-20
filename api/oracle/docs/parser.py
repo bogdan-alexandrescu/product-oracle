@@ -61,6 +61,13 @@ class ParsedSection:
     body_text: str
     citation_keys: list[str]
     line: int  # 1-based line of the heading in the whole file
+    # 1-based line in the whole file where the body starts (the parser's token.map[1]):
+    # after the heading line, or after a setext heading's underline.
+    body_line: int = 0
+    # The heading's markup ("#".."###" for ATX, "=" or "-" for setext) and its nesting
+    # (0 at the top level, more inside a list or block quote).
+    markup: str = "#"
+    nesting: int = 0
 
     @property
     def content_hash(self) -> str:
@@ -268,6 +275,7 @@ def _parse_sections(
     lines = body.split("\n")
     # (heading line index, body start index, level, heading text or None, key or None)
     heads: list[tuple[int, int, int, str, str | None]] = []
+    shape: dict[int, tuple[str, int]] = {}
     for token_index, token in enumerate(tokens := _md.parse(body)):
         if token.type != "heading_open" or token.map is None:
             continue
@@ -277,6 +285,7 @@ def _parse_sections(
         raw = tokens[token_index + 1].content.strip()
         match = SECTION_ID_RE.search(raw)
         start, end = token.map
+        shape[start] = (token.markup, token.level)
         if match is None:
             problems.append(
                 ImportProblem(
@@ -333,6 +342,9 @@ def _parse_sections(
                 body_text=body_text(body_md),
                 citation_keys=citation_keys,
                 line=line,
+                body_line=body_start + 1 + line_offset,
+                markup=shape[start][0],
+                nesting=shape[start][1],
             )
         )
     return sections

@@ -821,6 +821,15 @@ async def check_edit(
             dv = await db.get(DocumentVersion, dv_id)
             if dv is not None:
                 allowed.append(contract.prd_parts(dv.markdown))
+                if av is by_run:
+                    # Oracle's citations stay as Oracle wrote them; an edit may add others
+                    # (listed as Added sources, E1, owner, 2026-10-20).
+                    structure += [
+                        ImportProblem(code=p.code, message=p.message)
+                        for p in contract.citation_problems(
+                            markdown, contract.oracle_citations(dv.markdown)
+                        )
+                    ]
     if not allowed:
         allowed.append(contract.expected_prd_parts(inputs))
     submitted = contract.prd_parts(markdown)
@@ -853,6 +862,9 @@ _CHANGED: dict[str | None, str] = {
     None: "The edit changes a part Oracle writes.",
     "front_matter": "The edit changes the spec: front matter (source and requirement ids).",
     "title": "The edit changes the front matter title: the spec's title is Oracle's.",
+    "template": "The edit changes the front matter template: it stays as Oracle wrote it.",
+    "template_version": "The edit changes the front matter template_version: it stays as "
+    "Oracle wrote it.",
     "order": "Oracle's sections (spec, requirements, full, acceptance-criteria, sources) "
     "keep their place relative to each other.",
     "brief": "The brief: list keeps listing Oracle's sections (requirements).",
@@ -1058,6 +1070,8 @@ async def read_spec(db: AsyncSession, request_id: uuid.UUID) -> SpecOut:
     sections: list[SpecSectionOut] = []
     if versions and versions[-1].document_version_id:
         latest_approved = versions[-1].approach_status == "approved"
+        latest_dv = await db.get(DocumentVersion, versions[-1].document_version_id)
+        keys = contract.keys_of(latest_dv.front_matter if latest_dv else None)
         for s in await _section_rows(db, versions[-1].document_version_id):
             sections += [
                 SpecSectionOut(
@@ -1070,7 +1084,7 @@ async def read_spec(db: AsyncSession, request_id: uuid.UUID) -> SpecOut:
                     added=p.added,
                     label=p.label,
                 )
-                for p in contract.part_states(s.section_key, s.body_md, latest_approved)
+                for p in contract.part_states(s.section_key, s.body_md, latest_approved, keys)
             ]
     design = []
     for child in family[1:]:

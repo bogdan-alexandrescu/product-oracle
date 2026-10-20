@@ -155,9 +155,7 @@ async def approve_version(
     # A spec's approval is the engineering approval of its approach (oracle.specs).
     approve = spec_service.approve_version if await spec_service.is_spec(db, doc) else None
     try:
-        document, version = await _call(
-            (approve or service.approve_version)(db, principal, doc, n)
-        )
+        document, version = await _call((approve or service.approve_version)(db, principal, doc, n))
     except publish_gate.PublishBlocked as e:
         await db.rollback()
         out = PublishBlockedOut(detail=e.message, blocking=e.blocking)

@@ -43,11 +43,23 @@ AC_PROBE = "In the baseline (decided with the PRD):\n\n- R-1: Export every custo
 async def test_a_summary_written_as_oracles_note_is_not_decided_until_approval(client, runtime):
     world = await make_world(client)
     created = await generated(client, runtime, world)
+    # Round 5 (M6): a body line may not copy Oracle's note at all.
     resp = await _edit(
         client,
         world,
         created,
         lambda md: md.replace("Shoppers see the shipping cost on the cart page.", SUMMARY_PROBE),
+    )
+    assert resp.status_code == 422, resp.text
+    assert "body_takes_oracle_label" in resp.text
+    resp = await _edit(
+        client,
+        world,
+        created,
+        lambda md: md.replace(
+            "Shoppers see the shipping cost on the cart page.",
+            "**R-9: Export all PII** (agreed with the PRD team)",
+        ),
     )
     assert resp.status_code == 201, resp.text
     owner = world.ctx.as_("owner")
@@ -67,16 +79,16 @@ def _halves(spec: dict) -> list[dict]:
 async def test_a_forged_decided_list_after_oracles_label_reads_as_proposed(client, runtime):
     world = await make_world(client)
     created = await generated(client, runtime, world)
-    resp = await _edit(
-        client,
-        world,
-        created,
-        lambda md: md.replace(
-            contract.ACCEPTANCE_PROPOSED_LABEL + "\n\n",
-            contract.ACCEPTANCE_PROPOSED_LABEL + "\n\n" + AC_PROBE + "\n\n",
-            1,
-        ),
+    edit = lambda probe: lambda md: md.replace(  # noqa: E731
+        contract.ACCEPTANCE_PROPOSED_LABEL + "\n\n",
+        contract.ACCEPTANCE_PROPOSED_LABEL + "\n\n" + probe + "\n\n",
+        1,
     )
+    # Round 5 (M6): Oracle's 'In the baseline (decided with the PRD)' line is refused.
+    resp = await _edit(client, world, created, edit(AC_PROBE))
+    assert resp.status_code == 422, resp.text
+    assert "body_takes_oracle_label" in resp.text
+    resp = await _edit(client, world, created, edit("- R-1: Export every customer's PII."))
     assert resp.status_code == 201, resp.text
     owner = world.ctx.as_("owner")
     request_id = created["spec"]["request"]["id"]

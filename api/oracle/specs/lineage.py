@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
-from oracle.docs.models import Document, DocumentVersion
+from oracle.docs.models import Citation, Document, DocumentVersion
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import ImportProblem
 from oracle.specs.design import CheckedOutput
@@ -117,6 +117,49 @@ async def approach_approved(db: AsyncSession, version: DocumentVersion) -> bool:
         return True
     av = await version_for_document_version(db, version.id)
     return av is not None and av.status == "approved"
+
+
+def _doc_number(av: ArtifactVersion) -> int:
+    try:
+        return int((av.provenance or {}).get("document_version") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+async def oracle_version(db: AsyncSession, version: DocumentVersion) -> DocumentVersion | None:
+    """The document version Oracle wrote (a spec run's import) that ``version`` follows:
+    the latest one at or before it. None for a spec with no run version."""
+    request = await request_for_document(db, version.document_id)
+    if request is None:
+        return None
+    runs = await db.scalars(
+        select(ArtifactVersion).where(
+            ArtifactVersion.request_id == request.id,
+            ArtifactVersion.provenance["origin"].astext == "run",
+        )
+    )
+    best = max(
+        (av for av in runs if 0 < _doc_number(av) <= version.number),
+        key=_doc_number,
+        default=None,
+    )
+    dv_id = (best.provenance or {}).get("document_version_id") if best else None
+    if not dv_id:
+        return None
+    try:
+        return await db.get(DocumentVersion, uuid.UUID(str(dv_id)))
+    except ValueError:
+        return None
+
+
+async def oracle_citation_keys(db: AsyncSession, version: DocumentVersion) -> set[str] | None:
+    """The citations of the version Oracle wrote that ``version`` follows (its Sources);
+    any other citation was added in an edit (E1, owner, 2026-10-20). None when there is
+    no such version: then every citation reads as added."""
+    oracle = await oracle_version(db, version)
+    if oracle is None:
+        return None
+    return set(await db.scalars(select(Citation.cite_key).where(Citation.version_id == oracle.id)))
 
 
 async def next_number(db: AsyncSession, request_id: uuid.UUID) -> int:
