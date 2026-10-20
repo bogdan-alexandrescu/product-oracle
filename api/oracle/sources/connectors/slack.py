@@ -1,6 +1,7 @@
 """Slack: the allowlisted public and private channels of one user's workspace.
 
-credential ``{"token"}`` (a user or bot token); config ``{"channels": [channel ids]}``.
+credential ``{"token"}`` (a user or bot token); config ``{"channels": [channel ids],
+"since"?: "YYYY-MM-DD"}``. With ``since``, no message posted before that day (UTC) is read.
 
 Direct messages are never ingested (S3): ``D...`` ids and conversations Slack reports as
 ``is_im`` or ``is_mpim`` are refused by ``validate`` and again by ``sync``.
@@ -24,7 +25,7 @@ position in ``conversations.history``, so each sync re-reads ``THREAD_LOOKBACK``
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
@@ -105,6 +106,20 @@ def _channels(config: dict[str, Any]) -> list[str]:
         if channel.startswith("D"):
             raise ConnectorConfigError(f"{channel} is a direct message: DMs are never ingested")
     return channels
+
+
+def _since(config: dict[str, Any]) -> float | None:
+    """``since`` as a Slack timestamp (seconds), or ``None`` when absent."""
+    since = config.get("since")
+    if since is None:
+        return None
+    try:
+        day = date.fromisoformat(since) if isinstance(since, str) else None
+    except ValueError:
+        day = None
+    if day is None:
+        raise ConnectorConfigError("since must be a date (YYYY-MM-DD)")
+    return datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()
 
 
 def _token(credential: dict[str, Any] | None) -> str:
@@ -249,6 +264,7 @@ class SlackConnector:
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         channels = _channels(config)
+        _since(config)
         async with self._session(credential) as slack:
             await slack.call("auth.test")
             for channel in channels:
@@ -261,6 +277,7 @@ class SlackConnector:
         cursor: dict[str, Any] | None,
     ) -> AsyncIterator[SyncEvent]:
         channels = _channels(config)
+        since = _since(config)
         state: dict[str, Any] = {
             "channels": {k: dict(v) for k, v in ((cursor or {}).get("channels") or {}).items()}
         }
@@ -269,11 +286,16 @@ class SlackConnector:
             if base and not base.endswith("/"):
                 base += "/"
             for channel in channels:
-                async for event in self._sync_channel(slack, base, channel, state):
+                async for event in self._sync_channel(slack, base, channel, state, since):
                     yield event
 
     async def _sync_channel(
-        self, slack: _Slack, base: str, channel: str, state: dict[str, Any]
+        self,
+        slack: _Slack,
+        base: str,
+        channel: str,
+        state: dict[str, Any],
+        since: float | None = None,
     ) -> AsyncIterator[SyncEvent]:
         info = await slack.conversation(channel)
         name = info.get("name") or channel
@@ -289,8 +311,13 @@ class SlackConnector:
         params: dict[str, Any] = {"channel": channel}
         if oldest:
             params["oldest"] = _ts_shift(oldest, THREAD_LOOKBACK)
+        if since is not None and float(params.get("oldest") or 0) < since:
+            params["oldest"] = f"{since:.6f}"
         messages = [m async for m in slack.paged("conversations.history", "messages", **params)]
-        messages = sorted((m for m in messages if _keep(m)), key=lambda m: float(m["ts"]))
+        messages = sorted(
+            (m for m in messages if _keep(m) and (since is None or float(m["ts"]) >= since)),
+            key=lambda m: float(m["ts"]),
+        )
 
         newest = oldest
         for message in messages:
