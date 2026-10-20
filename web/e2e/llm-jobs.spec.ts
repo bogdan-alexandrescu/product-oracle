@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, openSection, section, sectionAction, showAll } from "./helpers";
+import { feedbackState, login, openSection, section, sectionAction, showAll } from "./helpers";
 
 /** The review panel's tab, in the visible version view; Feedback shows every section's items. */
-async function openTab(page: Page, name: string | RegExp) {
-  await page.getByRole("tab", { name }).filter({ visible: true }).click();
+async function openTab(page: Page, name: "Feedback" | "History") {
+  await page.getByRole("tab", { name: new RegExp(`^${name}`) }).filter({ visible: true }).click();
   if (name === "Feedback") await showAll(page);
 }
 
@@ -55,6 +55,7 @@ test("suggestion cards: classification, duplicates, edit and accept, and a pushb
   await expect(card).toContainText("(edited)");
   await demand.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(card).toContainText("Accepted");
+  await expect(demand.getByTestId("feedback-state-chip")).toHaveText("Staged");
   await expect(card).toContainText("use “Refine section” on #problem");
 
   // Pushback: reasoning and sources; keeping the call needs a reason.
@@ -106,12 +107,13 @@ test("refine a section from an accepted suggestion: diff preview, accept, next v
   await expect(await openSection(page, "roles")).toContainText("Three fixed roles");
 
   await openTab(page, "Feedback");
+  await feedbackState(page, "Done");
   await expect(feedbackItem(page, "how many teams asked")).toContainText("addressed in v3");
   await expect(feedbackItem(page, "quantify the demand")).toContainText("addressed in v3");
   await expect(feedbackItem(page, "how many teams asked").getByTestId("suggestion")).toContainText("Applied");
 
   // The new version's reports were queued and written.
-  await openTab(page, "Reports");
+  await openTab(page, "History");
   const reports = page.getByTestId("reports-panel").filter({ visible: true });
   await expect(reports.getByRole("region", { name: "Resolution report" })).toContainText("addressed in this version");
   await reports.getByRole("tab", { name: "What changed since v2" }).click();
@@ -153,7 +155,7 @@ test("locked sections offer no refinement", async ({ page }) => {
 test("reports on a version: write, read both tabs, export", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
-  await openTab(page, "Reports");
+  await openTab(page, "History");
   const reports = page.getByTestId("reports-panel").filter({ visible: true });
   await expect(reports).toContainText("No reports yet.");
   await reports.getByRole("button", { name: "Write reports" }).click();
@@ -190,7 +192,7 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
     const card = feedbackItem(page, "how many teams asked").getByTestId("suggestion");
     await expect(card).toContainText("Proposed text for #problem");
     await expect(card.getByRole("button")).toHaveCount(0);
-    await openTab(page, "Jobs");
+    await openTab(page, "History");
     const jobs = page.getByTestId("jobs-panel").filter({ visible: true });
     await expect(jobs.getByTestId("llm-job").first()).toBeVisible();
     // No action buttons; the (i) tip is not an action.
@@ -244,7 +246,7 @@ test("a new comment queues review comments, and Oracle's suggestion appears on i
   await openTab(page, "Feedback");
   const card = feedbackItem(page, "Split the invoice by project").getByTestId("suggestion");
   await expect(card).toContainText("Proposed text for #scope");
-  await openTab(page, "Jobs");
+  await openTab(page, "History");
   await expect(
     page.getByTestId("jobs-panel").filter({ visible: true }).getByTestId("llm-job").first(),
   ).toContainText("1 feedback item handled");

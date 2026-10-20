@@ -95,6 +95,14 @@ const PATHS = {
   back: <path d="M19 12H5M11 6l-6 6 6 6" />,
   "chevron-left": <path d="M15 6l-6 6 6 6" />,
   "chevron-right": <path d="M9 6l6 6-6 6" />,
+  "chevron-down": <path d="M6 9l6 6 6-6" />,
+  "chevron-up": <path d="M6 15l6-6 6 6" />,
+  outline: (
+    <>
+      <rect x="3.5" y="4" width="17" height="16" rx="2" />
+      <path d="M9.5 4v16M5.8 8h1.6M5.8 11.5h1.6" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="6" />

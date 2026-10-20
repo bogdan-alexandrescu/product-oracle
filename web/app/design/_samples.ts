@@ -37,7 +37,7 @@ export const CHIP_KINDS: { kind: ChipKind; label: string }[] = [
 export const ICONS = [
   "home", "requests", "baseline", "prds", "priorities", "roadmap", "runs", "inbox", "settings", "more",
   "plus", "check", "x", "flag", "coin", "pause", "doc", "comment", "ask", "alert", "arrow", "back",
-  "chevron-left", "chevron-right",
+  "chevron-left", "chevron-right", "chevron-down", "chevron-up", "outline",
   "search", "clock", "user", "lock", "grip", "sun", "moon", "monitor", "signout", "folder", "link", "sources",
 ] as const satisfies readonly IconName[];
 

@@ -1,18 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 
 import { SuggestionActions, SuggestionCard, SuggestionForm, useSuggestionDecision } from "@/components/SuggestionCard";
 import { Button, Chip, Empty } from "@/components/ds";
-import { FeedbackStatusChip, InlineError, Quote, SELECT, VerdictChip } from "@/components/review/parts";
+import { FeedbackStatusChip, InlineError, Quote, VerdictChip } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type FeedbackItem, type FeedbackStatus, type Suggestion, type VersionSummary } from "@/lib/api/client";
-import { STATUS_LABEL } from "@/lib/format";
+import { api, unwrap, type FeedbackItem, type FeedbackStatus, type Suggestion } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
+import { sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
-
-const STATUSES = Object.keys(STATUS_LABEL) as FeedbackStatus[];
 
 /** Where a row's section link goes: the section in this version, else the version it was raised on. */
 export type GoTo = {
@@ -20,29 +18,38 @@ export type GoTo = {
   keys: ReadonlySet<string>;
   /** Opens a section of the version on screen. */
   open: (key: string) => void;
+  /** Section headings of the version on screen: "Go to 2.2 Evidence from support". */
+  headings?: ReadonlyMap<string, string>;
 };
 
 function plainClick(e: MouseEvent) {
   return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 }
 
-function SectionLink({ item, doc, current, goTo }: { item: FeedbackItem; doc: string; current: number; goTo?: GoTo }) {
+/** "Go to <section>": the one section link (sectionHref); opens it here when this version has it. */
+export function SectionLink({ item, doc, current, goTo }: { item: FeedbackItem; doc: string; current: number; goTo?: GoTo }) {
   const key = item.section_key!;
   const here = !!goTo?.keys.has(key);
   const n = here ? current : item.raised_on_version;
+  const heading = here ? goTo?.headings?.get(key) : undefined;
   return (
     <Link
-      href={`/documents/${doc}/v/${n}#${key}`}
+      href={sectionHref(doc, n, key)}
       data-section-link={key}
+      data-testid="feedback-goto"
+      data-own-nav
+      title={heading ?? `§${key}`}
       onClick={(e) => {
         if (!here || !plainClick(e)) return;
         e.preventDefault();
         goTo!.open(key);
       }}
-      className="inline-flex h-7 min-w-0 items-center gap-1 truncate text-sm font-semibold text-accent-ink hover:underline"
+      className="inline-flex h-7 min-w-0 items-center gap-1 text-sm font-semibold text-accent-ink hover:underline"
     >
-      Go to <span className="font-mono text-[13px] font-medium">§{key}</span>
-      {n !== current && ` (v${n})`}
+      <span className="min-w-0 truncate">
+        Go to {heading ?? <span className="font-mono text-[13px] font-medium">§{key}</span>}
+      </span>
+      {n !== current && <span className="flex-none">(v{n})</span>}
     </Link>
   );
 }
@@ -51,7 +58,7 @@ function SectionLink({ item, doc, current, goTo }: { item: FeedbackItem; doc: st
  * Resolve and Reopen for an item without an open suggestion; a comment's thread follows
  * its item, as the Comments tab shows it.
  */
-function useTriage(item: FeedbackItem, onChanged?: () => void) {
+export function useTriage(item: FeedbackItem, onChanged?: () => void) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function set(status: "addressed" | "open") {
@@ -133,7 +140,7 @@ function PlainRow({ item, doc, current, goTo, canDecide, onChanged }: RowProps) 
   return <Row item={item} doc={doc} current={current} goTo={goTo} actions={canDecide && <TriageActions item={item} onChanged={onChanged} />} />;
 }
 
-function TriageActions({ item, onChanged }: { item: FeedbackItem; onChanged?: () => void }) {
+export function TriageActions({ item, onChanged }: { item: FeedbackItem; onChanged?: () => void }) {
   const t = useTriage(item, onChanged);
   if (item.status === "superseded") return null;
   return (
@@ -204,121 +211,7 @@ function Row({
   );
 }
 
-/**
- * Every comment, section verdict and Oracle suggestion on the document (`items`, loaded by
- * the page so the tab and header can count them), filterable by status and version;
- * `sectionKeys` keeps only the items raised on those sections (the open one). `focus`
- * scrolls the first item into view once, for a link that arrives at the open feedback.
- */
-export function FeedbackPanel({
-  doc,
-  current,
-  versions,
-  items: all,
-  error,
-  reload,
-  status,
-  onStatus,
-  sectionKeys,
-  goTo,
-  focus = false,
-  onFocused,
-}: {
-  doc: string;
-  current: number;
-  versions: VersionSummary[];
-  items: FeedbackItem[] | undefined;
-  error: string | null;
-  reload: () => void;
-  status: FeedbackStatus | "";
-  onStatus: (s: FeedbackStatus | "") => void;
-  sectionKeys?: ReadonlySet<string> | null;
-  goTo?: GoTo;
-  focus?: boolean;
-  onFocused?: () => void;
-}) {
-  const [version, setVersion] = useState<number | "">("");
-  const listRef = useRef<HTMLOListElement>(null);
-  const items = all?.filter(
-    (f) =>
-      (!status || f.status === status) &&
-      (version === "" || f.raised_on_version === version) &&
-      (!sectionKeys || (!!f.section_key && sectionKeys.has(f.section_key))),
-  );
-
-  // Arriving at the open feedback: the first item at the top of the panel, its actions in view.
-  const ready = !!items && items.length > 0;
-  useEffect(() => {
-    if (!focus || !ready) return;
-    const el = listRef.current?.querySelector<HTMLElement>("[data-testid=feedback-item]");
-    if (!el) return;
-    const box = el.closest<HTMLElement>("[role=tabpanel]");
-    if (box && box.scrollHeight > box.clientHeight + 1 && getComputedStyle(box).overflowY !== "visible") {
-      // The panel scrolls inside itself (wide screens): bring the item up when its actions are below the fold.
-      const offset = el.getBoundingClientRect().top - box.getBoundingClientRect().top;
-      if (offset > box.clientHeight - 120) box.scrollTop += offset - 8;
-    }
-    const top = el.getBoundingClientRect().top;
-    if (top < 0 || top > window.innerHeight * 0.6) el.scrollIntoView({ block: "start" });
-    onFocused?.();
-  }, [focus, ready, onFocused]);
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="flex min-w-0 flex-1">
-          <span className="sr-only">Status</span>
-          <select
-            aria-label="Filter by status"
-            value={status}
-            onChange={(e) => onStatus(e.target.value as FeedbackStatus | "")}
-            className={`${SELECT} w-full`}
-          >
-            <option value="">All statuses</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex min-w-0 flex-1">
-          <span className="sr-only">Raised on</span>
-          <select
-            aria-label="Filter by version"
-            value={version}
-            onChange={(e) => setVersion(e.target.value ? Number(e.target.value) : "")}
-            className={`${SELECT} w-full`}
-          >
-            <option value="">All versions</option>
-            {versions.map((v) => (
-              <option key={v.number} value={v.number}>
-                Raised on v{v.number}
-              </option>
-            ))}
-          </select>
-        </label>
-        {items && (
-          <span className="tnum flex-none text-[13px] font-semibold text-text2">
-            {items.length} item{items.length === 1 ? "" : "s"}
-          </span>
-        )}
-      </div>
-      {error && <ErrorNote>{error}</ErrorNote>}
-      {!all && !error && <Loading />}
-      {items && items.length === 0 && <Empty>No feedback</Empty>}
-      {items && items.length > 0 && (
-        <ol ref={listRef} className="flex flex-col" aria-label="Feedback items">
-          {items.map((f) => (
-            <FeedbackRow key={f.id} item={f} doc={doc} current={current} goTo={goTo} onChanged={reload} />
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-}
-
-/** How this version handled feedback raised on earlier versions; `sectionKeys` as in FeedbackPanel. */
+/** How this version handled feedback raised on earlier versions; `sectionKeys` keeps only those sections' items. */
 export function ResolutionPanel({
   doc,
   n,
