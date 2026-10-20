@@ -191,7 +191,7 @@ level. A finding drawn only from text everyone can read (the brief, the title) i
 restricted. Anything drawn from sources that was never registered (an intake analysed
 before S6) fails closed: others see it as `private` until the author re-runs the
 analysis. The author sees everything (never through a run token: a run token's calls
-carry `x-oracle-run-id`, which only narrows); viewers, commenters, approvers, owners and
+carry `x-oracle-run-id`, which is trusted only as a server-signed value); viewers, commenters, approvers, owners and
 run tokens see each finding at its level in every read: the summary, the question batch,
 composition inputs, proposals, the foundation's list and get routes for intakes, gaps,
 questions, answers and assumption decisions, and the readiness checks (a model-written

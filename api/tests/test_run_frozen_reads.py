@@ -104,12 +104,12 @@ async def test_a_run_without_a_pin_reads_the_stored_score_on_list_routes(client,
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     item = await make_item(ctx, "owner")
     await cite(client, ctx, feat, source_item_id=str(item))
-    from oracle.auth.service import make_session_cookie
+    from oracle.auth.service import make_session_cookie, sign_run_binding
     from oracle.config import get_settings
 
     headers = {
         "Cookie": f"{get_settings().session_cookie_name}={make_session_cookie(ctx.users['owner'])}",
-        "x-oracle-run-id": str(uuid.uuid4()),
+        "x-oracle-run-id": sign_run_binding(ctx.users["owner"].id, uuid.uuid4()),
     }
     theirs = await _get(client, f"{B}/entities", headers)
     mine = await _get(client, f"{B}/entities", ctx.as_("owner"))

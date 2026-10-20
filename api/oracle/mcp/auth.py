@@ -88,7 +88,7 @@ def user_caller(
     credentials = {"cookie": cookie}
     if kind == "run" and run_id is not None:
         # REST sees the creator's session; this marks the call as the run's (S6).
-        credentials[RUN_HEADER] = str(run_id)
+        credentials[RUN_HEADER] = service.sign_run_binding(user.id, run_id)
     return McpCaller(
         tenant_id=user.tenant_id,
         kind=kind,

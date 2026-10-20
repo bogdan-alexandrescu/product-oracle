@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from oracle import confidence
-from oracle.auth.service import make_session_cookie
+from oracle.auth.service import make_session_cookie, sign_run_binding
 from oracle.baseline import scoring
 from oracle.config import get_settings
 from oracle.runs.models import Run
@@ -64,7 +64,7 @@ async def _run_pinned_at(ctx, who: str, as_of: datetime) -> dict[str, str]:
     cookie = make_session_cookie(ctx.users[who])
     return {
         "Cookie": f"{get_settings().session_cookie_name}={cookie}",
-        "x-oracle-run-id": str(run_id),
+        "x-oracle-run-id": sign_run_binding(ctx.users[who].id, run_id),
     }
 
 
@@ -147,7 +147,7 @@ async def test_a_run_without_a_pinned_snapshot_reads_the_stored_score(client, ct
     cookie = make_session_cookie(ctx.users["owner"])
     headers = {
         "Cookie": f"{get_settings().session_cookie_name}={cookie}",
-        "x-oracle-run-id": str(uuid.uuid4()),
+        "x-oracle-run-id": sign_run_binding(ctx.users["owner"].id, uuid.uuid4()),
     }
     theirs, _ = await _read(client, feat, headers)
     mine, _ = await _read(client, feat, ctx.as_("owner"))

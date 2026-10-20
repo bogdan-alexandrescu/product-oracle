@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import func, select, update
 
 from oracle import readiness
-from oracle.auth.service import make_session_cookie
+from oracle.auth.service import make_session_cookie, sign_run_binding
 from oracle.config import get_settings
 from oracle.intake import checks as intake_checks
 from oracle.intake import sharing
@@ -67,7 +67,7 @@ def as_run(ctx) -> dict[str, str]:
     as the run's (oracle.mcp.auth.user_caller)."""
     cookie = make_session_cookie(ctx.users["author"])
     return {"cookie": f"{get_settings().session_cookie_name}={cookie}",
-            "x-oracle-run-id": str(uuid.uuid4())}  # fmt: skip
+            "x-oracle-run-id": sign_run_binding(ctx.users["author"].id, uuid.uuid4())}  # fmt: skip
 
 
 def headers(ctx, who: str) -> dict[str, str]:

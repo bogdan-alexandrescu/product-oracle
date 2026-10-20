@@ -20,8 +20,11 @@ from oracle.config import get_settings
 from oracle.tenancy import tenant_session
 
 # Set by Oracle's MCP server on the in-process REST call a run token makes (it acts for
-# the run's creator). It only ever narrows what the caller sees (S6: a run token is
-# never the author of a finding), so a client sending it itself gains nothing.
+# the run's creator). The value is the run id signed by the server and bound to the
+# acting user (oracle.auth.service.sign_run_binding). A run sees more than people do
+# (S6: the full text of what a finding shared in full), so the header is trusted only
+# when its signature verifies for the authenticated user; a bare or forged run id is
+# ignored and the caller stays the person, with person rules.
 RUN_HEADER = "x-oracle-run-id"
 
 _bearer = HTTPBearer(auto_error=False, description="API token for the agent track")
@@ -118,14 +121,11 @@ async def _bearer_principal(raw: str) -> Principal:
     return Principal(tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id)
 
 
-def _run_of(request: Request) -> uuid.UUID | None:
+def _run_of(request: Request, principal: Principal) -> uuid.UUID | None:
     raw = request.headers.get(RUN_HEADER)
     if not raw:
         return None
-    try:
-        return uuid.UUID(raw)
-    except ValueError:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Bad {RUN_HEADER}") from None
+    return service.read_run_binding(raw, principal.user_id)
 
 
 async def get_principal(
@@ -134,7 +134,7 @@ async def get_principal(
     cookie: Annotated[str | None, Depends(_cookie)],
 ) -> Principal:
     principal = await _authenticate(request, bearer, cookie)
-    run_id = _run_of(request)
+    run_id = _run_of(request, principal)
     return replace(principal, run_id=run_id) if run_id is not None else principal
 
 

@@ -19,7 +19,7 @@ import uuid
 import pytest
 from sqlalchemy import delete, func, select
 
-from oracle.auth.service import make_session_cookie
+from oracle.auth.service import make_session_cookie, sign_run_binding
 from oracle.baseline.models import Proposal
 from oracle.config import get_settings
 from oracle.intake import evidence as ev
@@ -71,7 +71,7 @@ def as_run_of(ctx, who: str) -> dict[str, str]:
     """A run token of a run ``who`` created, as it reaches REST (``as_run`` for others)."""
     cookie = make_session_cookie(ctx.users[who])
     return {"cookie": f"{get_settings().session_cookie_name}={cookie}",
-            "x-oracle-run-id": str(uuid.uuid4())}  # fmt: skip
+            "x-oracle-run-id": sign_run_binding(ctx.users[who].id, uuid.uuid4())}  # fmt: skip
 
 
 async def evidence_hits(client, ctx, intake_id: str, who: str, q: str = "buyers") -> list[dict]:

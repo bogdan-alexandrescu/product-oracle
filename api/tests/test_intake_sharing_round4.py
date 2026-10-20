@@ -21,6 +21,7 @@ from sqlalchemy import select
 
 from oracle import readiness
 from oracle.auth.deps import Principal
+from oracle.auth.service import sign_run_binding
 from oracle.baseline.models import Proposal
 from oracle.intake import checks as intake_checks
 from oracle.jobs import worker
@@ -431,7 +432,7 @@ async def _run_of(ctx, intake_id: str) -> dict[str, str]:
         s.add(run)
         await s.commit()
         run_id = run.id
-    return {**as_run(ctx), "x-oracle-run-id": str(run_id)}
+    return {**as_run(ctx), "x-oracle-run-id": sign_run_binding(ctx.users["author"].id, run_id)}
 
 
 @pytest.mark.parametrize("real_run", [False, True])
