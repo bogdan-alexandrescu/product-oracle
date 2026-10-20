@@ -1,6 +1,6 @@
 import uuid
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -10,6 +10,22 @@ DocumentStatus = Literal["draft", "in_review", "approved"]
 CitationSource = Literal[
     "slack", "notion", "gdocs", "github", "fireflies", "upload", "web", "oracle"
 ]
+
+
+def citation_contract() -> str:
+    """The citation contract as agents read it (draft prompts, push_draft), its sources
+    generated from :data:`CitationSource` so the two cannot drift."""
+    sources = ", ".join(get_args(CitationSource))
+    return (
+        "Citation contract: citations are a list under citations in the YAML front matter; "
+        f"each has id, source (one of: {sources}), ref (a URL to the item; for oracle, the "
+        'baseline item\'s kind and key, e.g. "baseline decision <key>"), title, excerpt and '
+        "retrieved_at (when you read it, ISO 8601). Every [c:id] chip in the body must match "
+        "a citation's id. Oracle refuses a draft with any other source or a chip that "
+        "matches no id."
+    )
+
+
 Verdict = Literal["approved", "changes_requested", "rejected"]
 # O1f: brief sections make up the brief layer; the full layer is every section.
 Layer = Literal["brief", "detail"]

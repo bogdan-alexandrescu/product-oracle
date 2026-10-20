@@ -23,7 +23,7 @@ class Tenant(IdMixin, Base):
 class AuditEvent(TenantScoped, Base):
     __tablename__ = "audit_events"
 
-    # "user:<uuid>", "token:<uuid>" or "system".
+    # "user:<uuid>", "token:<uuid>", "oracle" (oracle.audit.ORACLE) or "system".
     actor: Mapped[str] = mapped_column(Text, nullable=False)
     action: Mapped[str] = mapped_column(Text, nullable=False)
     entity: Mapped[str] = mapped_column(Text, nullable=False)
