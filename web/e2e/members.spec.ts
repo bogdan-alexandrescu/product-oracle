@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, section, selectText, openSection, showAll } from "./helpers";
+import { feedbackState, login, section, selectText, openSection, showAll } from "./helpers";
 
 const memberRow = (page: Page, email: string) => page.getByTestId("member-row").filter({ hasText: email });
 
@@ -84,8 +84,8 @@ test("roles: a viewer reads and exports but has no comment, verdict or approve c
   await selectText(page, "s-5-3", "Choosing a card fills the form");
   await page.waitForTimeout(200);
   await expect(page.getByRole("button", { name: /^Comment/ })).toHaveCount(0);
-  const thread = page.getByTestId("comment").first();
-  await expect(thread).toBeVisible();
+  const thread = page.locator('[data-testid="feedback-item"][data-kind="comment"]').filter({ visible: true }).first();
+  await expect(thread.getByTestId("comment")).toBeVisible();
   await expect(thread.getByRole("button", { name: "Reply" })).toHaveCount(0);
   await expect(thread.getByRole("button", { name: "Resolve" })).toHaveCount(0);
 });
@@ -101,7 +101,7 @@ test("roles: a commenter comments and resolves their own thread, not others'", a
 
   // Someone else's thread: reply yes, resolve no.
   await showAll(page);
-  const theirs = page.getByTestId("comment").first();
+  const theirs = page.locator('[data-testid="feedback-item"][data-kind="comment"]').filter({ visible: true }).first();
   await expect(theirs.getByRole("button", { name: "Reply" })).toBeVisible();
   await expect(theirs.getByRole("button", { name: "Resolve" })).toHaveCount(0);
 
@@ -112,10 +112,14 @@ test("roles: a commenter comments and resolves their own thread, not others'", a
   await dialog.getByLabel("Comment").fill("Which month is this from?");
   await dialog.getByLabel("Comment").press("Control+Enter");
   await expect(dialog).toBeHidden();
-  const mine = page.getByTestId("comment").filter({ hasText: "Which month is this from?" });
+  const mine = page.getByTestId("feedback-item").filter({ visible: true, hasText: "Which month is this from?" });
   await expect(mine).toBeVisible();
   await mine.getByRole("button", { name: "Resolve" }).click();
-  await expect(mine).toHaveCount(0); // resolved threads are hidden by default
+  // Resolved: it leaves the Open list; Done shows it, with Reopen.
+  await expect(mine).toHaveCount(0);
+  await feedbackState(page, "Done");
+  await expect(mine.getByTestId("feedback-state-chip")).toHaveText("Done");
+  await expect(mine.getByRole("button", { name: "Reopen" })).toBeVisible();
 });
 
 test("roles: an approver sets verdicts and publishes a ready PRD, but cannot manage members", async ({ page }) => {
@@ -125,7 +129,9 @@ test("roles: an approver sets verdicts and publishes a ready PRD, but cannot man
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toBeVisible();
   await expect(page.getByTestId("role-note")).toHaveCount(0);
   await showAll(page);
-  await expect(page.getByTestId("comment").first().getByRole("button", { name: "Resolve" })).toBeVisible();
+  await expect(
+    page.locator('[data-testid="feedback-item"][data-kind="comment"]').filter({ visible: true }).first().getByRole("button", { name: "Resolve" }),
+  ).toBeVisible();
   // checkout-redesign carries a critical blocker: Publish opens the screen, which refuses.
   await page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/publish$/);

@@ -28,9 +28,12 @@ import {
   PageHeader,
   Panel,
   Ring,
+  FilterChips,
+  MARK_LABEL,
   ScrollStrip,
   SegmentedControl,
   Sparkline,
+  StatusMark,
   ToGo,
   Wordmark,
   type ButtonVariant,
@@ -416,6 +419,31 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
               </span>
             ))}
           </ScrollStrip>
+        </Body>
+      </Panel>
+
+      <Panel title="Status marks" testId={id("status-marks")}>
+        <Body>
+          {(["approved", "changes_requested", "rejected", "none", "locked"] as const).map((m) => (
+            <State key={m} name={MARK_LABEL[m]}>
+              <StatusMark state={m} size={20} />
+            </State>
+          ))}
+        </Body>
+      </Panel>
+
+      <Panel title="Filter chips" testId={id("filter-chips")}>
+        <Body>
+          <FilterChips
+            label="Show sections"
+            value="review"
+            onChange={() => {}}
+            items={[
+              { value: "all", label: "All", count: 104 },
+              { value: "review", label: "To review", count: 91 },
+              { value: "feedback", label: "Feedback", count: 9 },
+            ]}
+          />
         </Body>
       </Panel>
 

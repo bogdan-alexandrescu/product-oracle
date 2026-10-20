@@ -5,7 +5,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from oracle.docs.schemas import DocumentKind, VersionSource
-from oracle.jobs.schemas import LlmJobsTick
+from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
+from oracle.review.schemas import FeedbackKind
 
 Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap"]
 Depth = Literal["quick", "standard", "deep"]
@@ -391,9 +392,27 @@ class InboxCheckpoint(CheckpointOut):
 class InboxFeedbackItem(BaseModel):
     id: uuid.UUID
     summary: str
+    kind: FeedbackKind
     section_key: str | None = None
     raised_on_version: int
     created_at: datetime
+    # The status of Oracle's live suggestion on the item, if it has one.
+    suggestion_status: SuggestionStatus | None = None
+
+
+class InboxFeedbackCounts(BaseModel):
+    """What a document's open items wait for; the five add up to ``open_count``."""
+
+    # Oracle suggestions to accept or dismiss.
+    suggestions: int = 0
+    # Accepted suggestions, waiting for a refinement.
+    accepted: int = 0
+    # Comments to resolve.
+    comments: int = 0
+    # Section verdicts (changes requested, rejected) to address.
+    verdicts: int = 0
+    # General items.
+    other: int = 0
 
 
 class InboxDocument(BaseModel):
@@ -402,6 +421,10 @@ class InboxDocument(BaseModel):
     title: str
     latest_version: int | None = None
     open_count: int
+    counts: InboxFeedbackCounts = Field(default_factory=InboxFeedbackCounts)
+    # The section of the first open item in the review panel's order (raised on, created),
+    # so the Inbox can link straight to it.
+    first_section_key: str | None = None
     items: list[InboxFeedbackItem]
 
 

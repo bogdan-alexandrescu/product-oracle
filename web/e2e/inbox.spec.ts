@@ -14,7 +14,7 @@ test("inbox lists checkpoints, cost approvals, overruns and open feedback", asyn
   await expect(page.getByTestId("inbox-overruns")).toContainText("Spent $14.20 of $9.00 estimated");
   const feedback = page.getByTestId("inbox-feedback");
   await expect(feedback).toContainText("Checkout redesign PRD");
-  await expect(feedback).toContainText("open item");
+  await expect(feedback).toContainText("1 comment to resolve");
 
   // Approve the cost from the inbox: the run starts and leaves the list.
   await page.getByTestId("inbox-approvals").getByRole("button", { name: "Approve $53.00" }).click();
@@ -26,7 +26,7 @@ test("inbox lists checkpoints, cost approvals, overruns and open feedback", asyn
 
   // Row actions are outline, like every other row action; filled is for the page's primary.
   await expect(checkpoints.getByRole("link", { name: "Decide" }).first()).toHaveAttribute("data-variant", "secondary");
-  await expect(feedback.getByRole("link", { name: /^Resolve/ }).first()).toHaveAttribute("data-variant", "secondary");
+  await expect(feedback.getByRole("link", { name: /^Review/ }).first()).toHaveAttribute("data-variant", "secondary");
 
   // Decide goes to the run, at the decision.
   await checkpoints.getByRole("link", { name: "Decide" }).first().click();
