@@ -7,25 +7,27 @@ version, dropped sections stay staged), discard, the Inbox states and the MCP to
 
 import uuid
 
+import pytest
 from sqlalchemy import func, select
 
 from oracle.docs.models import DocumentVersion
 from oracle.jobs.models import LlmJob
+from oracle.llm import gateway
+from oracle.main import app
 from oracle.mcp.scopes import required_scope
 from oracle.mcp.tools import app_operations
-from oracle.main import app
+from oracle.seed import seed
 from oracle.tenancy import tenant_session
+from tests.claude_account_helpers import add_account, window
 from tests.test_llm_jobs import (
     DRAFT_V1,
     SLUG,
+    FakeClaude,
     V,
     comment,
-    ctx,  # noqa: F401
-    fake,  # noqa: F401
     feedback,
     import_draft,
     jobs,
-    pool,  # noqa: F401
     review_answer,
     tick,
     verdict,
@@ -33,6 +35,25 @@ from tests.test_llm_jobs import (
 from tests.test_members import token_with_role
 
 DOC = f"/v1/documents/{SLUG}"
+
+
+@pytest.fixture
+def fake():
+    claude = FakeClaude()
+    previous = gateway.set_transports(gateway.Transports(plan=claude, api_key=claude))
+    yield claude
+    gateway.set_transports(previous)
+
+
+@pytest.fixture
+async def ctx():
+    r = await seed(token_name="test")
+    return {"tenant_id": r.tenant_id, "headers": {"Authorization": f"Bearer {r.token}"}}
+
+
+@pytest.fixture
+async def pool(ctx):
+    return await add_account(ctx["tenant_id"], "personal", windows={"five_hour": window(0.2)})
 
 
 def suggest(fid: str, key: str, text: str) -> dict:
@@ -160,9 +181,7 @@ async def test_accepting_stages_the_item_and_the_staged_list_says_who_and_where(
     assert (g["section_gone"], g["section_locked"]) == (False, False)
 
 
-async def test_items_staged_on_an_earlier_draft_stay_staged_for_the_latest(
-    client, ctx, pool, fake
-):
+async def test_items_staged_on_an_earlier_draft_stay_staged_for_the_latest(client, ctx, pool, fake):
     ids = await staged_setup(client, ctx, fake)
     # Draft 2 arrives by another path (an agent's import), without the staged changes,
     # and without the Proposed solution section.
@@ -298,9 +317,7 @@ async def test_preview_then_apply_makes_exactly_one_version(client, ctx, pool, f
     assert any(w["op"] == "insert" for w in sol["words"])
 
     before = await version_count(ctx["tenant_id"])
-    resp = await client.post(
-        f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"]
-    )
+    resp = await client.post(f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"])
     assert resp.status_code == 201, resp.text
     v2 = resp.json()
     assert v2["number"] == 2
@@ -380,9 +397,7 @@ async def test_apply_is_refused_when_a_newer_version_appeared(client, ctx, pool,
     preview = (await client.get(f"{DOC}/next-draft/{job['id']}", headers=ctx["headers"])).json()
     assert preview["stale"] is True
     before = await version_count(ctx["tenant_id"])
-    resp = await client.post(
-        f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"]
-    )
+    resp = await client.post(f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"])
     assert resp.status_code == 409 and "newer version" in resp.json()["detail"]
     assert await version_count(ctx["tenant_id"]) == before
     assert len((await staged(client, ctx))["items"]) == 2
@@ -392,9 +407,7 @@ async def test_apply_refuses_a_section_locked_since_the_build(client, ctx, pool,
     await staged_setup(client, ctx, fake)
     job = await build(client, ctx, fake)
     await verdict(client, ctx, "solution", "approved")
-    resp = await client.post(
-        f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"]
-    )
+    resp = await client.post(f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"])
     assert resp.status_code == 409 and "Proposed solution" in resp.json()["detail"]
 
 
@@ -408,9 +421,7 @@ async def test_discard_keeps_everything_staged(client, ctx, pool, fake):
     assert out["draft_job"] is None
     preview = (await client.get(f"{DOC}/next-draft/{job['id']}", headers=ctx["headers"])).json()
     assert preview["discarded"] is True
-    resp = await client.post(
-        f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"]
-    )
+    resp = await client.post(f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"])
     assert resp.status_code == 409
     # A queued build is cancelled by discard.
     resp = await client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"])
@@ -425,9 +436,7 @@ async def test_a_running_build_previews_its_status_only(client, ctx, pool, fake)
     job = resp.json()
     preview = (await client.get(f"{DOC}/next-draft/{job['id']}", headers=ctx["headers"])).json()
     assert preview["job"]["status"] == "queued" and preview["sections"] == []
-    resp = await client.post(
-        f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"]
-    )
+    resp = await client.post(f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"])
     assert resp.status_code == 409
 
 
@@ -446,9 +455,7 @@ async def test_a_section_missing_from_the_answer_stays_staged(client, ctx, pool,
     preview = (await client.get(f"{DOC}/next-draft/{job['id']}", headers=ctx["headers"])).json()
     assert [s["section_key"] for s in preview["sections"]] == ["goal-trace"]
     assert [s["section_key"] for s in preview["skipped"]] == ["solution"]
-    resp = await client.post(
-        f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"]
-    )
+    resp = await client.post(f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"])
     assert resp.status_code == 201
     fb = await feedback(client, ctx)
     assert fb[ids["sol"]]["state"] == "staged"

@@ -8,6 +8,9 @@ from oracle.docs.schemas import DocumentStatus, Layer, Verdict, VersionSummary
 from oracle.jobs.schemas import SuggestionOut
 
 FeedbackStatus = Literal["open", "addressed", "declined", "superseded"]
+# C1e, derived for people: open (waiting for a decision), staged (its suggestion was
+# accepted and waits for the next draft), declined, done (addressed or superseded).
+FeedbackState = Literal["open", "staged", "declined", "done"]
 FeedbackKind = Literal["comment", "section_review", "general"]
 
 
@@ -91,6 +94,9 @@ class FeedbackItemOut(ORM):
     updated_at: datetime
     # What Oracle's review-comments job suggests for this item (not superseded), if any.
     suggestion: SuggestionOut | None = None
+    state: FeedbackState = "open"
+    # Staged: the draft the next build would make (the latest version + 1).
+    staged_for_version: int | None = None
 
 
 class FeedbackPatch(BaseModel):

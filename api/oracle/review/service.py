@@ -18,7 +18,7 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -174,10 +174,12 @@ async def feedback_out(
     from oracle.jobs.service import latest_suggestions
 
     suggestions = await latest_suggestions(session, [i.id for i in items])
+    latest = await latest_numbers(session, {i.document_id for i in items})
     out = []
     for item in items:
         anchor = anchors.get(item.comment_id) if item.comment_id else None
         suggestion = suggestions.get(item.id)
+        state = feedback_state(item.status, suggestion)
         out.append(
             FeedbackItemOut(
                 id=item.id,
@@ -196,9 +198,50 @@ async def feedback_out(
                 created_at=item.created_at,
                 updated_at=item.updated_at,
                 suggestion=SuggestionOut.model_validate(suggestion) if suggestion else None,
+                state=state,
+                staged_for_version=(latest.get(item.document_id) or 0) + 1
+                if state == "staged"
+                else None,
             )
         )
     return out
+
+
+def is_staged(suggestion) -> bool:
+    """C1e: an accepted section-text suggestion not applied in any draft yet."""
+    return (
+        suggestion is not None
+        and suggestion.kind == "section_text"
+        and suggestion.status == "accepted"
+        and suggestion.applied_in_version is None
+    )
+
+
+def feedback_state(status: str, suggestion) -> str:
+    """open / staged / declined / done, from the item's status and its live suggestion."""
+    if status == "declined":
+        return "declined"
+    if status != "open":
+        return "done"
+    if is_staged(suggestion):
+        return "staged"
+    if suggestion is not None and suggestion.status == "applied":
+        return "done"
+    return "open"
+
+
+async def latest_numbers(
+    session: AsyncSession, document_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    ids = set(document_ids)
+    if not ids:
+        return {}
+    rows = await session.execute(
+        select(DocumentVersion.document_id, func.max(DocumentVersion.number))
+        .where(DocumentVersion.document_id.in_(ids))
+        .group_by(DocumentVersion.document_id)
+    )
+    return dict(rows.all())
 
 
 def _feedback_order():
