@@ -638,6 +638,46 @@ async def test_mcp_push_draft_creates_a_document_with_base_zero(client):
         assert missing.is_error and "base_version" in str(missing.content)
 
 
+async def test_mcp_push_draft_without_a_base_takes_the_latest_version(client):
+    """base_version is optional: left out, the draft is taken as written on the document's
+    latest version (a new document when it has none)."""
+    from tests.legacy.helpers import mcp_session
+
+    ctx = await setup(client)  # team-calendar has version 1
+    async with tenant_session(ctx.tenant_id) as s:
+        _, raw = await create_api_token(s, "agent")
+        await s.commit()
+    async with mcp_session(raw) as c:
+        schema = next(t for t in (await c.list_tools()).tools if t.name == "push_draft")
+        assert schema.input_schema["required"] == ["doc", "markdown"]
+        assert "base_version" in schema.input_schema["properties"]
+        changed = replace(DRAFT, "Owner: product.", "Owner: growth.")
+        pushed = await c.call_tool("push_draft", {"doc": "team-calendar", "markdown": changed})
+        assert not pushed.is_error, pushed.content
+        assert pushed.structured_content["number"] == 2
+        fresh = replace(DRAFT, "document: team-calendar", "document: brand-new")
+        created = await c.call_tool("push_draft", {"doc": "brand-new", "markdown": fresh})
+        assert not created.is_error, created.content
+        assert created.structured_content["number"] == 1
+
+
+async def test_mcp_push_draft_with_a_stale_base_is_still_a_conflict(client):
+    from tests.legacy.helpers import mcp_session
+
+    ctx = await setup(client)
+    v2 = replace(DRAFT, "Teams miss shared deadlines.", "Teams miss deadlines (v2).")
+    assert (await import_md(client, ctx.auth, v2, base=1)).status_code == 201
+    async with tenant_session(ctx.tenant_id) as s:
+        _, raw = await create_api_token(s, "agent")
+        await s.commit()
+    stale = replace(DRAFT, "Calendar sync may lag.", "Calendar sync lags.")
+    async with mcp_session(raw) as c:
+        result = await c.call_tool(
+            "push_draft", {"doc": "team-calendar", "markdown": stale, "base_version": 1}
+        )
+        assert result.is_error and "version_conflict" in str(result.content), result.content
+
+
 async def test_publications_refuse_delete_but_a_company_delete_cascades(client):
     ctx = await setup(client)
     await approved(client, ctx)
