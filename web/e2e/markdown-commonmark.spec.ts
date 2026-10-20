@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { blocksText, parseBlocks } from "../lib/markdown";
+import { blocksText, isSafeHref, parseBlocks } from "../lib/markdown";
 
 // E1 (owner, 2026-10-20): the document view reads a section body as the API's check does
 // (CommonMark through markdown-it), so a body the API reads as paragraph text never shows
@@ -38,4 +38,21 @@ test("an image is no text and citation ids may hold ':'", () => {
   if (blocks[0].t !== "p") throw new Error("paragraph expected");
   expect(blocks[0].c.map((n) => n.t)).toEqual(["img", "text", "cite", "text"]);
   expect(blocks[0].c[2]).toEqual({ t: "cite", key: "prd:c1" });
+});
+
+test("a link renders only for http, https, mailto and relative or anchor hrefs", () => {
+  for (const ok of ["https://a.io/x", "http://a.io", "mailto:a@b.co", "/documents/x", "#sec", "./a", "page?x=1"]) {
+    expect(isSafeHref(ok), ok).toBe(true);
+  }
+  for (const bad of ["javascript:alert(1)", " JaVaScRiPt:alert(1)", "java\tscript:alert(1)", "vbscript:x", "data:text/html,x", "ftp://a.io"]) {
+    expect(isSafeHref(bad), bad).toBe(false);
+  }
+});
+
+test("many unclosed image and link openers parse in linear time", () => {
+  for (const unit of ["![", "[", "![a](", "[a]("]) {
+    const started = Date.now();
+    parseBlocks(unit.repeat(50_000));
+    expect(Date.now() - started, unit).toBeLessThan(1500);
+  }
 });
