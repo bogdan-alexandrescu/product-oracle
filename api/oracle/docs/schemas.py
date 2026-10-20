@@ -111,6 +111,21 @@ class SectionVerdict(ORM):
     created_at: datetime
 
 
+class SpecPartState(BaseModel):
+    """E1: the decided/proposed state of a part of a spec version's section, as the
+    document view shows it (the exports and the markdown show the same label)."""
+
+    label: str
+    decided: bool
+    # The template does not have the section: an edit added it ("Proposed · added in an
+    # edit").
+    added: bool = False
+    # The acceptance criteria have two: the half Oracle wrote ("decided") and the proposed
+    # half ("proposed"), which starts at the paragraph ``starts_at``.
+    half: Literal["decided", "proposed"] | None = None
+    starts_at: str | None = None
+
+
 class SectionOut(ORM):
     id: uuid.UUID
     section_key: str
@@ -126,6 +141,9 @@ class SectionOut(ORM):
     # Presenter notes: the section's fenced ``notes`` block only; guidance is never used
     # (O1g).
     notes: str | None = None
+    # Spec versions only (E1): each part's state, in order; empty for other documents and
+    # for a spec's title and "Full version" heading.
+    spec_states: list[SpecPartState] = []
 
 
 class VersionOut(VersionSummary):

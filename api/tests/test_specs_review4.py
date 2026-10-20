@@ -14,7 +14,7 @@ import pytest
 from oracle.specs import contract
 from oracle.swarm import FakeRuntime, set_runtime
 from tests.specs_helpers import get_spec, make_world
-from tests.test_specs_review2 import generated
+from tests.test_specs_review2 import generated, stored_markdown
 from tests.test_specs_review3 import _edit, _sections
 
 
@@ -222,3 +222,141 @@ async def test_sections_added_outside_oracles_parts_are_accepted(client, runtime
     for key in ("rollout-notes", "shopper-quotes", "later"):
         assert sections[key]["added"] is True
         assert sections[key]["label"] == "Proposed · added in an edit"
+
+
+# --------------------------------------------------------------------------- item 2 (b)
+
+ADDED = "## Rollout notes {#rollout-notes}\n\nTen percent first.\n\n"
+DECIDED_LINE = f"**{contract.DECIDED_PRD_LABEL}**"
+ADDED_LINE = f"**{contract.ADDED_LABEL}**"
+PROPOSED_AC_LINE = f"**{contract.PROPOSED_ACCEPTANCE_STATE}**"
+
+
+async def _with_added_section(client, runtime):
+    world = await make_world(client)
+    created = await generated(client, runtime, world)
+    # In the brief too, so the brief export and the slides show it.
+    resp = await _edit(
+        client,
+        world,
+        created,
+        lambda md: _before(APPROACH, ADDED)(md).replace(
+            "\n- requirements\n", "\n- requirements\n- rollout-notes\n", 1
+        ),
+    )
+    assert resp.status_code == 201, resp.text
+    return world, created, created["spec"]["document_slug"]
+
+
+async def test_the_document_view_carries_each_parts_state(client, runtime):
+    world, _, slug = await _with_added_section(client, runtime)
+    viewer = world.ctx.as_("viewer")
+    resp = await client.get(f"/v1/documents/{slug}/versions/2", headers=viewer)
+    assert resp.status_code == 200, resp.text
+    states = {s["section_key"]: s["spec_states"] for s in resp.json()["sections"]}
+    assert [st["label"] for st in states["rollout-notes"]] == ["Proposed · added in an edit"]
+    assert states["rollout-notes"][0]["added"] is True
+    assert states["rollout-notes"][0]["decided"] is False
+    assert [(st["label"], st["decided"]) for st in states["requirements"]] == [
+        (contract.DECIDED_PRD_LABEL, True)
+    ]
+    decided, proposed = states["acceptance-criteria"]
+    assert (decided["half"], decided["decided"], decided["starts_at"]) == ("decided", True, None)
+    assert (proposed["half"], proposed["decided"]) == ("proposed", False)
+    assert proposed["starts_at"] == contract.ACCEPTANCE_PROPOSED_LABEL
+    assert states["approach"][0]["label"] == contract.PROPOSED_STATE
+    assert states["summary"][0]["label"] == contract.PROPOSED_STATE
+    # A PRD has none.
+    prd = (await client.get("/v1/documents/checkout-redesign/versions/1", headers=viewer)).json()
+    assert all(s["spec_states"] == [] for s in prd["sections"])
+    # Once approved, the engineering parts read Decided; the added section never does.
+    await _approve(client, world, slug, 2)
+    resp = await client.get(f"/v1/documents/{slug}/versions/2", headers=viewer)
+    states = {s["section_key"]: s["spec_states"] for s in resp.json()["sections"]}
+    assert states["approach"][0]["label"] == contract.APPROVED_STATE
+    assert states["rollout-notes"][0]["label"] == contract.ADDED_LABEL
+
+
+def _after(text: str, heading: str) -> str:
+    return text[text.index(heading) :]
+
+
+async def test_exports_label_added_sections_and_oracles_parts(client, runtime):
+    world, _, slug = await _with_added_section(client, runtime)
+    viewer = world.ctx.as_("viewer")
+    base = f"/v1/documents/{slug}/versions/2/export"
+    html = (await client.get(f"{base}?format=html&layer=full", headers=viewer)).text
+    rollout = _after(html, "Rollout notes")
+    assert rollout.index(contract.ADDED_LABEL) < rollout.index("Ten percent first.")
+    assert contract.DECIDED_PRD_LABEL in _after(html, "Product requirements")
+    ac = _after(html, "Acceptance criteria")
+    assert ac.index(contract.DECIDED_PRD_LABEL) < ac.index(contract.PROPOSED_ACCEPTANCE_STATE)
+    assert ac.index(contract.PROPOSED_ACCEPTANCE_STATE) < ac.index("Proposed by this spec")
+    # The brief layer, the slides (HTML and the deck API), the PPTX and the markdown.
+    brief = (await client.get(f"{base}?format=html&layer=brief", headers=viewer)).text
+    assert contract.ADDED_LABEL in brief
+    slides = (await client.get(f"{base}?format=html&layer=deck", headers=viewer)).text
+    assert contract.ADDED_LABEL in slides
+    deck = (await client.get(f"/v1/documents/{slug}/versions/2/deck", headers=viewer)).json()
+    assert any(contract.ADDED_LABEL in str(s) for s in deck["slides"])
+    pptx = await client.get(f"{base}?format=pptx&layer=deck", headers=viewer)
+    assert pptx.status_code == 200
+    md = (await client.get(f"{base}?format=md", headers=viewer)).text
+    assert ADDED_LINE in _after(md, "## Rollout notes")
+    # The PDF renders the same HTML (when the renderer is installed).
+    pdf = await client.get(f"{base}?format=pdf&layer=full", headers=viewer)
+    assert pdf.status_code in (200, 503)
+
+
+async def test_the_pptx_slide_of_an_added_section_carries_the_label(client, runtime):
+    import io
+
+    from pptx import Presentation
+
+    world, _, slug = await _with_added_section(client, runtime)
+    resp = await client.get(
+        f"/v1/documents/{slug}/versions/2/export?format=pptx&layer=deck",
+        headers=world.ctx.as_("viewer"),
+    )
+    assert resp.status_code == 200, resp.text
+    texts = [
+        shape.text_frame.text
+        for slide in Presentation(io.BytesIO(resp.content)).slides
+        for shape in slide.shapes
+        if shape.has_text_frame
+    ]
+    assert any(contract.ADDED_LABEL in t for t in texts)
+
+
+async def test_markdown_carries_the_labels_and_round_trips(client, runtime):
+    world, created, slug = await _with_added_section(client, runtime)
+    approver = world.ctx.as_("approver")
+    md = (await client.get(f"/v1/documents/{slug}/versions/2/markdown", headers=approver)).text
+    lines = _after(md, "## Rollout notes").split("\n")
+    assert lines[:3] == ["## Rollout notes {#rollout-notes}", "", ADDED_LINE]
+    assert DECIDED_LINE in _after(md, "## Product requirements").split("\n")[:3]
+    ac = _after(md, "## Acceptance criteria")
+    assert ac.index(DECIDED_LINE) < ac.index(PROPOSED_AC_LINE) < ac.index("Proposed by this")
+    assert contract.strip_state_labels(md) == await stored_markdown(world.ctx.tenant_id, slug, 2)
+    # Pushed back as served, it is the same version; edited, the labels are not stored.
+    from tests.specs_helpers import import_md
+
+    resp = await import_md(client, approver, md, doc=slug)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["number"] == 2
+    resp = await import_md(client, approver, md.replace("Ten percent first.", "Five."), doc=slug)
+    assert resp.status_code == 201, resp.text
+    stored = await stored_markdown(world.ctx.tenant_id, slug, 3)
+    assert "Five." in stored
+    assert not any(f"**{label}**" in stored for label in contract.STATE_LABELS)
+
+
+async def test_get_document_markdown_over_mcp_carries_the_labels(client, runtime):
+    from tests.test_mcp import api_token, mcp_client, text_of
+
+    world, _, slug = await _with_added_section(client, runtime)
+    token = await api_token(world.ctx.tenant_id, "viewer")
+    async with mcp_client(token) as c:
+        md = text_of(await c.call_tool("get_document_markdown", {"doc": slug}))
+    assert ADDED_LINE in _after(md, "## Rollout notes")
+    assert DECIDED_LINE in _after(md, "## Product requirements")

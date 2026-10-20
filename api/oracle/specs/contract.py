@@ -466,6 +466,81 @@ def part_states(key: str, body: str, approved: bool) -> list[PartState]:
     return [PartState(key, part, approved, APPROVED_STATE if approved else PROPOSED_STATE)]
 
 
+# The sections that show no state: the title and the "Full version" heading hold the
+# document together (they are decided, and say where the rest comes from).
+UNLABELLED = (TITLE_ID, FULL_ID)
+
+
+def state_line(label: str) -> str:
+    """A state label as the exports and the markdown show it: a paragraph of its own."""
+    return f"**{label}**"
+
+
+_STATE_LINES = frozenset(state_line(label) for label in STATE_LABELS)
+
+
+def labelled_body(key: str, body: str, approved: bool) -> str:
+    """A section's body with its state labels: at the top, and for the acceptance
+    criteria also before the proposed half (an export renders this)."""
+    if key in UNLABELLED:
+        return body
+    states = part_states(key, body, approved)
+    if len(states) > 1:
+        decided, proposed = split_acceptance(body)
+        body = (
+            f"{decided}\n\n{state_line(states[1].label)}\n\n{ACCEPTANCE_PROPOSED_LABEL}"
+            f"\n\n{proposed}"
+        )
+    return f"{state_line(states[0].label)}\n\n{body}".rstrip()
+
+
+def label_markdown(markdown: str, approved: bool) -> str:
+    """A spec version's markdown with every section's state label after its heading (and
+    before the proposed acceptance criteria). :func:`strip_state_labels` undoes it, so the
+    markdown imports back as the same version."""
+    try:
+        draft = parse_draft(markdown)
+    except DraftError:
+        return markdown
+    lines = draft.markdown.split("\n")
+    inserts: list[tuple[int, list[str]]] = []
+    starts = [s.line - 1 for s in draft.sections] + [len(lines)]
+    for i, s in enumerate(draft.sections):
+        if s.section_key in UNLABELLED:
+            continue
+        head = starts[i] + (0 if lines[starts[i]].lstrip().startswith("#") else 1)
+        states = part_states(s.section_key, s.body_md, approved)
+        inserts.append((head + 1, ["", state_line(states[0].label)]))
+        if len(states) > 1:
+            at = next(
+                (
+                    j
+                    for j in range(head + 1, starts[i + 1])
+                    if lines[j] == ACCEPTANCE_PROPOSED_LABEL and lines[j - 1] == ""
+                ),
+                None,
+            )
+            if at is not None:
+                inserts.append((at, [state_line(states[1].label), ""]))
+    for at, new in sorted(inserts, reverse=True):
+        lines[at:at] = new
+    return "\n".join(lines)
+
+
+def strip_state_labels(markdown: str) -> str:
+    """The markdown without Oracle's state labels (each with the blank line before it):
+    they are shown, never stored, whoever wrote them."""
+    lines = markdown.replace("\r\n", "\n").split("\n")
+    out: list[str] = []
+    for line in lines:
+        if line.strip() in _STATE_LINES:
+            if out and not out[-1].strip():
+                out.pop()
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
 # E1 'Added sections, visible' (owner, 2026-10-20): Oracle's parts an edit may not add a
 # section inside, and the note and labels an added heading may not take.
 PRD_PART_TITLES = {k: SECTIONS_BY_KEY[k].title for k in PRD_PARTS}

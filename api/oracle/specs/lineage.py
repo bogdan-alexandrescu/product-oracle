@@ -110,6 +110,15 @@ async def version_for_document_version(
     )
 
 
+async def approach_approved(db: AsyncSession, version: DocumentVersion) -> bool:
+    """Whether a spec version's approach is approved: the version, or its artifact
+    version."""
+    if version.approved_at is not None:
+        return True
+    av = await version_for_document_version(db, version.id)
+    return av is not None and av.status == "approved"
+
+
 async def next_number(db: AsyncSession, request_id: uuid.UUID) -> int:
     latest = await db.scalar(
         select(func.max(ArtifactVersion.number)).where(ArtifactVersion.request_id == request_id)

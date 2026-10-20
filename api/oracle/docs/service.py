@@ -26,6 +26,7 @@ from oracle.docs.schemas import (
     ImportProblem,
     SectionOut,
     SectionVerdict,
+    SpecPartState,
     VersionOut,
     VersionSource,
     VersionSummary,
@@ -236,6 +237,46 @@ def _template_meta(body: str):
     return version_meta(body)
 
 
+async def is_spec_version(db: AsyncSession, version: DocumentVersion) -> bool:
+    document = await db.get(Document, version.document_id)
+    return document is not None and document.kind == "spec"
+
+
+async def _spec_states(
+    db: AsyncSession, version: DocumentVersion, sections: list[Section]
+) -> dict[str, list[SpecPartState]]:
+    """E1: the state of each part of a spec version's sections (none for other kinds)."""
+    if not await is_spec_version(db, version):
+        return {}
+    from oracle.specs import contract, lineage
+
+    approved = await lineage.approach_approved(db, version)
+    return {
+        s.section_key: [
+            SpecPartState(
+                label=p.label,
+                decided=p.decided,
+                added=p.added,
+                half=p.half,
+                starts_at=contract.ACCEPTANCE_PROPOSED_LABEL if p.half == "proposed" else None,
+            )
+            for p in contract.part_states(s.section_key, s.body_md, approved)
+        ]
+        for s in sections
+        if s.section_key not in contract.UNLABELLED
+    }
+
+
+async def spec_markdown(db: AsyncSession, version: DocumentVersion) -> str:
+    """A version's markdown as it is served (GET .../markdown, MCP get_document_markdown,
+    the markdown export): a spec version's carries its state labels (E1)."""
+    if not await is_spec_version(db, version):
+        return version.markdown
+    from oracle.specs import contract, lineage
+
+    return contract.label_markdown(version.markdown, await lineage.approach_approved(db, version))
+
+
 async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut:
     sections = list(
         await db.scalars(
@@ -248,6 +289,7 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
         )
     )
     verdicts = await _latest_verdicts(db, version.id)
+    states = await _spec_states(db, version, sections)
     source = (await version_sources(db, [version.source_version_id])).get(
         version.source_version_id  # type: ignore[arg-type]
     )
@@ -261,6 +303,7 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
                     "verdict": verdicts.get(s.section_key),
                     # O1g: computed on read, so every version follows the same rule.
                     "notes": layers.presenter_notes(s.body_md) if s.layer == "brief" else None,
+                    "spec_states": states.get(s.section_key, []),
                 }
             )
             for s in sections
@@ -362,6 +405,16 @@ async def import_draft(
         draft_kind = await _draft_kind(db, draft)
         if draft_kind is not None and draft_kind != document.kind:
             raise _kind_mismatch(document.slug, document.kind, draft_kind)
+        if document.kind == "spec":
+            # E1: the state labels a spec's markdown is served with are never stored.
+            from oracle.specs.contract import strip_state_labels
+
+            stripped = strip_state_labels(draft.markdown)
+            if stripped != draft.markdown:
+                named = draft.template, draft.template_version
+                draft = parse_draft(stripped)
+                if draft.template is None:
+                    draft.template, draft.template_version = named
         existing = await db.scalar(
             select(DocumentVersion).where(
                 DocumentVersion.document_id == document.id,

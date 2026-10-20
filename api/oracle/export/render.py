@@ -87,6 +87,8 @@ class ExportVersion:
     # v2 (§7, §16.9): each section's internal claim-to-source links, for the appendix
     # only ({"key", "links": [{"claim", "label", "kind", "confidence"}]}).
     evidence_links: list[dict] = field(default_factory=list)
+    # The markdown the export serves, when it is not the stored one (a spec's, labelled).
+    markdown: str | None = None
 
     @property
     def source_label(self) -> str | None:
@@ -296,8 +298,28 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
     from oracle.trace.evidence import appendix_links
 
     ev.evidence_links = await appendix_links(db, version)
+    if document.kind == "spec":
+        await _label_spec(db, ev)
     await _resolve_theme(db, ev)
     return ev
+
+
+async def _label_spec(db: AsyncSession, ev: ExportVersion) -> None:
+    """E1: every export of a spec version (HTML, PDF, slides, PPTX, markdown) shows each
+    part's decided/proposed state, and 'Proposed · added in an edit' on a section an edit
+    added. The labels go on copies of the sections, never on the stored rows."""
+    from oracle.specs import contract, lineage
+
+    approved = await lineage.approach_approved(db, ev.version)
+    columns = [c.key for c in Section.__table__.columns]
+    labelled = []
+    for s in ev.all_sections:
+        copy = Section(**{c: getattr(s, c) for c in columns})
+        copy.body_md = contract.labelled_body(s.section_key, s.body_md or "", approved)
+        labelled.append(copy)
+    ev.all_sections = labelled
+    ev.sections = list(labelled)
+    ev.markdown = contract.label_markdown(ev.version.markdown, approved)
 
 
 async def _resolve_theme(db: AsyncSession, ev: ExportVersion) -> None:
@@ -828,7 +850,7 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
     the export can still be re-imported.
     """
     banner = f"<!-- {banner_line(ev)} -->\n"
-    markdown = ev.version.markdown
+    markdown = ev.markdown if ev.markdown is not None else ev.version.markdown
     if markdown.startswith("---"):
         m = re.compile(r"^---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)", re.S | re.M).match(
             markdown

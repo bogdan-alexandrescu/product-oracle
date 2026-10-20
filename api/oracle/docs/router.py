@@ -133,7 +133,9 @@ async def get_version_markdown(doc: str, n: int, db: TenantDB) -> PlainTextRespo
         version = await service.get_version_row(db, document, n)
     except service.NotFoundError as exc:
         raise _not_found(exc) from exc
-    return PlainTextResponse(version.markdown, media_type="text/markdown; charset=utf-8")
+    return PlainTextResponse(
+        await service.spec_markdown(db, version), media_type="text/markdown; charset=utf-8"
+    )
 
 
 @router.get("/{doc}/diff", response_model=DiffOut)
