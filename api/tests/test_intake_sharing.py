@@ -456,16 +456,18 @@ async def test_a_run_token_marker_only_narrows(client, fake):
     """The run marker header narrows what a session sees; it never widens it."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     cookie = make_session_cookie(ctx.users["author"])
+    binding = sign_run_binding(ctx.users["author"].id, uuid.uuid4())
     headers = {"cookie": f"{get_settings().session_cookie_name}={cookie}",
-               "x-oracle-run-id": sign_run_binding(ctx.users["author"].id, uuid.uuid4())}  # fmt: skip
+               "x-oracle-run-id": binding}  # fmt: skip
     resp = await client.get(f"/v1/intakes/{intake_id}/summary", headers=headers)
     assert resp.status_code == 200
     assert resp.json()["is_author"] is False and MODEL_GAP not in resp.text
-    # A bare or malformed run id is not a run: the author stays the author.
+    # A bare or malformed run id is not a run, and is refused (fail closed): the request
+    # never quietly acts as the author.
     for bad_value in ("not-a-uuid", str(uuid.uuid4())):
         bad = {**headers, "x-oracle-run-id": bad_value}
         resp = await client.get(f"/v1/intakes/{intake_id}/summary", headers=bad)
-        assert resp.status_code == 200 and resp.json()["is_author"] is True
+        assert resp.status_code == 400 and "is_author" not in resp.text
 
 
 async def test_findings_from_shared_text_only_are_not_restricted(client, fake):

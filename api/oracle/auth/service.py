@@ -104,11 +104,11 @@ def read_run_binding(value: str, user_id: uuid.UUID | None) -> uuid.UUID | None:
     if user_id is None:
         return None
     try:
-        data = _run_serializer().loads(value, max_age=get_settings().session_max_age_seconds)
+        data = _run_serializer().loads(value, max_age=get_settings().run_binding_max_age_seconds)
         if uuid.UUID(data["u"]) != user_id:
             return None
         return uuid.UUID(data["r"])
-    except (BadSignature, KeyError, ValueError, TypeError):
+    except (BadSignature, KeyError, ValueError, TypeError, AttributeError):
         return None
 
 

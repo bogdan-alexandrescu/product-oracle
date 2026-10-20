@@ -125,7 +125,15 @@ def _run_of(request: Request, principal: Principal) -> uuid.UUID | None:
     raw = request.headers.get(RUN_HEADER)
     if not raw:
         return None
-    return service.read_run_binding(raw, principal.user_id)
+    run_id = service.read_run_binding(raw, principal.user_id)
+    if run_id is None:
+        # Fail closed: a header that does not verify must not leave the request acting as
+        # the person (who would see author-only findings a run may not).
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Invalid {RUN_HEADER}: not a run binding issued for this credential",
+        )
+    return run_id
 
 
 async def get_principal(
