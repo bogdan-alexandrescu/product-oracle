@@ -14,10 +14,21 @@ import { useQuery } from "@/lib/use-query";
 type Tab = "resolution" | "changes";
 
 /** A version's reports: how each feedback item was handled, and what changed since an earlier version. */
-export function ReportsPanel({ doc, n, refreshKey }: { doc: string; n: number; refreshKey: number }) {
+export function ReportsPanel({
+  doc,
+  n,
+  refreshKey,
+  initialTab = "resolution",
+}: {
+  doc: string;
+  n: number;
+  refreshKey: number;
+  /** "changes" opens on What changed (where applying a next draft lands, C1e). */
+  initialTab?: Tab;
+}) {
   const { role } = useMe();
   const canAct = hasRole(role, "approver");
-  const [tab, setTab] = useState<Tab>("resolution");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [error, setError] = useState<string | null>(null);
   const q = useQuery(`reports|${doc}|${n}|${refreshKey}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}/reports", { params: { path: { doc, n } } })),

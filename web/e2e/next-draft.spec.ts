@@ -76,7 +76,7 @@ test("build draft 6: one job, one combined preview, apply makes exactly one vers
   // Exactly one new version, with both sections revised, and its 'what changed' report open.
   await expect(page.getByRole("tab", { name: "Reports" }).filter({ visible: true })).toHaveAttribute("aria-selected", "true");
   const reports = page.getByTestId("reports-panel").filter({ visible: true });
-  await reports.getByRole("tab", { name: "What changed since v5" }).click();
+  await expect(reports.getByRole("tab", { name: "What changed since v5" })).toHaveAttribute("aria-selected", "true");
   await expect(reports.getByRole("region", { name: "What changed" })).toContainText("F-38 Outbound check");
   await expect(reports.getByRole("region", { name: "What changed" })).toContainText("Goal trace");
   expect(await versionNumbers(page)).toEqual(["v1", "v2", "v3", "v4", "v5", "v6"]);

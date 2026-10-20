@@ -114,12 +114,12 @@ test("an accepted suggestion goes into the next draft: one build, diff preview, 
   await expect(feedbackItem(page, "quantify the demand").getByTestId("feedback-state")).toHaveText("Addressed in v3");
   await expect(feedbackItem(page, "how many teams asked").getByTestId("suggestion")).toContainText("Applied");
 
-  // The new version's reports were queued and written.
+  // The new version's reports were queued and written; applying lands on what changed.
   await openTab(page, "Reports");
   const reports = page.getByTestId("reports-panel").filter({ visible: true });
-  await expect(reports.getByRole("region", { name: "Resolution report" })).toContainText("addressed in this version");
-  await reports.getByRole("tab", { name: "What changed since v2" }).click();
   await expect(reports.getByRole("region", { name: "What changed" })).toContainText("1. Problem");
+  await reports.getByRole("tab", { name: "Resolution report" }).click();
+  await expect(reports.getByRole("region", { name: "Resolution report" })).toContainText("addressed in this version");
 });
 
 test("refine from an approver's instruction alone, editing before accepting", async ({ page }) => {

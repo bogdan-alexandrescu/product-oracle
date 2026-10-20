@@ -131,10 +131,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [composing, setComposing] = useState<Selection | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  // ?tab=reports opens on the version's reports: where applying a next draft lands (C1e).
-  const [tab, setTab] = useState<Tab>(() =>
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "reports" ? "reports" : "comments",
+  // ?tab=reports opens on the version's 'what changed' report: where applying a next draft lands (C1e).
+  const [landedOnReports] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "reports",
   );
+  const [tab, setTab] = useState<Tab>(landedOnReports ? "reports" : "comments");
   const [scope, setScope] = useState<Scope>("section");
   const [refreshKey, setRefreshKey] = useState(0);
   // O1f: the brief or the whole version; the choice is remembered per user. A comment
@@ -685,7 +686,9 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             ))}
           </ol>
         )}
-        {tab === "reports" && <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} />}
+        {tab === "reports" && (
+          <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} initialTab={landedOnReports ? "changes" : "resolution"} />
+        )}
         {tab === "jobs" && <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />}
       </div>
       {version && (
