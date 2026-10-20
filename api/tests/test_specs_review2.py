@@ -19,6 +19,7 @@ from oracle.v2.models import ArtifactVersion, DocumentSectionLink
 from tests.fixtures import draft
 from tests.specs_helpers import (
     PRD,
+    adopt,
     design_json,
     get_run,
     get_spec,
@@ -319,6 +320,8 @@ async def test_regenerate_changes_nothing_until_its_run_imports(client, runtime)
     v2 = draft("prd_v1.md").replace("wallet payments", "wallet and bank payments")
     assert (await import_md(client, owner, v2)).status_code == 201
     await client.post(f"/v1/documents/{PRD}/versions/2/approve", headers=owner)
+    # E1: PRD v2 adopts the spec's requirements (a regeneration is refused otherwise).
+    await adopt(world, 2)
     resp = await client.post(
         f"/v1/spec-requests/{request_id}/regenerate", json={"reason": "v2"}, headers=approver
     )

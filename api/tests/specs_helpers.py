@@ -175,6 +175,27 @@ async def make_world(client, name: str = "Example Co", approve: bool = True) -> 
         return World(ctx, doc.id, v1.id, shipping.id, cards.id, criterion.id, feature.id)
 
 
+async def adopt(world: World, number: int) -> None:
+    """PRD version ``number`` adopts both requirements (E1: a section link on it), as the
+    fixture's v1 does; links made without a section hash are not carried forward."""
+    async with tenant_session(world.ctx.tenant_id) as s:
+        version_id = await s.scalar(
+            select(DocumentVersion.id).where(
+                DocumentVersion.document_id == world.prd_id, DocumentVersion.number == number
+            )
+        )
+        s.add_all(
+            [
+                DocumentSectionLink(document_id=world.prd_id, version_id=version_id,
+                                    section_key="s-5-2", kind="implements",
+                                    entity_id=world.shipping),
+                DocumentSectionLink(document_id=world.prd_id, version_id=version_id,
+                                    section_key="s-5-1", kind="implements", entity_id=world.cards),
+            ]
+        )  # fmt: skip
+        await s.commit()
+
+
 async def add_approver(ctx: Ctx, email: str = "eng-lead@example.com") -> User:
     async with tenant_session(ctx.tenant_id) as s:
         user = User(email=email, password_hash="x", role="approver")

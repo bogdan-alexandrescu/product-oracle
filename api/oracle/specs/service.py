@@ -137,13 +137,15 @@ async def _linked_sections(
     db: AsyncSession, document_id: uuid.UUID, version_id: uuid.UUID, entity_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, list[str]]:
     """PRD section keys that link each requirement (section links on the version, or
-    document-wide ones)."""
+    document-wide ones). E1 (owner, 2026-10-20): a link of any kind except 'mentions' is
+    the PRD adopting the requirement; a mention is not."""
     if not entity_ids:
         return {}
     rows = await db.execute(
         select(DocumentSectionLink.entity_id, DocumentSectionLink.section_key).where(
             DocumentSectionLink.document_id == document_id,
             DocumentSectionLink.entity_id.in_(entity_ids),
+            DocumentSectionLink.kind != "mentions",
             (DocumentSectionLink.version_id == version_id)
             | DocumentSectionLink.version_id.is_(None),
         )
@@ -164,10 +166,29 @@ async def _requirements(db: AsyncSession, ids: list[uuid.UUID]) -> list[Entity]:
     wrong = [f"{e.key} ({e.type})" for e in rows.values() if e.type != "requirement"]
     if wrong:
         raise Invalid(f"not requirements: {', '.join(wrong)}")
-    rejected = [e.key for e in rows.values() if e.status == "rejected"]
-    if rejected:
-        raise Invalid(f"rejected requirements cannot be specified: {', '.join(rejected)}")
     return [rows[i] for i in dict.fromkeys(ids)]
+
+
+async def _adopted(
+    db: AsyncSession, prd: Document, version: DocumentVersion, ids: list[uuid.UUID]
+) -> tuple[list[Entity], dict[uuid.UUID, list[str]]]:
+    """The requirements ``ids`` and the PRD sections that adopt each, or 422 naming every
+    one that ``version`` of the PRD does not adopt (E1): a rejected requirement, or one
+    with no section link other than a mention on that version or the whole document.
+    Checked when a spec is requested and when it is regenerated."""
+    entities = await _requirements(db, ids)
+    linked = await _linked_sections(db, prd.id, version.id, [e.id for e in entities])
+    rejected = [e.key for e in entities if e.status == "rejected"]
+    outside = [e.key for e in entities if e.status != "rejected" and not linked.get(e.id)]
+    problems = []
+    if rejected:
+        problems.append(f"rejected requirements cannot be specified: {', '.join(rejected)}")
+    if outside:
+        verb = "is" if len(outside) == 1 else "are"
+        problems.append(f"{', '.join(outside)} {verb} not in PRD v{version.number}")
+    if problems:
+        raise Invalid("; ".join(problems))
+    return entities, linked
 
 
 async def _acceptance(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, list[str]]:
@@ -220,19 +241,14 @@ async def create_request(
 ) -> tuple[uuid.UUID, uuid.UUID]:
     """(spec request id, draft run id). One transaction: the requests, the run, the audit."""
     prd, version = await _approved_prd(db, body.prd, body.prd_version)
-    entities = await _requirements(db, list(body.requirement_ids))
+    # E1: the spec lists under "Decided in the approved PRD" only requirements that PRD
+    # version adopted (a section link on it, or a document-wide one, not a mention).
+    entities, linked = await _adopted(db, prd, version, list(body.requirement_ids))
     sections = await _section_rows(db, version.id)
     keys = [s.section_key for s in sections]
     unknown = [k for k in body.section_keys if k not in keys]
     if unknown:
         raise Invalid(f"sections not in {prd.slug} v{version.number}: {', '.join(unknown)}")
-    linked = await _linked_sections(db, prd.id, version.id, [e.id for e in entities])
-    # E1: the spec lists under "Decided in the approved PRD" only requirements that PRD
-    # version adopted (a section link on it, or a document-wide one).
-    outside = [e.key for e in entities if not linked.get(e.id)]
-    if outside:
-        verb = "is" if len(outside) == 1 else "are"
-        raise Invalid(f"{', '.join(outside)} {verb} not in PRD v{version.number}")
     wanted = set(body.section_keys) | {k for ks in linked.values() for k in ks if k in keys}
     if not wanted:
         raise Invalid(
@@ -372,6 +388,8 @@ def _regeneration_for(request: ArtifactRequest, run: Run | None) -> dict[str, An
 
 
 async def _apply_regeneration(db: AsyncSession, request: ArtifactRequest, run: Run) -> None:
+    """Move the request (and its flow and wireframe requests) to the regeneration's PRD
+    version and sections: only once its run's spec is imported."""
     regen = _regeneration_for(request, run)
     if regen is None:
         return
@@ -402,7 +420,24 @@ async def _inputs(
         for e in await db.scalars(select(Entity).where(Entity.id.in_(request.requirement_ids)))
     }
     linked = await _linked_sections(db, prd.id, version.id, list(entities))
-    acceptance = await _acceptance(db, list(entities))
+    # A second guard (E1): only requirements this PRD version adopts are written into the
+    # spec; any other (unlinked since, only mentioned, rejected or deleted) is dropped and
+    # reported.
+    adopted = [
+        e
+        for i in request.requirement_ids
+        if (e := entities.get(i)) is not None
+        and e.type == "requirement"
+        and e.status != "rejected"
+        and linked.get(i)
+    ]
+    kept = {e.id for e in adopted}
+    dropped = tuple(
+        entities[i].key if i in entities else str(i)
+        for i in request.requirement_ids
+        if i not in kept
+    )
+    acceptance = await _acceptance(db, [e.id for e in adopted])
     params = request.params or {}
     feature = None
     if params.get("feature_id"):
@@ -418,8 +453,7 @@ async def _inputs(
             section_keys=tuple(k for k in linked.get(e.id, []) if k in sections),
             acceptance=tuple(acceptance.get(e.id, [])),
         )
-        for i in request.requirement_ids
-        if (e := entities.get(i)) is not None
+        for e in adopted
     )
     inputs = contract.SpecInputs(
         slug=params.get("document_slug") or "",
@@ -435,6 +469,7 @@ async def _inputs(
         request_id=str(request.id),
         run_id=str(run.id) if run else None,
         feature=feature,
+        dropped=dropped,
     )
     return inputs, prd, version
 
@@ -537,7 +572,7 @@ async def prompt_lines(db: AsyncSession, run: Run) -> list[str]:
     return lines
 
 
-def _provenance(run: Run, request: ArtifactRequest, version: DocumentVersion) -> dict[str, Any]:
+def _provenance(run: Run, inputs: contract.SpecInputs, version: DocumentVersion) -> dict[str, Any]:
     """Run provenance (§16.24): never a credential."""
     settings = get_runtime_settings()
     return {
@@ -549,8 +584,8 @@ def _provenance(run: Run, request: ArtifactRequest, version: DocumentVersion) ->
         "prd_version_id": str(version.id),
         "prd_document_id": str(version.document_id),
         "prd_version": version.number,
-        "requirement_ids": [str(r) for r in request.requirement_ids],
-        "section_keys": list(request.section_keys),
+        "requirement_ids": [r.id for r in inputs.requirements],
+        "section_keys": [k for k, _ in inputs.sections],
         "source_snapshot_id": str(run.snapshot_id) if run.snapshot_id else None,
     }
 
@@ -570,10 +605,7 @@ async def import_spec(
             inputs, prd, version = await _inputs(s, request, run_row or run)
         except Invalid as exc:
             return {"error": str(exc)}
-        # A proposed regeneration moves the request to its PRD version now, as it imports.
-        await _apply_regeneration(s, request, run_row or run)
-        await s.flush()
-        provenance = _provenance(run_row or run, request, version)
+        provenance = _provenance(run_row or run, inputs, version)
         params = request.params or {}
         # Plain ids: a refused import rolls the session back and expires its objects.
         request_id, version_id = request.id, version.id
@@ -581,6 +613,17 @@ async def import_spec(
 
         composed = contract.compose(files.get("spec.md") or "", inputs)
         out["spec_check"] = [p.as_json() for p in composed.problems]
+        if inputs.dropped:
+            out["dropped_requirements"] = list(inputs.dropped)
+            out["spec_check"].append(
+                contract.Problem(
+                    "requirement_not_adopted",
+                    f"PRD {prd.slug} v{version.number} does not adopt "
+                    f"{', '.join(inputs.dropped)} (no section link other than a mention, or "
+                    "rejected): left out of the spec",
+                    severity="warning",
+                ).as_json()
+            )
         if "spec.md" not in files:
             composed.markdown = None
             out["spec_check"].append(
@@ -641,15 +684,23 @@ async def import_spec(
         # Fresh objects after import_draft's commit.
         request = await s.get(ArtifactRequest, request_id)
         assert request is not None
-        # Again: a refused spec import rolled the session back.
         run_row = await s.get(Run, run.id)
-        await _apply_regeneration(s, request, run_row or run)
+        regenerating = _regeneration_for(request, run_row or run) is not None
+        # A proposed regeneration moves the request to its PRD version only once its spec
+        # is imported; a refused one leaves the spec (and its design) as it was.
+        if spec_ok:
+            await _apply_regeneration(s, request, run_row or run)
         design_status = "skipped"
-        if params.get("design", True):
+        if regenerating and not spec_ok:
+            out["design"] = {
+                "skipped": "the regeneration's spec.md was not imported: its design is not "
+                "recorded either"
+            }
+        elif params.get("design", True):
             check = check_design(
                 files.get("design.json"),
                 prd_sections={k for k, _ in await _section_keys(s, version_id)},
-                requirement_ids={str(r) for r in request.requirement_ids},
+                requirement_ids={r.id for r in inputs.requirements},
                 screens=int(params.get("screens") or 3),
             )
             out["design"] = check.as_json()
@@ -1212,6 +1263,8 @@ async def regenerate(
             f"{prd.slug} v{version.number} is older than v{current.number}, the version this "
             "spec is built from: regenerate from it or a newer approved version"
         )
+    # E1: every requirement of the spec must be adopted by the version it is rebuilt from.
+    await _adopted(db, prd, version, list(request.requirement_ids))
     run = await db.get(Run, request.run_id) if request.run_id else None
     if run is not None and run.status not in ("succeeded", "failed", "cancelled"):
         raise SpecError(f"run {run.id} is still {run.status}: finish or cancel it first")

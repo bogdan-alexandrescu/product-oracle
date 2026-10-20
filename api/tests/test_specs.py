@@ -20,6 +20,7 @@ from tests.fixtures import draft
 from tests.specs_helpers import (
     PRD,
     add_approver,
+    adopt,
     design_json,
     get_run,
     get_spec,
@@ -378,6 +379,8 @@ async def test_regeneration_is_a_proposed_draft_run(client, runtime):
     )
     assert resp.status_code == 422
     await client.post(f"/v1/documents/{PRD}/versions/2/approve", headers=owner)
+    # E1: PRD v2 adopts the spec's requirements (a regeneration is refused otherwise).
+    await adopt(world, 2)
     resp = await client.post(
         f"/v1/spec-requests/{request_id}/regenerate",
         json={"reason": "The payment step changed"},

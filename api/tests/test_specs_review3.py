@@ -9,20 +9,35 @@
 3. The static check of design files is linear.
 """
 
+import uuid
+
 import pytest
-from sqlalchemy import update
+import yaml
+from sqlalchemy import delete, select, update
 
 from oracle.baseline.models import Entity
+from oracle.docs.models import DocumentVersion
 from oracle.specs import contract
-from oracle.swarm import FakeRuntime, set_runtime
+from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
+from oracle.v2.models import DocumentSectionLink
+from tests.fixtures import draft
 from tests.specs_helpers import (
+    PRD,
+    design_json,
+    get_run,
     get_spec,
     import_md,
     make_world,
+    pending,
+    request_spec,
+    spec_md,
+    start,
+    tick,
 )
 from tests.test_specs_review2 import (
     REFUSED,
+    SECTIONS,
     generated,
     stored_markdown,
     version_count,
@@ -246,3 +261,170 @@ async def test_an_edit_is_checked_against_the_prd_versions_text_not_todays(clien
         lambda md: md.replace("A shipping quote service", "A cached shipping quote service"),
     )
     assert resp.status_code == 201, resp.text
+
+
+# --------------------------------------------------------------------------- item 2
+
+
+async def _link(world, version_id, entity_id, key: str, kind: str = "implements") -> None:
+    async with tenant_session(world.ctx.tenant_id) as s:
+        s.add(
+            DocumentSectionLink(
+                document_id=world.prd_id, version_id=version_id, section_key=key, kind=kind,
+                entity_id=entity_id,
+            )
+        )  # fmt: skip
+        await s.commit()
+
+
+async def _approved_v2(client, world) -> uuid.UUID:
+    """PRD v2, approved. Its links are not carried forward (the fixture's links have no
+    section hash): each test links what v2 adopts."""
+    owner = world.ctx.as_("owner")
+    v2 = draft("prd_v1.md").replace("wallet payments", "wallet and bank payments")
+    assert (await import_md(client, owner, v2)).status_code == 201
+    resp = await client.post(f"/v1/documents/{PRD}/versions/2/approve", headers=owner)
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(world.ctx.tenant_id) as s:
+        return await s.scalar(
+            select(DocumentVersion.id).where(
+                DocumentVersion.document_id == world.prd_id, DocumentVersion.number == 2
+            )
+        )
+
+
+async def _spec_on_v1(client, runtime, world) -> str:
+    """A spec built from PRD v1 for both requirements, its run finished."""
+    owner = world.ctx.as_("owner")
+    created = await generated(client, runtime, world)
+    run = await get_run(client, owner, created["run_id"])
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{pending(run)['id']}/decide",
+        json={"decision": "approved"},
+        headers=owner,
+    )
+    assert resp.status_code == 200, resp.text
+    return created["spec"]["request"]["id"]
+
+
+async def _regenerate(client, world, request_id, status=201, **body):
+    resp = await client.post(
+        f"/v1/spec-requests/{request_id}/regenerate",
+        json={"reason": "PRD v2", **body},
+        headers=world.ctx.as_("approver"),
+    )
+    assert resp.status_code == status, resp.text
+    return resp.json()
+
+
+async def test_regenerate_to_a_version_that_did_not_carry_a_requirement_is_refused(client, runtime):
+    world = await make_world(client)
+    request_id = await _spec_on_v1(client, runtime, world)
+    v2 = await _approved_v2(client, world)
+    # PRD v2 adopts the saved-cards requirement; the shipping-cost link was not carried.
+    await _link(world, v2, world.cards, "s-5-1")
+    body = await _regenerate(client, world, request_id, status=422)
+    assert body["detail"] == "req-shipping-cost is not in PRD v2"
+
+
+async def test_regenerate_with_a_requirement_rejected_since_is_refused(client, runtime):
+    world = await make_world(client)
+    request_id = await _spec_on_v1(client, runtime, world)
+    v2 = await _approved_v2(client, world)
+    await _link(world, v2, world.cards, "s-5-1")
+    await _link(world, v2, world.shipping, "s-5-2")
+    async with tenant_session(world.ctx.tenant_id) as s:
+        await s.execute(update(Entity).where(Entity.id == world.shipping).values(status="rejected"))
+        await s.commit()
+    body = await _regenerate(client, world, request_id, status=422)
+    assert "req-shipping-cost" in body["detail"]
+    assert "req-saved-cards" not in body["detail"]
+
+
+async def test_a_mentions_link_does_not_adopt_a_requirement(client, runtime):
+    world = await make_world(client)
+    async with tenant_session(world.ctx.tenant_id) as s:
+        r4 = Entity(type="requirement", key="R4", title="R4", status="confirmed", origin="user")
+        s.add(r4)
+        await s.commit()
+    await _link(world, world.prd_v1, r4.id, "s-5-1", kind="mentions")
+    body = await request_spec(
+        client, world, status=422, requirement_ids=[str(r4.id)], section_keys=["s-5-1"]
+    )
+    assert body["detail"] == "R4 is not in PRD v1"
+    # Any other kind adopts it.
+    await _link(world, world.prd_v1, r4.id, "s-5-1", kind="tests")
+    await request_spec(client, world, requirement_ids=[str(r4.id)], section_keys=["s-5-1"])
+
+
+async def test_regenerate_refuses_a_requirement_v2_only_mentions(client, runtime):
+    world = await make_world(client)
+    request_id = await _spec_on_v1(client, runtime, world)
+    v2 = await _approved_v2(client, world)
+    await _link(world, v2, world.cards, "s-5-1")
+    await _link(world, v2, world.shipping, "s-5-2", kind="mentions")
+    body = await _regenerate(client, world, request_id, status=422)
+    assert body["detail"] == "req-shipping-cost is not in PRD v2"
+
+
+async def test_import_drops_and_reports_a_requirement_no_longer_adopted(client, runtime):
+    world = await make_world(client)
+    owner = world.ctx.as_("owner")
+    request_id = await _spec_on_v1(client, runtime, world)
+    v2 = await _approved_v2(client, world)
+    await _link(world, v2, world.cards, "s-5-1")
+    await _link(world, v2, world.shipping, "s-5-2")
+    proposal = await _regenerate(client, world, request_id)
+    # The link goes before the run imports.
+    async with tenant_session(world.ctx.tenant_id) as s:
+        await s.execute(
+            delete(DocumentSectionLink).where(
+                DocumentSectionLink.version_id == v2,
+                DocumentSectionLink.entity_id == world.shipping,
+            )
+        )
+        await s.commit()
+    runtime.script["spec_draft"] = [
+        Outcome(artifacts={"spec.md": spec_md(), "design.json": design_json(world.reqs, SECTIONS)})
+    ]
+    await start(client, world.ctx.as_("approver"), proposal["run_id"])
+    await tick(client, owner)
+    run = await get_run(client, owner, proposal["run_id"])
+    imported = pending(run)["payload"]["import"]
+    assert imported["dropped_requirements"] == ["req-shipping-cost"]
+    assert any(p["code"] == "requirement_not_adopted" for p in imported["spec_check"])
+    spec = await get_spec(client, owner, request_id)
+    assert spec["latest_version"] == 2
+    markdown = await stored_markdown(world.ctx.tenant_id, spec["document_slug"], 2)
+    front = yaml.safe_load(markdown.split("---")[1])
+    assert front["spec"]["requirement_ids"] == [str(world.cards)]
+    assert "req-shipping-cost" not in markdown.split("{#requirements}")[1].split("\n## ")[0]
+
+
+async def test_a_regeneration_whose_spec_import_fails_leaves_the_request_on_its_version(
+    client, runtime
+):
+    world = await make_world(client)
+    owner = world.ctx.as_("owner")
+    request_id = await _spec_on_v1(client, runtime, world)
+    before = (await get_spec(client, owner, request_id))["request"]
+    v2 = await _approved_v2(client, world)
+    await _link(world, v2, world.cards, "s-5-1")
+    await _link(world, v2, world.shipping, "s-5-2")
+    proposal = await _regenerate(client, world, request_id)
+    runtime.script["spec_draft"] = [
+        Outcome(
+            artifacts={
+                "spec.md": spec_md(skip=("approach",)),
+                "design.json": design_json(world.reqs, SECTIONS),
+            }
+        )
+    ]
+    await start(client, world.ctx.as_("approver"), proposal["run_id"])
+    await tick(client, owner)
+    run = await get_run(client, owner, proposal["run_id"])
+    assert "error" in pending(run)["payload"]["import"]
+    after = await get_spec(client, owner, request_id)
+    assert after["latest_version"] == 1
+    assert after["request"]["source_version_id"] == before["source_version_id"]
+    assert after["request"]["section_keys"] == before["section_keys"]

@@ -185,6 +185,8 @@ class SpecInputs:
     request_id: str | None = None
     run_id: str | None = None
     feature: str | None = None
+    # Keys of the request's requirements the PRD version does not adopt (left out).
+    dropped: tuple[str, ...] = ()
 
 
 @dataclass
