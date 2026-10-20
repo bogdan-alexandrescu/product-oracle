@@ -56,6 +56,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -80,6 +81,7 @@ OVERLAP = timedelta(days=1)
 SERIES_PAGES = 10
 MAX_SERIES = 200
 MAX_MEETINGS = 2000
+MAX_LABELS = 1000
 
 AUTH_CODES = {"auth_failed", "unauthorized", "unauthenticated", "forbidden", "invalid_api_key"}
 RATE_CODES = {"too_many_requests", "rate_limited", "rate_limit_exceeded"}
@@ -142,10 +144,40 @@ def _iso(value: datetime) -> str:
 
 
 def _config_date(config: dict[str, Any], key: str) -> datetime | None:
+    value = config.get(key)
+    if value is None or value == "":
+        return None
+    # Numbers (and booleans, which are ints) would read as epoch milliseconds.
+    if not isinstance(value, str):
+        raise ConnectorConfigError(f"{key} must be an ISO date (YYYY-MM-DD)")
     try:
-        return _parse_date(config.get(key))
+        parsed = _parse_date(value)
+        # date_to is used as the day after it: the last representable day cannot be.
+        if parsed is not None:
+            parsed + timedelta(days=1)
+        return parsed
     except ValueError as e:
         raise ConnectorConfigError(f"{key} must be an ISO date (YYYY-MM-DD)") from e
+    except OverflowError as e:
+        raise ConnectorConfigError(f"{key} is out of range") from e
+
+
+def _retry_after(value: str | None) -> float | None:
+    """Retry-After in seconds, or as an HTTP date; None when unreadable."""
+    if not value:
+        return None
+    try:
+        return max(float(value), 0.0)
+    except ValueError:
+        pass
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    wait = (when - datetime.now(UTC)).total_seconds()
+    return wait if wait > 0 else None
 
 
 def _strings(config: dict[str, Any], key: str, limit: int) -> list[str]:
@@ -279,6 +311,8 @@ def selection(config: dict[str, Any]) -> Selection:
         isinstance(k, str) and isinstance(v, str) for k, v in labels.items()
     ):
         raise ConnectorConfigError("labels must map strings to strings")
+    if len(labels) > MAX_LABELS:
+        raise ConnectorConfigError(f"labels takes at most {MAX_LABELS} entries")
     titles = _strings(config, "title_contains", MAX_MEETINGS)
     return Selection(
         mode=mode,
@@ -349,6 +383,8 @@ def _range(date_from: date | None, date_to: date | None) -> dict[str, Any]:
     if date_from:
         variables["fromDate"] = _iso(datetime.combine(date_from, datetime.min.time(), UTC))
     if date_to:
+        if date_to >= date.max:
+            raise ConnectorConfigError("the end date is out of range")
         end = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), UTC)
         variables["toDate"] = _iso(end - timedelta(milliseconds=1))
     return variables
@@ -420,6 +456,11 @@ def _participants(transcript: dict[str, Any]) -> list[str]:
     return list(seen)
 
 
+class FirefliesForbidden(ConnectorAuthError):
+    """Fireflies refused one request ("forbidden"): the key may lack access to it (a
+    plan or team permission), which does not mean the key itself was revoked."""
+
+
 class _Fireflies:
     def __init__(self, client: httpx.AsyncClient, api_key: str):
         self.client = client
@@ -429,21 +470,29 @@ class _Fireflies:
         response = await self.client.post(
             API_URL, json={"query": query, "variables": variables}, headers=self.headers
         )
-        retry = response.headers.get("Retry-After")
-        retry_after = float(retry) if retry else None
+        retry_after = _retry_after(response.headers.get("Retry-After"))
         if response.status_code == 429:
             raise ConnectorRateLimited("Fireflies rate limited", retry_after=retry_after)
-        if response.status_code in (401, 403):
+        if response.status_code == 403:
+            raise FirefliesForbidden("Fireflies refused the request (403)")
+        if response.status_code == 401:
             raise ConnectorAuthError(f"Fireflies rejected the API key ({response.status_code})")
         try:
             body = response.json()
         except ValueError:
-            body = {}
+            body = None
+        if not isinstance(body, dict):
+            # Never read as "no meetings": a full pass would delete everything stored.
+            raise ConnectorError(
+                f"Fireflies answered HTTP {response.status_code} with something other than JSON"
+            )
         errors = body.get("errors") or []
         for error in errors:
             code = str((error.get("extensions") or {}).get("code") or error.get("code") or "")
             code = code.lower()
             message = error.get("message") or code
+            if code == "forbidden":
+                raise FirefliesForbidden(f"Fireflies refused the request: {message}")
             if code in AUTH_CODES:
                 raise ConnectorAuthError(f"Fireflies rejected the API key: {message}")
             if code in RATE_CODES or "too many requests" in message.lower():
@@ -457,7 +506,18 @@ class _Fireflies:
         if response.status_code >= 400 or errors:
             detail = errors[0].get("message") if errors else f"HTTP {response.status_code}"
             raise ConnectorError(f"Fireflies query failed: {detail}")
-        return body.get("data") or {}
+        data = body.get("data")
+        if not isinstance(data, dict):
+            raise ConnectorError("Fireflies answered without data")
+        return data
+
+    async def transcripts(self, **variables: Any) -> list[dict[str, Any]]:
+        """One page of the transcripts list. A missing list is an error, never an empty
+        page: a full pass would otherwise delete everything stored."""
+        page = (await self.query(LIST_QUERY, **variables)).get("transcripts")
+        if not isinstance(page, list) or not all(isinstance(e, dict) and e.get("id") for e in page):
+            raise ConnectorError("Fireflies answered without a list of transcripts")
+        return page
 
 
 def fingerprint(config: dict[str, Any]) -> str:
@@ -519,9 +579,7 @@ class FirefliesConnector:
         """Pages of the transcripts list, newest first, until a short page."""
         skip = 0
         while max_pages is None or skip < max_pages * PAGE_SIZE:
-            page = (await fireflies.query(LIST_QUERY, limit=PAGE_SIZE, skip=skip, **variables)).get(
-                "transcripts"
-            ) or []
+            page = await fireflies.transcripts(limit=PAGE_SIZE, skip=skip, **variables)
             yield page
             if len(page) < PAGE_SIZE:
                 return
@@ -634,7 +692,7 @@ class FirefliesConnector:
         if search.strip():
             variables.update(keyword=search.strip()[:255], scope="title")
         async with self._session(credential) as fireflies:
-            page = (await fireflies.query(LIST_QUERY, **variables)).get("transcripts") or []
+            page = await fireflies.transcripts(**variables)
         return MeetingPage(
             meetings=[_meeting(e) for e in page],
             next_skip=skip + PAGE_SIZE if len(page) >= PAGE_SIZE else None,

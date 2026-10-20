@@ -3,12 +3,14 @@ series and single meetings (S5, owner 2026-10-19)."""
 
 import time
 from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 
 import httpx
 import pytest
 
 from oracle.sources.base import (
     ConnectorConfigError,
+    ConnectorError,
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemDelete,
@@ -420,6 +422,65 @@ async def test_rate_limited_while_listing():
     with pytest.raises(ConnectorRateLimited) as raised:
         await collect(connector(FakeFireflies(SAMPLE, error=rate_limited(30))), {"mode": "all"})
     assert raised.value.retry_after == 30
+
+
+# --- Safety -------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        pytest.param(httpx.Response(200, text="<html>Bad gateway</html>"), id="not-json"),
+        pytest.param(httpx.Response(200, json={"data": {"transcripts": None}}), id="null-list"),
+        pytest.param(httpx.Response(200, json={"data": None}), id="null-data"),
+        pytest.param(httpx.Response(200, json={}), id="empty-body"),
+    ],
+)
+async def test_a_full_pass_on_a_broken_answer_fails_and_deletes_nothing(response):
+    fake = FakeFireflies(SAMPLE, error=response)
+    events: list = []
+    with pytest.raises(ConnectorError):
+        async for event in connector(fake).sync(
+            {"mode": "all"}, CREDENTIAL, None, known=known("S1", "S2", "K1")
+        ):
+            events.append(event)
+    assert deleted(events) == []
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"mode": "all", "date_to": "9999-12-31"},
+        {"mode": "all", "date_from": 5},
+        {"mode": "all", "date_from": 1_760_000_000_000},
+        {"mode": "all", "date_to": True},
+        {"mode": "all", "date_from": 1.5},
+        {"from_date": False},
+        {"mode": "all", "labels": {f"m{i}": "Meeting" for i in range(1001)}},
+    ],
+)
+def test_out_of_range_or_mistyped_values_are_config_errors(config):
+    with pytest.raises(ConnectorConfigError):
+        selection(config)
+
+
+def test_a_thousand_labels_are_fine():
+    labels = {f"m{i}": "Meeting" for i in range(1000)}
+    assert selection({"mode": "selected", "meetings": ["m1"], "labels": labels}).meetings
+
+
+async def test_retry_after_as_an_http_date():
+    later = datetime.now(UTC) + timedelta(seconds=120)
+    response = rate_limited()
+    response.headers["Retry-After"] = format_datetime(later, usegmt=True)
+    with pytest.raises(ConnectorRateLimited) as raised:
+        await collect(connector(FakeFireflies(SAMPLE, error=response)), {"mode": "all"})
+    assert raised.value.retry_after is not None and 100 < raised.value.retry_after <= 121
+    # An unreadable one is ignored rather than failing the sync.
+    response.headers["Retry-After"] = "soon"
+    with pytest.raises(ConnectorRateLimited) as raised:
+        await collect(connector(FakeFireflies(SAMPLE, error=response)), {"mode": "all"})
+    assert raised.value.retry_after is None
 
 
 # --- Browse -------------------------------------------------------------------------

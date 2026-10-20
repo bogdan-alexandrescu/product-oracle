@@ -292,3 +292,114 @@ async def test_narrowing_deletes_what_falls_outside_on_the_next_sync(
         resp = await a.get(f"/v1/sources/{source_id}/items")
         assert resp.status_code == 200, resp.text
         assert {i["external_id"] for i in resp.json()} == kept
+
+
+# --- Safety -------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("path", ["meetings", "series"])
+async def test_an_out_of_range_date_is_a_422(fake, alice, conn, path):
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/connections/{conn}/fireflies/{path}", params={"to": "9999-12-31"})
+    assert resp.status_code == 422, resp.text
+    assert fake.requests == []
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"mode": "all", "date_to": "9999-12-31"},
+        {"mode": "all", "date_from": 5},
+        {"mode": "all", "date_from": True},
+        {"mode": "all", "labels": {f"m{i}": "x" for i in range(1001)}},
+    ],
+)
+async def test_a_source_with_a_bad_date_or_too_many_labels_is_a_422(
+    fake, connector, alice, conn, config
+):
+    async with client_for(alice) as a:
+        resp = await a.post(
+            "/v1/sources",
+            json={"kind": "fireflies", "name": "Bad", "connection_id": str(conn), "config": config},
+        )
+    assert resp.status_code == 422, resp.text
+
+
+async def test_the_browse_502_is_redacted(fake, alice, conn):
+    fake.error = httpx.Response(
+        200, json={"errors": [{"message": f"internal error for key {API_KEY}"}]}
+    )
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/connections/{conn}/fireflies/meetings")
+    assert resp.status_code == 502
+    assert API_KEY not in resp.text
+
+
+async def test_a_browse_that_gets_no_list_is_a_502(fake, alice, conn):
+    fake.error = httpx.Response(200, text="<html>maintenance</html>")
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/connections/{conn}/fireflies/series")
+    assert resp.status_code == 502
+
+
+async def _connection_status(user, conn) -> str:
+    async with client_for(user) as c:
+        rows = (await c.get("/v1/connections")).json()
+    return next(r["status"] for r in rows if r["id"] == str(conn))
+
+
+async def test_forbidden_on_browse_does_not_expire_the_connection(fake, alice, conn):
+    fake.error = httpx.Response(
+        200,
+        json={
+            "errors": [
+                {
+                    "message": "You do not have access to this resource",
+                    "extensions": {"code": "forbidden", "status": 403},
+                }
+            ]
+        },
+    )
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/connections/{conn}/fireflies/meetings")
+    assert resp.status_code == 409, resp.text
+    assert "reconnect" not in resp.json()["detail"].lower()
+    assert await _connection_status(alice, conn) == "active"
+
+    # A rejected key still does.
+    fake.error = httpx.Response(401, json={"errors": [{"message": "Invalid API key"}]})
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/connections/{conn}/fireflies/meetings")
+    assert resp.status_code == 409
+    assert await _connection_status(alice, conn) == "expired"
+
+
+async def test_a_full_pass_on_a_broken_answer_keeps_the_items(
+    fake, connector, tenant_id, alice, conn
+):
+    async with client_for(alice) as a:
+        resp = await a.post(
+            "/v1/sources",
+            json={
+                "kind": "fireflies",
+                "name": "All",
+                "connection_id": str(conn),
+                "config": {"mode": "all"},
+            },
+        )
+        source_id = resp.json()["id"]
+        assert (await a.post(f"/v1/sources/{source_id}/sync")).json()["outcome"] == "completed"
+        # A config change makes the next sync a full pass, which prunes.
+        resp = await a.patch(
+            f"/v1/sources/{source_id}", json={"config": {"mode": "all", "date_from": "2026-01-01"}}
+        )
+        assert resp.status_code == 200, resp.text
+        for broken in (
+            httpx.Response(200, text="<html>maintenance</html>"),
+            httpx.Response(200, json={"data": {"transcripts": None}}),
+        ):
+            fake.error = broken
+            sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+            assert sync["outcome"] == "error", sync
+            assert sync["deleted"] == 0
+            assert all((await _items(tenant_id, source_id)).values())

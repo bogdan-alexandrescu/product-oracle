@@ -18,14 +18,15 @@ from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.connections.router import ProviderHttp, UserPrincipal
 from oracle.sources import base
-from oracle.sources.connectors.fireflies import FirefliesConnector, Meeting
-from oracle.sources.service import InvalidError, _read_credential
+from oracle.sources.connectors.fireflies import FirefliesConnector, FirefliesForbidden, Meeting
+from oracle.sources.service import InvalidError, _read_credential, redact
 
 router = APIRouter(prefix="/v1", tags=["connections"])
 
 RESPONSES: dict[int | str, dict[str, str]] = {
     404: {"description": "Not one of your Fireflies connections"},
-    409: {"description": "The connection cannot be used: reconnect it"},
+    409: {"description": "The connection cannot be used (reconnect it), or Fireflies refused"},
+    422: {"description": "An invalid date range"},
     429: {"description": "Fireflies is rate limiting the API key; see Retry-After"},
     502: {"description": "Fireflies did not answer as expected"},
 }
@@ -85,6 +86,14 @@ async def _browse(db: TenantDB, conn: Connection, call):
         )
         headers = {"Retry-After": str(wait)} if wait else None
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail, headers) from None
+    except FirefliesForbidden:
+        # The key may lack access to this (a plan or team permission): the connection
+        # itself still works, so it is not marked expired.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Fireflies refused to list these meetings for this API key: check the key's "
+            "Fireflies plan and permissions",
+        ) from None
     except base.ConnectorAuthError:
         await connections.mark_failure(
             db, conn, "expired", "Fireflies rejected the API key while browsing"
@@ -94,7 +103,13 @@ async def _browse(db: TenantDB, conn: Connection, call):
             "Fireflies rejected the API key: reconnect it in Settings > Connections",
         ) from None
     except base.ConnectorError as e:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e)) from None
+        # Redacted like a sync's error: Fireflies may echo the key back.
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, redact(str(e), credential)) from None
+
+
+def _check_range(date_to: date | None) -> None:
+    if date_to is not None and date_to >= date.max:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "'to' is out of range")
 
 
 def _meeting_out(m: Meeting) -> FirefliesMeetingOut:
@@ -117,6 +132,7 @@ async def list_fireflies_meetings(
     cursor: Annotated[str | None, Query(pattern=r"^\d{1,6}$")] = None,
 ) -> FirefliesMeetingPage:
     """Your meetings in Fireflies, newest first, a page at a time (search: in titles)."""
+    _check_range(date_to)
     conn = await _fireflies_connection(db, connection_id, principal)
     page = await _browse(
         db,
@@ -149,6 +165,7 @@ async def list_fireflies_series(
     date_to: Annotated[date | None, Query(alias="to")] = None,
 ) -> FirefliesSeriesList:
     """Your meetings grouped into recurring series, with counts and the last date."""
+    _check_range(date_to)
     conn = await _fireflies_connection(db, connection_id, principal)
     result = await _browse(
         db,
