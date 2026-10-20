@@ -10,7 +10,14 @@ import pytest
 from oracle.runs.models import Run, RunSegment
 from oracle.tenancy import tenant_session
 from tests.review_v2_helpers import person, setup
-from tests.test_review_v2_security_6 import _at_checkpoint, _decide, _read, _tick, runtime  # noqa: F401
+from tests.test_review_v2_security_6 import (  # noqa: F401
+    _at_checkpoint,
+    _decide,
+    _read,
+    _started,
+    _tick,
+    runtime,
+)
 
 
 async def _demote(client, ctx, user_id, role: str):
@@ -120,3 +127,93 @@ async def test_a_demotion_that_keeps_the_checkpoint_role_keeps_the_decision(clie
     run = await _read(client, ctx, run["id"])
     assert run["status"] == "running"
     assert len(runtime.submitted) == 2
+
+
+# --- M2: an overrun Resume is a spend approval (C2) ------------------------------------
+
+
+async def _paused(client, ctx, runtime):  # noqa: F811
+    """A run paused on overrun, its segment finished and its checkpoint off: a Resume
+    queues the next segment."""
+    from oracle.swarm import Outcome
+
+    runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50), polls=1)]
+    run = await _started(client, ctx, checkpoints={"baseline_confirm": False})
+    await _tick(client, ctx)
+    await _tick(client, ctx)
+    run = await _read(client, ctx, run["id"])
+    assert run["status"] == "paused_overrun", run
+    return run
+
+
+async def _resume(client, run, headers):
+    resp = await client.post(f"/v1/runs/{run['id']}/resume", headers=headers)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def _remove(client, ctx, how: str, user_id) -> None:
+    if how == "demoted":
+        await _demote(client, ctx, user_id, "approver")
+    else:
+        resp = await client.post(f"/v1/members/{user_id}/disable", headers=ctx.auth)
+        assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.parametrize("how", ["demoted", "disabled"])
+async def test_a_resume_whose_segment_was_not_submitted_is_voided(client, runtime, how):  # noqa: F811
+    from sqlalchemy import select
+
+    from oracle.models import AuditEvent
+    from oracle.runtokens import RunToken
+    from oracle.swarm import RuntimeUnavailable
+
+    ctx = await setup(client)
+    run = await _paused(client, ctx, runtime)
+    ceiling = run["overrun_ceiling_usd"]
+    spender = await person(ctx.tenant_id, "owner", "spender")
+    real = runtime.submit
+
+    async def down(spec):
+        raise RuntimeUnavailable("SwarmCloud is down")
+
+    runtime.submit = down
+    resumed = await _resume(client, run, spender.headers)
+    assert resumed["status"] == "running" and resumed["overrun_ceiling_usd"] != ceiling
+    runtime.submit = real
+    submitted = len(runtime.submitted)
+
+    await _remove(client, ctx, how, spender.user_id)
+    after = await _read(client, ctx, run["id"])
+    assert after["status"] == "paused_overrun"
+    assert after["overrun_ceiling_usd"] == ceiling
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Run, run["id"])
+        assert row.resumed_by is None
+        assert all(t.revoked_at for t in await s.scalars(select(RunToken)))
+        events = list(
+            await s.scalars(select(AuditEvent).where(AuditEvent.action == "run.resume_voided"))
+        )
+        assert [e.data["resumed_by"] for e in events] == [str(spender.user_id)]
+    # Nothing is submitted for it now: the tick leaves the run paused.
+    await _tick(client, ctx)
+    assert (await _read(client, ctx, run["id"]))["status"] == "paused_overrun"
+    assert len(runtime.submitted) == submitted
+    # An owner who still is one resumes it: the voided segment is queued and submitted.
+    again = await _resume(client, run, ctx.auth)
+    assert again["status"] == "running"
+    assert len(runtime.submitted) == submitted + 1
+
+
+@pytest.mark.parametrize("how", ["demoted", "disabled"])
+async def test_a_resume_whose_segment_was_submitted_stands(client, runtime, how):  # noqa: F811
+    ctx = await setup(client)
+    run = await _paused(client, ctx, runtime)
+    spender = await person(ctx.tenant_id, "owner", "spender")
+    resumed = await _resume(client, run, spender.headers)
+    submitted = len(runtime.submitted)
+    await _remove(client, ctx, how, spender.user_id)
+    after = await _read(client, ctx, run["id"])
+    assert after["status"] == "running"
+    assert after["overrun_ceiling_usd"] == resumed["overrun_ceiling_usd"]
+    assert len(runtime.submitted) == submitted

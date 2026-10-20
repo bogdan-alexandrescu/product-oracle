@@ -9,6 +9,9 @@ build (ORACLE_ALLOW_RESERVED_EMAIL_DOMAINS), where it defaults to admin@example.
 
 Idempotent for the tenant and the admin (existing ones are kept, the password is not
 changed). Every run creates a NEW API token and prints it once; only its hash is stored.
+No token is minted for a disabled member (restore them first) or, outside the mock/test
+build, for an existing member at a reserved example domain. ``--password`` is at least
+12 characters, as My account requires.
 """
 
 import argparse
@@ -21,12 +24,23 @@ from dataclasses import dataclass
 from sqlalchemy import select
 
 from oracle.auth.models import User
-from oracle.auth.service import ReservedEmailError, create_api_token, create_user
+from oracle.auth.service import (
+    PASSWORD_MIN_LENGTH,
+    ReservedEmailError,
+    check_email_allowed,
+    create_api_token,
+    create_user,
+    may_sign_in,
+)
 from oracle.config import get_settings
 from oracle.db import dispose_engine
 from oracle.models import Tenant
 from oracle.templates.defaults import ensure_default_template
 from oracle.tenancy import tenant_session, unscoped_session
+
+
+class SeedRefused(ValueError):
+    """The admin exists but may not get a token (a disabled member)."""
 
 
 @dataclass
@@ -50,6 +64,8 @@ async def seed(
     email = email or default_email()
     if email is None:
         raise ValueError("an admin email is required (--email); there is no default admin")
+    # Existing members too: a seed never mints a live token for admin@example.com again.
+    check_email_allowed(email)
     async with unscoped_session() as s:
         tenant = await s.scalar(select(Tenant).order_by(Tenant.created_at).limit(1))
         tenant_created = tenant is None
@@ -68,6 +84,10 @@ async def seed(
             if not password:
                 password = generated = secrets.token_urlsafe(12)
             user = await create_user(s, email, password)
+        elif not may_sign_in(user):
+            raise SeedRefused(
+                f"{email} is a disabled member; restore them (Settings > Members) first"
+            )
         # The token acts as the admin, so per-user calls (`oracle sync`) work with it.
         _, raw = await create_api_token(s, token_name, user_id=user.id)
         await ensure_default_template(s)
@@ -129,7 +149,7 @@ async def _main(args: argparse.Namespace) -> None:
             password=args.password,
             token_name=args.token_name,
         )
-    except ReservedEmailError as e:
+    except (ReservedEmailError, SeedRefused) as e:
         raise SystemExit(f"oracle.seed: {e}") from None
     finally:
         await dispose_engine()
@@ -145,6 +165,8 @@ def main() -> None:
     args = p.parse_args()
     if not args.email:
         p.error("--email is required (or ORACLE_ADMIN_EMAIL): there is no default admin")
+    if args.password is not None and len(args.password) < PASSWORD_MIN_LENGTH:
+        p.error(f"--password must be at least {PASSWORD_MIN_LENGTH} characters")
     asyncio.run(_main(args))
 
 

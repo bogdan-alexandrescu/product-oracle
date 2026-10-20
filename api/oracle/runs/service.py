@@ -1127,6 +1127,10 @@ async def _submit(
     _submitted(run, segment, sub, workflow_id)
 
 
+# Set on a segment a voided overrun Resume had queued: the next Resume queues it again.
+RESUME_VOIDED = "resume_voided"
+
+
 def unqueue(segment: RunSegment) -> None:
     """Take a pending segment off the queue (its run no longer waits on the runtime): a
     submission under way finds its claim gone and cancels what it started."""
@@ -1839,17 +1843,31 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     run = await _get_run(db, run_id, lock=True)
     if run.status != "paused_overrun":
         raise RunError(f"run is {run.status}, not paused on overrun")
-    # The owner accepts the spend so far plus another half of the estimate.
+    # The owner accepts the spend so far plus another half of the estimate. A Resume is
+    # a spend approval (C2): who gave it and the ceiling it replaced are kept, so a
+    # demotion or disable can void it (oracle.members.service._void_spend_approvals).
     allowance = (run.estimate_usd or Decimal(0)) * (flows.OVERRUN_FACTOR - 1)
     ceiling = ((run.spent_usd or Decimal(0)) + allowance).quantize(Decimal("0.0001"))
+    run.resumed_from_ceiling_usd = _ceiling(run)
+    run.resumed_by = principal.id
+    run.resumed_at = _now()
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
     run.status = "running"
     await audit.record(db, principal, "run.resumed", "run", run.id, {"ceiling_usd": str(ceiling)})
     segments = await _segments(db, run.id)
     if not any(s.status == "running" for s in segments):
-        done = [s for s in segments if s.status == "succeeded"]
-        if done:
-            await _advance(db, run, done[-1], segments, queue=True)
+        # A Resume voided before its segment was submitted left that segment unqueued
+        # (marked): queue it again; otherwise advance past the last segment that ran.
+        voided = [s for s in segments if s.status == "pending" and _art(s).get(RESUME_VOIDED)]
+        if voided:
+            art = _art(voided[0])
+            art.pop(RESUME_VOIDED, None)
+            _set_art(voided[0], art)
+            await _submit(db, run, voided[0], segments, queue=True)
+        else:
+            done = [s for s in segments if s.status == "succeeded"]
+            if done:
+                await _advance(db, run, done[-1], segments, queue=True)
     await db.commit()  # the router submits what it queued (submit_queued), outside the gate
 
 

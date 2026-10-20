@@ -382,6 +382,67 @@ async def _void_spend_approvals(
             session, principal, "run.approval_voided", "run", run.id,
             {"approved_by": str(approved_by), **via},
         )  # fmt: skip
+    return [r.id for r in runs] + await _void_resumes(session, principal, approvers, member_id, via)
+
+
+async def _void_resumes(
+    session: AsyncSession,
+    principal: "Principal",
+    approvers: set[uuid.UUID],
+    member_id: uuid.UUID | None,
+    via: dict[str, str],
+) -> list[uuid.UUID]:
+    """An overrun Resume is a spend approval (C2, owner decision): one the removed or
+    demoted owner gave whose next segment has not been submitted (nothing started since
+    the Resume) is void. The run is paused on overrun again with the ceiling the Resume
+    replaced; the segment it queued is taken off the queue (marked, so the next Resume
+    queues it again; a submission under way cancels what it started) and the run's
+    tokens are revoked. A segment still running from before the pause goes on, as the
+    pause lets it, with its token. A run the Resume took to a checkpoint keeps waiting
+    for it, under the old ceiling. ``member_id``: as for :func:`_void_spend_approvals`."""
+    from oracle.runs.models import Run, RunSegment
+    from oracle.runs.service import RESUME_VOIDED, _art, _set_art, _set_knob, unqueue
+    from oracle.runtokens import revoke_run_tokens
+
+    since = select(RunSegment.id).where(
+        RunSegment.run_id == Run.id, RunSegment.started_at >= Run.resumed_at
+    )
+    runs = list(
+        await session.scalars(
+            select(Run)
+            .where(
+                Run.resumed_by.in_(approvers),
+                Run.status.in_(("running", "awaiting_checkpoint")),
+                Run.created_by.is_distinct_from(member_id) if member_id else true(),
+                ~since.exists(),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for run in runs:
+        resumed_by, ceiling = run.resumed_by, run.resumed_from_ceiling_usd
+        _set_knob(run, "spend_ceiling_usd", str(ceiling) if ceiling is not None else None)
+        run.resumed_by = run.resumed_at = run.resumed_from_ceiling_usd = None
+        segments = list(
+            await session.scalars(select(RunSegment).where(RunSegment.run_id == run.id))
+        )
+        if run.status == "running":
+            run.status = "paused_overrun"
+            for segment in segments:
+                if segment.status == "pending" and (
+                    segment.error is not None or "claim" in (segment.artifacts or {})
+                ):
+                    unqueue(segment)
+                    art = _art(segment)
+                    art[RESUME_VOIDED] = True
+                    _set_art(segment, art)
+            if not any(s.status == "running" for s in segments):
+                await revoke_run_tokens(session, run.id)
+        await audit.record(
+            session, principal, "run.resume_voided", "run", run.id,
+            {"resumed_by": str(resumed_by), "ceiling_usd": str(ceiling), **via},
+        )  # fmt: skip
     return [r.id for r in runs]
 
 

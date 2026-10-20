@@ -91,6 +91,12 @@ async def _admin_id(tenant_id: uuid.UUID) -> uuid.UUID:
         ("a@x.invalid", True),
         ("a@box.localhost", True),
         ("a@localhost", True),
+        ("a@acme.example", True),
+        ("a@ｅｘａｍｐｌｅ．ｃｏｍ", True),  # full-width letters and dot
+        ("a@exam\u200bple.com", True),  # zero-width space
+        ("a@example\u3002com", True),  # ideographic full stop
+        ("a@EXAMPLE.COM.", True),
+        ("a@exаmple.com", False),  # Cyrillic а: a different (punycode) domain
         ("a@example.co", False),
         ("a@notexample.com", False),
         ("a@acme.com", False),
@@ -142,9 +148,46 @@ async def test_existing_reserved_members_are_not_touched(client, real_build, mon
     await _login(client)
     members = (await client.get("/v1/members")).json()
     assert [m["email"] for m in members] == [ADMIN]
-    # Seeding again for the existing admin mints a token and creates nobody.
-    again = await seed(email=ADMIN)
-    assert again.tenant_id == r.tenant_id and not again.user_created
+    # Seeding again for the existing admin mints no token (and creates nobody).
+    with pytest.raises(ReservedEmailError):
+        await seed(email=ADMIN)
+    async with tenant_session(r.tenant_id) as s:
+        assert len((await s.scalars(select(ApiToken))).all()) == 1
+
+
+async def test_seed_mints_no_token_for_a_disabled_member(client):
+    from oracle.seed import SeedRefused
+
+    r = await seed(password=PASSWORD)
+    async with tenant_session(r.tenant_id) as s:
+        await s.execute(update(User).values(disabled_at=datetime.now(UTC)))
+        await s.commit()
+    with pytest.raises(SeedRefused):
+        await seed(email=ADMIN)
+    async with tenant_session(r.tenant_id) as s:
+        assert len((await s.scalars(select(ApiToken))).all()) == 1
+
+
+def test_seed_password_needs_the_minimum_length(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["oracle.seed", "--email", "a@acme.io", "--password", "short"])
+    with pytest.raises(SystemExit) as exit_:
+        seed_main()
+    assert exit_.value.code == 2
+    assert f"at least {PASSWORD_MIN_LENGTH}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "prod", [{"cookie_secure": True}, {"iap_audiences": ["/projects/1/global/backendServices/2"]}]
+)
+def test_reserved_domains_cannot_be_allowed_in_production(prod):
+    from pydantic import ValidationError
+
+    from oracle.config import Settings
+
+    with pytest.raises(ValidationError, match="ALLOW_RESERVED_EMAIL_DOMAINS"):
+        Settings(allow_reserved_email_domains=True, **prod)
+    assert Settings(allow_reserved_email_domains=False, **prod)
+    assert Settings(allow_reserved_email_domains=True)
 
 
 async def test_seed_requires_an_email_outside_tests(real_build, monkeypatch, capsys):
@@ -373,6 +416,10 @@ async def test_change_password(client):
         "/v1/me/password", json={"current_password": _phrase("wrong"), "new_password": new}
     )
     assert wrong.status_code == 400
+    same = await client.post(
+        "/v1/me/password", json={"current_password": PASSWORD, "new_password": PASSWORD}
+    )
+    assert same.status_code == 400 and "new password" in same.json()["detail"]
     ok = await client.post(
         "/v1/me/password", json={"current_password": PASSWORD, "new_password": new}
     )
@@ -449,21 +496,93 @@ async def test_personal_token_validation_and_scope_cap(client):
         assert (await client.post("/v1/me/tokens", json=bad)).status_code == 422
     weird = await client.post("/v1/me/tokens", json={"name": "x", "scopes": ["admin"]})
     assert weird.status_code == 422
-    # A read-only token cannot mint a token with more than it has.
-    ro = (
-        await client.post("/v1/me/tokens", json={"name": "ro", "scopes": ["oracle:read"]})
-    ).json()["secret"]
-    headers = {"Authorization": f"Bearer {ro}"}
-    wider = await client.post(
-        "/v1/me/tokens",
-        json={"name": "w", "scopes": ["oracle:read", "oracle:write"]},
-        headers=headers,
+    bad_expiry = await client.post(
+        "/v1/me/tokens", json={"name": "x", "scopes": ["oracle:read"], "expires_in_days": 7}
     )
-    assert wider.status_code == 403
-    same = await client.post(
-        "/v1/me/tokens", json={"name": "r2", "scopes": ["oracle:read"]}, headers=headers
+    assert bad_expiry.status_code == 422
+
+
+async def test_tokens_never_mint_tokens(client):
+    """AC1: a personal token is created from the signed-in browser only; a token of any
+    scope (or an MCP client, below) is refused, so none outlives its parent."""
+    r = await seed(password=PASSWORD)
+    await _login(client)
+    for scopes in (["oracle:read"], ["oracle:read", "oracle:write"]):
+        secret = (
+            await client.post("/v1/me/tokens", json={"name": "cli", "scopes": scopes})
+        ).json()["secret"]
+        refused = await client.post(
+            "/v1/me/tokens",
+            json={"name": "child", "scopes": ["oracle:read"]},
+            headers={"Authorization": f"Bearer {secret}"},
+        )
+        assert refused.status_code == 403, refused.text
+        assert "browser" in refused.json()["detail"]
+    async with tenant_session(r.tenant_id) as s:
+        names = set(await s.scalars(select(ApiToken.name)))
+    assert "child" not in names
+
+
+async def test_read_only_credentials_change_nothing(client):
+    r = await seed(password=PASSWORD)
+    await _login(client)
+    ro = (await client.post("/v1/me/tokens", json={"name": "ro", "scopes": ["oracle:read"]})).json()
+    headers = {"Authorization": f"Bearer {ro['secret']}"}
+    resp = await client.delete(f"/v1/me/tokens/{ro['token']['id']}", headers=headers)
+    assert resp.status_code == 403
+    for method, path in [
+        ("POST", "/v1/me/password"),
+        ("POST", "/v1/me/sign-out-everywhere"),
+    ]:
+        body = {"current_password": PASSWORD, "new_password": _phrase("fresh")}
+        resp = await client.request(method, path, headers=headers, json=body)
+        assert resp.status_code == 403, (path, resp.text)
+    async with tenant_session(r.tenant_id) as s:
+        assert all(t.revoked_at is None for t in await s.scalars(select(ApiToken)))
+        assert (await s.scalar(select(User.sessions_valid_after))) is None
+    # Reading still works.
+    assert (await client.get("/v1/me/tokens", headers=headers)).status_code == 200
+
+
+async def test_personal_tokens_expire(client):
+    r = await seed(password=PASSWORD)
+    await _login(client)
+    before = datetime.now(UTC)
+    default = (
+        await client.post("/v1/me/tokens", json={"name": "d", "scopes": ["oracle:read"]})
+    ).json()
+    expires = datetime.fromisoformat(default["token"]["expires_at"])
+    assert timedelta(days=89) < expires - before <= timedelta(days=90, minutes=1)
+    year = (
+        await client.post(
+            "/v1/me/tokens", json={"name": "y", "scopes": ["oracle:read"], "expires_in_days": 365}
+        )
+    ).json()
+    assert datetime.fromisoformat(year["token"]["expires_at"]) - before > timedelta(days=364)
+    never = (
+        await client.post(
+            "/v1/me/tokens", json={"name": "n", "scopes": ["oracle:read"], "expires_in_days": None}
+        )
+    ).json()
+    assert never["token"]["expires_at"] is None
+    auth = {"Authorization": f"Bearer {default['secret']}"}
+    assert (await client.get("/v1/me", headers=auth)).status_code == 200
+    # Past its expiry it is refused, listed with its expiry and not counted as open.
+    async with tenant_session(r.tenant_id) as s:
+        await s.execute(
+            update(ApiToken)
+            .where(ApiToken.id == uuid.UUID(default["token"]["id"]))
+            .values(expires_at=datetime.now(UTC) - timedelta(seconds=1))
+        )
+        await s.commit()
+    assert (await client.get("/v1/me", headers=auth)).status_code == 401
+    row = next(
+        t for t in (await client.get("/v1/me/tokens")).json() if t["id"] == default["token"]["id"]
     )
-    assert same.status_code == 201
+    assert row["revoked_at"] is None
+    assert datetime.fromisoformat(row["expires_at"]) < datetime.now(UTC)
+    members = (await client.get("/v1/members")).json()
+    assert members[0]["open_tokens"] == 3  # agent-track, the year one and the never one
 
 
 async def test_my_mcp_clients(client):
@@ -523,11 +642,12 @@ async def test_sign_out_everywhere(client):
         },
     )
     assert refreshed.status_code == 400
-    # Personal API tokens are not sessions: they keep working until revoked.
+    # AC1: personal API tokens are revoked too.
     tenant_id = uuid.UUID(await _tenant_of_admin())
     async with tenant_session(tenant_id) as s:
         token = await s.scalar(select(ApiToken).where(ApiToken.name == "agent-track"))
-        assert token.revoked_at is None
+        assert token.revoked_at is not None
+    assert resp.json()["api_tokens_revoked"] == 1
     # Signing in again works.
     await _login(client)
     assert (await client.get("/v1/me")).status_code == 200
@@ -573,15 +693,14 @@ async def test_sessions_signed_before_a_password_change_by_another_device_end(cl
 ACCOUNT_TOOLS = {
     "list_api_tokens",
     "revoke_api_token",
-    "create_personal_token",
     "list_my_tokens",
     "revoke_my_token",
     "list_my_oauth_clients",
     "revoke_my_oauth_client",
-    "change_password",
-    "sign_out_everywhere",
     "get_my_account",
 }
+# AC1: from the signed-in browser only, never an MCP tool.
+BROWSER_ONLY = {"create_personal_token", "change_password", "sign_out_everywhere"}
 
 
 async def test_account_tools_exist_for_people(client):
@@ -592,13 +711,57 @@ async def test_account_tools_exist_for_people(client):
     async with mcp_client(r.token) as c:
         names = {t.name for t in (await c.list_tools()).tools}
         assert ACCOUNT_TOOLS <= names
+        assert names.isdisjoint(BROWSER_ONLY)
         result = await c.call_tool("list_my_tokens", {})
         assert not result.is_error and "agent-track" in text_of(result)
-        result = await c.call_tool(
-            "create_personal_token", {"body": {"name": "from mcp", "scopes": ["oracle:read"]}}
-        )
-        assert not result.is_error and "po_" in text_of(result)
+        # A po_ secret over MCP never mints a token, changes the password or signs out.
+        for tool, args in [
+            ("create_personal_token", {"body": {"name": "from mcp", "scopes": ["oracle:read"]}}),
+            ("change_password", {"body": {"current_password": PASSWORD, "new_password": "x" * 20}}),
+            ("sign_out_everywhere", {}),
+        ]:
+            result = await c.call_tool(tool, args)
+            assert result.is_error, tool
     assert token.name == "agent-track"
+    async with tenant_session(r.tenant_id) as s:
+        assert len((await s.scalars(select(ApiToken))).all()) == 1
+        assert (await s.scalar(select(User.sessions_valid_after))) is None
+    # The REST call with the same secret is refused too.
+    resp = await client.post(
+        "/v1/me/tokens",
+        json={"name": "from rest", "scopes": ["oracle:read"]},
+        headers={"Authorization": f"Bearer {r.token}"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_an_mcp_client_cannot_mint_a_token_or_sign_out(client):
+    """AC1 over OAuth: a poa_ access token (full scopes) is refused on every browser-only
+    operation."""
+    _, issued = await full_flow(client)
+    client.cookies.clear()
+    headers = {"Authorization": f"Bearer {issued['access_token']}"}
+    assert issued["access_token"].startswith("poa_")
+    resp = await client.post(
+        "/v1/me/tokens", json={"name": "from mcp", "scopes": ["oracle:read"]}, headers=headers
+    )
+    assert resp.status_code == 403, resp.text
+    body = {"current_password": PASSWORD, "new_password": _phrase("fresh")}
+    assert (await client.post("/v1/me/password", json=body, headers=headers)).status_code == 403
+    assert (await client.post("/v1/me/sign-out-everywhere", headers=headers)).status_code == 403
+    assert (await client.get("/v1/me", headers=headers)).status_code == 200
+    tenant_id = uuid.UUID(await _tenant_of_admin())
+    async with tenant_session(tenant_id) as s:
+        assert len((await s.scalars(select(ApiToken))).all()) == 1
+
+
+async def test_a_read_only_mcp_client_cannot_revoke(client):
+    _, issued = await full_flow(client, scope="oracle:read")
+    grant_id = (await client.get("/v1/me/oauth-clients")).json()[0]["id"]
+    client.cookies.clear()
+    headers = {"Authorization": f"Bearer {issued['access_token']}"}
+    resp = await client.delete(f"/v1/me/oauth-clients/{grant_id}", headers=headers)
+    assert resp.status_code == 403, resp.text
 
 
 async def test_run_tokens_never_reach_account_tools(client):
@@ -658,3 +821,147 @@ async def test_grant_ids_are_family_ids(client):
         family = await s.scalar(select(OAuthToken.family_id))
     rows = (await client.get("/v1/me/oauth-clients")).json()
     assert rows[0]["id"] == str(family)
+
+
+# --- Review fixes 2: AC1 revocations, the gate, Origin, sign-in race --------------------
+
+
+@pytest.mark.parametrize("how", ["sign_out", "password"])
+async def test_sign_out_and_password_change_end_every_credential(client, how):
+    """AC1: both revoke personal API tokens, every MCP client (refresh tokens included)
+    and the run tokens of the person's runs still going; a finished run's are left."""
+    reg, issued = await full_flow(client)
+    tenant_id = uuid.UUID(await _tenant_of_admin())
+    admin_id = await _admin_id(tenant_id)
+    going = await _run_token(tenant_id, admin_id, ["read:documents"])
+    other = await _add_user(tenant_id, "pm@acme.io", "approver")
+    theirs = await _run_token(tenant_id, other.id, ["read:documents"])
+    if how == "sign_out":
+        resp = await client.post("/v1/me/sign-out-everywhere")
+        assert resp.status_code == 200, resp.text
+        assert resp.json() | {"sessions_valid_after": None} == {
+            "sessions_valid_after": None,
+            "mcp_clients_revoked": 1,
+            "api_tokens_revoked": 1,
+            "runs_tokens_revoked": 1,
+        }
+    else:
+        body = {"current_password": PASSWORD, "new_password": _phrase("fresh")}
+        assert (await client.post("/v1/me/password", json=body)).status_code == 204
+    assert await verify_run_token(going) is None
+    assert await verify_run_token(theirs) is not None
+    me = await client.get("/v1/me", headers={"Authorization": f"Bearer {issued['access_token']}"})
+    assert me.status_code == 401
+    refreshed = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "client_id": reg["client_id"],
+            "refresh_token": issued["refresh_token"],
+        },
+    )
+    assert refreshed.status_code == 400
+    async with tenant_session(tenant_id) as s:
+        assert all(t.revoked_at for t in await s.scalars(select(ApiToken)))
+
+
+async def test_a_viewer_never_takes_the_gate_exclusively(client):
+    """Revoking an unknown token or grant is a 404 found before the gate; a viewer's own
+    revocations and sign-out take it shared: none waits on a publish holding it."""
+    import asyncio
+
+    from oracle.review import publish
+
+    r = await seed(password=PASSWORD)
+    viewer = await _add_user(r.tenant_id, "v@acme.io", "viewer", password=PASSWORD)
+    await _login(client, "v@acme.io")
+    mine = (
+        await client.post("/v1/me/tokens", json={"name": "v", "scopes": ["oracle:read"]})
+    ).json()["token"]["id"]
+    async with tenant_session(r.tenant_id) as held:
+        await publish.gate_lock(held, shared=True)  # a publish rendering
+        for path in (f"/v1/me/tokens/{uuid.uuid4()}", f"/v1/me/oauth-clients/{uuid.uuid4()}"):
+            resp = await asyncio.wait_for(client.delete(path), timeout=10)
+            assert resp.status_code == 404
+        resp = await asyncio.wait_for(client.delete(f"/v1/me/tokens/{mine}"), timeout=10)
+        assert resp.status_code == 204
+        resp = await asyncio.wait_for(client.post("/v1/me/sign-out-everywhere"), timeout=10)
+        assert resp.status_code == 200
+        await held.rollback()
+    assert viewer.role == "viewer"
+
+
+async def test_creating_a_token_rechecks_the_caller_under_the_gate(client):
+    """A token minted while a disable commits cannot survive it: the caller is re-read
+    under the gate."""
+    r = await seed(password=PASSWORD)
+    await _login(client)
+    async with tenant_session(r.tenant_id) as s:
+        await s.execute(update(User).values(disabled_at=datetime.now(UTC)))
+        await s.commit()
+    from oracle.account import service
+    from oracle.auth.deps import Principal
+    from oracle.members.service import MemberError
+
+    admin_id = await _admin_id(r.tenant_id)
+    principal = Principal(tenant_id=r.tenant_id, kind="user", role="owner", user_id=admin_id)
+    async with tenant_session(r.tenant_id) as s:
+        with pytest.raises(MemberError, match="removed"):
+            await service.create_personal_token(s, principal, "late", ["oracle:read"], 90)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Origin": "https://evil.example.net"},
+        {"Origin": "null"},
+        {"Sec-Fetch-Site": "cross-site"},
+    ],
+)
+async def test_body_less_cookie_posts_refuse_another_origin(client, headers):
+    r = await seed(password=PASSWORD)
+    other = await _add_user(r.tenant_id, "pm@acme.io", "approver")
+    await _login(client)
+    run_id = uuid.uuid4()
+    for path in (
+        "/v1/me/sign-out-everywhere",
+        f"/v1/runs/{run_id}/approve",
+        f"/v1/runs/{run_id}/resume",
+        f"/v1/members/{other.id}/disable",
+    ):
+        resp = await client.post(path, headers=headers)
+        assert resp.status_code == 403, (path, resp.text)
+        assert "Cross-site" in resp.json()["detail"]
+    # The app's own origin passes; so does a bearer token, whatever the Origin.
+    ok = await client.post(
+        f"/v1/members/{other.id}/disable", headers={"Origin": "http://localhost:3000"}
+    )
+    assert ok.status_code == 200, ok.text
+    client.cookies.clear()
+    token = await client.post(
+        f"/v1/runs/{run_id}/approve", headers={**headers, "Authorization": f"Bearer {r.token}"}
+    )
+    assert token.status_code == 404
+
+
+async def test_a_sign_in_racing_a_password_change_does_not_survive_it(client):
+    """M3: the sign-in stamps its cookie with the member's row locked; a change holding
+    the lock commits first, so the old password no longer signs in (or, had the sign-in
+    locked first, its cookie predates the change's epoch)."""
+    import asyncio
+
+    r = await seed(password=PASSWORD)
+    admin_id = await _admin_id(r.tenant_id)
+    new = _phrase("fresh")
+    async with tenant_session(r.tenant_id) as change:
+        user = await change.scalar(select(User).where(User.id == admin_id).with_for_update())
+        login = asyncio.create_task(
+            client.post("/v1/auth/login", json={"email": ADMIN, "password": PASSWORD})
+        )
+        await asyncio.sleep(1.0)  # the sign-in checked the old password, waits on the row
+        assert not login.done()
+        user.password_hash = hash_password(new)
+        user.sessions_valid_after = datetime.now(UTC)
+        await change.commit()
+    resp = await asyncio.wait_for(login, timeout=10)
+    assert resp.status_code == 401, resp.text
