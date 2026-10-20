@@ -142,12 +142,35 @@ export function Empty({ children, testId, icon }: { children: ReactNode; testId?
   );
 }
 
-/** Notices: an error, or a one-line result of an action. */
-export function Notice({ tone = "info", children }: { tone?: "info" | "error" | "pass"; children: ReactNode }) {
+/** Notices: an error, or a one-line result of an action; with `action`, the buttons sit at its end. */
+export function Notice({
+  tone = "info",
+  action,
+  testId,
+  children,
+}: {
+  tone?: "info" | "error" | "pass";
+  action?: ReactNode;
+  testId?: string;
+  children: ReactNode;
+}) {
   const cls =
     tone === "error" ? "bg-crit-bg text-crit" : tone === "pass" ? "bg-pass-bg text-pass" : "bg-accent-soft text-accent-ink";
+  const role = tone === "error" ? "alert" : "status";
+  if (action) {
+    return (
+      <div
+        role={role}
+        data-testid={testId}
+        className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button px-3 py-2 text-sm font-medium ${cls}`}
+      >
+        <span className="min-w-0 flex-1">{children}</span>
+        <span className="inline-flex flex-wrap gap-1.5">{action}</span>
+      </div>
+    );
+  }
   return (
-    <p role={tone === "error" ? "alert" : "status"} className={`rounded-button px-3 py-2 text-sm font-medium ${cls}`}>
+    <p role={role} data-testid={testId} className={`rounded-button px-3 py-2 text-sm font-medium ${cls}`}>
       {children}
     </p>
   );

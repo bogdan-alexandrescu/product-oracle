@@ -220,7 +220,9 @@ async def test_swarmcloud_submit_maps_steps_and_never_sends_the_run_token():
     assert body["steps"][1]["input_from"] == {"baseline-1-researcher": "researcher.md"}
     assert body["steps"][0]["runner_profile"] == "claude-code"
     assert body["steps"][0]["input"] == {"prompt": "Research."}
-    assert body["metadata"]["run_id"] == "r1"
+    # A workflow keeps no metadata in SwarmCloud: nothing is sent at the top level.
+    assert "metadata" not in body
+    assert body["steps"][0]["metadata"] == {"agent_role": "researcher"}
     assert "ort_secret-run-token" not in req.content.decode()
 
 
@@ -319,8 +321,11 @@ async def test_runtime_status_reports_the_tenant_and_never_the_token(client):
     _, owner = await seed_auth()
 
     def me(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/v1/tenants/me"
         assert "x-swarm-tenant" not in request.headers  # the service tenant is the default
+        if request.url.path == "/v1/mcp-servers":
+            return httpx.Response(503, json={"detail": {"code": "mcp_unavailable"}})
+        if request.url.path != "/v1/tenants/me":
+            return httpx.Response(404, json={"detail": "no route"})
         return httpx.Response(200, json={"tenant": {"tenant_id": "u-or-9a0792", "kind": "user"}})
 
     def refused(request: httpx.Request) -> httpx.Response:
@@ -335,6 +340,12 @@ async def test_runtime_status_reports_the_tenant_and_never_the_token(client):
         body = (await client.get("/v1/runtime/status", headers=owner)).json()
         assert body["runtime"] == "swarmcloud" and body["reachable"] is True
         assert body["tenant_id"] == "u-or-9a0792" and body["error"] is None
+        assert body["features"] == {
+            "mcp": "off",
+            "await_input": "unknown",
+            "service_answer": "unknown",
+        }
+        assert "mcp_unavailable" in body["feature_reasons"]["mcp"]
 
         set_runtime(
             SwarmCloudRuntime(
@@ -360,6 +371,8 @@ async def test_runtime_status_reports_the_tenant_and_never_the_token(client):
             "reachable": True,
             "tenant_id": "fake",
             "can_reach_oracle": True,
+            "features": {"mcp": "off", "await_input": "off", "service_answer": "off"},
+            "feature_reasons": {},
             "notes": FakeRuntime().notes(),
             "error": None,
         }
@@ -499,3 +512,62 @@ async def test_failed_task_error_is_redacted_and_capped():
     status = await runtime.status("wf_1")
     assert status.state == "failed"
     assert "SECRETVALUE" not in status.error and len(status.error) <= 200
+
+
+async def test_refusal_reads_the_reason_and_redacts_code_and_message():
+    from oracle.swarm import RecordedAnswer  # noqa: F401 - exported for runtimes
+
+    # Built from pieces: a credential-shaped value is never one literal in the source.
+    secret = "ya" + "29." + "a0" + "x" * 20
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/input"):
+            # SwarmCloud's envelope: the reason in detail, not the top-level code.
+            return httpx.Response(
+                409,
+                json={
+                    "code": "conflict",
+                    "message": "already answered",
+                    "detail": {"reason": "already_answered", "answered_by": "x@example.com"},
+                },
+            )
+        # A code and a top-level message that echo a credential.
+        return httpx.Response(
+            400, json={"code": f"bad_{secret}", "message": f"refused Bearer {secret}"}
+        )
+
+    runtime = SwarmCloudRuntime(
+        "https://swarm.test", StaticBearer("sc-bearer"), transport=httpx.MockTransport(refuse)
+    )
+    with pytest.raises(RuntimeUnavailable) as err:
+        await runtime.answer("wf_1", "review1", answer_id="a", payload={"verdict": "MERGE"})
+    assert err.value.code == "already_answered" and err.value.status == 409
+    assert err.value.detail["answered_by"] == "x@example.com"
+    assert not err.value.retryable
+    with pytest.raises(RuntimeUnavailable) as err:
+        await runtime.whoami()
+    assert secret not in str(err.value) and "<withheld>" in str(err.value)
+    assert "refused" in str(err.value)  # the top-level message is read
+
+
+def test_detail_reads_the_top_level_message():
+    from oracle.swarm.swarmcloud import _detail
+
+    resp = httpx.Response(422, json={"code": "validation_error", "message": "steps: too many"})
+    assert _detail(resp) == "steps: too many"
+    resp = httpx.Response(422, json={"code": "x", "message": "m", "detail": {"message": "inner"}})
+    assert _detail(resp) == "inner"
+
+
+async def test_submission_carries_its_key_in_every_steps_metadata_only():
+    swarm = FakeSwarm()
+    rt = _runtime(swarm)
+    from dataclasses import replace
+
+    await rt.submit(replace(SPEC, label="oracle-r1-baseline-1"))
+    body = json.loads(swarm.requests[0].content)
+    assert "metadata" not in body
+    assert [s["metadata"] for s in body["steps"]] == [
+        {"agent_role": "researcher", "oracle_key": "oracle-r1-baseline-1"},
+        {"agent_role": "analyst", "oracle_key": "oracle-r1-baseline-1"},
+    ]

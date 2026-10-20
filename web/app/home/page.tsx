@@ -110,8 +110,10 @@ export default function HomePage() {
   // The API filters (asked of me, still asked): Home counts exactly what the badge counts.
   const questions = questionNeeds(questionsQ.data ?? [], docs);
   const decisions = needs ? [...needs.checkpoints, ...needs.approvals, ...needs.overruns] : [];
+  // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
+  const runs = needs ? [...needs.lookups, ...needs.imports] : [];
   const reviews = needs?.feedback ?? [];
-  const shownNeeds = pickNeeds([...decisions, ...reviews], questions, MAX_NEEDS);
+  const shownNeeds = pickNeeds([...decisions, ...runs, ...reviews], questions, MAX_NEEDS);
   // The rail badge's count: the Inbox's rows and the questions asked of me.
   const waiting = inbox ? inbox.total + questions.length : undefined;
   const openItems = new Map((inbox?.feedback ?? []).map((d) => [d.document_id, d.open_count]));
@@ -156,6 +158,7 @@ export default function HomePage() {
           tools={
             <>
               {decisions.length > 0 && <CountChip label="Decisions" n={decisions.length} />}
+              {runs.length > 0 && <CountChip label="Runs" n={runs.length} />}
               {reviews.length > 0 && <CountChip label="Reviews" n={reviews.length} />}
               {questions.length > 0 && <CountChip label="Questions" n={questions.length} />}
               <Link
