@@ -45,7 +45,7 @@ test("inbox: the feedback row says what waits and links to the first open item",
 test("arriving from the inbox: Feedback, All + Open, at the first open item with its actions in view", async ({ page }) => {
   await suggestions(page);
   await page.goto("/inbox");
-  await page.getByTestId("inbox-feedback").getByRole("link", { name: /^Review suggestions/ }).click();
+  await page.getByTestId("inbox-feedback").getByRole("link", { name: "Review suggestions Fleet next version — PRD" }).click();
   await expect(page).toHaveURL(/\/documents\/fleet-next\/v\/2\?feedback=open#f-33$/);
 
   await expect(page.getByTestId("document-sections").filter({ visible: true })).toHaveAttribute("data-open", "f-33");
