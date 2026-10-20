@@ -1,6 +1,8 @@
-"""Google Docs under drive.file (S5, 2026-10-19): people pick files with Google's Drive
-picker, Oracle reads only the picked files, and older Google connections are asked to
-reconnect once."""
+"""Google Docs and the Drive picker (S5, 2026-10-19, revised by 'Drive folders'): people
+pick files and folders with Google's Drive picker; Oracle keeps read access to the
+person's Drive (drive.readonly), so a picked folder syncs every doc in it, now and later.
+Only a Google grant without drive.readonly (the short-lived drive.file one) is asked to
+reconnect."""
 
 from urllib.parse import parse_qs, urlparse
 
@@ -19,15 +21,22 @@ from oracle.connections.providers import (
 from oracle.sources import base, service
 from oracle.sources.base import CursorCheckpoint, ItemUnavailable
 from oracle.tenancy import tenant_session
-from tests.connection_helpers import add_connection, clear_provider_http, make_person
+from tests.connection_helpers import (
+    add_connection,
+    clear_provider_http,
+    make_person,
+    use_provider_http,
+)
 from tests.sources_helpers import FakeConnector, client_for, make_connection, message
 
 CLIENT_ID = "1234-picker.apps.googleusercontent.com"
 CLIENT_SECRET = "".join(["GOC", "SPX", "-example-client-secret"])
 APP_ID = "123456789012"
 API_KEY = "".join(["AI", "za", "Sy", "Example-browser-key"])
-NEW = ["openid", "email", DRIVE_FILE]
-OLD = ["openid", "email", DRIVE_READONLY]
+# What Oracle asks for, and what connections made before the picker already hold.
+READONLY = ["openid", "email", DRIVE_READONLY]
+# The drive.file grant the first picker build asked for: it cannot read folders.
+FILE_ONLY = ["openid", "email", DRIVE_FILE]
 # Example token values, built from pieces so no credential-shaped literal is in the file.
 OLD_ACCESS = "".join(["ya", "29", ".old"])
 OLD_REFRESH = "".join(["1", "/", "/old"])
@@ -72,36 +81,47 @@ def docs(monkeypatch):
 # --- Scope --------------------------------------------------------------------------
 
 
-def test_google_asks_for_drive_file_not_drive_readonly():
-    assert PROVIDERS["google"].oauth.scopes == ["openid", "email", DRIVE_FILE]
-    assert DRIVE_FILE == "https://www.googleapis.com/auth/drive.file"
+def test_google_asks_for_drive_readonly():
+    assert PROVIDERS["google"].oauth.scopes == ["openid", "email", DRIVE_READONLY]
+    assert DRIVE_READONLY == "https://www.googleapis.com/auth/drive.readonly"
 
 
-def test_authorize_url_requests_drive_file(google_oauth):
+def test_authorize_url_requests_drive_readonly(google_oauth):
     p = PROVIDERS["google"]
     url = oauth.authorize_url(p, oauth.client_for(p), "state", "challenge")
     scope = parse_qs(urlparse(url).query)["scope"][0].split()
-    assert scope == ["openid", "email", DRIVE_FILE]
-    assert DRIVE_READONLY not in url
+    assert scope == ["openid", "email", DRIVE_READONLY]
+    assert DRIVE_FILE not in url
 
 
 async def test_identify_reads_granted_scopes_from_tokeninfo():
     def handler(request):
         if request.url.host == "oauth2.googleapis.com":
             assert request.url.path == "/tokeninfo"
-            assert request.url.params["access_token"] == "tok"
-            return httpx.Response(200, json={"scope": " ".join(OLD)})
+            # The token goes in a POST body, never in a URL (logs, proxies).
+            assert request.method == "POST"
+            assert "tok" not in str(request.url)
+            assert parse_qs(request.content.decode()) == {"access_token": ["tok"]}
+            return httpx.Response(200, json={"scope": " ".join(READONLY)})
         return httpx.Response(200, json={"sub": "g-1", "email": "pat@example.com"})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
         identity = await PROVIDERS["google"].identify(c, "tok")
-    assert identity.scopes == OLD
+    assert identity.scopes == READONLY
 
 
-async def test_identify_still_works_when_tokeninfo_fails():
+@pytest.mark.parametrize(
+    "answer",
+    [
+        httpx.Response(500),
+        httpx.Response(200, text="<html>not json</html>"),
+        httpx.Response(200, json=["not", "an", "object"]),
+    ],
+)
+async def test_identify_still_works_when_tokeninfo_fails(answer):
     def handler(request):
         if request.url.host == "oauth2.googleapis.com":
-            return httpx.Response(500)
+            return answer
         return httpx.Response(200, json={"sub": "g-1", "email": "pat@example.com"})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
@@ -109,36 +129,63 @@ async def test_identify_still_works_when_tokeninfo_fails():
     assert (identity.account_id, identity.scopes) == ("g-1", [])
 
 
-async def test_connections_without_drive_file_ask_to_reconnect(client, tenant_id):
+async def test_only_connections_without_drive_readonly_ask_to_reconnect(client, tenant_id):
     pat = await make_person(tenant_id, "pat@example.com", "viewer")
-    old = await add_connection(
-        tenant_id, pat.id, "google", auth_mode="oauth", account_id="g-old", scopes=OLD
+    readonly = await add_connection(
+        tenant_id, pat.id, "google", auth_mode="oauth", account_id="g-ro", scopes=READONLY
     )
-    new = await add_connection(
-        tenant_id, pat.id, "google", auth_mode="oauth", account_id="g-new", scopes=NEW
+    file_only = await add_connection(
+        tenant_id, pat.id, "google", auth_mode="oauth", account_id="g-file", scopes=FILE_ONLY
     )
+    unknown = await add_connection(tenant_id, pat.id, "google", account_id="g-pasted", scopes=[])
     gh = await add_connection(tenant_id, pat.id, "github", scopes=["repo"])
     resp = await client.get("/v1/connections", headers=pat.headers)
     assert resp.status_code == 200
     by_id = {c["id"]: c for c in resp.json()}
-    assert by_id[str(old.id)]["reconnect_reason"] == RECONNECT_TO_CHOOSE_FILES
+    # Existing drive.readonly connections keep working with no reconnect.
+    assert by_id[str(readonly.id)]["reconnect_reason"] is None
+    assert by_id[str(file_only.id)]["reconnect_reason"] == RECONNECT_TO_CHOOSE_FILES
     assert RECONNECT_TO_CHOOSE_FILES == "Reconnect to choose files"
-    assert by_id[str(new.id)]["reconnect_reason"] is None
+    # Scopes Google did not report (a pasted token) are not judged.
+    assert by_id[str(unknown.id)]["reconnect_reason"] is None
     assert by_id[str(gh.id)]["reconnect_reason"] is None
 
 
-async def test_reconnect_without_drive_file_signs_in_again(client, tenant_id, google_oauth):
+async def test_reconnect_without_drive_readonly_signs_in_again(client, tenant_id, google_oauth):
     pat = await make_person(tenant_id, "pat@example.com", "viewer")
     old = await add_connection(
-        tenant_id, pat.id, "google", auth_mode="oauth", account_id="g-old", scopes=OLD,
+        tenant_id, pat.id, "google", auth_mode="oauth", account_id="g-file", scopes=FILE_ONLY,
         bundle={"access_token": OLD_ACCESS, "refresh_token": OLD_REFRESH},
     )  # fmt: skip
     resp = await client.post(f"/v1/connections/{old.id}/reconnect", headers=pat.headers)
     assert resp.status_code == 200, resp.text
     url = resp.json()["authorize_url"]
     assert url.startswith("https://accounts.google.com/")
-    assert DRIVE_FILE in parse_qs(urlparse(url).query)["scope"][0].split()
+    assert DRIVE_READONLY in parse_qs(urlparse(url).query)["scope"][0].split()
     assert oauth.decode_state(parse_qs(urlparse(url).query)["state"][0], "google").connection_id
+
+
+async def test_reconnect_with_drive_readonly_just_refreshes(client, tenant_id, google_oauth):
+    pat = await make_person(tenant_id, "pat@example.com", "viewer")
+    conn = await add_connection(
+        tenant_id, pat.id, "google", auth_mode="oauth", account_id="g-1", scopes=READONLY,
+        bundle={"access_token": OLD_ACCESS, "refresh_token": OLD_REFRESH},
+    )  # fmt: skip
+
+    def handler(request):
+        if request.url.path == "/token":
+            return httpx.Response(200, json={"access_token": USER_ACCESS, "expires_in": 3599})
+        if request.url.path == "/tokeninfo":
+            return httpx.Response(200, json={"scope": " ".join(READONLY)})
+        return httpx.Response(200, json={"sub": "g-1", "email": "pat@example.com"})
+
+    use_provider_http(handler)
+    resp = await client.post(f"/v1/connections/{conn.id}/reconnect", headers=pat.headers)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["authorize_url"] is None
+    assert body["connection"]["status"] == "active"
+    assert body["connection"]["reconnect_reason"] is None
 
 
 # --- Picker config ------------------------------------------------------------------
@@ -147,7 +194,7 @@ async def test_reconnect_without_drive_file_signs_in_again(client, tenant_id, go
 async def test_picker_config_for_signed_in_users(client, tenant_id, picker):
     viewer = await make_person(tenant_id, "viewer@example.com", "viewer")
     await add_connection(
-        tenant_id, viewer.id, "google", auth_mode="oauth", scopes=NEW,
+        tenant_id, viewer.id, "google", auth_mode="oauth", scopes=READONLY,
         bundle={"access_token": USER_ACCESS, "refresh_token": USER_REFRESH},
     )  # fmt: skip
     resp = await client.get("/v1/connections/google/picker-config", headers=viewer.headers)
@@ -207,51 +254,45 @@ async def _google_source(tenant_id, user, scopes, config):
     return conn, resp
 
 
-async def test_picked_docs_on_drive_file(tenant_id, docs):
+async def test_picked_files_and_folders_on_drive_readonly(tenant_id, docs):
     pat = (await make_person(tenant_id, "pat@example.com")).user
-    _, resp = await _google_source(tenant_id, pat, NEW, {"docs": ["1Doc"]})
-    assert resp.status_code == 201, resp.text
-    assert resp.json()["reconnect_reason"] is None
-    old = await make_connection(tenant_id, pat, "google", scopes=OLD)
-    async with client_for(pat) as c:
-        kinds = {k["kind"]: k for k in (await c.get("/v1/sources/kinds")).json()}
-    choices = {c["id"]: c for c in kinds["google_docs"]["connections"]}
-    assert choices[str(old)]["reconnect_reason"] == RECONNECT_TO_CHOOSE_FILES
-    assert [c["reconnect_reason"] for k, c in choices.items() if k != str(old)] == [None]
-
-
-async def test_legacy_folders_keep_working_on_drive_readonly(tenant_id, docs):
-    pat = (await make_person(tenant_id, "pat@example.com")).user
-    docs.pages = [[message("1Doc", "text", kind="doc")]]
-    _, resp = await _google_source(tenant_id, pat, OLD, {"folders": ["1Folder"]})
+    docs.pages = [[message("1Doc", "text", kind="doc"), message("1InFolder", "t", kind="doc")]]
+    config = {"docs": ["1Doc"], "folders": ["1Folder"], "names": {"1Folder": "Specs"}}
+    _, resp = await _google_source(tenant_id, pat, READONLY, config)
     assert resp.status_code == 201, resp.text
     source = resp.json()
-    # Still syncs, but asks to move to picked files.
-    assert source["reconnect_reason"] == RECONNECT_TO_CHOOSE_FILES
+    assert source["config"] == config
+    assert source["reconnect_reason"] is None
     async with client_for(pat) as c:
         result = (await c.post(f"/v1/sources/{source['id']}/sync")).json()
     assert result["outcome"] == "completed", result
-    assert result["upserted"] == 1
+    assert result["upserted"] == 2
+    file_only = await make_connection(tenant_id, pat, "google", scopes=FILE_ONLY)
+    async with client_for(pat) as c:
+        kinds = {k["kind"]: k for k in (await c.get("/v1/sources/kinds")).json()}
+    choices = {c["id"]: c for c in kinds["google_docs"]["connections"]}
+    assert choices[str(file_only)]["reconnect_reason"] == RECONNECT_TO_CHOOSE_FILES
+    assert [c["reconnect_reason"] for k, c in choices.items() if k != str(file_only)] == [None]
 
 
 async def test_folders_without_drive_readonly_ask_to_reconnect(tenant_id, docs):
     pat = (await make_person(tenant_id, "pat@example.com")).user
-    _, resp = await _google_source(tenant_id, pat, NEW, {"folders": ["1Folder"]})
+    _, resp = await _google_source(tenant_id, pat, FILE_ONLY, {"folders": ["1Folder"]})
     assert resp.status_code == 422
     assert resp.json()["detail"].startswith(RECONNECT_TO_CHOOSE_FILES)
     assert not [c for c in docs.calls if "cursor" in c]
 
 
-async def test_legacy_source_after_reconnecting_to_drive_file(tenant_id, docs):
+async def test_a_grant_that_loses_drive_readonly_stops_syncing_folders(tenant_id, docs):
     pat = (await make_person(tenant_id, "pat@example.com")).user
-    conn, resp = await _google_source(tenant_id, pat, OLD, {"folders": ["1Folder"]})
+    conn, resp = await _google_source(tenant_id, pat, READONLY, {"folders": ["1Folder"]})
     source = resp.json()
-    # The person reconnected Google: the grant is drive.file now.
+    assert source["reconnect_reason"] is None
     from oracle.connections.models import Connection
 
     async with tenant_session(tenant_id) as s:
         row = await s.get(Connection, conn)
-        row.scopes = NEW
+        row.scopes = FILE_ONLY
         await s.commit()
     async with client_for(pat) as c:
         listed = (await c.get("/v1/sources")).json()
@@ -271,7 +312,7 @@ async def test_unreadable_items_are_reported_not_a_source_failure(tenant_id, doc
             ItemUnavailable("1DocGone", "No access: the file was unshared or removed"),
         ]
     ]
-    _, resp = await _google_source(tenant_id, pat, NEW, {"docs": ["1DocOk", "1DocGone"]})
+    _, resp = await _google_source(tenant_id, pat, READONLY, {"docs": ["1DocOk", "1DocGone"]})
     source = resp.json()
     async with client_for(pat) as c:
         result = (await c.post(f"/v1/sources/{source['id']}/sync")).json()

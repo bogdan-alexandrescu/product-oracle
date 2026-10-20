@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from datetime import UTC, datetime
@@ -110,14 +111,46 @@ async def collect(conn, config, cursor=None):
 def test_registered_with_oauth_metadata():
     assert isinstance(get_connector("google_docs"), GoogleDocsConnector)
     assert google_docs.OAUTH["token_url"] == "https://oauth2.googleapis.com/token"
-    # Picked files only (S5, 2026-10-19); legacy folder sources need drive.readonly.
-    assert google_docs.OAUTH["scopes"] == ["https://www.googleapis.com/auth/drive.file"]
+    # Picked files and folders, folders read in full (S5, 'Drive folders', 2026-10-19).
+    assert google_docs.OAUTH["scopes"] == ["https://www.googleapis.com/auth/drive.readonly"]
 
 
 async def test_validate():
     fake = FakeDrive()
     await connector(fake).validate(CONFIG, CREDENTIAL)
     assert fake.calls == ["about", f"file:{PRODUCT}", "file:1DocListedExample"]
+
+
+async def test_validate_checks_picked_items_in_bounded_batches():
+    docs = [f"1DocMany{i:02d}" for i in range(23)]
+    in_flight, peak, seen = 0, 0, []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal in_flight, peak
+        path = str(request.url.copy_with(query=None))[len(DRIVE_URL) :]
+        if path == "about":
+            return httpx.Response(200, json=fixture("about"))
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        file_id = path.split("/")[1]
+        seen.append(file_id)
+        return httpx.Response(200, json={"id": file_id, "mimeType": google_docs.DOC_MIME})
+
+    conn = GoogleDocsConnector(httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    await conn.validate({"docs": docs}, CREDENTIAL)
+    assert sorted(seen) == docs
+    # Several at once, never more than one batch.
+    assert 1 < peak <= google_docs.VALIDATE_BATCH
+
+
+async def test_validate_caps_how_many_items_a_source_picks():
+    fake = FakeDrive()
+    many = {"docs": [f"1Doc{i}" for i in range(google_docs.MAX_PICKED + 1)]}
+    with pytest.raises(ConnectorConfigError, match=f"at most {google_docs.MAX_PICKED}"):
+        await connector(fake).validate(many, CREDENTIAL)
+    assert fake.calls == []
 
 
 @pytest.mark.parametrize(
