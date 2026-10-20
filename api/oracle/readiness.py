@@ -30,6 +30,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 Status = Literal["pass", "warning", "critical", "not_applicable"]
+# Who asks: the dashboard ("advisory") or the publish transaction ("publish").
+Purpose = Literal["advisory", "publish"]
 
 
 @dataclass(frozen=True)
@@ -41,7 +43,7 @@ class ReadinessContext:
     version_id: uuid.UUID | None = None
     composition_revision: int | None = None
     # "publish" when the publish transaction asks; checks may be stricter then.
-    purpose: Literal["advisory", "publish"] = "advisory"
+    purpose: Purpose = "advisory"
 
 
 class CheckOutcome(BaseModel):

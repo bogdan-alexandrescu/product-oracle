@@ -235,7 +235,7 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
       { id: I.experiment, blocker_id: I.blocker, option_id: I.option, hypothesis: "Batching halves lookup calls", method: "Replay a synthetic day of traffic", success_threshold: "Under 50% of today's calls", owner_id: userId, decision_gate_at: null, status: "planned", result: null, evidence_ids: [], lock_version: 1, created_at: AT, updated_at: AT },
     ],
     blocker_events: [
-      { id: I.blockerEvent, blocker_id: I.blocker, option_id: I.option, experiment_id: I.experiment, kind: "experiment_started", from_status: "open", to_status: "mitigating", reason: null, actor: `user:${userId}`, data: {}, created_at: AT },
+      { id: I.blockerEvent, blocker_id: I.blocker, option_id: I.option, experiment_id: I.experiment, kind: "experiment_started", from_status: "open", to_status: "mitigating", reason: null, actor: `user:${userId}`, data: {}, summary: "Experiment started", created_at: AT },
     ],
     change_events: [
       { id: I.change, subject_kind: "document_section", subject_id: null, subject_ref: "checkout-redesign@2#metrics", document_id: documentId, cause: "section_edited", actor: `user:${userId}`, data: {}, handled_by: [], created_at: AT },

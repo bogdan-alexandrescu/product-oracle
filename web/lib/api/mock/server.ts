@@ -9,6 +9,7 @@ import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
 import { enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
@@ -18,7 +19,7 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
-import { routeQuality, seedQuality, type QualityDb } from "./quality";
+import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeTrace } from "./trace";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
@@ -60,6 +61,8 @@ export interface Db {
   quality?: QualityDb;
   /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
   modules?: ModulesDb;
+  /** Blocker strategies (./blockers.ts) on the v2 rows; absent in older saved data. */
+  blockers?: BlockersDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -888,6 +891,19 @@ function ensureV2(db: Db): V2Db {
   return db.v2;
 }
 
+function ensureBlockers(db: Db): BlockersDb {
+  if (!db.blockers) {
+    const v2 = ensureV2(db);
+    const deposits = db.documents.find((d) => d.slug === "online-deposits");
+    db.blockers = seedBlockers(
+      db.documents.find((d) => d.kind === "prd")?.id ?? db.tenant_id,
+      db.user_id,
+      deposits && { documentId: deposits.id, v2 },
+    );
+  }
+  return db.blockers;
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -952,6 +968,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  // Company settings are the owner's, as in the API (tenant_settings_api.py).
+  if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const connections = await connectionsRoute(req, p);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
@@ -965,22 +983,19 @@ async function route(db: Db, req: Request): Promise<Response> {
   // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
   const v2db = ensureV2(db);
   db.quality ??= seedQuality();
-  const quality = await routeQuality(
-    {
-      db: db.quality,
-      v2: v2db,
-      userId: me.id,
-      role: me.role,
-      findVersion: (ref, n) => {
-        const doc = findDocument(db, ref);
-        const v = doc && findVersion(db, doc, n);
-        return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
-      },
+  const qualityCtx: QualityContext = {
+    db: db.quality,
+    v2: v2db,
+    userId: me.id,
+    role: me.role,
+    findVersion: (ref, n) => {
+      const doc = findDocument(db, ref);
+      const v = doc && findVersion(db, doc, n);
+      return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
     },
-    req,
-    p,
-    q,
-  );
+    blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
+  };
+  const quality = await routeQuality(qualityCtx, req, p, q);
   if (quality) return quality;
   // Modules and compositions check roles themselves (viewers may ask for a recommendation).
   if (!db.modules) {
@@ -1052,7 +1067,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
 
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
-  const v2 = routeV2(ensureV2(db), req, p, q, me.id);
+  const v2Db = ensureV2(db);
+  // Blocker strategy routes (CR-04): writes on the v2 option, experiment and event rows.
+  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents };
+  const blockers = await routeBlockers(blockerContext, ensureBlockers(db), req, p, q);
+  if (blockers) return blockers;
+  const v2 = routeV2(v2Db, req, p, q, me.id);
   if (v2) return v2;
 
   const handled = await laneF(db, req, p, m);
@@ -1160,6 +1180,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
+    // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
+    if (doc.kind === "prd") {
+      const latest = docVersions(db, doc).pop()!.number;
+      const refusal = publishRefusal(qualityCtx, { documentId: doc.id, slug: doc.slug, versionId: v.id }, v.number, latest, (id) =>
+        ensureBlockers(db).blockers.find((b) => b.id === id)?.statement,
+      );
+      if (refusal) return json(409, refusal);
+    }
     v.approved_at = now();
     doc.status = "approved";
     doc.updated_at = v.approved_at;

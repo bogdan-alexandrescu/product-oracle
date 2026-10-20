@@ -75,6 +75,7 @@ test("roles: a viewer reads and exports but has no comment, verdict or approve c
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
   await expect(section(page, "problem").getByTestId("verdict-state")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+  await expect(page.getByTestId("publish-link")).toHaveCount(0);
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await expect(page.getByRole("button", { name: "Export MD" })).toBeEnabled();
 
@@ -96,6 +97,7 @@ test("roles: a commenter comments and resolves their own thread, not others'", a
   await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+  await expect(page.getByTestId("publish-link")).toHaveCount(0);
 
   // Someone else's thread: reply yes, resolve no.
   await showAll(page);
@@ -116,7 +118,7 @@ test("roles: a commenter comments and resolves their own thread, not others'", a
   await expect(mine).toHaveCount(0); // resolved threads are hidden by default
 });
 
-test("roles: an approver sets verdicts and approves, but cannot manage members", async ({ page }) => {
+test("roles: an approver sets verdicts and publishes a ready PRD, but cannot manage members", async ({ page }) => {
   await login(page, "approver@example.com");
   await page.goto("/documents/checkout-redesign/v/2");
   await openSection(page, "problem");
@@ -124,9 +126,16 @@ test("roles: an approver sets verdicts and approves, but cannot manage members",
   await expect(page.getByTestId("role-note")).toHaveCount(0);
   await showAll(page);
   await expect(page.getByTestId("comment").first().getByRole("button", { name: "Resolve" })).toBeVisible();
-  await page.getByRole("button", { name: "Approve version" }).click();
-  await page.getByRole("button", { name: "Confirm" }).click();
-  await expect(page.getByText(/Approved/).first()).toBeVisible();
+  // checkout-redesign carries a critical blocker: Publish opens the screen, which refuses.
+  await page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true }).click();
+  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/publish$/);
+  await expect(page.getByTestId("publish-button")).toBeDisabled();
+  await expect(page.getByTestId("block-row").first()).toBeVisible();
+  // A ready PRD publishes.
+  await page.goto("/documents/visit-reminders/publish");
+  await page.getByTestId("publish-button").click();
+  await page.getByRole("dialog", { name: "Publish v1?" }).getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByTestId("published-chip")).toHaveText("Published v1");
 });
 
 test("roles: a role change shows up on the reviewer's next page load", async ({ page }) => {

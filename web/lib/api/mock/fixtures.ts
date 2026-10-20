@@ -272,6 +272,29 @@ const ALERTS_V1: SectionSeed[] = [
   },
 ];
 
+// The Quillfield clinic set (as on /design): deposits is the B1 Publish frame's PRD, held
+// by a critical blocker and an unsupported third-party operation; reminders is ready.
+const DEPOSITS_V1: SectionSeed[] = [
+  { key: "title", level: 1, heading: "Online deposits at booking", body: "Patients pay a small deposit when they book, so fewer slots go unused." },
+  { key: "problem", level: 2, heading: "1. Problem", body: "One booking in nine ends as a no-show; the slot cannot be offered again that day." },
+  { key: "solution", level: 2, heading: "2. Solution", body: "Take a deposit through the booking calendar; refund it when the patient cancels in time." },
+  { key: "metrics", level: 2, heading: "3. Success metrics", body: "No-show rate under 5% within two months of launch." },
+];
+const DEPOSITS_V2: SectionSeed[] = [
+  ...DEPOSITS_V1.slice(0, 3),
+  { key: "risks", level: 2, heading: "3. Risks", body: "Same-day cancellations need a same-day refund, which the card processor may not support." },
+  { ...DEPOSITS_V1[3], heading: "4. Success metrics" },
+];
+const DEPOSITS_V3: SectionSeed[] = DEPOSITS_V2.map((s) =>
+  s.key === "metrics" ? { ...s, body: "No-show rate under 5% within two months of launch; refunds within one working day." } : s,
+);
+const REMINDERS_V1: SectionSeed[] = [
+  { key: "title", level: 1, heading: "Visit reminders", body: "A text and an email the day before each visit, with one-tap confirm or rebook." },
+  { key: "problem", level: 2, heading: "1. Problem", body: "Patients forget visits booked weeks ahead; front desks spend mornings on reminder calls." },
+  { key: "solution", level: 2, heading: "2. Solution", body: "Send reminders 24 hours ahead; a reply of C confirms, R opens the rebook page." },
+  { key: "metrics", level: 2, heading: "3. Success metrics", body: "Reminder calls down by half; confirmations from 60% of patients." },
+];
+
 // A PRD with a brief layer (O1f): the brief first, then "Full version" and the detail
 // each feature row and milestone expands.
 const CARTS_CITATIONS: CitationSeed[] = [
@@ -517,6 +540,24 @@ export const DOCUMENTS: DocumentSeed[] = [
         source: { slug: "usage-alerts", version: 1 },
       },
     ],
+  },
+  {
+    slug: "online-deposits",
+    title: "Online deposits at booking",
+    template: "oracle-default",
+    template_version: "1",
+    versions: [
+      { number: 1, created_at: "2026-10-14T09:00:00Z", sections: DEPOSITS_V1, citations: [] },
+      { number: 2, created_at: "2026-10-15T09:00:00Z", sections: DEPOSITS_V2, citations: [] },
+      { number: 3, created_at: "2026-10-16T09:00:00Z", sections: DEPOSITS_V3, citations: [] },
+    ],
+  },
+  {
+    slug: "visit-reminders",
+    title: "Visit reminders",
+    template: "oracle-default",
+    template_version: "1",
+    versions: [{ number: 1, created_at: "2026-10-11T09:00:00Z", sections: REMINDERS_V1, citations: [] }],
   },
 ];
 

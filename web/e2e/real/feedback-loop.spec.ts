@@ -21,7 +21,7 @@ async function login(page: Page) {
 
 type OpenItem = { id: string; kind: string; section_key: string | null; status: string };
 
-test("full loop: push, review, pull, push v2 with resolutions, diff, approve, export", async ({ page }) => {
+test("full loop: push, review, pull, push v2 with resolutions, diff, publish, export", async ({ page }) => {
   const work = await mkdtemp(path.join(tmpdir(), "oracle-e2e-"));
 
   // The agent track imports v1.
@@ -116,9 +116,15 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, approve, ex
     await expect(row).toContainText("addressed in v2");
   }
 
-  // Approve v2, then export it.
-  await page.getByRole("button", { name: "Approve version" }).click();
-  await page.getByRole("button", { name: "Confirm" }).click();
+  // Publish v2 (the PRD has no blocks: the API's publish gate lets it through), then export it.
+  await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+  await page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/publish$`));
+  await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v2");
+  await page.getByTestId("publish-button").click();
+  await page.getByRole("dialog", { name: "Publish v2?" }).getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByTestId("published-chip")).toHaveText("Published v2");
+  await page.goto(`/documents/${DOC}/v/2`);
   await expect(page.getByText(/✓ Approved/)).toBeVisible();
   await expect(page.getByText(/review is closed/)).toBeVisible();
 

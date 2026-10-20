@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from oracle.auth.router import router as auth_router
 from oracle.baseline.router import router as baseline_router
+from oracle.blockers.router import router as blockers_router
 from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
 from oracle.config import get_settings
@@ -141,6 +142,7 @@ def create_app() -> FastAPI:
     # Modules and compositions (CR-01/02): catalogue, packs, manifests, revisions.
     app.include_router(modules_router)
     app.include_router(trace_router)
+    app.include_router(blockers_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).
