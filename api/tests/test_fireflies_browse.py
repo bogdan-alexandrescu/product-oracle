@@ -11,6 +11,7 @@ from sqlalchemy import select
 from oracle.connections.models import Connection
 from oracle.main import app
 from oracle.sources import base, fireflies_browse, service
+from oracle.sources.base import SCOPE_KEY
 from oracle.sources.connectors.fireflies import (
     MAX_LABEL,
     MAX_LABELS,
@@ -319,6 +320,11 @@ async def test_narrowing_deletes_what_falls_outside_on_the_next_sync(
         assert {i["external_id"] for i in resp.json()} == kept
 
 
+def _position(cursor):
+    """A saved cursor without the engine's fingerprint of the selection."""
+    return {k: v for k, v in (cursor or {}).items() if k != SCOPE_KEY}
+
+
 async def _change_source(tenant_id, source_id, alice, what: str) -> None:
     """What another request does while a sync runs (oracle.sources.service.update_source
     resets the cursor; a reconnect changes the connection's account)."""
@@ -375,7 +381,8 @@ async def test_a_sync_saves_no_cursor_once_its_source_changed(
         assert sync["outcome"] == "superseded", sync
         async with tenant_session(tenant_id) as s:
             source = await s.get(Source, source_id)
-            assert source.cursor is None
+            # No position saved: at most the fingerprint the sync stamped when it started.
+            assert not _position(source.cursor)
             assert source.last_synced_at is None
         assert await _items(tenant_id, source_id) == {}
 
@@ -766,7 +773,8 @@ async def test_a_connection_switch_before_the_sync_starts_is_superseded(
         assert calls == []
         async with tenant_session(tenant_id) as s:
             source = await s.get(Source, source_id)
-            assert source.cursor is None
+            # No position saved: at most the fingerprint the sync stamped when it started.
+            assert not _position(source.cursor)
             assert source.connection_id != conn
             new_conn = source.connection_id
 
