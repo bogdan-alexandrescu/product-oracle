@@ -23,7 +23,7 @@ nothing is applied without a person. Unresolved critical blockers reach the revi
 | 4. Conflicts and staleness | `extract.from_sources`, `summary.conflicts` | Pinned items that state different percentages for the same measure are a conflict, with the B3 recommendation from `baseline.conflicts.pick_winner` (confidence, then code > tracker > docs > meetings > chat, then newer). Open baseline conflicts on the goals, features and constraints the brief touches are listed with their resolution. Pinned items with freshness ≤ 0.35 are stale. |
 | 5. Rank | `categories.rank_score` | importance weight (critical 4 … low 1) × the areas a missing answer affects (goals 3, feasibility 3, scope 2, economics 2, risks 2, module selection 1) × the unknown share (unknown 1, brief hypothesis 0.9, an inference 1 − its evidence confidence, kept between 0.2 and 0.6). Signals in the brief raise importance: a partner API makes third-party policy critical, personal data makes security critical, a rate limit makes blockers critical, a model-driven feature raises evaluation criteria. |
 | 6. Short batches, every path | `engine.ask_batch`, `answers.answer` | Batches of five (1-10), asked by the author or an approver. Each question offers `answer`, `dont_know`, `defer`, `delegate` (to a company member who can answer) and `research`. A delegated question can be answered only by the person asked or an approver. A gap decided by an explicit decision (validated, accepted risk) is never rewritten by a later `dont_know`, `defer`, `research` or `delegate`. |
-| 7. Proposals, never approvals | `answers._propose_baseline`, `_propose_patch`, `propose_research` | An answer proposes a baseline entity (outcome, constraint with `attrs.blocker`, risk or decision) in the baseline's proposals; a `decision` change event through `oracle/changes.py` for the modules lane; a `prd_patch` when the intake is linked to a PRD (accepting it opens a feedback item on the latest version, refused on an approved section); a `research_run` for "Research this" and for "I don't know" on a critical gap. |
+| 7. Proposals, never approvals | `answers._propose_baseline`, `_propose_patch`, `propose_research` | An answer proposes a baseline entity (outcome, constraint with `attrs.proposed_blocker`, risk or decision) in the baseline's proposals; a `decision` change event through `oracle/changes.py` for the modules lane; a `prd_patch` when the intake is linked to a PRD (accepting it opens a feedback item on the latest version, refused on an approved section); a `research_run` for "Research this" and for "I don't know" on a critical gap. |
 | 8. The review gate | `oracle/intake/checks.py` | `intake.critical_blockers` (hard) is critical while a critical blockers or third-party-policy gap of the PRD is unresolved; `intake.open_decisions` (advisory) warns on other critical gaps. Only an owner clears a critical gap without review (B4): an answer below the owner role moves it to `answered_pending_review` (still unresolved); validating it unanswered, validating a critical hard blocker, accepting its risk or assumption, lowering its importance, or moving an intake with an open critical blocker off its PRD all take an owner. An approver may validate an answered critical gap that is not a hard blocker. |
 
 All seventeen categories are covered: customer/user, pain evidence, company-goal
@@ -108,6 +108,28 @@ limits, configurability and scaling (`categories.CATEGORIES`).
   readable or searchable by runs nor shown to people. If two releases of one item
   differ, the sources routes serve the newest released version, an intake's own
   routes the version that intake released.
+- Round 10 (after main's evidence inspector and blockers): the evidence inspector
+  (`/v1/documents/{doc}/versions/{n}/evidence`, also over MCP) shows a run a linked item
+  it may not read (withheld, deleted, frozen with no release readable now) restricted,
+  and a released one at the title and link released; a run cannot link such an item to
+  a section (422). The blockers appendix serves the link or ref evidence copied when it
+  was attached, never the item's current link. A run reads its user's own frozen items
+  as at release, like another user's: acl reduced to `visibility`, `is_private` and
+  `doc_type`, no `source_updated_at`, confidence from the version released. A run's own
+  item deleted upstream is missing from baseline evidence and from its YAML imports, as
+  is one frozen with no release. An item a person may not see scores neutral in intake
+  refs, and baseline evidence scores by the version it was taken from
+  (`retrieved_at`), never by when the item changed upstream. Owners are never frozen:
+  their current reads show the item's current title and link (a rename alone writes no
+  version).
+- Version links after a deploy (round 10): `0014_intake` backfills
+  `source_item_versions.url`, but an API or worker on the previous image keeps writing
+  versions without one until it stops. `oracle.sources.repair` runs the same query for
+  `url IS NULL` rows at API startup and once more 15 minutes later (old replicas are gone
+  by then), and by hand with `python -m oracle.sources.repair` (prints the rows
+  repaired). Both skip rows whose link would stay NULL, so nothing is rewritten needlessly
+  and a second run changes nothing. Until repaired, such a version reads as having no
+  link (fail closed).
 - Lowering stays consistent (round 7): a re-analysis brings open baseline proposals
   down to their finding's level as setting the level does (private withdraws them); a
   withdrawn proposal keeps only the category's question. Deciding and withdrawing take
@@ -256,8 +278,10 @@ sources, the analysis and the findings' sharing levels live in `product_intakes.
   `security.privacy`, `integrations.third_party`, `quality.evaluation`, …); the composer
   decides and may map them to its pack's keys.
 - **Blockers:** answers on blockers and third-party policy propose `constraint` entities
-  with `attrs.blocker` (`type: unknown`, `limit_kind: other | policy`, severity: the
-  gap's public importance), which the blockers lane's checks pick up once accepted. An
+  with `attrs.proposed_blocker` (`type: unknown`, `limit_kind: other | policy`, severity:
+  the gap's public importance). Only the blocker routes write `attrs.blocker`
+  (`baseline.MANAGED_ATTRS`, CR-04): once the constraint is accepted, an approver makes
+  it a blocker with `POST /v1/blockers` and its `entity_id` (round 10, merge with main). An
   answer to a finding shared at counts proposes only its category's fixed question
   (`attrs`: the gap's id and category; no answer text, no severity); from summary up the
   same open proposal carries the answer and severity, and lowering the level to counts
