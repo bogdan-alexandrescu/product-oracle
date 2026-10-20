@@ -987,6 +987,17 @@ DOWNLOAD_HEADERS = {
 # --------------------------------------------------------------------------- reviews
 
 
+def _approval_audit(principal: Principal, request: ArtifactRequest) -> dict[str, Any]:
+    """E1: with no engineering approvers named, the requester may approve their own spec
+    (as with PRDs); every approval says whether it was one."""
+    named = (request.params or {}).get("engineering_approver_ids") or []
+    return {
+        "requested_by": str(request.requested_by) if request.requested_by else None,
+        "engineering_approvers_named": bool(named),
+        "self_approval": request.requested_by is not None and principal.id == request.requested_by,
+    }
+
+
 def _may_approve_engineering(principal: Principal, request: ArtifactRequest) -> bool:
     named = [str(i) for i in (request.params or {}).get("engineering_approver_ids") or []]
     if principal.role == "owner":
@@ -1051,7 +1062,11 @@ async def review_design(
         f"spec.design_{body.kind}",
         "artifact_version",
         av.id,
-        {"request_id": str(request.id), **data},
+        {
+            "request_id": str(request.id),
+            **data,
+            **(_approval_audit(principal, parent or request) if body.kind == "approved" else {}),
+        },
     )
     await db.commit()
     await db.refresh(event)
@@ -1103,7 +1118,11 @@ async def approve_version(
             "spec.approach_approved",
             "artifact_version",
             av.id,
-            {"request_id": str(request.id), "document_version_id": str(version.id)},
+            {
+                "request_id": str(request.id),
+                "document_version_id": str(version.id),
+                **_approval_audit(principal, request),
+            },
         )
     await session.flush()
     return document, version
