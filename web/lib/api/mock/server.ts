@@ -386,15 +386,6 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
   };
 }
 
-function ensureV2(db: Db): V2Db {
-  if (!db.v2) {
-    const prd = db.documents.find((d) => d.kind === "prd");
-    const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
-    db.v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
-  }
-  return db.v2;
-}
-
 function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   return {
     db: db.runs,
