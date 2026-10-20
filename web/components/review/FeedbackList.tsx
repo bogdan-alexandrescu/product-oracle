@@ -166,6 +166,12 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
       >
         <div className="flex flex-wrap items-center gap-1.5" data-testid="feedback-head">
           {item.section_key && <SectionLink item={item} doc={ctx.doc} current={ctx.n} goTo={ctx.goTo} />}
+          {/* Raised on an earlier version whose section this one no longer has: counted in the head, shown here. */}
+          {item.section_key && !ctx.headings.has(item.section_key) && (
+            <Chip kind="warn" data-testid="feedback-section-removed">
+              Section removed
+            </Chip>
+          )}
           <Chip kind="line">{KIND_LABEL[kind]}</Chip>
           {item.verdict && <VerdictChip verdict={item.verdict} />}
           <Chip kind={STATE_KIND[state]} data-testid="feedback-state-chip">

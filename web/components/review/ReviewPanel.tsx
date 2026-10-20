@@ -43,7 +43,7 @@ export function ReviewPanel({
   version: VersionOut | undefined;
   doc: string;
   n: number;
-  stats: { reviewed: number; total: number; locked: number; openFeedback: number | null };
+  stats: { reviewed: number; total: number; locked: number; lockedLabel?: string; openFeedback: number | null };
   tab: PanelTab;
   setTab: (t: PanelTab) => void;
   feedback: FeedbackProps;
@@ -80,7 +80,7 @@ export function ReviewPanel({
             {(
               [
                 ["Reviewed", `${stats.reviewed}/${stats.total}`, "stat-reviewed"],
-                ["Locked", stats.locked, "stat-locked"],
+                [stats.lockedLabel ?? "Locked", stats.locked, "stat-locked"],
                 ["Open feedback", stats.openFeedback ?? "–", "stat-open-feedback"],
               ] as const
             ).map(([label, value, testId]) => (

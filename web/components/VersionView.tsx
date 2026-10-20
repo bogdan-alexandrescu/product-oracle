@@ -476,6 +476,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+      // Not inside a dialog (the sheets, the build sheet, the switcher): its keys are its own.
+      if ((e.target as HTMLElement | null)?.closest?.("[role=dialog]")) return;
       if (e.key === "/") {
         e.preventDefault();
         focusFilter();
@@ -565,6 +567,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       )),
   });
 
+  // A section is locked once its version is approved; before that an approved section is 'Approved'.
   const lockedCount = version?.sections.filter((s) => s.verdict?.verdict === "approved").length ?? 0;
   const reviewedCount = version?.sections.filter((s) => s.verdict).length ?? 0;
   const reviewedShown = shownSections.filter((s) => s.verdict).length;
@@ -692,7 +695,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       version={version}
       doc={doc}
       n={n}
-      stats={{ reviewed: reviewedCount, total: sections.length, locked: lockedCount, openFeedback }}
+      stats={{ reviewed: reviewedCount, total: sections.length, locked: lockedCount, lockedLabel: version?.approved_at ? "Locked" : "Approved", openFeedback }}
       openFeedback={openFeedback}
       tab={tab}
       setTab={openTab}
