@@ -8,8 +8,8 @@ too. One row per feature for the whole deployment (no tenant): the runtime is Or
 Additive; the downgrade drops the table (each process then learns again at its first
 submission, as before).
 
-Revision ID: 0017_runtime_features
-Revises: 0016_refinement_batch
+Revision ID: 0018_runtime_features
+Revises: 0017_citation_source_oracle
 """
 
 from collections.abc import Sequence
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0017_runtime_features"
-down_revision: str | None = "0016_refinement_batch"
+revision: str = "0018_runtime_features"
+down_revision: str | None = "0017_citation_source_oracle"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

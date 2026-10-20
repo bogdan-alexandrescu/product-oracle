@@ -124,6 +124,89 @@ test("new run over $50 waits for an owner's approval", async ({ page }) => {
   await expect(status(page)).toHaveText("Running");
 });
 
+/**
+ * Seeds the mock with a run waiting at its PRD review whose draft Oracle refused at segment
+ * end (the import error on the segment and in the checkpoint's payload). Returns its id.
+ */
+async function seedRejectedDraft(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    type S = Record<string, unknown> & { seq: number; checkpoint: string };
+    const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
+    const id = "7a11c0de-0000-4000-8000-0000000000d1";
+    const at = "2026-10-17T09:00:00Z";
+    const error = "prd.md was rejected: [invalid_citation] citation #1 (o-g1) is invalid: source";
+    const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "guest-checkout", document_id: null, created_at: at, started_at: at };
+    const segments: S[] = run.segments;
+    for (const s of segments) {
+      Object.assign(s, {
+        id: crypto.randomUUID(),
+        status: "succeeded",
+        cost_usd: 1,
+        attempts: [{ attempt: 1, workflow_id: `mock-wf-rej-${s.seq}`, submitted_at: at, cost_usd: 1, note: null, state: "succeeded" }],
+      });
+    }
+    const draft = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, source: null, prd_links: null };
+    Object.assign(segments[3], { artifacts: ["prd.md"], draft_import: draft });
+    run.checkpoints = segments.map((s) => {
+      const open = s.seq === 4;
+      return {
+        id: crypto.randomUUID(),
+        run_id: id,
+        kind: s.checkpoint,
+        status: open ? "pending" : "approved",
+        approver_role: "approver",
+        segment_seq: s.seq,
+        decided_by: null,
+        decided_at: open ? null : at,
+        note: null,
+        payload: open ? { segment_seq: 4, segment: "prd_draft", attempt: 1, artifacts: ["prd.md"], import: { error } } : {},
+        created_at: at,
+        can_decide: open,
+      };
+    });
+    Object.assign(run, { status: "awaiting_checkpoint", waiting_on: "prd_review" });
+    db.runs.runs.push(run);
+    db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Guest checkout PRD\n---\n\n# Guest checkout PRD {#title}\n";
+    localStorage.setItem(key, JSON.stringify(db));
+    return id;
+  });
+}
+
+test("a rejected draft: Retry import imports it, and the segment links the PRD", async ({ page }) => {
+  await login(page);
+  const id = await seedRejectedDraft(page);
+  await page.goto(`/runs/${id}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+
+  const prd = page.getByTestId("segment-prd_draft");
+  await expect(prd).toContainText("Draft not imported: prd.md was rejected: [invalid_citation]");
+  const retry = prd.getByRole("button", { name: "Retry import" });
+  await expect(retry).toBeVisible();
+  // Only the segment whose draft was refused offers it.
+  await expect(page.getByRole("button", { name: "Retry import" })).toHaveCount(1);
+  // The review cannot be approved without a draft; changes can still be requested.
+  const review = prd.getByTestId("checkpoint-prd_review");
+  await expect(review.getByRole("button", { name: "Approve and continue" })).toBeDisabled();
+  await expect(review.getByTestId("cannot-approve")).toHaveText("The draft was not imported: retry import, or request changes.");
+  await review.getByLabel("Note for the agents").fill("Fix the citations");
+  await expect(review.getByRole("button", { name: "Request changes" })).toBeEnabled();
+
+  await retry.click();
+  await expect(prd).toContainText("Imported as guest-checkout v1");
+  await expect(prd).not.toContainText("Draft not imported");
+  await expect(retry).toHaveCount(0);
+  // Nothing is decided: the review still waits for a person, who may approve it now.
+  await expect(prd.getByTestId("checkpoint-waiting")).toBeVisible();
+  await expect(status(page)).toHaveText("Waiting for review");
+  await expect(review.getByRole("button", { name: "Approve and continue" })).toBeEnabled();
+  await expect(review.getByTestId("cannot-approve")).toHaveCount(0);
+
+  await prd.getByRole("link", { name: "guest-checkout v1" }).click();
+  await expect(page).toHaveURL(/\/documents\/guest-checkout\/v\/1$/);
+});
+
 test("cancel a run: it asks in the page, never in a browser dialog; going back does nothing", async ({ page }) => {
   // UI test finding E5 (2026-10-20): a native confirm froze the tab for browser automation.
   const native: string[] = [];

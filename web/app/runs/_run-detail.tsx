@@ -110,6 +110,9 @@ export function RunDetail({ id }: { id: string }) {
         }),
       ),
     );
+  // Imports a segment's refused draft again (the review still waits for a person).
+  const retryImport = (seq: number) =>
+    act(() => unwrap(api.POST("/v1/runs/{run_id}/segments/{seq}/retry-draft-import", { params: { path: { run_id: id, seq } } })));
   const done = run.segments.filter((s) => s.status === "succeeded").length;
   const deciding = run.checkpoints.some((c) => c.status === "pending" && c.can_decide);
   const open = !FINAL_STATUSES.includes(run.status) && run.status !== "draft";
@@ -310,6 +313,7 @@ export function RunDetail({ id }: { id: string }) {
                 checkpoints={run.checkpoints.filter((c) => c.segment_seq === s.seq)}
                 busy={busy}
                 onDecide={decide}
+                onRetryImport={retryImport}
               />
             ))}
           </ol>
@@ -426,12 +430,14 @@ function SegmentItem({
   checkpoints,
   busy,
   onDecide,
+  onRetryImport,
 }: {
   run: RunOut;
   segment: SegmentOut;
   checkpoints: CheckpointOut[];
   busy: boolean;
   onDecide: Decide;
+  onRetryImport: (seq: number) => void;
 }) {
   const kind = s.checkpoint;
   const deciding = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
@@ -522,7 +528,12 @@ function SegmentItem({
         <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
           {s.error && <p className="text-crit">{s.error}</p>}
           {s.items_check && <ItemsCheckLine check={s.items_check} />}
-          {s.draft_import && <DraftImportLine imp={s.draft_import} />}
+          {s.draft_import && (
+            <DraftImportLine
+              imp={s.draft_import}
+              retry={s.can_retry_draft_import ? { busy, onRetry: () => onRetryImport(s.seq) } : undefined}
+            />
+          )}
           {s.artifacts.length > 0 && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} />}
           {deciding.map((cp, i) => (
             <CheckpointRow key={cp.id} cp={cp} busy={busy} onDecide={onDecide} anchor={i === 0} />
@@ -533,8 +544,26 @@ function SegmentItem({
   );
 }
 
-function DraftImportLine({ imp }: { imp: NonNullable<SegmentOut["draft_import"]> }) {
-  if (imp.error) return <p className="text-crit">Draft not imported: {imp.error}</p>;
+function DraftImportLine({
+  imp,
+  retry,
+}: {
+  imp: NonNullable<SegmentOut["draft_import"]>;
+  /** The import was refused and its review is open: Retry import (owners and approvers). */
+  retry?: { busy: boolean; onRetry: () => void };
+}) {
+  if (imp.error) {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-crit">Draft not imported: {imp.error}</p>
+        {retry && (
+          <Button disabled={retry.busy} onClick={retry.onRetry}>
+            Retry import
+          </Button>
+        )}
+      </div>
+    );
+  }
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text">
       <span>
@@ -642,6 +671,8 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
   const redoOrContinue = answer?.needs === "redo_or_continue";
   // Redo carries the console's findings, else the note: the API refuses it without either.
   const redoBlocked = !answer?.can_redo && !note.trim();
+  // The draft was not imported: approving is refused until Retry import imports it.
+  const approveBlocked = cp.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null;
   return (
     <div
       id={anchor ? "decide" : undefined}
@@ -662,6 +693,11 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
       </div>
       {cp.note && <p className="mt-1.5 text-text2">{cp.note}</p>}
       {answer && <ConsolePanel answer={answer} />}
+      {approveBlocked && (
+        <p className="mt-2 text-sm text-warn" data-testid="cannot-approve">
+          {approveBlocked}
+        </p>
+      )}
       <textarea
         aria-label="Note for the agents"
         placeholder={redoOrContinue ? "Note (optional, added to the findings)" : "Note (required to request changes)"}
@@ -673,7 +709,13 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
       <div className="mt-2 flex flex-wrap gap-2">
         {redoOrContinue ? (
           <>
-            <Button variant="solid" icon="check" disabled={busy} onClick={() => onDecide(cp, "continue", note)}>
+            <Button
+              variant="solid"
+              icon="check"
+              disabled={busy || !!approveBlocked}
+              title={approveBlocked ?? undefined}
+              onClick={() => onDecide(cp, "continue", note)}
+            >
               Continue
             </Button>
             <Button
@@ -687,14 +729,21 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
         ) : (
           <>
             {answer?.needs === "confirm" && (
-              <Button variant="solid" icon="check" disabled={busy} onClick={() => onDecide(cp, "confirm", note)}>
+              <Button
+                variant="solid"
+                icon="check"
+                disabled={busy || (answer.verdict === "MERGE" && !!approveBlocked)}
+                title={answer.verdict === "MERGE" ? (approveBlocked ?? undefined) : undefined}
+                onClick={() => onDecide(cp, "confirm", note)}
+              >
                 Confirm {answer.verdict === "MERGE" ? "approval" : "change request"}
               </Button>
             )}
             <Button
               variant={answer?.needs === "confirm" ? "secondary" : "solid"}
               icon={answer?.needs === "confirm" ? undefined : "check"}
-              disabled={busy}
+              disabled={busy || !!approveBlocked}
+              title={approveBlocked ?? undefined}
               onClick={() => onDecide(cp, "approved", note)}
             >
               Approve and continue
