@@ -30,6 +30,13 @@ export interface BaselineState {
 
 export type BaselineCaller = { userId: string; role: Role };
 
+/** The accepted intake constraint the seed keeps as a suggested blocker (B4). */
+export const SUGGESTED_BLOCKER = {
+  id: "a4000000-0000-4000-8000-000000000010",
+  key: "saved-addresses-third-party-policy-4f2a1c",
+  title: "The carrier's terms forbid keeping a buyer's address for more than 30 days",
+} as const;
+
 /** Below this every piece of a feature's evidence counts as weak (confidence DEFAULTS.low). */
 export const LOW_CONFIDENCE = 0.4;
 const WEIGHTS = { source: 0.35, freshness: 0.25, mentions: 0.2, goal_impact: 0.2 } as const;
@@ -396,6 +403,27 @@ export function seedBaseline(uuid: () => string): BaselineState {
     body: "The card processor may not refund a deposit on the day it was taken.",
     confidence: 0.6,
   }).id = DEPOSITS_IDS.blocker;
+
+  // An intake answer that revealed a blocker: its constraint, accepted by an approver, is
+  // still a "suggested blocker" (B4) until someone promotes it.
+  const carrier = entity("constraint", SUGGESTED_BLOCKER.key, SUGGESTED_BLOCKER.title, {
+    body: `Which third-party rules or policies limit this?\n\n${SUGGESTED_BLOCKER.title}.`,
+    attrs: {
+      intake_id: "a4000000-0000-4000-8000-000000000001",
+      gap_id: "a4000000-0000-4000-8000-000000000002",
+      answer_id: "a4000000-0000-4000-8000-000000000003",
+      proposed_blocker: { type: "unknown", limit_kind: "policy", severity: "high", status: "open" },
+    },
+    confidence: 0.62,
+  });
+  carrier.id = SUGGESTED_BLOCKER.id;
+  cite(carrier, "notion:page", { source: 0.8, freshness: 0.7, mentions: 0.4, goal_impact: 0.3 }, {
+    url: "https://www.notion.so/example/Carrier-terms-0000000001",
+    ref: "Carrier terms summary",
+    excerpt: "Stored delivery addresses must be deleted within 30 days of the last order.",
+    retrieved_at: "2026-10-18T10:00:00Z",
+    itemTitle: "Carrier terms summary",
+  });
 
   return s;
 }

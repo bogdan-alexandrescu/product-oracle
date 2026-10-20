@@ -1237,7 +1237,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
   const v2Db = ensureV2(db);
   // Blocker strategy routes (CR-04): writes on the v2 option, experiment and event rows.
-  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents };
+  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents, baseline: db.baseline };
   const blockers = await routeBlockers(blockerContext, ensureBlockers(db), req, p, q);
   if (blockers) return blockers;
   const v2 = routeV2(v2Db, req, p, q, me.id);
