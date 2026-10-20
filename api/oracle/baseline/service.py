@@ -793,9 +793,17 @@ async def list_edges(
 
 
 async def revisions(
-    db: AsyncSession, *, entity_id: uuid.UUID | None = None, edge_id: uuid.UUID | None = None
+    db: AsyncSession,
+    *,
+    entity_id: uuid.UUID | None = None,
+    edge_id: uuid.UUID | None = None,
+    limit: int | None = None,
 ) -> list[EntityRevision]:
-    stmt = select(EntityRevision).order_by(EntityRevision.created_at.desc())
+    stmt = (
+        select(EntityRevision)
+        .order_by(EntityRevision.created_at.desc(), EntityRevision.id)
+        .limit(limit)
+    )
     if entity_id:
         stmt = stmt.where(EntityRevision.entity_id == entity_id)
     if edge_id:

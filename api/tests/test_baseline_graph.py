@@ -428,3 +428,24 @@ async def test_other_company_cannot_see_the_graph(client, ctx):
     assert (await client.get(f"{B}/graph", headers=other.as_("owner"))).json()["entities"] == []
     async with tenant_session(other.tenant_id) as s:
         assert (await s.scalars(select(Entity))).all() == []
+
+
+async def test_revisions_take_a_limit_of_the_newest(client, ctx):
+    """Home's goal trend reads only the newest revisions, never a goal's whole history."""
+    goal = await entity(client, ctx, type="goal", key="activation", attrs={"current": "30%"})
+    for current in ("31%", "33%", "35%"):
+        resp = await client.patch(
+            f"{B}/entities/{goal['id']}",
+            json={"attrs": {"current": current}},
+            headers=ctx.as_("owner"),
+        )
+        assert resp.status_code == 200, resp.text
+    url = f"{B}/entities/{goal['id']}/revisions"
+    every = (await client.get(url, headers=ctx.as_("viewer"))).json()
+    assert len(every) == 4
+    newest = (await client.get(url, params={"limit": 2}, headers=ctx.as_("viewer"))).json()
+    assert newest == every[:2]
+    assert [r["after"]["attrs"]["current"] for r in newest] == ["35%", "33%"]
+    for bad in (0, 501):
+        resp = await client.get(url, params={"limit": bad}, headers=ctx.as_("viewer"))
+        assert resp.status_code == 422, bad

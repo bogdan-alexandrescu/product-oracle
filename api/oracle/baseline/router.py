@@ -8,7 +8,7 @@ Commenters may only propose (POST /v1/baseline/proposals).
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import inspect
 
@@ -269,9 +269,14 @@ async def unlock_entity(entity_id: uuid.UUID, principal: Approver, db: TenantDB)
 
 @router.get("/entities/{entity_id}/revisions", response_model=list[RevisionOut])
 async def list_entity_revisions(
-    entity_id: uuid.UUID, principal: Reader, db: TenantDB
+    entity_id: uuid.UUID,
+    principal: Reader,
+    db: TenantDB,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
 ) -> list[RevisionOut]:
-    return [RevisionOut.model_validate(r) for r in await service.revisions(db, entity_id=entity_id)]
+    """The entity's revisions, newest first; ``limit`` keeps only the newest (Home's trend)."""
+    rows = await service.revisions(db, entity_id=entity_id, limit=limit)
+    return [RevisionOut.model_validate(r) for r in rows]
 
 
 # --- edges ----------------------------------------------------------------------------------
