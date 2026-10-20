@@ -385,3 +385,20 @@ def test_names_must_be_a_map_of_strings():
 
     with pytest.raises(ConnectorConfigError, match="names"):
         _options({"docs": ["1DocListedExample"], "names": ["x"]})
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        {"1DocOtherExample": "Not picked"},
+        {"1DocListedExample": "x" * 501},
+        {"1DocListedExample": "A", "1FolderSpecsExample": "B"},
+    ],
+)
+def test_names_name_only_what_is_picked_and_are_short(names):
+    from oracle.sources.base import ConnectorConfigError
+    from oracle.sources.connectors.google_docs import _options
+
+    with pytest.raises(ConnectorConfigError, match="names"):
+        _options({"docs": ["1DocListedExample"], "names": names})
+    _options({"docs": ["1DocListedExample"], "names": {"1DocListedExample": "x" * 500}})

@@ -57,6 +57,19 @@ test("settings › sources › Google Drive: an owner sets the company's domains
   await expect(shared).toContainText("None yet.");
 });
 
+test("settings › sources › Google Drive: a public mail provider is not a company domain", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/sources");
+  const domains = page.getByTestId("company-drive").getByTestId("company-domains");
+  // Removing a domain hides, from every member's sources, the docs it let in.
+  await expect(domains).toContainText("Removing a domain hides the docs it let in from every member's sources at once.");
+  const add = domains.getByRole("form", { name: "Add a company domain" });
+  await add.getByLabel("Add a domain").fill("gmail.com");
+  await add.getByRole("button", { name: "Add" }).click();
+  await expect(domains.getByRole("alert")).toContainText("gmail.com is a public mail provider");
+  await expect(domains.getByRole("list", { name: "Company email domains" }).getByRole("listitem")).toHaveText(["example.com"]);
+});
+
 test("settings › sources › Google Drive: owners only", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "approver"), MOCK_ROLE_KEY);
   await login(page);

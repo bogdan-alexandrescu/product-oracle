@@ -1,12 +1,14 @@
 """Narrowing a Google Docs source (S5, 'Browse access and narrowing', owner 2026-10-19;
-soft delete, owner 2026-10-20): removing a picked file or folder, then saving, deletes
-what was pulled in from it on the next sync. What to delete comes from the stored items,
-not only the cursor, so it holds when the connection changes too, for sources narrowed
-before this fix, and when a sync runs across the edit. Runs the real connector against a
-small fake Drive."""
+soft delete, and narrowing takes effect on save, owner 2026-10-20): removing a picked
+file or folder and saving deletes what was pulled in from it in that request, with no
+Drive call, so it holds with an expired connection or a paused source. A sync also
+deletes what it knows and no longer finds (sources narrowed before this fix). A picked
+folder Drive refuses (403 or 404) hides its docs until it can be read again (owner
+2026-10-20). Runs the real connector against a small fake Drive."""
 
 import asyncio
 import re
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -54,6 +56,10 @@ class Drive:
         self.parents: dict[str, list[str]] = {}
         self.log: list[dict] = []
         self.gone: set[str] = set()
+        # File id -> (status, reason) Drive answers for its metadata (403s, 5xx).
+        self.refuse: dict[str, tuple[int, str]] = {}
+        # File ids whose metadata call times out.
+        self.slow: set[str] = set()
         self.calls: list[str] = []
         self.hold: tuple[asyncio.Event, asyncio.Event] | None = None
         # After a held export is released: answer it 429 (Drive rate limiting).
@@ -106,11 +112,17 @@ class Drive:
             )
         if path == "files":
             (folder,) = re.findall(r"'([^']+)' in parents", params["q"])
-            if folder in self.gone:
+            if folder in self.gone or folder in self.refuse:
                 return httpx.Response(200, json={"files": []})
             kids = [self.files[i] for i in self.parents.get(folder, []) if i not in self.gone]
             return httpx.Response(200, json={"files": kids})
         file_id = path.split("/")[1]
+        if file_id in self.slow:
+            raise httpx.ReadTimeout("timed out", request=request)
+        if file_id in self.refuse:
+            status, reason = self.refuse[file_id]
+            error = {"message": "Refused", "errors": [{"reason": reason}]}
+            return httpx.Response(status, json={"error": error})
         if file_id not in self.files or file_id in self.gone:
             return httpx.Response(404, json={"error": {"message": "File not found"}})
         if path.endswith("/export"):
@@ -194,6 +206,51 @@ async def _narrow_and_sync(pat, source, config) -> dict:
     return result
 
 
+@asynccontextmanager
+async def _held_sync(drive, pat, source):
+    """A sync held at its first export while the block runs; yields its result, filled in
+    once the block ends. Released even when the block fails, so a failing test never
+    leaves a sync holding rows that every later test would wait on."""
+    started, release = asyncio.Event(), asyncio.Event()
+    drive.hold = (started, release)
+    running = asyncio.create_task(_sync(pat, source))
+    result: dict = {}
+    try:
+        await asyncio.wait_for(started.wait(), 10)
+        yield result
+    finally:
+        release.set()
+        result.update(await asyncio.wait_for(running, 10))
+
+
+async def _narrow(tenant_id, drive, pat, source, config) -> dict:
+    """Save a narrower allowlist; what left it is deleted in that request, Drive untouched."""
+    drive.calls.clear()
+    edited = await _patch(pat, source, {"config": config})
+    assert drive.calls == []
+    return edited
+
+
+async def _set_connection_status(tenant_id, source_id, status: str) -> None:
+    from oracle.connections.models import Connection
+
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Source, source_id)
+        conn = await s.get(Connection, row.connection_id)
+        conn.status = status
+        await s.commit()
+
+
+async def _forget_tree(tenant_id, source_id, folder) -> None:
+    """A picked folder whose docs Oracle has not listed (its tree is unknown)."""
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Source, source_id)
+        tree = dict(row.cursor["tree"])
+        del tree[folder]
+        row.cursor = {**row.cursor, "tree": tree}
+        await s.commit()
+
+
 async def _reset_cursor(tenant_id, source_id, config=None) -> None:
     """What a source narrowed on main before this fix looks like: no cursor."""
     async with tenant_session(tenant_id) as s:
@@ -204,19 +261,24 @@ async def _reset_cursor(tenant_id, source_id, config=None) -> None:
         await s.commit()
 
 
-async def test_removed_file_is_deleted_on_the_next_sync(tenant_id, drive):
-    # The reviewer's probe: pick A and SENSITIVE, sync, remove SENSITIVE, sync.
+async def test_a_removed_file_is_deleted_on_save(tenant_id, drive):
+    # The reviewer's probe: pick A and SENSITIVE, sync, remove SENSITIVE, save.
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, SENSITIVE]})
     assert await _live(tenant_id, source["id"]) == {DOC_A, SENSITIVE}
 
-    result = await _narrow_and_sync(pat, source, {"docs": [DOC_A]})
-    assert result["deleted"] == 1
+    edited = await _narrow(tenant_id, drive, pat, source, {"docs": [DOC_A]})
+    assert edited["item_count"] == 1
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+    # The next sync has nothing more to delete.
+    result = await _sync(pat, source)
+    assert result["outcome"] == "completed", result
+    assert result["deleted"] == 0
     assert await _live(tenant_id, source["id"]) == {DOC_A}
 
 
-async def test_removed_folder_deletes_every_doc_from_it(tenant_id, drive):
+async def test_a_removed_folder_deletes_every_doc_from_it_on_save(tenant_id, drive):
     drive.folder(FOLDER, "Specs")
     drive.folder(SUB, "Old specs", parent=FOLDER)
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
@@ -225,9 +287,77 @@ async def test_removed_folder_deletes_every_doc_from_it(tenant_id, drive):
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A], "folders": [FOLDER]})
     assert await _live(tenant_id, source["id"]) == {DOC_A, IN_FOLDER, IN_SUB}
 
-    result = await _narrow_and_sync(pat, source, {"docs": [DOC_A]})
-    assert result["deleted"] == 2
+    await _narrow(tenant_id, drive, pat, source, {"docs": [DOC_A]})
     assert await _live(tenant_id, source["id"]) == {DOC_A}
+    result = await _sync(pat, source)
+    assert result["deleted"] == 0
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+
+
+async def test_narrowing_with_an_expired_connection_deletes_on_save(tenant_id, drive):
+    """No Drive call is needed to narrow: an expired connection does not stop it."""
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    drive.doc(DOC_A, "A")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A], "folders": [FOLDER]})
+    await _set_connection_status(tenant_id, source["id"], "expired")
+
+    await _narrow(tenant_id, drive, pat, source, {"docs": [DOC_A]})
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+
+
+async def test_narrowing_a_paused_source_deletes_on_save(tenant_id, drive):
+    drive.doc(DOC_A, "A")
+    drive.doc(SENSITIVE, "SENSITIVE")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, SENSITIVE]})
+    async with client_for(pat) as c:
+        assert (await c.post(f"/v1/sources/{source['id']}/pause")).status_code == 200
+    edited = await _narrow(tenant_id, drive, pat, source, {"docs": [DOC_A]})
+    assert edited["status"] == "paused"
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+
+
+async def test_narrowing_deletes_what_came_from_a_removed_folder_when_another_tree_is_unknown(
+    tenant_id, drive
+):
+    """Folder B's docs were never listed (its tree is unknown): what came from the removed
+    folder A is still deleted on save, and B's docs are not touched."""
+    other, in_other = "1FolderOther", "1DocInOther0"
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    drive.folder(other, "Plans")
+    drive.doc(in_other, "Plan", folder=other)
+    drive.doc(DOC_A, "A")
+    config = {"docs": [DOC_A], "folders": [FOLDER, other]}
+    pat, source = await _setup(tenant_id, drive, config)
+    assert await _live(tenant_id, source["id"]) == {DOC_A, IN_FOLDER, in_other}
+    await _forget_tree(tenant_id, source["id"], other)
+    await _set_connection_status(tenant_id, source["id"], "expired")
+
+    await _narrow(tenant_id, drive, pat, source, {"docs": [DOC_A], "folders": [other]})
+    assert await _live(tenant_id, source["id"]) == {DOC_A, in_other}
+
+
+async def test_a_removed_doc_still_in_a_picked_folder_is_kept(tenant_id, drive):
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    pat, source = await _setup(tenant_id, drive, {"docs": [IN_FOLDER], "folders": [FOLDER]})
+    await _narrow(tenant_id, drive, pat, source, {"folders": [FOLDER]})
+    assert await _live(tenant_id, source["id"]) == {IN_FOLDER}
+
+
+async def test_a_folder_picked_again_after_narrowing_brings_its_docs_back(tenant_id, drive):
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    drive.doc(DOC_A, "A")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A], "folders": [FOLDER]})
+    await _narrow(tenant_id, drive, pat, source, {"docs": [DOC_A]})
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+
+    await _patch(pat, source, {"config": {"docs": [DOC_A], "folders": [FOLDER]}})
+    result = await _sync(pat, source)
+    assert result["outcome"] == "completed", result
+    assert await _live(tenant_id, source["id"]) == {DOC_A, IN_FOLDER}
 
 
 async def test_a_doc_added_to_a_picked_folder_later_is_pulled_in(tenant_id, drive):
@@ -260,9 +390,11 @@ async def test_changing_connection_and_narrowing_together_deletes(tenant_id, dri
     other = await make_connection(tenant_id, pat, "google", scopes=READONLY)
 
     await _patch(pat, source, {"connection_id": str(other), "config": {"docs": [DOC_A]}})
+    # Deleted on save; the new connection is checked with Drive as before.
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
     result = await _sync(pat, source)
     assert result["outcome"] == "completed", result
-    assert result["deleted"] == 1
+    assert result["deleted"] == 0
     assert await _live(tenant_id, source["id"]) == {DOC_A}
     # Everything left is read again through the new connection.
     assert result["upserted"] == 1
@@ -295,25 +427,40 @@ async def test_a_sync_running_across_the_edit_saves_nothing_over_it(tenant_id, d
     await _reset_cursor(tenant_id, source["id"])
     assert (await _row(tenant_id, source["id"])).unavailable_items  # 1DocMissing
 
-    started, release = asyncio.Event(), asyncio.Event()
-    drive.hold = (started, release)
-    running = asyncio.create_task(_sync(pat, source))
-    await asyncio.wait_for(started.wait(), 10)
-    edited = await _patch(pat, source, {"config": {"docs": [DOC_A]}})
-    assert edited["unavailable_items"] == []
-    release.set()
-    first = await asyncio.wait_for(running, 10)
+    async with _held_sync(drive, pat, source) as first:
+        edited = await _patch(pat, source, {"config": {"docs": [DOC_A]}})
+        assert edited["unavailable_items"] == []
+        # Deleted on save, while the sync still runs.
+        assert await _live(tenant_id, source["id"]) == {DOC_A}
 
     assert first["outcome"] == "superseded", first
     row = await _row(tenant_id, source["id"])
     # The edit's cleared report and cursor stand.
     assert row.unavailable_items == []
     assert row.cursor is None
-    assert await _live(tenant_id, source["id"]) == {DOC_A, SENSITIVE}
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
 
     result = await _sync(pat, source)
     assert result["outcome"] == "completed", result
-    assert result["deleted"] == 1
+    assert result["deleted"] == 0
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+
+
+async def test_a_sync_holding_a_removed_docs_row_does_not_block_the_save(tenant_id, drive):
+    """The sync has written (not yet committed) the row of the doc being removed and is
+    held exporting another: the save does not wait on that row, and once the sync stops
+    (superseded, its writes rolled back) the doc is deleted all the same."""
+    drive.doc(DOC_A, "A")
+    drive.doc(SENSITIVE, "SENSITIVE")
+    pat, source = await _setup(tenant_id, drive, {"docs": [SENSITIVE, DOC_A]})
+    await _reset_cursor(tenant_id, source["id"])
+    # Trashed in Drive: the sync deletes SENSITIVE's row first, then exports A (held).
+    drive.files[SENSITIVE]["trashed"] = True
+    async with _held_sync(drive, pat, source) as first:
+        patch = _patch(pat, source, {"config": {"docs": [DOC_A]}})
+        edited = await asyncio.wait_for(patch, 10)
+        assert edited["config"]["docs"] == [DOC_A]
+    assert first["outcome"] == "superseded", first
     assert await _live(tenant_id, source["id"]) == {DOC_A}
 
 
@@ -325,13 +472,9 @@ async def test_a_rate_limited_sync_across_the_edit_writes_no_error_over_it(tenan
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, SENSITIVE]})
     await _reset_cursor(tenant_id, source["id"])
 
-    started, release = asyncio.Event(), asyncio.Event()
-    drive.hold, drive.limit_after_hold = (started, release), True
-    running = asyncio.create_task(_sync(pat, source))
-    await asyncio.wait_for(started.wait(), 10)
-    await _patch(pat, source, {"config": {"docs": [DOC_A]}})
-    release.set()
-    first = await asyncio.wait_for(running, 10)
+    drive.limit_after_hold = True
+    async with _held_sync(drive, pat, source) as first:
+        await _patch(pat, source, {"config": {"docs": [DOC_A]}})
 
     assert first["outcome"] == "superseded", first
     assert (await _row(tenant_id, source["id"])).last_error is None
@@ -391,36 +534,127 @@ async def test_an_allowlist_edit_keeps_the_cursor(tenant_id, drive):
 # --- folders: unreadable, capped, not listed again when nothing changed ----------------
 
 
-async def test_an_unreadable_folder_is_reported_and_its_docs_kept(tenant_id, drive):
+def _refused(status: int, reason: str):
+    def lose(drive) -> None:
+        drive.refuse[FOLDER] = (status, reason)
+        drive._change(FOLDER, removed=True)  # Drive logs the permission change
+
+    return lose
+
+
+LOSSES = {
+    "404": lambda drive: drive.unshare(FOLDER),
+    "403 insufficientFilePermissions": _refused(403, "insufficientFilePermissions"),
+    "403 forbidden": _refused(403, "forbidden"),
+    "404 notFound": _refused(404, "notFound"),
+}
+
+
+@pytest.mark.parametrize("loss", list(LOSSES))
+async def test_a_folder_drive_refuses_hides_its_docs_until_it_can_be_read_again(
+    tenant_id, drive, loss
+):
+    """Owner 2026-10-20: a 403 or 404 for a picked folder is a confirmed loss: its docs
+    are hidden at once and the source says "Lost access to <folder>"; once Drive lets
+    Oracle read the folder again, they come back."""
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    drive.doc(DOC_A, "A")
+    config = {"docs": [DOC_A], "folders": [FOLDER], "names": {FOLDER: "Specs"}}
+    pat, source = await _setup(tenant_id, drive, config)
+    LOSSES[loss](drive)
+
+    result = await _sync(pat, source)
+    assert result["outcome"] == "completed", result
+    assert result["deleted"] == 1
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+    (note,) = result["source"]["unavailable_items"]
+    assert note["external_id"] == FOLDER and note["status"] == "unavailable"
+    assert note["name"] == "Specs"
+    assert note["reason"].startswith("Lost access to Specs")
+    # Still hidden, and still said, on the sync after.
+    result = await _sync(pat, source)
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+    assert [n["external_id"] for n in result["source"]["unavailable_items"]] == [FOLDER]
+
+    # Shared again (Drive's change log need not say so): the docs come back.
+    drive.gone.discard(FOLDER)
+    drive.refuse.pop(FOLDER, None)
+    result = await _sync(pat, source)
+    assert result["outcome"] == "completed", result
+    assert await _live(tenant_id, source["id"]) == {DOC_A, IN_FOLDER}
+    assert result["source"]["unavailable_items"] == []
+
+
+async def test_a_lost_folder_removed_from_the_source_leaves_no_note(tenant_id, drive):
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     drive.doc(DOC_A, "A")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A], "folders": [FOLDER]})
     drive.unshare(FOLDER)
-
-    result = await _sync(pat, source)
-    assert result["outcome"] == "completed", result
-    assert result["deleted"] == 0
-    assert await _live(tenant_id, source["id"]) == {DOC_A, IN_FOLDER}
-    (note,) = result["source"]["unavailable_items"]
-    assert note["external_id"] == FOLDER and note["status"] == "unavailable"
-    assert note["reason"].startswith("No access to this folder")
-
-    # Removing it from the source deletes what came from it.
-    result = await _narrow_and_sync(pat, source, {"docs": [DOC_A]})
-    assert result["deleted"] == 1
+    await _sync(pat, source)
+    edited = await _narrow(tenant_id, drive, pat, source, {"docs": [DOC_A]})
+    assert edited["unavailable_items"] == []
     assert await _live(tenant_id, source["id"]) == {DOC_A}
 
 
-async def test_an_unreadable_folder_without_a_known_tree_deletes_nothing(tenant_id, drive):
+async def test_narrowing_keeps_what_the_last_sync_said_about_the_rest(tenant_id, drive):
+    """A folder still lost keeps saying so after an unrelated pick is removed (its docs
+    stay hidden), so the source never hides docs without saying why."""
+    other = "1FolderOther"
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
-    pat, source = await _setup(tenant_id, drive, {"folders": [FOLDER]})
+    drive.folder(other, "Plans")
+    drive.doc(DOC_A, "A")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A], "folders": [FOLDER, other]})
+    drive.unshare(FOLDER)
+    await _sync(pat, source)
+    edited = await _narrow(tenant_id, drive, pat, source, {"folders": [FOLDER, other]})
+    assert [n["external_id"] for n in edited["unavailable_items"]] == [FOLDER]
+    assert await _live(tenant_id, source["id"]) == set()
+
+
+async def test_a_lost_folder_without_a_known_tree_still_hides_its_docs(tenant_id, drive):
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    drive.doc(DOC_A, "A")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A], "folders": [FOLDER]})
     await _reset_cursor(tenant_id, source["id"])
     drive.unshare(FOLDER)
     result = await _sync(pat, source)
+    assert result["outcome"] == "completed", result
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+
+
+async def test_a_doc_picked_on_its_own_in_a_lost_folder_stays(tenant_id, drive):
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    drive.doc(IN_SUB, "Shared with me directly", folder=FOLDER)
+    pat, source = await _setup(tenant_id, drive, {"docs": [IN_SUB], "folders": [FOLDER]})
+    drive.refuse[FOLDER] = (404, "notFound")
+    await _sync(pat, source)
+    assert await _live(tenant_id, source["id"]) == {IN_SUB}
+
+
+FAILURES = {
+    "timeout": lambda drive: drive.slow.add(FOLDER),
+    "500": lambda drive: drive.refuse.update({FOLDER: (500, "backendError")}),
+    "503": lambda drive: drive.refuse.update({FOLDER: (503, "")}),
+}
+
+
+@pytest.mark.parametrize("failure", list(FAILURES))
+async def test_a_folder_that_times_out_or_fails_hides_nothing(tenant_id, drive, failure):
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    drive.doc(DOC_A, "A")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A], "folders": [FOLDER]})
+    FAILURES[failure](drive)
+    drive._change(FOLDER)  # so the folders are listed again
+    result = await _sync(pat, source)
+    assert result["outcome"] == "error", result
     assert result["deleted"] == 0
-    assert await _live(tenant_id, source["id"]) == {IN_FOLDER}
+    assert await _live(tenant_id, source["id"]) == {DOC_A, IN_FOLDER}
 
 
 async def test_folder_docs_are_capped_with_a_note(tenant_id, drive, monkeypatch):
@@ -649,9 +883,29 @@ async def test_renaming_picked_items_does_not_ask_drive_again(tenant_id, drive):
             json={"config": {"docs": [DOC_A, DOC_B, "1DocMissing"], "names": {DOC_A: 1}}},
         )
     assert bad.status_code == 422
-    # Changing a pick does ask Drive.
-    await _patch(pat, source, {"config": {"docs": [DOC_A], "names": names}})
+    # Adding a pick does ask Drive; removing one does not (narrowing takes effect on save).
+    drive.doc("1DocNew0000", "New")
+    await _patch(pat, source, {"config": {"docs": [DOC_A, DOC_B, "1DocNew0000"]}})
     assert "about" in drive.calls
+    drive.calls.clear()
+    await _patch(pat, source, {"config": {"docs": [DOC_A], "names": {DOC_A: "A"}}})
+    assert drive.calls == []
+
+
+async def test_names_only_name_what_is_picked(tenant_id, drive):
+    drive.doc(DOC_A, "A")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A]})
+    for names in (
+        {DOC_B: "Not picked"},
+        {DOC_A: "x" * 501},
+        {DOC_A: "A", DOC_B: "B"},
+    ):
+        async with client_for(pat) as c:
+            resp = await c.patch(
+                f"/v1/sources/{source['id']}", json={"config": {"docs": [DOC_A], "names": names}}
+            )
+        assert resp.status_code == 422, names
+    await _patch(pat, source, {"config": {"docs": [DOC_A], "names": {DOC_A: "x" * 500}}})
 
 
 async def test_company_domains_are_explicit_and_never_inferred_by_default(tenant_id, monkeypatch):

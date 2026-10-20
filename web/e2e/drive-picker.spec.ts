@@ -107,12 +107,13 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   await expect(row).toContainText("Pricing strategy, Activation v2 PRD, Customer interviews Q3");
   await expect(row).toContainText("FoldersProduct specs, Vendor research");
   await expect(row).toContainText("3 item(s)");
-  // An unshared file and an unreadable folder are reported on their own (the folder's
-  // docs are kept), and docs owned outside the company or in a shared drive outside it are
-  // listed as skipped, per reason, with their count and names; the source is still active.
+  // An unshared file and a folder Oracle lost access to are reported on their own (the
+  // folder's docs are hidden until it can be read again), and docs owned outside the
+  // company or in a shared drive outside it are listed as skipped, per reason, with their
+  // count and names; the source is still active.
   const notes = row.getByRole("list", { name: "Sync notes for Product docs" });
   await expect(notes.getByRole("listitem")).toHaveText([
-    /No access\s*Vendor research\s*its docs are kept until you remove it/,
+    /Lost access\s*to\s*Vendor research\s*its docs are hidden until Oracle can read it again/,
     /No access\s*Customer interviews Q3/,
     /Skipped: owned outside example.com\s*3 docs\s*Agency SOW 2026, Partner pricing sheet, Contractor onboarding notes/,
     /Skipped: in a shared drive outside the company\s*1 doc\s*Joint launch plan/,
@@ -124,7 +125,7 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   const list = row.getByRole("list", { name: "Picked files and folders" });
   await expect(list.getByRole("listitem")).toHaveText([
     /Product specs\s*Folder · every doc in it$/,
-    /Vendor research\s*Folder · every doc in it\s*No access/,
+    /Vendor research\s*Folder · every doc in it\s*Lost access/,
     /Pricing strategy\s*Google Doc/,
     /Activation v2 PRD\s*Google Doc/,
     /Customer interviews Q3\s*Google Doc\s*No access/,
@@ -142,12 +143,64 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   await expect(row.getByRole("status")).toHaveText("Files saved.");
   await expect(row).toContainText("Pricing strategy, Activation v2 PRD, Roadmap notes");
   await expect(row).not.toContainText("Product specs");
-  // Saving clears the last sync's notes until the next sync.
-  await expect(row.getByRole("list", { name: "Sync notes for Product docs" })).toHaveCount(0);
+  // Narrowing takes effect on save: the doc that came from the removed folder is gone now.
+  await expect(row).toContainText("2 item(s)");
+  // Notes about what is still picked stay (the lost folder); the rest wait for the next sync.
+  await expect(notes.getByRole("listitem")).toHaveText([/Lost access\s*to\s*Vendor research/]);
 
-  // Narrowing: the next sync deletes the doc that came from the removed folder.
   await row.getByRole("button", { name: "Sync now" }).click();
   await expect(row).toContainText("2 item(s)");
+});
+
+test("sources › Google Docs: removing a folder and saving hides its docs at once, without a sync", async ({ page }) => {
+  await fakeGoogle(page, PICKED);
+  await login(page);
+  // A doc from the "Product specs" folder is in search.
+  await page.goto("/sources");
+  await page.getByLabel("Search", { exact: true }).fill("guests");
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(page.getByTestId("search-hit")).toHaveCount(1);
+  await expect(page.getByTestId("search-hit")).toContainText("Checkout spec");
+
+  await page.goto("/settings/sources");
+  const row = page.getByRole("listitem", { name: "Product docs" });
+  await expect(row).toContainText("3 item(s)");
+  await row.getByRole("button", { name: "More actions for Product docs" }).click();
+  await row.getByRole("menuitem", { name: "Edit files and folders" }).click();
+  await row.getByRole("button", { name: "About choosing from Drive" }).click();
+  await expect(page.getByRole("tooltip", { name: /Removing one hides what came from it when you save/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  const list = row.getByRole("list", { name: "Picked files and folders" });
+  await list.getByRole("button", { name: "Remove Product specs" }).click();
+  await row.getByRole("button", { name: "Save files" }).click();
+  await expect(row.getByRole("status")).toHaveText("Files saved.");
+  await expect(row).toContainText("2 item(s)");
+
+  // Gone from search too, with no sync run.
+  await page.goto("/sources");
+  await page.getByLabel("Search", { exact: true }).fill("guests");
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(page.getByText("Nothing in your sources matches “guests”.")).toBeVisible();
+  await expect(page.getByTestId("search-hit")).toHaveCount(0);
+});
+
+test("sources › Google Docs: a folder Oracle lost access to says so on the source page", async ({ page }) => {
+  await fakeGoogle(page, PICKED);
+  await login(page);
+  await page.goto("/settings/sources");
+  const row = page.getByRole("listitem", { name: "Product docs" });
+  const notes = row.getByRole("list", { name: "Sync notes for Product docs" });
+  const lost = notes.getByRole("listitem", { name: "Lost access to Vendor research" });
+  await expect(lost).toHaveText(/Lost access\s*to\s*Vendor research\s*its docs are hidden until Oracle can read it again/);
+  await expect(lost.getByText("Lost access", { exact: true })).toHaveAttribute("title", /removed, or no longer shared with you/);
+  // Still said after a sync that cannot read it.
+  await row.getByRole("button", { name: "Sync now" }).click();
+  await expect(lost).toBeVisible();
+
+  await row.getByRole("button", { name: "More actions for Product docs" }).click();
+  await row.getByRole("menuitem", { name: "Edit files and folders" }).click();
+  const list = row.getByRole("list", { name: "Picked files and folders" });
+  await expect(list.getByRole("listitem", { name: "Vendor research" })).toContainText("Lost access");
 });
 
 test("sources › Google Docs: copy says plainly what Oracle can read", async ({ page }) => {
