@@ -178,6 +178,8 @@ class FakeSwarmCloud:
         self.wind_down_reads = 0
         self._winding: dict[str, int] = {}
         self.step_failure: dict[str, tuple[str, str]] = {}  # step_id -> (code, message)
+        # Files an agent step writes instead of the default content: step_id -> files.
+        self.step_files: dict[str, dict[str, str]] = {}
         self._n = 0
 
     def runtime(self, **kw: Any) -> SwarmCloudRuntime:
@@ -683,6 +685,7 @@ class FakeSwarmCloud:
         elif m3 := _NOTES.search(prompt):
             names = [m3[1]]
         s.files = {n: _default_content(n, segment, attempt) for n in names}
+        s.files.update(self.step_files.get(s.step_id, {}))
         s.cost = AGENT_COST
         s.state = "SUCCEEDED"
 
