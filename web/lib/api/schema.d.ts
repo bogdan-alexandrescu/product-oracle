@@ -907,6 +907,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{connection_id}/google/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Google Drive Files
+         * @description List the Google Docs and folders in your Google Drive (and shared drives) that a
+         *     Google Docs source can pick: by name, or inside one folder, most recently modified
+         *     first. Each has the id to put in a source's ``docs`` or ``folders``.
+         *
+         *     Read through your own Google connection. Answers are cached for a minute, and you
+         *     may search Drive a limited number of times a minute.
+         */
+        get: operations["list_google_drive_files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/settings": {
         parameters: {
             query?: never;
@@ -7126,6 +7151,33 @@ export interface components {
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
         };
+        /** DriveFileOut */
+        DriveFileOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "doc" | "folder";
+            /** Modified Time */
+            modified_time: string | null;
+            /** Url */
+            url: string | null;
+            /** Owner */
+            owner: string | null;
+            /** In Shared Drive */
+            in_shared_drive: boolean;
+        };
+        /** DriveFilePage */
+        DriveFilePage: {
+            /** Files */
+            files: components["schemas"]["DriveFileOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** EdgeCreate */
         EdgeCreate: {
             /**
@@ -12121,7 +12173,7 @@ export interface components {
              * Outcome
              * @enum {string}
              */
-            outcome: "completed" | "rate_limited" | "error";
+            outcome: "completed" | "rate_limited" | "error" | "superseded";
             /**
              * Upserted
              * @default 0
@@ -13068,6 +13120,14 @@ export interface components {
             external_id: string;
             /** Reason */
             reason: string;
+            /** Name */
+            name?: string | null;
+            /**
+             * Status
+             * @default unavailable
+             * @enum {string}
+             */
+            status: "unavailable" | "skipped" | "flagged" | "limited";
         };
         /** UploadResult */
         UploadResult: {
@@ -15147,6 +15207,78 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_google_drive_files: {
+        parameters: {
+            query?: {
+                /** @description Text the name contains */
+                q?: string;
+                /** @description A folder id: list what is in it */
+                folder?: string | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriveFilePage"];
+                };
+            };
+            /** @description folder is not a Drive folder id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a person (an API token without a user) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not one of your Google connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The connection needs reconnecting (or lacks Drive access) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Drive is rate limiting, or you searched too often; retry after Retry-After seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
