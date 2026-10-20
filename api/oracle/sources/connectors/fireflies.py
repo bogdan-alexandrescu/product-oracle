@@ -15,20 +15,22 @@ Configs saved before the picker still work and read as a *title rule*: a config 
 ``mode`` is ``all`` from ``from_date``, keeping only titles that contain one of
 ``title_contains`` (or of ``meetings``, where the old web form put title filters).
 
-A series is keyed by the transcript's ``calendar_id`` (the calendar provider's event id,
-https://docs.fireflies.ai/schema/transcript; ``cal:<id>``, a Google instance suffix
-``_YYYYMMDDTHHMMSSZ``, a 'this and following' split ``_R<start>`` and ``@google.com``
-removed) and, for meetings without one, by the normalised title and
-organizer (``title:<title>|<organizer>``).
+A series is a calendar series, keyed by the transcript's ``calendar_id`` (the calendar
+provider's event id, https://docs.fireflies.ai/schema/transcript; ``cal:<id>``, a Google
+instance suffix ``_YYYYMMDDTHHMMSSZ``, a 'this and following' split ``_R<start>`` and
+``@google.com`` removed). A picked series takes exactly the meetings of that calendar
+series, the ones the picker counts. A meeting without a calendar id is in no series: only
+picking it takes it.
 
 Each transcript becomes one ``transcript`` item: the summary (overview, action items,
-keywords) followed by the sentences as ``speaker: text``. Participants are the ``acl``.
+keywords) followed by the sentences as ``speaker: text``. The item's ``acl`` records
+the participants for reference only: nothing reads it, and a source's items are visible
+only to its owner (S3).
 
 Cursor::
 
     {"since": "2026-10-01T09:00:00Z", "listed": "2026-10-03T15:00:00Z",
-     "recent": {"id1": "2026-10-01T09:00:00Z"}, "aliases": ["title:standup|ada@example.com"],
-     "selection": "3f2a9c0d1e4b5a6c"}
+     "recent": {"id1": "2026-10-01T09:00:00Z"}, "selection": "3f2a9c0d1e4b5a6c"}
 
 ``since`` is the date of the newest transcript synced; ``listed`` that of the newest
 meeting listed when it is later (one not picked), so the position moves on even when
@@ -39,10 +41,6 @@ and skips the ids in ``recent`` (those synced within that window, with their dat
 
 ``selection`` is a fingerprint of the config the cursor was saved under: a cursor of
 another selection is ignored, so narrowing always gets a full pass (see below).
-
-``aliases`` are the title keys of meetings seen in a picked calendar series: a meeting
-whose calendar id changed (or that has none) still matches the series by its title and
-organizer.
 
 A pass without a position (a new source, or one whose config changed) lists the whole date
 range: stored items no longer picked are deleted, stored items still picked are not
@@ -214,8 +212,6 @@ _SUFFIX_WINDOW = 64
 # instances add their own start. Either may end in "@google.com".
 _INSTANCE = re.compile(r"(?:_R\d{8}(?:T\d{6}Z?)?)?(?:_\d{8}(?:T\d{6}Z?)?)?$")
 _GOOGLE_DOMAIN = re.compile(r"@google\.com$", re.IGNORECASE)
-# Title keys remembered for the picked calendar series (see Selection.matches).
-MAX_ALIASES = 1000
 
 
 def series_title(title: str | None) -> str:
@@ -235,24 +231,11 @@ def series_title(title: str | None) -> str:
         text = shorter
 
 
-def normalise_title(title: str | None) -> str:
-    return series_title(title).lower()
-
-
-def title_key(entry: dict[str, Any]) -> str:
-    """The series key of a transcript by its normalised title and organizer."""
-    organizer = str(entry.get("organizer_email") or "").strip().lower()
-    return f"title:{normalise_title(entry.get('title'))}|{organizer}"
-
-
-def series_key(entry: dict[str, Any]) -> str:
-    """The recurring series a transcript belongs to: its calendar event, else its
-    normalised title and organizer."""
+def series_key(entry: dict[str, Any]) -> str | None:
+    """The calendar series a transcript belongs to; None without a calendar id."""
     calendar = _GOOGLE_DOMAIN.sub("", str(entry.get("calendar_id") or "").strip())
     calendar = _INSTANCE.sub("", calendar) or calendar
-    if calendar:
-        return f"cal:{calendar}"
-    return title_key(entry)
+    return f"cal:{calendar}" if calendar else None
 
 
 # --- Config -------------------------------------------------------------------------
@@ -270,13 +253,9 @@ class Selection:
     titles: tuple[str, ...] = ()
     legacy: bool = False
 
-    def matches(
-        self, entry: dict[str, Any], when: datetime | None, aliases: frozenset[str] = frozenset()
-    ) -> bool:
-        """Whether the selection takes this transcript. A picked series also matches by
-        title and organizer: the series' own title key, or ``aliases``, the title keys
-        of the meetings seen in a picked calendar series (so a series whose calendar id
-        changes keeps matching)."""
+    def matches(self, entry: dict[str, Any], when: datetime | None) -> bool:
+        """Whether the selection takes this transcript: in ``selected`` mode, a picked
+        meeting or a meeting of a picked calendar series."""
         if when is not None:
             if self.date_from and when < self.date_from:
                 return False
@@ -288,10 +267,7 @@ class Selection:
                 return False
         if self.mode == "all":
             return True
-        if entry.get("id") in self.meetings or series_key(entry) in self.series:
-            return True
-        by_title = title_key(entry)
-        return by_title in self.series or by_title in aliases
+        return entry.get("id") in self.meetings or series_key(entry) in self.series
 
 
 def selection(config: dict[str, Any]) -> Selection:
@@ -313,6 +289,8 @@ def selection(config: dict[str, Any]) -> Selection:
     if date_from and date_to and date_to < date_from:
         raise ConnectorConfigError("date_to must be on or after date_from")
     series = frozenset(_strings(config, "series", MAX_SERIES))
+    if not all(key.startswith("cal:") for key in series):
+        raise ConnectorConfigError("series takes calendar series keys (cal:...)")
     meetings = frozenset(_strings(config, "meetings", MAX_MEETINGS))
     if mode == "selected" and not series and not meetings:
         raise ConnectorConfigError("pick at least one series or meeting, or take all meetings")
@@ -345,7 +323,8 @@ class Meeting:
     duration: float | None
     organizer: str | None
     attendee_count: int
-    series_key: str
+    # None: the meeting is in no calendar series.
+    series_key: str | None
     series_title: str
 
 
@@ -541,7 +520,6 @@ def _cursor(
     since: datetime | None,
     listed: datetime | None,
     recent: dict[str, str],
-    aliases: set[str],
 ) -> dict[str, Any]:
     cursor: dict[str, Any] = {"recent": dict(recent)}
     if since is not None:
@@ -549,8 +527,6 @@ def _cursor(
     # Only past ``since``: the newest meeting listed, when it was not picked.
     if listed is not None and (since is None or listed > since):
         cursor["listed"] = _iso(listed)
-    if aliases:
-        cursor["aliases"] = sorted(aliases)
     cursor["selection"] = selected
     return cursor
 
@@ -613,7 +589,6 @@ class FirefliesConnector:
         since = _parse_date((cursor or {}).get("since"))
         listed_before = _parse_date((cursor or {}).get("listed"))
         recent: dict[str, str] = dict((cursor or {}).get("recent") or {})
-        aliases = {a for a in (cursor or {}).get("aliases") or [] if isinstance(a, str)}
         position = max((d for d in (since, listed_before) if d), default=None)
         stop = position - OVERLAP if position else picked.date_from
         if position and picked.date_from and picked.date_from > stop:
@@ -640,18 +615,13 @@ class FirefliesConnector:
                     listed.append((when, entry))
                     if when and (newest_listed is None or when > newest_listed):
                         newest_listed = when
-                    key = series_key(entry)
-                    if key.startswith("cal:") and key in picked.series:
-                        if len(aliases) < MAX_ALIASES:
-                            aliases.add(title_key(entry))
                 if done:
                     break
 
-            learned = frozenset(aliases)
             matched: set[str] = set()
             pending: list[tuple[datetime, dict[str, Any], bool]] = []
             for when, entry in listed:
-                if not picked.matches(entry, when, learned):
+                if not picked.matches(entry, when):
                     continue
                 matched.add(entry["id"])
                 if entry["id"] in recent:
@@ -678,14 +648,14 @@ class FirefliesConnector:
                 horizon = newest - OVERLAP
                 recent = {i: d for i, d in recent.items() if _parse_date(d) >= horizon}
                 if fetch:
-                    written = _cursor(selected, newest, listed_before, recent, aliases)
+                    written = _cursor(selected, newest, listed_before, recent)
                     yield CursorCheckpoint(written)
             # The whole listing is done: the position moves to the newest meeting listed,
             # picked or not. Written whenever it changed, deletes and all.
             end = max((d for d in (newest, newest_listed) if d), default=None)
             if end is not None:
                 recent = {i: d for i, d in recent.items() if _parse_date(d) >= end - OVERLAP}
-            final = _cursor(selected, newest, newest_listed, recent, aliases)
+            final = _cursor(selected, newest, newest_listed, recent)
             # The fingerprint alone is no change (cursors saved before it lack it).
             if _without_selection(final) != _without_selection(written):
                 yield CursorCheckpoint(final)
@@ -713,8 +683,9 @@ class FirefliesConnector:
     async def browse_series(
         self, credential: dict[str, Any] | None, *, date_from: date | None, date_to: date | None
     ) -> SeriesList:
-        """The key's meetings grouped into series, newest first (at most SERIES_PAGES
-        pages of meetings are read)."""
+        """The key's meetings grouped into their calendar series, newest first (at most
+        SERIES_PAGES pages of meetings are read). Meetings without a calendar id are in
+        no series. A series' count is what a sync of it takes over the same dates."""
         groups: dict[str, Series] = {}
         scanned = 0
         truncated = False
@@ -723,6 +694,8 @@ class FirefliesConnector:
                 for entry in page:
                     scanned += 1
                     m = _meeting(entry)
+                    if m.series_key is None:
+                        continue
                     group = groups.get(m.series_key)
                     if group is None:
                         # Pages are newest first: the first meeting seen names the series.

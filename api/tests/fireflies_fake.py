@@ -115,9 +115,9 @@ def rate_limited(retry_after: int = 30) -> httpx.Response:
     )
 
 
-# A month of meetings: two recurring series (one on the calendar, one only by title),
-# a one-off and an unrelated meeting.
+# A month of meetings: two calendar series, a one-off and an old meeting (no calendar).
 STANDUP_CAL = "7kq2abc0def1ghi2jkl3mno4pq"
+PLANNING_CAL = "plan5q9r8s7t6u"
 SAMPLE = [
     meeting("S1", "AI Agents daily standup", "2026-09-28T09:00:00Z", calendar_id=STANDUP_CAL),
     meeting(
@@ -127,9 +127,19 @@ SAMPLE = [
         calendar_id=f"{STANDUP_CAL}_20261005T090000Z",
     ),
     meeting("S3", "AI agents daily standup ", "2026-10-12T09:00:00Z", calendar_id=STANDUP_CAL),
-    meeting("P1", "AI agents sprint planning #11", "2026-09-30T14:00:00Z", organizer="lin@x.io"),
     meeting(
-        "P2", "AI agents sprint planning - Oct 14", "2026-10-14T14:00:00Z", organizer="lin@x.io"
+        "P1",
+        "AI agents sprint planning #11",
+        "2026-09-30T14:00:00Z",
+        organizer="lin@x.io",
+        calendar_id=PLANNING_CAL,
+    ),
+    meeting(
+        "P2",
+        "AI agents sprint planning - Oct 14",
+        "2026-10-14T14:00:00Z",
+        organizer="lin@x.io",
+        calendar_id=f"{PLANNING_CAL}_20261014T140000Z",
     ),
     meeting(
         "K1",

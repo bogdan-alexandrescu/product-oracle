@@ -66,8 +66,9 @@ class FirefliesMeetingOut(BaseModel):
     duration: float | None
     organizer: str | None
     attendee_count: int
-    # What a source's config.series holds to take this meeting's whole series.
-    series_key: str
+    # What a source's config.series holds to take this meeting's calendar series; null
+    # when the meeting is in none (only picking it takes it).
+    series_key: str | None
     series_title: str
 
 

@@ -12,6 +12,7 @@ from oracle.tenancy import tenant_session
 from tests.connection_helpers import clear_provider_http, use_provider_http
 from tests.fireflies_fake import (
     API_KEY,
+    PLANNING_CAL,
     SAMPLE,
     STANDUP_CAL,
     FakeFireflies,
@@ -21,7 +22,7 @@ from tests.fireflies_fake import (
 from tests.sources_helpers import client_for, make_connection, make_user
 
 STANDUP = f"cal:{STANDUP_CAL}"
-PLANNING = "title:ai agents sprint planning|lin@x.io"
+PLANNING = f"cal:{PLANNING_CAL}"
 
 
 @pytest.fixture
@@ -75,7 +76,7 @@ async def test_meetings_lists_the_owners_meetings_paged(fake, alice, conn):
             "duration": 45.5,
             "organizer": "ada@example.com",
             "attendee_count": 3,
-            "series_key": "title:customer interview: acme|ada@example.com",
+            "series_key": None,
             "series_title": "Customer interview: Acme",
         }
         # The API key is used server-side only.
@@ -120,6 +121,8 @@ async def test_series_lists_groups_with_counts(fake, alice, conn):
     assert series[STANDUP]["title"] == "AI agents daily standup"
     assert series[STANDUP]["last_date"] == "2026-10-12T09:00:00Z"
     assert series[PLANNING]["meeting_count"] == 2
+    # The one-off and the old kickoff are on no calendar: in no series.
+    assert set(series) == {STANDUP, PLANNING}
     assert resp.json()["truncated"] is False
 
 

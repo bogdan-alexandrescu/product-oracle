@@ -22,16 +22,23 @@ from oracle.sources.connectors.fireflies import (
     Selection,
     _iso,
     fingerprint,
-    normalise_title,
     selection,
     series_key,
     series_title,
 )
-from tests.fireflies_fake import API_KEY, SAMPLE, STANDUP_CAL, FakeFireflies, meeting, rate_limited
+from tests.fireflies_fake import (
+    API_KEY,
+    PLANNING_CAL,
+    SAMPLE,
+    STANDUP_CAL,
+    FakeFireflies,
+    meeting,
+    rate_limited,
+)
 
 CREDENTIAL = {"api_key": API_KEY}
 STANDUP = f"cal:{STANDUP_CAL}"
-PLANNING = "title:ai agents sprint planning|lin@x.io"
+PLANNING = f"cal:{PLANNING_CAL}"
 
 
 def connector(fake: FakeFireflies) -> FirefliesConnector:
@@ -83,8 +90,8 @@ def deleted(events) -> list[str]:
         ("#12", "#12"),
     ],
 )
-def test_normalise_title(title, normal):
-    assert normalise_title(title) == normal
+def test_series_title_drops_dated_suffixes(title, normal):
+    assert series_title(title).lower() == normal
 
 
 def test_series_title_keeps_case_and_drops_the_dated_suffix():
@@ -151,9 +158,11 @@ def test_series_key_prefers_the_calendar_event_and_strips_the_instance_suffix():
     keys = {series_key(m) for m in SAMPLE if m["id"].startswith("S")}
     assert keys == {STANDUP}
     assert {series_key(m) for m in SAMPLE if m["id"].startswith("P")} == {PLANNING}
-    # Same title, another organizer: another series.
-    other = meeting("X", "AI agents sprint planning #3", "2026-10-01T10:00:00Z", organizer="z@x.io")
-    assert series_key(other) == "title:ai agents sprint planning|z@x.io"
+    # No calendar id: no series.
+    other = meeting(
+        "X", "AI agents sprint planning #3", "2026-10-01T10:00:00Z", organizer="lin@x.io"
+    )
+    assert series_key(other) is None
 
 
 @pytest.mark.parametrize(
@@ -194,30 +203,62 @@ async def test_a_split_series_keeps_taking_new_meetings():
     assert upserted(second) == ["A2"]
 
 
-async def test_a_picked_series_also_matches_by_title_and_organizer():
-    """When the calendar id changes in a way the key cannot follow (a series moved to
-    another calendar, a provider with other ids), the series still matches by its
-    normalised title and organizer."""
-    fake = FakeFireflies(
+def _one_offs_beside_a_series() -> FakeFireflies:
+    return FakeFireflies(
         [
             meeting("A1", "Standup #1", "2026-10-01T16:00:00Z", calendar_id="abc123def"),
-            meeting("A2", "Standup #2", "2026-10-08T16:00:00Z", calendar_id="zzz-moved"),
-            meeting("A3", "Standup #3", "2026-10-15T16:00:00Z"),
-            # Same title, another organizer: another series.
-            meeting("B1", "Standup", "2026-10-09T16:00:00Z", organizer="z@x.io"),
+            meeting(
+                "A2", "Standup #2", "2026-10-08T16:00:00Z", calendar_id="abc123def_20261008T160000Z"
+            ),
+            # A one-off with the series' title and organizer, on no calendar.
+            meeting("X1", "Standup", "2026-10-09T16:00:00Z"),
+            # The same title on another calendar event: another series.
+            meeting("Y1", "Standup #3", "2026-10-15T16:00:00Z", calendar_id="zzz-other"),
         ]
     )
+
+
+async def test_a_picked_series_takes_its_calendar_series_only():
+    """A series is the calendar series: a one-off with the same title and organizer is
+    not in it (the picker shows it unpicked), and only picking it takes it."""
+    fake = _one_offs_beside_a_series()
     conn = connector(fake)
     config = {"mode": "selected", "series": ["cal:abc123def"]}
     first = await collect(conn, config)
-    assert upserted(first) == ["A1", "A2", "A3"]
+    assert upserted(first) == ["A1", "A2"]
     cursor = next(e for e in reversed(first) if isinstance(e, CursorCheckpoint)).cursor
-    # Remembered, so a later sync that no longer lists A1 still knows the title.
-    fake.meetings.append(
-        meeting("A4", "Standup #4", "2026-10-22T16:00:00Z", calendar_id="other-cal-id")
+    assert "aliases" not in cursor
+    fake.meetings.append(meeting("X2", "Standup #4", "2026-10-22T16:00:00Z"))
+    assert upserted(await collect(conn, config, cursor)) == []
+
+    picked = {"mode": "selected", "series": ["cal:abc123def"], "meetings": ["X1"]}
+    assert upserted(await collect(conn, picked)) == ["A1", "A2", "X1"]
+
+
+async def test_the_pickers_series_count_is_what_a_sync_of_it_takes():
+    fake = _one_offs_beside_a_series()
+    conn = connector(fake)
+    listed = await conn.browse_series(CREDENTIAL, date_from=None, date_to=None)
+    counts = {s.key: s.meeting_count for s in listed.series}
+    # Meetings without a calendar id are in no series.
+    assert counts == {"cal:abc123def": 2, "cal:zzz-other": 1}
+    for key, count in counts.items():
+        events = await collect(conn, {"mode": "selected", "series": [key]})
+        assert len(upserted(events)) == count, key
+    page = await conn.browse_meetings(CREDENTIAL, search="", date_from=None, date_to=None, skip=0)
+    assert {m.id: m.series_key for m in page.meetings}["X1"] is None
+
+
+async def test_a_full_pass_drops_one_offs_an_older_rule_took_with_the_series():
+    """Sources synced while a series also matched by title stored such one-offs: the
+    full pass after this change deletes them."""
+    events = await collect(
+        connector(_one_offs_beside_a_series()),
+        {"mode": "selected", "series": ["cal:abc123def"]},
+        known=known("A1", "A2", "X1"),
     )
-    second = await collect(conn, config, cursor)
-    assert upserted(second) == ["A4"]
+    assert deleted(events) == ["X1"]
+    assert upserted(events) == []
 
 
 # --- Config -------------------------------------------------------------------------
@@ -351,7 +392,6 @@ async def test_a_full_pass_deletes_what_is_no_longer_picked_and_skips_what_is_st
             # The newest meeting listed (P2, not picked).
             "listed": "2026-10-14T14:00:00Z",
             # The series' title key, should its calendar id change.
-            "aliases": ["title:ai agents daily standup|ada@example.com"],
             "selection": fingerprint(config),
         }
     )
