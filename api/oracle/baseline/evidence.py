@@ -49,7 +49,9 @@ async def withheld_from(db: AsyncSession, principal: Principal) -> set[uuid.UUID
 async def _own_item(
     db: AsyncSession, principal: Principal, item_id: uuid.UUID
 ) -> tuple[SourceItem, Source, SourceItemVersion | None]:
-    """The item if the principal's user owns it; someone else's item reads as missing."""
+    """The item if the principal's user owns it; someone else's item reads as missing.
+    A run reads an item a finding shared in full released at the version released only
+    (S6, freeze at sharing), and an item deleted upstream as missing."""
     row = (
         await db.execute(
             select(SourceItem, Source)
@@ -65,11 +67,16 @@ async def _own_item(
     ):
         raise NotFoundError("Source item not found among your sources")
     item, source = row
-    version = (
-        await db.get(SourceItemVersion, item.current_version_id)
-        if item.current_version_id
-        else None
-    )
+    version_id = item.current_version_id
+    if principal.is_run:
+        from oracle.intake.evidence import run_shared
+
+        if item.deleted_at is not None:
+            raise NotFoundError("Source item not found among your sources")
+        frozen = run_shared(principal).subquery()  # type: ignore[union-attr]
+        released = await db.scalar(select(frozen.c.version_id).where(frozen.c.item_id == item_id))
+        version_id = released or version_id
+    version = await db.get(SourceItemVersion, version_id) if version_id else None
     return item, source, version
 
 

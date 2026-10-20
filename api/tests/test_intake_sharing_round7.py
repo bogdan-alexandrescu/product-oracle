@@ -318,3 +318,26 @@ async def test_only_a_real_gaps_question_only_proposal_waits_for_the_answer(clie
         f"/v1/baseline/proposals/{proposal.id}/accept", headers=ctx.as_("owner")
     )
     assert resp.status_code == 200, resp.text
+
+
+async def test_a_run_quoting_its_users_shared_item_quotes_the_frozen_text(client, fake):  # noqa: F811
+    """Baseline evidence a run attaches from its user's item a finding shared in full
+    released copies the released version, never a newer one (nor a deleted item)."""
+    from tests.baseline_helpers import entity
+
+    ctx, intake_id, items = await world(client, fake, hidden=False, role="approver")
+    await share_all(client, ctx, intake_id, "full")
+    await _sync(ctx, items["a"], EDITED_A)
+    feat = await entity(client, ctx, type="feature", key="saved-addresses")
+    resp = await client.post(
+        f"/v1/baseline/entities/{feat['id']}/evidence",
+        json={"source_item_id": str(items["a"])}, headers=as_run_of(ctx, "author"),
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["excerpt"] == EXCERPT_A[:500]
+    await _delete(ctx, items["a"])
+    resp = await client.post(
+        f"/v1/baseline/entities/{feat['id']}/evidence",
+        json={"source_item_id": str(items["a"])}, headers=as_run_of(ctx, "author"),
+    )  # fmt: skip
+    assert resp.status_code == 404, resp.text
