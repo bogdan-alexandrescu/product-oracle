@@ -55,7 +55,9 @@ async def _run_pinned_at(ctx, who: str, as_of: datetime) -> dict[str, str]:
         snapshot = Snapshot(label="Run pin", as_of=as_of, created_by=user)
         s.add(snapshot)
         await s.flush()
-        run = Run(flow="baseline_to_prd", status="running", snapshot_id=snapshot.id, created_by=user)
+        run = Run(
+            flow="baseline_to_prd", status="running", snapshot_id=snapshot.id, created_by=user
+        )
         s.add(run)
         await s.commit()
         run_id = run.id
