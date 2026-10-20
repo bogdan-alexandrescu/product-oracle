@@ -2228,12 +2228,37 @@ export interface paths {
         };
         /**
          * Runtime Status
-         * @description Call the agent runtime as Oracle and report what it answers: reachable, and as which
-         *     tenant. Owner only. Never shows a credential.
+         * @description Call the agent runtime as Oracle and report what it answers: reachable, as which
+         *     tenant, and which adapter v2 features are on (mcp, await_input, service_answer: on,
+         *     off or unknown; read briefly cached, never longer than the runtime's timeout). Owner
+         *     only. Never shows a credential.
          */
         get: operations["runtime_status"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runtime/mcp-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register Mcp Server
+         * @description Register Oracle's MCP server in the agent runtime, idempotently: created when
+         *     missing, its URL updated when ORACLE_PUBLIC_URL changed, else unchanged. Runs do this
+         *     on their own before the first run token is sent; this is for owners and the
+         *     switch-on check. Owner only.
+         */
+        post: operations["register_mcp_server"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2383,6 +2408,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Run
+         * @description Retry a run whose lost submission Oracle could neither find nor rule out (Inbox:
+         *     lookups): looked up once more, else the segment is submitted again.
+         */
+        post: operations["retry_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/cancel": {
         parameters: {
             query?: never;
@@ -2394,6 +2440,120 @@ export interface paths {
         put?: never;
         /** Cancel Run */
         post: operations["cancel_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/stop-cancelling": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Cancelling Run
+         * @description Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that
+         *     proves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox
+         *     item clears. A run that has not ended ends (cancelled, the reason recorded) and no
+         *     second workflow starts for that segment; Oracle keeps reading the stopped workflow's
+         *     status and cost on every tick until it ends, and counts its spend on the run (P3d).
+         */
+        post: operations["stop_cancelling_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/retry-lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Lookup Run
+         * @description Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status
+         *     did not read past its search's end, or SwarmCloud answered it with 404s that prove
+         *     nothing, or its confirmed cancel still reads CANCELLING. Read, its cost is counted
+         *     on the run and it is followed until it ends. That workflow only, at most once per
+         *     30 s per run (429 sooner).
+         */
+        post: operations["retry_lookup_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/retry-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Import Run
+         * @description Retry importing a step's output (Inbox: ``imports``, ``can_retry_import``): Oracle
+         *     stopped after its resumed advance failed 5 times in a row; the next tick tries again,
+         *     the count reset. Owners only; audited.
+         */
+        post: operations["retry_import_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/cancel-again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Again Run
+         * @description Cancel again (Inbox: ``cancel_again``): a workflow an approver stopped cancelling,
+         *     whose spend took the ended run over its ceiling, has Oracle's cancel calls turned
+         *     back on; its status and cost are still read until it ends, and nothing restarts
+         *     (P3d). An owner or the approver who created the run; audited.
+         */
+        post: operations["cancel_again_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/dismiss-overrun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Overrun Run
+         * @description Clear an ended run's overrun from the Inbox (``can_dismiss_overrun``: nothing of
+         *     the run is left to read). The overrun stays recorded on the run; audited.
+         */
+        post: operations["dismiss_overrun_run"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5647,6 +5807,11 @@ export interface components {
              */
             files: string[];
         };
+        /** CancelAgain */
+        CancelAgain: {
+            /** Workflow Id */
+            workflow_id: string;
+        };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
             /** Key */
@@ -5824,7 +5989,7 @@ export interface components {
              * Decision
              * @enum {string}
              */
-            decision: "approved" | "changes_requested";
+            decision: "approved" | "changes_requested" | "confirm" | "redo" | "continue";
             /** Note */
             note?: string | null;
         };
@@ -5877,6 +6042,7 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            console?: components["schemas"]["ConsoleAnswer"] | null;
         };
         /** Choice */
         Choice: {
@@ -6594,6 +6760,54 @@ export interface components {
              * @enum {string}
              */
             effective_role: "viewer" | "commenter" | "approver" | "owner";
+        };
+        /**
+         * ConsoleAnswer
+         * @description What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):
+         *     an answer that does not count (its answerer is not an Oracle member with the
+         *     checkpoint's role), a counted change request the workflow had no revision step for,
+         *     an answer Oracle could not read, or one it has not read yet (``unread``: SwarmCloud
+         *     errors, a 404 or a lagging record; read again on every tick).
+         */
+        ConsoleAnswer: {
+            /** Answered By */
+            answered_by?: string | null;
+            /** On Behalf Of */
+            on_behalf_of?: string | null;
+            /** Answered At */
+            answered_at?: string | null;
+            /** Via */
+            via?: string | null;
+            /** Verdict */
+            verdict?: ("MERGE" | "NOT_YET") | null;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: string[];
+            /** Counted */
+            counted?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Needs
+             * @enum {string}
+             */
+            needs: "confirm" | "redo_or_continue" | "unreadable" | "unread";
+            /**
+             * Revise
+             * @default false
+             */
+            revise: boolean;
+            /** Redo Segment */
+            redo_segment?: string | null;
+            /** Redo Cost Usd */
+            redo_cost_usd?: number | null;
+            /**
+             * Can Redo
+             * @default false
+             */
+            can_redo: boolean;
         };
         /** CriterionInfo */
         CriterionInfo: {
@@ -8164,6 +8378,7 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            console?: components["schemas"]["ConsoleAnswer"] | null;
             /**
              * Flow
              * @enum {string}
@@ -8221,6 +8436,21 @@ export interface components {
             approvals: components["schemas"]["RunSummary"][];
             /** Overruns */
             overruns: components["schemas"]["RunSummary"][];
+            /**
+             * Lookups
+             * @default []
+             */
+            lookups: components["schemas"]["RunSummary"][];
+            /**
+             * Searches
+             * @default []
+             */
+            searches: components["schemas"]["RunSummary"][];
+            /**
+             * Imports
+             * @default []
+             */
+            imports: components["schemas"]["RunSummary"][];
             /** Feedback */
             feedback: components["schemas"]["InboxDocument"][];
             /** Total */
@@ -9171,6 +9401,21 @@ export interface components {
             modules: components["schemas"]["ManifestModuleOut"][];
             /** Unmapped Sections */
             unmapped_sections: string[];
+        };
+        /**
+         * McpServerRegistration
+         * @description Oracle's MCP server in the runtime (``oracle``, at ORACLE_PUBLIC_URL + /mcp).
+         */
+        McpServerRegistration: {
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "created" | "updated" | "unchanged";
         };
         /** Me */
         Me: {
@@ -10672,6 +10917,42 @@ export interface components {
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
             /** Error */
             error?: string | null;
+            /** Stuck */
+            stuck?: string | null;
+            /**
+             * Can Retry
+             * @default false
+             */
+            can_retry: boolean;
+            /**
+             * Can Stop Cancelling
+             * @default false
+             */
+            can_stop_cancelling: boolean;
+            /**
+             * Can Retry Lookup
+             * @default false
+             */
+            can_retry_lookup: boolean;
+            /**
+             * Cancel Again
+             * @default []
+             */
+            cancel_again: string[];
+            /**
+             * Can Dismiss Overrun
+             * @default false
+             */
+            can_dismiss_overrun: boolean;
+            /** Searching */
+            searching?: string | null;
+            /** Import Failed */
+            import_failed?: string | null;
+            /**
+             * Can Retry Import
+             * @default false
+             */
+            can_retry_import: boolean;
             progress?: components["schemas"]["RunProgress"] | null;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
@@ -10694,6 +10975,11 @@ export interface components {
             segments: components["schemas"]["SegmentOut"][];
             /** Checkpoints */
             checkpoints: components["schemas"]["CheckpointOut"][];
+            /**
+             * Token Read Only
+             * @default false
+             */
+            token_read_only: boolean;
         };
         /** RunPatch */
         RunPatch: {
@@ -10770,7 +11056,68 @@ export interface components {
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review") | null;
             /** Error */
             error?: string | null;
+            /** Stuck */
+            stuck?: string | null;
+            /**
+             * Can Retry
+             * @default false
+             */
+            can_retry: boolean;
+            /**
+             * Can Stop Cancelling
+             * @default false
+             */
+            can_stop_cancelling: boolean;
+            /**
+             * Can Retry Lookup
+             * @default false
+             */
+            can_retry_lookup: boolean;
+            /**
+             * Cancel Again
+             * @default []
+             */
+            cancel_again: string[];
+            /**
+             * Can Dismiss Overrun
+             * @default false
+             */
+            can_dismiss_overrun: boolean;
+            /** Searching */
+            searching?: string | null;
+            /** Import Failed */
+            import_failed?: string | null;
+            /**
+             * Can Retry Import
+             * @default false
+             */
+            can_retry_import: boolean;
             progress?: components["schemas"]["RunProgress"] | null;
+        };
+        /**
+         * RuntimeFeatures
+         * @description Adapter v2's switches in the runtime: caller MCP (#1433), waits for a person
+         *     (#1436), and Oracle's principal answering them.
+         */
+        RuntimeFeatures: {
+            /**
+             * Mcp
+             * @default unknown
+             * @enum {string}
+             */
+            mcp: "on" | "off" | "unknown";
+            /**
+             * Await Input
+             * @default unknown
+             * @enum {string}
+             */
+            await_input: "on" | "off" | "unknown";
+            /**
+             * Service Answer
+             * @default unknown
+             * @enum {string}
+             */
+            service_answer: "on" | "off" | "unknown";
         };
         /**
          * RuntimeStatusOut
@@ -10787,6 +11134,21 @@ export interface components {
             tenant_id?: string | null;
             /** Can Reach Oracle */
             can_reach_oracle: boolean;
+            /**
+             * @default {
+             *       "mcp": "unknown",
+             *       "await_input": "unknown",
+             *       "service_answer": "unknown"
+             *     }
+             */
+            features: components["schemas"]["RuntimeFeatures"];
+            /**
+             * Feature Reasons
+             * @default {}
+             */
+            feature_reasons: {
+                [key: string]: string;
+            };
             /**
              * Notes
              * @default []
@@ -11106,6 +11468,10 @@ export interface components {
             cost_usd: number;
             /** Note */
             note?: string | null;
+            /** Note By */
+            note_by?: string | null;
+            /** Not Applied */
+            not_applied?: string | null;
             /** State */
             state?: string | null;
         };
@@ -17650,6 +18016,26 @@ export interface operations {
             };
         };
     };
+    register_mcp_server: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerRegistration"];
+                };
+            };
+        };
+    };
     list_flows: {
         parameters: {
             query?: never;
@@ -17924,7 +18310,197 @@ export interface operations {
             };
         };
     };
+    retry_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_cancelling_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_lookup_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_import_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_again_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelAgain"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_overrun_run: {
         parameters: {
             query?: never;
             header?: never;

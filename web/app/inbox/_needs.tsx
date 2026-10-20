@@ -7,7 +7,18 @@ import { Button, Chip, CostFigure, DataTable, Icon, LinkButton, type Column, typ
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 
-import { CHECKPOINT_LABEL, age, shortId, usd, type InboxOut, type RunSummary } from "../runs/_lib";
+import {
+  CANCEL_AGAIN_CONFIRM,
+  CHECKPOINT_LABEL,
+  FINAL_STATUSES,
+  RETRY_CONFIRM,
+  STOP_CANCELLING_CONFIRM,
+  age,
+  shortId,
+  usd,
+  type InboxOut,
+  type RunSummary,
+} from "../runs/_lib";
 
 /** One row of B1's "Needs you" table: kind, item, context, age, the action. Inbox and Home draw the same rows. */
 export type Need = {
@@ -122,16 +133,36 @@ export type Act = (key: string, call: () => Promise<unknown>) => Promise<void>;
 
 const path = (id: string) => ({ params: { path: { run_id: id } } });
 
+/** What Oracle still needs of a checkpoint answered in SwarmCloud's console. */
+function consoleNeeds(c: NonNullable<InboxOut["checkpoints"][number]["console"]>): string {
+  if (c.needs === "confirm") return "needs an approver to confirm";
+  if (c.needs === "redo_or_continue") return `changes requested; choose Redo from ${c.redo_segment} or Continue`;
+  if (c.needs === "unread") return "waiting to read the answer";
+  return "the verdict could not be read";
+}
+
 /**
- * The Inbox's four kinds of rows, each with its action. `compact` (Home) gives an overrun
- * one Decide that opens the run, where Resume and Cancel are.
+ * The Inbox's rows, each with its action. `compact` (Home) gives an overrun, a stuck run and
+ * a failed import one action that opens the run, where the rest are.
  */
 export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compact = false) {
   const checkpoints: Need[] = inbox.checkpoints.map((c) => ({
     key: c.id,
     icon: "flag",
     kind: "Checkpoint",
-    item: <span className="truncate">{CHECKPOINT_LABEL[c.kind]}</span>,
+    item: (
+      <>
+        <span className="truncate">{CHECKPOINT_LABEL[c.kind]}</span>
+        {c.console && (
+          // Answered in SwarmCloud's console: what Oracle still needs before it counts.
+          <Chip kind="warn" title={`Answered in SwarmCloud by ${c.console.answered_by ?? "someone"}: ${consoleNeeds(c.console)}`}>
+            <span className="truncate">
+              Answered in SwarmCloud by {c.console.answered_by ?? "someone"}: {consoleNeeds(c.console)}
+            </span>
+          </Chip>
+        )}
+      </>
+    ),
     context: (
       <span className="block truncate" title={[c.flow_title, c.segment_title, c.document_slug].filter(Boolean).join(" · ")}>
         {c.segment_title ?? c.flow_title}
@@ -216,6 +247,139 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     ),
   }));
 
+  const runContext = (r: RunSummary) => (
+    <Link href={`/runs/${r.id}`} className="block truncate hover:underline">
+      <RunName run={r} />
+    </Link>
+  );
+  const openRun = (r: RunSummary) => <LinkButton href={`/runs/${r.id}`}>Open</LinkButton>;
+
+  const lookups: Need[] = inbox.lookups.map((r) => ({
+    key: r.id,
+    icon: "alert",
+    kind: "Stuck run",
+    item: (
+      <span className="truncate" title={r.stuck ?? undefined}>
+        {r.stuck}
+      </span>
+    ),
+    context: runContext(r),
+    run: shortId(r.id),
+    at: r.started_at ?? r.created_at,
+    action: compact ? (
+      openRun(r)
+    ) : (
+      <>
+        {r.can_retry && (
+          <Button
+            disabled={busy !== null}
+            onClick={() => {
+              if (window.confirm(RETRY_CONFIRM)) {
+                void act(`retry-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry", path(r.id))));
+              }
+            }}
+          >
+            Retry
+          </Button>
+        )}
+        {r.can_stop_cancelling && (
+          <Button
+            disabled={busy !== null}
+            onClick={() => {
+              if (window.confirm(STOP_CANCELLING_CONFIRM)) {
+                void act(`stop-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path(r.id))));
+              }
+            }}
+          >
+            Stop cancelling
+          </Button>
+        )}
+        {r.can_retry_lookup && (
+          <Button
+            disabled={busy !== null}
+            onClick={() => act(`lookup-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path(r.id))))}
+          >
+            Retry lookup
+          </Button>
+        )}
+        {(r.cancel_again ?? []).map((wid, _, all) => (
+          <Button
+            key={wid}
+            disabled={busy !== null}
+            onClick={() => {
+              if (window.confirm(CANCEL_AGAIN_CONFIRM)) {
+                void act(`again-${r.id}-${wid}`, () =>
+                  unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path(r.id), body: { workflow_id: wid } })),
+                );
+              }
+            }}
+          >
+            {all.length > 1 ? `Cancel again ${wid}` : "Cancel again"}
+          </Button>
+        ))}
+        {r.can_dismiss_overrun && (
+          <Button
+            variant="ghost"
+            disabled={busy !== null}
+            onClick={() => act(`dismiss-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/dismiss-overrun", path(r.id))))}
+          >
+            Dismiss
+          </Button>
+        )}
+        {!FINAL_STATUSES.includes(r.status) && (
+          <Button
+            variant="ghost"
+            disabled={busy !== null}
+            onClick={() => act(`cancel-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/cancel", path(r.id))))}
+          >
+            Cancel run
+          </Button>
+        )}
+      </>
+    ),
+  }));
+
+  // Owners only: runs whose output Oracle stopped trying to import.
+  const imports: Need[] = (inbox.imports ?? []).map((r) => ({
+    key: r.id,
+    icon: "alert",
+    kind: "Couldn't import",
+    item: (
+      <span className="truncate" title={r.import_failed ?? undefined}>
+        {r.import_failed}
+      </span>
+    ),
+    context: runContext(r),
+    run: shortId(r.id),
+    at: r.started_at ?? r.created_at,
+    action: compact
+      ? openRun(r)
+      : r.can_retry_import && (
+          <Button
+            disabled={busy !== null}
+            onClick={() => act(`import-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry-import", path(r.id))))}
+          >
+            Retry
+          </Button>
+        ),
+  }));
+
+  // Shown only: nothing to decide, and not counted in the total (nor on Home or the badge).
+  const searches: Need[] = (inbox.searches ?? []).map((r) => ({
+    key: r.id,
+    icon: "search",
+    kind: "Looking",
+    item: (
+      <span className="truncate" title={r.searching ?? undefined}>
+        {r.searching}
+      </span>
+    ),
+    context: runContext(r),
+    run: shortId(r.id),
+    at: r.started_at ?? r.created_at,
+    action: null,
+  }));
+
   const feedback: Need[] = inbox.feedback.map((d) => {
     const href = d.latest_version ? `/documents/${d.slug}/v/${d.latest_version}` : `/documents/${d.slug}`;
     const latest = d.items.map((f) => f.created_at).sort().at(-1);
@@ -238,7 +402,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     };
   });
 
-  return { checkpoints, approvals, overruns, feedback };
+  return { checkpoints, approvals, overruns, lookups, imports, searches, feedback };
 }
 
 /**
