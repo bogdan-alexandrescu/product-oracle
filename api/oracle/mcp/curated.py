@@ -216,22 +216,34 @@ _PUSH_DRAFT_SCHEMA = {
             "description": "The version the draft was written on (the one you read with "
             "get_document_markdown); 0 when the draft creates the document. A newer "
             "version that changed what the draft has is a conflict to merge, never "
-            "overwritten.",
+            "overwritten. Optional: left out, the document's latest version (0 when "
+            "it has none yet).",
         },
     },
-    "required": ["doc", "markdown", "base_version"],
+    "required": ["doc", "markdown"],
 }
 
 
 async def _push_draft(app, caller, ops, args) -> types.CallToolResult:
     op = ops["op"]
     missing = [k for k in ("doc", "markdown") if not args.get(k)]
-    base = args.get("base_version")
-    if base is None:
-        missing.append("base_version")
     if missing:
         raise ToolError(f"Missing required argument(s): {', '.join(missing)}")
-    if isinstance(base, bool) or not isinstance(base, int) or base < 0:
+    base = args.get("base_version")
+    if base is None:
+        # Left out: the draft is taken as written on the latest version (0: a new
+        # document). Read as part of this call (its scope is the push's); the caller's own
+        # access still applies.
+        found = await call_operation(
+            app, caller, ops["document"], {"doc": args["doc"]}, check_scopes=False
+        )
+        if found.ok:
+            base = found.json().get("latest_version") or 0
+        elif found.status_code == 404:
+            base = 0
+        else:
+            return to_result(found)
+    elif isinstance(base, bool) or not isinstance(base, int) or base < 0:
         raise ToolError("base_version must be a whole number, 0 for a new document")
     return to_result(
         await call_operation(
@@ -401,11 +413,15 @@ CURATED: tuple[Curated, ...] = (
         description=(
             "Import a draft as the next version of a document (markdown with YAML front "
             "matter); creates the document on first import (base_version 0). Pass the "
-            "version you wrote it on as base_version. Keep the template's final "
+            "version you wrote it on as base_version (left out, the latest version is "
+            "taken). Keep the template's final "
             "Sources and data points section, with each data point's confidence, and flag "
             "claims that rest only on low-confidence evidence."
         ),
-        needs={"op": _by("POST", ("import_version",))},
+        needs={
+            "op": _by("POST", ("import_version",)),
+            "document": _by("GET", ("get_document",)),
+        },
         schema=lambda ops: copy.deepcopy(_PUSH_DRAFT_SCHEMA),
         run=_push_draft,
     ),

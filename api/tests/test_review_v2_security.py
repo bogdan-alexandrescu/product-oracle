@@ -634,8 +634,11 @@ async def test_mcp_push_draft_creates_a_document_with_base_zero(client):
             },
         )
         assert again.is_error
-        missing = await c.call_tool("push_draft", {"doc": "other-doc", "markdown": other})
-        assert missing.is_error and "base_version" in str(missing.content)
+        # base_version is optional (the latest version): an unchanged draft still imports.
+        left_out = await c.call_tool("push_draft", {"doc": "other-doc", "markdown": other})
+        assert not left_out.is_error, left_out.content
+        no_doc = await c.call_tool("push_draft", {"doc": "", "markdown": other})
+        assert no_doc.is_error and "doc" in str(no_doc.content)
 
 
 async def test_mcp_push_draft_without_a_base_takes_the_latest_version(client):

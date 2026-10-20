@@ -47,7 +47,6 @@ from oracle.ticker import router as scheduler_tick
 
 router = APIRouter(prefix="/v1", tags=["runs"])
 
-Approver = Annotated[Principal, Depends(require_role("approver"))]
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]
@@ -173,10 +172,12 @@ async def resume_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> Ru
 
 
 @router.post("/runs/{run_id}/retry", response_model=RunOut)
-async def retry_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def retry_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Retry a run whose lost submission Oracle could neither find nor rule out (Inbox:
     lookups): looked up once more, else the segment is submitted again."""
     await _call(service.retry(db, principal, run_id))
+    # The segment is queued under the gate; submitted here, with nothing held.
+    await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
 
 
@@ -187,7 +188,7 @@ async def cancel_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) ->
 
 
 @router.post("/runs/{run_id}/stop-cancelling", response_model=RunOut)
-async def stop_cancelling_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def stop_cancelling_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Stop cancelling a workflow whose cancel SwarmCloud keeps answering with a 404 that
     proves nothing (Inbox: ``can_stop_cancelling``): the cancel calls stop and the Inbox
     item clears. A run that has not ended ends (cancelled, the reason recorded) and no
@@ -198,7 +199,7 @@ async def stop_cancelling_run(run_id: uuid.UUID, principal: Approver, db: Tenant
 
 
 @router.post("/runs/{run_id}/retry-lookup", response_model=RunOut)
-async def retry_lookup_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def retry_lookup_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Read a workflow whose cost is unknown now (Inbox: ``can_retry_lookup``): its status
     did not read past its search's end, or SwarmCloud answered it with 404s that prove
     nothing, or its confirmed cancel still reads CANCELLING. Read, its cost is counted
@@ -209,7 +210,7 @@ async def retry_lookup_run(run_id: uuid.UUID, principal: Approver, db: TenantDB)
 
 
 @router.post("/runs/{run_id}/retry-import", response_model=RunOut)
-async def retry_import_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) -> RunOut:
+async def retry_import_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Retry importing a step's output (Inbox: ``imports``, ``can_retry_import``): Oracle
     stopped after its resumed advance failed 5 times in a row; the next tick tries again,
     the count reset. Owners only; audited."""
@@ -237,7 +238,7 @@ async def retry_draft_import(
 
 @router.post("/runs/{run_id}/cancel-again", response_model=RunOut)
 async def cancel_again_run(
-    run_id: uuid.UUID, body: CancelAgain, principal: Approver, db: TenantDB
+    run_id: uuid.UUID, body: CancelAgain, principal: ApproverNow, db: TenantDB
 ) -> RunOut:
     """Cancel again (Inbox: ``cancel_again``): a workflow an approver stopped cancelling,
     whose spend took the ended run over its ceiling, has Oracle's cancel calls turned
@@ -248,7 +249,7 @@ async def cancel_again_run(
 
 
 @router.post("/runs/{run_id}/dismiss-overrun", response_model=RunOut)
-async def dismiss_overrun_run(run_id: uuid.UUID, principal: Approver, db: TenantDB) -> RunOut:
+async def dismiss_overrun_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> RunOut:
     """Clear an ended run's overrun from the Inbox (``can_dismiss_overrun``: nothing of
     the run is left to read). The overrun stays recorded on the run; audited."""
     await _call(service.dismiss_overrun(db, principal, run_id))
