@@ -738,7 +738,7 @@ export function PublishView({ doc }: { doc: string }) {
                 Cancel
               </Button>
               {refusal?.stale ? (
-                <Button variant="primary" icon="back" onClick={reloadPage}>
+                <Button variant="primary" onClick={reloadPage}>
                   Reload
                 </Button>
               ) : (
