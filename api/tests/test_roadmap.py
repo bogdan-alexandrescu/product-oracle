@@ -3,6 +3,7 @@ the roadmap draft's import with provenance and PRD links, exports, the feedback 
 on a roadmap, roles, and MCP. Against Postgres with the FakeRuntime."""
 
 import uuid
+from datetime import UTC, date, datetime
 
 import pytest
 from sqlalchemy import select
@@ -13,6 +14,7 @@ from oracle.config import get_settings
 from oracle.docs.models import Document, DocumentVersion
 from oracle.export import render
 from oracle.review.models import FeedbackItem
+from oracle.roadmap.models import ScheduleBasis
 from oracle.runs import flows
 from oracle.runs.roadmap import check_items, doc_links
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
@@ -107,9 +109,25 @@ def runtime():
     set_runtime(None)
 
 
+async def verified_estimate(tenant_id: uuid.UUID, reference: str = "ENG-412") -> None:
+    """CR-11: a date needs a verified basis. ITEMS' Beta date rests on ENG-412."""
+    async with tenant_session(tenant_id) as s:
+        s.add(
+            ScheduleBasis(
+                kind="estimate",
+                reference=reference,
+                supports_date=date(2026, 11, 30),
+                verified_at=datetime.now(UTC),
+            )
+        )
+        await s.commit()
+
+
 @pytest.fixture
 async def owner():
-    return await seed_auth()
+    tenant_id, auth = await seed_auth()
+    await verified_estimate(tenant_id)
+    return tenant_id, auth
 
 
 async def as_user(tenant_id: uuid.UUID, role: str) -> dict[str, str]:
@@ -679,6 +697,51 @@ async def test_a_bad_items_file_waits_at_its_checkpoint_or_fails_the_run(client,
     run = await get(client, auth, run["id"])
     assert run["status"] == "failed"
     assert run["error"].startswith("roadmap_items.yaml was rejected: [invalid_horizon]")
+
+
+async def test_a_date_without_a_verified_basis_is_refused(client, owner, runtime):
+    """O4 and CR-11: Oracle never invents dates. A milestone date whose date_source
+    names no verified estimate, capacity or commitment (or one for another date) is a
+    problem at the checkpoint, and fails the run with the checkpoint off."""
+    _, auth = owner
+    await approved_prd(client, auth)
+    guessed = ITEMS.replace("date_source: ENG-412 estimate", "date_source: the team thinks so")
+    other_day = ITEMS.replace("date: 2026-11-30", "date: 2026-12-15")
+    runtime.script["roadmap_items"] = [
+        Outcome(artifacts={"roadmap_items.yaml": guessed}),
+        Outcome(artifacts={"roadmap_items.yaml": other_day}),
+    ]
+    run = await start(client, auth, await create(client, auth, source=PRD))
+    assert "- ENG-412 (estimate) supports 2026-11-30" in runtime.submitted[0].steps[-1].prompt
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert [p["code"] for p in pending(run)["payload"]["items_check"]["problems"]] == [
+        "unverified_date"
+    ]
+    off = {"roadmap_items": False, "roadmap_review": False}
+    run = await start(
+        client,
+        auth,
+        await create(client, auth, source=PRD, document="r2", knobs={"checkpoints": off}),
+    )
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "failed"
+    assert run["error"].startswith("roadmap_items.yaml was rejected: [unverified_date]")
+
+
+def test_items_check_dates_against_verified_bases():
+    from oracle.roadmap.schedule import Basis
+
+    eng = Basis(uuid.uuid4(), "estimate", "ENG-412", date(2026, 11, 30))
+    assert check_items(ITEMS, date_bases=[eng]).ok
+    assert check_items(ITEMS).ok  # without bases (pure parsing) dates are not checked
+    for bases in ([], [Basis(uuid.uuid4(), "estimate", "ENG-41", date(2026, 11, 30))]):
+        codes = [p["code"] for p in check_items(ITEMS, date_bases=bases).problems]
+        assert codes == ["unverified_date"], bases
+    dated = "milestone: {name: Beta, date: 2026-11-30, date_source: ENG-412 estimate}"
+    undated = ITEMS.replace(dated, "milestone: Beta")
+    assert check_items(undated, date_bases=[]).ok
 
 
 async def test_existing_roadmap_gets_the_next_version(client, owner, runtime):
