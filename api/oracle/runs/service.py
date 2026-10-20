@@ -180,7 +180,7 @@ from oracle.swarm import (
     get_runtime,
     redact,
 )
-from oracle.swarm.runtime import MERGE, NOT_REACHED_STATES, NOT_YET
+from oracle.swarm.runtime import MERGE, NOT_YET, not_reached
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates import service as templates_service
 from oracle.templates.builtins import (
@@ -803,8 +803,8 @@ async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
 
 async def _read_hold(key: _HoldKey) -> str | None:
     """One live read of a workflow's status: whether it reached a review step no
-    checkpoint stands for yet (in any state but :data:`NOT_REACHED_STATES`, or not
-    listed). Bounded by :data:`HOLD_READ_SECONDS`; a read-only answer
+    checkpoint stands for yet (not :func:`not_reached`, or not listed).
+    Bounded by :data:`HOLD_READ_SECONDS`; a read-only answer
     is kept for :data:`HOLD_CACHE_SECONDS`."""
     run_id, workflow_id, reviews = key
     held: str | None = None
@@ -822,13 +822,14 @@ async def _read_hold(key: _HoldKey) -> str | None:
     else:
         for review in reviews:
             step = status.step(review)
-            if step is None or step.state not in NOT_REACHED_STATES:
+            if step is None or not not_reached(step):
                 log.info(
-                    "run %s: token read-only, step %s of %s is %s",
+                    "run %s: token read-only, step %s of %s is %s (park reason %s)",
                     run_id,
                     review,
                     workflow_id,
                     step.state if step else "not listed",
+                    step.park_reason if step else None,
                 )
                 held = HOLD_DECISION
                 break
