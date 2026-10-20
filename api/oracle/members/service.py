@@ -237,6 +237,7 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
         )
     jobs = await _cancel_llm_jobs(session, acted_as, at)
     voided = await _void_spend_approvals(session, principal, acted_as, user.id, via)
+    decisions = await _void_checkpoint_decisions(session, principal, acted_as, via)
     lapsed = await lapse_approvals(
         session, principal, reviewer_id=user.id, reason="member was removed (disabled)"
     )
@@ -262,6 +263,7 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
             "invites": [str(i.id) for i in invites],
             "llm_jobs": [str(j) for j in jobs],
             "run_approvals_voided": [str(r) for r in voided],
+            "checkpoint_decisions_voided": [str(c) for c in decisions],
             **lapsed,
         },
     )
@@ -343,6 +345,53 @@ async def _void_spend_approvals(
             {"approved_by": str(approved_by), **via},
         )  # fmt: skip
     return [r.id for r in runs]
+
+
+async def _void_checkpoint_decisions(
+    session: AsyncSession,
+    principal: "Principal",
+    deciders: set[uuid.UUID],
+    via: dict[str, str],
+) -> list[uuid.UUID]:
+    """A checkpoint decision the removed member gave whose segment has not been
+    submitted yet (the submission is under way, or waits for the tick's retry) is void,
+    as a spend approval is: the checkpoint waits for a decision again, nothing runs for
+    it. A decision whose workflow was submitted stands (it is running)."""
+    from oracle.runs.models import Checkpoint, Run, RunSegment
+    from oracle.runs.service import void_decision
+
+    decided = [str(d) for d in deciders]
+    candidates = (
+        await session.execute(
+            select(RunSegment.id, RunSegment.run_id)
+            .join(Run, Run.id == RunSegment.run_id)
+            .where(
+                Run.status == "running",
+                RunSegment.status == "pending",
+                RunSegment.artifacts["decision"]["decided_by"].astext.in_(decided),
+            )
+        )
+    ).all()
+    voided: list[uuid.UUID] = []
+    for segment_id, run_id in candidates:
+        fresh = {"populate_existing": True}
+        run = await session.scalar(
+            select(Run).where(Run.id == run_id).with_for_update().execution_options(**fresh)
+        )
+        segment = await session.scalar(
+            select(RunSegment).where(RunSegment.id == segment_id).execution_options(**fresh)
+        )
+        decision = (segment.artifacts or {}).get("decision") or {}
+        if run.status != "running" or segment.status != "pending":
+            continue
+        if decision.get("decided_by") not in decided:
+            continue
+        cp = await session.get(Checkpoint, uuid.UUID(decision["checkpoint_id"]))
+        if cp is None or cp.run_id != run.id:
+            continue
+        await void_decision(session, principal, run, segment, cp, via)
+        voided.append(cp.id)
+    return voided
 
 
 async def _disconnect_all(

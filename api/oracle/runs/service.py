@@ -1053,6 +1053,7 @@ async def _submit(
         return
     entry["workflow_id"] = workflow_id
     entry["state"] = "running"
+    art.pop("decision", None)
     art["attempts"].append(entry)
     for note in runtime.notes() if not runtime.can_reach_oracle else []:
         if note not in art["notes"]:
@@ -1476,6 +1477,14 @@ async def decide_checkpoint(
     decision: str,
     note: str | None,
 ) -> None:
+    from oracle.auth.service import caller_refusal
+    from oracle.review import publish
+
+    # Approving starts the next segment and spends money: the caller must hold the
+    # checkpoint's role when the decision lands, read under the gate (a disable or a
+    # demotion that commits first wins). A disable voids a decision whose segment has
+    # not been submitted yet (oracle.members.service._void_checkpoint_decisions).
+    await publish.gate_lock(db, shared=True)
     run = await _get_run(db, run_id, lock=True)
     cp = await db.scalar(
         select(Checkpoint).where(Checkpoint.id == checkpoint_id, Checkpoint.run_id == run.id)
@@ -1484,6 +1493,9 @@ async def decide_checkpoint(
         raise NotFound(f"checkpoint {checkpoint_id} not found")
     if not has_role(principal.role, cp.approver_role):  # type: ignore[arg-type]
         raise Forbidden(f"Requires the {cp.approver_role} role")
+    refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+    if refusal is not None:
+        raise Forbidden(refusal)
     if cp.status != "pending" or run.status != "awaiting_checkpoint":
         raise RunError(f"checkpoint is {cp.status}; run is {run.status}")
     note = (note or "").strip() or None
@@ -1506,22 +1518,74 @@ async def decide_checkpoint(
     )
     run.status = "running"
     if decision == "approved":
-        await _next(db, run, segment, segments)
+        target = next((s for s in segments if s.seq > segment.seq), None)
+        restore = "pending"
     else:
+        target, restore = segment, segment.status
         segment.status = "pending"
-        await _submit(db, run, segment, segments, change_request=note)
+    if target is None:
+        await _finish(db, run, "succeeded")
+    else:
+        # Until its workflow is submitted, the segment remembers the decision that
+        # started it: a disable of the decider voids it.
+        art = _art(target)
+        art["decision"] = {
+            "checkpoint_id": str(cp.id),
+            "decided_by": str(principal.id),
+            "restore": restore,
+        }
+        _set_art(target, art)
+        await _submit(db, run, target, segments, change_request=note)
     await db.commit()
 
 
-def _may_manage(principal: Principal, run: Run) -> bool:
-    return principal.role == "owner" or (
-        has_role(principal.role, "approver") and principal.id == run.created_by
+async def void_decision(
+    db: AsyncSession,
+    principal: Principal | None,
+    run: Run,
+    segment: RunSegment,
+    cp: Checkpoint,
+    via: dict[str, str],
+) -> None:
+    """Undo a checkpoint decision whose segment has not been submitted (both locked by
+    the caller, who commits): the checkpoint waits again, the segment is as before the
+    decision, the run's tokens die. A submission under way finds it so and cancels its
+    workflow (:func:`submit_queued`)."""
+    art = _art(segment)
+    decision = art.pop("decision", None) or {}
+    art.pop("pending_note", None)
+    art.pop("claim", None)
+    _set_art(segment, art)
+    segment.status = decision.get("restore") or "pending"
+    segment.error = None
+    decided_by, kind = cp.decided_by, cp.status
+    cp.status = "pending"
+    cp.decided_by = None
+    cp.decided_at = None
+    cp.note = None
+    run.status = "awaiting_checkpoint"
+    await revoke_run_tokens(db, run.id)
+    await audit.record(
+        db, principal, "checkpoint.decision_voided", "checkpoint", cp.id,
+        {"run_id": str(run.id), "decision": kind, "decided_by": str(decided_by), **via},
+    )  # fmt: skip
+
+
+async def _may_manage(db: AsyncSession, principal: Principal, run: Run) -> bool:
+    """An owner, or the approver who created the run; the role read now (the caller
+    holds the gate), not the one the request authenticated with."""
+    from oracle.auth.service import caller_refusal
+
+    if await caller_refusal(db, principal, "owner") is None:
+        return True
+    return principal.id == run.created_by and (
+        await caller_refusal(db, principal, "approver") is None
     )
 
 
 async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
     run = await _get_run(db, run_id, lock=True)
-    if not _may_manage(principal, run):
+    if not await _may_manage(db, principal, run):
         raise Forbidden("Only an owner or the approver who created the run can cancel it")
     if run.status in FINAL:
         raise RunError(f"run is already {run.status}")

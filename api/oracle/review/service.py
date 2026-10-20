@@ -364,8 +364,19 @@ async def update_comment(
     Below the approver role a principal may only change its own comments.
     """
     comment = await _get_comment(session, comment_id)
-    if comment.author_id != principal.id and not has_role(principal.role, "approver"):
-        raise ReviewError("forbidden", "Only the author or an approver can change this comment")
+    if comment.author_id != principal.id:
+        refusal = None if has_role(principal.role, "approver") else "not an approver"
+        if refusal is None:
+            # Moderation: the role is read now, under the review gate (C2).
+            from oracle.auth.service import caller_refusal
+            from oracle.review import publish
+
+            await publish.gate_lock(session, shared=True)
+            refusal = await caller_refusal(session, principal, "approver")
+        if refusal is not None:
+            raise ReviewError(
+                "forbidden", "Only the author or an approver can change this comment"
+            )
     changes: dict[str, object] = {}
     if resolved is not None:
         if comment.parent_id is not None:

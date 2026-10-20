@@ -112,15 +112,26 @@ async def rescore_target(
     )
 
 
+async def _approver_now(db: AsyncSession, principal: Principal) -> bool:
+    """The caller is an approver now, read under the review gate (C2: a disable or a
+    demotion that commits first wins)."""
+    from oracle.auth.service import caller_refusal
+    from oracle.review import publish
+
+    await publish.gate_lock(db, shared=True)
+    return await caller_refusal(db, principal, "approver") is None
+
+
 async def detach(db: AsyncSession, principal: Principal, evidence_id: uuid.UUID) -> None:
     ev = await db.get(Evidence, evidence_id)
     if ev is None:
         raise NotFoundError("Evidence not found")
     # Approvers remove any evidence; a commenter removes only link evidence they added (C2c).
-    if not has_role(principal.role, "approver") and not (
-        ev.kind is not None and ev.added_by == principal.id
-    ):
-        raise ForbiddenError("Only approvers, or the person who added this link, can remove it.")
+    if not (ev.kind is not None and ev.added_by == principal.id):
+        if not has_role(principal.role, "approver") or not await _approver_now(db, principal):
+            raise ForbiddenError(
+                "Only approvers, or the person who added this link, can remove it."
+            )
     entity_id, edge_id = ev.entity_id, ev.edge_id
     await audit.record(
         db,

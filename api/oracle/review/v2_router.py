@@ -19,7 +19,7 @@ from starlette.concurrency import run_in_threadpool
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import has_role, require_role, require_role_now
+from oracle.authz import has_role, recheck_caller, require_role, require_role_now
 from oracle.docs import service as docs_service
 from oracle.docs.edit import EditForbidden, EditRefused, edit_section
 from oracle.docs.parser import DraftError
@@ -195,7 +195,11 @@ async def edit_document_section(
     only that section's feedback (403 otherwise). An edit that reaches outside its
     section (adds, rewrites or swallows another section) is a 422."""
     document = await _call(get_document(db, doc))
-    if not has_role(principal.role, "approver"):
+    approver = has_role(principal.role, "approver")
+    if approver:
+        # Any section, and any feedback closed: the role is read now, under the gate.
+        await recheck_caller(db, principal, "approver")
+    else:
         owner = await db.scalar(
             select(SectionReviewState.owner_id).where(
                 SectionReviewState.document_id == document.id,
@@ -217,7 +221,7 @@ async def edit_document_section(
             heading=body.heading,
             body_md=body.body_md,
             resolutions=[r.model_dump(mode="json") for r in body.resolutions],
-            resolve_any=has_role(principal.role, "approver"),
+            resolve_any=approver,
         )
     except docs_service.BaseVersionConflictError as e:
         return import_conflict(e)
