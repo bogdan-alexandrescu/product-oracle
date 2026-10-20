@@ -201,3 +201,40 @@ async def test_notion_source_from_the_ui_syncs(client, alice, notion_conn, notio
     assert out["outcome"] == "completed", out
     assert out["upserted"] == len({ROOT, CHILD, ROW1, ROW2, GRAND})
     assert out["source"]["last_error"] is None
+
+
+async def test_narrowing_a_notion_source_deletes_pages_outside_it(
+    client, alice, notion_conn, notion_connector
+):
+    # Owner decision S5: narrowing a source deletes what now falls outside it on the next
+    # sync. Roots CHILD (with GRAND under it) and DB (rows ROW1, ROW2); then untick DB.
+    created = await client.post(
+        "/v1/sources",
+        headers=alice.headers,
+        json={
+            "kind": "notion",
+            "name": "Handbook",
+            "connection_id": str(notion_conn.id),
+            "config": {"roots": [CHILD, DB]},
+        },
+    )
+    assert created.status_code == 201, created.text
+    sid = created.json()["id"]
+    first = await client.post(f"/v1/sources/{sid}/sync", headers=alice.headers)
+    assert first.json()["upserted"] == len({CHILD, GRAND, ROW1, ROW2}), first.text
+
+    patched = await client.patch(
+        f"/v1/sources/{sid}", headers=alice.headers, json={"config": {"roots": [CHILD]}}
+    )
+    assert patched.status_code == 200, patched.text
+    second = await client.post(f"/v1/sources/{sid}/sync", headers=alice.headers)
+    assert second.json()["outcome"] == "completed", second.text
+    assert second.json()["deleted"] == 2
+
+    items = (
+        await client.get(
+            f"/v1/sources/{sid}/items", params={"include_deleted": "true"}, headers=alice.headers
+        )
+    ).json()
+    deleted = {i["external_id"]: i["deleted_at"] is not None for i in items}
+    assert deleted == {CHILD: False, GRAND: False, ROW1: True, ROW2: True}
