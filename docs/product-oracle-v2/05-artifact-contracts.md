@@ -418,6 +418,24 @@ assumptions.
 approach "based on assumptions", and needs a non-empty Assumptions section. When the map
 lands, only that function changes.
 
+### What a section body may hold (E1, owner, 2026-10-20)
+
+An edit and a run's import are refused (422, every problem at once,
+`oracle.specs.contract.structure_problems`) when a section's heading or body holds raw HTML
+(an HTML block or inline tag, escaped tag-like text included), HTML comment syntax (`<!--`
+or `-->`, code included) or a data: URL in an image or link. The label check reads each
+block as it renders in every output: the body, the body without citation markers, and
+`layers.slide_body(body)` with and without them. Images are no visible text; a task-list
+box or footnote marker before a label, emphasis ending right after 'Decided' or 'Proposed',
+a bare 'Decided', and a label split by a hard break are refused. Citation markers are
+dropped before a heading is compared with a PRD part's title. The request title is one
+escaped line in `# {title} {#spec}` and may not read as a label. The checks never parse
+with markdown-it's HTML rule on (it is quadratic on many unclosed `<!--`), and the comment
+check is one linear pass. The web's `lib/markdown` follows CommonMark where the check
+depends on it: an ordered list interrupts a paragraph only from 1, a line indented four
+spaces stays paragraph text, and a table needs a delimiter row with as many cells as its
+header (rows are cut or padded to that width).
+
 ### Generation: the `prd_to_spec` flow
 
 `POST /v1/spec-requests` (approver) checks that the PRD version is approved, that every id is
