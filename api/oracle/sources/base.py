@@ -34,6 +34,11 @@ from typing import Any, Protocol, runtime_checkable
 
 from oracle.sources.models import ITEM_KINDS
 
+# Added to a Google Docs source's config by the sync engine, never stored: the company's
+# email domains (oracle.sources.service.company_domains). Config keys starting with "_"
+# are refused from people.
+COMPANY_DOMAINS = "_company_domains"
+
 
 class ConnectorError(Exception):
     """Base class of connector failures."""
@@ -41,6 +46,11 @@ class ConnectorError(Exception):
 
 class ConnectorConfigError(ConnectorError):
     """The config or credential is invalid (bad repo name, missing scope, ...)."""
+
+
+class ConnectorBadInput(ConnectorConfigError):
+    """The config itself is malformed (an id that is not an id): answered 400, before
+    the provider is called."""
 
 
 class ConnectorAuthError(ConnectorError):
@@ -85,6 +95,12 @@ class ItemUnavailable:
     external_id: str
     # One short line for the owner, e.g. "No access: removed, or no longer shared".
     reason: str
+    # The item's name when the source config does not name it (a doc found in a folder).
+    name: str | None = None
+    # "unavailable": cannot be read; "skipped": readable, left out on purpose (a doc in
+    # a picked folder owned outside the company); "flagged": pulled in, with a warning;
+    # "limited": a folder listing stopped at the source's cap.
+    status: str = "unavailable"
 
 
 @dataclass(frozen=True)

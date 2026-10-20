@@ -147,7 +147,7 @@ async def test_validate_checks_picked_items_in_bounded_batches():
 
 async def test_validate_caps_how_many_items_a_source_picks():
     fake = FakeDrive()
-    many = {"docs": [f"1Doc{i}" for i in range(google_docs.MAX_PICKED + 1)]}
+    many = {"docs": [f"1DocMany{i:04d}" for i in range(google_docs.MAX_PICKED + 1)]}
     with pytest.raises(ConnectorConfigError, match=f"at most {google_docs.MAX_PICKED}"):
         await connector(fake).validate(many, CREDENTIAL)
     assert fake.calls == []
@@ -210,17 +210,22 @@ async def test_full_sync_recurses_folders_and_falls_back_to_plain_text():
     assert fake.calls.count("export:1DocPrdExample:text/plain") == 0
     assert fake.calls.count(f"list:{PRODUCT}:{PAGE_2}") == 1
 
-    assert events[-1] == CursorCheckpoint(
-        {
-            "modified_since": "2026-10-03T10:00:00.000Z",
-            "files": {
-                "1DocListedExample": "2026-09-15T10:00:00.000Z",
-                "1DocSpecExample": "2026-09-28T10:00:00.000Z",
-                "1DocPrdExample": "2026-10-02T10:00:00.000Z",
-                "1DocNotesExample": "2026-10-03T10:00:00.000Z",
-            },
-        }
-    )
+    last = events[-1]
+    assert isinstance(last, CursorCheckpoint)
+    assert last.cursor["modified_since"] == "2026-10-03T10:00:00.000Z"
+    assert last.cursor["files"] == {
+        "1DocListedExample": "2026-09-15T10:00:00.000Z",
+        "1DocSpecExample": "2026-09-28T10:00:00.000Z",
+        "1DocPrdExample": "2026-10-02T10:00:00.000Z",
+        "1DocNotesExample": "2026-10-03T10:00:00.000Z",
+    }
+    # Which docs came from the picked folder, and every folder walked.
+    assert set(last.cursor["tree"][PRODUCT]) == {
+        "1DocSpecExample",
+        "1DocPrdExample",
+        "1DocNotesExample",
+    }
+    assert set(last.cursor["folders"]) == {PRODUCT, SPECS}
 
 
 @pytest.mark.parametrize(
@@ -265,12 +270,10 @@ async def test_incremental_sync_exports_changes_and_deletes_removed_docs():
     assert [c for c in fake.calls if c.startswith("export:")] == [
         "export:1DocPrdExample:text/markdown"
     ]
-    assert events[-1].cursor == {
-        "modified_since": "2026-10-06T10:00:00.000Z",
-        "files": {
-            "1DocSpecExample": "2026-09-28T10:00:00.000Z",
-            "1DocPrdExample": "2026-10-06T10:00:00.000Z",
-        },
+    assert events[-1].cursor["modified_since"] == "2026-10-06T10:00:00.000Z"
+    assert events[-1].cursor["files"] == {
+        "1DocSpecExample": "2026-09-28T10:00:00.000Z",
+        "1DocPrdExample": "2026-10-06T10:00:00.000Z",
     }
 
 
@@ -278,7 +281,7 @@ async def test_removed_listed_doc_is_deleted():
     cursor = {"modified_since": None, "files": {"1DocGoneExample": "2026-09-01T00:00:00.000Z"}}
     events = await collect(connector(FakeDrive()), {"docs": ["1DocGoneExample"]}, cursor)
     assert events[0] == ItemDelete("1DocGoneExample")
-    assert events[-1].cursor == {"modified_since": None, "files": {}}
+    assert events[-1].cursor["files"] == {}
 
 
 async def test_expired_token():
@@ -363,4 +366,4 @@ def test_names_must_be_a_map_of_strings():
     from oracle.sources.connectors.google_docs import _options
 
     with pytest.raises(ConnectorConfigError, match="names"):
-        _options({"docs": ["1Doc"], "names": ["x"]})
+        _options({"docs": ["1DocListedExample"], "names": ["x"]})
