@@ -17,8 +17,10 @@ Nothing here runs or edits anything by itself (§5 step 7):
 any finding of an intake is below "shared in full", every item its analysis and jobs
 read is withheld from its author's runs. Run reads query it in SQL
 (``oracle.intake.evidence.run_withheld``) instead of parsing every intake per request.
-``intake_shared_items`` lists what the findings shared in full cite: any run reads those
-in full text unless an intake withholds them (round 6, owner 2026-10-19).
+``intake_shared_items`` lists what the findings shared in full released: any run reads
+those in full text unless an intake withholds them (round 6, owner 2026-10-19), and only
+at the version released (round 7, freeze at sharing: each (item, version) a finding
+cited when its author shared it in full).
 """
 
 import uuid
@@ -82,13 +84,14 @@ class IntakeWithheldItem(TenantScoped, Base):
 
 
 class IntakeSharedItem(TenantScoped, Base):
-    """A source item cited by a finding its intake's author shared in full: readable in
-    full text by runs (S6, owner 2026-10-19), unless an intake withholds it
-    (``IntakeWithheldItem``, which always wins). Rewritten by ``evidence.record_reads``."""
+    """A source item version a finding cited when its intake's author shared it in
+    full: readable in full text by runs at that version (S6, owner 2026-10-19), unless
+    an intake withholds the item (``IntakeWithheldItem``, which always wins) or it was
+    deleted upstream. Rewritten by ``evidence.record_reads``."""
 
     __tablename__ = "intake_shared_items"
     __table_args__ = (
-        UniqueConstraint("intake_id", "item_id"),
+        UniqueConstraint("intake_id", "item_id", "version_id"),
         Index("ix_intake_shared_items_item_id_user_id", "item_id", "user_id"),
     )
 
@@ -96,3 +99,5 @@ class IntakeSharedItem(TenantScoped, Base):
     # The intake's author, whose item it is (no FK, as elsewhere).
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     item_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    # The version released: the one the intake read at its pin when the author shared.
+    version_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)

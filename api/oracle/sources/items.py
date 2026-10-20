@@ -103,31 +103,39 @@ def version_ids(
     user_id: uuid.UUID,
     as_of: datetime | None = None,
     txn_snapshot: str | None = None,
-    also: set[uuid.UUID] | None = None,
+    also: Select | None = None,
 ) -> Select:
     """Ids of the versions a read sees: current ones, or the pinned ones at ``as_of``
     (and, given the pin's ``txn_snapshot``, committed when it was taken). ``also``:
-    other users' items the read may see too (a run's, S6)."""
+    SQL of (item_id, version_id), items a run reads at that version only (S6, freeze at
+    sharing): other users' items it may read too, and its user's own items a finding
+    shared in full released, whatever ``as_of`` says."""
     owned = SourceItem.source_id.in_(select(Source.id).where(Source.owner_user_id == user_id))
-    if also:
-        owned = or_(owned, SourceItem.id.in_(also))
+    released = also.subquery() if also is not None else None
+    if released is not None:
+        owned = and_(owned, SourceItem.id.not_in(select(released.c.item_id)))
     if as_of is None:
-        return select(SourceItem.current_version_id.label("id")).where(
+        mine = select(SourceItem.current_version_id.label("id")).where(
             owned,
             SourceItem.deleted_at.is_(None),
             SourceItem.current_version_id.is_not(None),
         )
-    return (
-        select(SourceItemVersion.id)
-        .join(SourceItem, SourceItem.id == SourceItemVersion.item_id)
-        .where(
-            owned,
-            version_at_pin(as_of, txn_snapshot),
-            ~deleted_at_pin(as_of, txn_snapshot),
+    else:
+        mine = (
+            select(SourceItemVersion.id)
+            .join(SourceItem, SourceItem.id == SourceItemVersion.item_id)
+            .where(
+                owned,
+                version_at_pin(as_of, txn_snapshot),
+                ~deleted_at_pin(as_of, txn_snapshot),
+            )
+            .ext(distinct_on(SourceItemVersion.item_id))
+            .order_by(SourceItemVersion.item_id, SourceItemVersion.fetched_at.desc())
         )
-        .ext(distinct_on(SourceItemVersion.item_id))
-        .order_by(SourceItemVersion.item_id, SourceItemVersion.fetched_at.desc())
-    )
+    if released is None:
+        return mine
+    pinned = mine.subquery()
+    return select(pinned.c.id).union(select(released.c.version_id.label("id")))
 
 
 async def items_as_of(
@@ -202,15 +210,21 @@ async def owned_item(
     return ItemRow(row[0], row[1], row[2]) if row else None
 
 
-async def item_row(session: AsyncSession, item_id: uuid.UUID) -> ItemRow | None:
-    """An item with its current version, whoever owns it: only for a read already
-    allowed (a run reading an item a finding shared in full cites, S6)."""
+async def item_row(
+    session: AsyncSession, item_id: uuid.UUID, version_id: uuid.UUID | None = None
+) -> ItemRow | None:
+    """An item with its current version (or ``version_id``), whoever owns it: only for
+    a read already allowed (a run reading an item a finding shared in full released, at
+    the version released, S6). An item deleted upstream is gone."""
+    version = SourceItemVersion.id == (
+        version_id if version_id is not None else SourceItem.current_version_id
+    )
     row = (
         await session.execute(
             select(SourceItem, SourceItemVersion, Source.kind)
             .join(Source, Source.id == SourceItem.source_id)
-            .outerjoin(SourceItemVersion, SourceItemVersion.id == SourceItem.current_version_id)
-            .where(SourceItem.id == item_id)
+            .outerjoin(SourceItemVersion, and_(version, SourceItemVersion.item_id == SourceItem.id))
+            .where(SourceItem.id == item_id, SourceItem.deleted_at.is_(None))
         )
     ).first()
     return ItemRow(row[0], row[1], row[2]) if row else None

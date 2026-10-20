@@ -463,9 +463,8 @@ class View:
         self.v = sharing.viewer(principal, intake)
         self.reg = sharing.registry(intake)
         self.analysis = sharing.analysis_view(intake, self.v)
-        self.reveal = (
-            set() if self.v.is_author else sharing.shared_item_ids(self.reg, self.v, "full")
-        )
+        # What findings shared in full released (freeze at sharing), for anyone else.
+        self.reveal = set() if self.v.is_author else sharing.frozen_item_ids(self.reg)
         self.raw: dict[uuid.UUID, KnowledgeGap] = {}
         self.gaps: list = []
         self.views: dict[uuid.UUID, Any] = {}
@@ -500,10 +499,15 @@ class View:
     ) -> dict[uuid.UUID, EvidenceRef]:
         snapshot = await pinned_snapshot(db, pin)
         reveal = self.reveal
+        released: dict[uuid.UUID, uuid.UUID] | None = None
         if self.v.is_run:
             # A run reads an item a finding shared in full cites only while no intake
             # withholds it (S6, owner 2026-10-19): not its title or excerpt either.
-            reveal = reveal & await ev.run_include(db, self.intake)
+            released = await ev.run_include(db, self.intake)
+            reveal = reveal & set(released)
+        elif reveal:
+            # Shown at the version sharing released (freeze at sharing).
+            released = await ev.released_versions(db, sharing.frozen_pairs(self.reg))
         return await ev.refs(
             db,
             ids,
@@ -511,6 +515,7 @@ class View:
             pin.as_of,
             txn_snapshot=snapshot.txn_snapshot if snapshot else None,
             reveal=reveal,
+            released=released,
         )
 
 

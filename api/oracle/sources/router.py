@@ -5,9 +5,11 @@ syncs only their own sources and items. Another user's source or item is a 404. 
 token acting for its user never reads raw an item behind one of the user's intake
 findings not shared in full (S6, ``oracle.intake.evidence.run_withheld``): the item is
 left out of every list, count and search, and is a 404. Any run also reads in full text
-the items a finding shared in full cites (``oracle.intake.evidence.run_shared``, owner
-2026-10-19), whoever owns them, unless an intake withholds them: ``/v1/source-items/{id}``
-returns them and ``/v1/search`` finds them, as ``/v1/intakes/{id}/evidence`` does.
+the items a finding shared in full released (``oracle.intake.evidence.run_shared``, owner
+2026-10-19), whoever owns them, unless an intake withholds them or they were deleted
+upstream: ``/v1/source-items/{id}`` returns them and ``/v1/search`` finds them, as
+``/v1/intakes/{id}/evidence`` does, only ever at the version sharing released (freeze
+at sharing: what the finding cited when its author shared it).
 """
 
 import uuid
@@ -15,7 +17,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.sources import items, service, store, uploads
@@ -55,11 +57,12 @@ async def _withheld(db: TenantDB, principal: Principal) -> set[uuid.UUID]:
     return await run_withheld(db, principal) or set()
 
 
-async def _shared(db: TenantDB, principal: Principal) -> set[uuid.UUID]:
-    """Items beyond its user's own a run reads (empty for anyone else)."""
+def _shared(principal: Principal) -> Select | None:
+    """SQL (item_id, version_id): what a run reads at the version a finding shared in
+    full released, its user's own items included (None for anyone else)."""
     from oracle.intake.evidence import run_shared
 
-    return await run_shared(db, principal)
+    return run_shared(principal)
 
 
 def _http(exc: Exception) -> HTTPException:
@@ -298,12 +301,29 @@ async def list_source_items(
 async def get_source_item(
     item_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
 ) -> ItemDetail:
-    row = await items.owned_item(db, _user(principal), item_id)
-    if row is None and item_id in await _shared(db, principal):
-        row = await items.item_row(db, item_id)
-    if row is None or item_id in await _withheld(db, principal):
+    user_id = _user(principal)
+    shared = _shared(principal)
+    released = None
+    if shared is not None:
+        # A run reads a shared item at the version released only, never another
+        # (S6, freeze at sharing), and nothing deleted upstream.
+        frozen = shared.subquery()
+        released = await db.scalar(select(frozen.c.version_id).where(frozen.c.item_id == item_id))
+    if released is not None:
+        row = await items.item_row(db, item_id, released)
+    else:
+        row = await items.owned_item(db, user_id, item_id)
+        if row is not None and principal.is_run and row.item.deleted_at is not None:
+            row = None
+        if row is not None and item_id in await _withheld(db, principal):
+            row = None
+    if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
-    versions = await db.scalar(select(func.count()).where(SourceItemVersion.item_id == row.item.id))
+    versions = 1
+    if released is None:
+        versions = await db.scalar(
+            select(func.count()).where(SourceItemVersion.item_id == row.item.id)
+        )
     settings = await items.confidence_settings(db)
     return ItemDetail(
         **items.item_out(row, settings),
@@ -424,14 +444,15 @@ async def search_sources(
     as_of: datetime | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> SearchResults:
-    """Search the user's own items (a run: also those a finding shared in full cites).
-    Ranked by relevance x confidence weight; ``as_of`` searches the versions pinned at
-    that time."""
+    """Search the user's own items (a run: also those a finding shared in full
+    released). Ranked by relevance x confidence weight; ``as_of`` searches the versions
+    pinned at that time, except a run's shared items: those are searched at the version
+    sharing released only, whatever ``as_of`` says (S6, freeze at sharing)."""
     user_id = _user(principal)
     if as_of is not None and as_of.tzinfo is None:
         as_of = as_of.replace(tzinfo=UTC)
     hits = await search_service.search(
         db, user_id, q, kinds=_kinds(kinds), source_id=source, as_of=as_of, limit=limit,
-        exclude=await _withheld(db, principal), also=await _shared(db, principal),
+        exclude=await _withheld(db, principal), also=_shared(principal),
     )  # fmt: skip
     return SearchResults(query=q, as_of=as_of, hits=hits)  # type: ignore[arg-type]

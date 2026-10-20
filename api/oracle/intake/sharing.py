@@ -188,7 +188,7 @@ def register(
         entry["match"] = match
     if public_state is not None:
         entry["public_state"] = public_state
-    for kept in ("public_importance", "published", "draft", "baseline_proposals"):
+    for kept in ("public_importance", "published", "draft", "baseline_proposals", "frozen"):
         # public_importance: a person's importance edit recorded before the gap row
         # carried its basis (read for old rows only).
         if previous.get(kept):
@@ -314,6 +314,36 @@ def shared_item_ids(reg: dict[str, dict[str, Any]], v: Viewer, need: str) -> set
         if v.sees(entry.get("sharing", DEFAULT), need):
             out |= {uuid.UUID(i) for i in entry.get("source_item_ids") or []}
     return out
+
+
+def frozen(entry: dict[str, Any] | None) -> dict[str, str]:
+    """What a finding shared in full released (S6, owner 2026-10-19, freeze at
+    sharing): item id -> version id, exactly what it cited, at the version the intake
+    read, when its author last shared it in full. Empty below full."""
+    if entry is None or is_open(entry) or entry.get("sharing", DEFAULT) != "full":
+        return {}
+    return dict(entry.get("frozen") or {})
+
+
+def unshared_ids(entry: dict[str, Any] | None) -> list[str]:
+    """What a finding shared in full cites now but did not cite when it was shared (a
+    later analysis added it): withheld until its author shares the finding again."""
+    if entry is None or is_open(entry) or entry.get("sharing", DEFAULT) != "full":
+        return []
+    released = frozen(entry)
+    return [i for i in entry.get("source_item_ids") or [] if i not in released]
+
+
+def frozen_pairs(reg: dict[str, dict[str, Any]]) -> set[tuple[uuid.UUID, uuid.UUID]]:
+    """(item id, version id) of everything the intake's findings shared in full
+    released."""
+    return {
+        (uuid.UUID(i), uuid.UUID(v)) for entry in reg.values() for i, v in frozen(entry).items()
+    }
+
+
+def frozen_item_ids(reg: dict[str, dict[str, Any]]) -> set[uuid.UUID]:
+    return {i for i, _ in frozen_pairs(reg)}
 
 
 # --- views of rows ----------------------------------------------------------------------

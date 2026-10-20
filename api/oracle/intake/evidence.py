@@ -19,7 +19,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, and_, delete, or_, select
+from sqlalchemy import Select, and_, delete, or_, select, tuple_
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import confidence
@@ -160,28 +161,70 @@ def withholds(intake: ProductIntake, gaps: list | None = None) -> bool:
 
 
 def shared_full_ids(intake: ProductIntake) -> set[uuid.UUID]:
-    """The items the intake's findings shared in full cite (S6, owner 2026-10-19): runs
-    read them in full text, unless an intake withholds them."""
+    """The items the intake's findings shared in full released (S6, owner 2026-10-19,
+    freeze at sharing: what each cited when its author shared it): runs read them in
+    full text, at the version released, unless an intake withholds them."""
+    from oracle.intake import sharing
+
+    return sharing.frozen_item_ids(sharing.registry(intake))
+
+
+def unshared_ids(intake: ProductIntake) -> set[uuid.UUID]:
+    """What the intake's findings shared in full cite but never released: items a later
+    analysis added (or one whose version at the pin was not known). Withheld from runs
+    until the author shares the finding again."""
     from oracle.intake import sharing
 
     reg = sharing.registry(intake)
-    return sharing.shared_item_ids(reg, sharing.EVERYONE, "full")
+    cited = {uuid.UUID(i) for entry in reg.values() for i in sharing.unshared_ids(entry)}
+    return cited - sharing.frozen_item_ids(reg)
+
+
+async def pinned_versions(
+    db: AsyncSession, intake: ProductIntake, item_ids: list[str] | list[uuid.UUID]
+) -> dict[str, str]:
+    """Item id -> the version of it the intake read (at its pinned snapshot), for the
+    author's items of ``item_ids`` still there: what sharing in full releases. An item
+    with no version at the pin, deleted or not the author's is left out (withheld)."""
+    snapshot = await pinned_snapshot(db, intake)
+    ids = {uuid.UUID(str(i)) for i in item_ids}
+    if snapshot is None or not ids or intake.author_id is None:
+        return {}
+    as_of, txn = snapshot.as_of, snapshot.txn_snapshot
+    rows = await db.execute(
+        select(SourceItemVersion.item_id, SourceItemVersion.id)
+        .join(SourceItem, SourceItem.id == SourceItemVersion.item_id)
+        .join(Source, Source.id == SourceItem.source_id)
+        .where(
+            SourceItemVersion.item_id.in_(ids),
+            Source.owner_user_id == intake.author_id,
+            SourceItem.deleted_at.is_(None),
+            source_items.version_at_pin(as_of, txn),
+        )
+        .ext(distinct_on(SourceItemVersion.item_id))
+        .order_by(SourceItemVersion.item_id, SourceItemVersion.fetched_at.desc())
+    )
+    return {str(item): str(version) for item, version in rows.all()}
 
 
 async def _rewrite(db: AsyncSession, model: type, intake: ProductIntake, ids: set) -> None:
     """Make the intake's rows of ``model`` exactly ``ids``: stale rows go, new ones are
     inserted with ON CONFLICT DO NOTHING, so two writers recomputing the same intake at
-    once never trip its (intake_id, item_id) unique constraint."""
+    once never trip its unique constraint. ``ids``: item ids, or (item id, version id)
+    pairs for ``intake_shared_items``."""
     from sqlalchemy.dialects.postgresql import insert
 
+    paired = model.__tablename__ == "intake_shared_items"
+    key = tuple_(model.item_id, model.version_id) if paired else model.item_id
     gone = delete(model).where(model.intake_id == intake.id)
     if ids:
-        gone = gone.where(model.item_id.not_in(ids))
+        gone = gone.where(key.not_in(sorted(ids)))
     await db.execute(gone)
     if ids and intake.author_id is not None:
         rows = [
             {"id": uuid.uuid4(), "tenant_id": intake.tenant_id, "intake_id": intake.id,
-             "user_id": intake.author_id, "item_id": i}
+             "user_id": intake.author_id,
+             **({"item_id": i[0], "version_id": i[1]} if paired else {"item_id": i})}
             for i in sorted(ids)
         ]  # fmt: skip
         await db.execute(insert(model).values(rows).on_conflict_do_nothing())
@@ -189,18 +232,22 @@ async def _rewrite(db: AsyncSession, model: type, intake: ProductIntake, ids: se
 
 async def record_reads(db: AsyncSession, intake: ProductIntake) -> None:
     """Rewrite the intake's rows of ``intake_withheld_items`` (everything it read while
-    it withholds, nothing once every finding is shared in full) and of
-    ``intake_shared_items`` (what its findings shared in full cite). Called wherever the
-    analysis or a level changes."""
-    from oracle.intake import engine
+    it withholds; once every finding is shared in full, what those findings cite but
+    never released) and of ``intake_shared_items`` (the (item, version) pairs its
+    findings shared in full released). Called wherever the analysis or a level
+    changes."""
+    from oracle.intake import engine, sharing
     from oracle.intake.models import IntakeSharedItem, IntakeWithheldItem
 
     await db.flush()
     author = intake.author_id is not None
     gaps = await engine.intake_gaps(db, intake.id)
-    withheld = read_item_ids(intake) if author and withholds(intake, gaps) else set()
+    withheld: set[uuid.UUID] = set()
+    if author:
+        withheld = read_item_ids(intake) if withholds(intake, gaps) else unshared_ids(intake)
     await _rewrite(db, IntakeWithheldItem, intake, withheld)
-    await _rewrite(db, IntakeSharedItem, intake, shared_full_ids(intake) if author else set())
+    pairs = sharing.frozen_pairs(sharing.registry(intake)) if author else set()
+    await _rewrite(db, IntakeSharedItem, intake, pairs)
     await db.flush()
 
 
@@ -211,17 +258,29 @@ def withheld_ids(user_id: uuid.UUID) -> Select:
     return select(IntakeWithheldItem.item_id).where(IntakeWithheldItem.user_id == user_id)
 
 
-def readable_shared_ids() -> Select:
-    """SQL: the items any run reads in full text because a finding shared in full cites
-    them (S6, owner 2026-10-19), less what an intake of their owner withholds (the
-    intake rule always wins)."""
+def readable_shared(intake_id: uuid.UUID | None = None) -> Select:
+    """SQL: (item_id, version_id) of what any run reads in full text because a finding
+    shared in full released it (S6, owner 2026-10-19), at the version released (the
+    newest one released, if several were), less what an intake of the owner withholds
+    (the intake rule always wins) and what was deleted upstream since. ``intake_id``:
+    what that intake released only."""
     from oracle.intake.models import IntakeSharedItem, IntakeWithheldItem
 
     held = select(IntakeWithheldItem.id).where(
         IntakeWithheldItem.item_id == IntakeSharedItem.item_id,
         IntakeWithheldItem.user_id == IntakeSharedItem.user_id,
     )
-    return select(IntakeSharedItem.item_id).where(~held.exists())
+    stmt = (
+        select(IntakeSharedItem.item_id, IntakeSharedItem.version_id)
+        .join(SourceItem, SourceItem.id == IntakeSharedItem.item_id)
+        .join(SourceItemVersion, SourceItemVersion.id == IntakeSharedItem.version_id)
+        .where(~held.exists(), SourceItem.deleted_at.is_(None))
+        .ext(distinct_on(IntakeSharedItem.item_id))
+        .order_by(IntakeSharedItem.item_id, SourceItemVersion.fetched_at.desc())
+    )
+    if intake_id is not None:
+        stmt = stmt.where(IntakeSharedItem.intake_id == intake_id)
+    return stmt
 
 
 async def run_withheld(db: AsyncSession, principal: Principal | None) -> set[uuid.UUID] | None:
@@ -235,23 +294,44 @@ async def run_withheld(db: AsyncSession, principal: Principal | None) -> set[uui
     return set((await db.scalars(withheld_ids(principal.user_id).distinct())).all())
 
 
-async def run_shared(db: AsyncSession, principal: Principal | None) -> set[uuid.UUID]:
-    """Items beyond its user's own a run reads in full text: those cited by findings
-    shared in full and withheld by no intake (empty for anyone but a run)."""
+def run_shared(principal: Principal | None) -> Select | None:
+    """SQL, (item_id, version_id): what a run reads in full text beyond its user's own
+    items, and the only version it reads of those (its user's own included) whatever
+    ``as_of`` it asks for. None for anyone but a run."""
     if principal is None or not principal.is_run:
-        return set()
-    return set((await db.scalars(readable_shared_ids().distinct())).all())
+        return None
+    return readable_shared()
 
 
-async def run_include(db: AsyncSession, intake: ProductIntake) -> set[uuid.UUID]:
+async def run_include(db: AsyncSession, intake: ProductIntake) -> dict[uuid.UUID, uuid.UUID]:
     """What a run (its author's or anyone's) may search and be shown of the intake's
-    items: those its findings shared in full cite, less what any intake of the author
-    withholds. The same items ``/v1/source-items/{id}`` and ``/v1/search`` give a run."""
-    reveal = shared_full_ids(intake)
-    if not reveal or intake.author_id is None:
-        return set()
-    held = set((await db.scalars(withheld_ids(intake.author_id).distinct())).all())
-    return reveal - held
+    items, item id -> the version released: what its findings shared in full released,
+    less what any intake of the author withholds and what was deleted since. The same
+    items and versions ``/v1/source-items/{id}`` and ``/v1/search`` give a run."""
+    if intake.author_id is None:
+        return {}
+    return dict((await db.execute(readable_shared(intake.id))).tuples().all())
+
+
+async def released_versions(
+    db: AsyncSession, pairs: set[tuple[uuid.UUID, uuid.UUID]]
+) -> dict[uuid.UUID, uuid.UUID]:
+    """Item id -> the newest version ``pairs`` released, for items not deleted since:
+    what people are shown of a finding shared in full."""
+    if not pairs:
+        return {}
+    rows = await db.execute(
+        select(SourceItemVersion.item_id, SourceItemVersion.id)
+        .join(SourceItem, SourceItem.id == SourceItemVersion.item_id)
+        .where(
+            SourceItemVersion.id.in_({v for _, v in pairs}),
+            SourceItem.deleted_at.is_(None),
+        )
+        .ext(distinct_on(SourceItemVersion.item_id))
+        .order_by(SourceItemVersion.item_id, SourceItemVersion.fetched_at.desc())
+    )
+    wanted = {i for i, _ in pairs}
+    return {i: v for i, v in rows.tuples().all() if i in wanted}
 
 
 async def refs(
@@ -262,10 +342,13 @@ async def refs(
     *,
     txn_snapshot: str | None = None,
     reveal: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
+    released: dict[uuid.UUID, uuid.UUID] | None = None,
 ) -> dict[uuid.UUID, EvidenceRef]:
     """Evidence refs for source items, as they were at the pin, shown per visibility:
     to the item's owner (never through a run token), and for ``reveal`` (items of
-    findings shared in full) to anyone."""
+    findings shared in full) to anyone. ``released``: the version sharing released of
+    each revealed item, shown instead of the pinned one; a revealed item with none
+    (deleted upstream since) is not shown."""
     if not item_ids:
         return {}
     rows = (
@@ -276,21 +359,26 @@ async def refs(
         )
     ).all()
     versions: dict[uuid.UUID, SourceItemVersion] = {}
-    for item, _source in rows:
+    me = caller_user(principal)
+    for item, source in rows:
         stmt = select(SourceItemVersion).where(SourceItemVersion.item_id == item.id)
-        if as_of is not None:
+        owner = me is not None and source.owner_user_id == me
+        if released is not None and item.id in reveal and not owner:
+            stmt = stmt.where(SourceItemVersion.id == released.get(item.id))
+        elif as_of is not None:
             stmt = stmt.where(source_items.version_at_pin(as_of, txn_snapshot))
         version = await db.scalar(stmt.order_by(SourceItemVersion.fetched_at.desc()).limit(1))
         if version is not None:
             versions[item.id] = version
     settings = await source_items.confidence_settings(db)
-    me = caller_user(principal)
     out: dict[uuid.UUID, EvidenceRef] = {}
     for item, source in rows:
         version = versions.get(item.id)
         row = source_items.ItemRow(item, version, source.kind)
         score = source_items.item_confidence(row, settings, now=as_of)
-        visible = (me is not None and source.owner_user_id == me) or item.id in reveal
+        owner = me is not None and source.owner_user_id == me
+        shown = item.id in reveal and (released is None or item.id in released)
+        visible = owner or (shown and item.deleted_at is None)
         out[item.id] = EvidenceRef(
             source_item_id=item.id,
             visible=visible,

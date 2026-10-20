@@ -1,5 +1,5 @@
 """Full-text search over the current user's items (and, for a run, the items findings
-shared in full cite: ``also``).
+shared in full released, at the version released: ``also``).
 
 Matches use ``websearch_to_tsquery`` against the generated ``search`` tsvector of the
 versions a read sees (current, or pinned at ``as_of``). Results are ordered by
@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import confidence
@@ -36,11 +36,12 @@ async def search(
     exclude: set[uuid.UUID] | None = None,
     include: set[uuid.UUID] | None = None,
     source_ids: list[uuid.UUID] | None = None,
-    also: set[uuid.UUID] | None = None,
+    also: Select | None = None,
 ) -> list[dict[str, Any]]:
     """``exclude``: items the caller may not read; ``include``: the only items the
-    caller may be shown; ``source_ids``: the only sources searched; ``also``: other
-    users' items the caller may read too (a run's, S6). All applied in SQL, before
+    caller may be shown; ``source_ids``: the only sources searched; ``also``: SQL of
+    (item_id, version_id), items the caller reads at that version only, whoever owns
+    them and whatever ``as_of`` says (a run's, S6). All applied in SQL, before
     ranking and the limit, so what is left out never changes what is returned."""
     if include is not None and not include:
         return []

@@ -38,7 +38,14 @@ Security review fixes (same lane, same revision):
   item id in a stored analysis is skipped, never cast.
 - ``intake_shared_items`` (round 6, owner 2026-10-19): the items cited by findings
   shared in full, which every run reads in full text unless an intake withholds them
-  (``intake_withheld_items`` always wins). Backfilled from the stored levels.
+  (``intake_withheld_items`` always wins). Round 7 (freeze at sharing, owner
+  2026-10-19): a row is an (item, version) pair, what a finding cited, at the version
+  its intake read, when its author shared it in full; runs read that version only.
+  Existing full shares are backfilled with the version each cited item had at the
+  intake's pin (recorded in the finding too, ``frozen``); an item whose version there
+  cannot be determined (no pin, no version at it, deleted, not the author's) is not
+  released and stays withheld until the author shares the finding again. A JSON-null
+  ``findings`` (or list) in a stored analysis is read as empty.
 - ``proposals.status`` gains ``withdrawn`` (round 6, owner 2026-10-19): lowering a
   finding back to private withdraws the open baseline proposal its answer made.
 
@@ -95,25 +102,38 @@ PROPOSAL_STATUSES = "status IN ('open', 'accepted', 'rejected')"
 PROPOSAL_STATUSES_WITHDRAWN = "status IN ('open', 'accepted', 'rejected', 'withdrawn')"
 XID = "(pg_current_xact_id()::text)::bigint"
 UUID_TEXT = "'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'"
+
+
+def _obj(expr: str) -> str:
+    """A JSON object, or an empty one for SQL NULL, JSON null or anything else."""
+    return f"(CASE WHEN jsonb_typeof({expr}) = 'object' THEN {expr} ELSE '{{}}'::jsonb END)"
+
+
+def _arr(expr: str) -> str:
+    """A JSON array, or an empty one for SQL NULL, JSON null or anything else."""
+    return f"(CASE WHEN jsonb_typeof({expr}) = 'array' THEN {expr} ELSE '[]'::jsonb END)"
+
+
+FINDINGS = _obj("i.analysis->'findings'")
 # Every item id an intake's stored analysis names: what it read, the findings' citations,
 # stale items and conflict claims. An id that is not a UUID is skipped, never cast (one
 # malformed entry would abort the whole migration).
 WITHHELD_BACKFILL = (
-    """
+    f"""
 INSERT INTO intake_withheld_items (id, tenant_id, intake_id, user_id, item_id)
 SELECT gen_random_uuid(), i.tenant_id, i.id, i.author_id, x.item_id::uuid
 FROM product_intakes i
 CROSS JOIN LATERAL (
-    SELECT jsonb_array_elements_text(COALESCE(i.analysis->'read_item_ids', '[]'))
-    UNION SELECT jsonb_array_elements_text(COALESCE(i.analysis->'relevant_item_ids', '[]'))
-    UNION SELECT s->>'item_id' FROM jsonb_array_elements(COALESCE(i.analysis->'stale', '[]')) s
+    SELECT jsonb_array_elements_text({_arr("i.analysis->'read_item_ids'")})
+    UNION SELECT jsonb_array_elements_text({_arr("i.analysis->'relevant_item_ids'")})
+    UNION SELECT s->>'item_id' FROM jsonb_array_elements({_arr("i.analysis->'stale'")}) s
     UNION SELECT cl->>'item_id'
-        FROM jsonb_array_elements(COALESCE(i.analysis->'conflicts', '[]')) c,
-             jsonb_array_elements(COALESCE(c->'claims', '[]')) cl
-    UNION SELECT jsonb_array_elements_text(COALESCE(f.value->'source_item_ids', '[]'))
-        FROM jsonb_each(COALESCE(i.analysis->'findings', '{}')) f
-    UNION SELECT jsonb_array_elements_text(COALESCE(f.value->'evidence_ids', '[]'))
-        FROM jsonb_each(COALESCE(i.analysis->'findings', '{}')) f
+        FROM jsonb_array_elements({_arr("i.analysis->'conflicts'")}) c,
+             jsonb_array_elements({_arr("c->'claims'")}) cl
+    UNION SELECT jsonb_array_elements_text({_arr("f.value->'source_item_ids'")})
+        FROM jsonb_each({FINDINGS}) f
+    UNION SELECT jsonb_array_elements_text({_arr("f.value->'evidence_ids'")})
+        FROM jsonb_each({FINDINGS}) f
 ) AS x(item_id)
 WHERE i.author_id IS NOT NULL AND x.item_id ~* """
     + UUID_TEXT
@@ -121,24 +141,52 @@ WHERE i.author_id IS NOT NULL AND x.item_id ~* """
 ON CONFLICT DO NOTHING
 """
 )
-# The items each finding shared in full cites (a finding drawn from shared text only,
-# ``restricted: false``, cites none of the author's items).
-SHARED_BACKFILL = (
-    """
-INSERT INTO intake_shared_items (id, tenant_id, intake_id, user_id, item_id)
-SELECT gen_random_uuid(), i.tenant_id, i.id, i.author_id, x.item_id::uuid
+# Freeze at sharing (round 7): each finding shared in full records the version each
+# item it cites had at the intake's pin (its last snapshot, committed then), for the
+# author's items not deleted. What cannot be determined is left out: not released.
+PINNED_VERSIONS = (
+    f"""
+SELECT DISTINCT ON (v.item_id) v.item_id, v.id AS version_id
+FROM source_item_versions v
+JOIN source_items si ON si.id = v.item_id AND si.deleted_at IS NULL
+JOIN sources so ON so.id = si.source_id AND so.owner_user_id = i.author_id
+JOIN snapshots sn ON sn.id = i.source_snapshot_ids[array_upper(i.source_snapshot_ids, 1)]
+WHERE v.item_id::text IN (
+        SELECT c FROM jsonb_array_elements_text({_arr("f.value->'source_item_ids'")}) c
+        WHERE c ~* """
+    + UUID_TEXT
+    + """)
+  AND v.fetched_at <= sn.as_of
+  AND (sn.txn_snapshot IS NULL OR v.xid IS NULL
+       OR pg_visible_in_snapshot(v.xid::text::xid8, sn.txn_snapshot::pg_snapshot))
+ORDER BY v.item_id, v.fetched_at DESC
+"""
+)
+FROZEN_BACKFILL = f"""
+UPDATE product_intakes i
+SET analysis = jsonb_set(i.analysis, '{{findings}}', (
+    SELECT jsonb_object_agg(f.key, CASE
+        WHEN jsonb_typeof(f.value) = 'object' AND f.value->>'sharing' = 'full'
+        THEN f.value || jsonb_build_object('frozen', (
+            SELECT COALESCE(jsonb_object_agg(p.item_id::text, p.version_id::text), '{{}}')
+            FROM ({PINNED_VERSIONS}) p))
+        ELSE f.value END)
+    FROM jsonb_each({FINDINGS}) f))
+WHERE i.author_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM jsonb_each({FINDINGS}) f
+    WHERE jsonb_typeof(f.value) = 'object' AND f.value->>'sharing' = 'full')
+"""
+# The (item, version) pairs each finding shared in full released.
+SHARED_BACKFILL = f"""
+INSERT INTO intake_shared_items (id, tenant_id, intake_id, user_id, item_id, version_id)
+SELECT gen_random_uuid(), i.tenant_id, i.id, i.author_id, fr.key::uuid, fr.value::uuid
 FROM product_intakes i
-CROSS JOIN LATERAL (
-    SELECT jsonb_array_elements_text(COALESCE(f.value->'source_item_ids', '[]'))
-    FROM jsonb_each(COALESCE(i.analysis->'findings', '{}')) f
-    WHERE f.value->>'sharing' = 'full'
-) AS x(item_id)
-WHERE i.author_id IS NOT NULL AND x.item_id ~* """
-    + UUID_TEXT
-    + """
+CROSS JOIN LATERAL jsonb_each({FINDINGS}) f
+CROSS JOIN LATERAL jsonb_each_text({_obj("f.value->'frozen'")}) fr
+WHERE i.author_id IS NOT NULL AND jsonb_typeof(f.value) = 'object'
+  AND f.value->>'sharing' = 'full'
 ON CONFLICT DO NOTHING
 """
-)
 TXN_SNAPSHOT = "pg_current_snapshot()::text"
 
 
@@ -323,6 +371,7 @@ def upgrade() -> None:
         sa.Column("intake_id", sa.Uuid(), nullable=False),
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.Column("item_id", sa.Uuid(), nullable=False),
+        sa.Column("version_id", sa.Uuid(), nullable=False),
         sa.Column("tenant_id", sa.Uuid(), nullable=False),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column(
@@ -345,7 +394,10 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_intake_shared_items")),
         sa.UniqueConstraint(
-            "intake_id", "item_id", name=op.f("uq_intake_shared_items_intake_id_item_id")
+            "intake_id",
+            "item_id",
+            "version_id",
+            name=op.f("uq_intake_shared_items_intake_id_item_id_version_id"),
         ),
     )
     for column in ("intake_id", "tenant_id"):
@@ -361,6 +413,7 @@ def upgrade() -> None:
         ["item_id", "user_id"],
         unique=False,
     )
+    op.execute(FROZEN_BACKFILL)
     op.execute(SHARED_BACKFILL)
 
     op.drop_constraint(op.f("ck_proposals_status"), "proposals", type_="check")

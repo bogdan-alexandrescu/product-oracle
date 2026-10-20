@@ -225,11 +225,103 @@ def test_the_backfills_skip_malformed_item_ids_and_record_full_findings(scratch_
     command.upgrade(cfg, "0014_intake")
     withheld = _run("SELECT item_id FROM intake_withheld_items")
     assert sorted(str(r[0]) for r in withheld) == sorted(ids)
+    # Round 7 (freeze at sharing): the item's version at the pin cannot be determined
+    # (no pin, no such item), so nothing is released; it stays withheld.
     shared = _run("SELECT intake_id, user_id, item_id FROM intake_shared_items")
-    assert [(r[0], r[1], str(r[2])) for r in shared] == [(intake, author, ids[1])]
+    assert shared == []
     checks = _run(
         "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_proposals_status'"
     )
     assert "withdrawn" in checks[0][0]
+    command.downgrade(cfg, "0013")
+    command.upgrade(cfg, "0014_intake")
+
+
+def test_full_shares_are_frozen_at_the_pins_versions_and_null_findings_migrate(scratch_db):
+    """Round 7 (freeze at sharing, owner 2026-10-19): an existing full share releases
+    the version each cited item had at the intake's pin, recorded in the finding and in
+    intake_shared_items; an item with no version at the pin, or deleted, is not
+    released (fail closed). A JSON-null findings value never aborts the migration."""
+    import json
+    from datetime import UTC, datetime
+
+    JAN, MAR = datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 3, 1, tzinfo=UTC)
+    cfg = _cfg()
+    command.upgrade(cfg, "0013")
+    t, author = uuid.uuid4(), uuid.uuid4()
+    intake, other, nulls = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    source, snap = uuid.uuid4(), uuid.uuid4()
+    pinned, late, gone = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    v1, v2, v3, v4 = (uuid.uuid4() for _ in range(4))
+    _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
+    _run(
+        "INSERT INTO users (id, tenant_id, email, password_hash, role) "
+        "VALUES (:u, :t, 'author@example.com', 'x', 'commenter')",
+        u=author,
+        t=t,
+    )
+    _run(
+        "INSERT INTO sources (id, tenant_id, owner_user_id, kind, name, status) "
+        "VALUES (:s, :t, :u, 'slack', 'slack-1', 'active')",
+        s=source,
+        t=t,
+        u=author,
+    )
+    for item, deleted in ((pinned, False), (late, False), (gone, True)):
+        _run(
+            "INSERT INTO source_items (id, tenant_id, source_id, external_id, kind, deleted_at) "
+            "VALUES (:i, :t, :s, :e, 'message', CASE WHEN :d THEN now() END)",
+            i=item, t=t, s=source, e=str(item), d=deleted,
+        )  # fmt: skip
+    # pinned: v1 before the pin, v2 after it; late: only v3, after it; gone: v4 before.
+    for version, item, when in (
+        (v1, pinned, JAN), (v2, pinned, MAR), (v3, late, MAR), (v4, gone, JAN),
+    ):  # fmt: skip
+        _run(
+            "INSERT INTO source_item_versions (id, tenant_id, item_id, content, content_hash, "
+            "fetched_at) VALUES (:v, :t, :i, 'Returning buyers.', 'h', :w)",
+            v=version, t=t, i=item, w=when,
+        )  # fmt: skip
+    _run(
+        "INSERT INTO snapshots (id, tenant_id, label, as_of) VALUES (:s, :t, 'pin', :w)",
+        s=snap,
+        t=t,
+        w=JAN.replace(month=2),
+    )
+    ids = [str(pinned), str(late), str(gone)]
+    rows = {
+        intake: {"read_item_ids": ids, "findings": {
+            "f1": {"kind": "gap", "source_item_ids": ids, "sharing": "full"},
+            "f2": {"kind": "gap", "source_item_ids": [str(pinned)], "sharing": "summary"},
+            "f3": None,
+        }},
+        other: {"read_item_ids": [str(pinned)], "findings": {
+            "f1": {"kind": "gap", "source_item_ids": [str(pinned)], "sharing": "full"}}},
+        nulls: {"read_item_ids": None, "stale": None, "conflicts": [{"claims": None}],
+                "findings": None},
+    }  # fmt: skip
+    for intake_id, analysis in rows.items():
+        # ``other`` has no pin: nothing it cites can be released.
+        pins = "ARRAY[CAST(:p AS uuid)]" if intake_id == intake else "CAST('{}' AS uuid[])"
+        _run(
+            "INSERT INTO product_intakes (id, tenant_id, title, brief, author_id, analysis, "
+            f"source_snapshot_ids) VALUES (:i, :t, 'Saved addresses', 'Returning buyers.', "
+            f":a, CAST(:an AS jsonb), {pins})",
+            i=intake_id, t=t, a=author, an=json.dumps(analysis),
+            **({"p": snap} if intake_id == intake else {}),
+        )  # fmt: skip
+    command.upgrade(cfg, "0014_intake")
+    shared = _run("SELECT intake_id, item_id, version_id FROM intake_shared_items")
+    assert [tuple(r) for r in shared] == [(intake, pinned, v1)]
+    [[analysis]] = _run("SELECT analysis FROM product_intakes WHERE id = :i", i=intake)
+    assert analysis["findings"]["f1"]["frozen"] == {str(pinned): str(v1)}
+    assert "frozen" not in analysis["findings"]["f2"] and analysis["findings"]["f3"] is None
+    [[analysis]] = _run("SELECT analysis FROM product_intakes WHERE id = :i", i=other)
+    assert analysis["findings"]["f1"]["frozen"] == {}
+    # Everything they read stays withheld until the next analysis (round 5).
+    withheld = _run("SELECT intake_id, item_id FROM intake_withheld_items")
+    assert {(r[0], str(r[1])) for r in withheld} == {(intake, i) for i in ids} | {
+        (other, str(pinned))
+    }
     command.downgrade(cfg, "0013")
     command.upgrade(cfg, "0014_intake")

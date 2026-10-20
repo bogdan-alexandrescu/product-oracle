@@ -312,7 +312,12 @@ async def set_sharing(
     changes: list[tuple[str, str]],
 ) -> list[str]:
     """Set what others see of the author's findings; every change is audited. Returns
-    the ids of the findings set."""
+    the ids of the findings set.
+
+    Sharing in full releases exactly what the finding cites now, at the version the
+    intake read (S6, owner 2026-10-19, freeze at sharing): what a later analysis adds,
+    and newer versions, stay withheld until the author shares it in full again, which
+    releases what it cites then."""
     author_only(principal, intake, "share its findings")
     reg = sharing.registry(intake)
     missing = [fid for fid, _ in changes if fid not in reg]
@@ -325,15 +330,25 @@ async def set_sharing(
         entry = dict(reg[fid])
         before = entry.get("sharing", sharing.DEFAULT)
         done.append(fid)
-        if before == level:
-            continue
-        moved.append(fid)
+        released = entry.get("frozen")
+        if level == "full":
+            entry["frozen"] = await ev.pinned_versions(
+                db, intake, entry.get("source_item_ids") or []
+            )
+        else:
+            entry.pop("frozen", None)
         entry["sharing"] = level
         reg[fid] = entry
+        if before == level and (level != "full" or entry["frozen"] == released):
+            continue
+        if before != level:
+            moved.append(fid)
         data: dict[str, Any] = {"finding_id": fid, "from": before, "to": level}
         if level != "private":
             # A private finding's kind and category stay unsaid (as its summary audit).
             data |= {"kind": entry["kind"], "category": entry.get("category")}
+        if level == "full":
+            data["released"] = len(entry["frozen"])
         await audit.record(db, principal, "intake.finding_shared", "intake", intake.id, data)
     intake.analysis = {**(intake.analysis or {}), "findings": reg}
     # What runs may read changed with the levels (S6, owner 2026-10-19).

@@ -212,11 +212,13 @@ async def search_intake_evidence(
     me = ev.caller_user(principal)
     reveal: set[uuid.UUID] = set()
     include: set[uuid.UUID] | None = None
+    released: dict[uuid.UUID, uuid.UUID] | None = None
     if principal.is_run:
         # Only the items it may read are searched, ranked and counted: what else the
         # author's sources hold never changes the answer (left out in SQL, before the
-        # limit).
-        include = reveal = await ev.run_include(db, intake)
+        # limit). Each at the version sharing released (freeze at sharing).
+        released = await ev.run_include(db, intake)
+        include = reveal = set(released)
         me = intake.author_id if include else None
     elif me is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Searching sources needs a user")
@@ -233,6 +235,7 @@ async def search_intake_evidence(
             limit=limit,
             include=include,
             source_ids=ev.source_ids_of(intake) or None,
+            also=ev.readable_shared(intake.id) if released is not None else None,
         )
     refs = await ev.refs(
         db,
@@ -241,6 +244,7 @@ async def search_intake_evidence(
         pin.as_of,
         txn_snapshot=snapshot.txn_snapshot if snapshot else None,
         reveal=reveal,
+        released=released,
     )
     out = [
         EvidenceHit(
@@ -396,8 +400,14 @@ def _finding_out(fid: str, entry: dict, v: sharing.Viewer) -> FindingOut | None:
     out.summary_confirmed = bool(entry.get("published")) if v.sees(level, "summary") else None
     if v.is_author:
         out.draft_summary = sharing.draft_summary(entry)
-    if v.sees(level, "full"):
         out.source_item_ids = [uuid.UUID(i) for i in entry.get("source_item_ids") or []]
+        out.unshared_item_ids = [uuid.UUID(i) for i in sharing.unshared_ids(entry)]
+    elif v.sees(level, "full"):
+        # What sharing released, not what a later analysis added (freeze at sharing).
+        released = sharing.frozen(entry)
+        out.source_item_ids = [
+            uuid.UUID(i) for i in entry.get("source_item_ids") or [] if i in released
+        ]
     return out
 
 

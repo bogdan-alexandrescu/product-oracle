@@ -279,7 +279,10 @@ class FindingOut(BaseModel):
     the kind and category; from "summary" its line and the gap; at "full" the source
     items it cites. ``summary``: the line the summary level shows, the one its author
     confirmed or wrote, else Oracle's fixed category line. ``draft_summary``: Oracle's
-    draft, for the author only."""
+    draft, for the author only. At "full", others see the items it released when it was
+    shared; ``unshared_item_ids`` (the author only): what it cites now that sharing did
+    not release (a later analysis added them; "N new sources since you shared", share
+    it in full again to release them)."""
 
     id: uuid.UUID
     kind: FindingKind
@@ -291,6 +294,7 @@ class FindingOut(BaseModel):
     draft_summary: str | None = None
     gap_id: uuid.UUID | None = None
     source_item_ids: list[uuid.UUID] = []
+    unshared_item_ids: list[uuid.UUID] = []
 
 
 class SharingIn(BaseModel):
