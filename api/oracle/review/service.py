@@ -374,9 +374,7 @@ async def update_comment(
             await publish.gate_lock(session, shared=True)
             refusal = await caller_refusal(session, principal, "approver")
         if refusal is not None:
-            raise ReviewError(
-                "forbidden", "Only the author or an approver can change this comment"
-            )
+            raise ReviewError("forbidden", "Only the author or an approver can change this comment")
     changes: dict[str, object] = {}
     if resolved is not None:
         if comment.parent_id is not None:

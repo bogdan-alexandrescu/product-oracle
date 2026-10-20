@@ -225,9 +225,7 @@ async def test_a_disable_racing_a_checkpoint_decision_voids_it(client, runtime, 
     assert resp.json()["status"] == "running"
 
 
-async def test_a_disable_voids_a_decision_whose_submission_is_waiting_for_a_retry(
-    client, runtime
-):
+async def test_a_disable_voids_a_decision_whose_submission_is_waiting_for_a_retry(client, runtime):
     """The runtime refused the submission a decision started (it waits for the tick's
     retry); the decider is disabled: the decision is void, the tick submits nothing."""
     from oracle.swarm import RuntimeUnavailable
@@ -353,7 +351,8 @@ async def test_an_approver_and_the_commenter_who_added_a_link_still_remove_it(cl
     ctx = await setup(client)
     approver = await person(ctx.tenant_id, "approver", "approver")
     commenter = await person(ctx.tenant_id, "commenter", "commenter")
-    resp = await client.delete(f"/v1/baseline/evidence/{await _evidence(ctx)}", headers=approver.headers)
+    theirs = await _evidence(ctx)
+    resp = await client.delete(f"/v1/baseline/evidence/{theirs}", headers=approver.headers)
     assert resp.status_code == 204, resp.text
     mine = await _evidence(ctx, added_by=commenter.user_id)
     resp = await client.delete(f"/v1/baseline/evidence/{mine}", headers=commenter.headers)
@@ -471,9 +470,7 @@ async def test_a_disable_racing_a_start_cancels_the_workflow_it_submitted(client
     author = await person(ctx.tenant_id, "approver", "author")
     run = await _run(client, ctx, author.headers)
     blocked = _Blocked(runtime, "submit")
-    call = asyncio.create_task(
-        client.post(f"/v1/runs/{run['id']}/start", headers=author.headers)
-    )
+    call = asyncio.create_task(client.post(f"/v1/runs/{run['id']}/start", headers=author.headers))
     try:
         await asyncio.wait_for(blocked.entered.wait(), WAIT)
         resp = await asyncio.wait_for(disable(client, ctx, author.user_id), WAIT)
@@ -487,7 +484,11 @@ async def test_a_disable_racing_a_start_cancels_the_workflow_it_submitted(client
     assert len(runtime.submitted) == 1 and len(runtime.cancelled) == 1
     async with tenant_session(ctx.tenant_id) as s:
         seg = await s.scalar(select(RunSegment).where(RunSegment.seq == 1))
-        assert seg.status == "cancelled" and seg.swarm_workflow_id == runtime.cancelled[0]
+        assert seg.status == "cancelled" and seg.swarm_workflow_id is None
+        event = await s.scalar(
+            select(AuditEvent).where(AuditEvent.action == "run.workflow_cancelled")
+        )
+        assert event.data["workflow_id"] == runtime.cancelled[0]
 
 
 async def test_a_disable_racing_an_approve_voids_it_and_cancels_the_workflow(client, runtime):
@@ -498,9 +499,7 @@ async def test_a_disable_racing_an_approve_voids_it_and_cancels_the_workflow(cli
     run = await _started(client, ctx, depth="deep")
     owner = await person(ctx.tenant_id, "owner", "owner")
     blocked = _Blocked(runtime, "submit")
-    call = asyncio.create_task(
-        client.post(f"/v1/runs/{run['id']}/approve", headers=owner.headers)
-    )
+    call = asyncio.create_task(client.post(f"/v1/runs/{run['id']}/approve", headers=owner.headers))
     try:
         await asyncio.wait_for(blocked.entered.wait(), WAIT)
         resp = await asyncio.wait_for(disable(client, ctx, owner.user_id), WAIT)
@@ -557,3 +556,38 @@ async def test_a_claimed_submission_is_not_made_twice_by_the_tick(client, runtim
     assert (await call).status_code == 200
     assert len(runtime.submitted) == 1
     assert (await _read(client, ctx, run["id"]))["segments"][0]["status"] == "running"
+
+
+async def test_a_failed_cancel_of_a_workflow_started_for_a_changed_run_is_retried(client, runtime):
+    """The run was cancelled while its submission was under way, and the runtime does
+    not confirm the cancel of the workflow it started: the tick retries it."""
+    from oracle.members.models import MemberFollowUp
+    from oracle.swarm import RuntimeUnavailable
+
+    ctx = await setup(client)
+    run = await _run(client, ctx)
+    blocked = _Blocked(runtime, "submit")
+    real_cancel = runtime.cancel
+
+    async def down(workflow_id):
+        raise RuntimeUnavailable("SwarmCloud is down")
+
+    call = asyncio.create_task(client.post(f"/v1/runs/{run['id']}/start", headers=ctx.auth))
+    try:
+        await asyncio.wait_for(blocked.entered.wait(), WAIT)
+        resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=ctx.auth)
+        assert resp.status_code == 200, resp.text
+        runtime.cancel = down
+    finally:
+        blocked.release.set()
+    assert (await call).status_code == 200
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(MemberFollowUp))
+        assert row.kind == "run_cancel" and row.status == "pending"
+        row.next_attempt_at = None
+        await s.commit()
+    runtime.cancel = real_cancel
+    await _tick(client, ctx)
+    assert len(runtime.cancelled) == 1
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.scalar(select(MemberFollowUp))).status == "done"

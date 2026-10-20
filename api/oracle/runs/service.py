@@ -756,7 +756,7 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
         return
     await audit.record(db, principal, "run.started", "run", run.id, {})
     await _launch(db, run)
-    await db.commit()
+    await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
 async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
@@ -767,7 +767,7 @@ async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> 
     run.approved_at = _now()
     await audit.record(db, principal, "run.approved", "run", run.id, {"usd": str(run.estimate_usd)})
     await _launch(db, run)
-    await db.commit()
+    await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
 async def _launch(db: AsyncSession, run: Run) -> None:
@@ -776,7 +776,7 @@ async def _launch(db: AsyncSession, run: Run) -> None:
     ceiling = (run.estimate_usd * flows.OVERRUN_FACTOR).quantize(Decimal("0.0001"))
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
     segments = await _segments(db, run.id)
-    await _submit(db, run, segments[0], segments)
+    await _submit(db, run, segments[0], segments, queue=True)
 
 
 # --------------------------------------------------------------------------- segments
@@ -983,14 +983,31 @@ async def _roadmap_context(
     )
 
 
-async def _submit(
+# A segment a request queued for the runtime (a start, an approval, a resume, a checkpoint
+# decision): the request commits under the review gate, then submits it outside the gate
+# (:func:`submit_queued`). If that never happens, the tick submits it.
+QUEUED = "waiting to be submitted to the agent runtime"
+# How long a submission under way keeps the tick off its segment: past it, the process
+# that claimed it is taken to be gone and the tick submits the segment again.
+CLAIM_SECONDS = 300
+
+
+@dataclass
+class _Submission:
+    spec: WorkflowSpec
+    entry: dict[str, Any]
+    art: dict[str, Any]
+    change_request: str | None
+
+
+async def _prepare(
     db: AsyncSession,
     run: Run,
     segment: RunSegment,
     segments: list[RunSegment],
     change_request: str | None = None,
-) -> None:
-    """Mint the segment's run token and submit its workflow (the caller commits)."""
+) -> _Submission:
+    """Mint the segment's run token and build its workflow (no runtime call)."""
     runtime = get_runtime()
     settings = get_runtime_settings()
     flow, knobs = _flow(run), _knobs(run)
@@ -1039,21 +1056,31 @@ async def _submit(
         "note": change_request,
         "state": None,
     }
-    try:
-        workflow_id = await runtime.submit(spec)
-    except RuntimeUnavailable as exc:
-        # Left pending: the next tick submits it again.
-        segment.status = "pending"
-        segment.error = str(exc)
-        if change_request:
-            art["pending_note"] = change_request
-        _set_art(segment, art)
-        await revoke_run_tokens(db, run.id)
-        log.warning("run %s segment %s: submit failed: %s", run.id, segment.name, exc)
-        return
+    return _Submission(spec, entry, art, change_request)
+
+
+async def _refused(
+    db: AsyncSession, run: Run, segment: RunSegment, sub: _Submission, exc: Exception
+) -> None:
+    """The runtime refused the submission: left pending, the next tick submits it again."""
+    art = sub.art
+    art.pop("claim", None)
+    segment.status = "pending"
+    segment.error = str(exc)
+    if sub.change_request:
+        art["pending_note"] = sub.change_request
+    _set_art(segment, art)
+    await revoke_run_tokens(db, run.id)
+    log.warning("run %s segment %s: submit failed: %s", run.id, segment.name, exc)
+
+
+def _submitted(run: Run, segment: RunSegment, sub: _Submission, workflow_id: str) -> None:
+    runtime = get_runtime()
+    art, entry = sub.art, sub.entry
     entry["workflow_id"] = workflow_id
     entry["state"] = "running"
     art.pop("decision", None)
+    art.pop("claim", None)
     art["attempts"].append(entry)
     for note in runtime.notes() if not runtime.can_reach_oracle else []:
         if note not in art["notes"]:
@@ -1065,6 +1092,168 @@ async def _submit(
     segment.finished_at = None
     segment.started_at = segment.started_at or _now()
     run.status = "running"
+
+
+async def _submit(
+    db: AsyncSession,
+    run: Run,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    change_request: str | None = None,
+    *,
+    queue: bool = False,
+) -> None:
+    """Mint the segment's run token and submit its workflow (the caller commits).
+
+    With ``queue`` the runtime is not called: the segment is queued (:data:`QUEUED`)
+    for :func:`submit_queued` to submit after the caller commits. A request that holds
+    the review gate queues: the gate is never held across a network call."""
+    if queue:
+        art = _art(segment)
+        if change_request:
+            art["pending_note"] = change_request
+        art.pop("claim", None)
+        _set_art(segment, art)
+        segment.status = "pending"
+        segment.error = QUEUED
+        run.status = "running"
+        return
+    sub = await _prepare(db, run, segment, segments, change_request)
+    try:
+        workflow_id = await get_runtime().submit(sub.spec)
+    except RuntimeUnavailable as exc:
+        await _refused(db, run, segment, sub, exc)
+        return
+    _submitted(run, segment, sub, workflow_id)
+
+
+def unqueue(segment: RunSegment) -> None:
+    """Take a pending segment off the queue (its run no longer waits on the runtime): a
+    submission under way finds its claim gone and cancels what it started."""
+    art = _art(segment)
+    art.pop("claim", None)
+    art.pop("decision", None)
+    _set_art(segment, art)
+    segment.error = None
+
+
+def _claimed(segment: RunSegment) -> bool:
+    """A submission of this segment is under way (claimed less than CLAIM_SECONDS ago)."""
+    claim = (segment.artifacts or {}).get("claim") or {}
+    at = claim.get("at")
+    return at is not None and (_now() - datetime.fromisoformat(at)).total_seconds() < CLAIM_SECONDS
+
+
+async def _locked(db: AsyncSession, run_id: uuid.UUID) -> tuple[Run | None, list[RunSegment]]:
+    """The run, locked and read afresh, with its segments read afresh."""
+    run = await db.scalar(
+        select(Run)
+        .where(Run.id == run_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if run is None:
+        return None, []
+    segments = list(
+        await db.scalars(
+            select(RunSegment)
+            .where(RunSegment.run_id == run_id)
+            .order_by(RunSegment.seq)
+            .execution_options(populate_existing=True)
+        )
+    )
+    return run, segments
+
+
+async def submit_queued(db: AsyncSession, run_id: uuid.UUID) -> None:
+    """Submit the run's queued segment, after the request that queued it committed:
+    outside the review gate, and without the run's row lock held across the call.
+
+    The segment is claimed (and its run token minted) in one transaction, the runtime is
+    called with nothing held, and the outcome recorded in another. If the run changed
+    meanwhile (cancelled, its approval or the checkpoint decision voided by a disable),
+    the workflow the runtime started is cancelled at once; a cancel that fails is
+    retried from the tick. A refused submission waits for the tick's retry, and so does
+    one whose process died mid-call (its claim expires). Commits."""
+    from oracle.members.models import MemberFollowUp
+
+    run, segments = await _locked(db, run_id)
+    segment = next((s for s in segments if s.status == "pending" and s.error == QUEUED), None)
+    if run is None or run.status != "running" or segment is None or _claimed(segment):
+        await db.rollback()
+        return
+    sub = await _prepare(db, run, segment, segments)
+    claim = uuid.uuid4().hex
+    sub.art["claim"] = {"id": claim, "at": _now().isoformat()}
+    _set_art(segment, sub.art)
+    segment_id = segment.id
+    await db.commit()
+
+    failure: RuntimeUnavailable | None = None
+    workflow_id = ""
+    try:
+        workflow_id = await get_runtime().submit(sub.spec)
+    except RuntimeUnavailable as exc:
+        failure = exc
+
+    run, segments = await _locked(db, run_id)
+    segment = next((s for s in segments if s.id == segment_id), None)
+    ours = (
+        run is not None
+        and segment is not None
+        and run.status == "running"
+        and segment.status == "pending"
+        and ((segment.artifacts or {}).get("claim") or {}).get("id") == claim
+    )
+    if failure is not None:
+        if ours:
+            sub.art = _art(segment)  # type: ignore[arg-type]
+            await _refused(db, run, segment, sub, failure)  # type: ignore[arg-type]
+        await db.commit()
+        return
+    if ours:
+        sub.art = _art(segment)  # type: ignore[arg-type]
+        sub.art.pop("pending_note", None)
+        _submitted(run, segment, sub, workflow_id)  # type: ignore[arg-type]
+        await db.commit()
+        return
+    # The run changed while the runtime started the workflow: nothing runs for it.
+    await audit.record(
+        db, None, "run.workflow_cancelled", "run", run_id,
+        {"workflow_id": workflow_id, "segment_id": str(segment_id),
+         "reason": "the run changed while its segment was submitted"},
+    )  # fmt: skip
+    await db.commit()
+    try:
+        await get_runtime().cancel(workflow_id)
+    except RuntimeUnavailable as exc:
+        log.warning("run %s: cancel of %s failed: %s", run_id, workflow_id, exc)
+        db.add(
+            MemberFollowUp(
+                member_id=(run.created_by if run is not None else None) or run_id,
+                kind="run_cancel",
+                target_id=segment_id,
+                workflow_id=workflow_id,
+            )
+        )
+        await db.commit()
+
+
+async def cancel_at_runtime(db: AsyncSession, workflows: list[tuple[uuid.UUID, str]]) -> None:
+    """Cancel cancelled segments' workflows (segment id, workflow id) at the runtime,
+    after the cancel committed (outside the review gate); a cancel the runtime does not
+    confirm is noted on the segment. Commits."""
+    failed: dict[uuid.UUID, str] = {}
+    for segment_id, workflow_id in workflows:
+        try:
+            await get_runtime().cancel(workflow_id)
+        except RuntimeUnavailable as exc:
+            failed[segment_id] = f"cancel not confirmed by the runtime: {exc}"
+    for segment_id, error in failed.items():
+        segment = await db.get(RunSegment, segment_id)
+        if segment is not None:
+            segment.error = error
+    await db.commit()
 
 
 def _recompute_spend(run: Run, segments: list[RunSegment]) -> None:
@@ -1080,11 +1269,16 @@ async def _finish(db: AsyncSession, run: Run, status: str, error: str | None = N
 
 
 async def _next(
-    db: AsyncSession, run: Run, segment: RunSegment, segments: list[RunSegment]
+    db: AsyncSession,
+    run: Run,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    *,
+    queue: bool = False,
 ) -> None:
     later = [s for s in segments if s.seq > segment.seq]
     if later:
-        await _submit(db, run, later[0], segments)
+        await _submit(db, run, later[0], segments, queue=queue)
     else:
         await _finish(db, run, "succeeded")
 
@@ -1236,9 +1430,15 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
 
 
 async def _advance(
-    db: AsyncSession, run: Run, segment: RunSegment, segments: list[RunSegment]
+    db: AsyncSession,
+    run: Run,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    *,
+    queue: bool = False,
 ) -> bool:
-    """After a segment succeeded: import its draft, then open or skip its checkpoint.
+    """After a segment succeeded: import its draft, then open or skip its checkpoint
+    (and submit the next segment, or with ``queue`` queue it: :func:`_submit`).
 
     Returns False when this attempt of the segment was already advanced.
     """
@@ -1330,7 +1530,7 @@ async def _advance(
         problems = "; ".join(f"[{p['code']}] {p['message']}" for p in items_check["problems"][:5])
         await _finish(db, run, "failed", f"{ITEMS_FILE} was rejected: {problems}")
         return True
-    await _next(db, run, segment, segments)
+    await _next(db, run, segment, segments, queue=queue)
     return True
 
 
@@ -1376,6 +1576,8 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
         if run.status == "running":
             # A submission the runtime refused earlier: try again.
             pending = next((s for s in segments if s.status == "pending" and s.error), None)
+            if pending is not None and _claimed(pending):
+                return  # a request's submission is under way (submit_queued)
             if pending is not None:
                 await _submit(db, run, pending, segments)
             else:
@@ -1535,8 +1737,8 @@ async def decide_checkpoint(
             "restore": restore,
         }
         _set_art(target, art)
-        await _submit(db, run, target, segments, change_request=note)
-    await db.commit()
+        await _submit(db, run, target, segments, change_request=note, queue=True)
+    await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
 async def void_decision(
@@ -1551,13 +1753,12 @@ async def void_decision(
     the caller, who commits): the checkpoint waits again, the segment is as before the
     decision, the run's tokens die. A submission under way finds it so and cancels its
     workflow (:func:`submit_queued`)."""
+    decision = (segment.artifacts or {}).get("decision") or {}
+    unqueue(segment)
     art = _art(segment)
-    decision = art.pop("decision", None) or {}
     art.pop("pending_note", None)
-    art.pop("claim", None)
     _set_art(segment, art)
     segment.status = decision.get("restore") or "pending"
-    segment.error = None
     decided_by, kind = cp.decided_by, cp.status
     cp.status = "pending"
     cp.decided_by = None
@@ -1589,8 +1790,12 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         raise Forbidden("Only an owner or the approver who created the run can cancel it")
     if run.status in FINAL:
         raise RunError(f"run is already {run.status}")
-    await stop_run(db, principal, run)
+    segments: list[RunSegment] = []
+    await stop_run(db, principal, run, deferred=segments)
+    workflows = [(s.id, s.swarm_workflow_id or "") for s in segments]
     await db.commit()
+    # Outside the gate (taken by the route's re-check), after the cancel committed.
+    await cancel_at_runtime(db, workflows)
 
 
 async def stop_run(
@@ -1619,6 +1824,7 @@ async def stop_run(
             s.status = "cancelled"
             s.finished_at = _now()
         elif s.status == "pending":
+            unqueue(s)
             s.status = "cancelled"
     for cp in await _checkpoints(db, [run.id]):
         if cp.status == "pending":
@@ -1643,8 +1849,8 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     if not any(s.status == "running" for s in segments):
         done = [s for s in segments if s.status == "succeeded"]
         if done:
-            await _advance(db, run, done[-1], segments)
-    await db.commit()
+            await _advance(db, run, done[-1], segments, queue=True)
+    await db.commit()  # the router submits what it queued (submit_queued), outside the gate
 
 
 # --------------------------------------------------------------------------- inbox

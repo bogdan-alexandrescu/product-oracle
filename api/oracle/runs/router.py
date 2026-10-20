@@ -119,6 +119,7 @@ async def start_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> 
     """Pin a snapshot and submit the first segment, or wait for an owner when the
     estimate is over the approval threshold ($50)."""
     await _call(service.start(db, principal, run_id))
+    await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
 
 
@@ -126,6 +127,7 @@ async def start_run(run_id: uuid.UUID, principal: ApproverNow, db: TenantDB) -> 
 async def approve_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Approve the cost of a run awaiting approval and start it."""
     await _call(service.approve(db, principal, run_id))
+    await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
 
 
@@ -133,6 +135,7 @@ async def approve_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> R
 async def resume_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB) -> RunOut:
     """Resume a run paused on overrun; it may spend another half of its estimate."""
     await _call(service.resume(db, principal, run_id))
+    await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
 
 
@@ -155,6 +158,7 @@ async def decide_checkpoint(
     await _call(
         service.decide_checkpoint(db, principal, run_id, checkpoint_id, body.decision, body.note)
     )
+    await service.submit_queued(db, run_id)
     return await service.read_run(db, run_id, principal)
 
 

@@ -315,7 +315,7 @@ async def _void_spend_approvals(
     started (no segment ever ran) is void: the run waits for an approval again. A run
     that started keeps its approval and its ceiling. Their own runs are cancelled."""
     from oracle.runs.models import Run, RunSegment
-    from oracle.runs.service import FINAL
+    from oracle.runs.service import FINAL, unqueue
     from oracle.runtokens import revoke_run_tokens
 
     started = select(RunSegment.id).where(
@@ -340,6 +340,12 @@ async def _void_spend_approvals(
         run.approved_by = None
         run.approved_at = None
         await revoke_run_tokens(session, run.id)
+        # Its first segment may be queued, or its submission under way: it is not ours
+        # now (oracle.runs.service.submit_queued cancels a workflow it started).
+        for segment in await session.scalars(
+            select(RunSegment).where(RunSegment.run_id == run.id, RunSegment.status == "pending")
+        ):
+            unqueue(segment)
         await audit.record(
             session, principal, "run.approval_voided", "run", run.id,
             {"approved_by": str(approved_by), **via},
