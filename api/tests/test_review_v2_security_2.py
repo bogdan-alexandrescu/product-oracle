@@ -27,11 +27,12 @@ from oracle.review.models import FeedbackItem, SectionPatch
 from oracle.sources.models import Source, SourceItem
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ChangeEvent, DocumentSectionLink
-from tests.review_v2_helpers import (
+from tests.review_v2_helpers import (  # noqa: F401 (local_runtime: a fixture)
     DOC,
     DRAFT,
     approve_all,
     import_md,
+    local_runtime,
     person,
     replace,
     setup,
@@ -263,6 +264,7 @@ async def test_a_member_tokens_approval_lapses_with_the_token(client):
 FENCED = replace(DRAFT, "A shared calendar view per project.", "A shared calendar view.\n\n```text")
 
 
+@pytest.mark.usefixtures("local_runtime")
 async def test_an_unclosed_fence_push_draft_keeps_the_approved_section(client):
     from oracle.runs.models import Run
     from oracle.runtokens import mint_run_token

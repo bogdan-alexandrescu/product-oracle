@@ -28,12 +28,13 @@ from oracle.tenancy import tenant_session, unscoped_session
 from oracle.v2.models import ChangeEvent, DocumentSectionLink
 from tests.connection_helpers import add_connection, clear_provider_http, use_provider_http
 from tests.legacy.helpers import run_cli
-from tests.review_v2_helpers import (
+from tests.review_v2_helpers import (  # noqa: F401 (local_runtime: a fixture)
     DOC,
     DRAFT,
     approve_all,
     edit,
     import_md,
+    local_runtime,
     person,
     replace,
     setup,
@@ -330,6 +331,7 @@ async def test_an_owner_resolves_only_their_sections_feedback(client):
 # --- M3: AI text never replaces approved text without a patch ----------------------------
 
 
+@pytest.mark.usefixtures("local_runtime")
 async def test_a_run_token_push_is_an_agent_draft(client):
     """MCP push_draft under a run token carries the run: the approved-section hold
     applies even though the REST call is made for the run's creator."""
