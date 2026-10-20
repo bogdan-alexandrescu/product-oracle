@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from oracle.connections.models import Connection
 from oracle.main import app
@@ -1011,7 +1011,12 @@ async def test_a_full_pick_fits_the_labels_cap(fake, connector, alice, conn):
 async def _picked(a, conn, config):
     resp = await a.post(
         "/v1/sources",
-        json={"kind": "fireflies", "name": "Meetings", "connection_id": str(conn), "config": config},
+        json={
+            "kind": "fireflies",
+            "name": "Meetings",
+            "connection_id": str(conn),
+            "config": config,
+        },
     )
     assert resp.status_code == 201, resp.text
     source = resp.json()
@@ -1081,8 +1086,9 @@ async def test_a_meeting_picked_alone_stays_when_its_series_is_unpicked(
 async def test_items_of_unknown_provenance_not_shown_picked_are_swept(
     fake, connector, tenant_id, alice, conn
 ):
-    """Stored before the provenance existed (none, or no series): a pick by meeting id
-    still holds; what cannot be shown inside the new picks is deleted."""
+    """Stored before the provenance existed (the migration's backfill: the meeting id, no
+    series): a pick by meeting id still holds; what cannot be shown inside the new picks
+    is deleted."""
     async with client_for(alice) as a:
         source = await _picked(
             a, conn, {"mode": "selected", "series": [STANDUP], "meetings": ["K1"]}
@@ -1091,7 +1097,7 @@ async def test_items_of_unknown_provenance_not_shown_picked_are_swept(
             await s.execute(
                 update(SourceItem)
                 .where(SourceItem.source_id == source["id"])
-                .values(provenance=None)
+                .values(provenance=func.jsonb_build_object("meeting", SourceItem.external_id))
             )
             await s.commit()
         await _save(a, fake, source, {"mode": "selected", "series": [STANDUP], "meetings": ["K1"]})

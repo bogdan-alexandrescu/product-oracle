@@ -91,6 +91,9 @@ class SourceItem(TenantScoped, Base):
     author: Mapped[str | None] = mapped_column(Text)
     # Visibility in the source (S3), e.g. {"visibility": "private", "members": [...]}.
     acl: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # Where in the selection the item came from (a Fireflies meeting id and series key, a
+    # Notion root), so narrowing can delete it on save without asking the provider.
+    provenance: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

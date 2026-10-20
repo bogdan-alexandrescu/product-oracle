@@ -102,6 +102,8 @@ class ItemUpsert:
     acl: dict[str, Any] = field(default_factory=dict)
     occurred_at: datetime | None = None
     source_updated_at: datetime | None = None
+    # Where in the selection it came from; see :attr:`Scope.provenance`.
+    provenance: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.kind not in ITEM_KINDS:
@@ -141,13 +143,18 @@ class Scope:
       (a channel, a repo), compared case-insensitively;
     - ``kinds``: the allowed item kinds;
     - ``occurred_from`` / ``occurred_before``: the range (``before`` exclusive) an item's
-      ``occurred_at`` must fall in; items without a date stay.
+      ``occurred_at`` must fall in; items without a date stay;
+    - ``provenance``: pairs of (key, allowed values): an item stays only if, for at least
+      one pair, its stored provenance holds one of the values under the key. An item whose
+      provenance is unknown (empty, or without the key) is not shown to be inside, so it
+      goes.
     """
 
     groups: frozenset[str] | None = None
     kinds: frozenset[str] | None = None
     occurred_from: datetime | None = None
     occurred_before: datetime | None = None
+    provenance: tuple[tuple[str, frozenset[str]], ...] | None = None
 
 
 @runtime_checkable

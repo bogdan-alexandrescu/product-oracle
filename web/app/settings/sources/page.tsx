@@ -266,7 +266,7 @@ function FirefliesEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
           Save meetings
         </Button>
         <InfoTip label="saving meetings" align="start">
-          Saving a narrower date range removes the meetings outside it at once; meetings no longer picked are removed on the next sync. What is already stored and still included is kept.
+          Saving a narrower date range, or dropping a meeting or series, removes the meetings outside your picks at once. What is already stored and still included is kept.
         </InfoTip>
       </div>
     </form>
@@ -537,7 +537,7 @@ function ChoosePages(props: { connectionId: string; value: string[]; onChange: (
         <Label>Choose pages</Label>
         <InfoTip label="choosing pages" align="start">
           Tick the pages and databases to pull in; their sub-pages and databases come with them. Pages no longer under
-          your picks are removed on the next sync after saving.
+          your picks are removed as soon as you save.
         </InfoTip>
       </span>
       <NotionPicker {...props} />

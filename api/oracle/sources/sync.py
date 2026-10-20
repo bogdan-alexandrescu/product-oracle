@@ -151,6 +151,18 @@ async def _write(db: AsyncSession, start: _Start, **values: Any) -> None:
         raise _Superseded
 
 
+async def _hold(db: AsyncSession, start: _Start) -> None:
+    """Take the source row's key-share lock before the transaction's first item write.
+    A save that narrows the source locks the row (FOR UPDATE) and then sweeps items; the
+    sync locks items and then writes its checkpoint on the row. Taking the row first,
+    here, gives both the same order, so neither waits on the other's rows (a deadlock);
+    a save waits for this transaction's next commit, and the checkpoint after it finds
+    the source changed (_Superseded)."""
+    await db.execute(
+        select(Source.id).where(Source.id == start.source_id).with_for_update(key_share=True)
+    )
+
+
 def _status(status: str) -> Any:
     """``status``, unless the source was paused meanwhile: a pause stays."""
     return case((Source.status == "paused", "paused"), else_=status)
@@ -244,18 +256,23 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         extra["known"] = known
 
     attentions: list[str] = []
+    held = False  # this transaction holds the source row (see _hold)
     try:
         if saved.get(base.SCOPE_KEY) != scope_fp:
             # The selection changed since the last sync (or was never fingerprinted):
             # drop what it no longer covers and rescope the cursor, committed now.
             scope = getattr(connector, "scope", None)
             if scope is not None:
+                await _hold(db, start)
                 stats.deleted += await store.delete_out_of_scope(db, source, scope(config))
             rescope = getattr(connector, "rescope_cursor", None)
             cursor = rescope(cursor or None, config) if rescope is not None else None
             await _write(db, start, cursor=stamped(cursor))
             await db.commit()
         async for event in connector.sync(dict(config), credential, cursor or None, **extra):
+            if isinstance(event, base.ItemUpsert | base.ItemDelete) and not held:
+                await _hold(db, start)
+                held = True
             if isinstance(event, base.ItemUpsert):
                 _, written = await store.upsert_item(db, source, event)
                 stats.upserted += 1
@@ -266,6 +283,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
                 cursor = dict(event.cursor)
                 await _write(db, start, cursor=stamped(cursor))
                 await db.commit()
+                held = False
                 stats.checkpoints += 1
             elif isinstance(event, base.Attention):
                 attentions.append(event.message)

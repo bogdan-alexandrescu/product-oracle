@@ -33,6 +33,7 @@ from oracle.sources.base import (
     CursorCheckpoint,
     ItemDelete,
     ItemUpsert,
+    Scope,
     SyncEvent,
     register,
 )
@@ -532,6 +533,10 @@ class NotionConnector:
             return None if _gone(database) else ("database", database)
         return None
 
+    def scope(self, config: dict[str, Any]) -> Scope:
+        """Still selected, as far as stored items tell: pulled in from a picked root."""
+        return Scope(provenance=(("root", frozenset(_parse_config(config))),))
+
     def rescope_cursor(
         self, old_cursor: dict[str, Any] | None, new_config: dict[str, Any]
     ) -> dict[str, Any] | None:
@@ -603,6 +608,7 @@ class NotionConnector:
                             acl=acl,
                             occurred_at=_ts(page.get("created_time")),
                             source_updated_at=_ts(page.get("last_edited_time")),
+                            provenance={"root": root_id},
                         )
                         state["pages"][object_id] = {
                             "edited": page.get("last_edited_time"),

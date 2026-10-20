@@ -3,7 +3,7 @@
 import hashlib
 import uuid
 
-from sqlalchemy import and_, func, not_, or_, select, update
+from sqlalchemy import and_, false, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.sources.base import ItemDelete, ItemUpsert, Scope
@@ -39,6 +39,7 @@ async def upsert_item(
     item.url = event.url
     item.author = event.author
     item.acl = dict(event.acl)
+    item.provenance = dict(event.provenance) or None
     item.occurred_at = event.occurred_at
     item.source_updated_at = event.source_updated_at
     item.deleted_at = None
@@ -99,6 +100,15 @@ async def delete_out_of_scope(db: AsyncSession, source: Source, scope: Scope) ->
         keep.append(
             or_(SourceItem.occurred_at.is_(None), SourceItem.occurred_at < scope.occurred_before)
         )
+    if scope.provenance is not None:
+        # An item shown to be in none of the picks goes, one with no provenance too: NULL
+        # is coalesced to false, or NOT(NULL) would keep it.
+        inside = [
+            SourceItem.provenance[key].astext.in_(sorted(values))
+            for key, values in scope.provenance
+            if values
+        ]
+        keep.append(func.coalesce(or_(*inside), False) if inside else false())
     if not keep:
         return 0
     result = await db.execute(

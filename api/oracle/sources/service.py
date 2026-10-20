@@ -285,18 +285,27 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         changes = {**changes, "config": normalize_config(source.kind, changes["config"])}
     reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
     reconfigure = changes.get("config") is not None and changes["config"] != source.config
+    asks = "connection_id" in changes or changes.get("config") is not None
     if reconnect or reconfigure:
         connection_id = changes["connection_id"] if reconnect else source.connection_id
         config = changes["config"] if reconfigure else source.config
         conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
         # Validating reads the credential, which commits: change nothing before it.
         await _validate(db, source.kind, config, conn)
+    if asks:
         # The row was loaded when the request started (sessions do not expire on
-        # commit): a sync may have saved a cursor or a status since. Read it again,
-        # locked until the commit below, so every column written here is compared with
-        # what the database holds (an unchanged attribute is never written).
+        # commit): a sync, or another save, may have changed it since. Read it again,
+        # locked until the commit below, and compare what is asked with THAT copy (a
+        # request asking for the config it loaded, after another save changed it, is a
+        # change). A running sync takes the same row lock before it writes items
+        # (sync._hold), so this sweep and its checkpoints never wait on each other's rows.
         await db.refresh(source, with_for_update=True)
+        old_config = dict(source.config or {})
+        connection_id = changes.get("connection_id", source.connection_id)
         reconnect = connection_id != source.connection_id
+        reconfigure = changes.get("config") is not None and changes["config"] != source.config
+    if reconnect or reconfigure:
+        config = changes["config"] if reconfigure else source.config
         if reconnect:
             # Another connection may sign in to another account: its position in the
             # old one means nothing. Start over (unchanged content writes no new version).
@@ -308,7 +317,7 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
             # show to fall outside the new selection is deleted (soft) in this request,
             # without calling the provider. What only the provider can tell (a Fireflies
             # series, a Notion sub-page) goes on the next sync's pass.
-            await _sweep(db, source, config)
+            await _sweep(db, source, old_config, config)
         # A config change keeps the cursor: the next sync sees the selection changed (its
         # fingerprint, oracle.sources.sync), sweeps again (nothing left by then) and asks
         # the connector how much of the cursor still holds (rescope_cursor), so it only
@@ -323,13 +332,24 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
     return source
 
 
-async def _sweep(db: AsyncSession, source: Source, config: dict[str, Any]) -> int:
+async def _sweep(
+    db: AsyncSession, source: Source, old_config: dict[str, Any], config: dict[str, Any]
+) -> int:
     """Soft-delete the source's stored items outside ``config`` (the connector's
-    ``scope``), in the caller's transaction; how many."""
+    ``scope``), in the caller's transaction; how many. A selection that keeps the same
+    scope (new labels, say) sweeps nothing: an item of unknown provenance is only swept
+    when the picks change."""
     scope = getattr(connector_for(source.kind), "scope", None)
     if scope is None:
         return 0
-    return await store.delete_out_of_scope(db, source, scope(config))
+    new_scope = scope(config)
+    try:
+        old_scope = scope(old_config)
+    except base.ConnectorConfigError:
+        old_scope = None  # saved before a rule it now breaks: sweep by the new one
+    if new_scope == old_scope:
+        return 0
+    return await store.delete_out_of_scope(db, source, new_scope)
 
 
 def normalize_config(kind: str, config: dict[str, Any]) -> dict[str, Any]:

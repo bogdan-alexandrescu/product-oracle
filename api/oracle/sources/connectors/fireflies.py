@@ -150,6 +150,7 @@ query Transcript($id: String!) {
     transcript_url
     organizer_email
     participants
+    calendar_id
     meeting_attendees { displayName email }
     sentences { index speaker_name text }
     summary { overview action_items keywords }
@@ -722,10 +723,16 @@ class FirefliesConnector:
         return out
 
     def scope(self, config: dict[str, Any]) -> Scope:
-        """Still selected, as far as stored items tell: dated inside the date range.
-        Which series and meetings are picked is checked by the full pass (``known``)."""
+        """Still selected, as far as stored items tell: dated inside the date range and,
+        in ``selected`` mode, a picked meeting or in a picked series (each item stores its
+        meeting id and series key), so a save deletes the unpicked with no Fireflies call."""
         picked = selection(config)
-        return Scope(occurred_from=picked.date_from, occurred_before=picked.date_to_end)
+        picks = None
+        if picked.mode == "selected" and not picked.titles:
+            picks = (("meeting", picked.meetings), ("series", picked.series))
+        return Scope(
+            occurred_from=picked.date_from, occurred_before=picked.date_to_end, provenance=picks
+        )
 
     def rescope_cursor(
         self, old_cursor: dict[str, Any] | None, new_config: dict[str, Any]
@@ -955,6 +962,7 @@ class FirefliesConnector:
             acl={"participants": participants},
             occurred_at=when,
             source_updated_at=when,
+            provenance={"meeting": transcript["id"], "series": series_key(transcript)},
         )
 
 
