@@ -404,7 +404,7 @@ async def test_folders_are_listed_again_after_a_while(tenant_id, drive, monkeypa
     assert "files" in drive.calls
 
 
-# --- docs in a picked folder owned outside the company (owner decision pending) -------
+# --- docs in a picked folder owned outside the company (S5, owner 2026-10-20) --------
 
 
 async def test_folder_docs_owned_outside_the_company_are_skipped(tenant_id, drive):

@@ -59,10 +59,14 @@ async def test_source_writes_need_oracle_write(client, slack, scope, can_write):
     writes = [
         await client.post(
             "/v1/sources",
-            json={"kind": "slack", "name": "New", "connection_id": str(conn),
-                  "config": {"channels": ["C2"]}},
+            json={
+                "kind": "slack",
+                "name": "New",
+                "connection_id": str(conn),
+                "config": {"channels": ["C2"]},
+            },
             headers=auth,
-        ),  # fmt: skip
+        ),
         await client.patch(path, json={"name": "Renamed"}, headers=auth),
         await client.post(f"{path}/sync", headers=auth),
         await client.post(f"{path}/pause", headers=auth),

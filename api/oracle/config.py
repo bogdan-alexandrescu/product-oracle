@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     # the company's (ORACLE_IAP_ALLOWED_DOMAINS, else the members' email domains):
     # "skip" leaves it out and lists it on the source as 'Skipped: owned outside
     # <domain>'; "include_and_flag" pulls it in and lists it as 'Owned outside <domain>'.
-    # Docs picked one by one are always pulled in. Owner decision pending (2026-10-20).
+    # Docs picked one by one are always pulled in. Owner, 2026-10-20 (S5): skip.
     drive_docs_owned_outside: Literal["skip", "include_and_flag"] = "skip"
 
 

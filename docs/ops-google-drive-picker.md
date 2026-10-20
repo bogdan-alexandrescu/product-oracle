@@ -48,7 +48,7 @@ the files and folders you choose here."
   source card; what came from it is kept until the folder is removed from the source.
 - Docs in a picked folder whose owner's email domain is not the company's are skipped
   and listed on the card as "Skipped: owned outside <domain>" with their count and names
-  (owner decision pending; see the setting below). The company's domains are
+  (S5, owner 2026-10-20; a person can still pick one on its own). The company's domains are
   `ORACLE_IAP_ALLOWED_DOMAINS`, else the members' email domains (public mail providers
   left out). Docs in a shared drive have no owner and count as the company's; docs picked
   one by one are always pulled in.

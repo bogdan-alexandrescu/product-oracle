@@ -11,7 +11,7 @@ look like a Drive id (:data:`DRIVE_ID`); 'root' (the whole My Drive) is refused.
 
 The sync engine adds the company's email domains (``base.COMPANY_DOMAINS``): a doc found
 in a picked folder whose owner is outside them is skipped and listed on the source, or
-pulled in and flagged (``ORACLE_DRIVE_DOCS_OWNED_OUTSIDE``; owner decision pending).
+pulled in and flagged (``ORACLE_DRIVE_DOCS_OWNED_OUTSIDE``; owner 2026-10-20: skipped).
 Docs picked one by one are always pulled in.
 
 A picked doc Oracle cannot read any more (unshared, access removed, trashed, not a Google
