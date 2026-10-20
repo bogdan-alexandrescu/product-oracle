@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { feedbackState, login, section } from "./helpers";
 
 /*
- * The Inbox's feedback row leads to the items it counts (owner report, 2026-10-20). Since the
+ * The Inbox's feedback rows, one per item (owner, 2026-10-20), lead to their items. Since the
  * PRD page navigation (I3, 2026-10-20) the review panel's Feedback tab filters by state chips
  * (Open / Staged / Declined / Done) and scope chips (This section / All sections). The
  * "suggestions" mock has a PRD (fleet-next v2) whose open feedback is three Oracle change
@@ -22,34 +22,38 @@ const item = (page: Page, key: string) => items(page).filter({ has: page.locator
 const pressed = (scope: ReturnType<typeof panel>, group: string, name: RegExp) =>
   expect(scope.getByTestId(group).getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
 
-test("inbox: the feedback row says what waits and links to the first open item", async ({ page }) => {
+test("inbox: one feedback row per item, saying what waits and linking to its section", async ({ page }) => {
   await suggestions(page);
   await page.goto("/inbox");
-  const row = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
-  await expect(row).toContainText("3 suggestions to accept or dismiss");
-  const action = row.getByRole("link", { name: "Review suggestions Fleet next version — PRD" });
+  const fleet = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
+  // One row per open item, no per-document count.
+  await expect(fleet).toHaveCount(3);
+  await expect(page.getByTestId("inbox-needs")).not.toContainText("to accept or dismiss");
+  const row = fleet.filter({ hasText: "#f-33" });
+  await expect(row).toContainText("Say what happens when the customer is not home");
+  const action = row.getByRole("link", { name: /^Review suggestions: Say what happens/ });
   await expect(action).toHaveText("Review suggestions");
   await expect(action).toHaveAttribute("href", DEEP_LINK);
 
-  // A row with comments only says so, and its button says what to do.
+  // A comment's row says so, and its button says what to do.
   const checkout = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Checkout redesign PRD" });
-  await expect(checkout).toContainText("1 comment to resolve");
+  await expect(checkout).toContainText("most recently used address");
   await expect(checkout.getByRole("link", { name: /^Review comments/ })).toHaveAttribute(
     "href",
     "/documents/checkout-redesign/v/2?feedback=open#s-5-3",
   );
 
-  // Home's Needs you row is the same row.
+  // Home's Needs you rows are the same rows.
   await page.goto("/home");
   const home = page.getByTestId("home-needs-table").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
-  await expect(home).toContainText("3 suggestions to accept or dismiss");
-  await expect(home.getByRole("link", { name: /^Review suggestions/ })).toHaveAttribute("href", DEEP_LINK);
+  await expect(home.first()).toContainText("#f-3");
+  await expect(home.first().getByRole("link", { name: /^Review suggestions/ })).toHaveAttribute("href", /^\/documents\/fleet-next\/v\/2\?feedback=open#f-3\d$/);
 });
 
 test("arriving from the inbox: Feedback, All + Open, at the first open item with its actions in view", async ({ page }) => {
   await suggestions(page);
   await page.goto("/inbox");
-  await page.getByTestId("inbox-feedback").getByRole("link", { name: "Review suggestions Fleet next version — PRD" }).click();
+  await page.getByTestId("inbox-feedback").getByRole("link", { name: /^Review suggestions: Say what happens/ }).click();
   await expect(page).toHaveURL(/\/documents\/fleet-next\/v\/2\?feedback=open#f-33$/);
 
   await expect(page.getByTestId("document-sections").filter({ visible: true })).toHaveAttribute("data-open", "f-33");
@@ -116,15 +120,17 @@ test("feedback items: long text collapsed, Accept, Edit and accept, Dismiss, and
 
   // The Inbox now says what is left.
   await page.goto("/inbox");
-  const row = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
+  const rows = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
   // C1e: the two accepted suggestions are staged for the next draft, not open feedback.
-  await expect(row).not.toContainText("accepted");
-  await expect(row).toContainText("1 item to address");
+  await expect(rows).toHaveCount(1);
+  const left = rows.filter({ hasText: "#f-36" });
+  await expect(left).toContainText("Depot handover needs a count check");
+  await expect(left.getByRole("link", { name: /^Review: Depot handover/ })).toHaveText("Review");
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Staged/ }).click();
-  await expect(page.getByTestId("inbox-tab-staged").locator('tr[data-state="staged-doc"]').filter({ hasText: "Fleet next version" })).toContainText(
-    "2 changes staged for draft 3",
-  );
-  await expect(row.getByRole("link", { name: /^Review feedback/ })).toBeVisible();
+  const staged = page.getByTestId("inbox-tab-staged").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
+  await expect(staged.getByTestId("staged-row-label")).toHaveText("2 changes staged for draft 3");
+  await expect(staged.filter({ hasText: "#f-33" })).toContainText("Draft 3");
+  await expect(staged.filter({ hasText: "#f-34" })).toContainText("Draft 3");
 });
 
 test("Feedback tab: counts open items, and shows All when the open section has none", async ({ page }) => {

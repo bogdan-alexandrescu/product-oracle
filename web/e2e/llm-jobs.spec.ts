@@ -56,7 +56,8 @@ test("suggestion cards: classification, duplicates, edit and accept, and a pushb
   await demand.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(card).toContainText("Accepted");
   await expect(demand.getByTestId("feedback-state-chip")).toHaveText("Staged");
-  await expect(card).toContainText("use “Refine section” on #problem");
+  // C1e: accepted section text is staged for the next draft, not applied per item.
+  await expect(card.getByTestId("suggestion-staged")).toHaveText("Staged for the next draft");
 
   // Pushback: reasoning and sources; keeping the call needs a reason.
   const customItem = feedbackItem(page, "custom roles");

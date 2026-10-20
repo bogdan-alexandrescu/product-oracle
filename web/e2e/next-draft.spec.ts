@@ -1,11 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login, openSection, showAll } from "./helpers";
+import { feedbackState, login, openSection, showAll } from "./helpers";
 
 /**
  * C1e: accepting a suggestion stages it; "Build draft N+1" builds every staged change in
  * one job, shows one combined preview and applies it as exactly one version; the Inbox
- * shows feedback by state in tabs, New first.
+ * shows every item by state in tabs, New first.
  *
  * Fixture: Clinic outreach PRD (Galatia-like) on draft 5, with Goal trace (raised on v4)
  * and F-38 Outbound check (v5) staged, one declined with a note, one open with a
@@ -22,6 +22,7 @@ async function feedbackTab(page: Page) {
 }
 
 const item = (page: Page, text: string) => page.getByTestId("feedback-item").filter({ visible: true, hasText: text });
+const chip = (page: Page, text: string) => item(page, text).getByTestId("feedback-state-chip");
 
 /** The versions the switcher offers are exactly these (retries until they are). */
 async function expectVersions(page: Page, versions: string[]) {
@@ -35,16 +36,24 @@ test("accepting a suggestion stages it for the next draft", async ({ page }) => 
   await expect(buildButton(page).getByTestId("build-draft-count")).toHaveText("· 2 staged");
 
   await feedbackTab(page);
-  // Every state reads on its item.
-  await expect(item(page, "G2 retention").getByTestId("feedback-state")).toHaveText("Accepted · staged for draft 6");
-  await expect(item(page, "40% figure").getByTestId("feedback-state")).toHaveText("Declined");
-  await expect(item(page, "Name the clinics").getByTestId("feedback-state")).toHaveText("Addressed in v4");
+  // Every state reads on its item, under its state chip.
+  await feedbackState(page, "Staged");
+  await expect(chip(page, "G2 retention")).toHaveText("Staged");
+  await feedbackState(page, "Declined");
+  await expect(chip(page, "40% figure")).toHaveText("Declined");
+  await feedbackState(page, "Done");
+  await expect(chip(page, "Name the clinics")).toHaveText("Done");
+  await feedbackState(page, "Open");
   const open = item(page, "outbound check works");
-  await expect(open.getByTestId("feedback-state")).toHaveText("Open");
+  await expect(open.getByTestId("feedback-state-chip")).toHaveText("Open");
 
   await open.getByRole("button", { name: "Accept", exact: true }).click();
-  await expect(open.getByTestId("feedback-state")).toHaveText("Accepted · staged for draft 6");
-  await expect(open.getByTestId("suggestion-staged")).toBeVisible();
+  // Accepted: it stays in view, now Staged, until a filter changes; Staged counts it.
+  await expect(open.getByTestId("feedback-state-chip")).toHaveText("Staged");
+  await expect(open.getByTestId("suggestion-staged")).toHaveText("Staged for the next draft");
+  const states = page.getByTestId("feedback-state").filter({ visible: true });
+  await expect(states.getByRole("button", { name: /^Open/ })).toHaveText(/Open\s*0/);
+  await expect(states.getByRole("button", { name: /^Staged/ })).toHaveText(/Staged\s*3/);
   // Nothing was applied: still on v5, and the build action counts it.
   await expectVersions(page, ["v1", "v2", "v3", "v4", "v5"]);
   await expect(buildButton(page).getByTestId("build-draft-count")).toHaveText("· 3 staged");
@@ -72,9 +81,9 @@ test("build draft 6: one job, one combined preview, apply makes exactly one vers
 
   await s.getByRole("button", { name: "Apply as draft 6" }).click();
   await expect(page).toHaveURL(/\/documents\/clinic-outreach\/v\/6\?tab=reports$/);
-  // Exactly one new version, with both sections revised, and its 'what changed' report open.
-  await expect(page.getByRole("tab", { name: "Reports" }).filter({ visible: true })).toHaveAttribute("aria-selected", "true");
-  const reports = page.getByTestId("reports-panel").filter({ visible: true });
+  // Exactly one new version, with both sections revised, and its 'what changed' report open under History.
+  await expect(page.getByRole("tab", { name: "History" }).filter({ visible: true })).toHaveAttribute("aria-selected", "true");
+  const reports = page.getByTestId("history-reports").filter({ visible: true }).getByTestId("reports-panel");
   await expect(reports.getByRole("tab", { name: "What changed since v5" })).toHaveAttribute("aria-selected", "true");
   await expect(reports.getByRole("region", { name: "What changed" })).toContainText("F-38 Outbound check");
   await expect(reports.getByRole("region", { name: "What changed" })).toContainText("Goal trace");
@@ -84,8 +93,9 @@ test("build draft 6: one job, one combined preview, apply makes exactly one vers
   await expect(buildButton(page)).toHaveCount(0);
 
   await feedbackTab(page);
-  await expect(item(page, "G2 retention").getByTestId("feedback-state")).toHaveText("Addressed in v6");
-  await expect(item(page, "before the call is placed").getByTestId("feedback-state")).toHaveText("Addressed in v6");
+  await feedbackState(page, "Done");
+  await expect(chip(page, "G2 retention")).toHaveText("Done");
+  await expect(chip(page, "before the call is placed")).toHaveText("Done");
 });
 
 test("dropping a section from the preview keeps its item staged for the draft after", async ({ page }) => {
@@ -105,8 +115,11 @@ test("dropping a section from the preview keeps its item staged for the draft af
   await expect(buildButton(page)).toContainText("Build draft 7");
   await expect(buildButton(page).getByTestId("build-draft-count")).toHaveText("· 1 staged");
   await feedbackTab(page);
-  await expect(item(page, "before the call is placed").getByTestId("feedback-state")).toHaveText("Accepted · staged for draft 7");
-  await expect(item(page, "G2 retention").getByTestId("feedback-state")).toHaveText("Addressed in v6");
+  await feedbackState(page, "Staged");
+  await expect(chip(page, "before the call is placed")).toHaveText("Staged");
+  await expect(item(page, "G2 retention")).toHaveCount(0);
+  await feedbackState(page, "Done");
+  await expect(chip(page, "G2 retention")).toHaveText("Done");
 });
 
 test("discarding a build keeps everything staged", async ({ page }) => {
@@ -138,34 +151,36 @@ test("Inbox: tabs by state with counts, New by default, and the badge counts onl
   await page.goto("/inbox");
   const tabs = page.getByTestId("inbox-state-tabs");
   const tab = (name: string) => tabs.getByRole("tab", { name: new RegExp(`^${name}`) });
-  // New is the default tab on arrival, newest first.
+  // New is the default tab on arrival; a first visit, so every waiting item is New.
   await expect(tab("New")).toHaveAttribute("aria-selected", "true");
-  await expect(tab("New")).toHaveText("New5");
+  await expect(tab("New")).toHaveText("New10");
   await expect(tab("Open")).toHaveText("Open0");
   await expect(tab("Staged")).toHaveText("Staged2");
   await expect(tab("Declined")).toHaveText("Declined1");
   await expect(tab("Done")).toHaveText("Done5");
-  const newRows = page.getByTestId("inbox-tab-new").locator("tr[data-row]");
+  await expect(page.getByTestId("inbox-tab-new").locator("tr[data-row]")).toHaveCount(10);
+  // Feedback one row per item, newest first.
+  const newRows = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback").locator("tr[data-row]");
   await expect(newRows).toHaveCount(5);
   await expect(newRows.first()).toContainText("Add a metric that shows the outbound check works");
   await expect(newRows.first().getByRole("link", { name: /^Review/ })).toHaveText("Review suggestions");
 
-  // The badge: checkpoints 1 + cost 2 + questions 2 + new 5 + open 0; staged, declined and done do not count.
+  // The badge: checkpoints 1 + cost 2 + questions 2 + feedback 5 (new or open); staged, declined and done do not count.
   await expect(page.getByTestId("nav-inbox-badge")).toHaveText("10");
   await expect(page.getByText("10 waiting").filter({ visible: true })).toBeVisible();
 
   await tab("Staged").click();
   const staged = page.getByTestId("inbox-tab-staged");
-  const docRow = staged.locator('tr[data-state="staged-doc"]');
-  await expect(docRow).toContainText("2 changes staged for draft 6");
+  const docRow = staged.locator("tr[data-row]").filter({ has: page.getByTestId("staged-row-label") });
+  await expect(docRow.getByTestId("staged-row-label")).toHaveText("2 changes staged for draft 6");
   await expect(docRow).toContainText("Clinic outreach PRD");
-  await expect(staged.locator('tr[data-state="staged"]')).toHaveCount(2);
+  await expect(staged.locator('tr[data-state="staged"]').filter({ hasNot: page.getByTestId("staged-row-label") })).toHaveCount(2);
 
   await tab("Declined").click();
   const declined = page.getByTestId("inbox-tab-declined").locator("tr[data-row]");
   await expect(declined).toHaveCount(1);
   await expect(declined.getByTestId("decline-note")).toHaveText("The 2024 audit is still the latest count; keep the figure.");
-  await expect(declined.getByRole("link", { name: /^View/ })).toBeVisible();
+  await expect(declined.getByRole("link", { name: /^Open/ })).toBeVisible();
 
   await tab("Done").click();
   await expect(page.getByTestId("inbox-tab-done").locator("tr[data-row]").filter({ hasText: "Name the clinics" })).toContainText("v4");
@@ -181,15 +196,17 @@ test("Inbox: arriving marks items seen; they stay New for this visit, Open on th
   await login(page);
   await page.goto("/inbox");
   const tabs = page.getByTestId("inbox-state-tabs");
-  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New5");
+  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New10");
   // Let the arrival's mark-seen call land, then come back.
   await page.waitForTimeout(500);
   await page.goto("/documents");
   await page.goto("/inbox");
   await page.reload();
   await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New0");
-  await expect(tabs.getByRole("tab", { name: /^Open/ })).toHaveText("Open5");
+  await expect(tabs.getByRole("tab", { name: /^Open/ })).toHaveText("Open10");
   // New is still the default tab; the badge still counts open items.
   await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("nav-inbox-badge")).toHaveText("10");
+  await tabs.getByRole("tab", { name: /^Open/ }).click();
+  await expect(page.getByTestId("inbox-tab-open").getByTestId("inbox-feedback").locator("tr[data-row]")).toHaveCount(5);
 });
