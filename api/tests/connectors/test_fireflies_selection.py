@@ -1,6 +1,8 @@
 """Fireflies sources picked in the browse screen: all meetings, a date range, recurring
 series and single meetings (S5, owner 2026-10-19)."""
 
+import time
+
 import httpx
 import pytest
 
@@ -83,6 +85,34 @@ def test_normalise_title(title, normal):
 def test_series_title_keeps_case_and_drops_the_dated_suffix():
     assert series_title("AI agents sprint planning - Oct 14") == "AI agents sprint planning"
     assert series_title("  AI Agents  daily standup ") == "AI Agents daily standup"
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Standup" + " 1" * 8000,
+        "Standup" + " - 1" * 4000,
+        "1 " * 8000 + "x",
+        "Standup " + "(10/14) " * 2000,
+    ],
+)
+def test_series_title_is_linear_on_a_16_kb_title(title):
+    """A long title must not block the event loop (it used to take 22 s at 16 KB)."""
+    assert len(title) >= 16_000
+    best = float("inf")
+    for _ in range(3):
+        started = time.perf_counter()
+        series_title(title)
+        best = min(best, time.perf_counter() - started)
+    assert best < 0.010
+
+
+def test_series_title_cuts_long_titles_and_strips_every_suffix_at_once():
+    assert series_title("Standup" + " 1" * 8000) == "Standup"
+    assert len(series_title("x" * 5000)) <= fireflies.MAX_TITLE
+    assert series_title("Sprint planning - Oct 14 (2) #3") == "Sprint planning"
+    # Nothing but a suffix: kept as it is.
+    assert series_title("- 12") == "- 12"
 
 
 def test_series_key_prefers_the_calendar_event_and_strips_the_instance_suffix():

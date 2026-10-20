@@ -154,20 +154,23 @@ _DATED = (
     rf"|(?:{_WEEKDAY})?{_MONTH}\s+{_DAY}(?:,?\s+\d{{4}})?"
     rf"|(?:{_WEEKDAY})?{_DAY}\s+{_MONTH}(?:,?\s+\d{{4}})?)"
 )
-# A trailing date or number after a space or separator: " - Oct 14", " #12", " (10/14)".
-_SUFFIX = re.compile(rf"(?:\s*[-\u2013\u2014:|,]\s*|\s+)\(?{_DATED}\)?\s*$", re.IGNORECASE)
+# Titles are cut to this many characters before their suffixes are removed.
+MAX_TITLE = 200
+# Every trailing date or number after a space or separator, in one anchored match:
+# " - Oct 14", " #12", " (10/14) #3".
+_SUFFIXES = re.compile(rf"(?:(?:\s*[-\u2013\u2014:|,]\s*|\s+)\(?{_DATED}\)?)+\s*$", re.IGNORECASE)
 # Google Calendar instance ids are the recurring event's id plus the instance start.
 _INSTANCE = re.compile(r"_\d{8}(?:T\d{6}Z?)?$")
 
 
 def series_title(title: str | None) -> str:
-    """The title with trailing dates and numbers removed, case kept."""
-    text = " ".join((title or "").split())
-    while True:
-        shorter = _SUFFIX.sub("", text).strip()
-        if shorter == text or not shorter:
-            return text or "Untitled meeting"
-        text = shorter
+    """The title with trailing dates and numbers removed, case kept.
+
+    The title is cut to MAX_TITLE characters first, so the cost is bounded whatever
+    Fireflies returns."""
+    text = " ".join((title or "").split())[:MAX_TITLE].strip()
+    shorter = _SUFFIXES.sub("", text, count=1).strip()
+    return shorter or text or "Untitled meeting"
 
 
 def normalise_title(title: str | None) -> str:
