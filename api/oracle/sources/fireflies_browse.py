@@ -48,13 +48,12 @@ _cache: OrderedDict[Hashable, tuple[float, object]] = OrderedDict()
 _spent: dict[uuid.UUID, deque[tuple[float, int]]] = {}
 
 RESPONSES: dict[int | str, dict[str, str]] = {
+    404: {"description": "Not one of your Fireflies connections"},
+    409: {"description": "The connection cannot be used (reconnect it), or Fireflies refused"},
     429: {
         "description": "Fireflies is rate limiting the API key, or this connection has "
         "browsed too much for now; see Retry-After"
     },
-    404: {"description": "Not one of your Fireflies connections"},
-    409: {"description": "The connection cannot be used (reconnect it), or Fireflies refused"},
-    422: {"description": "An invalid date range"},
     502: {"description": "Fireflies did not answer as expected"},
 }
 

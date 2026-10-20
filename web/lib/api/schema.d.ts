@@ -15739,7 +15739,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The connection cannot be used: reconnect it */
+            /** @description The connection cannot be used (reconnect it), or Fireflies refused */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15755,7 +15755,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Fireflies is rate limiting the API key; see Retry-After */
+            /** @description Fireflies is rate limiting the API key, or this connection has browsed too much for now; see Retry-After */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -15801,7 +15801,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The connection cannot be used: reconnect it */
+            /** @description The connection cannot be used (reconnect it), or Fireflies refused */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15817,7 +15817,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Fireflies is rate limiting the API key; see Retry-After */
+            /** @description Fireflies is rate limiting the API key, or this connection has browsed too much for now; see Retry-After */
             429: {
                 headers: {
                     [name: string]: unknown;

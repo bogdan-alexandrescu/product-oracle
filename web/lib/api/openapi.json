@@ -4896,10 +4896,10 @@
             "description": "Not one of your Fireflies connections"
           },
           "409": {
-            "description": "The connection cannot be used: reconnect it"
+            "description": "The connection cannot be used (reconnect it), or Fireflies refused"
           },
           "429": {
-            "description": "Fireflies is rate limiting the API key; see Retry-After"
+            "description": "Fireflies is rate limiting the API key, or this connection has browsed too much for now; see Retry-After"
           },
           "502": {
             "description": "Fireflies did not answer as expected"
@@ -4994,10 +4994,10 @@
             "description": "Not one of your Fireflies connections"
           },
           "409": {
-            "description": "The connection cannot be used: reconnect it"
+            "description": "The connection cannot be used (reconnect it), or Fireflies refused"
           },
           "429": {
-            "description": "Fireflies is rate limiting the API key; see Retry-After"
+            "description": "Fireflies is rate limiting the API key, or this connection has browsed too much for now; see Retry-After"
           },
           "502": {
             "description": "Fireflies did not answer as expected"
