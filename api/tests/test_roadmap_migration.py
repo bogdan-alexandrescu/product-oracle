@@ -67,9 +67,10 @@ def scratch_db():
 def test_0016_roadmap_follows_the_wave_1_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0014_blockers_snapshot"
-    # The Drive picker's per-item notes chain on it.
-    assert script.get_heads() == ["0016_source_unavailable_items"]
-    assert script.get_revision("0016_source_unavailable_items").down_revision == REVISION
+    # 0016_refinement_batch (C1e) chains on it, 0017_citation_source_oracle on that, and
+    # the Drive picker's per-item notes on that; still a single head.
+    assert script.get_heads() == ["0018_source_unavailable_items"]
+    assert script.get_revision("0016_refinement_batch").down_revision == REVISION
 
 
 def _event(tenant: uuid.UUID, subject: str) -> None:

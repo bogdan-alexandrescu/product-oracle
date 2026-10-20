@@ -28,8 +28,9 @@ FULL_SECTION_ID = "full"
 FULL_HEADING = "Full version"
 SOURCES_SECTION_ID = "sources"
 
-_NOTES_FENCE = re.compile(r"^```[ \t]*notes[ \t]*\n(.*?)^```[ \t]*$\n?", re.S | re.M)
-_COMMENT = re.compile(r"<!--(.*?)-->", re.S)
+# A fenced ``notes`` block's opening and closing lines (each a whole line).
+_NOTES_OPEN = re.compile(r"```[ \t]*notes[ \t]*\n")
+_NOTES_CLOSE = re.compile(r"```[ \t]*\n?")
 # An in-document link to a section: [text](#section-id)
 SECTION_LINK_RE = re.compile(r"\]\(#([A-Za-z0-9][A-Za-z0-9_.:-]*)\)")
 
@@ -119,9 +120,31 @@ def layers(keys: Iterable[str], brief: Iterable[str]) -> dict[str, Layer]:
     return {k: (BRIEF if k in brief_set else DETAIL) for k in keys}
 
 
+def _notes_spans(text: str) -> list[tuple[int, int, int, int]]:
+    """(start, end, body start, body end) of each fenced ``notes`` block, as the regex
+    ``^```[ \\t]*notes[ \\t]*\\n(.*?)^```[ \\t]*$\\n?`` (re.S | re.M) would find them,
+    in one linear pass: that regex is quadratic on many unclosed openers."""
+    spans: list[tuple[int, int, int, int]] = []
+    opened: tuple[int, int] | None = None
+    i = 0
+    while i < len(text):
+        nl = text.find("\n", i)
+        end = len(text) if nl < 0 else nl + 1
+        line = text[i:end]
+        if opened is None:
+            if _NOTES_OPEN.fullmatch(line):
+                opened = (i, end)
+        elif _NOTES_CLOSE.fullmatch(line):
+            spans.append((opened[0], end, opened[1], i))
+            opened = None
+        i = end
+    return spans
+
+
 def notes_block(body_md: str) -> str | None:
     """Text of the section's fenced ``notes`` blocks, joined; None without one."""
-    found = [m.group(1).strip() for m in _NOTES_FENCE.finditer(body_md or "")]
+    text = body_md or ""
+    found = [text[b:e].strip() for _, _, b, e in _notes_spans(text)]
     found = [f for f in found if f]
     return "\n\n".join(found) if found else None
 
@@ -131,15 +154,37 @@ def presenter_notes(body_md: str) -> str | None:
     return notes_block(body_md)
 
 
+def strip_comments(text: str) -> str:
+    """``text`` without its ``<!-- ... -->`` comments, the same as the regex
+    ``<!--.*?-->`` would remove, in one linear pass: the regex is quadratic on a body
+    holding many unclosed ``<!--``."""
+    out: list[str] = []
+    pos = 0
+    while (start := text.find("<!--", pos)) >= 0:
+        end = text.find("-->", start + 4)
+        if end < 0:
+            # No later comment can close either.
+            break
+        out.append(text[pos:start])
+        pos = end + 3
+    out.append(text[pos:])
+    return "".join(out)
+
+
 def slide_body(body_md: str) -> str:
     """A section body as shown on a slide or in an export: no notes, no guidance."""
-    text = _NOTES_FENCE.sub("", body_md or "")
-    return _COMMENT.sub("", text).strip("\n")
+    text = body_md or ""
+    kept, pos = [], 0
+    for start, end, _, _ in _notes_spans(text):
+        kept.append(text[pos:start])
+        pos = end
+    kept.append(text[pos:])
+    return strip_comments("".join(kept)).strip("\n")
 
 
 def linked_sections(body_md: str) -> list[str]:
     """Section ids a body links to with ``[text](#id)``, in order, without repeats."""
-    return list(dict.fromkeys(SECTION_LINK_RE.findall(_COMMENT.sub("", body_md or ""))))
+    return list(dict.fromkeys(SECTION_LINK_RE.findall(strip_comments(body_md or ""))))
 
 
 def subtree(sections: Sequence[SectionRef], key: str) -> list[str]:
