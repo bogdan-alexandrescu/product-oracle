@@ -255,9 +255,10 @@ async def test_the_decider_approves_current_versions_only(client):
 
     v2 = replace(DRAFT, "Calendar sync may lag.", "Calendar sync may lag by a day.")
     assert (await import_md(client, ctx.auth, v2)).status_code == 201
-    # Version 1 is no longer current.
+    # Version 1 is no longer current: the publish gate's words (C5) for a PRD.
     resp = await client.post(ctx.v(1, "/approve"), headers=decider.headers)
-    assert resp.status_code == 409 and "current version" in resp.json()["detail"]
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "v2 exists: only the latest version can be published"
     resp = await client.post(ctx.v(2, "/approve"), headers=decider.headers)
     assert resp.status_code == 200
     assert resp.json()["version"]["approved_at"]

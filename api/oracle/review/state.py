@@ -936,10 +936,13 @@ async def record_section_changes(
     version: DocumentVersion,
     new_hashes: dict[str, str],
     cause: str,
+    *,
+    part_of: uuid.UUID | None = None,
 ) -> list[ChangeEvent]:
     """One ``document_section`` change per section whose revision differs from the
     previous version's (added and removed sections included). A document's first
-    version changes nothing that could depend on it."""
+    version changes nothing that could depend on it. ``part_of``: the version's own
+    change (``document_version``) these are parts of; the trace handles that one."""
     if previous is None:
         return []
     old = dict(
@@ -971,6 +974,7 @@ async def record_section_changes(
                     "version": version.number,
                     "previous_version": previous.number,
                     "version_id": str(version.id),
+                    **({"part_of_change_id": str(part_of)} if part_of else {}),
                 },
             )
         )

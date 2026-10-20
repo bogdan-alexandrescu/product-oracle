@@ -650,21 +650,10 @@ async def import_draft(
 
     from oracle.review import patches, state
 
-    await state.record_section_changes(db, principal, document, previous, version, revisions, cause)
-    if held:
-        await patches.propose_held(
-            db, principal, document, version, held, origin=origin, run_id=run_id
-        )
-
-    document.title = draft.title
-    document.template = draft.template
-    document.template_version = draft.template_version
-    if document.status == "approved":
-        # A newer, unapproved version now exists.
-        document.status = "in_review"
-
-    # v2 hook: outputs built on earlier versions may now be stale (oracle.trace).
-    await changes.record_change(
+    # v2 hook: outputs built on earlier versions may now be stale (oracle.trace). One
+    # change: the review lane's per-section changes below are parts of it, and the trace
+    # marks what the version reaches once, from this event.
+    version_change = await changes.record_change(
         db,
         "document_version",
         cause="version_imported",
@@ -677,6 +666,21 @@ async def import_draft(
             "previous_version_id": str(previous.id) if previous else None,
         },
     )
+    await state.record_section_changes(
+        db, principal, document, previous, version, revisions, cause, part_of=version_change.id
+    )
+    if held:
+        await patches.propose_held(
+            db, principal, document, version, held, origin=origin, run_id=run_id
+        )
+
+    document.title = draft.title
+    document.template = draft.template
+    document.template_version = draft.template_version
+    if document.status == "approved":
+        # A newer, unapproved version now exists.
+        document.status = "in_review"
+
     await audit.record(
         db,
         principal,
