@@ -13625,6 +13625,13 @@ export interface operations {
                     "application/json": components["schemas"]["VersionOut"];
                 };
             };
+            /** @description Draft larger than 1 MiB (ORACLE_MAX_BODY_BYTES) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Draft rejected */
             422: {
                 headers: {
@@ -17242,6 +17249,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["YamlImportError"];
                 };
+            };
+            /** @description File larger than 1 MiB (ORACLE_MAX_BODY_BYTES) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description File rejected */
             422: {
