@@ -273,7 +273,15 @@ def readable_shared(intake_id: uuid.UUID | None = None) -> Select:
     stmt = (
         select(IntakeSharedItem.item_id, IntakeSharedItem.version_id)
         .join(SourceItem, SourceItem.id == IntakeSharedItem.item_id)
-        .join(SourceItemVersion, SourceItemVersion.id == IntakeSharedItem.version_id)
+        # The version must be one of that item's: a pair naming another item's version
+        # never serves that text under this item.
+        .join(
+            SourceItemVersion,
+            and_(
+                SourceItemVersion.id == IntakeSharedItem.version_id,
+                SourceItemVersion.item_id == IntakeSharedItem.item_id,
+            ),
+        )
         .where(~held.exists(), SourceItem.deleted_at.is_(None))
         .ext(distinct_on(IntakeSharedItem.item_id))
         .order_by(IntakeSharedItem.item_id, SourceItemVersion.fetched_at.desc())

@@ -323,11 +323,23 @@ def confidence_out(score: confidence.Score, settings: dict[str, Any] | None) -> 
     return {"value": score.confidence, "breakdown": score.breakdown, "low": score.confidence < low}
 
 
+def _scalar_acl(acl: dict[str, Any]) -> dict[str, Any]:
+    """The acl without who is on it: member, participant and permission lists go."""
+    return {k: v for k, v in acl.items() if isinstance(v, str | bool | int | float)}
+
+
 def item_out(
-    row: ItemRow, settings: dict[str, Any] | None, now: datetime | None = None
+    row: ItemRow,
+    settings: dict[str, Any] | None,
+    now: datetime | None = None,
+    *,
+    foreign: bool = False,
 ) -> dict[str, Any]:
+    """``foreign``: another user's item a finding shared in full released to the caller
+    (a run, S6): who wrote it, who it is shared with and when it changed upstream are
+    left out (the title and text it reads are the ones released)."""
     item, version = row.item, row.version
-    return {
+    out = {
         "id": item.id,
         "source_id": item.source_id,
         "source_kind": row.source_kind,
@@ -345,3 +357,6 @@ def item_out(
         "fetched_at": version.fetched_at if version is not None else None,
         "confidence": confidence_out(item_confidence(row, settings, now), settings),
     }
+    if foreign:
+        out.update(author=None, acl=_scalar_acl(item.acl or {}), source_updated_at=None)
+    return out

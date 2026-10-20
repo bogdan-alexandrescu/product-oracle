@@ -151,8 +151,8 @@ FROM source_item_versions v
 JOIN source_items si ON si.id = v.item_id AND si.deleted_at IS NULL
 JOIN sources so ON so.id = si.source_id AND so.owner_user_id = i.author_id
 JOIN snapshots sn ON sn.id = i.source_snapshot_ids[array_upper(i.source_snapshot_ids, 1)]
-WHERE v.item_id::text IN (
-        SELECT c FROM jsonb_array_elements_text({_arr("f.value->'source_item_ids'")}) c
+WHERE v.item_id IN (
+        SELECT c::uuid FROM jsonb_array_elements_text({_arr("f.value->'source_item_ids'")}) c
         WHERE c ~* """
     + UUID_TEXT
     + """)

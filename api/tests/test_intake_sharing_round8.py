@@ -10,17 +10,23 @@ titles).
 Synthetic placeholders only.
 """
 
+import copy
+import json
 import uuid
 from datetime import UTC, datetime
+
+from sqlalchemy import select
 
 from oracle.sources import store
 from oracle.sources.base import ItemUpsert
 from oracle.sources.models import Source, SourceItem
 from oracle.tenancy import tenant_session
+from oracle.v2.models import ProductIntake
 from tests.test_intake_sharing import EXCERPT_A, TITLE_A, share_all
-from tests.test_intake_sharing_round5 import world
+from tests.test_intake_sharing_round5 import ANSWER, _baseline_proposals, _blocker_gap, share, world
 from tests.test_intake_sharing_round6 import (
     RUNS,
+    _answer_model_gap,
     as_run_of,
     evidence_hits,
     fake,  # noqa: F401 (fixture)
@@ -201,3 +207,86 @@ async def test_attach_without_ref_stores_the_frozen_title(client, fake):  # noqa
         assert [e["ref"] for e in resp.json()["evidence"]] == [TITLE_A, TITLE_A]
     shown = await client.get(f"/v1/baseline/entities/{feat['id']}", headers=ctx.as_("author"))
     assert {e["source_item"]["title"] for e in shown.json()["evidence"]} == {TITLE_A}
+
+
+# --- minors ------------------------------------------------------------------------------------
+
+
+async def test_a_findings_ids_list_only_what_others_may_read(client, fake):  # noqa: F811
+    """Anyone but the author is shown the ids of the items a finding released and that
+    are still readable: not one deleted upstream since."""
+    ctx, intake_id, items = await world(client, fake, hidden=False)
+    await share_all(client, ctx, intake_id, "full")
+    await _delete(ctx, items["a"])
+    for who, headers in (("approver", ctx.as_("approver")), ("run", as_run_of(ctx, "author"))):
+        resp = await client.get(f"/v1/intakes/{intake_id}/findings", headers=headers)
+        assert resp.status_code == 200, resp.text
+        ids = {i for f in resp.json() for i in f["source_item_ids"]}
+        assert ids, who
+        assert str(items["a"]) not in ids, who
+    resp = await client.get(f"/v1/intakes/{intake_id}/findings", headers=ctx.as_("author"))
+    assert str(items["a"]) in {i for f in resp.json() for i in f["source_item_ids"]}
+
+
+async def test_another_users_released_item_reads_without_who_is_on_it(client, fake):  # noqa: F811
+    ctx, intake_id, items = await world(client, fake, hidden=False)
+    async with tenant_session(ctx.tenant_id) as s:
+        item = await s.get(SourceItem, items["a"])
+        item.author = "U-author"
+        item.acl = {"visibility": "private", "participants": ["Ada", "Grace"]}
+        await s.commit()
+    await share_all(client, ctx, intake_id, "full")
+    h = as_run_of(ctx, "approver")
+    resp = await client.get(f"/v1/source-items/{items['a']}", headers=h)
+    assert resp.status_code == 200, resp.text
+    hits = {x["item"]["id"]: x["item"] for x in await _search(client, ctx, "approver", "buyers")}
+    for out in (resp.json(), hits[str(items["a"])]):
+        assert out["author"] is None
+        assert out["source_updated_at"] is None
+        assert out["acl"] == {"visibility": "private"}
+    # The author's own run reads its own item as it is.
+    resp = await client.get(f"/v1/source-items/{items['a']}", headers=as_run_of(ctx, "author"))
+    assert resp.json()["acl"]["participants"] == ["Ada", "Grace"]
+
+
+async def test_a_release_naming_another_items_version_serves_nothing(client, fake):  # noqa: F811
+    from oracle.intake.models import IntakeSharedItem
+
+    ctx, intake_id, items = await world(client, fake, hidden=False)
+    await share_all(client, ctx, intake_id, "full")
+    async with tenant_session(ctx.tenant_id) as s:
+        b = await s.get(SourceItem, items["b"])
+        rows = (
+            await s.scalars(select(IntakeSharedItem).where(IntakeSharedItem.item_id == items["a"]))
+        ).all()
+        assert rows
+        for row in rows:
+            row.version_id = b.current_version_id
+        await s.commit()
+    h = as_run_of(ctx, "approver")
+    assert (await client.get(f"/v1/source-items/{items['a']}", headers=h)).status_code == 404
+    hits = await _search(client, ctx, "approver", "buyers")
+    assert str(items["a"]) not in {x["item"]["id"] for x in hits}
+
+
+async def test_a_reanalysis_never_raises_an_open_proposal(client, fake):  # noqa: F811
+    """``propose_shared(create=False)`` only lowers: a question-only proposal stays
+    question-only even if the finding reads higher by then."""
+    from oracle.intake import answers
+
+    ctx, intake_id, _ = await world(client, fake, hidden=False, model=_blocker_gap)
+    gap = await _answer_model_gap(client, ctx)
+    await share(client, ctx, intake_id, str(gap.id), "counts")
+    [proposal] = await _baseline_proposals(ctx)
+    assert proposal.status == "open"
+    assert ANSWER not in json.dumps(proposal.payload)
+    async with tenant_session(ctx.tenant_id) as s:
+        intake = await s.get(ProductIntake, uuid.UUID(intake_id))
+        analysis = copy.deepcopy(intake.analysis)
+        analysis["findings"][str(gap.id)]["sharing"] = "full"
+        intake.analysis = analysis
+        await s.flush()
+        await answers.propose_shared(s, None, intake, [gap], create=False)
+        await s.commit()
+    [proposal] = await _baseline_proposals(ctx)
+    assert ANSWER not in json.dumps(proposal.payload)

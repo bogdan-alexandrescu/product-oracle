@@ -49,7 +49,7 @@ async def search(
     visible = items.version_ids(user_id, as_of, txn_snapshot, also).subquery()
     rank = func.ts_rank(SourceItemVersion.search, query)
     stmt = (
-        select(SourceItem, SourceItemVersion, Source.kind, rank.label("rank"))
+        select(SourceItem, SourceItemVersion, Source.kind, rank.label("rank"), Source.owner_user_id)
         .join(SourceItem, SourceItem.id == SourceItemVersion.item_id)
         .join(Source, Source.id == SourceItem.source_id)
         .where(
@@ -75,9 +75,9 @@ async def search(
 
     settings = await items.confidence_settings(session)
     scored = []
-    for item, version, source_kind, relevance in rows:
+    for item, version, source_kind, relevance, owner in rows:
         row = items.ItemRow(item, version, source_kind)
-        out = items.item_out(row, settings, now=as_of)
+        out = items.item_out(row, settings, now=as_of, foreign=owner != user_id)
         weight = confidence.rank_weight(out["confidence"]["value"])
         scored.append((float(relevance) * weight, float(relevance), version.id, out))
     scored.sort(key=lambda s: (-s[0], -s[1], str(s[2])))

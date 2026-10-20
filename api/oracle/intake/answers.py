@@ -405,7 +405,9 @@ async def propose_shared(
                         db, principal, "baseline.proposal.withdrawn", "proposal", existing.id,
                         {"intake_id": str(intake.id), "gap_id": str(gap.id)},
                     )  # fmt: skip
-                else:
+                elif create or mode == "question" or _carries_answer(existing):
+                    # A re-analysis (``create=False``) only lowers: it never puts the
+                    # answer into a question-only proposal.
                     fields, reason = _baseline_fields(intake, gap, question, row, mode)
                     existing.payload = {**existing.payload, "fields": fields, "reason": reason}
                 continue
@@ -432,6 +434,13 @@ async def propose_shared(
                 out.append(proposal)
     await db.flush()
     return out
+
+
+def _carries_answer(proposal: Proposal) -> bool:
+    """Whether the proposal carries the answer (written at ``full``), not only the
+    category's question."""
+    attrs = ((proposal.payload or {}).get("fields") or {}).get("attrs") or {}
+    return "answer_id" in attrs
 
 
 async def _proposal_of(

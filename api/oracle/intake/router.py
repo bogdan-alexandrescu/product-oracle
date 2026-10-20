@@ -384,7 +384,9 @@ async def dismiss_intake_proposal(
 # --- findings (S6) -----------------------------------------------------------------------
 
 
-def _finding_out(fid: str, entry: dict, v: sharing.Viewer) -> FindingOut | None:
+def _finding_out(fid: str, entry: dict, v: sharing.Viewer, readable: set[str]) -> FindingOut | None:
+    """``readable``: the intake's items runs may read now (``ev.run_include``); anyone
+    but the author is shown the ids of those only."""
     if sharing.is_open(entry):
         return None  # drawn from shared text only: nothing to share
     level = entry.get("sharing", sharing.DEFAULT)
@@ -403,21 +405,29 @@ def _finding_out(fid: str, entry: dict, v: sharing.Viewer) -> FindingOut | None:
         out.source_item_ids = [uuid.UUID(i) for i in entry.get("source_item_ids") or []]
         out.unshared_item_ids = [uuid.UUID(i) for i in sharing.unshared_ids(entry)]
     elif v.sees(level, "full"):
-        # What sharing released, not what a later analysis added (freeze at sharing).
+        # What sharing released, not what a later analysis added (freeze at sharing),
+        # and still readable: nothing deleted upstream or withheld since.
         released = sharing.frozen(entry)
         out.source_item_ids = [
-            uuid.UUID(i) for i in entry.get("source_item_ids") or [] if i in released
+            uuid.UUID(i)
+            for i in entry.get("source_item_ids") or []
+            if i in released and i in readable
         ]
     return out
 
 
-def _findings(intake, principal: Principal, only: set[str] | None = None) -> list[FindingOut]:
+async def _findings(
+    db: TenantDB, intake, principal: Principal, only: set[str] | None = None
+) -> list[FindingOut]:
     v = sharing.viewer(principal, intake)
+    readable: set[str] = set()
+    if not v.is_author:
+        readable = {str(i) for i in await ev.run_include(db, intake)}
     out = []
     for fid, entry in sharing.registry(intake).items():
         if only is not None and fid not in only:
             continue
-        row = _finding_out(fid, entry, v)
+        row = _finding_out(fid, entry, v, readable)
         if row is not None:
             out.append(row)
     return out
@@ -429,7 +439,7 @@ async def list_intake_findings(
 ) -> list[FindingOut]:
     """Findings drawn from the author's own sources and their sharing levels. The author
     sees every one; anyone else those shared at counts or above, as far as each allows."""
-    return _findings(await _intake(db, intake_id), principal)
+    return await _findings(db, await _intake(db, intake_id), principal)
 
 
 @router.patch("/intakes/{intake_id}/findings/{finding_id}", response_model=FindingOut)
@@ -445,7 +455,7 @@ async def set_intake_finding_sharing(
         raise _http(e) from e
     await db.commit()
     await db.refresh(intake)
-    [out] = _findings(intake, principal, {str(finding_id)})
+    [out] = await _findings(db, intake, principal, {str(finding_id)})
     return out
 
 
@@ -467,7 +477,7 @@ async def set_intake_finding_summary(
         raise _http(e) from e
     await db.commit()
     await db.refresh(intake)
-    [out] = _findings(intake, principal, {str(finding_id)})
+    [out] = await _findings(db, intake, principal, {str(finding_id)})
     return out
 
 
@@ -485,7 +495,7 @@ async def set_intake_findings_sharing(
         raise _http(e) from e
     await db.commit()
     await db.refresh(intake)
-    return _findings(intake, principal, set(done))
+    return await _findings(db, intake, principal, set(done))
 
 
 # --- gaps --------------------------------------------------------------------------------

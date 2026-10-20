@@ -335,9 +335,12 @@ async def get_source_item(
         versions = await db.scalar(
             select(func.count()).where(SourceItemVersion.item_id == row.item.id)
         )
+    foreign = released is not None and user_id != await db.scalar(
+        select(Source.owner_user_id).where(Source.id == row.item.source_id)
+    )
     settings = await items.confidence_settings(db)
     return ItemDetail(
-        **items.item_out(row, settings),
+        **items.item_out(row, settings, foreign=foreign),
         content=row.version.content if row.version is not None else None,
         version_count=versions or 0,
     )
