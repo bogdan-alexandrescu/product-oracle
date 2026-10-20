@@ -120,7 +120,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, confidence
+from oracle import audit, confidence, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -147,6 +147,7 @@ from oracle.runs.schemas import (
     FlowSegmentOut,
     InboxCheckpoint,
     InboxDocument,
+    InboxFeedbackCounts,
     InboxFeedbackItem,
     InboxOut,
     ItemsCheck,
@@ -2715,9 +2716,11 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
             keys = set(
                 await db.scalars(select(Section.section_key).where(Section.version_id == source_id))
             )
-    return roadmap.check_items(
-        text, prd_slug=slug, prd_version=version, prd_sections=keys
-    ).as_json()
+    # Off the event loop: the run's file is untrusted text (oracle.safe_yaml).
+    check = await safe_yaml.run_parse(
+        roadmap.check_items, text, prd_slug=slug, prd_version=version, prd_sections=keys
+    )
+    return check.as_json()
 
 
 # --------------------------------------------------------------------------- tick
@@ -5432,6 +5435,19 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
 # --------------------------------------------------------------------------- inbox
 
 
+def _waits_for(item: FeedbackItem, suggestion: str | None) -> str:
+    """The InboxFeedbackCounts field an open item counts under."""
+    if suggestion == "open":
+        return "suggestions"
+    if suggestion == "accepted":
+        return "accepted"
+    if item.kind == "comment":
+        return "comments"
+    if item.kind == "section_review":
+        return "verdicts"
+    return "other"
+
+
 async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
     pending = list(
         await db.scalars(
@@ -5484,6 +5500,11 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
         by_doc: dict[uuid.UUID, list[FeedbackItem]] = {}
         for f in items:
             by_doc.setdefault(f.document_id, []).append(f)
+        from oracle.jobs.service import latest_suggestions
+
+        suggestion_status = {
+            k: s.status for k, s in (await latest_suggestions(db, [f.id for f in items])).items()
+        }
         if by_doc:
             docs = {
                 d.id: d for d in await db.scalars(select(Document).where(Document.id.in_(by_doc)))
@@ -5499,6 +5520,16 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
             )
             for doc_id, doc_items in by_doc.items():
                 d = docs[doc_id]
+                counts = InboxFeedbackCounts()
+                for f in doc_items:
+                    field = _waits_for(f, suggestion_status.get(f.id))
+                    setattr(counts, field, getattr(counts, field) + 1)
+                # The review panel lists items by version raised on, then age.
+                first = min(
+                    (f for f in doc_items if f.section_key),
+                    key=lambda f: (f.raised_on_version, f.created_at, str(f.id)),
+                    default=None,
+                )
                 feedback.append(
                     InboxDocument(
                         document_id=d.id,
@@ -5506,13 +5537,17 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
                         title=d.title,
                         latest_version=latest.get(d.id),
                         open_count=len(doc_items),
+                        counts=counts,
+                        first_section_key=first.section_key if first else None,
                         items=[
                             InboxFeedbackItem(
                                 id=f.id,
                                 summary=f.summary,
+                                kind=f.kind,  # type: ignore[arg-type]
                                 section_key=f.section_key,
                                 raised_on_version=f.raised_on_version,
                                 created_at=f.created_at,
+                                suggestion_status=suggestion_status.get(f.id),  # type: ignore[arg-type]
                             )
                             for f in doc_items[:5]
                         ],

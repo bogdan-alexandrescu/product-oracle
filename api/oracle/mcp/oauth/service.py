@@ -36,7 +36,10 @@ from oracle.tenancy import tenant_session, unscoped_session
 
 SCOPES = ("oracle:read", "oracle:write")
 SCOPE_DESCRIPTIONS = {
-    "oracle:read": "Read the baseline, sources you can see, documents and runs.",
+    "oracle:read": (
+        "Read the baseline, sources you can see, documents and runs, and list the titles "
+        "of every Notion page shared with Product Oracle, including pages in no source."
+    ),
     "oracle:write": "Make changes with your role: propose, comment, approve, edit.",
 }
 # Asked for when a client sends no scope; the consent screen shows it and the user's

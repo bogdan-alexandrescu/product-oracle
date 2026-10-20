@@ -29,6 +29,7 @@ export function Inspector({
   children,
   label,
   testId,
+  className = "",
 }: {
   /** "Feature · selected" */
   eyebrow: ReactNode;
@@ -45,15 +46,17 @@ export function Inspector({
   /** Accessible name of the region; defaults to the title when it is a string. */
   label?: string;
   testId?: string;
+  /** Extra classes on the region (a sticky, height-capped panel). */
+  className?: string;
 }) {
   const cols = Math.max(1, Math.min(statColumns ?? stats?.length ?? 1, stats?.length ?? 1));
   return (
     <aside
       aria-label={label ?? (typeof title === "string" ? title : "Inspector")}
       data-testid={testId}
-      className="min-w-0 overflow-hidden rounded-inspector border border-line bg-surface shadow-panel max-[600px]:rounded-[14px]"
+      className={`min-w-0 overflow-hidden rounded-inspector border border-line bg-surface shadow-panel max-[600px]:rounded-[14px] ${className}`}
     >
-      <div className="bg-hero px-5 pt-4 pb-[18px] text-hero-text max-[600px]:px-4">
+      <div className="flex-none bg-hero px-5 pt-4 pb-[18px] text-hero-text max-[600px]:px-4">
         <div className="flex items-center justify-between gap-3">
           <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">{eyebrow}</span>
           {action}
