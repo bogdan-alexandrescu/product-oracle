@@ -2,12 +2,14 @@
 (S5, owner 2026-10-19). Fireflies is mocked: no network."""
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 from sqlalchemy import select
 
 from oracle.connections.models import Connection
+from oracle.main import app
 from oracle.sources import base, fireflies_browse, service
 from oracle.sources.connectors.fireflies import FirefliesConnector
 from oracle.sources.models import Source, SourceItem
@@ -503,6 +505,10 @@ class Clock:
 def clock(monkeypatch):
     clock = Clock()
     monkeypatch.setattr(fireflies_browse, "_clock", clock)
+    start = datetime(2026, 10, 20, tzinfo=UTC)
+    monkeypatch.setattr(
+        fireflies_browse, "_now", lambda: start + timedelta(seconds=clock.now), raising=False
+    )
     return clock
 
 
@@ -541,7 +547,7 @@ async def test_a_looping_client_is_limited_per_connection(fake, tenant_id, alice
         limited = await a.get(url, params={"search": "one more"})
         assert limited.status_code == 429
         assert 0 < int(limited.headers["Retry-After"]) <= 60
-        assert "try again" in limited.json()["detail"].lower()
+        assert limited.json()["detail"].startswith("Fireflies limit reached, try later")
         # Cached answers are still served.
         assert (await a.get(url, params={"search": "loop 0"})).status_code == 200
 
@@ -552,15 +558,115 @@ async def test_a_looping_client_is_limited_per_connection(fake, tenant_id, alice
         resp = await a.get(f"/v1/connections/{other}/fireflies/meetings")
         assert resp.status_code == 200, resp.text
 
-        # A minute later, the connection may call Fireflies again, up to the hourly cap.
+        # A minute later, the connection may call Fireflies again, up to the daily cap.
         clock.now += 61
         assert (await a.get(url, params={"search": "later"})).status_code == 200
         for i in range(400):
-            clock.now += 3
+            clock.now += 60
             await a.get(url, params={"search": f"slow {i}"})
-        # All within half an hour: the hourly cap holds (+1: the other connection).
-        assert len(fake.requests) <= fireflies_browse.CALLS_PER_HOUR + 1
+        # All within a day: the daily cap holds (+1: the other connection).
+        assert len(fake.requests) <= fireflies_browse.CALLS_PER_DAY + 1
+        limited = await a.get(url, params={"search": "tomorrow"})
+        assert limited.status_code == 429
+        assert int(limited.headers["Retry-After"]) > 3600
+        assert "hours" in limited.json()["detail"]
     assert statuses.count(200) <= fireflies_browse.CALLS_PER_MINUTE
+
+
+async def test_the_budget_is_shared_by_every_api_process(fake, alice, conn, clock):
+    """Counted in the database: a process that never saw the earlier calls (an empty
+    in-memory cache) still finds the connection's budget spent."""
+    url = f"/v1/connections/{conn}/fireflies/meetings"
+    async with client_for(alice) as a:
+        for i in range(fireflies_browse.CALLS_PER_MINUTE):
+            clock.now += 61
+            assert (await a.get(url, params={"search": f"s{i}"})).status_code == 200
+        for i in range(fireflies_browse.CALLS_PER_DAY):
+            fireflies_browse.reset_limits()  # another API process
+            clock.now += 61
+            await a.get(url, params={"search": f"t{i}"})
+        assert len(fake.requests) == fireflies_browse.CALLS_PER_DAY
+        fireflies_browse.reset_limits()
+        clock.now += 61
+        assert (await a.get(url, params={"search": "s0"})).status_code == 429
+
+
+async def test_a_low_plans_daily_quota_survives_a_browsing_session(fake, alice, conn, clock):
+    """The lower Fireflies plans allow 50 API calls a day: one browsing session (series
+    lists and pages of meetings, as fast as a client can ask) leaves half to syncs."""
+    async with client_for(alice) as a:
+        for i in range(100):
+            clock.now += 5
+            await a.get(
+                f"/v1/connections/{conn}/fireflies/series",
+                params={"from": f"2026-01-{1 + i % 28:02d}"},
+            )
+            await a.get(
+                f"/v1/connections/{conn}/fireflies/meetings", params={"cursor": str(i * 50)}
+            )
+    assert len(fake.requests) <= 25
+    assert fireflies_browse.CALLS_PER_DAY <= 25
+
+
+async def test_a_cached_answer_is_not_served_once_the_connection_is_unusable(
+    fake, tenant_id, alice, conn, clock
+):
+    url = f"/v1/connections/{conn}/fireflies/meetings"
+    async with client_for(alice) as a:
+        assert (await a.get(url)).status_code == 200
+        async with tenant_session(tenant_id) as s:
+            row = await s.get(Connection, conn)
+            row.status = "expired"
+            await s.commit()
+        resp = await a.get(url)
+        assert resp.status_code == 409, resp.text
+        assert "reconnect" in resp.json()["detail"]
+
+
+async def test_one_search_is_one_cache_entry(fake, alice, conn, clock):
+    url = f"/v1/connections/{conn}/fireflies/meetings"
+    async with client_for(alice) as a:
+        assert (await a.get(url, params={"search": "standup"})).status_code == 200
+        assert (await a.get(url, params={"search": "  standup "})).status_code == 200
+        assert (await a.get(url, params={"search": "   "})).status_code == 200
+        assert (await a.get(url, params={"search": ""})).status_code == 200
+    assert len(fake.list_variables()) == 2
+
+
+@pytest.fixture
+def local_runtime():
+    """Run tokens from any address, as in tests/test_mcp.py."""
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
+
+
+async def test_run_tokens_cannot_browse_a_connection(
+    fake, tenant_id, alice, conn, clock, local_runtime
+):
+    """A run's token acts for the run, not for the person: it may not spend their
+    Fireflies quota, through REST or MCP."""
+    from tests.test_mcp import mcp_client, run_token, text_of
+
+    token = await run_token(tenant_id, ["read:sources", "read:documents"], alice.id)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as rest:
+        for path in ("meetings", "series"):
+            resp = await rest.get(f"/v1/connections/{conn}/fireflies/{path}")
+            # Run tokens are for Oracle's MCP server only: REST does not know them.
+            assert resp.status_code == 401, resp.text
+    async with mcp_client(token) as c:
+        names = {t.name for t in (await c.list_tools()).tools}
+        assert names.isdisjoint({"list_fireflies_meetings", "list_fireflies_series"})
+        for tool in ("list_fireflies_meetings", "list_fireflies_series"):
+            refused = await c.call_tool(tool, {"connection_id": str(conn)})
+            assert refused.is_error and "not available to run tokens" in text_of(refused)
+    assert fake.requests == []
 
 
 async def test_the_series_list_makes_a_fixed_number_of_calls(fake, alice, conn, clock):

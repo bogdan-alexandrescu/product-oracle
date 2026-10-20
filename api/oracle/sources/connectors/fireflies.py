@@ -84,11 +84,14 @@ OVERLAP = timedelta(days=3)
 # A meeting Fireflies lists but answers without a transcript is asked for again on this
 # many syncs (the position waits for it), then skipped.
 MISSING_TRIES = 3
-# The series list reads at most this many pages of meetings (rate limits: 30-60 a minute).
-SERIES_PAGES = 10
+# The series list reads at most this many pages of meetings (lower Fireflies plans allow
+# 50 API calls a day: see oracle.sources.fireflies_browse).
+SERIES_PAGES = 4
 MAX_SERIES = 200
 MAX_MEETINGS = 2000
 MAX_LABELS = 1000
+# Fireflies' keyword search takes at most this many characters.
+MAX_SEARCH = 255
 
 # Longer waits Fireflies asks for are read as this (a day).
 MAX_RETRY_AFTER = 86_400.0
@@ -779,8 +782,9 @@ class FirefliesConnector:
     ) -> MeetingPage:
         """One page of the key's meetings, newest first, for the picker."""
         variables: dict[str, Any] = {"limit": PAGE_SIZE, "skip": skip, **_range(date_from, date_to)}
-        if search.strip():
-            variables.update(keyword=search.strip()[:255], scope="title")
+        keyword = search.strip()[:MAX_SEARCH]
+        if keyword:
+            variables.update(keyword=keyword, scope="title")
         async with self._session(credential) as fireflies:
             page = await fireflies.transcripts(**variables)
         return MeetingPage(

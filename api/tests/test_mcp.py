@@ -326,6 +326,9 @@ async def test_rest_role_checks_apply_to_api_tokens(tenant_id, guarded_app, role
         ("POST", "/v1/documents/{doc}/versions/{n}/approve", None),
         ("POST", "/v1/documents/{doc}/versions/{n}/comments", None),
         ("GET", "/v1/me", None),
+        # Browsing a person's connection spends their provider quota: never a run's.
+        ("GET", "/v1/connections/{connection_id}/fireflies/meetings", None),
+        ("GET", "/v1/connections/{connection_id}/fireflies/series", None),
         ("GET", "/v1/runs", None),
         ("GET", "/healthz", None),
     ],

@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Text,
     UniqueConstraint,
     Uuid,
@@ -141,3 +142,17 @@ class Snapshot(TenantScoped, Base):
     )
     # User id or API token id; no FK because it can be either.
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+class BrowseCall(TenantScoped, Base):
+    """Provider calls made while browsing a connection for a source picker (S5): what a
+    connection may still spend is counted here, so every API process sees the same
+    budget (oracle.sources.fireflies_browse)."""
+
+    __tablename__ = "browse_calls"
+
+    connection_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("connections.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    calls: Mapped[int] = mapped_column(Integer, nullable=False)

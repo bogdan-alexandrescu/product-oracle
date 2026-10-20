@@ -5,24 +5,30 @@ acting as them (owner, 2026-10-19); another user's connection reads as not found
 Fireflies is called server-side with the stored API key, which never reaches the
 browser.
 
-Browsing spends the person's Fireflies quota, so its cost is bounded per connection:
-answers are cached for CACHE_SECONDS, and at most CALLS_PER_MINUTE and CALLS_PER_HOUR
-Fireflies calls are made for browsing (a series list counts as SERIES_CALLS, the most it
-makes); past that the routes answer 429. Cached answers cost nothing. Both live in the
-API process's memory, so each API process keeps its own.
+Browsing spends the person's Fireflies quota (the lower Fireflies plans allow 50 API
+calls a day), so its cost is bounded per connection: at most CALLS_PER_MINUTE and
+CALLS_PER_DAY Fireflies calls are made for browsing (a series list counts as
+SERIES_CALLS, the most it makes), the rest of the quota being left to syncs. The calls
+are counted in the database (``browse_calls``), so the budget holds across API
+processes; past it the routes answer 429 "Fireflies limit reached, try later". Answers
+are also cached for CACHE_SECONDS in the API process; a cached answer costs nothing, but
+is only served while the connection is still active.
+
+The picker's dates are whole days in UTC: the API does not know the person's time zone.
 """
 
 import hashlib
 import math
 import time
 import uuid
-from collections import OrderedDict, deque
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Hashable
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy import delete, select
 
 from oracle.auth.deps import TenantDB
 from oracle.connections import service as connections
@@ -31,28 +37,37 @@ from oracle.connections.router import ProviderHttp, UserPrincipal
 from oracle.sources import base
 from oracle.sources.connectors import fireflies
 from oracle.sources.connectors.fireflies import FirefliesConnector, FirefliesForbidden, Meeting
+from oracle.sources.models import BrowseCall
 from oracle.sources.service import InvalidError, _read_credential, redact
 
 router = APIRouter(prefix="/v1", tags=["connections"])
 
 CACHE_SECONDS = 60.0
 CACHE_ENTRIES = 1000
-CALLS_PER_MINUTE = 30
-CALLS_PER_HOUR = 150
+CALLS_PER_MINUTE = 10
+CALLS_PER_DAY = 25
 # The most Fireflies calls one series list makes.
 SERIES_CALLS = fireflies.SERIES_PAGES
+LIMIT_REACHED = "Fireflies limit reached, try later"
+_WINDOWS = (
+    (timedelta(minutes=1), CALLS_PER_MINUTE, "a minute"),
+    (timedelta(days=1), CALLS_PER_DAY, "a day"),
+)
 
 _clock = time.monotonic
 _cache: OrderedDict[Hashable, tuple[float, object]] = OrderedDict()
-# Per connection: when each Fireflies call (or reservation of several) was made.
-_spent: dict[uuid.UUID, deque[tuple[float, int]]] = {}
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
 
 RESPONSES: dict[int | str, dict[str, str]] = {
     404: {"description": "Not one of your Fireflies connections"},
     409: {"description": "The connection cannot be used (reconnect it), or Fireflies refused"},
     429: {
-        "description": "Fireflies is rate limiting the API key, or this connection has "
-        "browsed too much for now; see Retry-After"
+        "description": "Fireflies limit reached, try later: Fireflies is rate limiting the "
+        "API key, or this connection has browsed its daily share; see Retry-After"
     },
     502: {"description": "Fireflies did not answer as expected"},
 }
@@ -88,7 +103,7 @@ class FirefliesSeriesOut(BaseModel):
 
 class FirefliesSeriesList(BaseModel):
     series: list[FirefliesSeriesOut]
-    # True when there were more meetings than the list reads (the newest 500).
+    # True when there were more meetings than the list reads (the newest 200).
     truncated: bool
 
 
@@ -100,18 +115,42 @@ async def _fireflies_connection(db: TenantDB, connection_id: uuid.UUID, principa
 
 
 def reset_limits() -> None:
-    """Forget cached answers and spent budgets (tests)."""
+    """Forget cached answers (tests; spent budgets live in the database)."""
     _cache.clear()
-    _spent.clear()
 
 
-def _spend(connection_id: uuid.UUID, calls: int) -> None:
-    """Reserve ``calls`` Fireflies calls for this connection, or answer 429."""
-    now = _clock()
-    spent = _spent.setdefault(connection_id, deque())
-    while spent and spent[0][0] <= now - 3600:
-        spent.popleft()
-    for window, limit in ((60.0, CALLS_PER_MINUTE), (3600.0, CALLS_PER_HOUR)):
+def _later(seconds: int) -> str:
+    if seconds < 120:
+        return f"{seconds} seconds"
+    if seconds < 7200:
+        return f"{math.ceil(seconds / 60)} minutes"
+    return f"{math.ceil(seconds / 3600)} hours"
+
+
+def _limited(detail: str, seconds: int | None) -> HTTPException:
+    headers = {"Retry-After": str(seconds)} if seconds else None
+    return HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, f"{LIMIT_REACHED}. {detail}", headers)
+
+
+async def _spend(db: TenantDB, conn: Connection, calls: int) -> None:
+    """Reserve ``calls`` Fireflies calls for this connection, or answer 429. Commits."""
+    now = _now()
+    longest = max(window for window, _, _ in _WINDOWS)
+    # One reservation at a time per connection, across API processes.
+    await db.execute(select(Connection.id).where(Connection.id == conn.id).with_for_update())
+    await db.execute(
+        delete(BrowseCall).where(
+            BrowseCall.connection_id == conn.id, BrowseCall.at <= now - longest
+        )
+    )
+    spent = (
+        await db.execute(
+            select(BrowseCall.at, BrowseCall.calls)
+            .where(BrowseCall.connection_id == conn.id)
+            .order_by(BrowseCall.at)
+        )
+    ).all()
+    for window, limit, per in _WINDOWS:
         recent = [(at, n) for at, n in spent if at > now - window]
         used = sum(n for _, n in recent)
         if used + calls > limit:
@@ -122,27 +161,34 @@ def _spend(connection_id: uuid.UUID, calls: int) -> None:
                 if used - freed + calls <= limit:
                     wait = at + window - now
                     break
-            seconds = max(1, math.ceil(wait))
-            raise HTTPException(
-                status.HTTP_429_TOO_MANY_REQUESTS,
-                "Too many Fireflies requests for this connection (they use your Fireflies "
-                f"quota). Try again in {seconds} seconds.",
-                {"Retry-After": str(seconds)},
+            await db.rollback()
+            seconds = max(1, math.ceil(wait.total_seconds()))
+            raise _limited(
+                f"Browsing may make {limit} Fireflies calls {per} for this connection, so "
+                f"syncs keep the rest of your Fireflies quota. Try again in {_later(seconds)}.",
+                seconds,
             )
-    spent.append((now, calls))
+    db.add(BrowseCall(connection_id=conn.id, at=now, calls=calls))
+    await db.commit()
 
 
 async def _cached(
     db: TenantDB, conn: Connection, key: Hashable, calls: int, call: Callable[..., Awaitable]
 ):
-    """The answer of ``call`` for ``key``, from the cache when it is fresh."""
+    """The answer of ``call`` for ``key``, from the cache when it is fresh and the
+    connection is still active."""
+    if conn.status != "active":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"The Fireflies connection is {conn.status}: reconnect it in Settings > Connections",
+        )
     now = _clock()
     # A reconnected key (new ciphertext) is another cache entry.
     full_key = (conn.id, hashlib.sha256(conn.ciphertext).hexdigest(), key)
     hit = _cache.get(full_key)
     if hit is not None and hit[0] > now:
         return hit[1]
-    _spend(conn.id, calls)
+    await _spend(db, conn, calls)
     result = await _browse(db, conn, call)
     _cache[full_key] = (now + CACHE_SECONDS, result)
     _cache.move_to_end(full_key)
@@ -160,11 +206,11 @@ async def _browse(db: TenantDB, conn: Connection, call):
         return await call(credential)
     except base.ConnectorRateLimited as e:
         wait = math.ceil(e.retry_after) if e.retry_after else None
-        detail = "Fireflies is rate limiting this API key. " + (
-            f"Try again in {wait} seconds." if wait else "Try again in a minute."
-        )
-        headers = {"Retry-After": str(wait)} if wait else None
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail, headers) from None
+        raise _limited(
+            "Fireflies is rate limiting this API key. "
+            + (f"Try again in {_later(wait)}." if wait else "Try again in a minute."),
+            wait,
+        ) from None
     except FirefliesForbidden:
         # The key may lack access to this (a plan or team permission): the connection
         # itself still works, so it is not marked expired.
@@ -210,8 +256,11 @@ async def list_fireflies_meetings(
     date_to: Annotated[date | None, Query(alias="to")] = None,
     cursor: Annotated[str | None, Query(pattern=r"^\d{1,6}$")] = None,
 ) -> FirefliesMeetingPage:
-    """Your meetings in Fireflies, newest first, a page at a time (search: in titles)."""
+    """Your meetings in Fireflies, newest first, a page at a time (search: in titles;
+    from/to: whole days in UTC)."""
     _check_range(date_to)
+    # As the connector sends it, so one search is one cache entry.
+    search = search.strip()[: fireflies.MAX_SEARCH]
     conn = await _fireflies_connection(db, connection_id, principal)
     page = await _cached(
         db,
@@ -245,7 +294,8 @@ async def list_fireflies_series(
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
 ) -> FirefliesSeriesList:
-    """Your meetings grouped into recurring series, with counts and the last date."""
+    """Your meetings grouped into their calendar series, with counts and the last date
+    (from/to: whole days in UTC). Meetings on no calendar are in no series."""
     _check_range(date_to)
     conn = await _fireflies_connection(db, connection_id, principal)
     result = await _cached(
