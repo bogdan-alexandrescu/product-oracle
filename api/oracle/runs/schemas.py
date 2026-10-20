@@ -201,6 +201,10 @@ class SegmentOut(BaseModel):
     artifacts: list[str]
     attempts: list[SegmentAttempt]
     draft_import: DraftImport | None = None
+    # Retry import (owner, 2026-10-20): the draft's import was refused and its file is
+    # kept, and either its review is still open and I have the review's approver role or
+    # above, or the run finished with no version imported and I am an owner.
+    can_retry_draft_import: bool = False
     items_check: ItemsCheck | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -252,6 +256,9 @@ class CheckpointOut(BaseModel):
     created_at: datetime
     # Whether the caller's role may decide it (pending checkpoints only).
     can_decide: bool = False
+    # Why approving it is refused now (owner, 2026-10-20): the draft its segment left was
+    # not imported. Request changes, or Retry import on the segment, first.
+    cannot_approve: str | None = None
     # An open checkpoint answered in SwarmCloud's console, waiting on an approver (W5).
     console: ConsoleAnswer | None = None
 
