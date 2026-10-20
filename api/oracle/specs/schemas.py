@@ -19,7 +19,12 @@ from oracle.v2.schemas import (
 
 Depth = Literal["brief", "full"]
 Part = Literal[
-    "context", "product_requirement", "engineering_approach", "open_decision", "assumption"
+    "context",
+    "product_requirement",
+    "engineering_approach",
+    "open_decision",
+    "assumption",
+    "proposed",
 ]
 ApproachStatus = Literal["proposed", "approved"]
 DesignReviewKind = Literal["comment", "approved", "changes_requested", "rejected"]
@@ -74,7 +79,8 @@ class SpecSectionOut(BaseModel):
     layer: str
     part: Part
     # Product requirements are decided in the PRD; the engineering approach, open decisions
-    # and assumptions only once an engineering approver approves the version.
+    # and assumptions only once an engineering approver approves the version. A section an
+    # edit added (part "proposed") is never decided (E1).
     decided: bool
 
 

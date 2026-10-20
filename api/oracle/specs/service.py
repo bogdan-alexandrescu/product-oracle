@@ -708,10 +708,12 @@ async def check_edit(
     markdown: str,
 ) -> None:
     """E1: an edit of a spec version (the API, ``push_draft``, ``oracle push``) may change
-    only its engineering parts. The parts Oracle writes from the PRD (requirements, the
-    decided half of the acceptance criteria, sources) must read as Oracle composes them
-    from the request's inputs, or as the version the edit replaces has them; otherwise
-    the edit is refused (DraftError, 422)."""
+    only its engineering parts and add sections. The sections Oracle writes (requirements,
+    the decided half of the acceptance criteria, sources, the title and its intro, the
+    "Full version" heading), their levels, order and brief listing, the labels on the
+    engineering sections and the ``spec`` front matter must read as in the version Oracle
+    wrote from the PRD version, or as the version the edit replaces has them; otherwise the
+    edit is refused (DraftError, 422), naming what changed."""
     versions = await _versions(db, request.id)
     by_run = next(
         (v for v in reversed(versions) if (v.provenance or {}).get("origin") == "run"), None
@@ -723,28 +725,56 @@ async def check_edit(
         inputs, _, version = await _inputs(db, request, run, source_version_id)
     except Invalid as exc:
         raise DraftError([ImportProblem(code="spec_inputs", message=str(exc))]) from exc
-    allowed = [contract.expected_prd_parts(inputs)]
-    if previous is not None and (dv_id := _doc_version_id(previous)) is not None:
-        dv = await db.get(DocumentVersion, dv_id)
-        if dv is not None:
-            allowed.append(contract.prd_parts(dv.markdown))
+    allowed: list[dict[str, object]] = []
+    # As Oracle wrote them from the PRD version (not from today's baseline, which may
+    # have moved on since), then as the version this edit replaces has them.
+    for av in (by_run, previous):
+        if av is not None and (dv_id := _doc_version_id(av)) is not None:
+            dv = await db.get(DocumentVersion, dv_id)
+            if dv is not None:
+                allowed.append(contract.prd_parts(dv.markdown))
+    if not allowed:
+        allowed.append(contract.expected_prd_parts(inputs))
     submitted = contract.prd_parts(markdown)
     if submitted in allowed:
         return
-    changed = sorted(
-        {k for a in allowed for k in set(a) | set(submitted) if a.get(k) != submitted.get(k)}
+    changed = min(
+        (
+            sorted(k for k in set(a) | set(submitted) if a.get(k) != submitted.get(k))
+            for a in allowed
+        ),
+        key=len,
     )
     raise DraftError(
         [
             ImportProblem(
                 code="prd_part_changed",
                 message=f"Product requirements come from PRD v{version.number}. "
-                "Change them in the PRD.",
-                section_key=key if key != "front_matter" else None,
+                f"Change them in the PRD. {_CHANGED.get(key, _CHANGED[None]).format(key=key)}",
+                section_key=key if key in contract.ORACLE_PARTS else None,
             )
-            for key in changed[:1] or [None]
+            for key in changed or [None]
         ]
     )
+
+
+_CHANGED: dict[str | None, str] = {
+    None: "The edit changes a part Oracle writes.",
+    "front_matter": "The edit changes the spec: front matter (source and requirement ids).",
+    "order": "Oracle's sections (spec, requirements, full, acceptance-criteria, sources) "
+    "keep their place relative to each other.",
+    "brief": "The brief: list keeps listing Oracle's sections (requirements).",
+    "labels": "Engineering sections keep their Proposed or Assumed label, and the "
+    "assumptions their note.",
+    contract.TITLE_ID: "The title section and its intro (the approved PRD and version) are "
+    "Oracle's.",
+}
+_CHANGED.update(
+    {
+        k: "The '{key}' section is Oracle's: its heading, level and text stay as written."
+        for k in contract.PRD_PARTS + (contract.FULL_ID,)
+    }
+)
 
 
 # --------------------------------------------------------------------------- views
@@ -944,7 +974,8 @@ async def read_spec(db: AsyncSession, request_id: uuid.UUID) -> SpecOut:
                     heading=s.heading,
                     layer=s.layer,
                     part=part,
-                    decided=part in ("product_requirement", "context") or latest_approved,
+                    decided=part in ("product_requirement", "context")
+                    or (latest_approved and part != "proposed"),
                 )
             )
     design = []

@@ -12,6 +12,8 @@ a full layer (the engineering spec). Every section belongs to one **part**:
 - ``assumption``: what the approach assumes. Without a code capability map, the approach
   rests on these, and the spec says so.
 - ``context``: the summary and Sources and data points.
+- ``proposed``: a section the template does not have, added by an edit (E1, owner,
+  2026-10-20): always shown as Proposed, never decided, whatever its title or key.
 
 The agents write ``spec.md`` with a ``{#id}`` on every section heading they write.
 :func:`compose` checks it (every problem at once) and builds the version Oracle imports:
@@ -31,7 +33,12 @@ from oracle.docs.parser import CITATION_STRIP_RE, DraftError, parse_draft, split
 from oracle.runs.flows import prd_link
 
 Part = Literal[
-    "context", "product_requirement", "engineering_approach", "open_decision", "assumption"
+    "context",
+    "product_requirement",
+    "engineering_approach",
+    "open_decision",
+    "assumption",
+    "proposed",
 ]
 Depth = Literal["brief", "full"]
 DEPTHS: tuple[str, ...] = ("brief", "full")
@@ -114,10 +121,12 @@ def sections_for(depth: str) -> list[SpecSection]:
 
 
 def part_of(section_key: str) -> Part:
-    """The part a section of a spec version belongs to (the title and the "Full version"
-    heading are context)."""
+    """The part a section of a spec version belongs to: the title and the "Full version"
+    heading are context; a section the template does not have is proposed."""
     s = SECTIONS_BY_KEY.get(section_key)
-    return s.part if s else "context"
+    if s is not None:
+        return s.part
+    return "context" if section_key in (TITLE_ID, FULL_ID) else "proposed"
 
 
 def agent_sections(depth: str) -> list[SpecSection]:
@@ -136,6 +145,9 @@ ASSUMED_LABEL = (
 NO_MAP_NOTE = (
     "_No code capability map was available for this spec: every statement about the current "
     "code, systems and data below is an assumption, not a fact checked against the code._"
+)
+ACCEPTANCE_PROPOSED_LABEL = (
+    "Proposed by this spec (not product requirements until the PRD adopts them):"
 )
 REQUIREMENTS_NOTE = (
     "_Decided in the approved PRD: these are product requirements, not engineering choices. "
@@ -250,7 +262,7 @@ def _acceptance_body(inputs: SpecInputs, proposed: str | None) -> str:
     if proposed:
         lines += [
             "",
-            "Proposed by this spec (not product requirements until the PRD adopts them):",
+            ACCEPTANCE_PROPOSED_LABEL,
             "",
             proposed,
         ]
@@ -384,23 +396,48 @@ def compose(agent_md: str, inputs: SpecInputs) -> Composed:
 # spec version may change only its engineering parts: these stay as Oracle wrote them
 # (for acceptance criteria, the half decided with the PRD; proposals may change).
 PRD_PARTS = ("requirements", "acceptance-criteria", "sources")
-_PROPOSED_SPLIT = re.compile(r"\n\s*Proposed by this spec \(")
+# Every section Oracle writes: the PRD parts, the title (its intro names the PRD version)
+# and the "Full version" heading. Spec structure (owner, 2026-10-20): an edit may add
+# sections, but these keep their key, heading level and place relative to each other, and
+# the brief keeps listing the ones it lists.
+ORACLE_PARTS = (TITLE_ID, *PRD_PARTS, FULL_ID)
+# The labels Oracle puts at the top of the engineering sections and the assumptions.
+SECTION_LABELS = (PROPOSED_LABEL, ASSUMED_LABEL, NO_MAP_NOTE)
+# Only Oracle's own label, as Oracle writes it, splits the acceptance criteria: an
+# editor-written variant stays in the decided half (and so changes it).
+_PROPOSED_SPLIT = re.compile(rf"\n\n{re.escape(ACCEPTANCE_PROPOSED_LABEL)}(?:\n|$)")
+
+
+def _leading_label(body: str) -> str | None:
+    first = body.strip().split("\n\n", 1)[0].strip()
+    return first if first in SECTION_LABELS else None
 
 
 def prd_parts(markdown: str) -> dict[str, object]:
-    """What of a spec version comes from the PRD: (heading, body) of each PRD part, and
-    the front matter's ``spec`` block (source and requirement ids)."""
+    """What of a spec version Oracle writes and an edit may not change: (level, heading,
+    body) of each of Oracle's sections, their order, the ones the brief lists, the labels
+    on the engineering sections and the assumptions, and the front matter's ``spec``
+    block (source and requirement ids)."""
     try:
         draft = parse_draft(markdown)
     except DraftError:
         return {}
     out: dict[str, object] = {"front_matter": (draft.front_matter or {}).get("spec")}
+    order: list[str] = []
+    labels: set[tuple[str, str]] = set()
     for s in draft.sections:
-        if s.section_key in PRD_PARTS:
-            body = s.body_md.strip()
+        body = s.body_md.strip()
+        if s.section_key in ORACLE_PARTS:
             if s.section_key == "acceptance-criteria":
                 body = _PROPOSED_SPLIT.split(body, maxsplit=1)[0].rstrip()
-            out[s.section_key] = (s.heading, body)
+            out[s.section_key] = (s.level, s.heading, body)
+            order.append(s.section_key)
+        part = part_of(s.section_key)
+        if part in ("engineering_approach", "assumption"):
+            labels.add((part, _leading_label(body) or ""))
+    out["order"] = tuple(order)
+    out["brief"] = tuple(k for k in draft.brief or [] if k in ORACLE_PARTS)
+    out["labels"] = tuple(sorted(labels))
     return out
 
 
