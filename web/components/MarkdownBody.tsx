@@ -57,6 +57,16 @@ function docLinkHref(href: string): string | null {
   return m ? sectionHref(m[1], Number(m[2]), m[3]) : null;
 }
 
+/** The host of an http(s) URL, or null (a remote image is shown as a link, never loaded). */
+function remoteHost(src: string): string | null {
+  try {
+    const u = new URL(src);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.hostname : null;
+  } catch {
+    return null;
+  }
+}
+
 function label(nodes: Inline[]): string {
   return nodes
     .map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" || n.t === "img" ? "" : label(n.c)))
@@ -216,11 +226,24 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
           </span>
         );
       }
-      case "img":
-        // An https image only; its alt text is an attribute, not anchorable text (the
-        // API checks a spec's labels the same way: an image is no visible text).
-        // eslint-disable-next-line @next/next/no-img-element
-        return /^https:\/\//i.test(n.src) ? <img key={k} src={n.src} alt={n.alt} loading="lazy" className="max-w-full" /> : null;
+      case "img": {
+        // Owner decision (2026-10-20): an image loads only when Oracle stores it (a path
+        // of this app, '/uploads/...'). A remote image is a link showing its alt text and
+        // host, never an <img>: a reviewer's browser contacts no outside host. The alt
+        // text is an attribute, not anchorable text (the API checks a spec's labels the
+        // same way: an image is no visible text).
+        if (n.src.startsWith("/") && !n.src.startsWith("//")) {
+          // eslint-disable-next-line @next/next/no-img-element
+          return <img key={k} src={n.src} alt={n.alt} loading="lazy" className="max-w-full" />;
+        }
+        const host = remoteHost(n.src);
+        if (!host) return null;
+        return (
+          <a key={k} href={n.src} target="_blank" rel="noopener noreferrer" data-remote-image="">
+            {n.alt ? `${n.alt} (${host})` : host}
+          </a>
+        );
+      }
       case "cite": {
         const c = ctx.citations.get(n.key);
         return <CitationChip key={k} citeKey={n.key} citation={c?.citation} number={c?.number} />;

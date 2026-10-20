@@ -535,7 +535,7 @@ const SPEC_ROLLOUT: SectionSeed = {
   key: "rollout-notes",
   level: 2,
   heading: "Rollout notes",
-  body: "Ten percent of carts first, then everyone after a week without a rise in quote errors.",
+  body: "Ten percent of carts first, then everyone after a week without a rise in quote errors.\n\n![chart](https://example.com/chart.png)\n\n![stored](/uploads/rollout.png)",
 };
 const SPEC_ARCHITECTURE: SectionSeed = {
   key: "architecture",

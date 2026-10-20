@@ -525,12 +525,29 @@ def _render_citation(renderer, tokens, idx, options, env) -> str:
     return html
 
 
+def _render_image(self, tokens, idx, options, env) -> str:
+    """Owner decision (2026-10-20): an image loads only when Oracle stores it (a path of
+    this app, '/uploads/...'). A remote image is a link showing its alt text and host
+    ('chart (example.com)'): an export's reader never contacts an outside host."""
+    tok = tokens[idx]
+    src = tok.attrGet("src") or ""
+    alt = escape(tok.content or "")
+    parts = urlsplit(src)
+    if src.startswith("/") and not src.startswith("//"):
+        return self.renderToken(tokens, idx, options, env)
+    if parts.scheme in ("http", "https") and parts.hostname:
+        label = f"{alt} ({escape(parts.hostname)})" if alt else escape(parts.hostname)
+        return f'<a href="{escape(src)}" rel="noopener noreferrer">{label}</a>'
+    return alt
+
+
 @cache
 def _markdown() -> MarkdownIt:
     # Raw HTML in drafts is not rendered: exports are shared, drafts are agent-written.
     md = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
     md.inline.ruler.before("link", "citation", _citation_rule)
     md.add_render_rule("citation", _render_citation)
+    md.add_render_rule("image", _render_image)
     return md
 
 
@@ -698,6 +715,7 @@ def _themed_markdown(link: bool) -> MarkdownIt:
     md = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
     md.inline.ruler.before("link", "citation", _citation_rule)
     md.add_render_rule("citation", _link_citation if link else _strip_citation)
+    md.add_render_rule("image", _render_image)
     return md
 
 

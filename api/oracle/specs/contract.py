@@ -928,11 +928,13 @@ def _comment_spans(text: str) -> bool:
 _HEADING_LINE = re.compile(r"^ {0,3}#{1,6}(?:\s|$)", re.M)
 # A data: URL as a link or image destination, or a reference definition, as written (a
 # data: URL markdown-it does not accept stays text here but may render elsewhere).
-_DATA_DEST = re.compile(r"\]\(\s*(?:<\s*)?data:|^ {0,3}\[[^\]\n]+\]:\s*(?:<\s*)?data:", re.I | re.M)
+_DATA_DEST = re.compile(
+    r"(?<!\\)(?:\\\\)*\]\(\s*(?:<\s*)?data:|^ {0,3}\[[^\]\n]+\]:\s*(?:<\s*)?data:", re.I | re.M
+)
 # The same for javascript: and vbscript: (a destination markdown-it refuses stays text
 # here, but the raw text is what an export or another reader may link).
 _SCRIPT_DEST = re.compile(
-    r"\]\(\s*(?:<\s*)?(?:javascript|vbscript):"
+    r"(?<!\\)(?:\\\\)*\]\(\s*(?:<\s*)?(?:javascript|vbscript):"
     r"|^ {0,3}\[[^\]\n]+\]:\s*(?:<\s*)?(?:javascript|vbscript):",
     re.I | re.M,
 )

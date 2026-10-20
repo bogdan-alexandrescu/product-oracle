@@ -429,7 +429,7 @@ or link, or a line over 20,000 characters (`line_too_long`). Text escaped as ent
 one long line of tag-like text, so such a line is refused before any parse, and an import's
 or edit's parse also runs under the draft parse time cap (`too_slow`). The web renders a
 link only for http, https, mailto and relative or anchor destinations; any other scheme
-shows as plain text. The label check reads each
+shows as plain text. Images load only when Oracle stores them (a path of the app, `/uploads/...`): a remote image, in the web and in exports, is a link showing its alt text and host (`chart (example.com)`), never an `<img>` (owner, 2026-10-20); data: images stay refused at import. The label check reads each
 block as it renders in every output: the body, the body without citation markers, and
 `layers.slide_body(body)` with and without them. Images are no visible text; a task-list
 box or footnote marker before a label, emphasis ending right after 'Decided' or 'Proposed',
