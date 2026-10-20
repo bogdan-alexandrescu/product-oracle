@@ -161,7 +161,7 @@ from oracle.swarm import (
     get_runtime,
     redact,
 )
-from oracle.swarm.runtime import MERGE, NOT_YET
+from oracle.swarm.runtime import MERGE, NOT_REACHED_STATES, NOT_YET
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates import service as templates_service
 from oracle.templates.builtins import (
@@ -692,9 +692,6 @@ HOLD_UNKNOWN = "status unknown"
 HOLD_READ_SECONDS = 3.0
 HOLD_CACHE_SECONDS = 5.0
 _hold_clock = time.monotonic
-# A review step SwarmCloud has not reached (or never will: gated off). Any other state,
-# or no row for the step, is reached: read-only (deny by default).
-_NOT_REACHED = ("PENDING", "SKIPPED")
 
 _HoldKey = tuple[uuid.UUID, str, tuple[str, ...]]
 _hold_cache: dict[_HoldKey, tuple[float, str]] = {}
@@ -748,7 +745,8 @@ async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
 
 async def _read_hold(key: _HoldKey) -> str | None:
     """One live read of a workflow's status: whether it reached a review step no
-    checkpoint stands for yet. Bounded by :data:`HOLD_READ_SECONDS`; a read-only answer
+    checkpoint stands for yet (in any state but :data:`NOT_REACHED_STATES`, or not
+    listed). Bounded by :data:`HOLD_READ_SECONDS`; a read-only answer
     is kept for :data:`HOLD_CACHE_SECONDS`."""
     run_id, workflow_id, reviews = key
     held: str | None = None
@@ -766,7 +764,7 @@ async def _read_hold(key: _HoldKey) -> str | None:
     else:
         for review in reviews:
             step = status.step(review)
-            if step is None or step.state not in _NOT_REACHED:
+            if step is None or step.state not in NOT_REACHED_STATES:
                 log.info(
                     "run %s: token read-only, step %s of %s is %s",
                     run_id,
@@ -778,31 +776,55 @@ async def _read_hold(key: _HoldKey) -> str | None:
                 break
     if held is not None:
         now = _hold_clock()
-        for k in [k for k, (at, _) in _hold_cache.items() if now - at >= HOLD_CACHE_SECONDS]:
-            del _hold_cache[k]
+        _prune_hold_cache(now)
         _hold_cache[key] = (now, held)
     return held
 
 
-async def _live_hold(run_id: uuid.UUID, workflow_id: str, reviews: tuple[str, ...]) -> str | None:
-    """The live read's answer: a read-only one from the last 5 seconds, else one read
-    shared by every request asking meanwhile (single-flight per run and workflow)."""
-    key = (run_id, workflow_id, reviews)
+def _prune_hold_cache(now: float) -> None:
+    for k in [k for k, (at, _) in _hold_cache.items() if now - at >= HOLD_CACHE_SECONDS]:
+        del _hold_cache[k]
+
+
+def _cached_hold(key: _HoldKey) -> str | None:
+    """A read-only answer from the last :data:`HOLD_CACHE_SECONDS` (expired ones pruned)."""
+    now = _hold_clock()
+    _prune_hold_cache(now)
     cached = _hold_cache.get(key)
-    if cached is not None and _hold_clock() - cached[0] < HOLD_CACHE_SECONDS:
-        return cached[1]
+    return cached[1] if cached is not None else None
+
+
+async def _live_hold(run_id: uuid.UUID, workflow_id: str, reviews: tuple[str, ...]) -> str | None:
+    """The live read's answer: a read-only one from the last 5 seconds, else a read.
+
+    W5, shared status checks (owner, 2026-10-20): a request that starts a read uses its
+    own answer, and requests arriving while it is in flight join it, but share only a
+    read-only answer. On 'may write' each joiner makes a read of its own, never joining
+    one started before it arrived (a wait may have opened since that read was sent)."""
+    key = (run_id, workflow_id, reviews)
+    cached = _cached_hold(key)
+    if cached is not None:
+        return cached
     loop = asyncio.get_running_loop()
     task = _hold_reads.get(key)
-    if task is None or task.get_loop() is not loop:
-        task = loop.create_task(_read_hold(key))
-        _hold_reads[key] = task
+    if task is not None and task.get_loop() is loop:
+        # Shielded: one request going away does not cancel the read the others wait on.
+        shared = await asyncio.shield(task)
+        if shared is not None:
+            return shared
+        cached = _cached_hold(key)
+        if cached is not None:
+            return cached
+        # 'May write' was read before this request arrived: read for itself.
+        return await _read_hold(key)
+    task = loop.create_task(_read_hold(key))
+    _hold_reads[key] = task
 
-        def done(t: "asyncio.Task[str | None]") -> None:
-            if _hold_reads.get(key) is t:
-                del _hold_reads[key]
+    def done(t: "asyncio.Task[str | None]") -> None:
+        if _hold_reads.get(key) is t:
+            del _hold_reads[key]
 
-        task.add_done_callback(done)
-    # Shielded: one request going away does not cancel the read the others wait on.
+    task.add_done_callback(done)
     return await asyncio.shield(task)
 
 

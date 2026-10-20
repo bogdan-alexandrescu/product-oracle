@@ -5,6 +5,7 @@ read and not 'unknown' (P3d), Cancel again enforced by the service, the overrun'
 the shared HTTP client, and one more read after a 'gone' that follows a confirmed
 cancel."""
 
+import asyncio
 import uuid
 
 import pytest
@@ -15,14 +16,21 @@ from oracle.config import get_settings
 from oracle.models import AuditEvent
 from oracle.runs import service
 from oracle.runs.models import Run, RunSegment
+from oracle.swarm.runtime import StepStatus, WorkflowStatus
 from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
 from tests.fixtures import seed_auth
+from tests.swarmcloud_fake import EGRESS
 from tests.test_adapter_v2 import (
+    LB,
+    _at_baseline,
     _ceiling,
+    _draft_markdown,
     _inbox,
     _tick_errors,
+    mcp_session,
     on,
+    token_of,
     use,
 )
 from tests.test_adapter_v2 import settings as _v2_settings
@@ -223,3 +231,171 @@ async def test_importing_baseline_again_makes_no_second_proposal_for_a_locked_it
             assert out.get("proposals") == 1, out
         proposals = list(await s.scalars(select(Proposal)))
     assert len(proposals) == 1
+
+
+# --------------------------------------------------------------------------- item 2
+
+
+class _Status:
+    """A runtime whose status reads are counted; the first waits for ``gate``. Review
+    step ``r1`` reads ``state``."""
+
+    def __init__(self, state: str) -> None:
+        self.state = state
+        self.calls = 0
+        self.gate = asyncio.Event()
+
+    async def status(self, workflow_id):
+        self.calls += 1
+        if self.calls == 1:
+            await self.gate.wait()
+        return WorkflowStatus("running", steps=(StepStatus("r1", state=self.state),))
+
+
+@pytest.fixture
+def hold_runtime(monkeypatch):
+    service._hold_cache.clear()
+    service._hold_reads.clear()
+
+    def make(state: str) -> _Status:
+        runtime = _Status(state)
+        monkeypatch.setattr(service, "get_runtime", lambda: runtime)
+        return runtime
+
+    yield make
+    service._hold_cache.clear()
+    service._hold_reads.clear()
+
+
+async def test_a_joiner_on_a_may_write_check_reads_for_itself(hold_runtime):
+    runtime = hold_runtime("PENDING")
+    key = (uuid.uuid4(), "wf_x", ("r1",))
+    first = asyncio.create_task(service._live_hold(*key))
+    await asyncio.sleep(0.01)
+    joiners = [asyncio.create_task(service._live_hold(*key)) for _ in range(3)]
+    await asyncio.sleep(0.01)
+    assert runtime.calls == 1, "the joiners wait on the check in flight"
+    runtime.gate.set()
+    assert await first is None
+    assert await asyncio.gather(*joiners) == [None, None, None]
+    # The first used its own answer; each joiner made its own read.
+    assert runtime.calls == 4
+
+
+async def test_a_read_only_check_refuses_every_joiner_without_another_read(hold_runtime):
+    runtime = hold_runtime("RUNNING")
+    key = (uuid.uuid4(), "wf_x", ("r1",))
+    first = asyncio.create_task(service._live_hold(*key))
+    await asyncio.sleep(0.01)
+    joiners = [asyncio.create_task(service._live_hold(*key)) for _ in range(3)]
+    await asyncio.sleep(0.01)
+    runtime.gate.set()
+    answers = [await first, *await asyncio.gather(*joiners)]
+    assert answers == [service.HOLD_DECISION] * 4
+    assert runtime.calls == 1
+    # Cached for 5 seconds: a later request is refused without a read too.
+    assert await service._live_hold(*key) == service.HOLD_DECISION
+    assert runtime.calls == 1
+
+
+# --------------------------------------------------------------------------- minors (W5)
+
+
+async def test_the_hold_cache_does_not_leak_across_runs(hold_runtime):
+    runtime = hold_runtime("RUNNING")
+    runtime.gate.set()
+    one = (uuid.uuid4(), "wf_1", ("r1",))
+    assert await service._live_hold(*one) == service.HOLD_DECISION
+    runtime.state = "PENDING"
+    # Another run on a workflow of the same id and review steps: its own read.
+    other = (uuid.uuid4(), "wf_1", ("r1",))
+    assert await service._live_hold(*other) is None
+    assert runtime.calls == 2
+    assert await service._live_hold(*one) == service.HOLD_DECISION  # still cached
+    assert runtime.calls == 2
+
+
+async def test_expired_hold_answers_are_pruned_on_reads_too(hold_runtime, monkeypatch):
+    runtime = hold_runtime("RUNNING")
+    runtime.gate.set()
+    now = [1000.0]
+    monkeypatch.setattr(service, "_hold_clock", lambda: now[0])
+    old = (uuid.uuid4(), "wf_1", ("r1",))
+    await service._live_hold(*old)
+    assert old in service._hold_cache
+    now[0] += service.HOLD_CACHE_SECONDS + 1
+    fresh = (uuid.uuid4(), "wf_2", ("r1",))
+    service._hold_cache[fresh] = (now[0], service.HOLD_DECISION)
+    # Served from the cache (no read), and the expired answer is gone.
+    assert await service._live_hold(*fresh) == service.HOLD_DECISION
+    assert runtime.calls == 1
+    assert old not in service._hold_cache
+
+
+def test_the_not_reached_step_states_are_in_one_place():
+    from oracle.swarm import runtime as swarm_runtime
+
+    assert swarm_runtime.NOT_REACHED_STATES == frozenset({"PENDING", "SKIPPED"})
+    assert not hasattr(service, "_NOT_REACHED")
+
+
+@pytest.mark.parametrize(
+    "state",
+    ["PENDING", "SKIPPED", "RUNNING", "PARKED", "SUCCEEDED", "FAILED", "CANCELLED", "NEW_STATE"],
+)
+async def test_only_the_not_reached_states_leave_the_token_writable(hold_runtime, state):
+    from oracle.swarm.runtime import NOT_REACHED_STATES
+
+    runtime = hold_runtime(state)
+    runtime.gate.set()
+    held = await service._live_hold(uuid.uuid4(), "wf_1", ("r1",))
+    assert (held is None) == (state in NOT_REACHED_STATES), held
+
+
+async def _curated_writes(token: str) -> dict[str, tuple[bool, str]]:
+    out = {}
+    async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
+        for name, args in (
+            ("push_draft", {"doc": "r9-held", "markdown": _draft_markdown()}),
+            ("propose_change", {"body": {"op": "add", "kind": "goal", "data": {"key": "g9"}}}),
+        ):
+            res = await c.call_tool(name, args)
+            out[name] = (res.is_error, res.content[0].text)
+    return out
+
+
+@pytest.mark.parametrize("why", ["open_checkpoint", "review_reached"])
+async def test_curated_writes_are_refused_while_held_and_write_nothing(
+    client, owner, monkeypatch, why
+):
+    from dataclasses import replace
+
+    from oracle.baseline.models import Proposal
+    from oracle.docs.models import Document
+
+    tenant_id, auth = owner
+    swarm = on()
+    if why == "open_checkpoint":
+        await _at_baseline(client, auth, swarm)
+    else:
+        # Oracle has not looked yet; the live read finds the review step reached.
+        runtime = use(swarm)
+        swarm.steps_per_poll = 0
+        await started(client, auth)
+        real = runtime.status
+
+        async def status(workflow_id):
+            read = await real(workflow_id)
+            steps = tuple(
+                replace(s, state="PARKED") if s.step_id == "baseline-review1" else s
+                for s in read.steps
+            )
+            return replace(read, steps=steps)
+
+        monkeypatch.setattr(runtime, "status", status)
+    out = await _curated_writes(token_of(swarm))
+    for name, (err, said) in out.items():
+        assert err and "waiting for approval" in said, (name, said)
+    async with tenant_session(tenant_id) as s:
+        assert await s.scalar(select(Document).where(Document.slug == "r9-held")) is None
+        assert list(await s.scalars(select(Proposal))) == []

@@ -20,6 +20,12 @@ from typing import Any, Literal, Protocol, runtime_checkable
 WorkflowState = Literal["running", "succeeded", "failed", "cancelled"]
 TERMINAL: frozenset[str] = frozenset({"succeeded", "failed", "cancelled"})
 FeatureState = Literal["on", "off", "unknown"]
+# The one list of SwarmCloud step states (StepStatus.state, upper case) that mean the
+# workflow has NOT reached a step: not started yet (PENDING), or never to run (SKIPPED: a
+# gated step whose verdict did not match). Deny by default: any other state, one
+# SwarmCloud adds later, or no row for the step at all, counts as reached. A run token is
+# read-only from the moment a checkpoint's review step is reached (W5, owner 2026-10-19).
+NOT_REACHED_STATES: frozenset[str] = frozenset({"PENDING", "SKIPPED"})
 FEATURES = ("mcp", "await_input", "service_answer")
 
 # The profile of a step that waits for a person, and the verdicts it takes.
