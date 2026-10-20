@@ -5,6 +5,7 @@ import type { GraphOut, ProposalOut } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 
 import { formatValue, targetTitle } from "./common";
+import { LIMIT_LABEL, suggestedBlocker } from "./PromoteBlocker";
 
 type Payload = { op?: string; kind?: string; fields?: Record<string, unknown>; reason?: string | null; origin?: string };
 
@@ -19,6 +20,71 @@ function flatFields(fields: Record<string, unknown> = {}): [string, unknown][] {
 
 /** Open proposals: changes agents (or commenters) suggested, for an approver to accept or reject. */
 export function ProposalsTab({
+  proposals,
+  graph,
+  canWrite,
+  busy,
+  onOpen,
+  onDecide,
+  onPromote,
+}: {
+  proposals: ProposalOut[];
+  graph: GraphOut | undefined;
+  canWrite: boolean;
+  busy: boolean;
+  onOpen: (id: string) => void;
+  onDecide: (proposal: ProposalOut, accept: boolean) => void;
+  /** Opens a suggested blocker on its Promote to blocker form. */
+  onPromote: (id: string) => void;
+}) {
+  // Accepted intake constraints still marked as suggested blockers (B4).
+  const suggested = (graph?.entities ?? []).filter((e) => e.status !== "rejected" && suggestedBlocker(e));
+  return (
+    <>
+      {suggested.length > 0 && (
+        <Panel title="Suggested blockers" count={suggested.length}>
+          <ul aria-label="Suggested blockers">
+            {suggested.map((e) => {
+              const mark = suggestedBlocker(e)!;
+              const facts = [mark.severity && `${mark.severity} severity`, mark.limit_kind && LIMIT_LABEL[mark.limit_kind]];
+              return (
+                <li
+                  key={e.id}
+                  data-testid="suggested-blocker-row"
+                  className="flex items-center gap-4 border-t border-line px-4 py-3 first:border-t-0 max-[600px]:flex-col max-[600px]:items-start max-[600px]:gap-2.5 max-[600px]:px-3"
+                >
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Chip kind="warn">Suggested blocker</Chip>
+                      <button
+                        type="button"
+                        onClick={() => onOpen(e.id)}
+                        className="min-w-0 truncate text-left font-semibold hover:underline"
+                      >
+                        {e.title}
+                      </button>
+                    </div>
+                    <p className="truncate text-sm text-text2">
+                      {["From an intake answer", ...facts.filter(Boolean)].join(" · ")}
+                    </p>
+                  </div>
+                  {canWrite && (
+                    <Button className="flex-none" disabled={busy} onClick={() => onPromote(e.id)}>
+                      Promote to blocker
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+      )}
+      <ProposalList proposals={proposals} graph={graph} canWrite={canWrite} busy={busy} onOpen={onOpen} onDecide={onDecide} />
+    </>
+  );
+}
+
+function ProposalList({
   proposals,
   graph,
   canWrite,
@@ -54,6 +120,9 @@ export function ProposalsTab({
                   <div className="flex min-w-0 items-center gap-2">
                     <Chip kind="acc">{payload.op ?? "change"}</Chip>
                     <Chip kind="na">{payload.kind ?? "entity"}</Chip>
+                    {(payload.fields?.attrs as Record<string, unknown> | undefined)?.proposed_blocker != null && (
+                      <Chip kind="warn">Suggested blocker</Chip>
+                    )}
                     {p.entity_id && payload.op !== "create" ? (
                       <button
                         type="button"

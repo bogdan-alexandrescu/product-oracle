@@ -29,6 +29,8 @@ export interface V2Db {
   artifact_versions: Schemas["ArtifactVersionOut"][];
   artifact_outputs: Schemas["ArtifactOutputOut"][];
   artifact_review_events: Schemas["ArtifactReviewEventOut"][];
+  /** What intakes proposed (./intake.ts); absent in data saved before the intake lane. */
+  intake_proposals?: Schemas["IntakeProposalOut"][];
 }
 
 /** URL segment after /v1 -> the table it lists. */

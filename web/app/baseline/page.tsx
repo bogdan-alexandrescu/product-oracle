@@ -43,6 +43,8 @@ export default function BaselinePage() {
 
   const [tab, setTab] = useState<Tab>("graph");
   const [openId, setOpenId] = useState<string | null>(null);
+  // A suggested blocker opened from its Promote button opens on the blocker form (B4).
+  const [promoteId, setPromoteId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -54,7 +56,14 @@ export default function BaselinePage() {
   const refresh = useCallback(() => {
     void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals()]);
   }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals]);
-  const close = useCallback(() => setOpenId(null), []);
+  const close = useCallback(() => {
+    setOpenId(null);
+    setPromoteId(null);
+  }, []);
+  const promote = useCallback((id: string) => {
+    setPromoteId(id);
+    setOpenId(id);
+  }, []);
 
   async function act(run: () => Promise<string>) {
     setBusy(true);
@@ -173,6 +182,7 @@ export default function BaselinePage() {
               onClose={close}
               onOpen={setOpenId}
               onChanged={refresh}
+              promote={promoteId === openEntity.id}
             />
           )
         }
@@ -242,6 +252,7 @@ export default function BaselinePage() {
                   busy={busy}
                   onOpen={setOpenId}
                   onDecide={decide}
+                  onPromote={promote}
                 />
               )}
             </>

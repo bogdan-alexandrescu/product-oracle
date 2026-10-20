@@ -120,6 +120,13 @@ class CitationOut(ORM):
     title: str | None = None
     excerpt: str | None = None
     retrieved_at: datetime | None = None
+    # What the writer computed for the citation: the source item it read (null when the
+    # company has no such item), its confidence 0-1 and the low-confidence flag. With no
+    # confidence, ``confidence_note`` says why ("owner decision, locked").
+    item_id: uuid.UUID | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    confidence_note: str | None = None
+    low_confidence: bool = False
 
 
 class SectionVerdict(ORM):

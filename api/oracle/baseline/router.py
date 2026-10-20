@@ -77,22 +77,32 @@ def _writer(principal: Principal, body: OriginIn | EntityCreate | EdgeCreate) ->
     return service.Writer(principal, body.origin, run_id=body.run_id, reason=body.reason)
 
 
-async def _entities_out(db, rows: list[Entity]) -> list[EntityOut]:
+async def _entities_out(
+    db, rows: list[Entity], principal: Principal | None = None
+) -> list[EntityOut]:
     await _fresh(db, *rows)
     counts = await service.evidence_counts(db, entity_ids=[e.id for e in rows])
-    return [
-        EntityOut.model_validate(e).model_copy(update={"evidence_count": counts.get(e.id, 0)})
-        for e in rows
-    ]
+    view = await evidence.run_view(db, principal, entity_ids=[e.id for e in rows])
+    out = []
+    for e in rows:
+        o = EntityOut.model_validate(e).model_copy(update={"evidence_count": counts.get(e.id, 0)})
+        if view is not None:
+            o = o.model_copy(update={"confidence": view.confidence("entity", e.id)})
+        out.append(o)
+    return out
 
 
-async def _edges_out(db, rows: list[Edge]) -> list[EdgeOut]:
+async def _edges_out(db, rows: list[Edge], principal: Principal | None = None) -> list[EdgeOut]:
     await _fresh(db, *rows)
     counts = await service.evidence_counts(db, edge_ids=[e.id for e in rows])
-    return [
-        EdgeOut.model_validate(e).model_copy(update={"evidence_count": counts.get(e.id, 0)})
-        for e in rows
-    ]
+    view = await evidence.run_view(db, principal, edge_ids=[e.id for e in rows])
+    out = []
+    for e in rows:
+        o = EdgeOut.model_validate(e).model_copy(update={"evidence_count": counts.get(e.id, 0)})
+        if view is not None:
+            o = o.model_copy(update={"confidence": view.confidence("edge", e.id)})
+        out.append(o)
+    return out
 
 
 async def _entity_write(db, result: service.WriteResult, created: bool = False) -> JSONResponse:
@@ -129,8 +139,8 @@ _WRITE_RESPONSES = {202: {"description": "The item is locked: the change became 
 async def get_graph(principal: Reader, db: TenantDB) -> GraphOut:
     """Every entity and edge (no evidence bodies): what the Baseline screen draws."""
     return GraphOut(
-        entities=await _entities_out(db, await service.list_entities(db)),
-        edges=await _edges_out(db, await service.list_edges(db)),
+        entities=await _entities_out(db, await service.list_entities(db), principal),
+        edges=await _edges_out(db, await service.list_edges(db), principal),
     )
 
 
@@ -144,7 +154,7 @@ async def list_entities(
     type: EntityType | None = None,
     status: NodeStatus | None = None,
 ) -> list[EntityOut]:
-    return await _entities_out(db, await service.list_entities(db, type, status))
+    return await _entities_out(db, await service.list_entities(db, type, status), principal)
 
 
 @router.post(
@@ -178,14 +188,14 @@ async def get_entity(entity_id: uuid.UUID, principal: Reader, db: TenantDB) -> E
         raise _fail(exc) from exc
     edges = await service.list_edges(db, entity_id=entity.id)
     proposals = [p for p in await service.list_proposals(db, "open") if p.entity_id == entity.id]
-    base = (await _entities_out(db, [entity]))[0]
+    base = (await _entities_out(db, [entity], principal))[0]
+    rows = await evidence.present(db, principal, await evidence.list_for(db, entity_id=entity.id))
     return EntityDetail(
-        **base.model_dump(),
-        evidence=await evidence.present(
-            db, principal, await evidence.list_for(db, entity_id=entity.id)
-        ),
-        edges_out=await _edges_out(db, [e for e in edges if e.src_id == entity.id]),
-        edges_in=await _edges_out(db, [e for e in edges if e.dst_id == entity.id]),
+        **base.model_dump(exclude={"confidence"}),
+        confidence=evidence.as_read(principal, base.confidence, rows),
+        evidence=rows,
+        edges_out=await _edges_out(db, [e for e in edges if e.src_id == entity.id], principal),
+        edges_in=await _edges_out(db, [e for e in edges if e.dst_id == entity.id], principal),
         open_proposals=len(proposals),
     )
 
@@ -290,7 +300,7 @@ async def list_edges(
     type: EdgeType | None = None,
     entity_id: uuid.UUID | None = None,
 ) -> list[EdgeOut]:
-    return await _edges_out(db, await service.list_edges(db, type, entity_id))
+    return await _edges_out(db, await service.list_edges(db, type, entity_id), principal)
 
 
 @router.post(
@@ -321,12 +331,12 @@ async def get_edge(edge_id: uuid.UUID, principal: Reader, db: TenantDB) -> EdgeD
         edge = await service.get_edge(db, edge_id)
     except service.BaselineError as exc:
         raise _fail(exc) from exc
-    base = (await _edges_out(db, [edge]))[0]
+    base = (await _edges_out(db, [edge], principal))[0]
+    rows = await evidence.present(db, principal, await evidence.list_for(db, edge_id=edge.id))
     return EdgeDetail(
-        **base.model_dump(),
-        evidence=await evidence.present(
-            db, principal, await evidence.list_for(db, edge_id=edge.id)
-        ),
+        **base.model_dump(exclude={"confidence"}),
+        confidence=evidence.as_read(principal, base.confidence, rows),
+        evidence=rows,
     )
 
 
@@ -641,7 +651,7 @@ async def resolve_conflict(
 @router.get("/trace", response_model=TraceReport)
 async def get_trace(principal: Reader, db: TenantDB) -> TraceReport:
     """Features that serve no confirmed goal, or rest on weak evidence; goal coverage."""
-    return await trace.report(db)
+    return await trace.report(db, principal)
 
 
 @router.get(

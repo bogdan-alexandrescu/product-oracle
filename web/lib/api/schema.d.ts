@@ -1418,7 +1418,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Source Items */
+        /**
+         * List Source Items
+         * @description The source's items at their current versions. A run never lists a deleted item
+         *     (``include_deleted`` is ignored) and reads a shared item at the version released,
+         *     its title as shared (S6, owner 2026-10-19).
+         */
         get: operations["list_source_items"];
         put?: never;
         post?: never;
@@ -1493,7 +1498,9 @@ export interface paths {
         };
         /**
          * List Snapshot Items
-         * @description The user's items as they were at the snapshot (each at its pinned version).
+         * @description The user's items as they were at the snapshot (each at its pinned version). A run
+         *     reads a shared item at the version released whatever the snapshot, its title as
+         *     shared, and nothing deleted upstream (S6, owner 2026-10-19).
          */
         get: operations["list_snapshot_items"];
         put?: never;
@@ -1513,8 +1520,10 @@ export interface paths {
         };
         /**
          * Search Sources
-         * @description Search the user's own items. Ranked by relevance x confidence weight; ``as_of``
-         *     searches the versions pinned at that time.
+         * @description Search the user's own items (a run: also those a finding shared in full
+         *     released). Ranked by relevance x confidence weight; ``as_of`` searches the versions
+         *     pinned at that time, except a run's shared items: those are searched at the version
+         *     sharing released only, whatever ``as_of`` says (S6, freeze at sharing).
          */
         get: operations["search_sources"];
         put?: never;
@@ -2661,7 +2670,8 @@ export interface paths {
         /**
          * Retry Draft Import
          * @description Import a segment's draft again after its import at segment end was refused
-         *     (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).
+         *     (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``,
+         *     its problems ``draft_import.problems`` and their summary ``draft_import.summary``).
          *     While the run waits at that segment's review: the review's approver role or above, and
          *     nothing is decided (the review stays open for a person). After the run finished with
          *     the review approved past the refusal: owners only, while no version from the run
@@ -3017,7 +3027,12 @@ export interface paths {
          */
         get: operations["list_intakes"];
         put?: never;
-        post?: never;
+        /**
+         * Create Intake
+         * @description New product idea: a short brief, pinned to a snapshot of your sources, analysed
+         *     into gaps; the first short batch of questions is asked.
+         */
+        post: operations["create_intake"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3041,7 +3056,12 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Intake
+         * @description Rename, archive or reopen (the author or an approver); link to a PRD (an approver;
+         *     moving an intake with an unresolved critical blocker off its PRD: an owner).
+         */
+        patch: operations["update_intake"];
         trace?: never;
     };
     "/v1/gaps": {
@@ -3057,7 +3077,11 @@ export interface paths {
          */
         get: operations["list_knowledge_gaps"];
         put?: never;
-        post?: never;
+        /**
+         * Create Knowledge Gap
+         * @description Add a gap to an intake by hand; it is drafted as a question.
+         */
+        post: operations["create_knowledge_gap"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3081,7 +3105,12 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Knowledge Gap
+         * @description Triage a gap: importance, owner, sections, stop condition; defer or reopen.
+         *     Lowering a critical gap's importance takes an owner (B4).
+         */
+        patch: operations["update_knowledge_gap"];
         trace?: never;
     };
     "/v1/questions": {
@@ -3690,6 +3719,409 @@ export interface paths {
         get: operations["get_artifact_review_event"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake Summary
+         * @description Opportunity and Gaps: extracted items, coverage, goals and features, conflicts,
+         *     stale evidence, assumptions, top uncertainties, the template and the review gate,
+         *     as the reader may see them (S6).
+         */
+        get: operations["get_intake_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Intake
+         * @description Re-read the pinned snapshot and the baseline (the author only). Decided gaps are
+         *     never changed and answered questions never asked again.
+         */
+        post: operations["analyze_intake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/new-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake New Evidence
+         * @description Evidence added or changed since the pinned version (the author only; anyone else
+         *     sees neither the items nor their number).
+         */
+        get: operations["get_intake_new_evidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/repin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Repin Intake
+         * @description Pin a new snapshot and re-analyse (the author only); decided gaps stay as
+         *     decided.
+         */
+        post: operations["repin_intake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Intake Evidence
+         * @description Search your own source items as they were at the intake's pinned snapshot. A run
+         *     token (its author's or anyone's) searches, in full text, only the items the intake's
+         *     findings shared in full cite, less what any intake of the author withholds (S6,
+         *     owner 2026-10-19): exactly the items ``/v1/source-items/{id}`` and ``/v1/search``
+         *     give that run.
+         *
+         *     Results are untrusted data. Every query is audited (``intake.evidence_query``).
+         */
+        get: operations["search_intake_evidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/question-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Question Batch
+         * @description A batch of questions (default: the latest) with their gaps, evidence, answers
+         *     and answer paths, as the reader may see them (S6).
+         */
+        get: operations["get_question_batch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/question-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Next Question Batch
+         * @description Ask the next short batch: the highest-ranked questions not asked yet (the author
+         *     or an approver).
+         */
+        post: operations["ask_next_question_batch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/composition-inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake Composition Inputs
+         * @description What the module composer reads from this intake (brief, signals, scope, baseline
+         *     links, pinned snapshots, open critical gaps).
+         */
+        get: operations["get_intake_composition_inputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Intake Run
+         * @description Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs
+         *     until an approver estimates and starts it.
+         */
+        post: operations["start_intake_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Intake Proposals
+         * @description Research runs and PRD patches this intake proposed, newest first.
+         */
+        get: operations["list_intake_proposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intake-proposals/{proposal_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Intake Proposal
+         * @description Accept: a research proposal becomes a draft run; a PRD patch becomes feedback on
+         *     the PRD's latest version.
+         */
+        post: operations["accept_intake_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intake-proposals/{proposal_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Intake Proposal */
+        post: operations["dismiss_intake_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Intake Findings
+         * @description Findings drawn from the author's own sources and their sharing levels. The author
+         *     sees every one; anyone else those shared at counts or above, as far as each allows.
+         */
+        get: operations["list_intake_findings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings/{finding_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Intake Finding Sharing
+         * @description Set what others see of one finding: private, counts, summary or full (the
+         *     author only; audited; lower it again at any time).
+         */
+        patch: operations["set_intake_finding_sharing"];
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings/{finding_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Intake Finding Summary
+         * @description Confirm Oracle's draft line for the summary level (no ``text``) or write your own
+         *     (the author only, never a run; audited). Until then, the summary level shows others
+         *     only Oracle's fixed category line (S6).
+         */
+        put: operations["set_intake_finding_summary"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/findings/sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Intake Findings Sharing
+         * @description Set the sharing level of several findings at once (the author only; every change
+         *     is audited).
+         */
+        post: operations["set_intake_findings_sharing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/gaps/{gap_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Knowledge Gap
+         * @description Accept an assumption or a risk, validate, or reject, with a rationale. On a
+         *     critical gap, accepting, validating it unanswered, or validating a hard blocker
+         *     needs an owner (B4).
+         */
+        post: operations["decide_knowledge_gap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/gaps/{gap_id}/research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Gap Research
+         * @description Research this: propose a run that looks into the gap. Nothing runs until an
+         *     approver accepts it and starts the run.
+         */
+        post: operations["propose_gap_research"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/questions/{question_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Question
+         * @description Answer, or say "I don't know", defer, ask someone else, or "Research this". The
+         *     gap updates; what the answer implies elsewhere is proposed, never applied. The
+         *     question and gap come back as the reads show them to the caller (S6).
+         */
+        post: operations["answer_question"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4384,6 +4816,9 @@ export interface paths {
         /**
          * Create Blocker
          * @description Record a blocker: an existing constraint entity (``entity_id``), or a new one.
+         *     Promoting a constraint an intake answer suggested as a blocker (its
+         *     ``attrs.proposed_blocker``, the "suggested blocker" mark, B4) clears that mark in the
+         *     same write; the form is pre-filled from the constraint and the mark.
          */
         post: operations["create_blocker"];
         delete?: never;
@@ -5314,6 +5749,39 @@ export interface components {
             /** Unplanned */
             unplanned: components["schemas"]["DriftEntry"][];
         };
+        /** AnswerIn */
+        AnswerIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "answer" | "dont_know" | "defer" | "delegate" | "research";
+            /** Body */
+            body?: string | null;
+            /** Delegated To */
+            delegated_to?: string | null;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /** Knowledge State */
+            knowledge_state?: ("user_decision" | "verified_fact" | "hypothesis") | null;
+        };
+        /** AnswerResult */
+        AnswerResult: {
+            answer: components["schemas"]["StakeholderAnswerOut"];
+            question: components["schemas"]["StakeholderQuestionOut"];
+            gap: components["schemas"]["KnowledgeGapOut"] | null;
+            /** Proposals */
+            proposals: components["schemas"]["IntakeProposalOut"][];
+            /** Baseline Proposal Ids */
+            baseline_proposal_ids: string[];
+            /** Change Event Id */
+            change_event_id: string | null;
+            /** Next Actions */
+            next_actions: components["schemas"]["NextAction"][];
+        };
         /** ApproveOut */
         ApproveOut: {
             /**
@@ -5708,6 +6176,17 @@ export interface components {
             /** Source */
             source?: string | null;
         };
+        /** BatchState */
+        BatchState: {
+            /** Current */
+            current: number | null;
+            /** Asked */
+            asked: number;
+            /** Answered */
+            answered: number;
+            /** Remaining */
+            remaining: number;
+        };
         /**
          * BlockerCitation
          * @description A front matter ``citations`` entry (docs/mvp-app.md, Draft import format).
@@ -5737,8 +6216,10 @@ export interface components {
         };
         /**
          * BlockerCreate
-         * @description A new blocker: either an existing constraint entity (``entity_id``) or a new one
-         *     (``key`` and ``statement``).
+         * @description A new blocker: either an existing constraint entity (``entity_id``; a
+         *     ``statement`` or ``detail`` given replaces its title or body) or a new one (``key``
+         *     and ``statement``). Promoting a constraint an intake answer suggested as a blocker
+         *     clears its ``attrs.proposed_blocker`` mark in the same write (B4).
          */
         BlockerCreate: {
             /** Detail */
@@ -6712,6 +7193,17 @@ export interface components {
             excerpt?: string | null;
             /** Retrieved At */
             retrieved_at?: string | null;
+            /** Item Id */
+            item_id?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Confidence Note */
+            confidence_note?: string | null;
+            /**
+             * Low Confidence
+             * @default false
+             */
+            low_confidence: boolean;
         };
         /** ClaimIn */
         ClaimIn: {
@@ -6726,6 +7218,24 @@ export interface components {
             source_kind?: string | null;
             /** Observed At */
             observed_at?: string | null;
+        };
+        /** ClaimOut */
+        ClaimOut: {
+            /** Value */
+            value: unknown;
+            /** Source Kind */
+            source_kind?: string | null;
+            /** Source Class */
+            source_class?: string | null;
+            /** Observed At */
+            observed_at?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["EvidenceRef"][];
         };
         /**
          * ClaudeSweepSummary
@@ -7291,6 +7801,13 @@ export interface components {
              */
             created_at: string;
         };
+        /** ConflictRecommendation */
+        ConflictRecommendation: {
+            /** Winner */
+            winner?: number | null;
+            /** Reason */
+            reason: string;
+        };
         /** ConflictResolve */
         ConflictResolve: {
             /** Claim */
@@ -7299,6 +7816,32 @@ export interface components {
             value?: unknown;
             /** Note */
             note?: string | null;
+        };
+        /** ConflictView */
+        ConflictView: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "source" | "baseline";
+            /** Topic */
+            topic: string;
+            /** Claims */
+            claims: components["schemas"]["ClaimOut"][];
+            recommendation: components["schemas"]["ConflictRecommendation"];
+            /** Material */
+            material: boolean;
+            /** Conflict Id */
+            conflict_id?: string | null;
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
+            /**
+             * Summary Only
+             * @default false
+             */
+            summary_only: boolean;
         };
         /** ConnectionChoice */
         ConnectionChoice: {
@@ -7448,6 +7991,33 @@ export interface components {
              */
             can_redo: boolean;
         };
+        /** Coverage */
+        Coverage: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "covered" | "partial" | "missing";
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /** Reason */
+            reason: string;
+            /**
+             * Entity Ids
+             * @default []
+             */
+            entity_ids: string[];
+            /** Gap Id */
+            gap_id?: string | null;
+        };
         /** CriterionInfo */
         CriterionInfo: {
             /** Key */
@@ -7496,6 +8066,23 @@ export interface components {
              * @enum {string}
              */
             where: "title" | "heading" | "body";
+        };
+        /** DecisionIn */
+        DecisionIn: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "accept_assumption" | "accept_risk" | "validate" | "reject";
+            /** Rationale */
+            rationale: string;
+            /** Review At */
+            review_at?: string | null;
+        };
+        /** DecisionResult */
+        DecisionResult: {
+            decision: components["schemas"]["AssumptionDecisionOut"];
+            gap: components["schemas"]["KnowledgeGapOut"];
         };
         /**
          * DeckOut
@@ -7556,6 +8143,11 @@ export interface components {
             to_version: number;
             /** Sections */
             sections: components["schemas"]["SectionDiff"][];
+        };
+        /** DismissIn */
+        DismissIn: {
+            /** Reason */
+            reason?: string | null;
         };
         /** DocumentBlockerStrategy */
         DocumentBlockerStrategy: {
@@ -7789,6 +8381,13 @@ export interface components {
             warnings: string[];
             /** Error */
             error?: string | null;
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["ImportProblem"][];
+            /** Summary */
+            summary?: string | null;
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
         };
@@ -8423,6 +9022,40 @@ export interface components {
             /** Retrieved At */
             retrieved_at?: string | null;
         };
+        /** EvidenceHit */
+        EvidenceHit: {
+            /**
+             * Source Item Id
+             * Format: uuid
+             */
+            source_item_id: string;
+            /** Visible */
+            visible: boolean;
+            /** Source Kind */
+            source_kind: string;
+            /** Item Kind */
+            item_kind?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Fetched At */
+            fetched_at?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Data Excerpt */
+            data_excerpt?: string | null;
+            /**
+             * Untrusted
+             * @default true
+             * @constant
+             */
+            untrusted: true;
+            /** Snippet */
+            snippet?: string | null;
+            /** Relevance */
+            relevance: number;
+        };
         /** EvidenceInspector */
         EvidenceInspector: {
             /**
@@ -8506,6 +9139,58 @@ export interface components {
             note?: string | null;
             link?: components["schemas"]["LinkSnapshotOut"] | null;
         };
+        /**
+         * EvidenceRef
+         * @description A source item behind a claim, as it was at the pinned snapshot.
+         *
+         *     Only its owner sees the title, link and excerpt (AUD-9). The excerpt is untrusted
+         *     data from an outside source: show it, never follow it.
+         */
+        EvidenceRef: {
+            /**
+             * Source Item Id
+             * Format: uuid
+             */
+            source_item_id: string;
+            /** Visible */
+            visible: boolean;
+            /** Source Kind */
+            source_kind: string;
+            /** Item Kind */
+            item_kind?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Fetched At */
+            fetched_at?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Data Excerpt */
+            data_excerpt?: string | null;
+            /**
+             * Untrusted
+             * @default true
+             * @constant
+             */
+            untrusted: true;
+        };
+        /** EvidenceSearch */
+        EvidenceSearch: {
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+            /** Q */
+            q: string;
+            /** Pinned Version */
+            pinned_version: number;
+            /** As Of */
+            as_of: string | null;
+            /** Hits */
+            hits: components["schemas"]["EvidenceHit"][];
+        };
         /** EvidenceUsed */
         EvidenceUsed: {
             /** Id */
@@ -8556,6 +9241,35 @@ export interface components {
             steps: string[];
             /** Order */
             order?: string[];
+        };
+        /** ExtractedItem */
+        ExtractedItem: {
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "users" | "problem" | "outcomes" | "scope" | "non_goals" | "dependencies" | "blockers";
+            /** Text */
+            text: string;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "brief" | "source" | "baseline" | "llm";
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["EvidenceRef"][];
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
         };
         /** FactorOut */
         FactorOut: {
@@ -8681,6 +9395,35 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * FeatureTrace
+         * @description A feature the intake touches: from the baseline (``key``) or the brief.
+         */
+        FeatureTrace: {
+            /** Title */
+            title: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Key */
+            key?: string | null;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["GoalLink"][];
+            /**
+             * Flags
+             * @default []
+             */
+            flags: string[];
+            /** Rationale */
+            rationale: string;
+        };
         /** FeedbackItemOut */
         FeedbackItemOut: {
             /**
@@ -8786,6 +9529,87 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * FindingCount
+         * @description Findings shared as counts and categories only (S6).
+         */
+        FindingCount: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "item" | "gap" | "conflict" | "stale";
+            /** Category */
+            category?: string | null;
+            /** Count */
+            count: number;
+            /** Label */
+            label: string;
+        };
+        /**
+         * FindingOut
+         * @description A finding drawn from the author's own sources and what others see of it (S6).
+         *
+         *     The author sees every finding. Anyone else sees those shared at "counts" or above:
+         *     the kind and category; from "summary" its line and the gap; at "full" the source
+         *     items it cites. ``summary``: the line the summary level shows, the one its author
+         *     confirmed or wrote, else Oracle's fixed category line. ``draft_summary``: Oracle's
+         *     draft, for the author only. At "full", others see the items it released when it was
+         *     shared; ``unshared_item_ids`` (the author only): what it cites now that sharing did
+         *     not release (a later analysis added them; "N new sources since you shared", share
+         *     it in full again to release them).
+         */
+        FindingOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "item" | "gap" | "conflict" | "stale";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "model" | "rules";
+            /** Category */
+            category?: string | null;
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "counts" | "summary" | "full";
+            /** Summary */
+            summary?: string | null;
+            /** Summary Confirmed */
+            summary_confirmed?: boolean | null;
+            /** Draft Summary */
+            draft_summary?: string | null;
+            /** Gap Id */
+            gap_id?: string | null;
+            /**
+             * Source Item Ids
+             * @default []
+             */
+            source_item_ids: string[];
+            /**
+             * Unshared Item Ids
+             * @default []
+             */
+            unshared_item_ids: string[];
+        };
+        /**
+         * FindingSummaryIn
+         * @description The line others see at the summary level: omit ``text`` to confirm Oracle's draft
+         *     as it stands.
+         */
+        FindingSummaryIn: {
+            /** Text */
+            text?: string | null;
+        };
         /** FlowCatalog */
         FlowCatalog: {
             /** Flows */
@@ -8847,6 +9671,94 @@ export interface components {
              * @enum {string}
              */
             approver_role: "viewer" | "commenter" | "approver" | "owner";
+        };
+        /** GapCreate */
+        GapCreate: {
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling";
+            /** Statement */
+            statement: string;
+            /**
+             * Importance
+             * @enum {string}
+             */
+            importance: "critical" | "high" | "medium" | "low";
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** GapPatch */
+        GapPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Importance */
+            importance?: ("critical" | "high" | "medium" | "low") | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Status */
+            status?: ("unknown" | "deferred") | null;
+            /** Section Keys */
+            section_keys?: string[] | null;
+            /** Stop Condition */
+            stop_condition?: string | null;
+        };
+        /**
+         * GateView
+         * @description The review gate as everyone sees it. ``private_blocking_gap_ids``: for the author
+         *     only, their private critical blockers, which gate nothing until shared at counts or
+         *     above (S6).
+         */
+        GateView: {
+            /** Open Critical */
+            open_critical: number;
+            /** Blocking Gap Ids */
+            blocking_gap_ids: string[];
+            /**
+             * Gate
+             * @enum {string}
+             */
+            gate: "clear" | "blocked";
+            /**
+             * Private Blocking Gap Ids
+             * @default []
+             */
+            private_blocking_gap_ids: string[];
+        };
+        /** GoalLink */
+        GoalLink: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Matched On
+             * @enum {string}
+             */
+            matched_on: "brief" | "feature";
         };
         /** GoalTerm */
         GoalTerm: {
@@ -9572,6 +10484,200 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** IntakeCreate */
+        IntakeCreate: {
+            /** Title */
+            title: string;
+            /** Brief */
+            brief: string;
+            /** Snapshot Id */
+            snapshot_id?: string | null;
+            /**
+             * Source Ids
+             * @default []
+             */
+            source_ids: string[];
+            /** Document */
+            document?: string | null;
+            /**
+             * Ai Extraction
+             * @default true
+             */
+            ai_extraction: boolean;
+            /**
+             * Batch Size
+             * @default 5
+             */
+            batch_size: number;
+        };
+        /** IntakeOut */
+        IntakeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Brief */
+            brief: string;
+            /** Author Id */
+            author_id?: string | null;
+            /** Source Snapshot Ids */
+            source_snapshot_ids: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "analyzing" | "awaiting_answers" | "ready" | "converted" | "archived";
+            analysis: components["schemas"]["IntakeAnalysis"];
+            /** Document Id */
+            document_id?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Source Ids
+             * @default []
+             */
+            source_ids: string[];
+        };
+        /** IntakePatch */
+        IntakePatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Document */
+            document?: string | null;
+            /** Status */
+            status?: ("archived" | "awaiting_answers") | null;
+        };
+        /** IntakeProposalOut */
+        IntakeProposalOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+            /** Gap Id */
+            gap_id?: string | null;
+            /** Question Id */
+            question_id?: string | null;
+            /** Answer Id */
+            answer_id?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "research_run" | "prd_patch";
+            /** Title */
+            title: string;
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "accepted" | "dismissed";
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+            /** Created By */
+            created_by?: string | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** IntakeRunIn */
+        IntakeRunIn: {
+            /** Document */
+            document?: string | null;
+            /**
+             * @default {
+             *       "depth": "standard",
+             *       "roles": {},
+             *       "checkpoints": {}
+             *     }
+             */
+            knobs: components["schemas"]["KnobsIn"];
+        };
+        /**
+         * IntakeSummary
+         * @description The Opportunity and Gaps summary, as the reader may see it (S6).
+         */
+        IntakeSummary: {
+            intake: components["schemas"]["IntakeOut"];
+            pinned: components["schemas"]["Pinned"];
+            new_evidence: components["schemas"]["NewEvidence"];
+            /** Extracted */
+            extracted: components["schemas"]["ExtractedItem"][];
+            /** Coverage */
+            coverage: components["schemas"]["Coverage"][];
+            /** Goals */
+            goals: components["schemas"]["GoalLink"][];
+            /** Missing Goals */
+            missing_goals: boolean;
+            /** Features */
+            features: components["schemas"]["FeatureTrace"][];
+            /** Conflicts */
+            conflicts: components["schemas"]["ConflictView"][];
+            /** Stale */
+            stale: components["schemas"]["StaleEvidence"][];
+            /** Assumptions */
+            assumptions: components["schemas"]["RankedGap"][];
+            /** Top Uncertainties */
+            top_uncertainties: components["schemas"]["RankedGap"][];
+            /** Gaps */
+            gaps: components["schemas"]["RankedGap"][];
+            /** Next Actions */
+            next_actions: components["schemas"]["NextAction"][];
+            template: components["schemas"]["TemplateHint"];
+            readiness: components["schemas"]["GateView"];
+            batch: components["schemas"]["BatchState"];
+            /** Proposals */
+            proposals: components["schemas"]["IntakeProposalOut"][];
+            /**
+             * Shared Counts
+             * @default []
+             */
+            shared_counts: components["schemas"]["FindingCount"][];
+            /**
+             * Is Author
+             * @default false
+             */
+            is_author: boolean;
+        };
         /** InviteCreate */
         InviteCreate: {
             /** Email */
@@ -9906,7 +11012,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "unknown" | "under_investigation" | "asked" | "answered" | "validated" | "deferred" | "accepted_risk";
+            status: "unknown" | "under_investigation" | "asked" | "answered" | "answered_pending_review" | "validated" | "deferred" | "accepted_risk";
             /** Owner Id */
             owner_id?: string | null;
             /** Related Modules */
@@ -10191,12 +11297,11 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch";
-            /**
-             * Document Id
-             * Format: uuid
-             */
-            document_id: string;
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis";
+            /** Document Id */
+            document_id?: string | null;
+            /** Intake Id */
+            intake_id?: string | null;
             /** Version Number */
             version_number?: number | null;
             /** Section Key */
@@ -10570,6 +11675,23 @@ export interface components {
              */
             created_at: string;
         };
+        /** ModuleHint */
+        ModuleHint: {
+            /** Key */
+            key: string;
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "required" | "conditional";
+            /** Reason */
+            reason: string;
+            /**
+             * Gap Ids
+             * @default []
+             */
+            gap_ids: string[];
+        };
         /** ModulePolicyOut */
         ModulePolicyOut: {
             /**
@@ -10683,6 +11805,60 @@ export interface components {
             /** Changed */
             changed: string[];
         };
+        /**
+         * NewEvidence
+         * @description New evidence since the pinned version, shown before anything is redrafted.
+         */
+        NewEvidence: {
+            /** Since Version */
+            since_version: number;
+            /** As Of */
+            as_of?: string | null;
+            /** Count */
+            count: number | null;
+            /** Visible */
+            visible: boolean;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["NewEvidenceItem"][];
+        };
+        /** NewEvidenceItem */
+        NewEvidenceItem: {
+            /**
+             * Source Item Id
+             * Format: uuid
+             */
+            source_item_id: string;
+            /** Visible */
+            visible: boolean;
+            /** Source Kind */
+            source_kind: string;
+            /** Item Kind */
+            item_kind?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Fetched At */
+            fetched_at?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Data Excerpt */
+            data_excerpt?: string | null;
+            /**
+             * Untrusted
+             * @default true
+             * @constant
+             */
+            untrusted: true;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "new" | "changed" | "deleted";
+        };
         /** NewSource */
         NewSource: {
             /** Title */
@@ -10698,6 +11874,26 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+        };
+        /** NextAction */
+        NextAction: {
+            /**
+             * Gap Id
+             * Format: uuid
+             */
+            gap_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "answer" | "research" | "delegate" | "accept_assumption" | "accept_risk" | "validate";
+            /** Label */
+            label: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "commenter" | "approver" | "owner";
         };
         /** NextDraftApply */
         NextDraftApply: {
@@ -11046,6 +12242,35 @@ export interface components {
             categories: string[];
             /** Modules */
             modules: components["schemas"]["PackModuleOut"][];
+        };
+        /**
+         * Pinned
+         * @description The snapshot the intake reads ("version" counts its pins from 1).
+         */
+        Pinned: {
+            /** Version */
+            version: number;
+            /** Snapshot Id */
+            snapshot_id?: string | null;
+            /** As Of */
+            as_of?: string | null;
+            /**
+             * Versions
+             * @default []
+             */
+            versions: components["schemas"]["PinnedVersion"][];
+        };
+        /** PinnedVersion */
+        PinnedVersion: {
+            /** Version */
+            version: number;
+            /**
+             * Snapshot Id
+             * Format: uuid
+             */
+            snapshot_id: string;
+            /** As Of */
+            as_of?: string | null;
         };
         /** PrdAnchor */
         PrdAnchor: {
@@ -11455,6 +12680,31 @@ export interface components {
             /** Confidence */
             confidence?: number | null;
         };
+        /** QuestionBatch */
+        QuestionBatch: {
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+            /** Batch */
+            batch: number | null;
+            /** Questions */
+            questions: components["schemas"]["QuestionCard"][];
+            /** Remaining */
+            remaining: number;
+        };
+        /** QuestionCard */
+        QuestionCard: {
+            question: components["schemas"]["StakeholderQuestionOut"];
+            gap: components["schemas"]["KnowledgeGapOut"] | null;
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceRef"][];
+            /** Answer Paths */
+            answer_paths: ("answer" | "dont_know" | "defer" | "delegate" | "research")[];
+            /** Answers */
+            answers: components["schemas"]["StakeholderAnswerOut"][];
+        };
         /** QuestionRef */
         QuestionRef: {
             /** Key */
@@ -11496,6 +12746,85 @@ export interface components {
             /** Dependents */
             dependents: string[];
             explanation: components["schemas"]["Explanation"];
+        };
+        /** RankedGap */
+        RankedGap: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling";
+            /** Statement */
+            statement: string;
+            /** Impact */
+            impact: ("goals" | "feasibility" | "scope" | "economics" | "risks" | "module_selection")[];
+            /**
+             * Importance
+             * @enum {string}
+             */
+            importance: "critical" | "high" | "medium" | "low";
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Confidence */
+            confidence?: string | null;
+            /**
+             * Knowledge State
+             * @enum {string}
+             */
+            knowledge_state: "verified_fact" | "user_decision" | "ai_inference" | "hypothesis" | "unknown";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "unknown" | "under_investigation" | "asked" | "answered" | "answered_pending_review" | "validated" | "deferred" | "accepted_risk";
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Related Modules */
+            related_modules: string[];
+            /** Stop Condition */
+            stop_condition?: string | null;
+            /** Entity Ids */
+            entity_ids: string[];
+            /** Section Keys */
+            section_keys: string[];
+            /** Created By */
+            created_by?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Rank */
+            rank: number;
+            /** Score */
+            score: number;
+            /** Rank Reason */
+            rank_reason: string;
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["EvidenceRef"][];
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
         };
         /** RankingCounts */
         RankingCounts: {
@@ -12300,6 +13629,8 @@ export interface components {
              * @default false
              */
             can_retry_import: boolean;
+            /** Draft Rejected */
+            draft_rejected?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
             knobs: components["schemas"]["KnobsOut"];
             /** Snapshot Id */
@@ -12439,6 +13770,8 @@ export interface components {
              * @default false
              */
             can_retry_import: boolean;
+            /** Draft Rejected */
+            draft_rejected?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
         };
         /**
@@ -12995,6 +14328,32 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
+        /** SharingBulkIn */
+        SharingBulkIn: {
+            /** Changes */
+            changes: components["schemas"]["SharingChange"][];
+        };
+        /** SharingChange */
+        SharingChange: {
+            /**
+             * Finding Id
+             * Format: uuid
+             */
+            finding_id: string;
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "counts" | "summary" | "full";
+        };
+        /** SharingIn */
+        SharingIn: {
+            /**
+             * Sharing
+             * @enum {string}
+             */
+            sharing: "private" | "counts" | "summary" | "full";
+        };
         /** SkippedSection */
         SkippedSection: {
             /** Section Key */
@@ -13351,6 +14710,16 @@ export interface components {
              */
             updated_at: string;
         };
+        /** StaleEvidence */
+        StaleEvidence: {
+            evidence: components["schemas"]["EvidenceRef"];
+            /** Reason */
+            reason: string;
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Sharing */
+            sharing?: ("private" | "counts" | "summary" | "full") | null;
+        };
         /**
          * StaleOutputsPage
          * @description A page of outputs that are not fresh, stalest first.
@@ -13604,6 +14973,22 @@ export interface components {
             body: string;
             /** Required Sections */
             required_sections?: string[] | null;
+        };
+        /**
+         * TemplateHint
+         * @description An existing PRD template (O1d picker) and module hints for the composer.
+         */
+        TemplateHint: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string;
+            /** Theme */
+            theme?: string | null;
+            /** Modules */
+            modules: components["schemas"]["ModuleHint"][];
         };
         /** TemplateModuleAssignmentOut */
         TemplateModuleAssignmentOut: {
@@ -21165,6 +22550,39 @@ export interface operations {
             };
         };
     };
+    create_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_intake: {
         parameters: {
             query?: never;
@@ -21196,12 +22614,47 @@ export interface operations {
             };
         };
     };
+    update_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_knowledge_gaps: {
         parameters: {
             query?: {
                 intake_id?: string | null;
                 document_id?: string | null;
-                status?: ("unknown" | "under_investigation" | "asked" | "answered" | "validated" | "deferred" | "accepted_risk") | null;
+                status?: ("unknown" | "under_investigation" | "asked" | "answered" | "answered_pending_review" | "validated" | "deferred" | "accepted_risk") | null;
                 category?: ("customer_user" | "pain_evidence" | "goal_alignment" | "success_metric" | "differentiation" | "alternatives" | "constraints" | "blockers" | "economic_benefit" | "effort_cost" | "security_privacy" | "ownership" | "non_goals" | "release_rollout" | "evaluation_criteria" | "third_party_policy" | "configurability_scaling") | null;
                 importance?: ("critical" | "high" | "medium" | "low") | null;
                 limit?: number;
@@ -21233,6 +22686,39 @@ export interface operations {
             };
         };
     };
+    create_knowledge_gap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GapCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeGapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_knowledge_gap: {
         parameters: {
             query?: never;
@@ -21243,6 +22729,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeGapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_knowledge_gap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GapPatch"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -22333,6 +23854,632 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArtifactReviewEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intake_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intake_new_evidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewEvidence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repin_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_intake_evidence: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceSearch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_question_batch: {
+        parameters: {
+            query?: {
+                batch?: number | null;
+            };
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionBatch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_next_question_batch: {
+        parameters: {
+            query?: {
+                size?: number;
+            };
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionBatch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intake_composition_inputs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompositionInputs"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_intake_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakeRunIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_intake_proposals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeProposalOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_intake_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_intake_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DismissIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_intake_findings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_intake_finding_sharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_intake_finding_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingSummaryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_intake_findings_sharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharingBulkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_knowledge_gap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gap_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_gap_research: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gap_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_question: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerResult"];
                 };
             };
             /** @description Validation Error */

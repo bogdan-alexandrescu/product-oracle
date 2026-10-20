@@ -54,6 +54,7 @@ from typing import Any, Protocol
 import httpx
 import jwt
 
+from oracle.swarm.learned import DatabaseLearnedStore, Learned, LearnedStore
 from oracle.swarm.runtime import (
     AWAIT_PROFILE,
     FEATURES,
@@ -313,6 +314,7 @@ class SwarmCloudRuntime:
         features_ttl: float = 60.0,
         egress_refresh: float = 300.0,
         principal: str | None = None,
+        learned_store: LearnedStore | None = None,
     ) -> None:
         if not base_url:
             raise ValueError("ORACLE_SWARMCLOUD_URL is required for the swarmcloud runtime")
@@ -324,10 +326,17 @@ class SwarmCloudRuntime:
         self._egress_refresh = egress_refresh
         self._features: Features | None = None
         self._features_at = 0.0
-        # What calls taught us (a 422 at submit, an answer refused): feature -> (state,
-        # reason, until). It outlives one cached reading, not the TTL after it, except a
-        # sticky one (until is infinite), kept until SwarmCloud reports the feature on.
-        self._learned: dict[str, tuple[FeatureState, str, float]] = {}
+        # What calls taught us (a 422 at submit, an answer refused): feature -> its state,
+        # reason, and when it was learned and ends (wall clock). It outlives one cached
+        # reading, not the TTL after it, except a sticky one (until is infinite), kept until
+        # SwarmCloud reports the feature on.
+        self._learned: dict[str, Learned] = {}
+        # Where every instance keeps what it learned (the database; None: this process
+        # only), with this process's learning not written there yet and the sticky states
+        # SwarmCloud reported over (feature -> when).
+        self.learned_store = learned_store
+        self._unsaved: dict[str, Learned] = {}
+        self._over: dict[str, float] = {}
         self._egress: frozenset[str] | None = None
         self._egress_until = 0.0
         self._egress_lock = asyncio.Lock()
@@ -353,6 +362,7 @@ class SwarmCloudRuntime:
             features_ttl=settings.swarmcloud_features_ttl_seconds,
             egress_refresh=settings.egress_refresh_seconds,
             principal=settings.swarmcloud_principal or None,
+            learned_store=DatabaseLearnedStore(),
         )
 
     @property
@@ -379,16 +389,16 @@ class SwarmCloudRuntime:
             service_answer="unknown",
             reasons={k: "not read from SwarmCloud yet" for k in FEATURES},
         )
-        now = time.monotonic()
+        now = time.time()
         states = base.as_dict()
         reasons = dict(base.reasons)
-        for key, (state, reason, until) in list(self._learned.items()):
-            if until < now:
+        for key, learned in list(self._learned.items()):
+            if learned.until < now:
                 del self._learned[key]
                 continue
-            states[key] = state
-            if reason:
-                reasons[key] = reason
+            states[key] = learned.state
+            if learned.reason:
+                reasons[key] = learned.reason
             else:
                 reasons.pop(key, None)
         return Features(**states, reasons=reasons)
@@ -397,11 +407,47 @@ class SwarmCloudRuntime:
         self, feature: str, state: FeatureState, reason: str = "", *, sticky: bool = False
     ) -> None:
         """Record what a call showed about a feature: kept for the cache's lifetime, or,
-        ``sticky``, until SwarmCloud's own reading reports the feature on."""
-        until = float("inf") if sticky else time.monotonic() + max(self._features_ttl, 1)
-        self._learned[feature] = (state, reason, until)
+        ``sticky``, until SwarmCloud's own reading reports the feature on. Written to the
+        learned store (every instance's) on the next :meth:`load_learned`."""
+        now = time.time()
+        until = float("inf") if sticky else now + max(self._features_ttl, 1)
+        learned = Learned(state, reason, now, until)
+        self._learned[feature] = learned
+        if self.learned_store is not None:
+            self._unsaved[feature] = learned
+            self._over.pop(feature, None)
         if feature == "mcp":
             self._mcp_works = state == "on"
+
+    async def load_learned(self) -> None:
+        """Write what this process learned to the learned store, then read what every
+        instance learned: the store is the shared truth, so a restart or another instance
+        knows what a submission or answer showed. A store that cannot be reached is logged
+        and leaves this process's own knowledge in place (written on a later call)."""
+        if self.learned_store is None:
+            return
+        save, over = self._unsaved, self._over
+        self._unsaved, self._over = {}, {}
+        try:
+            rows = await self.learned_store.sync(save, over)
+        except Exception as exc:  # the database is down or slow: keep what we know
+            log.warning("cannot sync the runtime's learned feature states: %s", exc)
+            for feature, learned in save.items():
+                self._unsaved.setdefault(feature, learned)
+            for feature, at in over.items():
+                self._over.setdefault(feature, at)
+            return
+        now = time.time()
+        # This process's newer learning (made while the store was read) stays.
+        self._learned = {k: v for k, v in rows.items() if v.until >= now} | self._unsaved
+        mcp = self._unsaved.get("mcp") or rows.get("mcp")
+        if mcp is not None:
+            # Confirmed until something shows it off, as within one process.
+            self._mcp_works = mcp.state == "on"
+
+    async def _save_learned(self) -> None:
+        if self._unsaved or self._over:
+            await self.load_learned()
 
     @property
     def can_reach_oracle(self) -> bool:
@@ -411,6 +457,7 @@ class SwarmCloudRuntime:
         return [] if self.can_reach_oracle else [NO_MCP_NOTE]
 
     async def features(self, *, refresh: bool = False) -> Features:
+        await self.load_learned()
         fresh = time.monotonic() - self._features_at < self._features_ttl
         if self._features is not None and fresh and not refresh:
             return self._known()
@@ -432,10 +479,14 @@ class SwarmCloudRuntime:
         for key, state in states.items():
             # SwarmCloud reports the feature on: what a refusal taught is over.
             learned = self._learned.get(key)
-            if state == "on" and learned is not None and learned[2] == float("inf"):
+            if state == "on" and learned is not None and learned.sticky:
                 del self._learned[key]
+                if self.learned_store is not None:
+                    self._unsaved.pop(key, None)
+                    self._over[key] = time.time()
         self._features = Features(**states, reasons=reasons)
         self._features_at = time.monotonic()
+        await self._save_learned()
         return self._known()
 
     async def _read_mcp_feature(
@@ -446,12 +497,13 @@ class SwarmCloudRuntime:
         except RuntimeUnavailable as exc:
             if exc.code == "mcp_unavailable" or exc.status == 404:
                 states["mcp"] = "off"
-                self._mcp_works = False
                 reasons["mcp"] = (
                     "SwarmCloud answers 503 mcp_unavailable: caller MCP (#1433) is switched off"
                     if exc.code == "mcp_unavailable"
                     else "SwarmCloud has no /v1/mcp-servers yet"
                 )
+                # No longer confirmed, for every instance.
+                self.learn("mcp", "off", reasons["mcp"])
             else:
                 reasons["mcp"] = str(exc)
             return
@@ -520,8 +572,15 @@ class SwarmCloudRuntime:
 
     async def ensure_mcp_server(self, url: str) -> str:
         """Register Oracle's MCP server at ``url``. A registration already current is
-        PATCHed with the same URL while caller MCP is not confirmed: reads are served while
-        the switch is off, so only an accepted write shows that it is on."""
+        PATCHed with the same URL while caller MCP is not confirmed (by any instance): reads
+        are served while the switch is off, so only an accepted write shows that it is on."""
+        await self.load_learned()
+        try:
+            return await self._ensure_mcp_server(url)
+        finally:
+            await self._save_learned()
+
+    async def _ensure_mcp_server(self, url: str) -> str:
         if self._registered_url == url and self._mcp_works:
             return "unchanged"
         async with self._client() as client:
@@ -659,6 +718,13 @@ class SwarmCloudRuntime:
         return out
 
     async def submit(self, spec: WorkflowSpec) -> str:
+        try:
+            return await self._submit(spec)
+        finally:
+            # What the submission showed (accepted or refused) is every instance's.
+            await self._save_learned()
+
+    async def _submit(self, spec: WorkflowSpec) -> str:
         body = self.submission_body(spec)
         async with self._client() as client:
             try:
@@ -762,6 +828,26 @@ class SwarmCloudRuntime:
         answer_id: str,
         payload: dict[str, Any],
         on_behalf_of: str | None = None,
+    ) -> Answer:
+        try:
+            return await self._answer(
+                workflow_id,
+                step_id,
+                answer_id=answer_id,
+                payload=payload,
+                on_behalf_of=on_behalf_of,
+            )
+        finally:
+            await self._save_learned()
+
+    async def _answer(
+        self,
+        workflow_id: str,
+        step_id: str,
+        *,
+        answer_id: str,
+        payload: dict[str, Any],
+        on_behalf_of: str | None,
     ) -> Answer:
         body: dict[str, Any] = {"answer_id": answer_id, "payload": payload, "via": "mcp"}
         if on_behalf_of:

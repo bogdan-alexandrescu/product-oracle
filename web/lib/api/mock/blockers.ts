@@ -10,6 +10,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import type { BaselineState } from "./baseline";
 import { V2_IDS, type V2Db } from "./v2";
 
 type BlockerRow = Omit<Schemas["BlockerOut"], "gate" | "impacted" | "limit_kind_label">;
@@ -29,6 +30,8 @@ export interface BlockersContext {
   role: Role;
   v2: V2Db;
   documents: { id: string; slug: string; title: string }[];
+  /** The baseline, for blockers recorded on an existing constraint (`entity_id`). */
+  baseline?: BaselineState;
 }
 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
@@ -374,23 +377,40 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
     if (p.length === 2 && m === "POST") {
       if (!can("approver")) return forbidden("approver");
       const input = await body<Schemas["BlockerCreate"]>();
-      if (!input.key || !input.statement) return json(422, { detail: "A new blocker needs both a key and a statement" });
+      if (!input.entity_id === !input.key) return json(422, { detail: "Give either entity_id (an existing constraint) or key and statement" });
+      if (!input.entity_id && !input.statement) return json(422, { detail: "A new blocker needs both a key and a statement" });
+      // An existing constraint, e.g. an intake answer's suggested blocker (B4 promote).
+      const from = input.entity_id ? ctx.baseline?.entities.find((e) => e.id === input.entity_id) : undefined;
+      if (input.entity_id && !from) return json(404, { detail: "Blocker not found" });
+      if (from && from.type !== "constraint") return json(422, { detail: `${from.type}:${from.key} is a ${from.type}, not a constraint` });
       if (input.third_party && (!input.limit_kind || input.limit_kind === "other")) {
         return json(422, { detail: "Classify a third-party limit: capacity (rate or capacity), eligibility (API eligibility), permission or policy" });
       }
-      if (db.blockers.some((b) => b.key === input.key)) return json(409, { detail: `constraint:${input.key} already exists; give its entity_id` });
+      if (from && (from.attrs?.blocker || db.blockers.some((b) => b.id === from.id))) {
+        return json(409, { detail: `constraint:${from.key} is already a blocker; PATCH it` });
+      }
+      if (!from && db.blockers.some((b) => b.key === input.key)) return json(409, { detail: `constraint:${input.key} already exists; give its entity_id` });
+      const evidence = from ? (ctx.baseline?.evidence.filter((e) => e.entity_id === from.id) ?? []) : [];
       const b: BlockerRow = {
-        id: crypto.randomUUID(), key: input.key, statement: input.statement, detail: input.detail ?? null, entity_status: "confirmed", locked: true,
-        confidence: null, evidence_count: 0, type: input.type, limit_kind: input.limit_kind ?? "other", third_party: input.third_party ?? null,
+        id: from?.id ?? crypto.randomUUID(), key: from?.key ?? input.key!, statement: input.statement ?? from!.title,
+        detail: input.detail !== undefined ? input.detail : (from?.body ?? null), entity_status: from?.status ?? "confirmed", locked: true,
+        confidence: from?.confidence ?? null, evidence_count: evidence.length, type: input.type, limit_kind: input.limit_kind ?? "other", third_party: input.third_party ?? null,
         severity: input.severity ?? "medium", status: input.status ?? "open", timing: input.timing ?? null, threshold: input.threshold ?? null,
         impacted_entity_ids: input.impacted_entity_ids ?? [], impacted_users: input.impacted_users ?? [], owner_id: input.owner_id ?? null,
         review_at: input.review_at ?? null, document_ids: input.document_ids ?? [], scaling: input.scaling ?? {}, selected_option_id: null,
         revision: 0, created_at: now(), updated_at: now(),
       };
+      if (from) {
+        // One write: the strategy lands on the constraint and its "suggested blocker" mark goes.
+        const attrs: Record<string, unknown> = { ...(from.attrs ?? {}) };
+        delete attrs.proposed_blocker;
+        const spec = { type: b.type, limit_kind: b.limit_kind, third_party: b.third_party, severity: b.severity, status: b.status, revision: 1 };
+        Object.assign(from, { title: b.statement, body: b.detail, attrs: { ...attrs, blocker: spec }, locked: true, locked_by: ctx.userId, locked_at: now(), updated_at: now() });
+      }
       db.blockers.push(b);
-      event(ctx, b, "status_changed", b.status, { from_status: null, reason: "Blocker recorded" });
+      event(ctx, b, "status_changed", b.status, { from_status: null, reason: input.reason ?? "Blocker recorded" });
       b.revision = 1;
-      return json(201, strategy(ctx, db, b));
+      return json(201, { ...strategy(ctx, db, b), evidence });
     }
     const b = p[2] ? find(p[2]) : undefined;
     if (!b) return json(404, { detail: "Blocker not found" });

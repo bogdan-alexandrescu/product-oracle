@@ -6,7 +6,7 @@ Every authenticated endpoint takes ``principal: CurrentPrincipal`` and/or
 
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Annotated, Literal
 
 from fastapi import Depends, HTTPException, Request, status
@@ -18,6 +18,14 @@ from oracle.auth.jwks import KeysUnavailable
 from oracle.auth.models import Role, User
 from oracle.config import get_settings
 from oracle.tenancy import tenant_session
+
+# Set by Oracle's MCP server on the in-process REST call a run token makes (it acts for
+# the run's creator). The value is the run id signed by the server and bound to the
+# acting user (oracle.auth.service.sign_run_binding). A run sees more than people do
+# (S6: the full text of what a finding shared in full), so the header is trusted only
+# when its signature verifies for the authenticated user; a bare or forged run id is
+# ignored and the caller stays the person, with person rules.
+RUN_HEADER = "x-oracle-run-id"
 
 _bearer = HTTPBearer(auto_error=False, description="API token for the agent track")
 _cookie = APIKeyCookie(
@@ -33,6 +41,12 @@ class Principal:
     role: Role
     user_id: uuid.UUID | None = None
     token_id: uuid.UUID | None = None
+    # The run whose token made this call (through MCP), else None.
+    run_id: uuid.UUID | None = None
+
+    @property
+    def is_run(self) -> bool:
+        return self.run_id is not None
 
     @property
     def id(self) -> uuid.UUID:
@@ -107,10 +121,35 @@ async def _bearer_principal(raw: str) -> Principal:
     return Principal(tenant_id=token.tenant_id, kind="token", role=token.role, token_id=token.id)
 
 
+def _run_of(request: Request, principal: Principal) -> uuid.UUID | None:
+    raw = request.headers.get(RUN_HEADER)
+    if not raw:
+        return None
+    run_id = service.read_run_binding(raw, principal.user_id)
+    if run_id is None:
+        # Fail closed: a header that does not verify must not leave the request acting as
+        # the person (who would see author-only findings a run may not).
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Invalid {RUN_HEADER}: not a run binding issued for this credential",
+        )
+    return run_id
+
+
 async def get_principal(
     request: Request,
     bearer: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     cookie: Annotated[str | None, Depends(_cookie)],
+) -> Principal:
+    principal = await _authenticate(request, bearer, cookie)
+    run_id = _run_of(request, principal)
+    return replace(principal, run_id=run_id) if run_id is not None else principal
+
+
+async def _authenticate(
+    request: Request,
+    bearer: HTTPAuthorizationCredentials | None,
+    cookie: str | None,
 ) -> Principal:
     iap_user = await _iap_user(request)
     if bearer is not None:

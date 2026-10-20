@@ -19,6 +19,7 @@ from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
+from oracle.intake.router import router as intake_router
 from oracle.jobs.router import router as llm_jobs_router
 from oracle.jobs.worker import (
     JOB_OVERHEAD_SECONDS,
@@ -37,6 +38,7 @@ from oracle.quality.router import router as quality_router
 from oracle.review.router import router as review_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
+from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
 from oracle.swarm import close_runtime
 from oracle.templates.router import router as templates_router
@@ -74,6 +76,9 @@ async def lifespan(app: FastAPI):
     # Scheduler): it sweeps the companies due, never one within five minutes of its last
     # sweep. Not started while the run ticker is configured: the ticker sweeps then, once
     # for every instance. ORACLE_CLAUDE_SWEEP_SECONDS=0 turns it off.
+    # Versions an old image wrote without a link during the rollout (0014_intake):
+    # repaired now and once more later, in the background (oracle.sources.repair).
+    repair = asyncio.create_task(repair_version_urls_at_startup())
     interval = get_pool_settings().sweep_seconds
     tasks = [asyncio.create_task(run_scheduler(interval))] if interval > 0 and not ticker else []
     # The local worker for built-in model jobs; `oracle tick` runs them too.
@@ -81,6 +86,7 @@ async def lifespan(app: FastAPI):
     every = get_worker_settings().worker_seconds
     if every > 0:
         tasks.append(asyncio.create_task(run_worker(every)))
+    tasks.append(repair)
     yield
     for task in tasks:
         task.cancel()
@@ -142,6 +148,8 @@ def create_app() -> FastAPI:
     app.include_router(runs_router)
     # Product Oracle v2: thin read routes over the shared tables; lanes add writes.
     app.include_router(v2_router)
+    # v2 lanes: intake, gaps, questions and answers (CR-03).
+    app.include_router(intake_router)
     # CR-08: PRD quality and readiness, outcome tracking and learnings.
     app.include_router(quality_router)
     # Modules and compositions (CR-01/02): catalogue, packs, manifests, revisions.

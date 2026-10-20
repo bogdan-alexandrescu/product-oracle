@@ -67,10 +67,15 @@ def scratch_db():
 def test_0016_roadmap_follows_the_wave_1_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0014_blockers_snapshot"
-    # 0016_refinement_batch (C1e) chains on it, and 0017_citation_source_oracle on that;
-    # still a single head.
-    assert script.get_heads() == ["0017_citation_source_oracle"]
+    # 0016_refinement_batch (C1e) chains on it, 0017_citation_source_oracle on that, then
+    # 0018_runtime_features, 0019_citation_confidence and 0014_intake; still a single head.
+    assert script.get_heads() == ["0014_intake"]
     assert script.get_revision("0016_refinement_batch").down_revision == REVISION
+    assert script.get_revision("0017_citation_source_oracle").down_revision == (
+        "0016_refinement_batch"
+    )
+    assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
+    assert script.get_heads() == ["0014_intake"]
 
 
 def _event(tenant: uuid.UUID, subject: str) -> None:
