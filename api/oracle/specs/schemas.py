@@ -78,10 +78,19 @@ class SpecSectionOut(BaseModel):
     heading: str
     layer: str
     part: Part
-    # Product requirements are decided in the PRD; the engineering approach, open decisions
-    # and assumptions only once an engineering approver approves the version. A section an
-    # edit added (part "proposed") is never decided (E1).
+    # Only what Oracle locks is decided (E1): its own parts (product requirements, the
+    # decided half of the acceptance criteria, sources). The summary, engineering approach,
+    # open decisions and assumptions are decided once an engineering approver approves the
+    # version. A section an edit added, and proposed acceptance criteria (part "proposed"),
+    # are never decided.
     decided: bool
+    # The state as the document view, exports and markdown show it.
+    label: str
+    # The acceptance criteria are listed as two parts with the same key: the half Oracle
+    # wrote from the PRD ("decided") and the proposed half ("proposed"), when there is one.
+    half: Literal["decided", "proposed"] | None = None
+    # The template does not have the section: an edit added it.
+    added: bool = False
 
 
 class SpecVersionOut(BaseModel):

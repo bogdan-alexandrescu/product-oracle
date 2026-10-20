@@ -1045,17 +1045,19 @@ async def read_spec(db: AsyncSession, request_id: uuid.UUID) -> SpecOut:
     if versions and versions[-1].document_version_id:
         latest_approved = versions[-1].approach_status == "approved"
         for s in await _section_rows(db, versions[-1].document_version_id):
-            part = contract.part_of(s.section_key)
-            sections.append(
+            sections += [
                 SpecSectionOut(
                     key=s.section_key,
                     heading=s.heading,
                     layer=s.layer,
-                    part=part,
-                    decided=part in ("product_requirement", "context")
-                    or (latest_approved and part != "proposed"),
+                    part=p.part,
+                    decided=p.decided,
+                    half=p.half,
+                    added=p.added,
+                    label=p.label,
                 )
-            )
+                for p in contract.part_states(s.section_key, s.body_md, latest_approved)
+            ]
     design = []
     for child in family[1:]:
         latest = design_avs.get(child.id) or []

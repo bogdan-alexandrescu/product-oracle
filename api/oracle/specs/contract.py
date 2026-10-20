@@ -410,6 +410,62 @@ SECTION_LABELS = (PROPOSED_LABEL, ASSUMED_LABEL, NO_MAP_NOTE)
 _PROPOSED_SPLIT = re.compile(rf"\n\n{re.escape(ACCEPTANCE_PROPOSED_LABEL)}(?:\n|$)")
 
 
+def split_acceptance(body: str) -> tuple[str, str | None]:
+    """The acceptance criteria's two parts: the half Oracle wrote from the PRD (decided)
+    and, after Oracle's own label, the proposed half (``None`` when there is none)."""
+    parts = _PROPOSED_SPLIT.split(body.strip(), maxsplit=1)
+    proposed = parts[1].strip() if len(parts) > 1 else ""
+    return parts[0].rstrip(), proposed or None
+
+
+# Only what Oracle locks is reported Decided (E1, owner, 2026-10-20): the visible state of
+# each part of a spec version, in the document view, the exports and the markdown.
+ADDED_LABEL = "Proposed · added in an edit"
+DECIDED_PRD_LABEL = "Decided · from the approved PRD"
+PROPOSED_ACCEPTANCE_STATE = "Proposed · not a product requirement until the PRD adopts it"
+PROPOSED_STATE = "Proposed · until an engineering approver approves this version"
+APPROVED_STATE = "Decided · approved by an engineering approver"
+STATE_LABELS = (
+    ADDED_LABEL,
+    DECIDED_PRD_LABEL,
+    PROPOSED_ACCEPTANCE_STATE,
+    PROPOSED_STATE,
+    APPROVED_STATE,
+)
+
+
+@dataclass(frozen=True)
+class PartState:
+    """One part of a section of a spec version: the whole section, or one half of the
+    acceptance criteria (``half``)."""
+
+    key: str
+    part: Part
+    decided: bool
+    label: str
+    half: Literal["decided", "proposed"] | None = None
+    # The template does not have the section: an edit added it.
+    added: bool = False
+
+
+def part_states(key: str, body: str, approved: bool) -> list[PartState]:
+    """The decided/proposed state of a section of a spec version whose approach is
+    ``approved`` (or not): decided only for the sections Oracle locks (its own parts),
+    else once approved, and never for a section an edit added or for proposed acceptance
+    criteria. The summary is decided like the engineering parts."""
+    if key == "acceptance-criteria":
+        out = [PartState(key, "product_requirement", True, DECIDED_PRD_LABEL, "decided")]
+        if split_acceptance(body)[1] is not None:
+            out.append(PartState(key, "proposed", False, PROPOSED_ACCEPTANCE_STATE, "proposed"))
+        return out
+    part = part_of(key)
+    if key in ORACLE_PARTS:
+        return [PartState(key, part, True, DECIDED_PRD_LABEL)]
+    if part == "proposed":
+        return [PartState(key, part, False, ADDED_LABEL, added=True)]
+    return [PartState(key, part, approved, APPROVED_STATE if approved else PROPOSED_STATE)]
+
+
 def _leading_label(body: str) -> str | None:
     first = body.strip().split("\n\n", 1)[0].strip()
     return first if first in SECTION_LABELS else None
@@ -431,7 +487,7 @@ def prd_parts(markdown: str) -> dict[str, object]:
         body = s.body_md.strip()
         if s.section_key in ORACLE_PARTS:
             if s.section_key == "acceptance-criteria":
-                body = _PROPOSED_SPLIT.split(body, maxsplit=1)[0].rstrip()
+                body = split_acceptance(body)[0]
             out[s.section_key] = (s.level, s.heading, body)
             order.append(s.section_key)
         part = part_of(s.section_key)

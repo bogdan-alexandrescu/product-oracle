@@ -446,7 +446,9 @@ async def test_engineering_approvers_approve_the_approach(client, runtime):
     [version] = spec["versions"]
     assert version["approved_by"] == str(lead.id)
     assert version["artifact_version"]["status"] == "approved"
-    assert all(s["decided"] for s in spec["sections"])
+    # Everything but the proposed acceptance criteria, which the PRD decides (E1).
+    assert all(s["decided"] for s in spec["sections"] if s["part"] != "proposed")
+    assert [s["half"] for s in spec["sections"] if not s["decided"]] == ["proposed"]
     # A PRD's approval route is unchanged for PRDs.
     resp = await client.post(
         f"/v1/documents/{PRD}/versions/1/approve", headers=world.ctx.as_("approver")

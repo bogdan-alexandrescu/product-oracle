@@ -98,6 +98,9 @@ function design(kind: "user_flow" | "wireframe"): Design {
   };
 }
 
+const DECIDED = "Decided · from the approved PRD";
+const PROPOSED = "Proposed · until an engineering approver approves this version";
+
 export function seedSpecs(): SpecsDb {
   const parts: [string, string, string, Schemas["SpecSectionOut"]["part"]][] = [
     ["spec", "Early shipping cost: technical brief", "brief", "context"],
@@ -127,7 +130,16 @@ export function seedSpecs(): SpecsDb {
     engineering_approver_ids: [],
     code_capability_map: "unavailable",
     versions: [{ artifact_version: version(I.specVersion, I.request, "potentially_stale"), document_version: 1, document_version_id: I.docVersion, approach_status: "proposed", approved_by: null, approved_at: null, origin: "run" }],
-    sections: parts.map(([key, heading, layer, part]) => ({ key, heading, layer, part, decided: part === "product_requirement" || part === "context" })),
+    // E1: only what Oracle locks is decided; the acceptance criteria read as two halves.
+    sections: parts.flatMap(([key, heading, layer, part]): Schemas["SpecSectionOut"][] => {
+      const oracle = ["spec", "requirements", "full", "acceptance-criteria", "sources"].includes(key);
+      const state = { key, heading, layer, part, decided: oracle, half: null, added: false, label: oracle ? DECIDED : PROPOSED };
+      if (key !== "acceptance-criteria") return [state];
+      return [
+        { ...state, half: "decided" },
+        { ...state, part: "proposed", decided: false, half: "proposed", label: "Proposed · not a product requirement until the PRD adopts it" },
+      ];
+    }),
     design: [design("user_flow"), design("wireframe")],
     stale: [
       { kind: "artifact_version", category: "engineering_spec", artifact_kind: "tech_brief", document_kind: null, artifact_version_id: I.specVersion, request_id: I.request, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early shipping cost: technical brief", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [], reasons: ["section s-5-2 changed in checkout-redesign"] },
