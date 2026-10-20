@@ -33969,7 +33969,8 @@
               "product_requirement",
               "engineering_approach",
               "open_decision",
-              "assumption"
+              "assumption",
+              "proposed"
             ],
             "title": "Part"
           },

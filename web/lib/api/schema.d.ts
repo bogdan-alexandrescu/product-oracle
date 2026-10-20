@@ -10872,7 +10872,7 @@ export interface components {
              * Part
              * @enum {string}
              */
-            part: "context" | "product_requirement" | "engineering_approach" | "open_decision" | "assumption";
+            part: "context" | "product_requirement" | "engineering_approach" | "open_decision" | "assumption" | "proposed";
             /** Decided */
             decided: boolean;
         };
