@@ -49,6 +49,7 @@ from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
+from oracle.roadmap import schedule
 from oracle.runs import flows, roadmap
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
@@ -943,7 +944,9 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         for e in sorted(entities.values(), key=lambda e: e.key)
         if e.type == "goal" and e.status == "confirmed"
     ]
+    bases = await schedule.verified_bases(db, version.document_id)
     return flows.SourceContext(
+        schedule_bases=[b.as_json() for b in bases],
         slug=document.slug if document else str(version.document_id),
         title=document.title if document else "",
         version=version.number,
@@ -1333,18 +1336,20 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
             "by_horizon": {},
             "problems": [{"code": "missing_file", "message": f"the segment left no {ITEMS_FILE}"}],
         }
-    slug = version = None
+    slug = version = prd_id = None
     keys: set[str] | None = None
     source_id = _source_id(run)
     if source_id is not None:
         source = (await docs_service.version_sources(db, [source_id])).get(source_id)
         if source is not None:
-            slug, version = source.slug, source.version
+            slug, version, prd_id = source.slug, source.version, source.document_id
             keys = set(
                 await db.scalars(select(Section.section_key).where(Section.version_id == source_id))
             )
+    # CR-11: a date only with a verified estimate, capacity or commitment behind it.
+    bases = await schedule.verified_bases(db, prd_id)
     return roadmap.check_items(
-        text, prd_slug=slug, prd_version=version, prd_sections=keys
+        text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
     ).as_json()
 
 

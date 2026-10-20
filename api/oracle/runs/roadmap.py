@@ -14,11 +14,20 @@
         priority: {score: 4.2, rank: 1, explanation: "G1 weight 3 x contribution 2 ..."}
         confidence: high                  # high | medium | low
         prd_section: features-bulk-import
+        # Optional (CR-11): the baseline items it delivers and how it is validated.
+        feature: bulk-import              # a feature key; else traced from the section
+        requirements: [csv-columns]       # requirement keys
+        blockers: [vendor-rate-limit]     # constraint (blocker) keys
+        validation_gates: [{name: Pilot, criterion: "3 accounts import on day one"}]
+        economics: {value: "...", cost: "...", effort: 3}
 
 :func:`check_items` lists every problem at once, so a reviewer (or a re-run) can fix
 the file in one pass. Order matters: an item comes after the items it depends on and is
 never in an earlier horizon than them; a milestone carries a date only in Now and only
-with the source of that date.
+with the source of that date. When the caller passes the verified schedule bases
+(``date_bases``, oracle.roadmap.schedule), that source must name a basis that supports
+exactly that date: a date with no verified estimate, capacity or commitment behind it is
+refused (``unverified_date``).
 """
 
 import re
@@ -28,9 +37,13 @@ from typing import Any
 
 import yaml
 
+from oracle.roadmap.schedule import Basis, supporting
+
 HORIZONS = ("now", "next", "later")
 CONFIDENCES = ("high", "medium", "low")
 REQUIRED = ("id", "title", "outcome", "horizon", "prd_section")
+# Optional trace fields: a key, or a list of keys, of baseline entities.
+KEY_LISTS = ("requirements", "blockers")
 
 # A cross-document link to a document version's section, as the roadmap draft writes it
 # (oracle.runs.flows.prd_link): /documents/<slug>/v/<n>#<section>.
@@ -69,8 +82,10 @@ def check_items(
     prd_slug: str | None = None,
     prd_version: int | None = None,
     prd_sections: set[str] | None = None,
+    date_bases: list[Basis] | None = None,
 ) -> ItemsCheck:
-    """Parse and check ``roadmap_items.yaml`` against the source PRD version."""
+    """Parse and check ``roadmap_items.yaml`` against the source PRD version (and, with
+    ``date_bases``, every date against the verified schedule bases)."""
     out = ItemsCheck()
     try:
         data = yaml.safe_load(text)
@@ -134,7 +149,8 @@ def check_items(
                     f"item {item_id}: a priority score needs its explanation",
                     item_id,
                 )
-        _check_milestone(out, item_id, horizon, raw.get("milestone"))
+        _check_milestone(out, item_id, horizon, raw.get("milestone"), date_bases)
+        _check_trace_fields(out, item_id, raw)
         section = _text(raw.get("prd_section"))
         if section and prd_sections is not None and section not in prd_sections:
             out.add(
@@ -179,7 +195,37 @@ def check_items(
     return out
 
 
-def _check_milestone(out: ItemsCheck, item_id: str, horizon: str | None, milestone: Any) -> None:
+def _check_trace_fields(out: ItemsCheck, item_id: str, raw: dict[str, Any]) -> None:
+    feature = raw.get("feature")
+    if feature is not None and not isinstance(feature, str):
+        out.add("invalid_feature", f"item {item_id}: feature must be a feature key", item_id)
+    for name in KEY_LISTS:
+        value = raw.get(name)
+        if value is not None and not (
+            isinstance(value, list) and all(isinstance(v, str) for v in value)
+        ):
+            out.add("invalid_" + name, f"item {item_id}: {name} must be a list of keys", item_id)
+    gates = raw.get("validation_gates")
+    if gates is not None and not (
+        isinstance(gates, list) and all(isinstance(g, dict) and _text(g.get("name")) for g in gates)
+    ):
+        out.add(
+            "invalid_validation_gates",
+            f"item {item_id}: validation_gates must be a list of mappings with a name",
+            item_id,
+        )
+    economics = raw.get("economics")
+    if economics is not None and not isinstance(economics, dict):
+        out.add("invalid_economics", f"item {item_id}: economics must be a mapping", item_id)
+
+
+def _check_milestone(
+    out: ItemsCheck,
+    item_id: str,
+    horizon: str | None,
+    milestone: Any,
+    date_bases: list[Basis] | None = None,
+) -> None:
     if milestone is None or isinstance(milestone, str):
         return
     if not isinstance(milestone, dict):
@@ -211,6 +257,15 @@ def _check_milestone(out: ItemsCheck, item_id: str, horizon: str | None, milesto
                 f"item {item_id}: milestone date {when!r} is not YYYY-MM-DD",
                 item_id,
             )
+            return
+    source = _text(milestone.get("date_source"))
+    if date_bases is not None and source and not supporting(when, source, date_bases):
+        out.add(
+            "unverified_date",
+            f"item {item_id}: no verified estimate, capacity or commitment named in "
+            f"date_source ({source!r}) supports {when}; drop the date or record the basis",
+            item_id,
+        )
 
 
 def doc_links(markdown: str) -> list[dict[str, Any]]:

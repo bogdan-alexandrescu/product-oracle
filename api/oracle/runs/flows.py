@@ -268,12 +268,15 @@ FLOWS: dict[str, FlowDef] = {
                     "per PRD feature or milestone, each with: id (a slug), title, outcome "
                     "(the change for customers or the business, not a feature name), "
                     "horizon (now | next | later, on the company's horizons below), "
-                    "milestone (name; a date only in now and only when a source gives a "
-                    "date or an estimate, with that source as date_source), depends_on "
+                    "milestone (name; a date only in now and only when a verified schedule "
+                    "basis below supports exactly that date, naming its reference in "
+                    "date_source; never invent a date), depends_on "
                     "(ids of other items, from the depends_on / blocks edges), priority "
                     "(score and rank from the priority order, with the explanation), "
                     "confidence (high | medium | low) and prd_section (the id of the PRD "
-                    "section it comes from). List items in an order that respects "
+                    "section it comes from); optionally feature (its feature key), "
+                    "requirements and blockers (keys), validation_gates (name, criterion) "
+                    "and economics (value, cost, effort). List items in an order that respects "
                     "dependencies: an item comes after the items it depends on and is "
                     "never in an earlier horizon than them. Write roadmap_items.yaml: "
                     "version: 1, prd: {document, version}, items: [...].",
@@ -400,6 +403,9 @@ class SourceContext:
     edges: list[dict[str, str]] = field(default_factory=list)
     # Confirmed goals: key, title, metric, target, horizon.
     goals: list[dict[str, Any]] = field(default_factory=list)
+    # Verified schedule bases (CR-11): kind, reference, supports_date. The only sources
+    # a milestone date may name.
+    schedule_bases: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -540,6 +546,14 @@ def source_lines(src: SourceContext) -> list[str]:
         + ". Dated milestones only in now, and only from a source that gives a date or an "
         "estimate (O4).",
     ]
+    lines += ["", "Verified schedule bases (the only sources a milestone date may name):"]
+    if src.schedule_bases:
+        lines += [
+            f"- {b['reference']} ({b['kind']}) supports {b['supports_date']}"
+            for b in src.schedule_bases
+        ]
+    else:
+        lines.append("- none: give no dates, only horizons")
     if src.goals:
         lines += ["", "Confirmed goals:"]
         for g in src.goals:
