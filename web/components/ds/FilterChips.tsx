@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 export type FilterChip<V extends string> = { value: V; label: ReactNode; count?: number | null; testId?: string };
 
 /**
- * One choice of a few as toggle chips (All 104 · To review 80 · Feedback 9). They wrap,
+ * One choice of a few as toggle chips (All 104 · To review 80 · With feedback 9). They wrap,
  * never scroll sideways; 32 px tall, 44 px on a phone.
  */
 export function FilterChips<V extends string>({

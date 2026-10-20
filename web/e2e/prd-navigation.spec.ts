@@ -127,11 +127,11 @@ test("outline rail: '/' filters by name, the chips narrow, arrows and Enter pick
   await expect(section(page, "7-3-invoices")).toBeVisible();
   await box.fill("");
 
-  // Chips: To review (no verdict) and Feedback (sections with open feedback).
+  // Chips: To review (no verdict) and With feedback (sections with open feedback).
   const chips = rail(page).getByTestId("outline-chips");
   await expect(chips.getByRole("button", { name: /^To review/ })).toHaveText(/To review\s*91/);
-  await expect(chips.getByRole("button", { name: /^Feedback/ })).toHaveText(/Feedback\s*9/);
-  await chips.getByRole("button", { name: /^Feedback/ }).click();
+  await expect(chips.getByRole("button", { name: /^With feedback/ })).toHaveText(/With feedback\s*9/);
+  await chips.getByRole("button", { name: /^With feedback/ }).click();
   const withCount = railRows(page).filter({ has: page.getByTestId("outline-count") });
   await expect(withCount).toHaveCount(9);
   await expect(outlineRow(page, "5-4-import-from-a-spreadsheet").getByTestId("outline-count")).toHaveText("2");

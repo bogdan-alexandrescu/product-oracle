@@ -23,7 +23,7 @@ import { useViewportFit } from "@/lib/use-viewport-fit";
  * PRD page navigation (I3, owner 2026-10-20): the outline rail left of the section card
  * (>= 1280 px), the section switcher above it (below 1280 px) and the Sections sheet on a
  * phone. All three list the same rows: a status mark that differs in shape and colour, the
- * name, and an open-feedback count; a filter box and All / To review / Feedback chips.
+ * name, and an open-feedback count; a filter box and All / To review / With feedback chips.
  */
 
 export type OutlineChip = "all" | "review" | "feedback";
@@ -167,7 +167,7 @@ export function OutlineFilters({
         items={[
           { value: "all", label: "All", count: sections.length, testId: "chip-all" },
           { value: "review", label: "To review", count: toReview, testId: "chip-review" },
-          { value: "feedback", label: "Feedback", count: withFeedback, testId: "chip-feedback" },
+          { value: "feedback", label: "With feedback", count: withFeedback, testId: "chip-feedback" },
         ]}
       />
     </div>
