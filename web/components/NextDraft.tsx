@@ -39,6 +39,11 @@ export function BuildDraftButton({ doc }: { doc: string }) {
       }),
     ),
   );
+  // The Refinement switch (Built-in jobs): off means a build would be refused with a 409.
+  const sw = useQuery(`llm-settings|${doc}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}/llm-jobs/settings", { params: { path: { doc } } })),
+  );
+  const refinementOff = sw.data?.refinement === false;
   // The sheet opens on arrival from the Inbox's "Build draft" (?build=1); the button shows
   // only once the staged list has loaded on the client, so the server render never differs.
   const [open, setOpen] = useState(
@@ -57,6 +62,20 @@ export function BuildDraftButton({ doc }: { doc: string }) {
     : job?.status === "succeeded"
       ? `Draft ${data.next_version} ready`
       : `Build draft ${data.next_version}`;
+  if (refinementOff && !job) {
+    return (
+      <Button
+        variant="primary"
+        icon="doc"
+        disabled
+        title="Refinement jobs are switched off"
+        aria-label={`${label}: Refinement jobs are switched off`}
+        data-testid="build-draft"
+      >
+        {label}
+      </Button>
+    );
+  }
   return (
     <>
       <Button variant="primary" icon="doc" onClick={() => setOpen(true)} data-testid="build-draft" aria-haspopup="dialog">

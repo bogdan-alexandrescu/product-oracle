@@ -233,12 +233,18 @@ async def build(
     db: AsyncSession, principal: "Principal", doc: str, suggestion_ids: list[uuid.UUID] | None
 ) -> LlmJob:
     document = await get_document(db, doc)
+    # Serialise builds per document: the row lock is held until the request commits, so a
+    # double click or two approvers cannot both pass the pending check below.
+    await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
     latest = await _latest(db, document)
     if latest is None:
         raise JobError(409, f"'{document.slug}' has no version yet")
     pending = await current_job(db, document.id)
     if pending is not None and pending.status in ("queued", "running"):
-        raise JobError(409, "the next draft is already being built; wait for it or discard it")
+        raise JobError(
+            409,
+            f"a build is already running (job {pending.id}); wait for it or discard it",
+        )
     sections = await _sections(db, latest)
     headings = {s.section_key: s.heading for s in sections}
     ids = [str(i) for i in suggestion_ids] if suggestion_ids is not None else None
@@ -391,6 +397,26 @@ async def apply(
         named = ", ".join(f"{s.heading} ({s.section_key})" for s in hit)
         raise JobError(409, f"approved and locked since the build, never changed: {named}")
 
+    # A suggestion dismissed (or no longer staged) since the build is not applied, and a
+    # section whose every suggestion left staging is dropped from the new version.
+    wanted = [uuid.UUID(i) for k in kept for i in built[k].get("suggestion_ids") or []]
+    used = list(
+        await db.scalars(
+            select(LlmSuggestion).where(
+                LlmSuggestion.id.in_(wanted), LlmSuggestion.status == "accepted"
+            )
+        )
+    )
+    still = {str(u.id) for u in used}
+    kept = [
+        k
+        for k in kept
+        if not built[k].get("suggestion_ids") or set(built[k]["suggestion_ids"]) & still
+    ]
+    if not kept:
+        raise JobError(409, "every suggestion in this draft was dismissed since the build")
+    used = [u for u in used if any(str(u.id) in built[k].get("suggestion_ids", []) for k in kept)]
+
     replace: dict[str, tuple[str, str]] = {}
     for k in kept:
         s = built[k]
@@ -409,14 +435,6 @@ async def apply(
         replace[sources.section_key] = (heading, f"{body.rstrip()}\n\n{joined}".strip())
         placed = True
 
-    wanted = [uuid.UUID(i) for k in kept for i in built[k].get("suggestion_ids") or []]
-    used = list(
-        await db.scalars(
-            select(LlmSuggestion).where(
-                LlmSuggestion.id.in_(wanted), LlmSuggestion.status == "accepted"
-            )
-        )
-    )
     live = {str(u.feedback_item_id) for u in used}
     resolutions = [
         r for k in kept for r in built[k].get("resolutions") or [] if r["feedback_id"] in live

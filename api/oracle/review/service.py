@@ -380,8 +380,8 @@ async def update_comment(
 ) -> CommentOut:
     """Resolve / reopen a thread and/or edit a comment's text.
 
-    Resolving is thread state for the UI; the feedback item keeps its own status (it is
-    closed by the next draft's ``resolutions`` or ``PATCH /v1/feedback/{id}``). Editing
+    Resolving a thread also closes its feedback item (``addressed``, no version), so the
+    Inbox stops counting it; reopening the thread reopens an item closed that way. Editing
     the body of a top-level comment refreshes its item's summary while the item is open.
 
     Below the approver role a principal may only change its own comments.
@@ -396,9 +396,23 @@ async def update_comment(
         if resolved and comment.resolved_at is None:
             comment.resolved_at = _now()
             changes["resolved"] = True
+            item = await session.scalar(
+                select(FeedbackItem).where(FeedbackItem.comment_id == comment.id)
+            )
+            if item is not None and item.status == "open":
+                item.status = "addressed"
         elif not resolved and comment.resolved_at is not None:
             comment.resolved_at = None
             changes["resolved"] = False
+            item = await session.scalar(
+                select(FeedbackItem).where(FeedbackItem.comment_id == comment.id)
+            )
+            if (
+                item is not None
+                and item.status == "addressed"
+                and item.addressed_in_version is None
+            ):
+                item.status = "open"
     if body is not None and body != comment.body:
         comment.body = body
         changes["body"] = body
