@@ -338,6 +338,9 @@ async def get_source_item(
     foreign = released is not None and user_id != await db.scalar(
         select(Source.owner_user_id).where(Source.id == row.item.source_id)
     )
+    if released is not None:
+        # Its user's own item too reads as at release (S6, freeze at sharing).
+        row = items.ItemRow(row.item, row.version, row.source_kind, released=True)
     settings = await items.confidence_settings(db)
     return ItemDetail(
         **items.item_out(row, settings, foreign=foreign),

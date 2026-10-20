@@ -59,6 +59,8 @@ class ItemRow:
     item: SourceItem
     version: SourceItemVersion | None
     source_kind: str
+    # Read at the version a share released (a run, S6): metadata as at release too.
+    released: bool = False
 
 
 class _Xid8(UserDefinedType):
@@ -164,8 +166,10 @@ async def items_as_of(
     ``also``: a run's reads (``version_ids``): its user's items ever frozen at the
     version released only, and none deleted upstream."""
     pinned = version_ids(user_id, as_of, txn_snapshot, also).subquery()
+    # A run's user's own items ever frozen are read only as released (``version_ids``).
+    released = SourceItem.id.in_(also.frozen) if also is not None else literal(False)
     stmt = (
-        select(SourceItem, SourceItemVersion, Source.kind)
+        select(SourceItem, SourceItemVersion, Source.kind, released)
         .join(SourceItemVersion, SourceItemVersion.item_id == SourceItem.id)
         .join(Source, Source.id == SourceItem.source_id)
         .where(SourceItemVersion.id.in_(select(pinned.c.id)))
@@ -177,7 +181,7 @@ async def items_as_of(
         # The user's own items only: other users' released items are not theirs to list.
         stmt = stmt.where(Source.owner_user_id == user_id)
     rows = await session.execute(stmt)
-    return [ItemRow(item, version, kind) for item, version, kind in rows.all()]
+    return [ItemRow(item, version, kind, bool(r)) for item, version, kind, r in rows.all()]
 
 
 async def as_released(
@@ -215,7 +219,7 @@ async def as_released(
             version = versions.get(pairs.get(row.item.id))  # type: ignore[arg-type]
             if version is None:
                 continue
-            row = ItemRow(row.item, version, row.source_kind)
+            row = ItemRow(row.item, version, row.source_kind, released=True)
         out.append(row)
     return out
 
@@ -240,14 +244,14 @@ async def source_items(
         SourceItem.source_updated_at, SourceItem.occurred_at, SourceItem.created_at
     )
     if also is None:
-        stmt = select(SourceItem, SourceItemVersion).outerjoin(
+        stmt = select(SourceItem, SourceItemVersion, literal(False)).outerjoin(
             SourceItemVersion, SourceItemVersion.id == SourceItem.current_version_id
         )
     else:
         released = also.released.subquery()
         frozen = SourceItem.id.in_(also.frozen)
         stmt = (
-            select(SourceItem, SourceItemVersion)
+            select(SourceItem, SourceItemVersion, frozen)
             .outerjoin(released, released.c.item_id == SourceItem.id)
             .outerjoin(
                 SourceItemVersion,
@@ -274,7 +278,7 @@ async def source_items(
     if exclude:
         stmt = stmt.where(SourceItem.id.not_in(exclude))
     rows = await session.execute(stmt)
-    return [ItemRow(item, version, source.kind) for item, version in rows.all()]
+    return [ItemRow(item, version, source.kind, bool(r)) for item, version, r in rows.all()]
 
 
 async def owned_item(
@@ -332,12 +336,13 @@ def item_confidence(
     *,
     released: bool = False,
 ) -> confidence.Score:
-    """``released``: another user's item read at the version a share released (S6):
-    fresh as that version, never as the item changed upstream since."""
+    """``released``: an item read as a share released it, or one the reader may not
+    see (S6): fresh as ``row.version`` only, never as the item changed upstream since;
+    with no version, no freshness at all (a neutral score)."""
     item = row.item
     stamps = [t for t in (item.source_updated_at, item.occurred_at) if t is not None]
-    if released and row.version is not None:
-        stamps = [row.version.fetched_at]
+    if released:
+        stamps = []
     if not stamps and row.version is not None:
         stamps = [row.version.fetched_at]
     factors = confidence.Factors(
@@ -374,9 +379,16 @@ def item_out(
     foreign: bool = False,
 ) -> dict[str, Any]:
     """``foreign``: another user's item a finding shared in full released to the caller
-    (a run, S6): who wrote it, who it is shared with and when it changed upstream are
-    left out (the title, link and text it reads are the ones released, S6)."""
+    (a run, S6): who wrote it is left out too. An item read as released (``foreign``,
+    or ``row.released``: the run's user's own frozen item) reads as at release (S6,
+    freeze at sharing): who it is shared with and when it changed upstream are left
+    out, its confidence is as fresh as the version released, and its title, link and
+    text are the ones released. ``now`` None: a current read, where the owner sees the
+    item's title and link as they are now (a rename writes no version; owners are
+    never frozen)."""
     item, version = row.item, row.version
+    released = foreign or row.released
+    pinned = released or now is not None
     out = {
         "id": item.id,
         "source_id": item.source_id,
@@ -384,9 +396,9 @@ def item_out(
         "external_id": item.external_id,
         "kind": item.kind,
         # A pinned read shows the title as it was then.
-        "title": version.title if version is not None else item.title,
+        "title": version.title if version is not None and pinned else item.title,
         # The link as it was then too (S6, links): a Notion link carries the title.
-        "url": version.url if version is not None else item.url,
+        "url": version.url if version is not None and pinned else item.url,
         "author": item.author,
         "acl": item.acl or {},
         "occurred_at": item.occurred_at,
@@ -395,9 +407,11 @@ def item_out(
         "version_id": version.id if version is not None else None,
         "fetched_at": version.fetched_at if version is not None else None,
         "confidence": confidence_out(
-            item_confidence(row, settings, now, released=foreign), settings
+            item_confidence(row, settings, now, released=released), settings
         ),
     }
+    if released:
+        out.update(acl=_scalar_acl(item.acl or {}), source_updated_at=None)
     if foreign:
-        out.update(author=None, acl=_scalar_acl(item.acl or {}), source_updated_at=None)
+        out.update(author=None)
     return out

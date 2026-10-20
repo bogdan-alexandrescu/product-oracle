@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import confidence
@@ -48,8 +48,17 @@ async def search(
     query = func.websearch_to_tsquery("english", q)
     visible = items.version_ids(user_id, as_of, txn_snapshot, also).subquery()
     rank = func.ts_rank(SourceItemVersion.search, query)
+    # Every item ever frozen is read as released only (``items.version_ids``).
+    released = SourceItem.id.in_(also.frozen) if also is not None else literal(False)
     stmt = (
-        select(SourceItem, SourceItemVersion, Source.kind, rank.label("rank"), Source.owner_user_id)
+        select(
+            SourceItem,
+            SourceItemVersion,
+            Source.kind,
+            rank.label("rank"),
+            Source.owner_user_id,
+            released,
+        )
         .join(SourceItem, SourceItem.id == SourceItemVersion.item_id)
         .join(Source, Source.id == SourceItem.source_id)
         .where(
@@ -75,8 +84,8 @@ async def search(
 
     settings = await items.confidence_settings(session)
     scored = []
-    for item, version, source_kind, relevance, owner in rows:
-        row = items.ItemRow(item, version, source_kind)
+    for item, version, source_kind, relevance, owner, frozen in rows:
+        row = items.ItemRow(item, version, source_kind, bool(frozen))
         out = items.item_out(row, settings, now=as_of, foreign=owner != user_id)
         weight = confidence.rank_weight(out["confidence"]["value"])
         scored.append((float(relevance) * weight, float(relevance), version.id, out))

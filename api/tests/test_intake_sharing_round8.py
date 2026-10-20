@@ -244,8 +244,12 @@ async def test_another_users_released_item_reads_without_who_is_on_it(client, fa
         assert out["author"] is None
         assert out["source_updated_at"] is None
         assert out["acl"] == {"visibility": "private"}
-    # The author's own run reads its own item as it is.
+    # The author's own run reads its own frozen item as at release too (round 10); the
+    # author reads it as it is.
     resp = await client.get(f"/v1/source-items/{items['a']}", headers=as_run_of(ctx, "author"))
+    assert resp.json()["acl"] == {"visibility": "private"}
+    assert resp.json()["source_updated_at"] is None
+    resp = await client.get(f"/v1/source-items/{items['a']}", headers=ctx.as_("author"))
     assert resp.json()["acl"]["participants"] == ["Ada", "Grace"]
 
 

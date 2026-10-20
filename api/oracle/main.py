@@ -36,6 +36,7 @@ from oracle.priorities.router import router as priorities_router
 from oracle.quality.router import router as quality_router
 from oracle.review.router import router as review_router
 from oracle.runs.router import router as runs_router
+from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
 from oracle.swarm import close_runtime
 from oracle.templates.router import router as templates_router
@@ -73,6 +74,9 @@ async def lifespan(app: FastAPI):
     # Scheduler): it sweeps the companies due, never one within five minutes of its last
     # sweep. Not started while the run ticker is configured: the ticker sweeps then, once
     # for every instance. ORACLE_CLAUDE_SWEEP_SECONDS=0 turns it off.
+    # Versions an old image wrote without a link during the rollout (0014_intake):
+    # repaired now and once more later, in the background (oracle.sources.repair).
+    repair = asyncio.create_task(repair_version_urls_at_startup())
     interval = get_pool_settings().sweep_seconds
     tasks = [asyncio.create_task(run_scheduler(interval))] if interval > 0 and not ticker else []
     # The local worker for built-in model jobs; `oracle tick` runs them too.
@@ -80,6 +84,7 @@ async def lifespan(app: FastAPI):
     every = get_worker_settings().worker_seconds
     if every > 0:
         tasks.append(asyncio.create_task(run_worker(every)))
+    tasks.append(repair)
     yield
     for task in tasks:
         task.cancel()

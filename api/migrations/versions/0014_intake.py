@@ -52,7 +52,9 @@ Security review fixes (same lane, same revision):
   link it was written with, as it keeps the title, so a share freezes the link too.
   Existing versions are backfilled from their item's link, except Notion pages: their
   link's slug carries the page's *current* title, so they get the id-only page link
-  (none when the item's id is not a page id). Fail closed.
+  (none when the item's id is not a page id). Fail closed. Round 10: rows whose link
+  would be NULL are skipped; versions an old image writes during the rollout get theirs
+  from the same query at API startup (``oracle.sources.repair``).
 
 Check constraints this revision widens (``llm_jobs.kind``, ``knowledge_gaps.status``,
 ``proposals.status``) are extended from what the database holds, never rebuilt from a
@@ -221,22 +223,26 @@ ON CONFLICT DO NOTHING
 """
 TXN_SNAPSHOT = "pg_current_snapshot()::text"
 # Round 9 (links): a version's link from its item's; a Notion page's from its id only.
+# Round 10: rows whose link would be NULL are not written. A frozen copy of
+# oracle.sources.repair, which runs it again at startup for versions an old image wrote
+# during the rollout.
 NOTION_ID = "'^[0-9a-f]{32}$'"
-VERSION_URL_BACKFILL = (
-    """
-UPDATE source_item_versions v
-SET url = CASE
+VERSION_URL = (
+    """CASE
     WHEN so.kind <> 'notion' THEN si.url
     WHEN lower(replace(si.external_id, '-', '')) ~ """
     + NOTION_ID
     + """
         THEN 'https://www.notion.so/' || lower(replace(si.external_id, '-', ''))
-    END
+    END"""
+)
+VERSION_URL_BACKFILL = f"""
+UPDATE source_item_versions v
+SET url = {VERSION_URL}
 FROM source_items si
 JOIN sources so ON so.id = si.source_id
-WHERE si.id = v.item_id
+WHERE si.id = v.item_id AND v.url IS NULL AND ({VERSION_URL}) IS NOT NULL
 """
-)
 
 
 def upgrade() -> None:

@@ -4,9 +4,10 @@ Each evidence row is scored from oracle.confidence.Factors:
 
 - source and item kind from its source item; public-link evidence counts as its
   ``kind`` (``notion``, ``google_docs`` or ``web``); "manual" for free-standing evidence;
-- latest timestamp: the item's updated / occurred time, else its newest version's
-  fetch time, else the evidence's retrieved_at; for a public link, the page's stated
-  last change, else when it was last fetched;
+- latest timestamp: the evidence's retrieved_at (for a source item, when the version
+  it was taken from was fetched; never the item's current times, S6), else its newest
+  version's fetch time; for a public link, the page's stated last change, else when it
+  was last fetched;
 - mentions: distinct sources (source items and public links) behind the same entity
   or edge;
 - goal contribution: the highest ``supports`` contribution from the entity (for an
@@ -186,8 +187,10 @@ async def rescore_targets(
             if ev.kind:
                 latest = link_latest(snapshots.get(ev.id), ev.retrieved_at)
             elif item is not None:
-                stamps = [t for t in (item.source_updated_at, item.occurred_at) if t]
-                latest = max(stamps) if stamps else (fetched or ev.retrieved_at)
+                # As fresh as the version the evidence was taken from, never as the
+                # item changed upstream since: the score is shown to everyone, and
+                # the item is private to its owner (S6).
+                latest = ev.retrieved_at or fetched
             else:
                 latest = ev.retrieved_at
             factors = confidence.Factors(

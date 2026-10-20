@@ -401,20 +401,12 @@ async def present(
     # Public links were fetched anonymously: their snapshot is shown to everyone.
     snapshots = await scoring.latest_snapshots(db, [r.id for r in rows if r.kind])
     withheld = await withheld_from(db, principal) if item_ids else set()
-    # A run sees its items at the version it reads (S6, links): one ever frozen at the
-    # version released, or not at all.
+    # A run sees an item ever frozen at the version released (S6, links), or not at all.
     frozen = await run_versions(db, principal, set(items))
-    version_ids = {
-        i: frozen[i] if i in frozen else item.current_version_id for i, (item, _) in items.items()
-    }
     versions: dict[uuid.UUID, SourceItemVersion] = {}
-    if any(version_ids.values()):
-        res = await db.scalars(
-            select(SourceItemVersion).where(
-                SourceItemVersion.id.in_({v for v in version_ids.values() if v})
-            )
-        )
-        versions = {v.item_id: v for v in res.all() if version_ids.get(v.item_id) == v.id}
+    if released := {v for v in frozen.values() if v}:
+        res = await db.scalars(select(SourceItemVersion).where(SourceItemVersion.id.in_(released)))
+        versions = {v.item_id: v for v in res.all()}
     out = []
     for r in rows:
         item, source = items.get(r.source_item_id, (None, None))
@@ -423,6 +415,8 @@ async def present(
             and principal.user_id == source.owner_user_id
             and item.id not in withheld
             and not (item.id in frozen and frozen[item.id] is None)
+            # A run never reads an item deleted upstream, frozen or not (S6).
+            and not (principal.is_run and item.deleted_at is not None)
         )
         version = versions.get(item.id) if item is not None else None
         snap = snapshots.get(r.id)
@@ -444,7 +438,9 @@ async def present(
                     # The stored ref (the title as attached), never the item's current
                     # title (S6, titles).
                     title=r.ref,
-                    # The link of the version read, never the item's current one.
+                    # An item a run reads as released: the link released (S6,
+                    # links). Otherwise the link as it is now (a rename writes no
+                    # version; owners are never frozen).
                     url=version.url if version is not None else item.url,
                 )
                 if mine

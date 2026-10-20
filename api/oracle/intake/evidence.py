@@ -397,13 +397,13 @@ async def refs(
     out: dict[uuid.UUID, EvidenceRef] = {}
     for item, source in rows:
         version = versions.get(item.id)
-        row = source_items.ItemRow(item, version, source.kind)
         owner = me is not None and source.owner_user_id == me
-        score = source_items.item_confidence(
-            row, settings, now=as_of, released=released is not None and not owner
-        )
         shown = item.id in reveal and (released is None or item.id in released)
         visible = owner or (shown and item.deleted_at is None)
+        # Anyone but the owner: as fresh as the version shown, never as the item
+        # changed upstream since; an item they may not see scores neutral (S6).
+        row = source_items.ItemRow(item, version if visible else None, source.kind)
+        score = source_items.item_confidence(row, settings, now=as_of, released=not owner)
         out[item.id] = EvidenceRef(
             source_item_id=item.id,
             visible=visible,
