@@ -82,11 +82,12 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   // Error notices are <p role="alert">; Next's route announcer is the only other alert.
   await expect(page.locator("main p[role=alert], [data-testid^=home] p[role=alert]")).toHaveCount(0);
 
-  // The Inbox row says what waits and opens the review panel on the open items, at the first.
+  // One Inbox row per item (owner, 2026-10-20); each opens the review panel on the open items, at its section.
   await page.goto("/inbox");
-  const row = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Team invoices PRD" });
-  await expect(row).toContainText("1 comment to resolve · 1 section verdict to address");
-  await row.getByRole("link", { name: "Review feedback Team invoices PRD" }).click();
+  const inboxRows = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Team invoices PRD" });
+  await expect(inboxRows).toHaveCount(2);
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("2");
+  await inboxRows.filter({ hasText: "Finance leads need" }).getByRole("link", { name: /^Review comments/ }).click();
   await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/v/1\\?feedback=open#solution$`));
   const review = page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
   await expect(review.getByRole("tab", { name: /^Feedback\s*2$/ })).toHaveAttribute("aria-selected", "true");
@@ -125,7 +126,7 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   for (const note of ["bulk download as a zip archive", "numeric target for support tickets"]) {
     const row = rows.filter({ hasText: note });
     await expect(row).toContainText("Addressed");
-    await expect(row).toContainText("addressed in v2");
+    await expect(row).toContainText("Addressed in v2");
   }
 
   // Publish v2 (the PRD has no blocks: the API's publish gate lets it through), then export it.

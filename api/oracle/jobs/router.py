@@ -2,9 +2,11 @@
 
 Viewers read jobs, suggestions and reports; approvers queue, retry and cancel jobs,
 accept, edit and dismiss suggestions, and refine sections; owners turn job kinds on or
-off per document. An intake job's output (what it read and wrote from the author's
-sources) is shown to the intake's author only (S6). Logic lives in
-:mod:`oracle.jobs.service`; each handler commits once.
+off per document. Approvers build the next draft from the staged changes (C1e) in one
+job, preview it, apply it as one version or discard it. An intake job's output (what it
+read and wrote from the author's sources) is shown to the intake's author only (S6).
+Logic lives in :mod:`oracle.jobs.service` and :mod:`oracle.jobs.next_draft`; each
+handler commits once.
 """
 
 import uuid
@@ -19,14 +21,18 @@ from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.docs.schemas import VersionOut
 from oracle.intake import sharing
-from oracle.jobs import service
+from oracle.jobs import next_draft, service
 from oracle.jobs.schemas import (
     JobCreate,
     JobSettings,
     LlmJobOut,
+    NextDraftApply,
+    NextDraftIn,
+    NextDraftPreview,
     RefineIn,
     RefinementApply,
     RefinementPreview,
+    StagedChanges,
     SuggestionAccept,
     SuggestionDismiss,
     SuggestionOut,
@@ -149,6 +155,60 @@ async def apply_refinement(
 ) -> VersionOut:
     """Accept a refinement: import it as the next version, with its resolutions."""
     return await _call(service.apply_refinement(db, principal, job_id, body.heading, body.body_md))
+
+
+# --- next draft from staged changes (C1e) ----------------------------------------------
+
+
+@router.get(DOC + "/staged-changes", response_model=StagedChanges)
+async def list_staged_changes(
+    doc: str,
+    db: TenantDB,
+    include_gone: Annotated[
+        bool, Query(description="Also list staged items whose section is gone")
+    ] = False,
+) -> StagedChanges:
+    """Accepted suggestions waiting for the next draft, from whichever draft they were
+    raised on, with who accepted them and when, and the build in progress if any."""
+    return await _call(next_draft.staged_changes(db, doc, include_gone))
+
+
+@router.post(DOC + "/next-draft", response_model=LlmJobOut, status_code=201)
+async def build_next_draft(
+    doc: str, body: NextDraftIn, principal: Approver, db: TenantDB
+) -> LlmJobOut:
+    """Build the next draft: one job rewrites every section the chosen staged suggestions
+    touch (default: all staged), over the latest version. Locked sections are refused
+    (409, naming them)."""
+    job = await _call(next_draft.build(db, principal, doc, body.suggestion_ids))
+    await db.commit()
+    return await service.job_out(db, job)
+
+
+@router.get(DOC + "/next-draft/{job_id}", response_model=NextDraftPreview)
+async def preview_next_draft(doc: str, job_id: uuid.UUID, db: TenantDB) -> NextDraftPreview:
+    """The combined preview: each revised section with its word diff, notes and
+    resolutions. Sections are empty until the build has finished."""
+    return await _call(next_draft.preview(db, doc, job_id))
+
+
+@router.post(DOC + "/next-draft/{job_id}/apply", response_model=VersionOut, status_code=201)
+async def apply_next_draft(
+    doc: str, job_id: uuid.UUID, body: NextDraftApply, principal: Approver, db: TenantDB
+) -> VersionOut:
+    """Apply as ONE new version, without the dropped sections (they stay staged).
+    Refused (409) when a newer version appeared since the build started."""
+    return await _call(next_draft.apply(db, principal, doc, job_id, body.drop_sections, body.edits))
+
+
+@router.post(DOC + "/next-draft/{job_id}/discard", response_model=LlmJobOut)
+async def discard_next_draft(
+    doc: str, job_id: uuid.UUID, principal: Approver, db: TenantDB
+) -> LlmJobOut:
+    """Discard a build (cancel it while it runs); every staged item stays staged."""
+    job = await _call(next_draft.discard(db, principal, doc, job_id))
+    await db.commit()
+    return await service.job_out(db, job)
 
 
 # --- suggestions ----------------------------------------------------------------------

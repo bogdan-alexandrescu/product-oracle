@@ -64,7 +64,7 @@ order; a downgrade removes only the values added here.
 The integrator re-chains this revision in merge order (waves.md).
 
 Revision ID: 0014_intake
-Revises: 0016_roadmap
+Revises: 0016_refinement_batch
 """
 
 import re
@@ -75,7 +75,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0014_intake"
-down_revision: str | None = "0016_roadmap"
+down_revision: str | None = "0016_refinement_batch"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

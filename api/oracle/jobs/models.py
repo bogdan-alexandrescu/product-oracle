@@ -2,14 +2,15 @@
 
 A job (``llm_jobs``) is one unit of work for Oracle's own model calls on a document:
 ``review_comments`` (classify, group, suggest, push back), ``reporting`` (resolution
-report and what changed), ``refinement`` (a revised section) or ``quality_review`` (an
+report and what changed), ``refinement`` (a revised section), ``refinement_batch`` (every
+section the staged suggestions touch, revised together for the next draft) or ``quality_review`` (an
 advisory model view of the PRD quality criteria, :mod:`oracle.quality.judge`). Jobs run
 one at a time per document, from ``oracle tick`` and the local background worker.
 
 A suggestion (``llm_suggestions``) is what ``review_comments`` drafts for one feedback
 item. Nothing in it changes the document: an approver accepts, edits or dismisses it,
-and accepted section text reaches the document only through a refinement that an
-approver accepts in turn.
+and accepted section text is *staged* (C1e): it reaches the document only through a
+refinement (one section) or the next-draft batch that an approver applies in turn.
 """
 
 import uuid
@@ -35,7 +36,8 @@ from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
 # quality_review (CR-08): light judging of a PRD version, stored as labelled model output.
-JOB_KINDS = ("review_comments", "reporting", "refinement", "quality_review")
+# refinement_batch (C1e): the next draft from every staged suggestion, in one pass.
+JOB_KINDS = ("review_comments", "reporting", "refinement", "quality_review", "refinement_batch")
 # Jobs on a product intake (CR-03, migration 0014_intake): light extraction from a brief
 # and its pinned sources. They have no document; ``intake_id`` says whose they are.
 INTAKE_JOB_KINDS = ("intake_analysis",)

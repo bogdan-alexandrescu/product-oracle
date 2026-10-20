@@ -34,30 +34,39 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   await openHome(page);
   const needs = page.getByTestId("home-needs");
   const rows = needs.getByTestId("home-needs-table").locator("tr[data-row]");
+  // 10 items: six lines (one a question) and '+4 more in Inbox'.
   await expect(rows).toHaveCount(7);
+  await expect(needs.getByTestId("home-needs-more")).toHaveText("+4 more in Inbox");
   await expect(rows.filter({ hasText: "Confirm the baseline" }).getByRole("link", { name: "Decide" })).toBeVisible();
   await expect(rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" })).toBeVisible();
   await expect(rows.filter({ hasText: "$14.20 / $9.00" }).getByRole("link", { name: "Decide" })).toBeVisible();
-  await expect(rows.filter({ hasText: "Which metric shows repeat checkout got faster?" })).toContainText("Asked you");
-  // The deposits PRD's blocker question is asked of the signed-in owner too.
-  await expect(rows.filter({ hasText: "Same-day cancellation refund?" })).toContainText("Asked you");
+  await expect(rows.filter({ hasText: "Asked you" })).toHaveCount(1);
   await expect(needs.getByText("Decisions 3")).toBeVisible();
-  await expect(needs.getByText("Reviews 2")).toBeVisible();
+  // Each feedback item counts, not one per document.
+  await expect(needs.getByText("Reviews 5")).toBeVisible();
   await expect(needs.getByText("Questions 2")).toBeVisible();
-  await expect(page.getByText("7 waiting")).toBeVisible();
+  await expect(page.getByText("10 waiting")).toBeVisible();
 
-  // Approving from Home starts the run: the line leaves the list.
+  // Approving from Home starts the run: the line leaves the list (the next item moves up).
   await rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" }).click();
-  await expect(rows).toHaveCount(6);
+  await expect(rows.filter({ hasText: "$53.00 est." })).toHaveCount(0);
+  await expect(needs.getByTestId("home-needs-more")).toHaveText("+3 more in Inbox");
+  await expect(rows).toHaveCount(7);
+  await expect(page.getByText("9 waiting")).toBeVisible();
 
   await needs.getByTestId("home-inbox-link").click();
   await expect(page).toHaveURL(/\/inbox$/);
+  // Both questions asked of me wait in the Inbox.
+  const questions = page.getByTestId("inbox-questions");
+  await expect(questions.locator("tr[data-row]").filter({ hasText: "Which metric shows repeat checkout got faster?" })).toContainText("Asked you");
+  // The deposits PRD's blocker question is asked of the signed-in owner too.
+  await expect(questions.locator("tr[data-row]").filter({ hasText: "Same-day cancellation refund?" })).toContainText("Asked you");
 });
 
 test("Home: in flight rows select into the inspector", async ({ page }) => {
   await openHome(page);
   const flights = page.getByTestId("home-in-flight-table").getByTestId("flight-row");
-  await expect(flights).toHaveCount(5);
+  await expect(flights).toHaveCount(6);
   const checkout = flights.filter({ hasText: "Checkout redesign PRD" });
   await expect(checkout).toHaveAttribute("aria-selected", "true");
   await expect(checkout.getByTestId("row-journey").getByRole("img")).toHaveAttribute("aria-label", "Journey 8 of 9: Review");
@@ -105,7 +114,7 @@ test("Home on a phone: stacked blocks under the phone header, inspector below, n
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   // The In flight title shows on a phone, where the table header is hidden.
   await expect(page.getByTestId("home-in-flight-phone-title")).toBeVisible();
-  await expect(page.getByTestId("home-in-flight-phone-title")).toHaveText("In flight5");
+  await expect(page.getByTestId("home-in-flight-phone-title")).toHaveText("In flight6");
 });
 
 test("Home for a new company: one line per block with what to do next", async ({ page }) => {

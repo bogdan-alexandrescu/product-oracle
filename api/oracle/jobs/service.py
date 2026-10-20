@@ -21,7 +21,7 @@ from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.schemas import VersionOut
 from oracle.jobs import kinds, prompting
-from oracle.jobs.models import JOB_KINDS, LlmJob, LlmSuggestion
+from oracle.jobs.models import LlmJob, LlmSuggestion
 from oracle.jobs.schemas import (
     ChangesReport,
     JobSettings,
@@ -43,7 +43,11 @@ JOB_LABELS = {
     "refinement": "Refinement",
     "intake_analysis": "Intake analysis",
     "quality_review": "Quality review",
+    "refinement_batch": "Refinement",
 }
+#: Kinds that share another kind's per-document switch: the next-draft batch is
+#: refinement, so turning refinement off turns it off too.
+SWITCH = {"refinement_batch": "refinement"}
 
 
 class JobError(Exception):
@@ -130,7 +134,7 @@ async def job_out(db: AsyncSession, job: LlmJob) -> LlmJobOut:
 
 def settings_of(document: Document) -> JobSettings:
     off = set(document.disabled_llm_jobs or [])
-    return JobSettings(**{k: k not in off for k in JOB_KINDS})
+    return JobSettings(**{k: k not in off for k in JobSettings.model_fields})
 
 
 async def update_settings(
@@ -138,7 +142,7 @@ async def update_settings(
 ) -> JobSettings:
     document = await get_document(db, doc)
     before = settings_of(document)
-    document.disabled_llm_jobs = [k for k in JOB_KINDS if not getattr(settings, k)]
+    document.disabled_llm_jobs = [k for k in JobSettings.model_fields if not getattr(settings, k)]
     await db.flush()
     if before != settings:
         await audit.record(
@@ -153,7 +157,7 @@ async def update_settings(
 
 
 def enabled(document: Document, kind: str) -> bool:
-    return kind not in (document.disabled_llm_jobs or [])
+    return SWITCH.get(kind, kind) not in (document.disabled_llm_jobs or [])
 
 
 # --- queueing -------------------------------------------------------------------------
