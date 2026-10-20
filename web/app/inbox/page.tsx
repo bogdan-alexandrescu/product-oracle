@@ -79,7 +79,7 @@ function Needs({
   busy: string | null;
   act: Act;
 }) {
-  const { checkpoints, approvals, overruns, feedback } = inboxNeeds(inbox, busy, act);
+  const { checkpoints, approvals, overruns, lookups, imports, searches, feedback } = inboxNeeds(inbox, busy, act);
   const asked = questionNeeds(questions, docs);
   const total = inbox.total + asked.length;
 
@@ -92,6 +92,7 @@ function Needs({
           <>
             {checkpoints.length > 0 && <CountChip label="Checkpoints" n={checkpoints.length} />}
             {approvals.length + overruns.length > 0 && <CountChip label="Cost" n={approvals.length + overruns.length} />}
+            {lookups.length + imports.length > 0 && <CountChip label="Runs" n={lookups.length + imports.length} />}
             {feedback.length > 0 && <CountChip label="Feedback" n={feedback.length} />}
             {asked.length > 0 && <CountChip label="Questions" n={asked.length} />}
           </>
@@ -103,7 +104,7 @@ function Needs({
           <ErrorNote>{questionsError}</ErrorNote>
         </div>
       )}
-      {total === 0 ? (
+      {total === 0 && searches.length === 0 ? (
         !questionsError && (
           <Empty>
             Nothing waiting{" "}
@@ -118,6 +119,9 @@ function Needs({
           <NeedTable title="Checkpoints" testId="inbox-checkpoints" rows={checkpoints} />
           <NeedTable title="Cost approvals" testId="inbox-approvals" rows={approvals} />
           <NeedTable title="Paused on overrun" testId="inbox-overruns" rows={overruns} />
+          <NeedTable title="Stuck runs" testId="inbox-lookups" rows={lookups} />
+          <NeedTable title="Couldn't import" testId="inbox-imports" rows={imports} />
+          <NeedTable title="Looking for earlier submissions" testId="inbox-searches" rows={searches} />
           <NeedTable title="Open feedback" testId="inbox-feedback" rows={feedback} />
           <NeedTable title="Questions" testId="inbox-questions" rows={asked} />
         </>

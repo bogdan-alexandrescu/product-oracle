@@ -14,8 +14,7 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
-import yaml
-
+from oracle import safe_yaml
 from oracle.v2.contract import ModuleContract, validate_contract
 
 BUILTIN_DIR = Path(__file__).resolve().parent / "builtin"
@@ -72,7 +71,7 @@ class CatalogError(ValueError):
 
 
 def _load(name: str) -> Any:
-    return yaml.safe_load((BUILTIN_DIR / name).read_text(encoding="utf-8"))
+    return safe_yaml.load((BUILTIN_DIR / name).read_text(encoding="utf-8"))
 
 
 @cache

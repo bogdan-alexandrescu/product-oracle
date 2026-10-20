@@ -28,7 +28,8 @@ from typing import Any, TextIO
 from urllib.parse import quote
 
 import httpx
-import yaml
+
+from oracle import safe_yaml
 
 DEFAULT_URL = "http://localhost:8000"
 TIMEOUT = httpx.Timeout(30.0, read=120.0)
@@ -87,8 +88,8 @@ def _front_matter(text: str) -> dict[str, Any]:
     if len(parts) < 2:
         return {}
     try:
-        data = yaml.safe_load(parts[0].removeprefix("---"))
-    except yaml.YAMLError:
+        data = safe_yaml.load(parts[0].removeprefix("---"))
+    except safe_yaml.SafeYamlError:
         return {}  # the API reports front matter problems properly
     return data if isinstance(data, dict) else {}
 

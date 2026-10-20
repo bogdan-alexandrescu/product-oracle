@@ -20,7 +20,7 @@ from oracle.auth.service import create_api_token, create_user
 from oracle.authz import require_role
 from oracle.main import app, create_app
 from oracle.mcp import auth as mcp_auth
-from oracle.mcp.curated import CURATED, CURATED_NAMES, flag_low_confidence
+from oracle.mcp.curated import CURATED, flag_low_confidence
 from oracle.mcp.scopes import required_scope
 from oracle.mcp.tools import app_operations
 from oracle.runs.models import Run
@@ -29,6 +29,19 @@ from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def local_runtime():
+    """The local runtime: run tokens from any address (the egress check, for SwarmCloud,
+    has its own tests in test_adapter_v2.py)."""
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
+
+
 PRD_V1 = (FIXTURES / "prd_v1.md").read_text()
 DOC = "checkout-redesign"
 PROPOSED_GOAL = {"type": "goal", "key": "activation", "title": "Activation"}
@@ -471,7 +484,9 @@ async def test_curated_baseline_tools_flag_low_confidence(tenant_id):
         assert resp.status_code in (200, 201), resp.text
     async with mcp_client(token) as c:
         tools = {t.name: t for t in (await c.list_tools()).tools}
-        assert CURATED_NAMES <= set(tools)
+        # Every curated tool but the run-only one (a run's own outputs, for run tokens).
+        assert {c.name for c in CURATED if not c.own_run} <= set(tools)
+        assert "get_run_output" not in tools
         for name in ("search", "get_baseline", "trace_feature", "propose_change"):
             assert "confidence" in tools[name].description
             assert "flag" in tools[name].description

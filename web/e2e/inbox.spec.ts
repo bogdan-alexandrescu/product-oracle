@@ -42,3 +42,29 @@ test("inbox: cancel a run paused on overrun", async ({ page }) => {
   await page.goto("/runs");
   await expect(page.getByTestId("run-row").filter({ hasText: "team-workspaces" })).toContainText("Cancelled");
 });
+
+test("inbox: retry importing a run's output Oracle stopped trying to import", async ({ page }) => {
+  await login(page);
+  // A run whose resumed advance failed five times: its step failed, owners see it.
+  await page.evaluate(() => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    const run = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
+    run.status = "running";
+    run.checkpoints = [];
+    run.segments[0].status = "failed";
+    run.segments[0].error = "Couldn't import its output: DataError on 5 tries in a row.";
+    run.import_failed =
+      "Couldn't import team-onboarding's output: DataError on 5 tries in a row, and Oracle stopped trying.";
+    run.can_retry_import = true;
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.goto("/inbox");
+  const imports = page.getByTestId("inbox-imports");
+  await expect(imports).toContainText("Couldn't import team-onboarding's output: DataError");
+  await imports.getByRole("link").click();
+  await expect(page.getByTestId("run-import-failed")).toContainText("DataError");
+  await page.goto("/inbox");
+  await page.getByTestId("inbox-imports").getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByTestId("inbox-imports")).toHaveCount(0);
+});

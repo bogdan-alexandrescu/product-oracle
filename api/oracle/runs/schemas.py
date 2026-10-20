@@ -140,7 +140,12 @@ class SegmentAttempt(BaseModel):
     workflow_id: str | None = None
     submitted_at: datetime | None = None
     cost_usd: float = 0
+    # The reviewer's note this attempt applied: for a wait answered in SwarmCloud, the
+    # findings SwarmCloud recorded, by whom (``note_by``); an Inbox note that SwarmCloud
+    # did not record (it already held an answer) is ``not_applied``.
     note: str | None = None
+    note_by: str | None = None
+    not_applied: str | None = None
     state: str | None = None
 
 
@@ -202,6 +207,37 @@ class SegmentOut(BaseModel):
     error: str | None = None
 
 
+class ConsoleAnswer(BaseModel):
+    """What SwarmCloud's console recorded for a checkpoint still open in the Inbox (W5):
+    an answer that does not count (its answerer is not an Oracle member with the
+    checkpoint's role), a counted change request the workflow had no revision step for,
+    an answer Oracle could not read, or one it has not read yet (``unread``: SwarmCloud
+    errors, a 404 or a lagging record; read again on every tick)."""
+
+    answered_by: str | None = None
+    on_behalf_of: str | None = None
+    answered_at: str | None = None
+    via: str | None = None
+    verdict: Literal["MERGE", "NOT_YET"] | None = None
+    findings: list[str] = []
+    # None when the verdict could not be read.
+    counted: bool | None = None
+    # Why it does not count, or why it cannot be read.
+    reason: str | None = None
+    # What an approver does: confirm it (or approve / request changes), choose Redo from
+    # the segment or Continue, or decide over an answer Oracle cannot read (or has not
+    # read yet: the run's token is read-only until it is).
+    needs: Literal["confirm", "redo_or_continue", "unreadable", "unread"]
+    # The workflow has a revision step for a change request here.
+    revise: bool = False
+    # Redo: the segment that runs again as a new workflow, and its estimate (one more).
+    redo_segment: str | None = None
+    redo_cost_usd: float | None = None
+    # Redo carries the console's findings; without any, it needs a note (the API refuses
+    # a Redo without either, and the web disables the button).
+    can_redo: bool = False
+
+
 class CheckpointOut(BaseModel):
     id: uuid.UUID
     run_id: uuid.UUID
@@ -216,6 +252,8 @@ class CheckpointOut(BaseModel):
     created_at: datetime
     # Whether the caller's role may decide it (pending checkpoints only).
     can_decide: bool = False
+    # An open checkpoint answered in SwarmCloud's console, waiting on an approver (W5).
+    console: ConsoleAnswer | None = None
 
 
 class RunProgress(BaseModel):
@@ -250,8 +288,42 @@ class RunSummary(BaseModel):
     # The kind of the checkpoint the run waits on, if any.
     waiting_on: CheckpointKind | None = None
     error: str | None = None
+    # What the Inbox says of a run waiting for its owner or creator: a lost submission
+    # Oracle could neither find nor rule out past the lookup cap (Retry and Cancel;
+    # ``can_retry``), a cancel SwarmCloud keeps answering with a 404 that proves nothing
+    # (Stop cancelling: ``can_stop_cancelling``; Cancel on a run not ended), an answer
+    # post answered so (Cancel), a workflow whose cost is unknown because its status does
+    # not read (Retry lookup: ``can_retry_lookup``), or an ended run's spend over its
+    # ceiling while a workflow it stopped cancelling still runs (shown).
+    stuck: str | None = None
+    can_retry: bool = False
+    # Stop cancelling: Oracle stops the cancel calls, and keeps reading the workflow's
+    # status and cost until it ends, counted on the run; a run that has not ended ends
+    # (P3d).
+    can_stop_cancelling: bool = False
+    # Retry lookup: read a workflow whose cost is unknown now, not at its next rest.
+    can_retry_lookup: bool = False
+    # An ended run's spend over its ceiling (P3d, shown in ``stuck`` with the spend and
+    # the ceiling): the workflows an approver stopped cancelling that still run, each
+    # with Cancel again (Oracle's cancel calls back on; nothing restarts), and whether
+    # Dismiss clears the item (once nothing of the run is left to read).
+    cancel_again: list[str] = []
+    can_dismiss_overrun: bool = False
+    # Work given up on that Oracle still checks: submissions it looks for (Retry, or
+    # Cancel past the lookup cap), to cancel them and count their cost if they landed,
+    # and workflows it stopped cancelling, whose cost it reads until they end.
+    searching: str | None = None
+    # Owners: Oracle stopped trying to import the output of a step whose advance kept
+    # failing (the error's class, never what the agents wrote); Retry tries again.
+    import_failed: str | None = None
+    can_retry_import: bool = False
     # Set by GET /v1/runs and GET /v1/runs/{id}; None where a summary is embedded (inbox).
     progress: RunProgress | None = None
+
+
+class CancelAgain(BaseModel):
+    # The stopped workflow whose cancel calls Oracle turns back on.
+    workflow_id: str = Field(min_length=1, max_length=200)
 
 
 class RunOut(RunSummary):
@@ -267,10 +339,17 @@ class RunOut(RunSummary):
     notes: list[str]
     segments: list[SegmentOut]
     checkpoints: list[CheckpointOut]
+    # W5: while a console answer that did not count waits for an approver, the run's
+    # token is read-only (its agents' writes are refused "waiting for approval").
+    token_read_only: bool = False
 
 
 class CheckpointDecision(BaseModel):
-    decision: Literal["approved", "changes_requested"]
+    # confirm, redo and continue answer what SwarmCloud's console recorded (W5, see
+    # CheckpointOut.console): confirm takes an answer that did not count as the decision;
+    # redo re-runs the segment as a new workflow with the console's findings (one more
+    # segment); continue follows the workflow, which went on regardless.
+    decision: Literal["approved", "changes_requested", "confirm", "redo", "continue"]
     # Required with changes_requested: it goes to the agents re-running the segment.
     note: str | None = Field(default=None, max_length=10_000)
 
@@ -354,9 +433,30 @@ class InboxOut(BaseModel):
     # Owners only: runs waiting for cost approval, and runs paused on overrun.
     approvals: list[RunSummary]
     overruns: list[RunSummary]
+    # Owners and the run's creator: runs whose lost submission is past the lookup cap
+    # (RunSummary.stuck), to Retry or Cancel.
+    lookups: list[RunSummary] = []
+    # Owners and the run's creator: runs looking for an earlier submission given up on
+    # (RunSummary.searching); shown only, nothing to decide, not in ``total``.
+    searches: list[RunSummary] = []
+    # Owners only: runs whose output Oracle stopped trying to import
+    # (RunSummary.import_failed), to Retry.
+    imports: list[RunSummary] = []
     # Approvers and owners: open feedback on documents they can approve.
     feedback: list[InboxDocument]
     total: int
+
+
+FeatureState = Literal["on", "off", "unknown"]
+
+
+class RuntimeFeatures(BaseModel):
+    """Adapter v2's switches in the runtime: caller MCP (#1433), waits for a person
+    (#1436), and Oracle's principal answering them."""
+
+    mcp: FeatureState = "unknown"
+    await_input: FeatureState = "unknown"
+    service_answer: FeatureState = "unknown"
 
 
 class RuntimeStatusOut(BaseModel):
@@ -368,5 +468,17 @@ class RuntimeStatusOut(BaseModel):
     reachable: bool
     tenant_id: str | None = None
     can_reach_oracle: bool
+    features: RuntimeFeatures = RuntimeFeatures()
+    # Why a feature is off or unknown, by feature.
+    feature_reasons: dict[str, str] = {}
     notes: list[str] = []
     error: str | None = None
+
+
+class McpServerRegistration(BaseModel):
+    """Oracle's MCP server in the runtime (``oracle``, at ORACLE_PUBLIC_URL + /mcp)."""
+
+    name: str
+    url: str
+    # created | updated (the URL changed) | unchanged
+    result: Literal["created", "updated", "unchanged"]

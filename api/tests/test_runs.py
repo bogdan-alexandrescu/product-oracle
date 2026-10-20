@@ -820,7 +820,16 @@ async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
     run = await started(client, auth, depth="deep")  # awaiting approval
     assert run["status"] == "awaiting_approval"
     inbox = (await client.get("/v1/inbox", headers=viewer)).json()
-    assert inbox == {"checkpoints": [], "approvals": [], "overruns": [], "feedback": [], "total": 0}
+    assert inbox == {
+        "checkpoints": [],
+        "approvals": [],
+        "overruns": [],
+        "lookups": [],
+        "searches": [],
+        "imports": [],
+        "feedback": [],
+        "total": 0,
+    }
     assert (await client.get("/v1/inbox", headers=auth)).json()["total"] == 2
 
 
@@ -948,3 +957,36 @@ async def test_the_runs_list_carries_each_runs_progress(client, owner, runtime):
     # The inbox embeds summaries without it.
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
     assert all(r["progress"] is None for r in inbox["approvals"] + inbox["overruns"])
+
+
+async def test_the_runs_list_carries_progress_with_what_the_inbox_says_of_a_stuck_run(
+    client, owner, runtime
+):
+    """Home round 2's progress and adapter v2's stuck and import-failed fields, side by side
+    in one list: the Inbox counts the run in both groups, as the badge does."""
+    tenant_id, auth = owner
+    run = await started(client, auth)
+    await tick(client, auth)
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Run, uuid.UUID(run["id"]))
+        row.status = "running"
+        row.knobs = {
+            **row.knobs,
+            "stuck_lookup": {"label": "seg-1-a2"},
+            "import_failed": {"error": "DataError", "count": 5},
+        }
+        await s.commit()
+    listed = {r["id"]: r for r in (await client.get("/v1/runs", headers=auth)).json()}
+    summary = listed[run["id"]]
+    assert summary["progress"] == {"done": 1, "total": 4, "now": run["segments"][1]["title"]}
+    assert summary["stuck"].startswith("Submission seg-1-a2 was lost")
+    assert summary["can_retry"] is True
+    assert "DataError on 5 tries" in summary["import_failed"]
+    assert summary["can_retry_import"] is True
+    inbox = (await client.get("/v1/inbox", headers=auth)).json()
+    assert [r["id"] for r in inbox["lookups"]] == [run["id"]]
+    assert [r["id"] for r in inbox["imports"]] == [run["id"]]
+    assert all(r["progress"] is None for r in inbox["lookups"] + inbox["imports"])
+    assert inbox["total"] == len(inbox["checkpoints"]) + len(inbox["approvals"]) + len(
+        inbox["overruns"]
+    ) + 2 + len(inbox["feedback"])
