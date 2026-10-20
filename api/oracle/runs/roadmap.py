@@ -28,8 +28,15 @@ with the source of that date. When the caller passes the verified schedule bases
 (``date_bases``, oracle.roadmap.schedule), that source must name a basis that supports
 exactly that date: a date with no verified estimate, capacity or commitment behind it is
 refused (``unverified_date``).
+
+The file is read by :func:`load_items_yaml` on every path (the run's checkpoint, a run's
+import, a person's import): it refuses YAML aliases and anchors (``yaml.safe_load``
+shares an alias's node, so a few hundred bytes can expand to gigabytes once copied to
+JSON or text), more than ``MAX_NODES`` nodes, and a file larger than
+``MAX_STORED_BYTES`` once parsed.
 """
 
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -44,6 +51,10 @@ CONFIDENCES = ("high", "medium", "low")
 REQUIRED = ("id", "title", "outcome", "horizon", "prd_section")
 # Optional trace fields: a key, or a list of keys, of baseline entities.
 KEY_LISTS = ("requirements", "blockers")
+
+# Caps on a parsed roadmap_items.yaml (oracle.roadmap.items stores it as JSON).
+MAX_NODES = 50_000
+MAX_STORED_BYTES = 1_000_000
 
 # A cross-document link to a document version's section, as the roadmap draft writes it
 # (oracle.runs.flows.prd_link): /documents/<slug>/v/<n>#<section>.
@@ -70,6 +81,55 @@ class ItemsCheck:
         return {"items": len(self.items), "by_horizon": counts, "problems": self.problems}
 
 
+class ItemsYamlError(ValueError):
+    """roadmap_items.yaml was refused before it was expanded: ``code`` names why."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+class _ItemsLoader(yaml.SafeLoader):
+    """yaml.SafeLoader without aliases or anchors, and with a node budget."""
+
+    def __init__(self, stream: str) -> None:
+        super().__init__(stream)
+        self._nodes = 0
+
+    def compose_node(self, parent: Any, index: Any) -> Any:
+        event = self.peek_event()
+        if isinstance(event, yaml.AliasEvent) or getattr(event, "anchor", None):
+            raise ItemsYamlError(
+                "yaml_alias",
+                f"roadmap_items.yaml uses a YAML anchor or alias ({event.start_mark.line + 1}:"
+                f"{event.start_mark.column + 1}); write each value out in full",
+            )
+        self._nodes += 1
+        if self._nodes > MAX_NODES:
+            raise ItemsYamlError(
+                "too_large", f"roadmap_items.yaml has more than {MAX_NODES} YAML nodes"
+            )
+        return super().compose_node(parent, index)
+
+
+def load_items_yaml(text: str) -> Any:
+    """Parse roadmap_items.yaml the one safe way: no aliases or anchors, at most
+    ``MAX_NODES`` nodes and ``MAX_STORED_BYTES`` as JSON. Raises :class:`ItemsYamlError`
+    (a refusal) or ``yaml.YAMLError`` (not YAML)."""
+    loader = _ItemsLoader(text)
+    try:
+        data = loader.get_single_data()
+    finally:
+        loader.dispose()
+    size = len(json.dumps(data, default=str).encode())
+    if size > MAX_STORED_BYTES:
+        raise ItemsYamlError(
+            "too_large",
+            f"roadmap_items.yaml is {size} bytes once parsed, over {MAX_STORED_BYTES}",
+        )
+    return data
+
+
 def _text(value: Any) -> str | None:
     if value is None:
         return None
@@ -88,7 +148,10 @@ def check_items(
     ``date_bases``, every date against the verified schedule bases)."""
     out = ItemsCheck()
     try:
-        data = yaml.safe_load(text)
+        data = load_items_yaml(text)
+    except ItemsYamlError as exc:
+        out.add(exc.code, str(exc))
+        return out
     except yaml.YAMLError as exc:
         out.add("invalid_yaml", f"roadmap_items.yaml is not valid YAML: {exc}")
         return out

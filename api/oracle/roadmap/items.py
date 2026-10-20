@@ -34,7 +34,6 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-import yaml
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -577,7 +576,7 @@ async def on_roadmap_version(
             found = await run_items_file(db, document)
             if found is not None:
                 text, run = found
-                yaml.safe_load(text)
+                items_file.load_items_yaml(text)
                 await import_items(db, version, text, run_id=run.id)
             else:
                 await carry_forward(db, version)
