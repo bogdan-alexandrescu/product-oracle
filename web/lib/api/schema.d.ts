@@ -352,7 +352,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve Version */
+        /**
+         * Approve Version
+         * @description Approve (publish) a version. A PRD version is refused with a 409 naming the blocks
+         *     when its readiness verdict for purpose ``publish`` is blocked, or when it is not the
+         *     latest version; nothing is recorded then.
+         */
         post: operations["approve_version"];
         delete?: never;
         options?: never;
@@ -3398,6 +3403,8 @@ export interface paths {
          *     Every registered readiness check runs live. Advisory criteria never block (T2);
          *     ``blocked`` is true only when a hard check is critical. The latest model review and
          *     the human ratings of the version are shown beside each criterion, with agreement.
+         *     ``purpose=publish`` asks the checks what approve (publish) asks them; the Publish
+         *     screen does.
          */
         get: operations["get_document_readiness"];
         put?: never;
@@ -9900,6 +9907,30 @@ export interface components {
             /** Token Help */
             token_help: string;
         };
+        /**
+         * PublishBlock
+         * @description One reason a publish is refused.
+         */
+        PublishBlock: {
+            /** Key */
+            key: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Rationale */
+            rationale: string;
+        };
+        /**
+         * PublishBlockedOut
+         * @description 409 from approve: the PRD version may not be published (T2 publish gate, C5).
+         */
+        PublishBlockedOut: {
+            /** Detail */
+            detail: string;
+            /** Blocking */
+            blocking: components["schemas"]["PublishBlock"][];
+        };
         /** PublishIn */
         PublishIn: {
             /** Version */
@@ -10012,6 +10043,12 @@ export interface components {
             policy: "advisory";
             /** Policy Note */
             policy_note: string;
+            /**
+             * Purpose
+             * @default advisory
+             * @enum {string}
+             */
+            purpose: "advisory" | "publish";
             /**
              * Evaluated At
              * Format: date-time
@@ -13601,6 +13638,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApproveOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishBlockedOut"];
                 };
             };
             /** @description Validation Error */
@@ -19558,7 +19604,9 @@ export interface operations {
     };
     get_document_readiness: {
         parameters: {
-            query?: never;
+            query?: {
+                purpose?: "advisory" | "publish";
+            };
             header?: never;
             path: {
                 doc: string;

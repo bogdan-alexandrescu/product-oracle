@@ -19,7 +19,7 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
-import { routeQuality, seedQuality, type QualityDb } from "./quality";
+import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeTrace } from "./trace";
 import { routeV2, seedV2, type V2Db } from "./v2";
 
@@ -892,6 +892,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  // Company settings are the owner's, as in the API (tenant_settings_api.py).
+  if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const connections = await connectionsRoute(req, p);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
@@ -905,23 +907,19 @@ async function route(db: Db, req: Request): Promise<Response> {
   // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
   const v2db = ensureV2(db);
   db.quality ??= seedQuality();
-  const quality = await routeQuality(
-    {
-      db: db.quality,
-      v2: v2db,
-      userId: me.id,
-      role: me.role,
-      findVersion: (ref, n) => {
-        const doc = findDocument(db, ref);
-        const v = doc && findVersion(db, doc, n);
-        return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
-      },
-      blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
+  const qualityCtx: QualityContext = {
+    db: db.quality,
+    v2: v2db,
+    userId: me.id,
+    role: me.role,
+    findVersion: (ref, n) => {
+      const doc = findDocument(db, ref);
+      const v = doc && findVersion(db, doc, n);
+      return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
     },
-    req,
-    p,
-    q,
-  );
+    blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
+  };
+  const quality = await routeQuality(qualityCtx, req, p, q);
   if (quality) return quality;
   // Modules and compositions check roles themselves (viewers may ask for a recommendation).
   if (!db.modules) {
@@ -1106,6 +1104,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
+    // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
+    if (doc.kind === "prd") {
+      const latest = docVersions(db, doc).pop()!.number;
+      const refusal = publishRefusal(qualityCtx, { documentId: doc.id, slug: doc.slug, versionId: v.id }, v.number, latest, (id) =>
+        ensureBlockers(db).blockers.find((b) => b.id === id)?.statement,
+      );
+      if (refusal) return json(409, refusal);
+    }
     v.approved_at = now();
     doc.status = "approved";
     doc.updated_at = v.approved_at;

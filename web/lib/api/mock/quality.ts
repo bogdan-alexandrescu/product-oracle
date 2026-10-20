@@ -124,7 +124,14 @@ function reports(ctx: QualityContext, versionId: string, evaluator: string) {
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
-function dashboard(ctx: QualityContext, v: { documentId: string; slug: string; versionId: string }, n: number): Schemas["ReadinessDashboard"] {
+type Purpose = Schemas["ReadinessDashboard"]["purpose"];
+
+function dashboard(
+  ctx: QualityContext,
+  v: { documentId: string; slug: string; versionId: string },
+  n: number,
+  purpose: Purpose = "advisory",
+): Schemas["ReadinessDashboard"] {
   const model = reports(ctx, v.versionId, "llm_job")[0];
   const humans = reports(ctx, v.versionId, "human");
   const rules = RULES_BY_SLUG[v.slug] ?? RULES;
@@ -155,12 +162,40 @@ function dashboard(ctx: QualityContext, v: { documentId: string; slug: string; v
   const latest = reports(ctx, v.versionId, "rules")[0];
   return {
     document_id: v.documentId, slug: v.slug, version: n, version_id: v.versionId,
-    composition_revision: null, policy: "advisory", policy_note: POLICY_NOTE,
+    composition_revision: null, policy: "advisory", policy_note: POLICY_NOTE, purpose,
     evaluated_at: new Date().toISOString(), blocked: blocking.length > 0, blocking,
     counts: counts(items.map((i) => i.status)), items,
     model_review: model ? { report_id: model.id, job_id: null, model: "mock", created_at: model.created_at, label: "model_output", disclaimer: DISCLAIMER } : null,
     latest_report: latest ? { id: latest.id, created_at: latest.created_at } : null,
   };
+}
+
+/**
+ * The publish gate approve runs for a PRD (api/oracle/review/publish_gate.py): only the
+ * latest version (C5), and refused while the verdict for purpose "publish" is blocked. The
+ * 409 body, or null when the version may be published. ``critical_blockers`` names each
+ * critical blocker (``blockerTitle``), as the Publish screen lists them.
+ */
+export function publishRefusal(
+  ctx: QualityContext,
+  v: { documentId: string; slug: string; versionId: string },
+  n: number,
+  latest: number,
+  blockerTitle: (id: string) => string | undefined,
+): Schemas["PublishBlockedOut"] | null {
+  if (n !== latest) return { detail: `v${latest} exists: only the latest version can be published`, blocking: [] };
+  const verdict = dashboard(ctx, v, n, "publish");
+  if (!verdict.blocked) return null;
+  const blocking = verdict.items
+    .filter((i) => i.hard && i.status === "critical")
+    .flatMap((i): Schemas["PublishBlock"][] => {
+      const named = i.key === BLOCKERS_KEY ? i.evidence_ids.flatMap((id) => {
+        const title = blockerTitle(id);
+        return title ? [{ key: i.key, id, title, rationale: i.rationale }] : [];
+      }) : [];
+      return named.length ? named : [{ key: i.key, id: i.key, title: i.title, rationale: i.rationale }];
+    });
+  return { detail: `${blocking.length} block${blocking.length === 1 ? "" : "s"}: ${blocking.map((b) => b.title).join(", ")}`, blocking };
 }
 
 function storeReport(
@@ -212,7 +247,11 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
   if (p[1] === "documents" && p[3] === "versions" && p[4] && ["readiness", "evaluations", "quality-review"].includes(p[5])) {
     const n = Number(p[4]);
     const v = ctx.findVersion(p[2], n);
-    if (p[5] === "readiness" && m === "GET") return v ? json(200, dashboard(ctx, v, n)) : fail(404, "Version not found");
+    if (p[5] === "readiness" && m === "GET") {
+      const purpose = q.get("purpose") ?? "advisory";
+      if (purpose !== "advisory" && purpose !== "publish") return fail(422, "purpose must be advisory or publish");
+      return v ? json(200, dashboard(ctx, v, n, purpose)) : fail(404, "Version not found");
+    }
     if (p[5] === "evaluations" && m === "POST" && !p[6]) {
       const denied = need("commenter");
       if (denied) return denied;

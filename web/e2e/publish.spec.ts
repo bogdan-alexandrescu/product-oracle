@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -18,6 +18,35 @@ async function openPublish(page: Page, slug: string) {
 
 const inspector = (page: Page) => page.getByTestId("publish-inspector");
 
+/** Changes the mock's stored state, as another tab or person would between two requests. */
+async function editMockDb(page: Page, edit: string) {
+  await page.evaluate((body) => {
+    const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
+    new Function("db", body)(db);
+    localStorage.setItem("po-mock-db-v2", JSON.stringify(db));
+  }, edit);
+}
+
+/** An accessible description from aria-describedby, not only a title (a tooltip). */
+async function expectDescribedBy(target: Locator, text: string) {
+  const ids = (await target.getAttribute("aria-describedby")) ?? "";
+  expect(ids, "aria-describedby").not.toBe("");
+  const described = await target.evaluate((el, list) => list.split(/\s+/).map((id) => el.ownerDocument.getElementById(id)?.textContent ?? "").join(" ").trim(), ids);
+  expect(described).toBe(text);
+}
+
+async function setCompanySetting(page: Page, key: string, value: unknown) {
+  await page.addInitScript(
+    ([k, v]) => {
+      const raw = localStorage.getItem("po-mock-connections-v1");
+      const db = raw ? JSON.parse(raw) : { connections: [], settings: {} };
+      db.settings[k as string] = v;
+      localStorage.setItem("po-mock-connections-v1", JSON.stringify(db));
+    },
+    [key, value] as const,
+  );
+}
+
 test("blocked: two blocks, failing hard checks, advisory and a disabled Publish", async ({ page }) => {
   await openPublish(page, "online-deposits");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^Publish\s*Online deposits at booking v3$/);
@@ -26,7 +55,7 @@ test("blocked: two blocks, failing hard checks, advisory and a disabled Publish"
   const publish = page.getByTestId("publish-button");
   await expect(publish).toBeDisabled();
   await expect(publish).toHaveText("Publish v3");
-  await expect(publish).toHaveAccessibleDescription("2 blocks");
+  await expectDescribedBy(publish, "2 blocks");
 
   const blocks = page.getByTestId("block-row");
   await expect(blocks).toHaveCount(2);
@@ -84,12 +113,41 @@ test("accept risk: owners accept it, and the block goes", async ({ page }) => {
   const risk = inspector(page).getByTestId("block-risk");
   await expect(risk).toContainText("Owners only");
   await risk.getByRole("button", { name: "Accept risk" }).click();
+  await expect(risk.getByLabel("Review by")).toHaveAccessibleDescription("Within 90 days");
+  await risk.getByRole("button", { name: "Cancel" }).click();
+  await risk.getByRole("button", { name: "Accept risk" }).click();
   await risk.getByLabel("Reason").fill("Refund next working day; front desk tells the patient");
   await risk.getByRole("button", { name: "Accept risk" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Risk accepted." })).toBeVisible();
   await expect(page.getByTestId("block-row")).toHaveCount(1);
   await expect(page.getByTestId("blocks-chip")).toHaveText("1 block");
   await expect(page.getByTestId("publish-button")).toBeDisabled();
+});
+
+test("accept risk: the company's acceptance role and review limit, when the owner reads them", async ({ page }) => {
+  await setCompanySetting(page, "blocker_risk_acceptance_role", "approver");
+  await setCompanySetting(page, "blocker_risk_review_max_days", 14);
+  await openPublish(page, "online-deposits");
+  const risk = inspector(page).getByTestId("block-risk");
+  await expect(risk).toContainText("Approvers and owners");
+  await risk.getByRole("button", { name: "Accept risk" }).click();
+  const review = risk.getByLabel("Review by");
+  await expect(review).toHaveAccessibleDescription("Within 14 days");
+  // The default review date is inside the limit: 14 days out at most.
+  const days = await review.evaluate((el: HTMLInputElement) => (Date.parse(`${el.value}T09:00:00Z`) - Date.now()) / 86_400_000);
+  expect(days).toBeLessThanOrEqual(14);
+  expect(days).toBeGreaterThan(0);
+  await expect(review).toHaveAttribute("max", /\d{4}-\d{2}-\d{2}/);
+  await risk.getByLabel("Reason").fill("Refund next working day; front desk tells the patient");
+  await risk.getByRole("button", { name: "Accept risk" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Risk accepted." })).toBeVisible();
+});
+
+test("accept risk: an approver cannot read the settings, so the owner default stands", async ({ page }) => {
+  await setCompanySetting(page, "blocker_risk_acceptance_role", "approver");
+  await asRole(page, "approver");
+  await openPublish(page, "online-deposits");
+  await expect(inspector(page).getByTestId("block-risk")).toContainText("Only an owner can accept this risk");
 });
 
 for (const role of ["approver", "viewer"] as const) {
@@ -131,6 +189,88 @@ test("ready: commenters check readiness but cannot publish", async ({ page }) =>
   await openPublish(page, "visit-reminders");
   await expect(page.getByTestId("publish-button")).toBeDisabled();
   await expect(page.getByTestId("publish-header")).toContainText("Approvers only");
+  await expectDescribedBy(page.getByTestId("publish-button"), "Approvers only");
+});
+
+test("409 in the dialog: a block that appears after the page loaded is named in the dialog", async ({ page }) => {
+  await openPublish(page, "visit-reminders");
+  await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v1");
+  await page.getByTestId("publish-button").click();
+  const dialog = page.getByRole("dialog", { name: "Publish v1?" });
+  await expect(dialog).toBeVisible();
+  // Meanwhile someone links a critical blocker to this PRD.
+  await editMockDb(page, `
+    const doc = db.documents.find((d) => d.slug === "visit-reminders");
+    db.blockers.blockers[0].document_ids.push(doc.id);
+  `);
+  await dialog.getByRole("button", { name: "Publish", exact: true }).click();
+
+  const refusal = dialog.getByTestId("publish-refusal");
+  await expect(refusal).toBeVisible();
+  await expect(refusal).toHaveAttribute("role", "alert");
+  await expect(refusal).toContainText("Not published");
+  await expect(refusal).toContainText("1 block");
+  await expect(dialog.getByTestId("refusal-block")).toHaveText(["The address lookup service allows 100 requests a minute per company"]);
+  // Inside the dialog, above the overlay: nothing covers it.
+  const box = (await refusal.boundingBox())!;
+  const top = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-testid="publish-refusal"]') != null, [box.x + 10, box.y + box.height / 2]);
+  expect(top).toBe(true);
+  const confirm = dialog.getByRole("button", { name: "Publish", exact: true });
+  await expect(confirm).toBeDisabled();
+  await expect(confirm).toHaveAccessibleDescription(/1 block/);
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("blocks-chip")).toHaveText("1 block");
+  await expect(page.getByTestId("publish-button")).toBeDisabled();
+  await page.goto("/documents/visit-reminders/v/1");
+  await expect(page.getByTestId("doc-status")).not.toHaveText("Approved");
+});
+
+test("stale version: Publish refuses when a newer version landed since the page loaded", async ({ page }) => {
+  await openPublish(page, "visit-reminders");
+  await page.getByTestId("publish-button").click();
+  const dialog = page.getByRole("dialog", { name: "Publish v1?" });
+  await editMockDb(page, `
+    const doc = db.documents.find((d) => d.slug === "visit-reminders");
+    const v1 = db.versions.find((v) => v.document_id === doc.id && v.number === 1);
+    db.versions.push({ ...v1, id: crypto.randomUUID(), number: 2, approved_at: null });
+  `);
+  await dialog.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(dialog.getByTestId("publish-refusal")).toHaveText("v2 exists, reload");
+  await dialog.getByRole("button", { name: "Reload" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("publish-button")).toHaveText("Publish v2");
+  // v1 was not published.
+  await page.goto("/documents/visit-reminders/v/1");
+  await expect(page.getByTestId("doc-status")).not.toHaveText("Approved");
+});
+
+test("confirm dialog: focus is trapped inside and restored on close", async ({ page }) => {
+  await openPublish(page, "visit-reminders");
+  const opener = page.getByTestId("publish-button");
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Publish v1?" });
+  const publish = dialog.getByRole("button", { name: "Publish", exact: true });
+  const cancel = dialog.getByRole("button", { name: "Cancel" });
+  await expect(publish).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(publish).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(publish).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+
+  await opener.click();
+  await cancel.click();
+  await expect(opener).toBeFocused();
 });
 
 test("entry points: the PRD list and the PRD page open Publish", async ({ page }) => {
@@ -140,9 +280,27 @@ test("entry points: the PRD list and the PRD page open Publish", async ({ page }
   await expect(page).toHaveURL(/\/documents\/online-deposits\/publish$/);
 
   await page.goto("/documents/online-deposits/v/3");
-  await page.getByRole("link", { name: "Check readiness" }).click();
+  const header = page.getByTestId("doc-header");
+  await expect(header.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+  await header.getByRole("link", { name: "Publish", exact: true }).click();
   await expect(page).toHaveURL(/\/documents\/online-deposits\/publish$/);
   await expect(page.getByTestId("blocks-chip")).toHaveText("2 blocks");
+});
+
+test("PRD page: Publish replaces Approve version, for the latest version; roadmaps still approve", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/online-deposits/v/1");
+  const header = page.getByTestId("doc-header");
+  await expect(header.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+  const link = header.getByRole("link", { name: "Publish", exact: true });
+  await expect(link).toHaveAttribute("href", "/documents/online-deposits/publish");
+  await expect(link).toHaveAccessibleDescription("Publishes v3, the latest version");
+  await link.click();
+  await expect(page.getByTestId("publish-button")).toHaveText("Publish v3");
+
+  await page.goto("/documents/usage-alerts-roadmap/v/1");
+  await expect(page.getByTestId("doc-header").getByRole("button", { name: "Approve version" })).toBeVisible();
+  await expect(page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true })).toHaveCount(0);
 });
 
 test("resolve a blocker: opens its baseline item", async ({ page }) => {

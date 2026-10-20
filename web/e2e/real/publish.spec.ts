@@ -20,7 +20,9 @@ async function login(page: Page) {
 test("publish: the screen follows the API's readiness verdict", async ({ page }) => {
   expect(await oracle("push", path.join(__dirname, "fixtures", "publish_draft.md"))).toContain(`Imported ${DOC} version 1`);
   await login(page);
-  const verdict = await (await page.request.get(`/v1/documents/${DOC}/versions/1/readiness`)).json();
+  // The verdict approve asks for (T2 publish gate): purpose=publish.
+  const verdict = await (await page.request.get(`/v1/documents/${DOC}/versions/1/readiness?purpose=publish`)).json();
+  expect(verdict.purpose).toBe("publish");
 
   await page.goto(`/documents/${DOC}/publish`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^Publish\s*Publish check PRD v1$/);
@@ -38,4 +40,41 @@ test("publish: the screen follows the API's readiness verdict", async ({ page })
     await page.getByRole("dialog", { name: "Publish v1?" }).getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByTestId("published-chip")).toHaveText("Published v1");
   }
+});
+
+test("publish gate: a blocker linked after the page loaded is refused by the API, inside the dialog", async ({ page }) => {
+  const doc = "e2e-publish-gate";
+  expect(await oracle("push", path.join(__dirname, "fixtures", "publish_gate_draft.md"))).toContain(`Imported ${doc} version 1`);
+  await login(page);
+  await page.goto(`/documents/${doc}/publish`);
+  await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v1");
+  await page.getByTestId("publish-button").click();
+  const dialog = page.getByRole("dialog", { name: "Publish v1?" });
+  await expect(dialog).toBeVisible();
+
+  // Meanwhile a critical hard blocker is linked to the PRD.
+  const { id } = await (await page.request.get(`/v1/documents/${doc}`)).json();
+  const statement = "The partner API allows 100 requests a minute per company";
+  const created = await page.request.post("/v1/blockers", {
+    data: {
+      key: "e2e-partner-rate-limit", statement, type: "hard", limit_kind: "capacity",
+      third_party: "Example partner API", severity: "critical", document_ids: [id],
+    },
+  });
+  expect(created.status(), await created.text()).toBe(201);
+
+  await dialog.getByRole("button", { name: "Publish", exact: true }).click();
+  const refusal = dialog.getByTestId("publish-refusal");
+  await expect(refusal).toContainText("Not published");
+  await expect(refusal).toContainText("1 block");
+  await expect(dialog.getByTestId("refusal-block")).toHaveText([statement]);
+  await expect(dialog.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+
+  // Nothing was recorded: the version is not approved.
+  const after = await (await page.request.get(`/v1/documents/${doc}`)).json();
+  expect(after.status).not.toBe("approved");
+  expect(after.approved_version ?? null).toBeNull();
+  const approve = await page.request.post(`/v1/documents/${doc}/versions/1/approve`);
+  expect(approve.status()).toBe(409);
+  expect((await approve.json()).detail).toBe(`1 block: ${statement}`);
 });

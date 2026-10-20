@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 
 import { DocCrumb } from "@/components/DocToolbar";
 import {
@@ -27,6 +27,9 @@ type Readiness = Schemas["ReadinessDashboard"];
 type Item = Schemas["ReadinessItem"];
 type Strategy = Schemas["BlockerStrategy"];
 type Question = Schemas["StakeholderQuestionOut"];
+type Role = Schemas["Me"]["role"];
+/** Why the confirm dialog's Publish was refused: the API's 409, a newer version, or an error. */
+type Refusal = { detail: string; blocking: Schemas["PublishBlock"][]; stale?: boolean };
 
 /** The blockers lane's hard check (api/oracle/blockers/readiness.py). */
 const BLOCKERS_CHECK = "critical_blockers";
@@ -35,6 +38,10 @@ const CHECK_KIND: Record<string, string> = {
   third_party_support: "Third-party",
 };
 const PHONE = "(max-width: 600px)";
+const DAY = 86_400_000;
+/** B4 defaults (api/oracle/tenant_settings_api.py), used when the caller cannot read the settings. */
+const RISK_DEFAULTS = { role: "owner" as Role, maxDays: 90 };
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** One reason the API refuses the publish: a gating blocker, or another critical hard check. */
 type Block = {
@@ -136,21 +143,46 @@ function OnPublish({ n }: { n: number }) {
   );
 }
 
-/** Accept a blocker's risk: owners only (B4); others are told so, and nothing is stored. */
+/**
+ * The company's B4 settings: who may accept a critical blocker's risk, and how far out its
+ * review date may be. Settings are owner-readable; anyone else gets the defaults.
+ */
+function useRiskPolicy(): { role: Role; maxDays: number } {
+  const { role } = useMe();
+  const q = useQuery(`risk-policy|${role}`, async () => {
+    if (!hasRole(role, "approver")) return RISK_DEFAULTS;
+    const read = (key: string) => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key } } })).then((s) => s.value);
+    const [who, days] = await Promise.all([read("blocker_risk_acceptance_role"), read("blocker_risk_review_max_days")]).catch(() => [null, null]);
+    return {
+      role: who === "approver" || who === "owner" ? (who as Role) : RISK_DEFAULTS.role,
+      maxDays: typeof days === "number" && days >= 1 ? days : RISK_DEFAULTS.maxDays,
+    };
+  });
+  return q.data ?? RISK_DEFAULTS;
+}
+
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** Accept a blocker's risk: the company's acceptance role (B4, owners by default); others are told so. */
 function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: string) => void }) {
   const { role } = useMe();
+  const policy = useRiskPolicy();
   const onAuth = useAuthRedirect();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const [review, setReview] = useState(() => new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10));
+  const [today] = useState(() => Date.now());
+  // Thirty days out, inside the company's limit (a day short of it); null until edited.
+  const [picked, setPicked] = useState<string | null>(null);
+  const review = picked ?? isoDay(today + Math.max(1, Math.min(30, policy.maxDays - 1)) * DAY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const who = policy.role === "owner" ? { only: "Only an owner", chip: "Owners only" } : { only: "Only approvers and owners", chip: "Approvers and owners" };
 
-  if (role !== "owner") {
+  if (!hasRole(role, policy.role)) {
     return (
       <div data-testid="risk-owner-only" className="flex min-h-9 items-center gap-2 rounded-lg bg-surface2 px-2.5 font-medium">
         <Icon name="lock" size={16} className="flex-none text-text2" />
-        <span className="min-w-0">Only an owner can accept this risk</span>
+        <span className="min-w-0">{who.only} can accept this risk</span>
       </div>
     );
   }
@@ -162,7 +194,11 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
       await unwrap(
         api.POST("/v1/blockers/{blocker_id}/accept-risk", {
           params: { path: { blocker_id: blocker.blocker.id } },
-          body: { reason: reason.trim(), review_at: new Date(`${review}T09:00:00Z`).toISOString() },
+          // 09:00 UTC on the chosen day, kept inside the company's limit from now.
+          body: {
+            reason: reason.trim(),
+            review_at: new Date(Math.min(Date.parse(`${review}T09:00:00Z`), Date.now() + policy.maxDays * DAY - 60_000)).toISOString(),
+          },
         }),
       );
       setOpen(false);
@@ -180,7 +216,7 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
         <Button onClick={() => setOpen(true)}>Accept risk</Button>
         <Chip kind="line">
           <Icon name="lock" size={16} />
-          Owners only
+          {who.chip}
         </Chip>
       </div>
     );
@@ -200,7 +236,19 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
       </label>
       <label className="flex flex-col gap-1 text-[13px] font-semibold text-text2">
         Review by
-        <input className={INPUT} type="date" value={review} onChange={(e) => setReview(e.target.value)} required />
+        <input
+          className={INPUT}
+          type="date"
+          value={review}
+          min={isoDay(today + DAY)}
+          max={isoDay(today + policy.maxDays * DAY)}
+          onChange={(e) => setPicked(e.target.value)}
+          aria-describedby="risk-review-limit"
+          required
+        />
+        <span id="risk-review-limit" className="text-[13px] font-normal">
+          Within {policy.maxDays} days
+        </span>
       </label>
       <div className="flex flex-wrap gap-2">
         <Button type="submit" variant="solid" disabled={busy || !reason.trim()}>
@@ -371,6 +419,53 @@ function AdvisoryRow({ item, index }: { item: Item; index: number }) {
   );
 }
 
+/**
+ * While `open`: focus moves to the `[data-autofocus]` element (else the dialog), Tab and
+ * Shift+Tab stay inside `ref`, Escape calls `onClose`; on close, focus goes back to what
+ * had it when the dialog opened.
+ */
+function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, onClose: () => void) {
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  });
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    (ref.current?.querySelector<HTMLElement>("[data-autofocus]") ?? ref.current)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close.current();
+        return;
+      }
+      const root = ref.current;
+      if (e.key !== "Tab" || !root) return;
+      const items = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)];
+      if (items.length === 0) {
+        e.preventDefault();
+        root.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const at = document.activeElement;
+      if (e.shiftKey && (at === first || !root.contains(at))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (at === last || !root.contains(at))) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus();
+    };
+  }, [open, ref]);
+}
+
 /** Publish (B1): blocks, hard checks and advisory on the left, the selected block right. */
 export function PublishView({ doc }: { doc: string }) {
   const { role } = useMe();
@@ -382,7 +477,7 @@ export function PublishView({ doc }: { doc: string }) {
   const readinessQ = useQuery(`readiness|${doc}|${n}`, () =>
     n == null
       ? Promise.resolve(undefined)
-      : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc, n } } })),
+      : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc, n }, query: { purpose: "publish" } } })),
   );
   // Optional reads: without them the blocks fall back to the verdict's own rows.
   const strategyQ = useQuery(`blocker-strategy|${doc}`, () =>
@@ -401,8 +496,9 @@ export function PublishView({ doc }: { doc: string }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const readiness = readinessQ.data;
   const blocks = readiness && n != null ? blocksOf(doc, n, readiness, strategyQ.data) : [];
@@ -430,36 +526,50 @@ export function PublishView({ doc }: { doc: string }) {
     void reloadStrategy();
   };
 
+  const closeConfirm = () => {
+    setConfirming(false);
+    setRefusal(null);
+  };
+  useFocusTrap(dialogRef, confirming, closeConfirm);
+  // A refusal disables Publish; keep focus inside the dialog, on the way out.
   useEffect(() => {
-    if (!confirming) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setConfirming(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [confirming]);
+    if (refusal) dialogRef.current?.querySelector<HTMLElement>("[data-dialog-cancel]")?.focus();
+  }, [refusal]);
 
   async function publish() {
     if (n == null) return;
     setBusy(true);
-    setError(null);
+    setRefusal(null);
     try {
-      // The approve call does not ask the checks, so ask them again right before it.
-      const fresh = await unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc, n } } }));
-      if (fresh.blocked) {
-        setConfirming(false);
-        setError(`Not published: ${fresh.blocking.length} hard check${fresh.blocking.length === 1 ? "" : "s"} failing.`);
+      // C5: only the latest version is published; one that landed since this page loaded wins.
+      const fresh = await unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } }));
+      if (fresh.latest_version !== n) {
+        setRefusal({ detail: `v${fresh.latest_version} exists, reload`, blocking: [], stale: true });
+        return;
+      }
+      // The API runs the publish checks itself and answers 409 naming the blocks.
+      const res = await api.POST("/v1/documents/{doc}/versions/{n}/approve", { params: { path: { doc, n } } });
+      if (res.response.status === 409 && res.error && "blocking" in res.error) {
+        setRefusal(res.error);
         void reloadReadiness();
         void reloadStrategy();
         return;
       }
-      await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/approve", { params: { path: { doc, n } } }));
-      setConfirming(false);
+      await unwrap(Promise.resolve(res));
+      closeConfirm();
       setNotice(`Published v${n}.`);
       void docQ.reload();
     } catch (e) {
-      if (!onAuth(e)) setError(errorMessage(e));
+      if (!onAuth(e)) setRefusal({ detail: errorMessage(e), blocking: [] });
     } finally {
       setBusy(false);
     }
+  }
+
+  function reloadPage() {
+    closeConfirm();
+    setNotice(null);
+    void docQ.reload();
   }
 
   // Enabled only when the API's verdict refuses nothing; never a count made here.
@@ -483,13 +593,18 @@ export function PublishView({ doc }: { doc: string }) {
           variant="primary"
           icon={reason ? "lock" : "check"}
           disabled={!!reason}
-          aria-describedby={readiness?.blocked ? "publish-blocks" : undefined}
+          aria-describedby={reason ? "publish-reason" : undefined}
           title={reason ?? undefined}
           data-testid="publish-button"
           onClick={() => setConfirming(true)}
         >
           Publish v{n}
         </Button>
+        {reason && (
+          <span id="publish-reason" className="sr-only">
+            {reason}
+          </span>
+        )}
       </>
     );
 
@@ -520,7 +635,6 @@ export function PublishView({ doc }: { doc: string }) {
       />
       {docQ.error && <ErrorNote>{docQ.error}</ErrorNote>}
       {readinessQ.error && <ErrorNote>{readinessQ.error}</ErrorNote>}
-      {error && <Notice tone="error">{error}</Notice>}
       {notice && <Notice tone="pass">{notice}</Notice>}
       {d && n == null && <Notice>No version yet</Notice>}
 
@@ -582,9 +696,11 @@ export function PublishView({ doc }: { doc: string }) {
       {confirming && n != null && (
         <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="publish-confirm-title"
+            tabIndex={-1}
             className="w-full max-w-md min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip"
           >
             <div className="flex min-h-14 items-center border-b border-line px-5 max-[600px]:px-4">
@@ -595,13 +711,48 @@ export function PublishView({ doc }: { doc: string }) {
             <div className="px-5 py-3.5 max-[600px]:px-4">
               <OnPublish n={n} />
             </div>
+            {refusal && (
+              <div id="publish-refusal" role="alert" data-testid="publish-refusal" className="border-t border-line bg-crit-bg px-5 py-3 text-crit max-[600px]:px-4">
+                <p className="flex items-start gap-2 font-semibold">
+                  <Icon name="alert" size={16} className="mt-0.5 flex-none" />
+                  <span className="min-w-0">{refusal.blocking.length > 0 ? "Not published" : refusal.detail}</span>
+                </p>
+                {refusal.blocking.length > 0 && (
+                  <>
+                    <p className="mt-1 pl-6">
+                      {refusal.blocking.length} block{refusal.blocking.length === 1 ? "" : "s"}
+                    </p>
+                    <ul className="mt-1 flex flex-col gap-1 pl-6">
+                      {refusal.blocking.map((b) => (
+                        <li key={b.id} data-testid="refusal-block" className="list-disc">
+                          {b.title}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
             <div className="flex justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
-              <Button variant="ghost" onClick={() => setConfirming(false)}>
+              <Button variant="ghost" data-dialog-cancel onClick={closeConfirm}>
                 Cancel
               </Button>
-              <Button variant="primary" icon="check" disabled={busy} onClick={publish} autoFocus>
-                {busy ? "Publishing…" : "Publish"}
-              </Button>
+              {refusal?.stale ? (
+                <Button variant="primary" onClick={reloadPage}>
+                  Reload
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  icon={refusal ? "lock" : "check"}
+                  disabled={busy || !!refusal}
+                  aria-describedby={refusal ? "publish-refusal" : undefined}
+                  onClick={publish}
+                  data-autofocus
+                >
+                  {busy ? "Publishing…" : "Publish"}
+                </Button>
+              )}
             </div>
           </div>
         </div>
