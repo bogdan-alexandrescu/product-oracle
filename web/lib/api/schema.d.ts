@@ -886,6 +886,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{connection_id}/notion/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notion Pages
+         * @description The pages and databases this Notion connection can read, most recently edited first
+         *     (or by relevance with ``search``), 100 at a time, each with its parent.
+         */
+        get: operations["list_notion_pages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/settings": {
         parameters: {
             query?: never;
@@ -9427,6 +9448,38 @@ export interface components {
              */
             added_at: string;
         };
+        /** NotionPageOut */
+        NotionPageOut: {
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "page" | "database";
+            /** Title */
+            title: string;
+            /** Icon */
+            icon: string | null;
+            /**
+             * Parent Type
+             * @enum {string}
+             */
+            parent_type: "workspace" | "page" | "database" | "block";
+            /** Parent Id */
+            parent_id: string | null;
+            /** Last Edited At */
+            last_edited_at: string | null;
+            /** Url */
+            url: string;
+        };
+        /** NotionPagesOut */
+        NotionPagesOut: {
+            /** Items */
+            items: components["schemas"]["NotionPageOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** OAuthErrorOut */
         OAuthErrorOut: {
             /** Error */
@@ -14646,6 +14699,68 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_notion_pages: {
+        parameters: {
+            query?: {
+                search?: string;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotionPagesOut"];
+                };
+            };
+            /** @description Not one of your connections */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a Notion connection, or it needs reconnecting */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Notion's rate limit; retry after ``Retry-After`` seconds */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Notion did not answer */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

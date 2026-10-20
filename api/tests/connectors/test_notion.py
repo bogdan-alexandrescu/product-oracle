@@ -385,3 +385,94 @@ def test_markdown_edge_cases():
         "**bold** tail\n\n1. one\n\nbreak\n\n1. again\n\n$$\ne=mc^2\n$$\n\n"
         "[https://example.com](https://example.com)\n\nin column"
     )
+
+
+# --- Legacy config key and the page picker's search ------------------------------------
+
+OTHER = "77777777-7777-4777-8777-777777777777"
+
+
+async def test_legacy_pages_key_is_read_as_roots():
+    # Sources made in the web UI before the picker stored their ids under "pages".
+    fake = FakeNotion(full_routes())
+    await fake.connector().validate({"pages": [ROOT]}, CREDENTIAL)
+    events = await collect(fake.connector(), config={"pages": [ROOT]})
+    assert set(upserts(events)) == {ROOT, CHILD, ROW1, ROW2, GRAND}
+    # Both keys: one allowlist, no duplicates.
+    assert notion._parse_config({"roots": [ROOT], "pages": [ROOT, DB]}) == [ROOT, DB]
+    with pytest.raises(ConnectorConfigError, match="at least one root"):
+        notion._parse_config({"pages": []})
+
+
+def _search_routes(seen: list[dict]):
+    def search(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen.append(body)
+        if body.get("query") == "road":
+            return httpx.Response(200, json=fixture("search_roadmap.json"))
+        if body.get("start_cursor") == "cursor-search-2":
+            return httpx.Response(200, json=fixture("search_2.json"))
+        return httpx.Response(200, json=fixture("search_1.json"))
+
+    # FakeNotion keys a paginated request by its start_cursor.
+    return {"POST /search": search, "POST /search#cursor-search-2": search}
+
+
+async def test_search_shared_lists_pages_and_databases_with_parents():
+    seen: list[dict] = []
+    fake = FakeNotion(_search_routes(seen))
+    client = httpx.AsyncClient(transport=httpx.MockTransport(fake))
+    first, cursor = await notion.search_shared(client, "ntn_example", "", None)
+    assert cursor == "cursor-search-2"
+    assert seen[0] == {
+        "page_size": notion.PAGE_SIZE,
+        "sort": {"direction": "descending", "timestamp": "last_edited_time"},
+    }
+    assert first[0] == {
+        "id": ROOT,
+        "type": "page",
+        "title": "Product handbook",
+        "icon": "📘",
+        "parent_type": "workspace",
+        "parent_id": None,
+        "last_edited_at": datetime(2026, 9, 2, 10, tzinfo=UTC),
+        "url": "https://www.notion.so/11111111111141118111111111111111",
+    }
+    assert [(i["id"], i["type"], i["parent_type"], i["parent_id"]) for i in first[1:]] == [
+        (CHILD, "page", "page", ROOT),
+        (DB, "database", "page", ROOT),
+    ]
+    assert first[2]["title"] == "Feature requests"
+    assert first[2]["icon"] == "https://example.com/icon.png"
+
+    second, cursor = await notion.search_shared(client, "ntn_example", "", "cursor-search-2")
+    assert cursor is None
+    assert seen[1]["start_cursor"] == "cursor-search-2"
+    # Trashed items are left out; a page in a column has a block parent.
+    assert [(i["id"], i["parent_type"]) for i in second] == [(ROW1, "database"), (OTHER, "block")]
+    assert second[1]["icon"] == "https://files.example.com/i.png"
+
+    found, _ = await notion.search_shared(client, "ntn_example", " road ", None)
+    assert seen[2] == {"page_size": notion.PAGE_SIZE, "query": "road"}
+    assert [i["title"] for i in found] == ["Roadmap"]
+
+
+async def test_search_shared_errors():
+    limited = FakeNotion(
+        {
+            "POST /search": lambda r: httpx.Response(
+                429, json=fixture("error_rate_limited.json"), headers={"Retry-After": "12"}
+            )
+        }
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(limited))
+    with pytest.raises(ConnectorRateLimited) as info:
+        await notion.search_shared(client, "ntn_example", "", None)
+    assert info.value.retry_after == 12
+
+    rejected = FakeNotion(
+        {"POST /search": lambda r: httpx.Response(401, json=fixture("error_unauthorized.json"))}
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(rejected))
+    with pytest.raises(ConnectorAuthError):
+        await notion.search_shared(client, "ntn_example", "", None)
