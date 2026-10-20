@@ -252,3 +252,62 @@ async def test_checkpoint_per_channel_keeps_other_channels():
         "C0OTHER": {"oldest": "1750000000.000000", "threads": {}},
         "C0ROADMAP": {"oldest": "1760000500.000500", "threads": {}},
     }
+
+
+SINCE_EPOCH = datetime(2025, 10, 10, tzinfo=UTC).timestamp()
+
+
+@pytest.mark.parametrize("since", ["not-a-date", 20251010, "2025-13-01"])
+async def test_validate_refuses_a_bad_since(since):
+    fake = FakeSlack(BASE_ROUTES)
+    with pytest.raises(ConnectorConfigError, match="since"):
+        await connector(fake).validate({"channels": ["C0PRODUCT"], "since": since}, CREDENTIAL)
+    assert fake.calls == []
+
+
+async def test_validate_accepts_since_or_none():
+    for since in ("2025-10-10", None):
+        fake = FakeSlack(BASE_ROUTES)
+        await connector(fake).validate({"channels": ["C0PRODUCT"], "since": since}, CREDENTIAL)
+
+
+async def test_since_reads_no_message_before_it():
+    fake = FakeSlack(
+        {
+            **BASE_ROUTES,
+            # Slack would honour ``oldest``; the fake does not, so the connector's own
+            # filter is checked too.
+            "conversations.history": "history_C0PRODUCT_page1",
+            "conversations.history:bmV4dF90czoxNzYwMDAwMTAw": "history_C0PRODUCT_page2",
+        }
+    )
+    events = await collect(connector(fake), {"channels": ["C0PRODUCT"], "since": "2025-10-10"})
+    history = next(p for m, p in fake.calls if m == "conversations.history")
+    assert float(history["oldest"]) == SINCE_EPOCH
+    assert [e for e in events if isinstance(e, ItemUpsert)] == []
+    assert fake.count("conversations.replies") == 0
+    assert fake.count("users.info") == 0
+
+
+async def test_since_keeps_messages_on_or_after_it():
+    fake = FakeSlack(
+        {
+            **BASE_ROUTES,
+            "conversations.history": "history_C0PRODUCT_page1",
+            "conversations.history:bmV4dF90czoxNzYwMDAwMTAw": "history_C0PRODUCT_page2",
+            "conversations.replies:1760000200.000200": "replies_1760000200",
+        }
+    )
+    events = await collect(connector(fake), {"channels": ["C0PRODUCT"], "since": "2025-10-09"})
+    history = next(p for m, p in fake.calls if m == "conversations.history")
+    assert float(history["oldest"]) == datetime(2025, 10, 9, tzinfo=UTC).timestamp()
+    assert len([e for e in events if isinstance(e, ItemUpsert)]) == 3
+
+
+async def test_since_bounds_the_thread_lookback_of_an_incremental_sync():
+    # The cursor's lookback would reach back before ``since``: ``since`` wins.
+    cursor = {"channels": {"C0PRODUCT": {"oldest": f"{SINCE_EPOCH + 3600:.6f}", "threads": {}}}}
+    fake = FakeSlack({**BASE_ROUTES, "conversations.history": "history_C0PRODUCT_page2"})
+    await collect(connector(fake), {"channels": ["C0PRODUCT"], "since": "2025-10-10"}, cursor)
+    history = next(p for m, p in fake.calls if m == "conversations.history")
+    assert float(history["oldest"]) == SINCE_EPOCH
