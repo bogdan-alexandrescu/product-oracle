@@ -25,6 +25,7 @@ an approved one stays until a newer one is approved.
 """
 
 import hashlib
+import json
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -323,7 +324,14 @@ async def record_design(
     """One artifact version of a flow or wireframe request, with its validated outputs
     and its dependencies on the PRD sections and requirements they link. The caller
     commits."""
-    content_hash = _sha("\n".join(f"{o.name}:{o.sha256}" for o in outputs))
+    # The files and what they link and annotate: the same SVG with other annotations, or
+    # linking other sections or requirements, is another design.
+    content_hash = _sha(
+        json.dumps(
+            [[o.name, o.sha256, o.section_keys, o.requirement_ids, o.annotations] for o in outputs],
+            sort_keys=True,
+        )
+    )
     # The same design from the same PRD version is recorded once (a second advance of
     # the run, a retried import): the version already recorded is returned.
     existing = await db.scalar(

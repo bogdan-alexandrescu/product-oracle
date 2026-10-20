@@ -716,6 +716,7 @@ async def import_spec(
                     outputs = check.flows if child.kind == "user_flow" else check.wireframes
                     if not outputs:
                         continue
+                    number = await lineage.next_number(s, child.id)
                     av = await lineage.record_design(
                         s,
                         principal,
@@ -725,8 +726,11 @@ async def import_spec(
                         provenance=provenance,
                         prd_version_id=version_id,
                     )
-                    child.status = "succeeded"
                     created[child.kind] = str(av.id)
+                    if av.number < number:
+                        # Already recorded (a retried import): nothing changes.
+                        continue
+                    child.status = "succeeded"
                     await audit.record(
                         s,
                         principal,
@@ -1128,7 +1132,9 @@ def _approval_audit(principal: Principal, request: ArtifactRequest) -> dict[str,
     return {
         "requested_by": str(request.requested_by) if request.requested_by else None,
         "engineering_approvers_named": bool(named),
-        "self_approval": request.requested_by is not None and principal.id == request.requested_by,
+        # The user behind a token, when it has one (requests record that user's id).
+        "self_approval": request.requested_by is not None
+        and (principal.user_id or principal.id) == request.requested_by,
     }
 
 

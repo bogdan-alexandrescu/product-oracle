@@ -537,3 +537,108 @@ async def test_the_design_check_runs_off_the_event_loop_with_a_time_cap(
     assert [p["code"] for p in imported["design"]["problems"]] == ["design_check_timeout"]
     spec = await get_spec(client, owner, created["spec"]["request"]["id"])
     assert spec["request"]["status"] == "partial"
+
+
+# --------------------------------------------------------------------------- minors
+
+
+async def test_a_run_token_may_not_push_to_its_slug_once_another_document_holds_it(client, runtime):
+    from oracle.runs.models import Run
+    from oracle.runtokens import mint_run_token
+    from tests.test_mcp import mcp_client, text_of
+
+    world = await make_world(client)
+    created = await generated(client, runtime, world)
+    slug = created["spec"]["document_slug"]
+    stored = await stored_markdown(world.ctx.tenant_id, slug)
+    edited = stored.replace("A shipping quote service", "A cached shipping quote service")
+    owner = world.ctx.users["owner"]
+    # A run created for the same slug, before it had a document of its own.
+    async with tenant_session(world.ctx.tenant_id) as s:
+        squatter = Run(flow="prd_to_spec", created_by=owner.id, knobs={"document_slug": slug})
+        s.add(squatter)
+        await s.flush()
+        token = await mint_run_token(s, squatter.id, ["write:drafts"], ttl_seconds=600)
+        await s.commit()
+    async with mcp_client(token) as c:
+        refused = await c.call_tool("push_draft", {"doc": slug, "markdown": edited})
+    assert refused.is_error, text_of(refused)
+    assert "its own run's document" in text_of(refused)
+    assert await version_count(world.ctx.tenant_id, slug) == 1
+
+
+async def test_record_design_dedupe_covers_links_and_annotations(client, runtime):
+    from oracle.specs import lineage
+    from oracle.specs.design import check_design
+    from oracle.v2.models import ArtifactRequest, ArtifactVersion
+
+    world = await make_world(client)
+    created = await generated(client, runtime, world)
+    flow_request_id = uuid.UUID(
+        created["spec"]["request"]["params"]["design_request_ids"]["user_flow"]
+    )
+    bundle = json.loads(design_json(world.reqs, SECTIONS))
+    bundle["flows"][0]["annotations"][0]["note"] = "A different note on the same file."
+    check = check_design(
+        json.dumps(bundle), prd_sections=set(SECTIONS) | {"s-1"}, requirement_ids=set(world.reqs)
+    )
+    assert check.ok, check.problems
+    async with tenant_session(world.ctx.tenant_id) as s:
+        request = await s.get(ArtifactRequest, flow_request_id)
+        first = await s.scalar(
+            select(ArtifactVersion).where(ArtifactVersion.request_id == request.id)
+        )
+        av = await lineage.record_design(
+            s, None, request, check.flows, source_version_id=world.prd_v1,
+            provenance={"run_id": created["run_id"]}, prd_version_id=world.prd_v1,
+        )  # fmt: skip
+        await s.commit()
+        # Same SVG, another annotation: a new version, not the old one.
+        assert av.id != first.id
+
+
+async def test_a_retried_design_import_does_not_re_audit_or_reset_status(client, runtime):
+    from oracle.auth.deps import Principal
+    from oracle.models import AuditEvent
+    from oracle.runs.models import Run
+    from oracle.specs.service import import_spec
+    from oracle.v2.models import ArtifactRequest
+
+    world = await make_world(client)
+    created = await generated(client, runtime, world)
+    flow_request_id = uuid.UUID(
+        created["spec"]["request"]["params"]["design_request_ids"]["user_flow"]
+    )
+    async with tenant_session(world.ctx.tenant_id) as s:
+        flow = await s.get(ArtifactRequest, flow_request_id)
+        flow.status = "cancelled"
+        await s.commit()
+    owner = world.ctx.users["owner"]
+    principal = Principal(
+        tenant_id=world.ctx.tenant_id, kind="user", role="owner", user_id=owner.id
+    )
+    files = {"spec.md": spec_md(), "design.json": design_json(world.reqs, SECTIONS)}
+    async with tenant_session(world.ctx.tenant_id) as s:
+        run = await s.get(Run, uuid.UUID(created["run_id"]))
+        await import_spec(s, run, files, principal)
+    async with tenant_session(world.ctx.tenant_id) as s:
+        events = (
+            await s.scalars(select(AuditEvent).where(AuditEvent.action == "spec.design_recorded"))
+        ).all()
+        assert len(events) == 2  # the flows and the wireframes, once each
+        assert (await s.get(ArtifactRequest, flow_request_id)).status == "cancelled"
+
+
+def test_self_approval_compares_the_user_behind_a_token():
+    from oracle.auth.deps import Principal
+    from oracle.specs.service import _approval_audit
+    from oracle.v2.models import ArtifactRequest
+
+    user, token = uuid.uuid4(), uuid.uuid4()
+    request = ArtifactRequest(requested_by=user, params={})
+    as_token = Principal(
+        tenant_id=uuid.uuid4(), kind="token", role="approver", user_id=user, token_id=token
+    )
+    assert _approval_audit(as_token, request)["self_approval"] is True
+    other = Principal(tenant_id=uuid.uuid4(), kind="token", role="approver", token_id=token)
+    assert _approval_audit(other, request)["self_approval"] is False

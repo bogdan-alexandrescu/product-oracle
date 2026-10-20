@@ -314,7 +314,9 @@ async def _run_document_refusal(caller: McpCaller, doc: str) -> str | None:
         own = await s.get(Document, run.document_id) if run.document_id else None
     if target is not None and own is not None and target.id == own.id:
         return None
-    if own_slug and doc == own_slug and own is None:
+    # The slug it was created for, only while no document holds it: a document someone
+    # else made there since is not this run's.
+    if own_slug and doc == own_slug and own is None and target is None:
         return None
     if own is None and not own_slug and (target is None or target.kind != "spec"):
         return None
