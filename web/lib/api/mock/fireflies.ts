@@ -80,9 +80,17 @@ function inRange(m: Meeting, q: URLSearchParams): boolean {
   return (!from || day >= from) && (!to || day <= to);
 }
 
+/** Every browse call the mock answered ("series?from=..."), for tests counting requests. */
+declare global {
+  interface Window {
+    __firefliesBrowseCalls?: string[];
+  }
+}
+
 /** Handles /v1/connections/{id}/fireflies/{meetings|series}; null for other paths. */
 export function routeFirefliesBrowse(p: string[], q: URLSearchParams): Response | null {
   if (p[1] !== "connections" || p[3] !== "fireflies") return null;
+  if (typeof window !== "undefined") (window.__firefliesBrowseCalls ??= []).push(`${p[4]}?${q.toString()}`);
   if (p[2] !== FIREFLIES_CONNECTION_ID) return json(404, { detail: "Fireflies connection not found" });
   const search = (q.get("search") ?? "").trim().toLowerCase();
   if (search === "rate limit") {

@@ -30,6 +30,7 @@ import {
   firefliesConfigToSave,
   firefliesReady,
   firefliesSummary,
+  firefliesRange,
   readFirefliesConfig,
 } from "./FirefliesPicker";
 
@@ -367,7 +368,7 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
             <Label className="flex-none">{fireflies.titleRule ? "Title rule" : "Meetings"}</Label>
             <span className="min-w-0 truncate text-text">
               {fireflies.titleRule
-                ? `${fireflies.titleRule.join(", ")}${fireflies.value.date_from ? `, ${firefliesSummary(fireflies.value).replace(/^All meetings /, "")}` : ""}`
+                ? [fireflies.titleRule.join(", "), firefliesRange(fireflies.value)].filter(Boolean).join(", ")
                 : firefliesSummary(fireflies.value)}
             </span>
           </span>

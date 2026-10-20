@@ -28,7 +28,8 @@ function strings(value: unknown): string[] {
 
 /**
  * Reads a source's config. One saved before the picker (no `mode`) is a title rule:
- * all meetings since `from_date` whose title contains one of the strings.
+ * all meetings since `from_date` whose title contains one of the strings. It opens on
+ * choosing with nothing picked, so saving it as it opens cannot widen it to every meeting.
  */
 export function readFirefliesConfig(config: Record<string, unknown>): { value: FirefliesConfig; titleRule: string[] | null } {
   if (config.mode === "all" || config.mode === "selected") {
@@ -47,7 +48,7 @@ export function readFirefliesConfig(config: Record<string, unknown>): { value: F
   const rule = [...strings(config.title_contains), ...strings(config.meetings)];
   return {
     value: {
-      mode: "all",
+      mode: rule.length ? "selected" : "all",
       date_from: typeof config.from_date === "string" ? config.from_date.slice(0, 10) : undefined,
       series: [],
       meetings: [],
@@ -84,7 +85,8 @@ function shortDay(day: string): string {
     .replace(" ", "\u00a0");
 }
 
-function rangeText(c: FirefliesConfig): string {
+/** "Sep 1 – Oct 31" · "since Sep 1" · "until Oct 31" · "". */
+export function firefliesRange(c: Pick<FirefliesConfig, "date_from" | "date_to">): string {
   if (c.date_from && c.date_to) return `${shortDay(c.date_from)} – ${shortDay(c.date_to)}`;
   if (c.date_from) return `since ${shortDay(c.date_from)}`;
   if (c.date_to) return `until ${shortDay(c.date_to)}`;
@@ -93,7 +95,7 @@ function rangeText(c: FirefliesConfig): string {
 
 /** "All meetings since Sep 1" · "2 series, 5 meetings, since Sep 1". */
 export function firefliesSummary(c: FirefliesConfig): string {
-  const range = rangeText(c);
+  const range = firefliesRange(c);
   if (c.mode === "all") return range ? `All meetings ${range}` : "All meetings";
   const parts = [
     ...(c.series.length ? [`${c.series.length} series`] : []),
@@ -190,20 +192,24 @@ export function FirefliesPicker({
   const ongoing = !value.date_to;
   const [search, setSearch] = useState("");
   const query = useDebounced(search.trim());
+  // Typing a date changes it on every keystroke (0002, 0020, 0202, 2026): the lists
+  // follow once it settles.
+  const from = useDebounced(value.date_from, 400);
+  const to = useDebounced(value.date_to, 400);
   const labels = useMemo(() => value.labels ?? {}, [value.labels]);
 
   const set = (patch: Partial<FirefliesConfig>) => onChange({ ...value, ...patch });
 
-  const series = useQuery(`ff-series|${connectionId}|${value.date_from ?? ""}|${value.date_to ?? ""}|${choosing}`, () =>
+  const series = useQuery(`ff-series|${connectionId}|${from ?? ""}|${to ?? ""}|${choosing}`, () =>
     choosing
       ? unwrap(
           api.GET("/v1/connections/{connection_id}/fireflies/series", {
-            params: { path: { connection_id: connectionId }, query: { from: value.date_from || undefined, to: value.date_to || undefined } },
+            params: { path: { connection_id: connectionId }, query: { from: from || undefined, to: to || undefined } },
           }),
         )
       : Promise.resolve(null),
   );
-  const meetings = useMeetings(connectionId, query, value.date_from, value.date_to, choosing);
+  const meetings = useMeetings(connectionId, query, from, to, choosing);
 
   const pickedSeries = useMemo(() => new Set(value.series), [value.series]);
   const pickedMeetings = useMemo(() => new Set(value.meetings), [value.meetings]);

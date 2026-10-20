@@ -105,9 +105,14 @@ test("fireflies picker: a title rule saved before the picker shows until saved a
   const picker = row.getByTestId("fireflies-picker");
   await expect(picker.getByTestId("title-rule")).toContainText("“Customer interview”");
   await expect(picker.getByLabel("From")).toHaveValue("2026-09-01");
-  await expect(picker.getByTestId("fireflies-summary")).toHaveText("All meetings since Sep 1");
+  // Opens on choosing, with nothing picked: saving as it opens must not widen the rule to
+  // every meeting.
+  await expect(picker.getByRole("button", { name: "Choose" })).toHaveAttribute("aria-pressed", "true");
+  await expect(picker.getByTestId("fireflies-summary")).toHaveText("Nothing picked yet");
+  await expect(row.getByRole("button", { name: "Save meetings" })).toBeDisabled();
+  // The row still reads as the title rule until it is saved.
+  await expect(row.getByTestId("fireflies-included")).toContainText("Customer interview, since Sep 1");
 
-  await picker.getByRole("button", { name: "Choose" }).click();
   await picker.getByLabel("Search meetings").fill("customer");
   await picker.getByRole("group", { name: "Meetings" }).getByLabel("Customer interview: Acme").check();
   await row.getByRole("button", { name: "Save meetings" }).click();
@@ -142,4 +147,24 @@ test("fireflies picker: phone layout stacks without side scroll", async ({ page 
       .filter((size) => size < 13),
   );
   expect(small).toEqual([]);
+});
+
+test("fireflies picker: typing a date makes one request per list, not one per keystroke", async ({ page }) => {
+  const { picker } = await openAdd(page);
+  await picker.getByRole("button", { name: "Choose" }).click();
+  await expect(picker.getByRole("list", { name: "Series" }).getByRole("listitem").first()).toBeVisible();
+  const calls = () => page.evaluate(() => window.__firefliesBrowseCalls ?? []);
+  await expect.poll(async () => (await calls()).length).toBeGreaterThan(0);
+  await page.evaluate(() => (window.__firefliesBrowseCalls = []));
+
+  // Month, day, then the year digit by digit: 0002, 0020, 0202, 2026.
+  const from = picker.getByLabel("From");
+  await from.focus();
+  await page.keyboard.type("09012026", { delay: 60 });
+  await expect(from).toHaveValue("2026-09-01");
+  await expect.poll(async () => (await calls()).filter((c) => c.startsWith("series")).length).toBe(1);
+  await page.waitForTimeout(800);
+  const made = await calls();
+  expect(made.filter((c) => c.startsWith("series"))).toEqual(["series?from=2026-09-01"]);
+  expect(made.filter((c) => c.startsWith("meetings"))).toEqual(["meetings?from=2026-09-01"]);
 });
