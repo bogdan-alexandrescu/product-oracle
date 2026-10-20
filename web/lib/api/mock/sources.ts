@@ -5,6 +5,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockUuid, seeded } from "./ids";
+import { MOCK_NOTION_CONNECTION_ID } from "./notion";
 
 type Source = Schemas["SourceOut"];
 // `folder`: the picked Drive folder a Google Doc came from (mock only).
@@ -22,7 +23,7 @@ export const SOURCES_STORAGE_KEY = "po-mock-sources-v1";
 const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
   slack: [{ id: "c0000000-0000-4000-8000-000000000001", account_label: "Example Co chat", status: "active" }],
   github: [{ id: "c0000000-0000-4000-8000-000000000002", account_label: "example-org", status: "active" }],
-  notion: [],
+  notion: [{ id: MOCK_NOTION_CONNECTION_ID, account_label: "Example Notion", status: "active" }],
   fireflies: [],
   google: [
     { id: "c0000000-0000-4000-8000-000000000003", account_label: "pat@example.com", status: "active", reconnect_reason: null },
@@ -46,7 +47,7 @@ const AVAILABLE: Record<Source["kind"], boolean> = {
   upload: true,
   github: true,
   slack: true,
-  notion: false,
+  notion: true,
   fireflies: false,
   google_docs: true,
 };
@@ -284,6 +285,10 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       return json(422, {
         detail: "Reconnect to choose files: this Google connection cannot read folders; reconnect Google to give Oracle read access to your Drive",
       });
+    }
+    // As the real connector reads a Notion allowlist: "roots" only.
+    if (body.kind === "notion" && !(Array.isArray(body.config?.roots) && body.config.roots.length)) {
+      return json(422, { detail: "allowlist at least one root page or database" });
     }
     if (db.sources.some((s) => s.name === body.name.trim())) {
       return json(409, { detail: "You already have a source with this name" });

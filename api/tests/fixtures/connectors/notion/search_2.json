@@ -1,0 +1,111 @@
+{
+  "object": "list",
+  "type": "page_or_database",
+  "page_or_database": {},
+  "has_more": false,
+  "next_cursor": null,
+  "results": [
+    {
+      "object": "page",
+      "id": "44444444-4444-4444-8444-444444444441",
+      "created_time": "2026-09-01T10:00:00.000Z",
+      "last_edited_time": "2026-09-04T09:00:00.000Z",
+      "icon": null,
+      "parent": {
+        "type": "database_id",
+        "database_id": "33333333-3333-4333-8333-333333333333"
+      },
+      "archived": false,
+      "in_trash": false,
+      "properties": {
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Bulk export",
+                "link": null
+              },
+              "plain_text": "Bulk export",
+              "href": null,
+              "annotations": {}
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/44444444444444448444444444444441"
+    },
+    {
+      "object": "page",
+      "id": "77777777-7777-4777-8777-777777777777",
+      "created_time": "2026-09-01T10:00:00.000Z",
+      "last_edited_time": "2026-08-01T09:00:00.000Z",
+      "icon": {
+        "type": "file",
+        "file": {
+          "url": "https://files.example.com/i.png?X-Amz-Signature=abc",
+          "expiry_time": "2026-10-20T10:00:00.000Z"
+        }
+      },
+      "parent": {
+        "type": "block_id",
+        "block_id": "99999999-9999-4999-8999-999999999999"
+      },
+      "archived": false,
+      "in_trash": false,
+      "properties": {
+        "title": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Team notes",
+                "link": null
+              },
+              "plain_text": "Team notes",
+              "href": null,
+              "annotations": {}
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/77777777777747778777777777777777"
+    },
+    {
+      "object": "page",
+      "id": "88888888-8888-4888-8888-888888888888",
+      "created_time": "2026-09-01T10:00:00.000Z",
+      "last_edited_time": "2026-07-01T09:00:00.000Z",
+      "icon": null,
+      "parent": {
+        "type": "workspace",
+        "workspace": true
+      },
+      "archived": false,
+      "in_trash": true,
+      "properties": {
+        "title": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Old plan",
+                "link": null
+              },
+              "plain_text": "Old plan",
+              "href": null,
+              "annotations": {}
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/88888888888848888888888888888888"
+    }
+  ]
+}

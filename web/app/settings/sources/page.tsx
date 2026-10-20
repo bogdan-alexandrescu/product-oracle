@@ -25,17 +25,19 @@ import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD, TEXTAREA } from "../_components/fields";
 import { driveConfig, driveFiles, DriveFiles, DriveNotes, ReconnectToChoose, type DriveFile } from "./DriveFiles";
+import { NotionPicker, notionRoots } from "./NotionPicker";
 
 type Source = Schemas["SourceOut"];
 type Kind = Source["kind"];
 type KindOption = Schemas["SourceKindOut"];
 type Choice = Schemas["ConnectionChoice"];
 
-// The config key holding each kind's allowlist, and what one entry looks like.
+// The config key holding each kind's allowlist (as its connector reads it), and what one
+// entry looks like. Notion's roots are ticked in the page picker, not typed.
 const ALLOWLIST: Record<Exclude<Kind, "upload">, { key: string; label: string; example: string }> = {
   github: { key: "repos", label: "Repositories", example: "example-org/example-app" },
   slack: { key: "channels", label: "Channel ids", example: "C0123PRODUCT" },
-  notion: { key: "pages", label: "Root page ids", example: "0123abcd…" },
+  notion: { key: "roots", label: "Pages", example: "" },
   // Picked in Google's Drive picker (DriveFiles): "docs" and "folders".
   google_docs: { key: "docs", label: "Files", example: "1AbC…" },
   fireflies: { key: "meetings", label: "Meeting title filters", example: "Weekly product review" },
@@ -110,6 +112,7 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
 }
 
 function entries(config: Record<string, unknown>, key: string): string[] {
+  if (key === "roots") return notionRoots(config);
   const value = config[key];
   return Array.isArray(value) ? value.map(String) : [];
 }
@@ -146,40 +149,48 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
   const id = useId();
   const spec = ALLOWLIST[source.kind as Exclude<Kind, "upload">];
   const [text, setText] = useState(entries(source.config, spec.key).join("\n"));
+  const [roots, setRoots] = useState(() => notionRoots(source.config));
   const { act, error, busy } = useAction();
+  const notion = source.kind === "notion";
 
   async function save(e: FormEvent) {
     e.preventDefault();
-    const config = { ...source.config, [spec.key]: parseLines(text) };
+    const config: Record<string, unknown> = { ...source.config, [spec.key]: notion ? roots : parseLines(text) };
     const saved = await act(() =>
       unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config } })),
     );
     if (saved) onSaved(saved);
   }
 
+  if (notion && !source.connection_id) return <ReconnectNotion picked={roots.length} />;
+
   return (
     <form onSubmit={save} className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3">
-      <Field
-        label={`${spec.label} (one per line)`}
-        htmlFor={id}
-        tip={
-          <InfoTip label="saving the allowlist" align="start">
-            Saving a new allowlist syncs this source again from the start.
-          </InfoTip>
-        }
-      >
-        <textarea
-          id={id}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={4}
-          placeholder={spec.example}
-          className={`${TEXTAREA} font-mono`}
-        />
-      </Field>
+      {notion && source.connection_id ? (
+        <ChoosePages connectionId={source.connection_id} value={roots} onChange={setRoots} />
+      ) : (
+        <Field
+          label={`${spec.label} (one per line)`}
+          htmlFor={id}
+          tip={
+            <InfoTip label="saving the allowlist" align="start">
+              Saving a new allowlist syncs this source again from the start.
+            </InfoTip>
+          }
+        >
+          <textarea
+            id={id}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={4}
+            placeholder={spec.example}
+            className={`${TEXTAREA} font-mono`}
+          />
+        </Field>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
       <div>
-        <Button type="submit" variant="solid" disabled={busy}>
+        <Button type="submit" variant="solid" disabled={busy || (notion && roots.length === 0)}>
           Save allowlist
         </Button>
       </div>
@@ -236,6 +247,27 @@ function DriveFilesEditor({
         </InfoTip>
       </div>
     </form>
+  );
+}
+
+/** A Notion source whose connection is gone: its pages can only be picked through a connection. */
+function ReconnectNotion({ picked }: { picked: number }) {
+  return (
+    <div
+      className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3"
+      data-testid="notion-reconnect"
+    >
+      <Warn>Reconnect Notion to change pages.</Warn>
+      <p className="text-sm text-text2">
+        This source&rsquo;s Notion connection was removed. It keeps its {picked} picked{" "}
+        {picked === 1 ? "page" : "pages"}; changing them needs a Notion connection.
+      </p>
+      <div>
+        <LinkButton href="/settings/connections" icon="link">
+          Go to Connections
+        </LinkButton>
+      </div>
+    </div>
   );
 }
 
@@ -392,8 +424,8 @@ function SourceRow({
         {allowlist && (items.length > 0 || folders.length === 0) && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
-            <span className={`min-w-0 truncate text-text ${drive ? "" : "font-mono"}`} title={items.join(", ")}>
-              {items.length ? items.join(", ") : "none yet"}
+            <span className={`min-w-0 truncate text-text ${drive || source.kind === "notion" ? "" : "font-mono"}`} title={items.join(", ")}>
+              {source.kind === "notion" ? `${items.length} picked` : items.length ? items.join(", ") : "none yet"}
             </span>
           </span>
         )}
@@ -461,12 +493,29 @@ function SourceRow({
   );
 }
 
+/** The Notion page picker under its label: a source's roots, ticked rather than typed. */
+function ChoosePages(props: { connectionId: string; value: string[]; onChange: (roots: string[]) => void }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5" role="group" aria-label="Choose pages">
+      <span className="flex items-center gap-1.5">
+        <Label>Choose pages</Label>
+        <InfoTip label="choosing pages" align="start">
+          Tick the pages and databases to pull in; their sub-pages and databases come with them. Saving new picks syncs
+          the source again from the start.
+        </InfoTip>
+      </span>
+      <NotionPicker {...props} />
+    </div>
+  );
+}
+
 function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Source) => void }) {
   const [kind, setKind] = useState<Kind>("upload");
   const [name, setName] = useState("");
   const [connection, setConnection] = useState("");
   const [allow, setAllow] = useState("");
   const [files, setFiles] = useState<DriveFile[]>([]);
+  const [roots, setRoots] = useState<string[]>([]);
   const { act, error, busy } = useAction();
   const option = kinds.find((k) => k.kind === kind);
   const usable = (option?.connections ?? []).filter((c) => c.status === "active");
@@ -482,7 +531,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       kind,
       name: name.trim(),
       connection_id: spec ? connectionId : null,
-      config: drive ? driveConfig({}, files) : spec ? { [spec.key]: parseLines(allow) } : {},
+      config: drive ? driveConfig({}, files) : kind === "notion" ? { roots } : spec ? { [spec.key]: parseLines(allow) } : {},
     };
     const s = await act(() => unwrap(api.POST("/v1/sources", { body })));
     if (s) {
@@ -490,11 +539,15 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       setName("");
       setAllow("");
       setFiles([]);
+      setRoots([]);
     }
   }
 
   const blocked =
-    !option?.connector_available || (spec !== null && usable.length === 0) || (drive && (reconnect || files.length === 0));
+    !option?.connector_available ||
+    (spec !== null && usable.length === 0) ||
+    (drive && (reconnect || files.length === 0)) ||
+    (kind === "notion" && roots.length === 0);
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source">
@@ -505,6 +558,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
             onChange={(e) => {
               setKind(e.target.value as Kind);
               setConnection("");
+              setRoots([]);
             }}
             className={SELECT_FIELD}
           >
@@ -528,7 +582,14 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       </div>
       {spec && usable.length > 0 && (
         <Field label="Connection">
-          <select value={connectionId} onChange={(e) => setConnection(e.target.value)} className={SELECT_FIELD}>
+          <select
+            value={connectionId}
+            onChange={(e) => {
+              setConnection(e.target.value);
+              setRoots([]);
+            }}
+            className={SELECT_FIELD}
+          >
             {usable.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.account_label ?? c.id}
@@ -555,7 +616,10 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
           reconnect={reconnect}
         />
       )}
-      {spec && !drive && usable.length > 0 && (
+      {kind === "notion" && usable.length > 0 && (
+        <ChoosePages key={connectionId} connectionId={connectionId} value={roots} onChange={setRoots} />
+      )}
+      {spec && !drive && kind !== "notion" && usable.length > 0 && (
         <Field label={`${spec.label} to pull in (one per line)`}>
           <textarea
             value={allow}

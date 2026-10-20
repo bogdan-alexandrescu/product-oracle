@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # <domain>'; "include_and_flag" pulls it in and lists it as 'Owned outside <domain>'.
     # Docs picked one by one are always pulled in. Owner, 2026-10-20 (S5): skip.
     drive_docs_owned_outside: Literal["skip", "include_and_flag"] = "skip"
+    # Untrusted YAML (drafts' front matter, baseline.yaml, run files) is refused above this
+    # many bytes (oracle.safe_yaml); request bodies that carry it are capped at
+    # max_body_bytes (413).
+    yaml_max_bytes: int = 1024 * 1024
+    max_body_bytes: int = 1024 * 1024
 
 
 @lru_cache

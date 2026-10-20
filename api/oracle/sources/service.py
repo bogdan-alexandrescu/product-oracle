@@ -380,11 +380,19 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         await _validate(db, source.kind, config, conn)
         # A new account: sync from the start. A new allowlist: what left it is deleted
         # on the next sync. Unchanged content writes no new versions, so a full pass is
-        # cheap in storage. Google Docs keeps its cursor for a new allowlist (it lists
-        # the folders again when the allowlist changes); either way the sync engine
-        # deletes what the stored items have and the new allowlist does not
-        # (oracle.sources.sync), and a sync still running saves nothing more.
-        if reconnect or source.kind != "google_docs":
+        # cheap in storage. A connector that deletes by its cursor (items it knew minus
+        # items still live) must keep its known ids across a config change, or narrowing
+        # the source could never delete anything (S5).
+        if source.kind == "notion":
+            # Keep the page ids, drop the render cache: every live page is re-rendered
+            # and pages now outside the roots are deleted.
+            pages = (source.cursor or {}).get("pages") or {}
+            source.cursor = {"pages": {page_id: {} for page_id in pages}}
+        elif reconnect or source.kind != "google_docs":
+            # Google Docs keeps its cursor for a new allowlist (it lists the folders again
+            # when the allowlist changes); either way the sync engine adds every live item
+            # to what it knows (oracle.sources.sync), and a sync still running saves
+            # nothing more.
             source.cursor = None
         source.connection_id = connection_id
         source.config = config

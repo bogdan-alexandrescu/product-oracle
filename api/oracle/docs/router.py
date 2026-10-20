@@ -22,6 +22,7 @@ from oracle.docs.schemas import (
     VersionOut,
     VersionSummary,
 )
+from oracle.http import read_capped_body
 from oracle.jobs import service as jobs_service
 
 # Every route needs at least a viewer; importing a version needs an approver.
@@ -63,6 +64,7 @@ async def get_document(doc: str, db: TenantDB) -> DocumentOut:
     status_code=status.HTTP_201_CREATED,
     responses={
         200: {"model": VersionOut, "description": "Same content as an existing version"},
+        413: {"description": "Draft larger than 1 MiB (ORACLE_MAX_BODY_BYTES)"},
         422: {"model": ImportErrorResponse, "description": "Draft rejected"},
     },
     openapi_extra={
@@ -76,7 +78,7 @@ async def import_version(
     doc: str, request: Request, principal: Approver, db: TenantDB
 ) -> VersionOut | JSONResponse:
     """Import a draft (markdown + YAML front matter). Creates the document on first import."""
-    raw = await request.body()
+    raw = await read_capped_body(request)
     try:
         markdown = raw.decode("utf-8")
     except UnicodeDecodeError:

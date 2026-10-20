@@ -120,7 +120,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, confidence
+from oracle import audit, confidence, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -2675,9 +2675,11 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
             keys = set(
                 await db.scalars(select(Section.section_key).where(Section.version_id == source_id))
             )
-    return roadmap.check_items(
-        text, prd_slug=slug, prd_version=version, prd_sections=keys
-    ).as_json()
+    # Off the event loop: the run's file is untrusted text (oracle.safe_yaml).
+    check = await safe_yaml.run_parse(
+        roadmap.check_items, text, prd_slug=slug, prd_version=version, prd_sections=keys
+    )
+    return check.as_json()
 
 
 # --------------------------------------------------------------------------- tick

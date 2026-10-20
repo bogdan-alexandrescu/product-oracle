@@ -15,6 +15,7 @@ from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
 from oracle.config import get_settings
 from oracle.connections.browse_google import router as drive_browse_router
+from oracle.connections.notion_pages import router as notion_pages_router
 from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
 from oracle.docs.router import router as docs_router
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(members_router)
     app.include_router(connections_router)
     app.include_router(drive_browse_router)
+    app.include_router(notion_pages_router)
     app.include_router(settings_router)
     app.include_router(claude_accounts_router)
     app.include_router(sources_router)

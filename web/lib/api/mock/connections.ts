@@ -11,6 +11,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { MOCK_NOTION_CONNECTION_ID, notionPages } from "./notion";
+
 type ConnectionRow = Schemas["ConnectionOut"];
 
 interface ConnDb {
@@ -215,6 +217,14 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
       const who = identity(provider.key, "oauth-token");
       if (typeof who !== "string") upsert(db, provider.key, "oauth", who);
       return json(200, { url: `/settings/connections?connected=${provider.key}` });
+    }
+
+    if (p[3] === "notion" && p[4] === "pages" && m === "GET") {
+      // The Sources page's mock Notion connection, or one connected on Settings > Connections.
+      const own = db.connections.find((c) => c.id === p[2]);
+      if (p[2] !== MOCK_NOTION_CONNECTION_ID && !own) return json(404, { detail: "Connection not found" });
+      if (own && own.provider !== "notion") return json(409, { detail: "This is not a Notion connection" });
+      return notionPages(new URL(req.url, "http://mock"));
     }
 
     const row = db.connections.find((c) => c.id === p[2]);
