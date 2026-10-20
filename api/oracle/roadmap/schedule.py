@@ -80,6 +80,13 @@ def now() -> datetime:
 async def verified_bases(db: AsyncSession, prd_document_id: uuid.UUID | None) -> list[Basis]:
     """The verified bases recorded for this PRD, each with the item keys it is limited
     to. No PRD: none (a basis always belongs to one PRD)."""
+    return await bases_with_status(db, prd_document_id, "verified")
+
+
+async def bases_with_status(
+    db: AsyncSession, prd_document_id: uuid.UUID | None, status: str
+) -> list[Basis]:
+    """The bases of this PRD in ``status`` (verified or withdrawn), with their scope."""
     from oracle.roadmap.models import ProductTrack, TrackerRecord
 
     if prd_document_id is None:
@@ -88,7 +95,7 @@ async def verified_bases(db: AsyncSession, prd_document_id: uuid.UUID | None) ->
         await db.scalars(
             select(ScheduleBasis)
             .where(
-                ScheduleBasis.status == "verified",
+                ScheduleBasis.status == status,
                 ScheduleBasis.prd_document_id == prd_document_id,
             )
             .order_by(ScheduleBasis.supports_date, ScheduleBasis.reference)

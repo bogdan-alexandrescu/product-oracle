@@ -974,7 +974,8 @@ def test_app_links_default_to_the_public_url(monkeypatch):
 async def test_a_new_document_takes_its_kind_from_the_draft_and_stays_importable(client, owner):
     _, auth = owner
     # No kind line: the roadmap template makes it a roadmap, and it takes new versions.
-    first = ROADMAP_MD.replace("kind: roadmap\n", "")
+    # (No PRD to verify a date against: round 3, a date in the text would be refused.)
+    first = ROADMAP_MD.replace("kind: roadmap\n", "").replace("Beta by 2026-11-30.", "Beta first.")
     assert (await import_draft(client, auth, first, doc=ROADMAP)).status_code == 201
     doc = (await client.get(f"/v1/documents/{ROADMAP}", headers=auth)).json()
     assert doc["kind"] == "roadmap"

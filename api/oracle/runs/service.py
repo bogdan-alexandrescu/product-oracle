@@ -1174,6 +1174,8 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
                 theme=knobs.get("theme"),
                 template=template,
                 source_version_id=source_id,
+                # A run's draft is kept: its unverified dates are marked and recorded.
+                unverified_dates="mark",
             )
         except DraftError as exc:
             problems = "; ".join(f"[{p.code}] {p.message}" for p in exc.problems)

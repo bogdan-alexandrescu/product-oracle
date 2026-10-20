@@ -262,9 +262,10 @@ async def test_items_need_a_roadmap_built_from_a_prd_version(client, owner):  # 
     """§16.18: a roadmap stays sourced from an approved PRD. A roadmap version with no
     source PRD version (pushed by hand) gets no untraced items."""
     _, auth = owner
+    # (Undated: with no PRD, a date in the text is refused, round 3.)
     resp = await client.post(
         f"/v1/documents/{ROADMAP}/versions",
-        content=ROADMAP_MD.encode(),
+        content=ROADMAP_MD.replace("Beta by 2026-11-30.", "Beta first.").encode(),
         headers={**auth, "Content-Type": "text/markdown"},
     )
     assert resp.status_code == 201, resp.text
@@ -338,10 +339,20 @@ async def test_carried_items_keep_a_date_only_while_its_basis_holds(client, owne
     assert pay["stale_reasons"] == ["the schedule basis ENG-412 was withdrawn"]
     # Version 1's row is never rewritten, but its date is withheld when read (O4) ...
     assert pay["milestone"]["date"] is None and pay["milestone"]["refused_date"] == "2026-11-30"
-    # ... and a version carried forward does not inherit a date nothing supports.
+    # ... and a version carried forward does not inherit a date nothing supports. (Its
+    # text may not write the withdrawn date either: round 3, O4 'document dates'.)
     resp = await client.post(
         f"/v1/documents/{ROADMAP}/versions",
         content=ROADMAP_MD.replace("payment first", "payment now").encode(),
+        headers={**auth, "Content-Type": "text/markdown"},
+    )
+    assert resp.status_code == 422, resp.text
+    assert [p["code"] for p in resp.json()["errors"]] == ["unverified_date"]
+    resp = await client.post(
+        f"/v1/documents/{ROADMAP}/versions",
+        content=ROADMAP_MD.replace("payment first", "payment now")
+        .replace("Beta by 2026-11-30.", "Beta when re-estimated.")
+        .encode(),
         headers={**auth, "Content-Type": "text/markdown"},
     )
     assert resp.status_code in (200, 201), resp.text

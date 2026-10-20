@@ -280,6 +280,8 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
         select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == document.id)
     )
     ordered = sorted(version.sections, key=lambda s: s.ordinal)
+    if document.kind == "roadmap":
+        ordered = await _marked_dates(db, version, ordered)
     ev = ExportVersion(
         document=document,
         version=version,
@@ -298,6 +300,44 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
     ev.evidence_links = await appendix_links(db, version)
     await _resolve_theme(db, ev)
     return ev
+
+
+async def _marked_dates(
+    db: AsyncSession, version: DocumentVersion, sections: list[Section]
+) -> list[Section]:
+    """A roadmap's sections with the marker after each date that rests on no verified
+    basis now (``[unverified]``, ``[date withdrawn]``, O4 'document dates'). Unsaved
+    copies: the stored, approved text is never changed."""
+    from oracle.roadmap import doc_dates
+
+    marks = doc_dates.flagged(await doc_dates.marks_for_version(db, version, sections))
+    if not marks:
+        return sections
+    by_section: dict[str, list] = {}
+    for m in marks:
+        by_section.setdefault(m.section_key, []).append(m)
+    out = []
+    for s in sections:
+        mine = by_section.get(s.section_key)
+        if not mine:
+            out.append(s)
+            continue
+        out.append(
+            Section(
+                id=s.id,
+                version_id=s.version_id,
+                section_key=s.section_key,
+                ordinal=s.ordinal,
+                level=s.level,
+                heading=doc_dates.annotate(s.heading, mine),
+                body_md=doc_dates.annotate(s.body_md, mine),
+                body_text=s.body_text,
+                content_hash=s.content_hash,
+                citation_keys=list(s.citation_keys or []),
+                layer=s.layer,
+            )
+        )
+    return out
 
 
 async def _resolve_theme(db: AsyncSession, ev: ExportVersion) -> None:
