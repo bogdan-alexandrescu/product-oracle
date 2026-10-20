@@ -31,7 +31,8 @@ export type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
   sections: Omit<Schemas["SectionOut"], "verdict">[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
-type ReviewRow = Schemas["SectionReviewOut"];
+/** A stored section review; a spec may mark an approval lapsed (C2). */
+type ReviewRow = Schemas["SectionReviewOut"] & { lapsed_at?: string | null; lapse_reason?: string | null };
 type FeedbackRow = Schemas["FeedbackItemOut"];
 type MemberRow = Schemas["MemberOut"];
 type InviteRow = Schemas["InviteOut"];
@@ -816,7 +817,16 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
       const r = latestReview(db, v.id, s.section_key);
       return {
         ...s,
-        verdict: r ? { verdict: r.verdict, note: r.note, reviewer_id: r.reviewer_id, created_at: r.created_at } : null,
+        verdict: r
+          ? {
+              verdict: r.verdict,
+              note: r.note,
+              reviewer_id: r.reviewer_id,
+              created_at: r.created_at,
+              // An approval that lapsed (C2): set on a stored review by the specs.
+              ...(r.lapsed_at ? { lapsed_at: r.lapsed_at, lapse_reason: r.lapse_reason ?? null } : {}),
+            }
+          : null,
       };
     }),
   };

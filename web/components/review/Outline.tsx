@@ -300,7 +300,7 @@ export function OutlineList({
         const chapter = nd.hasChildren;
         const dimmed = filtering && !matches(s);
         const indent = mode === "tree" ? nd.depth * 14 : chapter ? 0 : Math.min(nd.depth, 3) * 14;
-        const state = sectionMark(s.verdict?.verdict, closed);
+        const state = sectionMark(s.verdict?.verdict, closed, Boolean(s.verdict?.lapsed_at));
         return (
           <li
             key={s.id}
@@ -345,7 +345,7 @@ export function OutlineList({
                 on ? "text-text" : dimmed ? "text-text2" : "text-text"
               }`}
             >
-              <SectionMark verdict={s.verdict?.verdict} closed={closed} />
+              <SectionMark verdict={s.verdict?.verdict} closed={closed} lapsed={Boolean(s.verdict?.lapsed_at)} />
               <span className="min-w-0 flex-1 truncate" data-testid="outline-name">
                 {s.heading}
               </span>
@@ -635,7 +635,7 @@ export function SectionSwitcher({
           onClick={() => (open ? close() : setOpen(true))}
           className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-line-strong px-2.5 text-left hover:bg-surface2"
         >
-          {current && <SectionMark verdict={current.verdict?.verdict} closed={props.closed} />}
+          {current && <SectionMark verdict={current.verdict?.verdict} closed={props.closed} lapsed={Boolean(current.verdict?.lapsed_at)} />}
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text" title={current?.heading}>
             {current?.heading ?? "Sections"}
           </span>

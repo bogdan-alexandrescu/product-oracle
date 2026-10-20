@@ -9,7 +9,7 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
-import { CountChip, inboxNeeds, NeedTable, questionNeeds, type Need } from "../inbox/_needs";
+import { CountChip, inboxNeeds, NeedTable, questionNeeds, revokeNeeds, type Need } from "../inbox/_needs";
 import { goalViews, historyOf, shownGoals, type Point } from "./_goals";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
@@ -112,8 +112,10 @@ export default function HomePage() {
   const decisions = needs ? [...needs.checkpoints, ...needs.approvals, ...needs.overruns] : [];
   // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
   const runs = needs ? [...needs.lookups, ...needs.imports] : [];
+  // Revokes a removed member's disable could not make (owners only), as the Inbox lists them.
+  const access = inbox ? revokeNeeds(inbox.revoke_failures ?? [], busy, act) : [];
   const reviews = needs?.feedback ?? [];
-  const shownNeeds = pickNeeds([...decisions, ...runs, ...reviews], questions, MAX_NEEDS);
+  const shownNeeds = pickNeeds([...decisions, ...runs, ...access, ...reviews], questions, MAX_NEEDS);
   // The rail badge's count: the Inbox's rows and the questions asked of me.
   const waiting = inbox ? inbox.total + questions.length : undefined;
   const openItems = new Map((inbox?.feedback ?? []).map((d) => [d.document_id, d.open_count]));
@@ -159,6 +161,7 @@ export default function HomePage() {
             <>
               {decisions.length > 0 && <CountChip label="Decisions" n={decisions.length} />}
               {runs.length > 0 && <CountChip label="Runs" n={runs.length} />}
+              {access.length > 0 && <CountChip label="Access" n={access.length} />}
               {reviews.length > 0 && <CountChip label="Reviews" n={reviews.length} />}
               {questions.length > 0 && <CountChip label="Questions" n={questions.length} />}
               <Link

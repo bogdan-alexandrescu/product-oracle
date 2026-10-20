@@ -424,7 +424,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
 
       <Panel title="Status marks" testId={id("status-marks")}>
         <Body>
-          {(["approved", "changes_requested", "rejected", "none", "locked"] as const).map((m) => (
+          {(["approved", "changes_requested", "rejected", "none", "lapsed", "locked"] as const).map((m) => (
             <State key={m} name={MARK_LABEL[m]}>
               <StatusMark state={m} size={20} />
             </State>

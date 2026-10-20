@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { Button, Chip, CostFigure, DataTable, Icon, LinkButton, type Column, type IconName } from "@/components/ds";
+import { Button, Chip, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { sectionHref } from "@/lib/section-link";
@@ -165,6 +165,74 @@ function consoleNeeds(c: NonNullable<InboxOut["checkpoints"][number]["console"]>
   if (c.needs === "redo_or_continue") return `changes requested; choose Redo from ${c.redo_segment} or Continue`;
   if (c.needs === "unread") return "waiting to read the answer";
   return "the verdict could not be read";
+}
+
+type RevokeFailure = NonNullable<InboxOut["revoke_failures"]>[number];
+
+/** Why the last attempt did not revoke, in the owner's words. */
+function revokeOutcome(outcome: string | null | undefined, provider: string): string {
+  if (outcome === "not_configured") return `Oracle's ${provider} sign-in app is not configured`;
+  if (outcome === "unreadable") return "Oracle could not read its copy of the credential";
+  return `${provider} refused or did not answer`;
+}
+
+/** Owners only: a provider revoke a removed member's disable could not make, with Retry and
+ * Dismiss. Inbox and Home draw the same rows (the badge counts them). */
+export function revokeNeeds(failures: RevokeFailure[], busy: string | null, act: Act): Need[] {
+  return failures.map((f) => {
+    const provider = f.provider_name ?? f.provider ?? "the provider";
+    const why = [
+      `${revokeOutcome(f.outcome, provider)}${f.last_error ? ` (${f.last_error})` : ""}`,
+      `tried ${f.attempts} time${f.attempts === 1 ? "" : "s"}`,
+      f.status === "pending"
+        ? `retrying until ${formatDateTime(f.retry_until)}`
+        : `stopped retrying ${formatDateTime(f.retry_until)}`,
+    ].join(" · ");
+    const path = { params: { path: { follow_up_id: f.id } } };
+    return {
+      key: f.id,
+      icon: "lock",
+      kind: "Couldn't revoke",
+      item: (
+        <>
+          <span className="truncate" title={f.title}>
+            {f.title}
+          </span>
+          <InfoTip label="this revoke" align="start">
+            Oracle keeps a copy of the credential until the revoke succeeds or you dismiss this. Dismiss if you revoked
+            the access at {provider} yourself.
+          </InfoTip>
+        </>
+      ),
+      context: (
+        <span className="block truncate text-text2" title={why}>
+          {why}
+        </span>
+      ),
+      at: f.created_at,
+      action: (
+        <>
+          <Button
+            disabled={busy !== null}
+            onClick={() =>
+              act(`retry-${f.id}`, () => unwrap(api.POST("/v1/member-follow-ups/{follow_up_id}/retry", path)))
+            }
+          >
+            Retry
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={busy !== null}
+            onClick={() =>
+              act(`dismiss-${f.id}`, () => unwrap(api.POST("/v1/member-follow-ups/{follow_up_id}/dismiss", path)))
+            }
+          >
+            Dismiss
+          </Button>
+        </>
+      ),
+    };
+  });
 }
 
 /**
