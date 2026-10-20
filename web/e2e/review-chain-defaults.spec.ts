@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openSection, outlineRow } from "./helpers";
 
 /**
@@ -34,6 +34,7 @@ test("outline rail: a lapsed approval shows Lapsed, never a check, as the sectio
 });
 
 test("home: owners see the revokes a disable could not make, as in the Inbox, and act on them", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "revoke-failures"), MOCK_SCENARIO_KEY);
   await login(page);
   await page.goto("/home");
   const needs = page.getByTestId("home-needs-table");
@@ -45,6 +46,7 @@ test("home: owners see the revokes a disable could not make, as in the Inbox, an
 });
 
 test("home: only owners see revokes a disable could not make", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "revoke-failures"), MOCK_SCENARIO_KEY);
   await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "approver"] as const);
   await login(page);
   await page.goto("/home");

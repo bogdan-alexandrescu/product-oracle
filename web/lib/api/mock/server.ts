@@ -70,7 +70,8 @@ export interface Db {
   blockers?: BlockersDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
-  /** Provider revokes a removed member's disable could not make (C2); seeded on first use. */
+  /** Provider revokes a removed member's disable could not make (C2); seeded in the
+   * "revoke-failures" scenario only. */
   revoke_failures?: RevokeFailureRow[];
 }
 
@@ -111,7 +112,7 @@ function seedRevokeFailures(): RevokeFailureRow[] {
 function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Response | null {
   if (p[1] !== "member-follow-ups" || req.method !== "POST") return null;
   if (!atLeast(me.role, "owner")) return forbidden("owner");
-  db.revoke_failures ??= seedRevokeFailures();
+  db.revoke_failures ??= [];
   const row = db.revoke_failures.find((r) => r.id === p[2]);
   if (!row) return notFound("Follow-up");
   if (row.dismissed) return json(409, { detail: "This follow-up is dismissed; nothing to do" });
@@ -148,7 +149,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * new company (members only, no goals, documents, runs or questions); "large" as a big one
  * (30 goals, 50 more active runs, questions asked of the signed-in member); "suggestions" as the
  * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
- * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts).
+ * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
+ * default company plus two provider revokes a removed member's disable could not make (C2).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -715,6 +717,8 @@ function load(): Db {
           ? seedBigPrd
           : seed,
   );
+  // Revokes a disable could not make: none, unless a spec asks for them.
+  db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
   save(db);
   return db;
 }
@@ -1401,7 +1405,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   if (runs && p[1] === "inbox") {
     // Owners also see the provider revokes a removed member's disable could not make.
-    db.revoke_failures ??= seedRevokeFailures();
+    db.revoke_failures ??= [];
     const inbox = (await runs.json()) as Schemas["InboxOut"];
     const failures = atLeast(me.role, "owner")
       ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
