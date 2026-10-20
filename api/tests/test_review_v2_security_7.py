@@ -561,3 +561,50 @@ async def test_a_cancel_follow_up_does_not_write_onto_a_segment_requeued_since(c
     runtime.cancel = down
     await _tick(client, ctx)
     assert (await _segment(ctx, run["id"], 2)).error == QUEUED
+
+
+async def test_the_tick_refuses_a_viewer_api_token(client, runtime):
+    from oracle.auth.service import create_api_token
+
+    ctx = await setup(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        token, raw = await create_api_token(s, "read-only")
+        token.role = "viewer"
+        await s.commit()
+    resp = await client.post("/v1/internal/tick", headers={"Authorization": f"Bearer {raw}"})
+    assert resp.status_code == 403, resp.text
+    await _tick(client, ctx)  # an owner's token still runs it
+
+
+SPELLINGS = [
+    "{u}",
+    "{h}",
+    "urn:uuid:{U}",
+    " {{{u}}}\t",
+    "UUID:{h}",
+    "0x{h30}",  # uuid.UUID reads it (int(..., 16)); the SQL never did
+    "{h_}",  # an underscore: the same
+    "{u}}}{{",  # braces inside
+    " {u}",  # a non-ASCII space
+    "{h31}",
+    "not-a-uuid",
+]
+
+
+@pytest.mark.parametrize("spelling", SPELLINGS)
+async def test_external_key_and_the_sql_read_exactly_the_same_spellings(client, spelling):
+    from sqlalchemy import literal
+
+    from oracle.review.publish import _as_uuid, _hex32, external_key
+
+    ctx = await setup(client)
+    u = uuid.UUID("12345678-9abc-def0-1234-56789abcdef0")
+    value = spelling.format(
+        u=u, U=str(u).upper(), h=u.hex, h30=u.hex[:30], h_=u.hex[:16] + "_" + u.hex[17:],
+        h31=u.hex[:31],
+    )  # fmt: skip
+    parsed = _as_uuid(value)
+    async with tenant_session(ctx.tenant_id) as s:
+        in_sql = await s.scalar(select(_hex32(literal(value))))
+    assert (parsed.hex if parsed else None) == in_sql
+    assert (external_key(value) == str(parsed)) if parsed else (external_key(value) != str(u))

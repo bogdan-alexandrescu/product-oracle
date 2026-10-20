@@ -188,6 +188,9 @@ async def tick(principal: CurrentPrincipal, db: TenantDB, http: ProviderHttp) ->
     disable still owes (``oracle tick`` calls it on a schedule)."""
     if principal.kind != "token" and principal.role != "owner":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Requires the owner role or an API token")
+    if principal.kind == "token" and principal.role == "viewer":
+        # The tick submits workflows and spends: a read-only token does not run it.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "A viewer API token cannot run the tick")
     try:
         out = await service.tick(db, principal)
         out.claude_accounts = summarise_sweep(await sweep_claude_accounts(principal.tenant_id))

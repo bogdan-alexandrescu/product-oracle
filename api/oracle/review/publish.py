@@ -211,28 +211,38 @@ def normalize_url(url: str) -> str:
     return urlunsplit((scheme, host, path, query, ""))
 
 
+# One grammar for a UUID in any spelling, in Python (:func:`_as_uuid`) and in SQL
+# (:func:`_hex32`): ASCII whitespace trimmed at the ends, every ``urn:`` and ``uuid:``
+# (any case), brace and dash removed, then exactly 32 hex digits (any case). Nothing else
+# (uuid.UUID also takes "0x", "_" or "+", which the SQL never did).
+_UUID_TRIM = " \t\n\r\f\v"
+_UUID_NOISE = "urn:|uuid:|[{}-]"
+_HEX32 = re.compile(r"[0-9a-f]{32}")
+
+
 def _as_uuid(value: str | None) -> uuid.UUID | None:
-    """A UUID in any spelling uuid.UUID reads (undashed, in braces, ``urn:``, ``uuid:``,
-    ``urn:uuid:``), in any case: it reads the prefixes in lowercase only."""
-    try:
-        return uuid.UUID(str(value).strip().lower()) if value else None
-    except ValueError:
+    """A UUID in any spelling of the grammar above (undashed, in braces, ``urn:``,
+    ``uuid:``, ``urn:uuid:``, any case), or None."""
+    if not value:
         return None
+    digits = re.sub(_UUID_NOISE, "", str(value).strip(_UUID_TRIM), flags=re.I).lower()
+    return uuid.UUID(hex=digits) if _HEX32.fullmatch(digits) else None
 
 
 def external_key(value: str | None) -> str:
     """A provider's id as compared: a UUID in any spelling (undashed, uppercase, in
     braces, ``urn:uuid:``, any case) as its canonical form, so a Notion page id cited
     one way matches the item stored another; anything else as is, stripped."""
-    text_value = str(value or "").strip()
-    parsed = _as_uuid(text_value)
+    text_value = str(value or "").strip(_UUID_TRIM)
+    parsed = _as_uuid(value)
     return str(parsed) if parsed is not None else text_value
 
 
 def _hex32(value: Any) -> Any:
-    """SQL: a stored id with dashes, braces and ``urn:`` / ``uuid:`` prefixes (any
-    case) removed, lowercased: what :func:`_as_uuid` reads becomes its 32 hex digits."""
-    return func.lower(func.regexp_replace(func.btrim(value), "urn:|uuid:|[{}-]", "", "gi"))
+    """SQL: a stored id as :func:`_as_uuid` reads it, as its 32 lowercase hex digits;
+    NULL for anything that grammar does not read."""
+    digits = func.lower(func.regexp_replace(func.btrim(value, _UUID_TRIM), _UUID_NOISE, "", "gi"))
+    return func.substring(digits, "^[0-9a-f]{32}$")
 
 
 async def revocation_record(db: AsyncSession, source_ids: list[uuid.UUID]) -> dict[str, Any]:

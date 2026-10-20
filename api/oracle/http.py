@@ -14,7 +14,7 @@ async def read_body(request: Request) -> bytes:
     after. A route calls it before it takes the review gate: a slow client never holds
     the gate while its body arrives."""
     too_large = HTTPException(
-        status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        413,
         f"body larger than {MAX_BODY_BYTES // (1024 * 1024) or 1} MB",
     )
     length = request.headers.get("content-length")
