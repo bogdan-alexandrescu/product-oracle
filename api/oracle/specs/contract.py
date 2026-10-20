@@ -553,11 +553,25 @@ def _plain(text: str) -> str:
     return " ".join(_EMPHASIS.sub("", text).lower().split())
 
 
+_COMMENT = re.compile(r"<!--.*?-->", re.S)
+_HEADING_LINE = re.compile(r"^ {0,3}#{1,6}(?:\s|$)", re.M)
+
+
+def _comment_spans(text: str) -> bool:
+    """A section's text opens a comment it does not close (or closes one it did not
+    open), or holds a comment that hides a heading (one that ran into the next section)."""
+    if any(_HEADING_LINE.search(m.group(0)) for m in _COMMENT.finditer(text)):
+        return True
+    rest = _COMMENT.sub("", text)
+    return "<!--" in rest or "-->" in rest
+
+
 def structure_problems(markdown: str) -> list[Problem]:
     """What an edit may not do with sections (every problem at once): add a section, or
     move one, inside the subtree of Product requirements, the acceptance criteria or
-    Sources and data points, or add one whose heading is Oracle's own (a part's title, its
-    'Decided in the approved PRD' note, a state label)."""
+    Sources and data points, add one whose heading is Oracle's own (a part's title, its
+    'Decided in the approved PRD' note, a state label), or leave an HTML comment open
+    across sections."""
     try:
         draft = parse_draft(markdown)
     except DraftError:
@@ -566,6 +580,15 @@ def structure_problems(markdown: str) -> list[Problem]:
     owner: tuple[str, int] | None = None
     titles = {_plain(t): k for k, t in PRD_PART_TITLES.items()}
     for s in draft.sections:
+        if _comment_spans(f"{s.heading}\n{s.body_md}"):
+            problems.append(
+                Problem(
+                    "comment_across_sections",
+                    "An HTML comment opens and closes within one section: it may not hide a "
+                    "heading or run into the next section.",
+                    s.section_key,
+                )
+            )
         if owner is not None and s.level <= owner[1]:
             owner = None
         if s.section_key in PRD_PART_TITLES:
@@ -607,12 +630,13 @@ def prd_parts(markdown: str) -> dict[str, object]:
     """What of a spec version Oracle writes and an edit may not change: (level, heading,
     body) of each of Oracle's sections, their order, the ones the brief lists, the labels
     on the engineering sections and the assumptions, and the front matter's ``spec``
-    block (source and requirement ids)."""
+    block (source and requirement ids) and title."""
     try:
         draft = parse_draft(markdown)
     except DraftError:
         return {}
-    out: dict[str, object] = {"front_matter": (draft.front_matter or {}).get("spec")}
+    fm = draft.front_matter or {}
+    out: dict[str, object] = {"front_matter": fm.get("spec"), "title": fm.get("title")}
     order: list[str] = []
     labels: set[tuple[str, str]] = set()
     for s in draft.sections:

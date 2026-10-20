@@ -702,9 +702,14 @@ async def import_spec(
                 "recorded either"
             }
         elif params.get("design", True):
+            prd_sections = {k for k, _ in await _section_keys(s, version_id)}
+            # Read the inputs, then release the transaction (and its row locks) while the
+            # worker checks the design (up to DESIGN_CHECK_SECONDS); the session opens a
+            # new one when it records the result.
+            await s.commit()
             check = await _check_design_off_loop(
                 files.get("design.json"),
-                prd_sections={k for k, _ in await _section_keys(s, version_id)},
+                prd_sections=prd_sections,
                 requirement_ids={r.id for r in inputs.requirements},
                 screens=int(params.get("screens") or 3),
             )
@@ -847,6 +852,7 @@ async def check_edit(
 _CHANGED: dict[str | None, str] = {
     None: "The edit changes a part Oracle writes.",
     "front_matter": "The edit changes the spec: front matter (source and requirement ids).",
+    "title": "The edit changes the front matter title: the spec's title is Oracle's.",
     "order": "Oracle's sections (spec, requirements, full, acceptance-criteria, sources) "
     "keep their place relative to each other.",
     "brief": "The brief: list keeps listing Oracle's sections (requirements).",

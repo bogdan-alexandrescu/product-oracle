@@ -134,6 +134,14 @@ async def create_section_links(
     internal per-claim links behind O1c). Pinned to the section's current hash. An
     approved version's links are pinned with it (409)."""
     document, version = await _version(db, doc, n)
+    # Lock the version row first: an approval in flight commits before this reads
+    # approved_at (and then refuses), or waits until these links are in.
+    await db.execute(
+        select(DocumentVersion)
+        .where(DocumentVersion.id == version.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if version.approved_at is not None:
         raise HTTPException(409, "an approved version's evidence links are pinned")
     hashes = dict(

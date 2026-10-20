@@ -1239,6 +1239,9 @@ async def _run_importer(
         principal = _creator(tenant_id, user, token)
     except LookupError as exc:
         return {"error": str(exc)}
+    # The importer works in its own transactions (a spec's design check takes up to
+    # DESIGN_CHECK_SECONDS): this session holds none open meanwhile.
+    await db.commit()
     return await extensions.run_importer(name, db, run, files, principal)
 
 

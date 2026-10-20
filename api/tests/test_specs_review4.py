@@ -13,6 +13,7 @@ import pytest
 
 from oracle.specs import contract
 from oracle.swarm import FakeRuntime, set_runtime
+from oracle.tenancy import tenant_session
 from tests.specs_helpers import get_spec, make_world
 from tests.test_specs_review2 import generated, stored_markdown
 from tests.test_specs_review3 import _edit, _sections
@@ -360,3 +361,122 @@ async def test_get_document_markdown_over_mcp_carries_the_labels(client, runtime
         md = text_of(await c.call_tool("get_document_markdown", {"doc": slug}))
     assert ADDED_LINE in _after(md, "## Rollout notes")
     assert DECIDED_LINE in _after(md, "## Product requirements")
+
+
+# --------------------------------------------------------------------------- minors
+
+
+async def test_an_edit_may_not_change_the_front_matter_title(client, runtime):
+    world = await make_world(client)
+    created = await generated(client, runtime, world)
+    resp = await _edit(
+        client,
+        world,
+        created,
+        lambda md: md.replace(
+            "title: 'Early shipping cost: engineering spec'", "title: Export all customer PII", 1
+        ),
+    )
+    assert resp.status_code == 422, resp.text
+    assert "front matter" in resp.text
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        # Opened in the approach, closed in the open decisions (which it would swallow).
+        lambda md: md.replace(
+            "A shipping quote service called from the cart.",
+            "A shipping quote service called from the cart.\n\n<!-- hidden",
+        ).replace("Which carrier rates to cache.", "--> Which carrier rates to cache."),
+        # Opened inline in one section, closed in a later one.
+        lambda md: md.replace(
+            "A shipping quote service called from the cart.",
+            "A shipping quote service <!-- called from the cart.",
+        ).replace("Cart, then quote, then shipping step.", "Cart --> then quote."),
+    ],
+    ids=["block", "inline"],
+)
+async def test_an_html_comment_across_sections_is_refused(client, runtime, edit):
+    world = await make_world(client)
+    created = await generated(client, runtime, world)
+    resp = await _edit(client, world, created, edit)
+    assert resp.status_code == 422, resp.text
+    assert "comment" in resp.text
+    # A comment closed within its section is fine.
+    resp = await _edit(
+        client,
+        world,
+        created,
+        lambda md: md.replace(
+            "Which carrier rates to cache.", "Which carrier rates to cache. <!-- ask ops -->"
+        ),
+    )
+    assert resp.status_code == 201, resp.text
+
+
+async def test_the_design_check_runs_outside_a_database_transaction(client, runtime, monkeypatch):
+    import asyncio
+    import threading
+
+    from sqlalchemy import text
+
+    from oracle.db import get_engine
+    from oracle.specs import service
+
+    started, release = threading.Event(), threading.Event()
+    real = service.check_design
+
+    def held(*args, **kwargs):
+        started.set()
+        release.wait(10)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(service, "check_design", held)
+    world = await make_world(client)
+    task = asyncio.create_task(generated(client, runtime, world))
+    try:
+        for _ in range(200):
+            if started.is_set():
+                break
+            await asyncio.sleep(0.05)
+        assert started.is_set()
+        async with get_engine().connect() as c:
+            idle = await c.scalar(
+                text(
+                    "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() "
+                    "AND state LIKE 'idle in transaction%' AND pid <> pg_backend_pid()"
+                )
+            )
+    finally:
+        release.set()
+        created = await task
+    assert idle == 0
+    spec = await get_spec(client, world.ctx.as_("owner"), created["spec"]["request"]["id"])
+    assert spec["request"]["status"] == "succeeded"
+    assert len(spec["design"]) == 2
+
+
+async def test_link_creation_waits_for_an_approval_in_flight(client):
+    import asyncio
+
+    from oracle.docs.models import DocumentVersion
+    from tests.test_trace_views import DOC, _evidence_setup
+
+    ctx, chain, v1, weak, strong, item = await _evidence_setup(client)
+    body = {"links": [{"section_key": "metrics", "kind": "claims", "evidence_id": str(weak)}]}
+    async with tenant_session(ctx.tenant_id) as s:
+        # An approval in flight: the version row is updated, not yet committed.
+        (await s.get(DocumentVersion, v1.id)).approved_at = v1.created_at
+        await s.flush()
+        task = asyncio.create_task(
+            client.post(
+                f"/v1/documents/{DOC}/versions/1/section-links",
+                json=body,
+                headers=ctx.as_("approver"),
+            )
+        )
+        await asyncio.sleep(0.5)
+        await s.commit()
+    resp = await task
+    assert resp.status_code == 409, resp.text

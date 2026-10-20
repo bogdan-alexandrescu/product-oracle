@@ -130,9 +130,11 @@ def _strip_css_comments(css: str) -> str:
 
 def _css_urls(css: str) -> list[str]:
     """The target of every ``url(`` in ``css``, unquoted, up to the next ``)`` (or the end:
-    an unclosed url( still fetches). A target over _MAX_REF characters is cut and never
-    reads as local. Linear: the closing parenthesis is found by position, not by
-    backtracking."""
+    an unclosed url( still fetches). A target over _MAX_REF characters is cut to that
+    length and marked with "...". Cut, a quoted target loses its closing quote and never
+    reads as local; an unquoted ``#id...`` still can, which is safe: a target that starts
+    with ``#`` refers to the document itself and never fetches, whatever follows. Linear:
+    the closing parenthesis is found by position, not by backtracking."""
     closes = [i for i, c in enumerate(css) if c == ")"]
     out = []
     for m in _CSS_URL_OPEN.finditer(css):
