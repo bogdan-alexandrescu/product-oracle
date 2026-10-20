@@ -53,49 +53,63 @@ export function ScrollStrip({
     setMore((m) => (m.left === left && m.right === right ? m : { left, right }));
   }, []);
 
-  // Observers on mount only: re-running them on every render (children change identity on
-  // each one) re-ran reveal() and snapped the strip back after every chevron scroll.
+  // Until the reader moves the strip themselves (a chevron, a swipe, the wheel), layout
+  // changes (the chevrons appearing, web fonts arriving) keep the current item in view.
+  // After that only a NEW current item is revealed: reveal() used to run on every render
+  // and snapped the strip back after each chevron click.
+  const moved = useRef(false);
+  const revealed = useRef<Element | null>(null);
+
+  // Observers on mount only (children change identity on every render).
   useEffect(() => {
     const s = el.current;
     if (!s) return;
-    // Showing a chevron narrows the strip after the first measure: measure again.
-    const raf = requestAnimationFrame(measure);
-    const ro = new ResizeObserver(measure);
-    ro.observe(s);
-    const mo = new MutationObserver(measure);
-    mo.observe(s, { childList: true, subtree: true });
+    const settle = () => {
+      if (!moved.current) reveal(s);
+      measure();
+    };
+    const raf = requestAnimationFrame(settle);
+    const ro = new ResizeObserver(settle);
+    const observe = () => {
+      ro.disconnect();
+      ro.observe(s);
+      for (const c of s.children) ro.observe(c);
+    };
+    observe();
+    const mo = new MutationObserver(() => {
+      observe();
+      settle();
+    });
+    mo.observe(s, { childList: true });
+    const byReader = () => {
+      moved.current = true;
+    };
     s.addEventListener("scroll", measure, { passive: true });
+    s.addEventListener("wheel", byReader, { passive: true });
+    s.addEventListener("touchstart", byReader, { passive: true });
+    s.addEventListener("pointerdown", byReader, { passive: true });
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
       mo.disconnect();
       s.removeEventListener("scroll", measure);
+      s.removeEventListener("wheel", byReader);
+      s.removeEventListener("touchstart", byReader);
+      s.removeEventListener("pointerdown", byReader);
     };
   }, [measure]);
 
-  // reveal() runs when the current item CHANGES (and on mount), never on a plain re-render,
-  // so the reader can still scroll the current item away with the chevrons or a swipe.
-  const revealed = useRef<Element | null>(null);
-  const again = useRef(0);
+  // A new current item: reveal it (and let layout keep it in view until the reader moves).
   useEffect(() => {
     const s = el.current;
     if (!s) return;
     const on = s.querySelector(CURRENT);
     if (on === revealed.current) return;
     revealed.current = on;
+    moved.current = false;
     reveal(s);
     measure();
-    // Showing a chevron narrows the strip a frame or two later: reveal once more, for this
-    // change only (the re-render that shows the chevron must not cancel it).
-    cancelAnimationFrame(again.current);
-    again.current = requestAnimationFrame(() => {
-      again.current = requestAnimationFrame(() => {
-        reveal(s);
-        measure();
-      });
-    });
   });
-  useEffect(() => () => cancelAnimationFrame(again.current), []);
 
   const setRef = (node: HTMLDivElement | null) => {
     el.current = node;
@@ -104,6 +118,7 @@ export function ScrollStrip({
   };
   const page = (dir: 1 | -1) => {
     const s = el.current;
+    moved.current = true;
     if (s) s.scrollBy({ left: dir * Math.max(80, s.clientWidth * 0.7), behavior: "smooth" });
   };
   const button = (dir: 1 | -1) => (
