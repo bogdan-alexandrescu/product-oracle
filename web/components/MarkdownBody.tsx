@@ -195,7 +195,12 @@ export function MarkdownBody({
   citations,
   onHighlightClick,
   expand,
-}: Omit<Ctx, "pos" | "found" | "shown"> & { blocks: Block[] }) {
+  markers,
+}: Omit<Ctx, "pos" | "found" | "shown"> & {
+  blocks: Block[];
+  /** Shown before the block at each index (not part of the anchorable text). */
+  markers?: Map<number, ReactNode>;
+}) {
   const ctx: Ctx = { pos: 0, highlights, activeId, citations, onHighlightClick, expand, found: [], shown: new Set() };
   // Renders a block, then the detail its links opened.
   const withDetail = (k: string, node: ReactNode) => {
@@ -213,70 +218,82 @@ export function MarkdownBody({
     <>
       {blocks.map((b, i) => {
         const k = String(i);
-        switch (b.t) {
-          case "p":
-            return withDetail(k, <p key={k}>{renderInline(b.c, ctx, k)}</p>);
-          case "h":
-            return <h4 key={k}>{renderInline(b.c, ctx, k)}</h4>;
-          case "quote":
-            return withDetail(k, <blockquote key={k}>{renderInline(b.c, ctx, k)}</blockquote>);
-          case "pre":
-            return (
-              <pre key={k}>
-                <code>{renderText(b.v, ctx, k)}</code>
-              </pre>
-            );
-          case "ul":
-          case "ol": {
-            const List = b.t;
-            return (
-              <List key={k}>
-                {b.items.map((it, j) => {
-                  const content = renderInline(it, ctx, `${k}.${j}`);
-                  return (
-                    <li key={j}>
-                      {content}
-                      <Detail keys={opened(ctx)} expand={expand} />
-                    </li>
-                  );
-                })}
-              </List>
-            );
-          }
-          case "table":
-            return (
-              <div key={k} className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      {b.head.map((c, j) => (
-                        <th key={j}>{renderInline(c, ctx, `${k}.h${j}`)}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {b.rows.map((r, j) => {
-                      const cells = r.map((c, x) => <td key={x}>{renderInline(c, ctx, `${k}.${j}.${x}`)}</td>);
-                      const keys = opened(ctx);
-                      return (
-                        <Fragment key={j}>
-                          <tr>{cells}</tr>
-                          {keys.length > 0 && (
-                            <tr {...ignore} className="detail-row">
-                              <td colSpan={Math.max(b.head.length, r.length)}>
-                                <Detail keys={keys} expand={expand} />
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            );
-        }
+        const marker = markers?.get(i);
+        return marker ? (
+          <Fragment key={`m-${k}`}>
+            {marker}
+            {block(b, k)}
+          </Fragment>
+        ) : (
+          block(b, k)
+        );
       })}
     </>
   );
+
+  function block(b: Block, k: string): ReactNode {
+    switch (b.t) {
+      case "p":
+        return withDetail(k, <p key={k}>{renderInline(b.c, ctx, k)}</p>);
+      case "h":
+        return <h4 key={k}>{renderInline(b.c, ctx, k)}</h4>;
+      case "quote":
+        return withDetail(k, <blockquote key={k}>{renderInline(b.c, ctx, k)}</blockquote>);
+      case "pre":
+        return (
+          <pre key={k}>
+            <code>{renderText(b.v, ctx, k)}</code>
+          </pre>
+        );
+      case "ul":
+      case "ol": {
+        const List = b.t;
+        return (
+          <List key={k}>
+            {b.items.map((it, j) => {
+              const content = renderInline(it, ctx, `${k}.${j}`);
+              return (
+                <li key={j}>
+                  {content}
+                  <Detail keys={opened(ctx)} expand={expand} />
+                </li>
+              );
+            })}
+          </List>
+        );
+      }
+      case "table":
+        return (
+          <div key={k} className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  {b.head.map((c, j) => (
+                    <th key={j}>{renderInline(c, ctx, `${k}.h${j}`)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {b.rows.map((r, j) => {
+                  const cells = r.map((c, x) => <td key={x}>{renderInline(c, ctx, `${k}.${j}.${x}`)}</td>);
+                  const keys = opened(ctx);
+                  return (
+                    <Fragment key={j}>
+                      <tr>{cells}</tr>
+                      {keys.length > 0 && (
+                        <tr {...ignore} className="detail-row">
+                          <td colSpan={Math.max(b.head.length, r.length)}>
+                            <Detail keys={keys} expand={expand} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+    }
+  }
 }

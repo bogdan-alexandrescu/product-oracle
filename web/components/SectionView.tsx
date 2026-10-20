@@ -1,15 +1,16 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 
 import { MarkdownBody, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
-import { LayerBadge, LockIcon } from "@/components/ui";
+import { LayerBadge, LockIcon, SpecStateBadge } from "@/components/ui";
+import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
-import type { Block } from "@/lib/markdown";
+import { blocksText, type Block } from "@/lib/markdown";
 
 const HEADING_CLASS: Record<number, string> = {
   1: "text-2xl font-semibold tracking-tight",
@@ -54,6 +55,23 @@ export const SectionView = memo(function SectionView({
   showLayer?: boolean;
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
+  // E1: a spec's part states; the acceptance criteria's proposed half starts at a block.
+  const states = section.spec_states;
+  const topState = states?.[0];
+  const markers = useMemo(() => {
+    const m = new Map<number, ReactNode>();
+    for (const st of states?.slice(1) ?? []) {
+      const at = st.starts_at ? blocks.findIndex((b) => b.t === "p" && blocksText([b]).startsWith(st.starts_at!)) : -1;
+      if (at >= 0)
+        m.set(
+          at,
+          <p key={`state-${at}`} className="not-prose mt-4 mb-1" {...{ [IGNORE_ATTR]: "" }}>
+            <SpecStateBadge state={st} />
+          </p>,
+        );
+    }
+    return m;
+  }, [blocks, states]);
   const locked = section.verdict?.verdict === "approved";
   // Preselect the baseline item the section names (heading first, then its text).
   const suggested = useMemo(() => {
@@ -89,6 +107,11 @@ export const SectionView = memo(function SectionView({
         )}
         <span className="ml-auto font-mono text-[11px] text-neutral-400">#{section.section_key}</span>
       </div>
+      {topState && (
+        <p className="mb-2" data-testid="spec-state-top">
+          <SpecStateBadge state={topState} />
+        </p>
+      )}
       {changedLock && (
         <p className="mb-2 text-xs text-amber-800">This section was approved in the previous version and has changed.</p>
       )}
@@ -100,6 +123,7 @@ export const SectionView = memo(function SectionView({
           citations={citations}
           onHighlightClick={onHighlightClick}
           expand={expand}
+          markers={markers.size ? markers : undefined}
         />
       </div>
       {evidenceTargets && (

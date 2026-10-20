@@ -10381,6 +10381,11 @@ export interface components {
             layer: "brief" | "detail";
             /** Notes */
             notes?: string | null;
+            /**
+             * Spec States
+             * @default []
+             */
+            spec_states: components["schemas"]["SpecPartState"][];
         };
         /** SectionReviewIn */
         SectionReviewIn: {
@@ -10808,6 +10813,26 @@ export interface components {
             /** Run Status */
             run_status?: string | null;
         };
+        /**
+         * SpecPartState
+         * @description E1: the decided/proposed state of a part of a spec version's section, as the
+         *     document view shows it (the exports and the markdown show the same label).
+         */
+        SpecPartState: {
+            /** Label */
+            label: string;
+            /** Decided */
+            decided: boolean;
+            /**
+             * Added
+             * @default false
+             */
+            added: boolean;
+            /** Half */
+            half?: ("decided" | "proposed") | null;
+            /** Starts At */
+            starts_at?: string | null;
+        };
         /** SpecRequestCreate */
         SpecRequestCreate: {
             /** Prd */
@@ -10875,6 +10900,15 @@ export interface components {
             part: "context" | "product_requirement" | "engineering_approach" | "open_decision" | "assumption" | "proposed";
             /** Decided */
             decided: boolean;
+            /** Label */
+            label: string;
+            /** Half */
+            half?: ("decided" | "proposed") | null;
+            /**
+             * Added
+             * @default false
+             */
+            added: boolean;
         };
         /** SpecSummary */
         SpecSummary: {

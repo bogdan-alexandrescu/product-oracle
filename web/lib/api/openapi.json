@@ -32490,6 +32490,14 @@
               }
             ],
             "title": "Notes"
+          },
+          "spec_states": {
+            "items": {
+              "$ref": "#/components/schemas/SpecPartState"
+            },
+            "type": "array",
+            "title": "Spec States",
+            "default": []
           }
         },
         "type": "object",
@@ -33808,6 +33816,56 @@
         ],
         "title": "SpecOut"
       },
+      "SpecPartState": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "decided": {
+            "type": "boolean",
+            "title": "Decided"
+          },
+          "added": {
+            "type": "boolean",
+            "title": "Added",
+            "default": false
+          },
+          "half": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "decided",
+                  "proposed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Half"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "decided"
+        ],
+        "title": "SpecPartState",
+        "description": "E1: the decided/proposed state of a part of a spec version's section, as the\ndocument view shows it (the exports and the markdown show the same label)."
+      },
       "SpecRequestCreate": {
         "properties": {
           "prd": {
@@ -33977,6 +34035,30 @@
           "decided": {
             "type": "boolean",
             "title": "Decided"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "half": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "decided",
+                  "proposed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Half"
+          },
+          "added": {
+            "type": "boolean",
+            "title": "Added",
+            "default": false
           }
         },
         "type": "object",
@@ -33985,7 +34067,8 @@
           "heading",
           "layer",
           "part",
-          "decided"
+          "decided",
+          "label"
         ],
         "title": "SpecSectionOut"
       },

@@ -100,6 +100,31 @@ function design(kind: "user_flow" | "wireframe"): Design {
 
 const DECIDED = "Decided · from the approved PRD";
 const PROPOSED = "Proposed · until an engineering approver approves this version";
+const APPROVED = "Decided · approved by an engineering approver";
+const ADDED = "Proposed · added in an edit";
+const PROPOSED_AC = "Proposed · not a product requirement until the PRD adopts it";
+/** Oracle's label that starts the proposed acceptance criteria. */
+export const ACCEPTANCE_PROPOSED_LABEL = "Proposed by this spec (not product requirements until the PRD adopts them):";
+const TEMPLATE_KEYS = new Set([
+  "summary", "requirements", "approach", "open-decisions", "acceptance-criteria", "user-flows", "inputs-outputs",
+  "architecture", "apis-data", "dependencies", "failure-modes", "security-privacy-performance", "test-strategy",
+  "release-flags", "migration-rollback", "assumptions", "sources",
+]);
+
+/** E1, as the API's `spec_states`: only what Oracle locks is decided; an added section is proposed. */
+export function specStates(key: string, body: string, approved: boolean): Schemas["SpecPartState"][] {
+  if (key === "spec" || key === "full") return [];
+  if (key === "acceptance-criteria") {
+    const out: Schemas["SpecPartState"][] = [{ label: DECIDED, decided: true, added: false, half: "decided", starts_at: null }];
+    if (body.includes(`\n\n${ACCEPTANCE_PROPOSED_LABEL}\n`)) {
+      out.push({ label: PROPOSED_AC, decided: false, added: false, half: "proposed", starts_at: ACCEPTANCE_PROPOSED_LABEL });
+    }
+    return out;
+  }
+  if (key === "requirements" || key === "sources") return [{ label: DECIDED, decided: true, added: false, half: null, starts_at: null }];
+  if (!TEMPLATE_KEYS.has(key)) return [{ label: ADDED, decided: false, added: true, half: null, starts_at: null }];
+  return [{ label: approved ? APPROVED : PROPOSED, decided: approved, added: false, half: null, starts_at: null }];
+}
 
 export function seedSpecs(): SpecsDb {
   const parts: [string, string, string, Schemas["SpecSectionOut"]["part"]][] = [

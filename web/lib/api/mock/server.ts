@@ -18,14 +18,14 @@ import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeQuality, seedQuality, type QualityDb } from "./quality";
-import { routeSpecs, seedSpecs, type SpecsDb } from "./specs";
+import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { routeTrace } from "./trace";
 import { routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
 export type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
-  sections: Omit<Schemas["SectionOut"], "verdict">[];
+  sections: (Omit<Schemas["SectionOut"], "verdict" | "spec_states"> & Partial<Pick<Schemas["SectionOut"], "spec_states">>)[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
 type ReviewRow = Schemas["SectionReviewOut"];
@@ -111,6 +111,7 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     citation_keys: [...new Set([...s.body.matchAll(/\[c:([\w.-]+)\]/g)].map((m) => m[1]))],
     layer: layered.brief.has(s.key) ? ("brief" as const) : ("detail" as const),
     notes: layered.brief.has(s.key) ? presenterNotes(s.body) : null,
+    spec_states: doc.kind === "spec" ? specStates(s.key, s.body, false) : [],
   }));
   return {
     id,
@@ -533,6 +534,7 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
       const r = latestReview(db, v.id, s.section_key);
       return {
         ...s,
+        spec_states: s.spec_states ?? [],
         verdict: r ? { verdict: r.verdict, note: r.note, reviewer_id: r.reviewer_id, created_at: r.created_at } : null,
       };
     }),

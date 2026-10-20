@@ -36,6 +36,26 @@ export function LayerBadge({ layer }: { layer: "brief" | "detail" | null | undef
   );
 }
 
+/**
+ * E1: the decided/proposed state of a part of a spec version (Oracle's parts are decided
+ * from the approved PRD; a section an edit added is "Proposed · added in an edit").
+ */
+export function SpecStateBadge({ state }: { state: { label: string; decided: boolean; added?: boolean } }) {
+  const tone = state.decided ? TONES.green : TONES.amber;
+  return (
+    <span
+      data-testid="spec-state"
+      data-decided={state.decided ? "true" : "false"}
+      data-added={state.added ? "true" : "false"}
+      className={`inline-flex max-w-full items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ${tone} ${
+        state.added ? "ring-dashed border border-dashed border-amber-400" : ""
+      }`}
+    >
+      {state.label}
+    </span>
+  );
+}
+
 export const VERDICT_TONE: Record<Verdict, Tone> = { approved: "green", changes_requested: "amber", rejected: "red" };
 export const STATUS_TONE: Record<FeedbackStatus, Tone> = {
   open: "blue",

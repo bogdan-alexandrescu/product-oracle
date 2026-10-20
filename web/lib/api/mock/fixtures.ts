@@ -29,7 +29,7 @@ export type VersionSeed = {
 export type DocumentSeed = {
   slug: string;
   title: string;
-  kind?: "prd" | "roadmap";
+  kind?: "prd" | "roadmap" | "spec";
   template?: string;
   template_version?: string;
   theme?: string;
@@ -451,6 +451,53 @@ const CARTS_V2: SectionSeed[] = CARTS_V1.map((s) =>
     : s,
 );
 
+// E1: the technical brief Oracle wrote from checkout-redesign v1, then edited: "Rollout
+// notes" is a section the spec template does not have (Proposed · added in an edit).
+const REQUIREMENTS_NOTE =
+  "_Decided in the approved PRD: these are product requirements, not engineering choices. Change them in the PRD, not here._";
+const SPEC_V1: SectionSeed[] = [
+  {
+    key: "spec",
+    level: 1,
+    heading: "Early shipping cost: technical brief",
+    body: "Technical brief for Early shipping cost, from the approved PRD Checkout redesign PRD (version 1). Product requirements come from that PRD; the engineering approach is proposed until an engineering approver approves this version.",
+  },
+  { key: "summary", level: 2, heading: "Summary", body: "Shoppers see the shipping cost on the cart page, before the address step." },
+  {
+    key: "requirements",
+    level: 2,
+    heading: "Product requirements",
+    body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Checkout redesign PRD](/documents/checkout-redesign/v/1), version 1.\n\n- **req-shipping-cost: Show shipping cost on the cart** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Shipping options](/documents/checkout-redesign/v/1#s-5-2)`,
+  },
+  {
+    key: "rollout-notes",
+    level: 2,
+    heading: "Rollout notes",
+    body: "Ten percent of carts first, then everyone after a week without a rise in quote errors.",
+  },
+  {
+    key: "approach",
+    level: 2,
+    heading: "Proposed engineering approach",
+    body: "_Proposed engineering approach, based on assumptions: no code capability map was available, so it is not checked against the code (see Assumptions)._\n\nA shipping quote service called from the cart, cached per postcode for ten minutes.",
+  },
+  { key: "open-decisions", level: 2, heading: "Open engineering decisions", body: "Which carrier rates to cache, and for how long." },
+  { key: "full", level: 1, heading: "Full version", body: "" },
+  {
+    key: "acceptance-criteria",
+    level: 2,
+    heading: "Acceptance criteria",
+    body: "In the baseline (decided with the PRD):\n\n- req-shipping-cost: A shopper sees the shipping cost on the cart page.\n\nProposed by this spec (not product requirements until the PRD adopts them):\n\n- The quote refreshes when the cart changes.",
+  },
+  { key: "assumptions", level: 2, heading: "Assumptions", body: "The cart service can call an internal endpoint." },
+  {
+    key: "sources",
+    level: 2,
+    heading: "Sources and data points",
+    body: "- Product requirements: PRD checkout-redesign version 1, approved 2026-10-17.\n- Code capability map: not available; the approach rests on the assumptions listed above.",
+  },
+];
+
 export const DOCUMENTS: DocumentSeed[] = [
   {
     slug: "checkout-redesign",
@@ -515,6 +562,22 @@ export const DOCUMENTS: DocumentSeed[] = [
         citations: [],
         brief: ALERTS_ROADMAP.brief,
         source: { slug: "usage-alerts", version: 1 },
+      },
+    ],
+  },
+  // E1: a spec with a section added in an edit.
+  {
+    slug: "checkout-redesign-early-shipping-cost-spec",
+    title: "Early shipping cost: technical brief",
+    kind: "spec",
+    versions: [
+      {
+        number: 1,
+        created_at: "2026-10-19T10:00:00Z",
+        sections: SPEC_V1,
+        citations: [],
+        brief: ["summary", "requirements", "rollout-notes", "approach", "open-decisions"],
+        source: { slug: "checkout-redesign", version: 1 },
       },
     ],
   },
