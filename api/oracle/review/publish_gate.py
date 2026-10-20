@@ -69,8 +69,14 @@ async def check(db: AsyncSession, document: Document, version: DocumentVersion) 
     if latest is not None and latest != version.number:
         raise PublishBlocked(f"v{latest} exists: only the latest version can be published", [])
     criteria.register()
+    from oracle.review.publish import REVIEW_CHECK_KEY
+
+    # The review lane's own invariants (the version's approval, required section
+    # approvals) are what an approval provides and a publish checks
+    # (oracle.review.publish.publish_check): not a block on the approval itself.
+    keys = [r.key for r in readiness.checks() if r.key != REVIEW_CHECK_KEY]
     report = await readiness.evaluate(
-        ReadinessContext(db, document.id, version.id, purpose="publish")
+        ReadinessContext(db, document.id, version.id, purpose="publish"), keys=keys
     )
     if report.blocked:
         blocks = await _blocks(db, report)

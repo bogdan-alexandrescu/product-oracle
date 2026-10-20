@@ -40,6 +40,17 @@ from tests.review_v2_helpers import (
 )
 
 
+@pytest.fixture
+def local_runtime():
+    """The local agent runtime: run tokens are accepted from any address (main's egress
+    check refuses them with an unconfigured SwarmCloud)."""
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
+
+
 @pytest.fixture(autouse=True)
 def _only_test_checks():
     with readiness.isolated_checks():
@@ -263,7 +274,7 @@ async def test_a_member_tokens_approval_lapses_with_the_token(client):
 FENCED = replace(DRAFT, "A shared calendar view per project.", "A shared calendar view.\n\n```text")
 
 
-async def test_an_unclosed_fence_push_draft_keeps_the_approved_section(client):
+async def test_an_unclosed_fence_push_draft_keeps_the_approved_section(client, local_runtime):
     from oracle.runs.models import Run
     from oracle.runtokens import mint_run_token
     from tests.legacy.helpers import mcp_session

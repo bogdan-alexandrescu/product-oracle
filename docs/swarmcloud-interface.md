@@ -20,8 +20,18 @@ switched on yet.
   `GET /v1/runtime/status` proves them (reachable, tenant `u-or-9a0792`, 2026-10-19).
 - **No tenant header:** the service tenant is the default; naming it is a 403.
 - **No idempotency keys:** a retried `POST /v1/workflows` creates a duplicate. Oracle
-  keys each submission `oracle-<run id>-<segment>-<attempt>` and looks for that key
-  before resubmitting (how: section 4).
+  keys each submission `oracle-<run id>-<segment>-<attempt>`, records the key on the
+  segment's claim before the POST, and looks for that key before it ever sends the
+  segment again (how: section 4). Only an answer that proves nothing was made lets it
+  send again without looking: no connection was made (connect error, connect timeout,
+  no free connection), or SwarmCloud refused it (a 4xx, or a 5xx whose envelope names a
+  refusal that writes nothing). Anything else may have landed and is looked up first: a
+  read or write timeout, a dropped connection, any other 5xx, a 2xx without a workflow
+  id or that does not read as JSON, a submission cut by its time budget, and a pass that
+  died after sending (its claim expires after 5 minutes). Found, it is the segment's
+  workflow (its spend counted); not found past the lookup window, the run waits in the
+  Inbox. The POST has its own time budget (120 s), never the tick's per-run deadline,
+  and the tick starts no submission it could not finish before its own budget ends.
 
 ## 1. Oracle's MCP server for agents (#1433) [OFF]
 

@@ -97,7 +97,11 @@ async def test_an_edit_invalidates_only_the_affected_section(client):
     assert s2["risks"]["status"] == "approved"
 
     async with tenant_session(ctx.tenant_id) as s:
-        events = (await s.scalars(select(ChangeEvent))).all()
+        events = (
+            await s.scalars(
+                select(ChangeEvent).where(ChangeEvent.subject_kind == "document_section")
+            )
+        ).all()
         # One change, for the edited section only, handled by the review lane's handler.
         assert [(e.subject_kind, e.cause, e.data["section_key"]) for e in events] == [
             ("document_section", "section_edited", "problem")
@@ -188,7 +192,13 @@ async def test_an_accepted_ai_patch_invalidates_the_section_approval(client):
     async with tenant_session(ctx.tenant_id) as s:
         causes = [
             (e.cause, e.data["section_key"])
-            for e in (await s.scalars(select(ChangeEvent).order_by(ChangeEvent.created_at)))
+            for e in (
+                await s.scalars(
+                    select(ChangeEvent)
+                    .where(ChangeEvent.subject_kind == "document_section")
+                    .order_by(ChangeEvent.created_at)
+                )
+            )
         ]
     assert ("patch_accepted", "problem") in causes
     assert ("patch_accepted", "solution") not in causes
@@ -250,9 +260,10 @@ async def test_the_decider_approves_current_versions_only(client):
 
     v2 = replace(DRAFT, "Calendar sync may lag.", "Calendar sync may lag by a day.")
     assert (await import_md(client, ctx.auth, v2)).status_code == 201
-    # Version 1 is no longer current.
+    # Version 1 is no longer current: refused (by the T2 publish gate first, for a PRD).
     resp = await client.post(ctx.v(1, "/approve"), headers=decider.headers)
-    assert resp.status_code == 409 and "current version" in resp.json()["detail"]
+    detail = resp.json()["detail"]
+    assert resp.status_code == 409 and ("latest version" in detail or "current version" in detail)
     resp = await client.post(ctx.v(2, "/approve"), headers=decider.headers)
     assert resp.status_code == 200
     assert resp.json()["version"]["approved_at"]

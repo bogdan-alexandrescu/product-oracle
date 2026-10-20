@@ -209,8 +209,29 @@ gcloud scheduler jobs resume oracle-tick --project="$PROJECT" --location="$REGIO
 ```
 
 While paused, runs wait where they are (nothing is lost; the next tick picks them up), and
-an owner or an API token can still tick by hand with `oracle tick`. To turn the endpoint
-off as well, unset `ORACLE_TICKER_AUDIENCE` (it answers 404).
+an owner (or the scheduler's tick token) can still tick by hand with `oracle tick`. To
+turn the endpoint off as well, unset `ORACLE_TICKER_AUDIENCE` (it answers 404).
+
+## 6. Ticking one company with `oracle tick` (the tick token)
+
+`POST /v1/internal/tick` (what `oracle tick` calls) ticks the caller's company. It takes
+an owner (signed in, or an API token acting as an owner or with the owner role) or an
+API token minted with the `tick` scope, and nothing else: viewer, commenter and approver
+tokens, and a run's token, are refused (403). The caller is re-read under the review gate
+first (a removal or a demotion that committed first wins); the gate is not held while
+the tick runs. For a cron or a scheduler other than Cloud Scheduler's run ticker, mint a
+tick token instead of lending it an owner's:
+
+```sh
+docker compose exec api python -m oracle.tick_token --name scheduler-tick
+# or, against the deployed database: python -m oracle.tick_token [--tenant <company id>]
+export ORACLE_API_TOKEN=<the printed token>   # for `oracle tick`
+```
+
+A tick token runs the tick only: every other route answers 403, the MCP server refuses
+it, and it acts for no member. Revoke it like any API token (`DELETE
+/v1/api-tokens/{id}`). The tick gives runs and their submissions what is left of the
+240 s limit less a 30 s margin (no submission starts that could not end inside it).
 
 ## Troubleshooting
 

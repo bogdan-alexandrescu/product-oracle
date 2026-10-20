@@ -63,7 +63,8 @@ def test_the_migration_follows_0015_on_a_single_head():
     # 0014 chain (quality, usage_retry_at, trace).
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0015_section_table_rows"
-    assert script.get_heads() == [REVISION]
+    # One head; later lanes chain after it (the PRD review chain's 0014_* in merge order).
+    assert len(script.get_heads()) == 1
 
 
 def _constraint(t, key: str, attrs: dict) -> uuid.UUID:

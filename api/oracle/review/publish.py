@@ -87,6 +87,11 @@ if TYPE_CHECKING:
 # The hard readiness check this lane registers (the review invariants, for the
 # readiness dashboard); the publish check computes them itself and skips it.
 REVIEW_CHECK_KEY = "review_approvals"
+# Publish problems that only say review is still to be done (a warning on the readiness
+# dashboard, never a defect there): the publish check refuses them all the same.
+AWAITING_REVIEW = frozenset(
+    {"version_not_approved", "missing_approval", "mandatory_reviewer_pending"}
+)
 # ``source_permission`` change-event causes that revoke and that restore access. A
 # lane recording a permission change uses one of these, with ``subject_id`` the source
 # or source item id (or ``document_id`` the document it affects).
@@ -905,8 +910,11 @@ async def _review_check(ctx: ReadinessContext) -> CheckOutcome:
     if not blockers:
         return CheckOutcome(status="pass", rationale="Approvals and required sections are current")
     keys = sorted({k for b in blockers for k in b.section_keys})
+    # Review still to be done (no approval yet) is where every draft starts: shown, not a
+    # block on the dashboard; the publish check itself refuses it (publish_check).
+    waiting = all(b.code in AWAITING_REVIEW for b in blockers)
     return CheckOutcome(
-        status="critical",
+        status="warning" if waiting else "critical",
         rationale="; ".join(b.message for b in blockers),
         section_keys=keys,
     )

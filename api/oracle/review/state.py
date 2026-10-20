@@ -971,6 +971,9 @@ async def record_section_changes(
                     "version": version.number,
                     "previous_version": previous.number,
                     "version_id": str(version.id),
+                    # The import records a document_version change too (oracle.trace
+                    # marks stale from that one).
+                    "covered_by": "document_version",
                 },
             )
         )

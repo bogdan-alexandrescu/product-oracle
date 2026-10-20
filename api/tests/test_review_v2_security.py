@@ -42,6 +42,17 @@ from tests.review_v2_helpers import (
 )
 
 
+@pytest.fixture
+def local_runtime():
+    """The local agent runtime: run tokens are accepted from any address (main's egress
+    check refuses them with an unconfigured SwarmCloud)."""
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
+
+
 @pytest.fixture(autouse=True)
 def _only_test_checks():
     with readiness.isolated_checks():
@@ -112,7 +123,11 @@ async def test_a_cited_source_deleted_blocks_publish(client):
     assert resp.status_code == 409
     assert resp.json()["check"]["blockers"][0]["code"] == "source_permission_revoked"
     async with tenant_session(ctx.tenant_id) as s:
-        [event] = (await s.scalars(select(ChangeEvent))).all()
+        [event] = (
+            await s.scalars(
+                select(ChangeEvent).where(ChangeEvent.subject_kind == "source_permission")
+            )
+        ).all()
         assert (event.subject_kind, event.cause, event.subject_id) == (
             "source_permission",
             "source_deleted",
@@ -324,7 +339,7 @@ async def test_an_owner_resolves_only_their_sections_feedback(client):
 # --- M3: AI text never replaces approved text without a patch ----------------------------
 
 
-async def test_a_run_token_push_is_an_agent_draft(client):
+async def test_a_run_token_push_is_an_agent_draft(client, local_runtime):
     """MCP push_draft under a run token carries the run: the approved-section hold
     applies even though the REST call is made for the run's creator."""
     from oracle.runs.models import Run
@@ -463,7 +478,8 @@ async def test_a_citation_change_changes_the_revision_and_invalidates(client):
     assert s2["goal-trace"]["status"] == "approval_stale"
     assert s2["problem"]["status"] == "approved"
     async with tenant_session(ctx.tenant_id) as s:
-        keys = [e.data["section_key"] for e in await s.scalars(select(ChangeEvent))]
+        sections = select(ChangeEvent).where(ChangeEvent.subject_kind == "document_section")
+        keys = [e.data["section_key"] for e in await s.scalars(sections)]
     assert keys == ["goal-trace"]
 
 

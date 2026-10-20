@@ -608,6 +608,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     Object.assign(r, { can_dismiss_overrun: false, stuck: null });
     return done();
   }
+  if (action === "dismiss-cancel-note" && m === "POST") {
+    if (!r.can_dismiss_cancel_note) return fail(409, "nothing to dismiss: no cancel of this run was dropped");
+    Object.assign(r, { can_dismiss_cancel_note: false, stuck: null });
+    return done();
+  }
   if (action === "checkpoints" && p[5] === "decide" && m === "POST") {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, "checkpoint not found");

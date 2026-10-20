@@ -134,10 +134,10 @@ class _Blocked:
         self.entered, self.release = asyncio.Event(), asyncio.Event()
         real = getattr(runtime, method)
 
-        async def slow(*args):
+        async def slow(*args, **kwargs):
             self.entered.set()
             await self.release.wait()
-            return await real(*args)
+            return await real(*args, **kwargs)
 
         setattr(runtime, method, slow)
 
@@ -558,10 +558,16 @@ async def test_a_claimed_submission_is_not_made_twice_by_the_tick(client, runtim
     assert (await _read(client, ctx, run["id"]))["segments"][0]["status"] == "running"
 
 
-async def test_a_failed_cancel_of_a_workflow_started_for_a_changed_run_is_retried(client, runtime):
+async def test_a_failed_cancel_of_a_workflow_started_for_a_changed_run_is_retried(
+    client, runtime, monkeypatch
+):
     """The run was cancelled while its submission was under way, and the runtime does
-    not confirm the cancel of the workflow it started: the tick retries it."""
-    from oracle.members.models import MemberFollowUp
+    not confirm the cancel of the workflow it started: it stays on the run's searches
+    (its spend read) and the tick cancels it again (round 8: main's searches, not a
+    run_cancel follow-up)."""
+    from datetime import timedelta
+
+    from oracle.runs import service
     from oracle.swarm import RuntimeUnavailable
 
     ctx = await setup(client)
@@ -582,15 +588,17 @@ async def test_a_failed_cancel_of_a_workflow_started_for_a_changed_run_is_retrie
         blocked.release.set()
     assert (await call).status_code == 200
     async with tenant_session(ctx.tenant_id) as s:
-        row = await s.scalar(select(MemberFollowUp))
-        assert row.kind == "run_cancel" and row.status == "pending"
-        row.next_attempt_at = None
-        await s.commit()
+        row = await s.get(Run, uuid.UUID(run["id"]))
+        [entry] = row.knobs["searches"]
+    assert entry["id"].startswith("fake-baseline") and not entry.get("cancelled")
+    assert runtime.cancelled == []
     runtime.cancel = real_cancel
+    real_now = service._now
+    monkeypatch.setattr(
+        service, "_now", lambda: real_now() + timedelta(seconds=service.STUCK_LOOKUP_SECONDS + 1)
+    )
     await _tick(client, ctx)
-    assert len(runtime.cancelled) == 1
-    async with tenant_session(ctx.tenant_id) as s:
-        assert (await s.scalar(select(MemberFollowUp))).status == "done"
+    assert runtime.cancelled == [entry["id"]]
 
 
 # --- MINORS --------------------------------------------------------------------------
@@ -653,7 +661,7 @@ async def test_follow_ups_still_run_when_an_earlier_part_of_the_tick_fails(clien
     await _disabled_with_connection(client, ctx, monkeypatch)
     await _due(ctx)
 
-    async def broken(tenant_id):
+    async def broken(tenant_id, **kwargs):
         raise RuntimeError("the model jobs broke")
 
     monkeypatch.setattr(runs_router, "run_llm_jobs", broken)
@@ -718,26 +726,35 @@ async def test_a_budget_that_runs_out_mid_query_does_not_cut_the_query_or_fail_t
 
     ctx = await setup(client)
     author = await person(ctx.tenant_id, "approver", "author")
-    await _started(client, ctx, author.headers)
+    run = await _started(client, ctx, author.headers)
     assert (await disable(client, ctx, author.user_id)).status_code == 200
     async with tenant_session(ctx.tenant_id) as s:
-        row = await s.scalar(select(MemberFollowUp).where(MemberFollowUp.kind == "run_cancel"))
-        row.status, row.attempts, row.next_attempt_at = "pending", 1, datetime.now(UTC)
+        s.add(
+            MemberFollowUp(
+                member_id=author.user_id,
+                kind="run_recheck",
+                target_id=uuid.UUID(run["id"]),
+                status="pending",
+                attempts=1,
+                next_attempt_at=datetime.now(UTC),
+            )
+        )
         await s.commit()
-    real_get = AsyncSession.get
+    real_scalar = AsyncSession.scalar
 
-    async def slow_get(self, entity, *args, **kwargs):
-        if entity is RunSegment:
+    async def slow_scalar(self, statement, *args, **kwargs):
+        described = getattr(statement, "column_descriptions", None) or [{}]
+        if described[0].get("entity") is Run and "FOR UPDATE" in str(statement):
             await self.execute(text("SELECT pg_sleep(2)"))
-        return await real_get(self, entity, *args, **kwargs)
+        return await real_scalar(self, statement, *args, **kwargs)
 
-    monkeypatch.setattr(AsyncSession, "get", slow_get)
+    monkeypatch.setattr(AsyncSession, "scalar", slow_scalar)
     monkeypatch.setattr(members, "FOLLOW_UP_TICK_BUDGET_SECONDS", 0.5)
     resp = await client.post("/v1/internal/tick", headers=ctx.auth)
     monkeypatch.undo()
     assert resp.status_code == 200, resp.text
     async with tenant_session(ctx.tenant_id) as s:
-        row = await s.scalar(select(MemberFollowUp).where(MemberFollowUp.kind == "run_cancel"))
+        row = await s.scalar(select(MemberFollowUp).where(MemberFollowUp.kind == "run_recheck"))
         assert row.status == "done" and row.attempts == 2
 
 

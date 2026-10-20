@@ -6108,6 +6108,9 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     if not await _manage_now(db, principal, created_by):
         raise Forbidden("Only an owner or the approver who created the run can cancel it")
     run = await _get_run(db, run_id, lock=True)
+    # Set when something that appeared meanwhile is left to call about (never under the
+    # lock): made right after the commit (settle_now).
+    deferred = False
     if run.status in FINAL:
         if not await _stop_cancelling(db, run):
             raise RunError(f"run is already {run.status}")
@@ -6128,9 +6131,12 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
             else:
                 # Not called under the lock: one that appeared meanwhile is cancelled by
                 # the tick (searches).
-                out = done.get(s.swarm_workflow_id) or _Cancelled(
-                    error=RuntimeUnavailable("not cancelled yet: the tick cancels it")
-                )
+                out = done.get(s.swarm_workflow_id)
+                if out is None:
+                    deferred = True
+                    out = _Cancelled(
+                        error=RuntimeUnavailable("not cancelled yet: the tick cancels it")
+                    )
                 if out.final is not None:
                     _cost_on(
                         run, segments, {"seq": s.seq, "id": s.swarm_workflow_id}, out.final.cost_usd
@@ -6180,6 +6186,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                     # Lost since Oracle looked (or sent again under the same label): the
                     # earlier lookup says nothing of it, and nothing is called under the
                     # lock: the tick looks it up.
+                    deferred = True
                     result = RuntimeUnavailable(f"submission {label} not looked up yet")
                 until = _credential_end(lost)
                 if isinstance(result, str):
@@ -6228,10 +6235,14 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
             "Run cancelled; SwarmCloud did not confirm cancelling its workflow yet, so Oracle "
             "cancels it again on every tick and keeps counting its cost.",
         )
+    live = _live(run)
+    deferred = deferred or (live is not None and bool(live.get("id")) and live["id"] not in done)
     await audit.record(db, principal, "run.cancelled", "run", run.id, {})
     await db.commit()
-    # What it could not cancel without calling SwarmCloud under the lock: now, outside it.
-    await settle_now(db, run_id)
+    if deferred:
+        # What it could not cancel without calling SwarmCloud under the lock: now,
+        # outside it (the tick would otherwise).
+        await settle_now(db, run_id)
 
 
 async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:

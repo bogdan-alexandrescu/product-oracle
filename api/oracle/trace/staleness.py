@@ -259,6 +259,10 @@ async def _by_document_version(db: AsyncSession, subject: Subject, out: Affected
 
 
 async def _by_document_section(db: AsyncSession, subject: Subject, out: Affected) -> None:
+    if subject.data.get("covered_by") == "document_version":
+        # The review lane's per-section change of an import: the import's own
+        # document_version change marks the same dependencies (once).
+        return
     key = subject.data.get("section_key")
     if not key and subject.ref and "#" in subject.ref:
         key = subject.ref.rsplit("#", 1)[1]

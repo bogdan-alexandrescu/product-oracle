@@ -88,14 +88,30 @@ already running never un-pauses one); their API tokens and OAuth grants are revo
 their unfinished runs are cancelled with their run tokens; the open invite for their
 email and every open invite they created are revoked; the built-in model jobs they
 queued are cancelled; a spend approval they gave on someone else's run that has not
-started is voided (the run waits for an approval again; a started run keeps its
-ceiling); their approvals lapse. No network call is made under the gate: the revokes at
-the providers and the cancels at the runtime are `member_follow_ups`, made after the
-disable commits (each with a deadline), recorded (`connection.provider_revoke`,
-`run.runtime_cancel`) and retried by the tick (`POST /v1/internal/tick`,
-`member_follow_ups`, after the tick has advanced runs and jobs, within a bounded time per
-tick) by time: a backoff after each failure (a minute, doubling, at most an hour) for 24
-hours from the disable. Only `revoked` (or nothing of Oracle's to revoke, a pasted token)
+started, an owner's Resume after an overrun they gave on a run still going, and a
+checkpoint decision of theirs whose segment has not been submitted are voided (the run
+waits in the Inbox for an approval, a Resume or a decision again; a started run keeps its
+start approval); their approvals lapse. A demotion (`PATCH /v1/members/{id}`) voids the
+same spend approvals, Resumes and decisions where the new role no longer allows them (an
+owner's approval and Resume need an owner; a decision needs its checkpoint's role); a
+token or grant revoke voids none of them (owner, 2026-10-19/20). The gate is held
+exclusively, so the change never waits on a run's row (a tick or a request may hold it
+while it calls SwarmCloud): a run it cannot lock at once gets a `run_recheck` follow-up,
+made after the commit and by the tick, and every tick pass and every submission rechecks
+its run too (`oracle.runs.service.recheck_run`). No network call is made under the gate:
+the revokes at the providers are `member_follow_ups`, made after the disable commits
+(each with a deadline), recorded (`connection.provider_revoke`) and retried by the tick
+(`POST /v1/internal/tick`, `member_follow_ups`, after the tick has advanced runs and jobs,
+within a bounded time per tick) by time: a backoff after each failure (a minute,
+doubling, at most an hour) for 24 hours from the disable. The workflows of the runs it
+cancelled go on each run's `searches`: cancelled right after the commit and again by the
+tick, their status and spend read into the run's spend while they may still run; one
+SwarmCloud cannot be reached about is retried for 3 days, then dropped with an Inbox note
+("Oracle stopped trying to cancel <workflow>; it may still be running in SwarmCloud;
+spend counted until <time>", Dismiss) (P3d, review round 8). An import a run had under
+way when its creator was disabled, or the run cancelled, writes nothing: it takes the
+gate and the run's row (shared) and re-reads the run's status and its creator's
+standing before it writes. Only `revoked` (or nothing of Oracle's to revoke, a pasted token)
 counts as a success: `not_configured` and `unreadable` do not. A provider revoke not done
 keeps Oracle's copy of the credential and is shown to owners in the Inbox ("Couldn't
 revoke <member>'s <provider> access at <provider>") with Retry (`POST

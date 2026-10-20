@@ -269,10 +269,10 @@ class _Blocked:
         self.entered, self.release = asyncio.Event(), asyncio.Event()
         real = getattr(runtime, method)
 
-        async def slow(*args):
+        async def slow(*args, **kwargs):
             self.entered.set()
             await self.release.wait()
-            return await real(*args)
+            return await real(*args, **kwargs)
 
         setattr(runtime, method, slow)
 
@@ -446,38 +446,30 @@ async def test_the_claim_keeps_the_reviewers_note_until_the_submission_succeeds(
     assert seg.artifacts["attempts"][-1]["note"] == "Cite G1"
 
 
-async def test_a_cancel_records_its_runtime_follow_up_before_the_call(client, runtime):
-    """The cancel's follow-up is in the cancel's own transaction: when the runtime is
-    called it is already saved, so a crash in between leaves it for the tick."""
-    from oracle.members.models import MemberFollowUp
+async def test_a_disables_cancel_is_recorded_before_the_call(client, runtime):
+    """A disable records the cancel of its member's workflows in its own transaction (on
+    the run's searches): when SwarmCloud is called after the commit it is already saved,
+    so a crash in between leaves it for the tick (round 8: searches, not run_cancel)."""
+    from tests.test_review_v2_security_3 import disable
 
     ctx = await setup(client)
-    run = await _started(client, ctx)
+    author = await person(ctx.tenant_id, "approver", "author")
+    run = await _started(client, ctx, author.headers)
     seen: list = []
     real = runtime.cancel
 
     async def spy(workflow_id):
         async with tenant_session(ctx.tenant_id) as s:
-            seen.append(
-                await s.scalar(
-                    select(MemberFollowUp).where(MemberFollowUp.workflow_id == workflow_id)
-                )
-            )
+            row = await s.get(Run, uuid.UUID(run["id"]))
+            seen.append([e["id"] for e in (row.knobs or {}).get("searches") or []])
         await real(workflow_id)
 
     runtime.cancel = spy
-    resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=ctx.auth)
-    assert resp.status_code == 200, resp.text
-    assert len(seen) == 1 and seen[0] is not None and seen[0].kind == "run_cancel"
-    async with tenant_session(ctx.tenant_id) as s:
-        assert (await s.get(MemberFollowUp, seen[0].id)).status == "done"
+    assert (await disable(client, ctx, author.user_id)).status_code == 200
+    assert len(seen) == 1 and seen[0] == [runtime.cancelled[0]]
 
 
-async def test_a_workflow_started_for_a_changed_run_has_its_follow_up_before_the_call(
-    client, runtime
-):
-    from oracle.members.models import MemberFollowUp
-
+async def test_a_workflow_started_for_a_changed_run_is_recorded_before_its_cancel(client, runtime):
     ctx = await setup(client)
     run = await _run_estimated(client, ctx)
     blocked = _Blocked(runtime, "submit")
@@ -486,11 +478,8 @@ async def test_a_workflow_started_for_a_changed_run_has_its_follow_up_before_the
 
     async def spy(workflow_id):
         async with tenant_session(ctx.tenant_id) as s:
-            seen.append(
-                await s.scalar(
-                    select(MemberFollowUp).where(MemberFollowUp.workflow_id == workflow_id)
-                )
-            )
+            row = await s.get(Run, uuid.UUID(run["id"]))
+            seen.append([e.get("id") for e in (row.knobs or {}).get("searches") or []])
         await real(workflow_id)
 
     runtime.cancel = spy
@@ -502,7 +491,7 @@ async def test_a_workflow_started_for_a_changed_run_has_its_follow_up_before_the
     finally:
         blocked.release.set()
     assert (await call).status_code == 200
-    assert len(seen) == 1 and seen[0] is not None
+    assert len(seen) == 1 and seen[0] == [runtime.cancelled[0]]
 
 
 async def _run_estimated(client, ctx) -> dict:

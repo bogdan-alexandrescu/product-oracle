@@ -525,13 +525,13 @@ async def test_follow_ups_run_after_runs_and_jobs_within_a_time_budget(
     order: list[str] = []
     real_tick, real_jobs = runs_router.service.tick, runs_router.run_llm_jobs
 
-    async def runs_tick(db, principal=None):
+    async def runs_tick(db, principal=None, **kwargs):
         order.append("runs")
-        return await real_tick(db, principal)
+        return await real_tick(db, principal, **kwargs)
 
-    async def jobs(tenant_id):
+    async def jobs(tenant_id, **kwargs):
         order.append("jobs")
-        return await real_jobs(tenant_id)
+        return await real_jobs(tenant_id, **kwargs)
 
     async def slow(http, conn):
         order.append("revoke")

@@ -1067,8 +1067,11 @@ async def test_a_commenters_comment_still_queues_the_job(client, ctx, pool, fake
 async def test_tick_needs_an_owner_or_token_and_reports_jobs(client, ctx, pool, fake):
     await import_draft(client, ctx)
     approver = await token_with_role(ctx["tenant_id"], "approver")
-    # Tokens may tick (the CLI's way); the tick summary carries the jobs line.
-    resp = await client.post("/v1/internal/tick", headers=approver)
+    owner = await token_with_role(ctx["tenant_id"], "owner")
+    # An owner's token may tick (the CLI's way; review round 8: no other role's token);
+    # the tick summary carries the jobs line.
+    assert (await client.post("/v1/internal/tick", headers=approver)).status_code == 403
+    resp = await client.post("/v1/internal/tick", headers=owner)
     assert resp.status_code == 200 and resp.json()["llm_jobs"]["ran"] == 0
 
 

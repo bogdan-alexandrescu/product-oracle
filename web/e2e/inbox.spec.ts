@@ -101,3 +101,24 @@ test("inbox: only owners see revokes a disable could not make", async ({ page })
   await expect(page.getByTestId("inbox-feedback")).toBeVisible();
   await expect(page.getByTestId("inbox-revoke-failures")).toHaveCount(0);
 });
+
+test("inbox: a cancel Oracle stopped trying after 3 days shows its note until dismissed", async ({ page }) => {
+  await login(page);
+  await page.evaluate(() => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    const run = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
+    run.status = "cancelled";
+    run.checkpoints = [];
+    run.stuck =
+      "Oracle stopped trying to cancel wf_7; it may still be running in SwarmCloud; spend counted until 2026-10-23 09:12 UTC.";
+    run.can_dismiss_cancel_note = true;
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.goto("/inbox");
+  const stuck = page.getByTestId("inbox-lookups");
+  await expect(stuck).toContainText("Oracle stopped trying to cancel wf_7; it may still be running in SwarmCloud");
+  await expect(stuck.getByRole("button", { name: "Cancel run" })).toHaveCount(0);
+  await stuck.getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.getByTestId("inbox-lookups")).toHaveCount(0);
+});

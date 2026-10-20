@@ -69,7 +69,7 @@ inserts in the code set `tenant_id` explicitly: `claude_accounts/sweep.py:127` a
 | Claude accounts | viewer reads; owner writes (`claude_accounts/router.py:54`) | the fallback token is write-only | scoped | mitigated |
 | Jobs | viewer reads; approver acts; owner sets settings (`jobs/router.py:71`) | | scoped | mitigated |
 | Runs and Inbox | any signed-in user reads (`runs/router.py:79`, `:93`, `:157`, `:169`); approver or owner writes; the >$50 approve and the resume are owner only | **run artifacts readable by any viewer** (`runs/router.py:157-165`, `runs/service.py:400`) | scoped | partial: once agents read the creator's own sources through MCP, artifacts can carry source content that viewers could not read in `/v1/search` |
-| `POST /v1/internal/tick` | `runs/router.py:180`: `principal.kind != "token" and role != "owner"` lets **any company API token, whatever its role**, run the tick | | scoped to the token's company | **open (low)**: a viewer-role API token can start queued runs, sweeps and LLM job spend. Require owner, or a dedicated operator scope. |
+| `POST /v1/internal/tick` | an owner (re-read under the review gate), or an API token with the `tick` scope (`python -m oracle.tick_token`); viewer, commenter and approver tokens and run tokens are refused (`runs/router.py`, `tick`) | a tick token is refused on every other route and by the MCP server (`auth/deps.py`, `mcp/auth.py`) | scoped to the token's company | mitigated (review round 8; `test_review_v2_security_8.py::test_the_tick_takes_owners_and_the_tick_token_only`) |
 | `/v1/runtime/status` | signed in | redacts echoed tokens (PR #8, #9) | n/a | mitigated |
 | MCP `/mcp` | bearer: API, OAuth or run token (`mcp/auth.py:64-72`); each tool is the REST route called in-process with the caller's credentials (`mcp/tools.py:299-325`) | same as REST | same as REST (`legacy/test_legacy_roles.py` calls `get_document` from another company) | mitigated |
 | OAuth endpoints (public) | PKCE S256 required (`mcp/oauth/routes.py:241-242`); single-use codes bound to the redirect URI (`mcp/oauth/service.py:335-378`); consent requires the same company (`routes.py:282-287`) | open dynamic registration (`routes.py:108`), by design (I2) | | mitigated |
@@ -187,7 +187,7 @@ Requirements for any generated-code preview (§11.2, §16.20). All of them are *
 |---|---|---|---|
 | S-1 | The default `ORACLE_SECRET_KEY` and `cookie_secure=False` are not refused at startup (`config.py:13`, `:16`) | medium | foundation or a hardening PR |
 | S-2 | Run tokens act with the creator's full role over every document and baseline node (`mcp/auth.py:132-148`) | medium (once MCP is switched on) | CR-07 adapter v2 |
-| S-3 | `POST /v1/internal/tick` accepts an API token of any role (`runs/router.py:180`) | low | hardening PR |
+| S-3 | `POST /v1/internal/tick` accepted an API token of any role; now owners and a `tick`-scoped token only (review round 8) | low, fixed | done |
 | S-4 | Run artifacts are readable by any viewer (`runs/router.py:157-165`) | low today, medium after MCP | CR-07 / CR-12 |
 | S-5 | The HTML export does not re-check the theme CSS (`export/render.py:771`) | low | hardening PR |
 | S-6 | No scheme allowlist on hrefs in the web app (`MarkdownBody.tsx:132`, `EvidenceChip.tsx:143`, `VersionView.tsx:537`) | low | design-system or UI wave |

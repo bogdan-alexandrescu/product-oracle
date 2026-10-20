@@ -834,6 +834,8 @@ async def approve_version(
         raise ReviewError(
             "forbidden", "Only the designated decider approves this document's versions"
         )
+    # The publish gate first (T2, C5): a PRD's older version is refused with its message.
+    await publish_gate.check(session, document, version)
     latest = await session.scalar(
         select(DocumentVersion.number)
         .where(DocumentVersion.document_id == document.id)
@@ -846,7 +848,6 @@ async def approve_version(
             f"version {version.number} is not the current version (version {latest} is); "
             "approve the current version",
         )
-    await publish_gate.check(session, document, version)
     already = version.approved_at is not None
     previous_approver = version.approved_by
     # A re-approval by someone else (the decider set after an earlier approval) is the

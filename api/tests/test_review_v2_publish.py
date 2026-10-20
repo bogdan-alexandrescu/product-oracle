@@ -115,6 +115,9 @@ async def test_a_critical_hard_check_blocks_and_an_advisory_one_never_does(clien
     ordinary advisory quality result alone does not silently block (T2)."""
     ctx = await setup(client)
     await approved(client, ctx)
+    # The approve ran the T2 publish gate, which registers the quality criteria: this
+    # test's own checks only from here.
+    readiness._checks.clear()
     readiness.register_check("problem_clarity", outcome("critical"))  # advisory
     body = await check(client, ctx)
     assert body["can_publish"] is True
@@ -364,7 +367,10 @@ async def test_review_invariants_are_a_hard_readiness_check(client):
         document = await s.scalar(select(Document).where(Document.slug == DOC))
         report = await readiness.evaluate(readiness.ReadinessContext(s, document.id))
     [result] = report.results
-    assert result.hard and result.status == "critical"
+    # Review still to be done is a warning on the dashboard (review round 8: not a defect,
+    # every draft starts there); the publish check still refuses it.
+    assert result.hard and result.status == "warning"
+    assert "approval" in result.rationale
     body = await check(client, ctx)
     # Not counted twice in the publish check.
     assert [r["key"] for r in body["readiness"]] == []
