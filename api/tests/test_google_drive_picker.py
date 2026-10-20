@@ -100,7 +100,7 @@ async def test_identify_reads_granted_scopes_from_tokeninfo():
             assert request.url.path == "/tokeninfo"
             # The token goes in a POST body, never in a URL (logs, proxies).
             assert request.method == "POST"
-            assert "tok" not in str(request.url)
+            assert "access_token" not in str(request.url)
             assert parse_qs(request.content.decode()) == {"access_token": ["tok"]}
             return httpx.Response(200, json={"scope": " ".join(READONLY)})
         return httpx.Response(200, json={"sub": "g-1", "email": "pat@example.com"})

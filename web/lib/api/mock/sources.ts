@@ -7,7 +7,8 @@ import type { Schemas } from "@/lib/api/client";
 import { mockUuid, seeded } from "./ids";
 
 type Source = Schemas["SourceOut"];
-type Item = Schemas["ItemOut"] & { content: string; source_name: string };
+// `folder`: the picked Drive folder a Google Doc came from (mock only).
+type Item = Schemas["ItemOut"] & { content: string; source_name: string; folder?: string };
 type Confidence = Schemas["ConfidenceOut"];
 
 interface SourcesDb {
@@ -94,7 +95,7 @@ function seed(): SourcesDb {
     item_count: 1,
     connector_available: true,
   };
-  // Google Docs picked in the Drive picker; one was unshared since.
+  // Google Docs and a folder picked in the Drive picker; one doc was unshared since.
   const docs: Source = {
     id: "50000000-0000-4000-8000-000000000003",
     kind: "google_docs",
@@ -102,10 +103,12 @@ function seed(): SourcesDb {
     connection_id: CONNECTIONS.google[0].id,
     config: {
       docs: ["1DocPricingExample", "1DocActivationExample", "1DocInterviewsExample"],
+      folders: ["1FolderSpecsExample"],
       names: {
         "1DocPricingExample": "Pricing strategy",
         "1DocActivationExample": "Activation v2 PRD",
         "1DocInterviewsExample": "Customer interviews Q3",
+        "1FolderSpecsExample": "Product specs",
       },
     },
     status: "active",
@@ -113,12 +116,13 @@ function seed(): SourcesDb {
     last_synced_at: "2026-10-19T08:00:00Z",
     created_at: "2026-10-19T07:00:00Z",
     updated_at: "2026-10-19T08:00:00Z",
-    item_count: 2,
+    item_count: 3,
     connector_available: true,
     unavailable_items: [{ external_id: "1DocInterviewsExample", reason: "No access: removed, or no longer shared with you" }],
     reconnect_reason: null,
   };
-  // A folder allowlist from before the picker, on a drive.readonly connection.
+  // A folder source on a connection holding only the short-lived drive.file grant, which
+  // cannot read folders: "Reconnect to choose files".
   const folders: Source = {
     id: "50000000-0000-4000-8000-000000000004",
     kind: "google_docs",
@@ -135,7 +139,15 @@ function seed(): SourcesDb {
     unavailable_items: [],
     reconnect_reason: "Reconnect to choose files",
   };
-  const item = (source: Source, external_id: string, kind: string, title: string, content: string, freshness: number): Item => ({
+  const item = (
+    source: Source,
+    external_id: string,
+    kind: string,
+    title: string,
+    content: string,
+    freshness: number,
+    folder?: string,
+  ): Item => ({
     id: uuid(),
     source_id: source.id,
     source_kind: source.kind,
@@ -153,6 +165,7 @@ function seed(): SourcesDb {
     fetched_at: "2026-10-17T08:00:00Z",
     confidence: confidence(source.kind, freshness),
     content,
+    ...(folder ? { folder } : {}),
   });
   return {
     sources: [chat, repo, docs, folders],
@@ -162,6 +175,7 @@ function seed(): SourcesDb {
       item(chat, "m2", "message", "Pricing thread", "Annual pricing gets a discount for teams above ten seats.", 0.9),
       item(docs, "1DocPricingExample", "doc", "Pricing strategy", "Annual plans get two months free.", 0.9),
       item(docs, "1DocActivationExample", "doc", "Activation v2 PRD", "New accounts finish setup in under 3 minutes.", 0.8),
+      item(docs, "1DocCheckoutSpecExample", "doc", "Checkout spec", "Guests can check out without an account.", 0.8, "1FolderSpecsExample"),
     ],
     snapshots: [],
   };
@@ -249,8 +263,10 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     const body = (await req.json()) as Schemas["SourceCreate"];
     if (!AVAILABLE[body.kind]) return json(422, { detail: "connector not available yet" });
     const choice = Object.values(CONNECTIONS).flat().find((c) => c.id === body.connection_id);
-    if (body.kind === "google_docs" && choice?.reconnect_reason && body.config?.docs) {
-      return json(422, { detail: "Reconnect to choose files: this Google connection cannot read Drive files" });
+    if (body.kind === "google_docs" && choice?.reconnect_reason && body.config?.folders) {
+      return json(422, {
+        detail: "Reconnect to choose files: this Google connection cannot read folders; reconnect Google to give Oracle read access to your Drive",
+      });
     }
     if (db.sources.some((s) => s.name === body.name.trim())) {
       return json(409, { detail: "You already have a source with this name" });
@@ -301,7 +317,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       if (patch.config) {
         s.config = patch.config;
         s.unavailable_items = [];
-        if (s.kind === "google_docs" && !("folders" in patch.config)) {
+        if (s.kind === "google_docs") {
           const choice = Object.values(CONNECTIONS).flat().find((c) => c.id === s.connection_id);
           s.reconnect_reason = choice?.reconnect_reason ?? null;
         }
@@ -322,7 +338,20 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       return json(200, { source_id: s.id, outcome: "error", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }
     s.last_synced_at = now();
-    return json(200, { source_id: s.id, outcome: "completed", upserted: 2, versions_written: 1, deleted: 0, checkpoints: 1, retry_after: null, error: null, source: counted(db, s) });
+    // Narrowing: a Google Doc no longer picked, or from a folder no longer picked, is deleted.
+    let deleted = 0;
+    if (s.kind === "google_docs") {
+      const docs = new Set((s.config.docs as string[] | undefined) ?? []);
+      const folders = new Set((s.config.folders as string[] | undefined) ?? []);
+      for (const i of db.items) {
+        if (i.source_id !== s.id || i.deleted_at) continue;
+        if (i.folder ? !folders.has(i.folder) : !docs.has(i.external_id)) {
+          i.deleted_at = now();
+          deleted += 1;
+        }
+      }
+    }
+    return json(200, { source_id: s.id, outcome: "completed", upserted: 2, versions_written: 1, deleted, checkpoints: 1, retry_after: null, error: null, source: counted(db, s) });
   }
   if (sub === "items") return json(200, db.items.filter((i) => i.source_id === s.id && !i.deleted_at).map(itemOut));
   if (sub === "uploads" && m === "POST") {

@@ -4,7 +4,9 @@ import type { Page } from "@playwright/test";
  * Stands in for Google in the browser: answers https://apis.google.com/js/api.js and
  * https://accounts.google.com/gsi/client with fakes of gapi, Google Identity Services and
  * google.picker, and aborts any other request to a Google host, so no test reaches Google.
- * The fake picker "picks" `files` and records how it was built in window.__drive.
+ * The fake picker "picks" `files` and records how it was built in window.__drive, and
+ * whether sign-in was asked for on a click (`inClick`: in the click's task, before any
+ * script load or fetch could end), as popup blockers require.
  */
 export interface FakeDriveFile {
   id: string;
@@ -13,14 +15,28 @@ export interface FakeDriveFile {
 }
 
 const DOC = "application/vnd.google-apps.document";
+export const FOLDER = "application/vnd.google-apps.folder";
+
+// A click marks its own task: inClick is true until the click's task and microtasks end.
+const CLICKS = `
+window.__drive = window.__drive || {};
+if (!window.__clicks) {
+  window.__clicks = true;
+  document.addEventListener("click", () => {
+    window.__inClick = true;
+    setTimeout(() => { window.__inClick = false; }, 0);
+  }, true);
+}
+`;
 
 const GIS = `
+${CLICKS}
 window.google = window.google || {};
-window.__drive = window.__drive || {};
 window.google.accounts = { oauth2: { initTokenClient(config) {
   window.__drive.tokenClient = { client_id: config.client_id, scope: config.scope, login_hint: config.login_hint };
   return { requestAccessToken() {
-    setTimeout(() => config.callback({ access_token: "fake-drive-file-token", expires_in: 3599, scope: config.scope }), 0);
+    (window.__drive.signIns = window.__drive.signIns || []).push({ inClick: !!window.__inClick });
+    setTimeout(() => config.callback({ access_token: "fake-drive-token", expires_in: 3599, scope: config.scope }), 0);
   } };
 } } };
 `;
@@ -71,11 +87,14 @@ window.gapi = { load(name, options) {
 }
 
 /** Fakes Google for `page`; returns the list of Google URLs the page asked for. */
-export async function fakeGoogle(page: Page, files: FakeDriveFile[], opts: { cancel?: boolean } = {}) {
+export async function fakeGoogle(page: Page, files: FakeDriveFile[], opts: { cancel?: boolean; delayMs?: number } = {}) {
   const asked: string[] = [];
-  await page.route(/^https:\/\/([a-z0-9-]+\.)*(google\.com|googleapis\.com|gstatic\.com|googleusercontent\.com)\//, (route) => {
+  await page.route(/^https:\/\/([a-z0-9-]+\.)*(google\.com|googleapis\.com|gstatic\.com|googleusercontent\.com)\//, async (route) => {
     const url = route.request().url();
     asked.push(url);
+    if (opts.delayMs && (url === "https://apis.google.com/js/api.js" || url === "https://accounts.google.com/gsi/client")) {
+      await new Promise((r) => setTimeout(r, opts.delayMs));
+    }
     if (url === "https://apis.google.com/js/api.js") {
       return route.fulfill({ contentType: "text/javascript", body: gapi(files, !!opts.cancel) });
     }

@@ -36,7 +36,7 @@ const ALLOWLIST: Record<Exclude<Kind, "upload">, { key: string; label: string; e
   github: { key: "repos", label: "Repositories", example: "example-org/example-app" },
   slack: { key: "channels", label: "Channel ids", example: "C0123PRODUCT" },
   notion: { key: "pages", label: "Root page ids", example: "0123abcd…" },
-  // Picked in Google's Drive picker (DriveFiles); legacy sources list "folders".
+  // Picked in Google's Drive picker (DriveFiles): "docs" and "folders".
   google_docs: { key: "docs", label: "Files", example: "1AbC…" },
   fireflies: { key: "meetings", label: "Meeting title filters", example: "Weekly product review" },
 };
@@ -187,7 +187,7 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
   );
 }
 
-/** Edit a Google Docs source's picked files: re-opens the Drive picker and adds to the list. */
+/** Edit a Google Docs source's picked files and folders: the Drive picker adds to the list. */
 function DriveFilesEditor({
   source,
   connection,
@@ -204,7 +204,7 @@ function DriveFilesEditor({
 
   async function save(e: FormEvent) {
     e.preventDefault();
-    const config = driveConfig(source.config, files, reconnect);
+    const config = driveConfig(source.config, files);
     const saved = await act(() =>
       unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config } })),
     );
@@ -223,7 +223,6 @@ function DriveFilesEditor({
         accountHint={connection?.account_label ?? ""}
         reconnect={reconnect}
         unavailable={unavailable}
-        autoOpen
       />
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex items-center gap-1.5">
@@ -231,7 +230,7 @@ function DriveFilesEditor({
           Save files
         </Button>
         <InfoTip label="saving the files" align="start">
-          Saving syncs this source again from the start.
+          Saving syncs this source again. Docs from a file or folder you removed are deleted on that sync.
         </InfoTip>
       </div>
     </form>
@@ -256,7 +255,8 @@ function SourceRow({
   const path = { params: { path: { source_id: source.id } } };
   const allowlist = source.kind === "upload" ? null : ALLOWLIST[source.kind];
   const drive = source.kind === "google_docs";
-  const legacyFolders = drive ? entries(source.config, "folders") : [];
+  const picked = drive ? driveFiles(source.config) : [];
+  const folders = picked.filter((f) => f.kind === "folder").map((f) => f.name);
   const unavailable = source.unavailable_items ?? [];
 
   async function syncNow() {
@@ -307,7 +307,7 @@ function SourceRow({
   }
 
   const items = drive
-    ? driveFiles(source.config).map((f) => f.name)
+    ? picked.filter((f) => f.kind === "doc").map((f) => f.name)
     : allowlist
       ? entries(source.config, allowlist.key)
       : [];
@@ -372,7 +372,7 @@ function SourceRow({
               ...(allowlist
                 ? [
                     {
-                      label: drive ? (editing ? "Close files" : "Edit files") : editing ? "Close allowlist" : "Edit allowlist",
+                      label: drive ? (editing ? "Close files and folders" : "Edit files and folders") : editing ? "Close allowlist" : "Edit allowlist",
                       onSelect: () => setEditing((v) => !v),
                     },
                   ]
@@ -385,7 +385,7 @@ function SourceRow({
       <div className="tnum mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-text2">
         <span>{source.item_count} item(s)</span>
         <span>{synced}</span>
-        {allowlist && (items.length > 0 || legacyFolders.length === 0) && (
+        {allowlist && (items.length > 0 || folders.length === 0) && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
             <span className={`min-w-0 truncate text-text ${drive ? "" : "font-mono"}`} title={items.join(", ")}>
@@ -393,11 +393,11 @@ function SourceRow({
             </span>
           </span>
         )}
-        {legacyFolders.length > 0 && (
+        {folders.length > 0 && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">Folders</Label>
-            <span className="min-w-0 truncate font-mono text-text" title={legacyFolders.join(", ")}>
-              {legacyFolders.join(", ")}
+            <span className="min-w-0 truncate text-text" title={folders.join(", ")}>
+              {folders.join(", ")}
             </span>
           </span>
         )}
@@ -406,7 +406,7 @@ function SourceRow({
       {unavailable.length > 0 && (
         <ul aria-label={`Unreadable files of ${source.name}`} className="mt-2 flex flex-col gap-1">
           {unavailable.map((u) => {
-            const name = driveFiles(source.config).find((f) => f.id === u.external_id)?.name ?? u.external_id;
+            const name = picked.find((f) => f.id === u.external_id)?.name ?? u.external_id;
             return (
               <li key={u.external_id} className="flex min-w-0 items-center gap-2 text-sm">
                 <Chip kind="warn" title={u.reason}>
@@ -477,7 +477,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       kind,
       name: name.trim(),
       connection_id: spec ? connectionId : null,
-      config: drive ? driveConfig({}, files, false) : spec ? { [spec.key]: parseLines(allow) } : {},
+      config: drive ? driveConfig({}, files) : spec ? { [spec.key]: parseLines(allow) } : {},
     };
     const s = await act(() => unwrap(api.POST("/v1/sources", { body })));
     if (s) {

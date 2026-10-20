@@ -158,16 +158,17 @@ async def credential_for(
 
 def scope_problem(kind: str, config: dict[str, Any], conn: Connection | None) -> str | None:
     """Why the connection's grant cannot read this source's allowlist, before calling
-    the provider. Google: picked files need drive.file (or the old drive.readonly);
-    folders are read through drive.readonly only, since drive.file does not open a
-    picked folder's children. Unknown scopes (an older pasted token) are not judged."""
+    the provider. Google: Oracle reads Drive through drive.readonly (S5, 'Drive folders');
+    a picked folder cannot be read without it, since the short-lived drive.file grant
+    does not open a folder's docs. Picked files also open under drive.file. Unknown
+    scopes (an older pasted token) are not judged."""
     if kind != "google_docs" or conn is None or not conn.scopes:
         return None
     scopes = set(conn.scopes)
     if config.get("folders") and DRIVE_READONLY not in scopes:
         return (
-            f"{RECONNECT_TO_CHOOSE_FILES}: Oracle can no longer read whole folders; "
-            "choose the files from Drive instead"
+            f"{RECONNECT_TO_CHOOSE_FILES}: this Google connection cannot read folders; "
+            "reconnect Google to give Oracle read access to your Drive"
         )
     if config.get("docs") and not scopes & {DRIVE_FILE, DRIVE_READONLY}:
         return f"{RECONNECT_TO_CHOOSE_FILES}: this Google connection cannot read Drive files"
@@ -176,8 +177,8 @@ def scope_problem(kind: str, config: dict[str, Any], conn: Connection | None) ->
 
 def source_reconnect_reason(source: Source, conn: Connection | None) -> str | None:
     """What the Sources page shows next to a source whose connection should be signed
-    in again (a Google grant from before the Drive picker), or whose legacy folder
-    allowlist the connection can no longer read."""
+    in again (a Google grant without drive.readonly), or whose folders the connection
+    cannot read."""
     if conn is None or KIND_PROVIDER.get(source.kind) != conn.provider:
         return None
     if scope_problem(source.kind, dict(source.config or {}), conn):
@@ -313,6 +314,29 @@ async def create_source(
     return source
 
 
+async def _narrowed_cursor(db: AsyncSession, source: Source) -> dict[str, Any] | None:
+    """The cursor to keep when a source's allowlist changes (same connection).
+
+    Narrowing a source deletes what now falls outside it on the next sync (S5, 'Browse
+    access and narrowing'). Google Docs: the connector deletes every known file it no
+    longer finds under the allowlist, so the known files stay, with every live item
+    added (those an earlier edit dropped from the cursor, timed "" so they are read
+    again). Other kinds sync from the start."""
+    if source.kind != "google_docs":
+        return None
+    known = {
+        str(k): str(v) for k, v in ((source.cursor or {}).get("files") or {}).items()
+    }
+    live = await db.scalars(
+        select(SourceItem.external_id).where(
+            SourceItem.source_id == source.id, SourceItem.deleted_at.is_(None)
+        )
+    )
+    for external_id in live:
+        known.setdefault(external_id, "")
+    return {"files": known} if known else None
+
+
 async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any]) -> Source:
     reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
     reconfigure = changes.get("config") is not None and changes["config"] != source.config
@@ -322,11 +346,13 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
         # Validating reads the credential, which commits: change nothing before it.
         await _validate(db, source.kind, config, conn)
+        # A new account: sync from the start. A new allowlist: what left it is deleted
+        # on the next sync. Unchanged content writes no new versions, so a full pass is
+        # cheap in storage.
+        cursor = None if reconnect else await _narrowed_cursor(db, source)
         source.connection_id = connection_id
         source.config = config
-        # A new allowlist or account: sync from the start. Unchanged content writes no
-        # new versions, so a full pass is cheap in storage.
-        source.cursor = None
+        source.cursor = cursor
         source.unavailable_items = []
         if source.status == "error":
             source.status = "active"

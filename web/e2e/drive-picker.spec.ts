@@ -1,22 +1,24 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { fakeGoogle } from "./google-fake";
+import { fakeGoogle, FOLDER } from "./google-fake";
 import { login } from "./helpers";
 
 const PICKED = [
   { id: "1DocRoadmapExample", name: "Roadmap notes" },
   { id: "1DocResearchExample", name: "Research synthesis" },
 ];
+const SPECS_FOLDER = { id: "1FolderPlanningExample", name: "Planning", mimeType: FOLDER };
 
 type Drive = {
   opened: number;
   tokenClient: { client_id: string; scope: string; login_hint?: string };
+  signIns: { inClick: boolean }[];
   builder: { appId: string; developerKey: string; token: string; features: string[]; views: Record<string, unknown>[] };
 };
 const drive = (page: Page) => page.evaluate(() => (window as unknown as { __drive: Drive }).__drive);
 
-test("sources › Google Docs: choose files from Drive, remove one, paste an id, add", async ({ page }) => {
-  const asked = await fakeGoogle(page, PICKED);
+test("sources › Google Docs: choose files and a folder from Drive, remove one, paste an id, add", async ({ page }) => {
+  const asked = await fakeGoogle(page, [SPECS_FOLDER, ...PICKED]);
   await login(page);
   await page.goto("/settings/sources");
   const form = page.getByRole("form", { name: "Add a source" });
@@ -26,74 +28,128 @@ test("sources › Google Docs: choose files from Drive, remove one, paste an id,
   await expect(form.getByRole("textbox", { name: /one per line/ })).toHaveCount(0);
   await expect(form.getByRole("button", { name: "Add source" })).toBeDisabled();
 
-  await form.getByRole("button", { name: "Choose files from Drive" }).click();
-  const list = form.getByRole("list", { name: "Picked files" });
-  await expect(list.getByRole("listitem")).toHaveText([/Roadmap notes\s*Google Doc/, /Research synthesis\s*Google Doc/]);
+  await form.getByRole("button", { name: "Choose from Drive" }).click();
+  const list = form.getByRole("list", { name: "Picked files and folders" });
+  await expect(list.getByRole("listitem")).toHaveText([
+    /Planning\s*Folder · every doc in it/,
+    /Roadmap notes\s*Google Doc/,
+    /Research synthesis\s*Google Doc/,
+  ]);
 
   const d = await drive(page);
+  // The browser token has the same scope as the API's Google connection.
   expect(d.tokenClient).toEqual({
     client_id: "000000000000-mock.apps.googleusercontent.com",
-    scope: "https://www.googleapis.com/auth/drive.file",
+    scope: "https://www.googleapis.com/auth/drive.readonly",
     login_hint: "pat@example.com",
   });
+  expect(d.signIns).toEqual([{ inClick: true }]);
   expect(d.builder).toMatchObject({
     appId: "000000000000",
     developerKey: "mock-browser-key",
-    token: "fake-drive-file-token",
+    token: "fake-drive-token",
     features: ["multiselectEnabled"],
   });
+  // Folders can be picked as well as Google Docs.
   expect(d.builder.views).toEqual([
     {
       viewId: "all",
-      mimeTypes: "application/vnd.google-apps.document",
+      mimeTypes: "application/vnd.google-apps.document,application/vnd.google-apps.folder",
       includeFolders: true,
-      selectFolderEnabled: false,
+      selectFolderEnabled: true,
       mode: "list",
     },
   ]);
 
   await list.getByRole("button", { name: "Remove Research synthesis" }).click();
-  await expect(list.getByRole("listitem")).toHaveCount(1);
+  await expect(list.getByRole("listitem")).toHaveCount(2);
   await form.getByRole("button", { name: "Paste ids" }).click();
   await form.getByLabel("Drive file ids").fill("1DocPastedExample");
   await form.getByRole("button", { name: "Add ids" }).click();
-  await expect(list.getByRole("listitem")).toHaveText([/Roadmap notes/, /1DocPastedExample\s*Drive id/]);
+  await expect(list.getByRole("listitem")).toHaveText([/Planning/, /Roadmap notes/, /1DocPastedExample\s*Drive id/]);
 
   await form.getByRole("button", { name: "Add source" }).click();
   const row = page.getByRole("listitem", { name: "Planning docs" });
   await expect(row).toContainText("Roadmap notes, 1DocPastedExample");
+  await expect(row).toContainText("FoldersPlanning");
+  // Saved as {docs, folders, names}: the editor reads it back.
+  await row.getByRole("button", { name: "More actions for Planning docs" }).click();
+  await row.getByRole("menuitem", { name: "Edit files and folders" }).click();
+  await expect(row.getByRole("list", { name: "Picked files and folders" }).getByRole("listitem")).toHaveText([
+    /Planning\s*Folder · every doc in it/,
+    /Roadmap notes\s*Google Doc/,
+    /1DocPastedExample\s*Drive id/,
+  ]);
   // Only Google's two scripts were asked for, and they were served by the fake.
   expect([...new Set(asked)].sort()).toEqual(["https://accounts.google.com/gsi/client", "https://apis.google.com/js/api.js"]);
 });
 
-test("sources › Google Docs: editing re-opens the picker and adds to the list", async ({ page }) => {
+test("sources › Google Docs: sign-in opens on the click even when Google loads slowly", async ({ page }) => {
+  await fakeGoogle(page, PICKED, { delayMs: 1500 });
+  await login(page);
+  await page.goto("/settings/sources");
+  const form = page.getByRole("form", { name: "Add a source" });
+  await form.getByLabel("Kind").selectOption("google_docs");
+  // Until Google's scripts are in, the button waits instead of opening a popup later.
+  await expect(form.getByRole("button", { name: "Loading Drive…" })).toBeDisabled();
+  await form.getByRole("button", { name: "Choose from Drive" }).click();
+  await expect(form.getByRole("list", { name: "Picked files and folders" }).getByRole("listitem")).toHaveCount(2);
+  expect((await drive(page)).signIns).toEqual([{ inClick: true }]);
+});
+
+test("sources › Google Docs: editing adds to the list from the picker; removing a doc and a folder", async ({ page }) => {
   await fakeGoogle(page, [{ id: "1DocPricingExample", name: "Pricing strategy" }, PICKED[0]]);
   await login(page);
   await page.goto("/settings/sources");
   const row = page.getByRole("listitem", { name: "Product docs" });
   await expect(row).toContainText("Pricing strategy, Activation v2 PRD, Customer interviews Q3");
+  await expect(row).toContainText("FoldersProduct specs");
+  await expect(row).toContainText("3 item(s)");
   // An unshared file is reported on its own; the source is still active.
   await expect(row.getByRole("list", { name: "Unreadable files of Product docs" })).toContainText("No accessCustomer interviews Q3");
   await expect(row).toContainText("Active");
 
   await row.getByRole("button", { name: "More actions for Product docs" }).click();
-  await row.getByRole("menuitem", { name: "Edit files" }).click();
-  const list = row.getByRole("list", { name: "Picked files" });
+  await row.getByRole("menuitem", { name: "Edit files and folders" }).click();
+  const list = row.getByRole("list", { name: "Picked files and folders" });
   await expect(list.getByRole("listitem")).toHaveText([
+    /Product specs\s*Folder · every doc in it/,
     /Pricing strategy\s*Google Doc/,
     /Activation v2 PRD\s*Google Doc/,
     /Customer interviews Q3\s*Google Doc\s*No access/,
-    /Roadmap notes\s*Google Doc/,
   ]);
-  expect((await drive(page)).opened).toBe(1);
+  // The picker opens on a click, not by itself.
+  expect((await drive(page))?.opened ?? 0).toBe(0);
+  await row.getByRole("button", { name: "Choose from Drive" }).click();
+  await expect(list.getByRole("listitem")).toHaveCount(5);
+  await expect(list.getByRole("listitem").last()).toHaveText(/Roadmap notes\s*Google Doc/);
+  expect((await drive(page)).signIns).toEqual([{ inClick: true }]);
+
   await list.getByRole("button", { name: "Remove Customer interviews Q3" }).click();
+  await list.getByRole("button", { name: "Remove Product specs" }).click();
   await row.getByRole("button", { name: "Save files" }).click();
   await expect(row.getByRole("status")).toHaveText("Files saved.");
   await expect(row).toContainText("Pricing strategy, Activation v2 PRD, Roadmap notes");
+  await expect(row).not.toContainText("Product specs");
   await expect(row.getByRole("list", { name: "Unreadable files of Product docs" })).toHaveCount(0);
+
+  // Narrowing: the next sync deletes the doc that came from the removed folder.
+  await row.getByRole("button", { name: "Sync now" }).click();
+  await expect(row).toContainText("2 item(s)");
 });
 
-test("sources › Google Docs: a connection without drive.file asks to reconnect", async ({ page }) => {
+test("sources › Google Docs: copy says plainly what Oracle can read", async ({ page }) => {
+  await fakeGoogle(page, PICKED);
+  await login(page);
+  await page.goto("/settings/sources");
+  const form = page.getByRole("form", { name: "Add a source" });
+  await form.getByLabel("Kind").selectOption("google_docs");
+  await form.getByRole("button", { name: "About choosing from Drive" }).click();
+  await expect(page.getByRole("tooltip", { name: /^Oracle can read your Drive; it pulls in only the files and folders you choose here\./ })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("reads only the Google Docs");
+});
+
+test("sources › Google Docs: a connection without drive.readonly asks to reconnect", async ({ page }) => {
   await fakeGoogle(page, PICKED);
   await login(page);
   await page.goto("/settings/sources");
@@ -106,11 +162,11 @@ test("sources › Google Docs: a connection without drive.file asks to reconnect
   await form.getByLabel("Kind").selectOption("google_docs");
   await form.getByLabel("Connection").selectOption({ label: "old-drive@example.com" });
   await expect(form.getByTestId("reconnect-to-choose")).toBeVisible();
-  await expect(form.getByRole("button", { name: "Choose files from Drive" })).toHaveCount(0);
+  await expect(form.getByRole("button", { name: "Choose from Drive" })).toHaveCount(0);
   await expect(form.getByRole("button", { name: "Add source" })).toBeDisabled();
 });
 
-test("connections › Google: an old grant shows Reconnect to choose files", async ({ page }) => {
+test("connections › Google: a drive.readonly grant needs no reconnect; a drive.file one does", async ({ page }) => {
   await login(page);
   await page.goto("/settings/connections");
   const google = page.getByTestId("connection-card-google");
@@ -119,20 +175,47 @@ test("connections › Google: an old grant shows Reconnect to choose files", asy
   await google.getByRole("button", { name: "Connect", exact: true }).click();
   const reconnect = google.getByRole("button", { name: "Reconnect to choose files" });
   await expect(reconnect).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("reads only the Google Docs");
   await reconnect.click();
   await expect(page).toHaveURL(/connected=google/);
   await expect(google.getByRole("button", { name: "Reconnect", exact: true })).toBeVisible();
   await expect(google.getByRole("button", { name: "Reconnect to choose files" })).toHaveCount(0);
 });
 
-test("sources › the page's CSP allows exactly Google's picker hosts", async ({ page }) => {
-  const resp = await page.request.get("/settings/sources");
-  const csp = resp.headers()["content-security-policy"];
-  expect(csp).toBeTruthy();
-  const hosts = new Set([...csp.matchAll(/https:\/\/([^/\s;]+)/g)].map((m) => m[1]));
-  expect([...hosts].sort()).toEqual(["accounts.google.com", "apis.google.com", "docs.google.com"]);
-  expect(csp).not.toMatch(/\*|https:(?!\/\/)|'unsafe-eval'/);
-  const directive = (name: string) => csp.split("; ").find((d) => d.startsWith(`${name} `));
-  expect(directive("script-src")).toBe("script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com/gsi/");
-  expect(directive("frame-src")).toBe("frame-src 'self' blob: https://docs.google.com https://accounts.google.com/gsi/");
+test("CSP: every page allows exactly Google's picker hosts, so in-app navigation to Sources is covered", async ({ page }) => {
+  for (const path of ["/settings/sources", "/", "/settings/connections"]) {
+    const resp = await page.request.get(path);
+    const csp = resp.headers()["content-security-policy"];
+    expect(csp, path).toBeTruthy();
+    const hosts = new Set([...csp.matchAll(/https:\/\/([^/\s;]+)/g)].map((m) => m[1]));
+    expect([...hosts].sort()).toEqual(["accounts.google.com", "apis.google.com", "docs.google.com"]);
+    expect(csp).not.toMatch(/\*|https:(?!\/\/)|'unsafe-eval'|blob:/);
+    const directive = (name: string) => csp.split("; ").find((d) => d.startsWith(`${name} `));
+    expect(directive("script-src")).toBe("script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com/gsi/");
+    expect(directive("frame-src")).toBe("frame-src 'self' https://docs.google.com https://accounts.google.com/gsi/");
+    expect(directive("connect-src")).toBe("connect-src 'self' https://accounts.google.com/gsi/");
+  }
+});
+
+test("CSP: after in-app navigation to Sources, the picker still loads under the policy", async ({ page }) => {
+  const asked = await fakeGoogle(page, PICKED);
+  const violations: string[] = [];
+  page.on("console", (m) => {
+    if (/Content Security Policy/i.test(m.text())) violations.push(m.text());
+  });
+  await login(page);
+  await page.goto("/settings/connections");
+  await page.evaluate(() => {
+    // Mark this document: a full reload would lose it.
+    (window as unknown as { __sameDocument: boolean }).__sameDocument = true;
+  });
+  await page.getByTestId("nav-sources").first().click();
+  await expect(page).toHaveURL(/\/settings\/sources/);
+  expect(await page.evaluate(() => (window as unknown as { __sameDocument?: boolean }).__sameDocument)).toBe(true);
+  const form = page.getByRole("form", { name: "Add a source" });
+  await form.getByLabel("Kind").selectOption("google_docs");
+  await form.getByRole("button", { name: "Choose from Drive" }).click();
+  await expect(form.getByRole("list", { name: "Picked files and folders" }).getByRole("listitem")).toHaveCount(2);
+  expect(asked.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
 });

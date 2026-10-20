@@ -244,8 +244,8 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
         )}
         {c.reconnect_reason && (
           <InfoTip label={`why reconnect ${name}`}>
-            Oracle now reads only the Google Docs you choose from Drive. Reconnect once, then choose the files on
-            Sources.
+            This Google sign-in cannot read folders. Reconnect once, then choose files and folders on Sources.
+            Oracle can read your Drive; it pulls in only the files and folders you choose there.
           </InfoTip>
         )}
         <span className="flex flex-none items-center gap-1">

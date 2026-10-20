@@ -3,7 +3,8 @@
  * from server.ts; state lives in its own localStorage key.
  *
  * Token rules: anything starting with "bad" is rejected; a Google token starting with
- * "legacy" has the old drive.readonly grant ("Reconnect to choose files"). OAuth is
+ * "legacy" has the short-lived drive.file grant, which cannot read folders ("Reconnect to
+ * choose files"). OAuth is
  * "configured" for GitHub and Google: authorize connects at once and sends the browser
  * straight back to the page. The Drive picker config is a fake (e2e mocks Google itself).
  * Claude is not a connection: see ./claude-accounts.ts.
@@ -28,7 +29,7 @@ export const MOCK_PICKER_CONFIG: Schemas["PickerConfigOut"] = {
 
 /** As oracle.connections.providers.reconnect_reason. */
 export function reconnectReason(provider: string, scopes: string[]): string | null {
-  return provider === "google" && !scopes.includes(DRIVE_FILE) ? "Reconnect to choose files" : null;
+  return provider === "google" && scopes.length > 0 && !scopes.includes(DRIVE_READONLY) ? "Reconnect to choose files" : null;
 }
 const PROVIDERS: Schemas["ProviderOut"][] = [
   {
@@ -68,7 +69,7 @@ const PROVIDERS: Schemas["ProviderOut"][] = [
     name: "Google Docs",
     source_kinds: ["google_docs"],
     oauth_configured: true,
-    oauth_scopes: ["openid", "email", DRIVE_FILE],
+    oauth_scopes: ["openid", "email", DRIVE_READONLY],
     token_help: "Google access tokens expire within an hour; connect with Google sign-in.",
   },
 ];
@@ -112,7 +113,7 @@ function identity(provider: string, token: string): { account_id: string; label:
     fireflies: "pat@example.com",
     google: "pat@example.com",
   };
-  const google = token.startsWith("legacy") ? ["openid", "email", DRIVE_READONLY] : ["openid", "email", DRIVE_FILE];
+  const google = token.startsWith("legacy") ? ["openid", "email", DRIVE_FILE] : ["openid", "email", DRIVE_READONLY];
   const scopes = provider === "github" ? ["repo"] : provider === "google" ? google : [];
   return { account_id: `${provider}-1`, label: labels[provider] ?? provider, scopes };
 }
@@ -230,7 +231,7 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
         if (who.account_id !== row.account_id) return json(400, { detail: "That token belongs to another account" });
       }
       if (!token && reconnectReason(row.provider, row.scopes)) {
-        // Signs in again for drive.file, as the real API's authorize_url would.
+        // Signs in again for drive.readonly, as the real API's authorize_url would.
         const who = identity(row.provider, "oauth-token");
         if (typeof who !== "string") upsert(db, row.provider, "oauth", { ...who, account_id: row.account_id });
         return json(200, { connection: out(db, row), authorize_url: `/settings/connections?connected=${row.provider}` });

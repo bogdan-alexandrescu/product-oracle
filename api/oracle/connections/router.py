@@ -75,8 +75,8 @@ class ConnectionOut(BaseModel):
     last_used_at: datetime | None
     created_at: datetime
     updated_at: datetime
-    # Set when the connection works but should be signed in again, e.g. a Google grant
-    # without drive.file: "Reconnect to choose files".
+    # Set when the connection works but should be signed in again: a Google grant
+    # without drive.readonly cannot read picked folders, "Reconnect to choose files".
     reconnect_reason: str | None = None
 
 
@@ -112,9 +112,10 @@ class AuthorizeOut(BaseModel):
 class PickerConfigOut(BaseModel):
     """What the browser needs to open Google's Drive picker. All of it is public."""
 
-    # Oracle's Google OAuth client id (the browser asks Google for a drive.file token).
+    # Oracle's Google OAuth client id (the browser asks Google for a drive.readonly
+    # token to browse Drive in the picker).
     client_id: str
-    # The Cloud project number of that client: files picked are granted to this app.
+    # The Cloud project number of that client (the picker's app id).
     app_id: str
     # A browser API key restricted to Oracle's origin and the Picker API.
     developer_key: str
@@ -384,7 +385,8 @@ async def reconnect_connection(
         )
     else:
         if reconnect_reason(conn.provider, list(conn.scopes or [])):
-            # A refresh keeps the old grant: sign in again for the scopes Oracle needs.
+            # Only a Google grant without drive.readonly: a refresh keeps the old grant,
+            # so sign in again for the scopes Oracle needs. drive.readonly grants refresh.
             url = _start_oauth(principal, p, conn.id)
             if url:
                 return ReconnectOut(connection=_out(conn), authorize_url=url)

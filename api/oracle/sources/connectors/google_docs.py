@@ -1,18 +1,12 @@
-"""Google Docs: the Docs one user picked in Google's Drive picker (drive.file).
+"""Google Docs: the Docs and folders one user picked in Google's Drive picker.
 
 credential: the Google connection's OAuth bundle ``{"access_token", ...}`` (the connections
 lane refreshes it; a rejected token raises :class:`ConnectorAuthError`).
-config ``{"docs": [file ids], "names": {file id: name}}``: the files the person picked
-(S5, 2026-10-19). ``names`` is only what the Sources page shows before the first sync.
-
-Under ``drive.file`` Oracle can open only the files the person picked (or created with
-Oracle): picking a folder grants that folder, not the files in it, and Drive answers
-404 for a file that was never picked. So the picker offers folders to browse into, not
-to pick, and this connector lists no folder for a ``docs`` allowlist.
-
-Legacy ``{"folders": [folder ids]}`` configs (read recursively) still work while the
-connection holds the old ``drive.readonly`` grant; ``oracle.sources.service`` refuses
-them with "Reconnect to choose files" once it does not.
+config ``{"docs": [file ids], "folders": [folder ids], "names": {id: name}}``: the files
+and folders the person picked (S5, 'Drive folders', owner 2026-10-19). ``names`` is only
+what the Sources page shows before the first sync. A picked folder syncs every Google
+Doc in it and its sub-folders, including docs added later, so the connection holds
+``drive.readonly`` (read access to the person's Drive), not ``drive.file``.
 
 A picked doc Oracle cannot read any more (unshared, access removed, trashed, not a Google
 Doc) is reported with :class:`ItemUnavailable`, one per doc; the rest still sync.
@@ -26,11 +20,14 @@ Cursor::
     {"modified_since": "2026-10-01T09:00:00.000Z",
      "files": {"<file id>": "2026-10-01T09:00:00.000Z"}}
 
-Every sync reads the picked docs' metadata (and lists legacy folders) and exports a doc
+Every sync lists the picked folders (recursively), reads the picked docs' metadata and exports a doc
 only when its ``modifiedTime`` moved past the one in ``files``. A doc in ``files`` that
-is trashed, deleted, unreadable or no longer allowlisted yields :class:`ItemDelete`.
+is trashed, deleted, unreadable or no longer allowlisted (its id, or the folder it is
+in, was removed from the source) yields :class:`ItemDelete`. When the allowlist changes,
+``oracle.sources.service`` keeps ``files`` for that reason (narrowing deletes).
 """
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -55,12 +52,15 @@ DRIVE_URL = "https://www.googleapis.com/drive/v3/"
 OAUTH = {
     "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
     "token_url": "https://oauth2.googleapis.com/token",
-    "scopes": ["https://www.googleapis.com/auth/drive.file"],
+    "scopes": ["https://www.googleapis.com/auth/drive.readonly"],
 }
 DOC_MIME = "application/vnd.google-apps.document"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 EXPORTS = ("text/markdown", "text/plain")
 PAGE_SIZE = 100
+# Picked files and folders per source, and how many of them validate checks at once.
+MAX_PICKED = 500
+VALIDATE_BATCH = 8
 FILE_FIELDS = (
     "id,name,mimeType,trashed,webViewLink,createdTime,modifiedTime,shared,"
     "owners(displayName,emailAddress),lastModifyingUser(displayName,emailAddress),"
@@ -93,6 +93,8 @@ def _options(config: dict[str, Any]) -> tuple[list[str], list[str]]:
         raise ConnectorConfigError("names must map Drive ids to file names")
     if not folders and not docs:
         raise ConnectorConfigError("allowlist at least one folder or doc")
+    if len(folders) + len(docs) > MAX_PICKED:
+        raise ConnectorConfigError(f"choose at most {MAX_PICKED} files and folders per source")
     return folders, docs
 
 
@@ -235,20 +237,20 @@ class GoogleDocsConnector:
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         folders, docs = _options(config)
+        wanted = [(i, FOLDER_MIME, "folder") for i in folders]
+        wanted += [(i, DOC_MIME, "doc") for i in docs]
         async with self._session(credential) as drive:
             await drive.get("about", fields="user(emailAddress)")
-            for folder in folders:
-                file = await drive.file(folder)
-                if file is None or file.get("trashed"):
-                    raise ConnectorConfigError(f"folder {folder} not found or not visible")
-                if file.get("mimeType") != FOLDER_MIME:
-                    raise ConnectorConfigError(f"{folder} is not a folder")
-            for doc in docs:
-                file = await drive.file(doc)
-                if file is None or file.get("trashed"):
-                    raise ConnectorConfigError(f"doc {doc} not found or not visible")
-                if file.get("mimeType") != DOC_MIME:
-                    raise ConnectorConfigError(f"{doc} is not a Google Doc")
+            # One metadata call per picked item, a bounded batch at a time.
+            for start in range(0, len(wanted), VALIDATE_BATCH):
+                batch = wanted[start : start + VALIDATE_BATCH]
+                files = await asyncio.gather(*(drive.file(i) for i, _, _ in batch))
+                for (item, mime, label), file in zip(batch, files, strict=True):
+                    if file is None or file.get("trashed"):
+                        raise ConnectorConfigError(f"{label} {item} not found or not visible")
+                    if file.get("mimeType") != mime:
+                        kind = "a folder" if mime == FOLDER_MIME else "a Google Doc"
+                        raise ConnectorConfigError(f"{item} is not {kind}")
 
     async def sync(
         self,

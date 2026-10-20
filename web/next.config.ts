@@ -5,19 +5,20 @@ import type { NextConfig } from "next";
 const apiUrl = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
 
 /**
- * Settings > Sources opens Google's Drive picker (lib/google-picker.ts). Its CSP lets the
- * page load Google's two scripts from their own hosts and Google's picker and sign-in
- * frames, and nothing else outside this origin. 'unsafe-inline' scripts cover Next's
- * inline bootstrap and the theme script; development adds 'unsafe-eval' for React.
+ * Settings > Sources opens Google's Drive picker (lib/google-picker.ts). The page is
+ * usually reached by in-app navigation, which keeps the CSP of the document first loaded,
+ * so this policy is sent on every page. It allows Google's two scripts from their own
+ * hosts, Google's picker frame (docs.google.com) and sign-in frame and requests
+ * (accounts.google.com/gsi/), and no other outside host for scripts, frames or requests.
+ * 'unsafe-inline' scripts cover Next's inline bootstrap and the theme script; development
+ * adds 'unsafe-eval' for React and ws: for hot reload. Styles, images and fonts are left
+ * open: theme previews (sandboxed srcdoc frames, which inherit this policy) may use any.
  */
-const SOURCES_CSP = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"} https://apis.google.com https://accounts.google.com/gsi/`,
-  "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
-  "frame-src 'self' blob: https://docs.google.com https://accounts.google.com/gsi/",
-  `connect-src 'self'${process.env.NODE_ENV === "production" ? "" : " ws:"} https://accounts.google.com/gsi/`,
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
+const DEV = process.env.NODE_ENV !== "production";
+const APP_CSP = [
+  `script-src 'self' 'unsafe-inline'${DEV ? " 'unsafe-eval'" : ""} https://apis.google.com https://accounts.google.com/gsi/`,
+  "frame-src 'self' https://docs.google.com https://accounts.google.com/gsi/",
+  `connect-src 'self'${DEV ? " ws:" : ""} https://accounts.google.com/gsi/`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -40,7 +41,7 @@ const nextConfig: NextConfig = {
     },
   },
   async headers() {
-    return [{ source: "/settings/sources", headers: [{ key: "Content-Security-Policy", value: SOURCES_CSP }] }];
+    return [{ source: "/:path*", headers: [{ key: "Content-Security-Policy", value: APP_CSP }] }];
   },
   async rewrites() {
     return [
