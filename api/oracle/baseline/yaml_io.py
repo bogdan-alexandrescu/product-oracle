@@ -30,7 +30,6 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-import yaml
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -133,7 +132,7 @@ async def export(db: AsyncSession, principal: Principal) -> str:
         "entities": [entity_doc(e) for e in entities],
         "edges": [edge_doc(e) for e in edges],
     }
-    return yaml.safe_dump(data, sort_keys=False, allow_unicode=True, width=100)
+    return safe_yaml.dump(data, sort_keys=False, allow_unicode=True, width=100)
 
 
 # --- import ---------------------------------------------------------------------------------

@@ -179,3 +179,34 @@ test("a roadmap version names its PRD, and its PRD links open the PRD view at th
   await page.goto("/documents/usage-alerts-roadmap/v/1/present");
   await expect(page.getByTestId("present-mode")).toContainText("From Usage alerts PRD v1");
 });
+
+test("a roadmap date whose basis was withdrawn is marked in the version view; the text is unchanged", async ({ page }) => {
+  // O4 'document dates': the mock seeds ENG-412 (verified, 2026-11-30) and ENG-413
+  // (withdrawn, 2026-12-15) for the usage-alerts PRD.
+  await login(page);
+  await page.goto("/documents/usage-alerts-roadmap/v/1");
+  await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
+  const item = await openSection(page, "item-behaviour");
+  const body = item.locator('[data-section-body="item-behaviour"]');
+  await expect(body).toContainText("Beta by 2026-11-30 (ENG-412 estimate)");
+  const marks = body.locator(".date-mark");
+  await expect(marks).toHaveCount(1);
+  await expect(marks.first()).toHaveText("date withdrawn");
+  await expect(marks.first()).toHaveAttribute("data-date-mark", "withdrawn");
+  await expect(marks.first()).toHaveAttribute("title", /ENG-413/);
+  // The marker sits right after the date it marks, outside the anchored text.
+  const before = await marks.first().evaluate((el) => el.previousSibling?.textContent ?? "");
+  expect(before.endsWith("2026-12-15")).toBe(true);
+  await expect(marks.first()).toHaveAttribute("data-anchor-ignore", "");
+});
+
+test("a roadmap version with a marked date cannot be approved: Approve is disabled with the reason", async ({ page }) => {
+  // Owner, 2026-10-20: approval waits until every date marker is resolved. The mock's v1
+  // writes 2026-12-15, whose basis (ENG-413) was withdrawn.
+  await login(page);
+  await page.goto("/documents/usage-alerts-roadmap/v/1");
+  const blocked = page.getByTestId("approve-blocked").filter({ visible: true });
+  await expect(blocked.getByRole("button", { name: "Approve version" })).toBeDisabled();
+  await expect(blocked).toContainText("2026-12-15 (date withdrawn)");
+  await expect(blocked).toContainText("Record a basis");
+});

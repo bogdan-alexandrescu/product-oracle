@@ -371,6 +371,13 @@ class FakeSwarmCloud:
             for dep in [*s.get("depends_on", []), *(s.get("input_from") or {})]:
                 if dep not in ids:
                     return _err(422, "validation_error", f"unknown step {dep}")
+            for up in s.get("input_from") or {}:
+                if up not in (s.get("depends_on") or []):
+                    return _err(
+                        422,
+                        "invalid_dag",
+                        f"step '{s['step_id']}' stages input from '{up}' but does not depend on it",
+                    )
         self._n += 1
         wid = f"wf_{self._n}"
         wf = Workflow(

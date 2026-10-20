@@ -22,12 +22,13 @@ import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from 
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake } from "./intake";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
+import { dateMarks, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeTrace } from "./trace";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
-export type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
+export type VersionRow = Omit<Schemas["VersionOut"], "sections" | "date_marks"> & {
   sections: Omit<Schemas["SectionOut"], "verdict">[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
@@ -65,6 +66,8 @@ export interface Db {
   modules?: ModulesDb;
   /** Blocker strategies (./blockers.ts) on the v2 rows; absent in older saved data. */
   blockers?: BlockersDb;
+  /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
+  roadmap?: RoadmapDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -727,6 +730,7 @@ function latestReview(db: Db, versionId: string, key: string): ReviewRow | undef
 function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
   return {
     ...v,
+    date_marks: [],
     sections: v.sections.map((s) => {
       const r = latestReview(db, v.id, s.section_key);
       return {
@@ -1243,6 +1247,20 @@ async function route(db: Db, req: Request): Promise<Response> {
   const v2 = routeV2(v2Db, req, p, q, me.id);
   if (v2) return v2;
 
+  // Roadmap alignment and product tracks (CR-11).
+  const roadmapCtx: RoadmapContext = { userId: me.id, role: me.role, documents: db.documents, versions: db.versions };
+  db.roadmap ??= seedRoadmap(roadmapCtx);
+  const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
+  if (roadmapRes) return roadmapRes;
+  if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
+    if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
+    const run = trackRunBody(roadmapCtx, db.roadmap, p[2]);
+    if (!run) return notFound("Track");
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    const forwarded = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(run), headers: { "Content-Type": "application/json" } });
+    return (await routeRuns({ ...runsContext(db), db: db.runs }, forwarded, ["v1", "runs"]))!;
+  }
+
   const handled = await laneF(db, req, p, m);
   if (handled) return handled;
 
@@ -1298,7 +1316,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (!v) return notFound("Version");
   const sub = p[5];
 
-  if (!sub) return json(200, versionOut(db, v));
+  if (!sub) {
+    // O4 'document dates': a roadmap's dates against its PRD's schedule bases now.
+    const marks = doc.kind === "roadmap" && db.roadmap ? dateMarks(db.roadmap, v.source?.document_id, v.sections) : [];
+    return json(200, { ...versionOut(db, v), date_marks: marks });
+  }
   if (sub === "markdown") {
     return new Response(versionMarkdown(doc, v), { headers: { "content-type": "text/markdown" } });
   }
@@ -1356,6 +1378,19 @@ async function route(db: Db, req: Request): Promise<Response> {
         ensureBlockers(db).blockers.find((b) => b.id === id)?.statement,
       );
       if (refusal) return json(409, refusal);
+    }
+    // O4 'document dates' (owner, 2026-10-20): not while a date of the roadmap is marked.
+    if (doc.kind === "roadmap" && db.roadmap && !v.approved_at) {
+      const marked = dateMarks(db.roadmap, v.source?.document_id, v.sections).filter((d) => d.label);
+      if (marked.length) {
+        return json(409, {
+          detail: `${marked.length} date${marked.length === 1 ? " rests" : "s rest"} on no verified basis: ${marked
+            .map((d) => `${d.text} (${d.section_key}: ${d.label})`)
+            .join(", ")}`,
+          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: d.text, rationale: `${d.text} is marked ${d.label}` })),
+          dates: marked,
+        });
+      }
     }
     v.approved_at = now();
     doc.status = "approved";

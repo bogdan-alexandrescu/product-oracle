@@ -49,9 +49,9 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-def test_0014_intake_chains_after_mains_0014_lanes():
+def test_0014_intake_chains_after_mains_head():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_revision("0014_intake").down_revision == "0014_blockers_snapshot"
+    assert script.get_revision("0014_intake").down_revision == "0016_roadmap"
     assert script.get_heads() == ["0014_intake"]
 
 

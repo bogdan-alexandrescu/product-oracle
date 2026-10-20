@@ -139,6 +139,8 @@ CHANGE_SUBJECTS = (
     "document_version",
     "entity",
     "artifact_version",
+    # A product track's monitoring (oracle.roadmap, migration 0016_roadmap).
+    "product_track",
 )
 
 # §10, T2: advisory by default; hard only where a hard readiness check says so.

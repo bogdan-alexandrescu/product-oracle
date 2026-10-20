@@ -18,8 +18,10 @@ recursion limit, and anchors expand into billions of nodes. :func:`load` is a
 
 Every failure, including a ``RecursionError``/``ValueError``/``OverflowError`` from
 inside the loader, is one :class:`SafeYamlError` (a ``yaml.YAMLError``) whose ``problem``
-says what is wrong. :func:`run_parse` runs a parse on a small dedicated thread pool, so
-a slow one never blocks the event loop.
+says what is wrong and whose ``code`` names it for a problem list (``duplicate_key``,
+``too_large``...). :func:`run_parse` runs a parse on a small dedicated thread pool, so a
+slow one never blocks the event loop; :func:`run_parse_within` also gives up after
+``PARSE_SECONDS`` (a run's roadmap files, a draft), as a :class:`ParseTimeout`.
 """
 
 import asyncio
@@ -55,6 +57,8 @@ MAX_DEPTH = 32
 MAX_NODES = 50_000
 MAX_SCALAR_CHARS = 256 * 1024
 MAX_DIGITS = 30
+# run_parse_within waits at most this long for a parse (the whole wait, queue included).
+PARSE_SECONDS = 5.0
 
 # What YAML's reader accepts (tab, LF, CR and printable Unicode); anything else is refused,
 # in the input and in the value of an escaped ("\x00") double-quoted scalar.
@@ -70,10 +74,18 @@ _FLOAT_TAG = "tag:yaml.org,2002:float"
 
 class SafeYamlError(yaml.YAMLError):
     """Text :func:`load` refuses. ``problem`` says why; ``problem_mark`` (when known)
-    is where, 0-based like PyYAML's marks."""
+    is where, 0-based like PyYAML's marks; ``code`` names the refusal for a problem list."""
 
-    def __init__(self, problem: str, mark: Any = None, *, show_mark: bool = True):
+    def __init__(
+        self,
+        problem: str,
+        mark: Any = None,
+        *,
+        show_mark: bool = True,
+        code: str = "invalid_yaml",
+    ):
         self.problem = problem
+        self.code = code
         self.problem_mark = mark
         self._show_mark = show_mark
         super().__init__(problem)
@@ -103,26 +115,34 @@ class _LimitedComposer(Composer):
     def compose_document(self):
         event = self.peek_event()
         if isinstance(event, DocumentStartEvent) and (event.version or event.tags):
-            raise SafeYamlError("YAML directives (%YAML, %TAG) are not allowed", event.start_mark)
+            raise SafeYamlError(
+                "YAML directives (%YAML, %TAG) are not allowed", event.start_mark, code="yaml_tag"
+            )
         return super().compose_document()
 
     def compose_node(self, parent, index):
         event = self.peek_event()
         if isinstance(event, AliasEvent) or event.anchor is not None:
-            raise SafeYamlError("anchors and aliases (&, *) are not allowed", event.start_mark)
+            raise SafeYamlError(
+                "anchors and aliases (&, *) are not allowed", event.start_mark, code="yaml_alias"
+            )
         if event.tag is not None:
-            raise SafeYamlError(f"tags are not allowed (found {event.tag!r})", event.start_mark)
+            raise SafeYamlError(
+                f"tags are not allowed (found {event.tag!r})", event.start_mark, code="yaml_tag"
+            )
         self._nodes += 1
         if not self._nodes % 128:
             time.sleep(0)  # let other threads (the event loop) take the GIL
         if self._nodes > MAX_NODES:
-            raise SafeYamlError(f"more than {MAX_NODES} values", event.start_mark)
+            raise SafeYamlError(f"more than {MAX_NODES} values", event.start_mark, code="too_large")
         if isinstance(event, ScalarEvent):
             _check_scalar(event)
         else:
             self._depth += 1
             if self._depth > MAX_DEPTH:
-                raise SafeYamlError(f"nested more than {MAX_DEPTH} levels deep", event.start_mark)
+                raise SafeYamlError(
+                    f"nested more than {MAX_DEPTH} levels deep", event.start_mark, code="too_deep"
+                )
         node = super().compose_node(parent, index)
         if not isinstance(event, ScalarEvent):
             self._depth -= 1
@@ -133,12 +153,20 @@ def _check_scalar(event: ScalarEvent) -> None:
     value = event.value
     if len(value) > MAX_SCALAR_CHARS:
         raise SafeYamlError(
-            f"a value is longer than {MAX_SCALAR_CHARS} characters", event.start_mark
+            f"a value is longer than {MAX_SCALAR_CHARS} characters",
+            event.start_mark,
+            code="too_large",
         )
     if _NON_PRINTABLE.search(value):
-        raise SafeYamlError("a value contains a non-printable character", event.start_mark)
+        raise SafeYamlError(
+            "a value contains a non-printable character", event.start_mark, code="non_printable"
+        )
     if event.implicit[0] and _SPECIAL_FLOAT.match(value):
-        raise SafeYamlError(f"{value} is not allowed: numbers must be finite", event.start_mark)
+        raise SafeYamlError(
+            f"{value} is not allowed: numbers must be finite",
+            event.start_mark,
+            code="non_finite_number",
+        )
 
 
 class _LimitedConstructor(SafeConstructor):
@@ -163,7 +191,9 @@ class _LimitedConstructor(SafeConstructor):
                 except TypeError:
                     continue  # unhashable: SafeConstructor reports it
                 if duplicate:
-                    raise SafeYamlError(f"duplicate key {repr(key)[:80]}", key_node.start_mark)
+                    raise SafeYamlError(
+                        f"duplicate key {repr(key)[:80]}", key_node.start_mark, code="duplicate_key"
+                    )
         return super().construct_mapping(node, deep=deep)
 
     def construct_yaml_int(self, node):
@@ -172,14 +202,20 @@ class _LimitedConstructor(SafeConstructor):
     def construct_yaml_float(self, node):
         value = float(_number_text(node))
         if not math.isfinite(value):
-            raise SafeYamlError(f"{node.value} is out of range for a number", node.start_mark)
+            raise SafeYamlError(
+                f"{node.value} is out of range for a number",
+                node.start_mark,
+                code="non_finite_number",
+            )
         return value
 
 
 def _number_text(node) -> str:
     text = node.value
     if sum(c.isdigit() for c in text) > MAX_DIGITS:
-        raise SafeYamlError(f"a number has more than {MAX_DIGITS} digits", node.start_mark)
+        raise SafeYamlError(
+            f"a number has more than {MAX_DIGITS} digits", node.start_mark, code="invalid_number"
+        )
     return text
 
 
@@ -238,12 +274,13 @@ def load(text: str, *, limit: int | None = None) -> Any:
     except UnicodeEncodeError:
         raise SafeYamlError("the text is not valid Unicode") from None
     if size > cap:
-        raise SafeYamlError(f"the YAML is larger than {cap} bytes ({size} bytes)")
+        raise SafeYamlError(f"the YAML is larger than {cap} bytes ({size} bytes)", code="too_large")
     bad = _NON_PRINTABLE.search(text)
     if bad:
         line = text.count("\n", 0, bad.start()) + 1
         raise SafeYamlError(
-            f"non-printable character {bad.group()!r} on line {line} is not allowed"
+            f"non-printable character {bad.group()!r} on line {line} is not allowed",
+            code="non_printable",
         )
     loader = SafeYamlLoader(text)
     try:
@@ -255,13 +292,28 @@ def load(text: str, *, limit: int | None = None) -> Any:
         error.problem_mark = getattr(exc, "problem_mark", None)
         raise error from None
     except RecursionError:
-        raise SafeYamlError(f"nested more than {MAX_DEPTH} levels deep") from None
+        raise SafeYamlError(f"nested more than {MAX_DEPTH} levels deep", code="too_deep") from None
     except (ValueError, OverflowError, TypeError, ArithmeticError) as exc:
         raise SafeYamlError(f"a value could not be read: {str(exc)[:200]}") from None
     except Exception as exc:  # noqa: BLE001 - one error type for every failure
-        raise SafeYamlError(f"the YAML could not be read: {type(exc).__name__}") from None
+        raise SafeYamlError(
+            f"the YAML could not be read: {type(exc).__name__}", code="unreadable_yaml"
+        ) from None
     finally:
         loader.dispose()
+
+
+class NoAliasDumper(yaml.SafeDumper):
+    """Writes a shared value out in full each time: what Oracle exports (baseline.yaml)
+    must load again through :func:`load`, which refuses aliases."""
+
+    def ignore_aliases(self, data: Any) -> bool:
+        return True
+
+
+def dump(data: Any, **kwargs: Any) -> str:
+    """``yaml.safe_dump`` without anchors or aliases."""
+    return yaml.dump(data, Dumper=NoAliasDumper, **kwargs)
 
 
 # --- off the event loop -----------------------------------------------------------------
@@ -275,3 +327,32 @@ async def run_parse[T](fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
     ctx = contextvars.copy_context()
     call = functools.partial(ctx.run, fn, *args, **kwargs)
     return await asyncio.get_running_loop().run_in_executor(_EXECUTOR, call)
+
+
+class ParseTimeout(SafeYamlError):
+    """:func:`run_parse_within` gave up: the parse took longer than its time cap."""
+
+    def __init__(self, name: str, seconds: float) -> None:
+        super().__init__(
+            f"{name} took more than {seconds:g} s to read; keep it small and plain",
+            code="too_slow",
+        )
+
+
+async def run_parse_within[T](
+    fn: Callable[..., T],
+    /,
+    *args: Any,
+    name: str = "the text",
+    seconds: float | None = None,
+    **kwargs: Any,
+) -> T:
+    """:func:`run_parse`, waiting at most ``seconds`` (``PARSE_SECONDS``): a run's file or a
+    draft that is too slow to read is a refusal (:class:`ParseTimeout`, ``name`` starts its
+    message), never a stalled tick. The abandoned parse finishes on the pool; its cost is
+    bounded by :func:`load`'s caps."""
+    limit = PARSE_SECONDS if seconds is None else seconds
+    try:
+        return await asyncio.wait_for(run_parse(fn, *args, **kwargs), timeout=limit)
+    except TimeoutError:
+        raise ParseTimeout(name, limit) from None

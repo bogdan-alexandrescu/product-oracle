@@ -63,8 +63,10 @@ def test_the_migration_follows_0015_and_precedes_0014_intake():
     # 0014 chain (quality, usage_retry_at, trace).
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0015_section_table_rows"
-    # The intake lane's 0014 follows it (round 10 merge).
-    assert script.get_revision("0014_intake").down_revision == REVISION
+    # v2-roadmap (wave 2) chains 0016_roadmap on it, and the intake lane's 0014 follows
+    # that (merge after #106).
+    assert script.get_revision("0016_roadmap").down_revision == REVISION
+    assert script.get_revision("0014_intake").down_revision == "0016_roadmap"
     assert script.get_heads() == ["0014_intake"]
 
 
