@@ -4,6 +4,22 @@ import { useEffect, useRef, type PointerEvent, type ReactNode } from "react";
 
 import { Icon } from "./Icon";
 
+/*
+ * The control last pressed: a tap on some browsers (Safari) does not focus the button, so
+ * the sheet it opens finds <body> focused and returns focus here instead.
+ */
+let lastPressed: HTMLElement | null = null;
+if (typeof document !== "undefined") {
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      const el = e.target instanceof Element ? e.target.closest<HTMLElement>("button, a[href], [role=button], [tabindex]") : null;
+      if (el) lastPressed = el;
+    },
+    true,
+  );
+}
+
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
@@ -39,7 +55,9 @@ export function Sheet({
 
   useEffect(() => {
     if (!open) return;
-    const opener = document.activeElement as HTMLElement | null;
+    const active = document.activeElement as HTMLElement | null;
+    // Focus returns to what opened the sheet: the focused control, else the one just pressed.
+    const opener = active && active !== document.body ? active : lastPressed;
     const p = panel.current;
     (p?.querySelector<HTMLElement>("[data-autofocus]") ?? p)?.focus();
     const onKey = (e: KeyboardEvent) => {

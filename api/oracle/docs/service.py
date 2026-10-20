@@ -7,12 +7,13 @@ apply resolutions -> audit -> commit.
 
 import uuid
 from dataclasses import dataclass
+from typing import Literal
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes, safe_yaml
+from oracle import audit, changes
 from oracle.auth.deps import Principal
 from oracle.docs import layers
 from oracle.docs.diff import diff_sections
@@ -23,6 +24,7 @@ from oracle.docs.parser import (
     cited_entries,
     is_uuid,
     parse_draft,
+    parse_draft_async,
     section_revision,
 )
 from oracle.docs.schemas import (
@@ -294,6 +296,25 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
     source = (await version_sources(db, [version.source_version_id])).get(
         version.source_version_id  # type: ignore[arg-type]
     )
+    date_marks: list[dict] = []
+    # One query for the kind and, for a roadmap built from a PRD version, that PRD.
+    kind, built_prd = (
+        await db.execute(
+            select(Document.kind, DocumentVersion.document_id)
+            .select_from(Document)
+            .outerjoin(DocumentVersion, DocumentVersion.id == version.source_version_id)
+            .where(Document.id == version.document_id)
+        )
+    ).one()
+    if kind == "roadmap":
+        from oracle.roadmap import doc_dates
+
+        date_marks = [
+            m.as_json()
+            for m in doc_dates.per_section(
+                await doc_dates.occurrences_for_version(db, version, sections, prd=built_prd)
+            )
+        ]
     return VersionOut(
         **VersionSummary.model_validate(version).model_dump(exclude={"source"}),
         source=source,
@@ -310,7 +331,100 @@ async def read_version(db: AsyncSession, version: DocumentVersion) -> VersionOut
             for s in sections
         ],
         citations=[CitationOut.model_validate(c) for c in citations],
+        date_marks=date_marks,
     )
+
+
+async def version_markdown(db: AsyncSession, version: DocumentVersion) -> tuple[str, list[dict]]:
+    """A version's stored markdown and, for a roadmap, the dates it writes that rest on no
+    verified basis now: the markdown carries an HTML comment after each
+    (``<!-- oracle: date unverified -->``, ``<!-- oracle: date withdrawn -->``; the import
+    drops them), and the list names them (O4 'document dates')."""
+    kind = await db.scalar(select(Document.kind).where(Document.id == version.document_id))
+    if kind != "roadmap":
+        return version.markdown, []
+    from oracle.roadmap import doc_dates
+
+    sections = list(
+        await db.scalars(
+            select(Section).where(Section.version_id == version.id).order_by(Section.ordinal)
+        )
+    )
+    marks = doc_dates.flagged(await doc_dates.occurrences_for_version(db, version, sections))
+    if not marks:
+        return version.markdown, []
+    markdown = doc_dates.annotate_markdown(version.markdown, sections, marks)
+    return markdown, [m.as_json() for m in doc_dates.per_section(marks)]
+
+
+async def _check_document_dates(
+    db: AsyncSession,
+    document: Document,
+    draft: ParsedDraft,
+    source_version_id: uuid.UUID | None,
+    *,
+    refuse: bool,
+    only_sections: set[str] | None = None,
+    template_body: str | None = None,
+) -> list[VersionWarning]:
+    """Every date the roadmap's text writes against its PRD's verified bases: refused
+    (DraftError, nothing stored) or one ``unverified_date`` warning each.
+
+    ``only_sections``: Oracle's own revisions (refinement, start-draft) check only the
+    sections they change (a date in an untouched section is the previous version's,
+    marked there); the title only when ``""`` is in it. A date the company's template
+    (``template_body``) writes literally in the same section is exempt: it is the
+    company's text, not a schedule claim."""
+    from oracle.roadmap import doc_dates
+
+    problems: list[ImportProblem] = []
+    sc = doc_dates.scope(draft.sections)
+    if sc.misplaced_sources:
+        problems.append(
+            ImportProblem(
+                code="sources_not_last",
+                message=doc_dates.SOURCES_NOT_LAST,
+                section_key=doc_dates.SOURCES_KEY,
+            )
+        )
+    prd_id = await doc_dates.prd_of(db, document.id, source_version_id, draft.front_matter)
+    title = draft.front_matter.get("title")
+    marks = await doc_dates.check(
+        db,
+        draft.sections,
+        prd_id,
+        title=title if isinstance(title, str) else None,
+        exempt=doc_dates.template_dates(template_body) if template_body else None,
+    )
+    bad = [
+        m
+        for m in doc_dates.flagged(marks)
+        if only_sections is None or m.section_key in only_sections
+    ]
+    if not bad and not problems:
+        return []
+    prd_slug = (
+        await db.scalar(select(Document.slug).where(Document.id == prd_id)) if prd_id else None
+    )
+    problems += [
+        ImportProblem(
+            code="unverified_date",
+            message=doc_dates.problem_message(m, prd_slug),
+            section_key=m.section_key or None,
+        )
+        for m in bad
+    ]
+    if refuse:
+        await db.rollback()
+        raise DraftError(problems)
+    return [
+        VersionWarning(
+            code=p.code,
+            message=p.message,
+            section_keys=[p.section_key] if p.section_key else [],
+        )
+        for p in problems
+    ]
 
 
 def _document_mismatch(slug: str, draft: ParsedDraft) -> DraftError:
@@ -410,6 +524,8 @@ async def import_draft(
     cause: str = "draft_imported",
     origin: str = "person",
     run_id: uuid.UUID | None = None,
+    unverified_dates: Literal["refuse", "mark"] = "refuse",
+    date_sections: set[str] | None = None,
 ) -> ImportResult:
     """Import a draft as the next version of ``doc``.
 
@@ -435,6 +551,13 @@ async def import_draft(
     reviewed as a diff (§9). A principal acting for a run (``principal.run_id``, a run
     token's call) always imports with ``origin="run"``.
 
+    A roadmap's dates (O4 'document dates', oracle.roadmap.doc_dates) must each rest on
+    a verified schedule basis of its PRD: ``unverified_dates="refuse"`` (a person's
+    import, Oracle's own revisions) refuses the draft; ``"mark"`` (a run's import) keeps
+    it and records an ``unverified_date`` warning per date, which the views mark (and
+    approval is refused until each is resolved). ``date_sections``: Oracle's own
+    revisions check only the sections they change (``""``: the title).
+
     Raises :class:`DraftError` (422), :class:`NotFoundError` (404, ``doc`` is an
     unknown id) or :class:`ImportConflictError` (409, lost a concurrent import race,
     or a base version conflict).
@@ -445,8 +568,8 @@ async def import_draft(
         run_id = run_id or acting_for_run
         if cause == "draft_imported":
             cause = "run_draft"
-    # Off the event loop: the draft is untrusted text (oracle.safe_yaml bounds its cost).
-    draft = await safe_yaml.run_parse(parse_draft, markdown)
+    # Off the event loop, time-capped: the draft is untrusted text (oracle.safe_yaml).
+    draft = await parse_draft_async(markdown)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template
     held: dict[str, HeldSection] = {}
@@ -556,6 +679,23 @@ async def import_draft(
                 message="imported without base_version: nothing checked that this draft "
                 "keeps the changes made since the version it was written on",
             )
+        )
+    if document.kind == "roadmap":
+        warnings += await _check_document_dates(
+            db,
+            document,
+            draft,
+            source_version_id,
+            refuse=unverified_dates == "refuse",
+            only_sections=date_sections,
+            template_body=await template_body(
+                db,
+                *(
+                    (draft.template, draft.template_version)
+                    if draft.template
+                    else (document.template, document.template_version)
+                ),
+            ),
         )
     if previous is not None:
         locked = await review_service.locked_section_keys(db, previous.id)

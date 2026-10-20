@@ -17,7 +17,7 @@ docs/product-oracle-v2/08-review-and-publish.md.
 The integrator re-chains this revision onto the head in merge order.
 
 Revision ID: 0014_review
-Revises: 0014_blockers_snapshot
+Revises: 0017_citation_source_oracle
 """
 
 import hashlib
@@ -31,7 +31,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0014_review"
-down_revision: str | None = "0014_blockers_snapshot"
+down_revision: str | None = "0017_citation_source_oracle"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

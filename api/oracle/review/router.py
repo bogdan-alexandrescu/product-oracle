@@ -173,7 +173,7 @@ async def approve_version(
         document, version = await _call(service.approve_version(db, principal, doc, n))
     except publish_gate.PublishBlocked as e:
         await db.rollback()
-        out = PublishBlockedOut(detail=e.message, blocking=e.blocking)
+        out = PublishBlockedOut(detail=e.message, blocking=e.blocking, dates=e.dates)
         return JSONResponse(out.model_dump(mode="json"), status_code=status.HTTP_409_CONFLICT)
     await db.commit()
     return ApproveOut(

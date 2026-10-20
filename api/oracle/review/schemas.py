@@ -4,10 +4,20 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from oracle.docs.schemas import DocumentStatus, Layer, Verdict, VersionSummary, WordOp
+from oracle.docs.schemas import (
+    DateMarkOut,
+    DocumentStatus,
+    Layer,
+    Verdict,
+    VersionSummary,
+    WordOp,
+)
 from oracle.jobs.schemas import SuggestionOut
 
 FeedbackStatus = Literal["open", "addressed", "declined", "superseded"]
+# C1e, derived for people: open (waiting for a decision), staged (its suggestion was
+# accepted and waits for the next draft), declined, done (addressed or superseded).
+FeedbackState = Literal["open", "staged", "declined", "done"]
 FeedbackKind = Literal["comment", "section_review", "general"]
 # A change request's severity (v2, §9).
 Severity = Literal["critical", "major", "minor"]
@@ -104,6 +114,9 @@ class FeedbackItemOut(ORM):
     updated_at: datetime
     # What Oracle's review-comments job suggests for this item (not superseded), if any.
     suggestion: SuggestionOut | None = None
+    state: FeedbackState = "open"
+    # Staged: the draft the next build would make (the latest version + 1).
+    staged_for_version: int | None = None
 
 
 class FeedbackPatch(BaseModel):
@@ -570,8 +583,11 @@ class PublishBlock(BaseModel):
 
 
 class PublishBlockedOut(BaseModel):
-    """409 from approve: the PRD version may not be published (T2 publish gate, C5)."""
+    """409 from approve: the PRD version may not be published (T2 publish gate, C5), or
+    the roadmap version writes dates that rest on no verified basis (O4 'document dates',
+    owner 2026-10-20: ``dates`` lists them)."""
 
     # "<N> blocks: <titles>", or "v<M> exists: ..." when the version is not the latest.
     detail: str
     blocking: list[PublishBlock]
+    dates: list[DateMarkOut] = []

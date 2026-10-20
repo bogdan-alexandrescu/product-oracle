@@ -5,7 +5,7 @@
 
 export type CitationSeed = {
   id: string;
-  source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web";
+  source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web" | "oracle";
   ref: string;
   title: string;
   excerpt: string;
@@ -459,7 +459,17 @@ export function roadmapFromPrd(prd: {
       { key: h.key, level: 2, heading: h.heading, body: h.body },
       ...items
         .filter((i) => i.horizon.key === h.key)
-        .map((i) => ({ key: i.key, level: 3, heading: i.title, body: `From the PRD: [${i.from.heading}](${link(i.from.key)}).` })),
+        .map((i, n) => ({
+          key: i.key,
+          level: 3,
+          heading: i.title,
+          // O4: the first Now item carries dated milestones, each on a schedule basis
+          // (mock roadmap.ts seeds ENG-412 verified and ENG-413 withdrawn).
+          body:
+            h.key === "now" && n === 0
+              ? `Beta by 2026-11-30 (ENG-412 estimate); GA by 2026-12-15 (ENG-413 estimate). From the PRD: [${i.from.heading}](${link(i.from.key)}).`
+              : `From the PRD: [${i.from.heading}](${link(i.from.key)}).`,
+        })),
     ]),
     { key: "sources", level: 2, heading: "Sources and data points", body: `- [${prd.title} v${prd.version}](${link()})` },
   ];
@@ -473,6 +483,59 @@ const CARTS_V2: SectionSeed[] = CARTS_V1.map((s) =>
     ? { ...s, body: "Shoppers build a cart on their phone, then lose it when they move to a laptop. More than half start over." }
     : s,
 );
+
+// C1e: a Galatia-like PRD on its fifth draft, with two accepted changes staged for draft 6
+// (F-38 Outbound check, raised on v5, and Goal trace, raised on v4), one declined, one still
+// open and one addressed in v4 (comments seeded in ./server.ts, suggestions in ./llm-jobs.ts).
+const OUTREACH_V1: SectionSeed[] = [
+  {
+    key: "title",
+    level: 1,
+    heading: "Clinic outreach PRD",
+    body: "Clinic outreach calls patients who missed a visit and books them back in, from one queue per clinic.",
+  },
+  {
+    key: "goal-trace",
+    level: 2,
+    heading: "Goal trace",
+    body: "Serves G1 activation: more new patients reach a second visit.",
+  },
+  {
+    key: "problem",
+    level: 2,
+    heading: "1. Problem",
+    body: "40% of missed visits are never rebooked. Front desks call back when they have time, from paper lists.",
+  },
+  {
+    key: "f-38",
+    level: 2,
+    heading: "F-38 Outbound check",
+    body: "After each outbound call, the agent checks the patient's consent and records the outcome.",
+  },
+  {
+    key: "metrics",
+    level: 2,
+    heading: "2. Metrics",
+    body: "- Rebooked within 14 days: 22% today, 35% target.\n- Calls per rebooking: 3.1 today.",
+  },
+  {
+    key: "sources",
+    level: 2,
+    heading: "Sources and data points",
+    body: "- Missed-visit audit, 2024.",
+  },
+];
+const OUTREACH_V3 = revise(OUTREACH_V1, {
+  problem: { body: "40% of missed visits are never rebooked. Front desks call back when they have time, from paper lists, in every pilot clinic." },
+});
+const OUTREACH_V4 = revise(OUTREACH_V3, {
+  problem: {
+    body: "40% of missed visits are never rebooked. Front desks in the three pilot clinics (Harbour, Northgate, Riverside) call back when they have time, from paper lists.",
+  },
+});
+const OUTREACH_V5 = revise(OUTREACH_V4, {
+  metrics: { body: "- Rebooked within 14 days: 22% today, 35% target.\n- Calls per rebooking: 3.1 today, 2 target." },
+});
 
 export const DOCUMENTS: DocumentSeed[] = [
   {
@@ -550,6 +613,19 @@ export const DOCUMENTS: DocumentSeed[] = [
       { number: 1, created_at: "2026-10-14T09:00:00Z", sections: DEPOSITS_V1, citations: [] },
       { number: 2, created_at: "2026-10-15T09:00:00Z", sections: DEPOSITS_V2, citations: [] },
       { number: 3, created_at: "2026-10-16T09:00:00Z", sections: DEPOSITS_V3, citations: [] },
+    ],
+  },
+  {
+    slug: "clinic-outreach",
+    title: "Clinic outreach PRD",
+    template: "oracle-default",
+    template_version: "1",
+    versions: [
+      { number: 1, created_at: "2026-10-06T10:00:00Z", sections: OUTREACH_V1, citations: [] },
+      { number: 2, created_at: "2026-10-07T10:00:00Z", sections: OUTREACH_V1, citations: [] },
+      { number: 3, created_at: "2026-10-08T10:00:00Z", sections: OUTREACH_V3, citations: [] },
+      { number: 4, created_at: "2026-10-09T10:00:00Z", sections: OUTREACH_V4, citations: [] },
+      { number: 5, created_at: "2026-10-10T10:00:00Z", sections: OUTREACH_V5, citations: [] },
     ],
   },
   {

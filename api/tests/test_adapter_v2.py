@@ -359,6 +359,15 @@ async def test_two_round_workflow_answers_replay_and_the_revise_step(client, own
         "next_draft-2-writer": "prd.md",
     }
     assert steps["next_draft-review2"]["depends_on"] == ["next_draft-revise1"]
+    # SwarmCloud stages files only from direct dependencies (422 invalid_dag otherwise).
+    assert steps["next_draft-revise1"]["depends_on"] == [
+        "next_draft-review1",
+        "next_draft-2-writer",
+    ]
+    assert steps["next_draft-revise2"]["depends_on"] == [
+        "next_draft-review2",
+        "next_draft-revise1",
+    ]
 
     # The workflow parks on review1: the run waits on that checkpoint.
     await tick(client, auth)

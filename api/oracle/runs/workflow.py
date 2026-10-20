@@ -217,7 +217,8 @@ def build_plan(
                     writer,
                     profile,
                     flows.step_prompt(flow, sdef, writer, last=True, ctx=revise_ctx),
-                    (review,),
+                    # SwarmCloud stages files only from a step's direct dependencies.
+                    (review, producer),
                     {review: review_artifact(r), producer: primary},
                     # The last step only: gated on the last verdict.
                     when={"step": review, "verdict_in": [NOT_YET]} if r == rounds else None,

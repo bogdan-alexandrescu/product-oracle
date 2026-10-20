@@ -89,7 +89,12 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
     assert script.get_revision("0014_trace").down_revision == "0014_usage_retry_at"
     assert script.get_revision("0015_section_table_rows").down_revision == "0014_trace"
     assert script.get_revision("0014_blockers_snapshot").down_revision == "0015_section_table_rows"
-    assert script.get_revision("0014_review").down_revision == "0014_blockers_snapshot"
+    assert script.get_revision("0016_roadmap").down_revision == "0014_blockers_snapshot"
+    assert script.get_revision("0016_refinement_batch").down_revision == "0016_roadmap"
+    assert (
+        script.get_revision("0017_citation_source_oracle").down_revision == "0016_refinement_batch"
+    )
+    assert script.get_revision("0014_review").down_revision == "0017_citation_source_oracle"
     assert script.get_revision("0014_member_disable").down_revision == "0014_review"
     assert script.get_revision("0014_member_follow_up_retry").down_revision == "0014_member_disable"
 

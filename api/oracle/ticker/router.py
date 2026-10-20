@@ -52,6 +52,7 @@ from oracle.connections import service as connections_service
 from oracle.db import get_engine
 from oracle.jobs import worker as llm_jobs
 from oracle.models import Tenant
+from oracle.roadmap import views as track_views
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.ticker import body, idtoken
 
@@ -167,7 +168,8 @@ def _count_sweep(result: dict[str, Any] | None, out: TickerOut) -> None:
 
 
 async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failures) -> None:
-    """One company's runs and account sweep (``oracle.ticker.body``), each on its own."""
+    """One company's runs and account sweep (``oracle.ticker.body``) and its product
+    tracks' monitoring, each on its own."""
     async with tenant_session(tenant_id) as db:
         company = await body.tick_company(db, tenant_id)
     if company.runs is not None:
@@ -180,6 +182,17 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
     if company.swept:
         _count_sweep(company.sweep, out)
     if company.errors:
+        failures.add(tenant_id)
+    try:
+        # Product tracks (CR-11): an hourly deterministic check, no model call.
+        failed: list[uuid.UUID] = []
+        async with tenant_session(tenant_id) as db:
+            await track_views.monitor_due(db, failed=failed)
+            await db.commit()
+        if failed:
+            failures.add(tenant_id)
+    except Exception:
+        log.exception("run ticker: track monitoring failed for company %s", tenant_id)
         failures.add(tenant_id)
 
 

@@ -88,6 +88,7 @@ ChangeSubject = Literal[
     "entity",
     "artifact_version",
     "member",
+    "product_track",
 ]
 FindingStatus = Literal["pass", "warning", "critical", "not_applicable"]
 Evaluator = Literal["rules", "llm_job", "agent", "human"]

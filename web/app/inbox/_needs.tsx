@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { Button, Chip, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
+import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
 
 import {
@@ -31,6 +32,8 @@ export type Need = {
   run?: string;
   at?: string | null;
   action: ReactNode;
+  /** The row's Inbox state (new, open, staged, declined, done), when it has one. */
+  state?: string;
 };
 
 export const NEED_COLUMNS: Column<Need>[] = [
@@ -107,7 +110,7 @@ export function NeedTable({
         rows={rows}
         rowKey={(n) => n.key}
         hideHeader
-        rowProps={(n) => ({ "data-need": n.kind })}
+        rowProps={(n) => ({ "data-need": n.kind, "data-state": n.state })}
       />
     </section>
   );
@@ -132,29 +135,167 @@ function RunName({ run }: { run: Pick<RunSummary, "flow_title" | "document_slug"
 
 export type Act = (key: string, call: () => Promise<unknown>) => Promise<void>;
 
-type InboxDocument = InboxOut["feedback"][number];
-
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** What a document's open items wait for ("3 suggestions to accept or dismiss"), and the button's verb. */
-export function feedbackWaits(d: InboxDocument): { parts: string[]; verb: string } {
-  const c = d.counts ?? { suggestions: 0, accepted: 0, comments: 0, verdicts: 0, other: d.open_count };
-  const parts = [
-    c.suggestions > 0 && `${plural(c.suggestions, "suggestion")} to accept or dismiss`,
-    c.accepted > 0 && `${plural(c.accepted, "accepted suggestion")} to refine`,
-    c.comments > 0 && `${plural(c.comments, "comment")} to resolve`,
-    c.verdicts > 0 && `${plural(c.verdicts, "section verdict")} to address`,
-    c.other > 0 && `${plural(c.other, "item")} to address`,
-  ].filter((p): p is string => !!p);
-  const only = (n: number) => n > 0 && n === d.open_count;
-  const verb = only(c.suggestions) ? "Review suggestions" : only(c.comments) ? "Review comments" : "Review feedback";
-  return { parts: parts.length ? parts : [plural(d.open_count, "open item")], verb };
+/** The Inbox's state tabs (C1e, owner 2026-10-20), New first: the default tab on arrival. */
+export type InboxState = "new" | "open" | "staged" | "declined" | "done";
+export const STATE_TABS: { id: InboxState; label: string }[] = [
+  { id: "new", label: "New" },
+  { id: "open", label: "Open" },
+  { id: "staged", label: "Staged" },
+  { id: "declined", label: "Declined" },
+  { id: "done", label: "Done" },
+];
+
+/**
+ * A row of the one Inbox in its state and group. `counted`: an item, counted in its tab (and,
+ * new or open, by the rail badge); a document's 'N changes staged' row and 'Looking' rows
+ * are not items.
+ */
+export type NeedGroup =
+  | "checkpoints"
+  | "approvals"
+  | "overruns"
+  | "lookups"
+  | "imports"
+  | "revoke-failures"
+  | "feedback"
+  | "questions"
+  | "searches";
+export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
+
+type FeedbackRow = InboxOut["items"][number];
+
+/**
+ * New on this visit: raised after my previous visit (`seenBefore`; null before the first,
+ * when everything is new). What was new on arrival stays New until the next visit, though
+ * arriving marked it seen.
+ */
+export function isNew(at: string | null | undefined, seenBefore: string | null | undefined): boolean {
+  if (seenBefore === undefined) return false;
+  return seenBefore === null || (!!at && at > seenBefore);
 }
 
-/** The latest version, its review panel on the open feedback, at the first open item's section. */
-export function feedbackHref(d: InboxDocument): string {
-  if (!d.latest_version) return `/documents/${d.slug}`;
-  return sectionHref(d.slug, d.latest_version, d.first_section_key, { feedback: "open" });
+/** A feedback item's state this visit: the API's, with what was new on arrival kept New. */
+export function visitState(item: FeedbackRow, seenBefore: string | null | undefined): InboxState {
+  if (item.state === "open" && isNew(item.created_at, seenBefore)) return "new";
+  return item.state;
+}
+
+/** The verb on an open item's button: what it waits for. */
+export function reviewVerb(f: Pick<FeedbackRow, "kind" | "suggestion_status">): string {
+  if (f.suggestion_status === "open") return "Review suggestions";
+  if (f.kind === "comment") return "Review comments";
+  return "Review";
+}
+
+/**
+ * One row per feedback item, in its state (the owner, 2026-10-20: one Inbox, no second
+ * per-document list), and on Staged each document's 'N changes staged for draft N+1' row
+ * first, with Build draft N+1.
+ */
+export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undefined): StatedNeed[] {
+  const docLink = (slug: string, title: string | null | undefined) => (
+    <Link href={`/documents/${slug}`} className="block truncate hover:underline">
+      {title ?? slug}
+    </Link>
+  );
+  const staged: StatedNeed[] = (inbox.staged ?? []).map((row) => ({
+    key: `staged-${row.document_id}`,
+    icon: "doc",
+    kind: "Next draft",
+    state: "staged",
+    counted: false,
+    group: "feedback",
+    item: (
+      <Link
+        href={sectionHref(row.slug, row.latest_version ?? 1, null, { feedback: "staged" })}
+        className="tnum truncate font-semibold hover:underline"
+        data-testid="staged-row-label"
+      >
+        {plural(row.count, "change")} staged for draft {row.next_version}
+      </Link>
+    ),
+    context: docLink(row.slug, row.title),
+    at: null,
+    action: (
+      <LinkButton
+        href={`/documents/${row.slug}/v/${row.latest_version}?${BUILD_PARAM}=1`}
+        aria-label={`Build draft ${row.next_version} of ${row.title}`}
+        data-testid="inbox-build-draft"
+      >
+        Build draft {row.next_version}
+      </LinkButton>
+    ),
+  }));
+  const items: StatedNeed[] = (inbox.items ?? []).map((f) => {
+    const state = visitState(f, seenBefore);
+    const slug = f.slug ?? "";
+    const latest = f.latest_version ?? f.raised_on_version;
+    const live = state === "new" || state === "open";
+    const href = sectionHref(slug, state === "done" ? (f.addressed_in_version ?? latest) : latest, f.section_key, live ? { feedback: "open" } : state === "staged" ? { feedback: "staged" } : undefined);
+    const outcome =
+      state === "staged" ? (
+        <Chip kind="now">Draft {f.staged_for_version}</Chip>
+      ) : state === "declined" ? (
+        <span className="truncate text-text2" title={f.resolution_note ?? undefined} data-testid="decline-note">
+          {f.resolution_note ?? "Declined"}
+        </span>
+      ) : state === "done" ? (
+        <Chip kind="pass">{f.addressed_in_version ? `v${f.addressed_in_version}` : "Closed"}</Chip>
+      ) : null;
+    const verb = reviewVerb(f);
+    return {
+      key: f.id,
+      icon: state === "declined" ? "x" : state === "done" || state === "staged" ? "check" : "comment",
+      kind: f.kind === "comment" ? "Comment" : f.kind === "section_review" ? "Section review" : "Feedback",
+      state,
+      counted: true,
+      group: "feedback",
+      item: (
+        <>
+          <Link href={href} className="min-w-0 truncate hover:underline" title={f.summary}>
+            {f.summary}
+          </Link>
+          {f.section_key && <span className="flex-none font-mono text-[13px] text-text2">#{f.section_key}</span>}
+          {outcome}
+        </>
+      ),
+      context: slug ? docLink(slug, f.title) : <span className="block truncate">{f.title}</span>,
+      at: live ? f.created_at : f.updated_at,
+      action:
+        state === "staged" ? (
+          // One Build draft per document (its group row above); the item only opens itself.
+          <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`}>
+            Open
+          </LinkButton>
+        ) : live ? (
+          <LinkButton href={href} aria-label={`${verb}: ${f.summary}`}>
+            {verb}
+          </LinkButton>
+        ) : (
+          <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`}>
+            Open
+          </LinkButton>
+        ),
+    };
+  });
+  // One group per document on Staged: its row (the single Build draft), then its staged items.
+  const grouped = new Set<string>();
+  const out: StatedNeed[] = [];
+  for (const row of staged) {
+    out.push(row);
+    const docId = row.key.slice("staged-".length);
+    for (const f of inbox.items ?? []) {
+      if (f.document_id !== docId) continue;
+      const it = items.find((i) => i.key === f.id);
+      if (it && it.state === "staged") {
+        out.push({ ...it, kind: "Staged change" });
+        grouped.add(it.key);
+      }
+    }
+  }
+  return [...out, ...items.filter((i) => !grouped.has(i.key))];
 }
 
 const path = (id: string) => ({ params: { path: { run_id: id } } });
@@ -474,30 +615,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     action: null,
   }));
 
-  const feedback: Need[] = inbox.feedback.map((d) => {
-    const href = feedbackHref(d);
-    const latest = d.items.map((f) => f.created_at).sort().at(-1);
-    const { parts, verb } = feedbackWaits(d);
-    return {
-      key: d.document_id,
-      icon: "comment",
-      kind: "Feedback",
-      item: (
-        <span className="tnum truncate" title={d.items.map((f) => `v${f.raised_on_version} · ${f.summary}`).join("\n")}>
-          {parts.join(" · ")}
-        </span>
-      ),
-      context: <span className="block truncate">{d.title}</span>,
-      at: latest,
-      action: (
-        <LinkButton href={href} aria-label={`${verb} ${d.title}`}>
-          {verb}
-        </LinkButton>
-      ),
-    };
-  });
-
-  return { checkpoints, approvals, overruns, lookups, imports, searches, feedback };
+  return { checkpoints, approvals, overruns, lookups, imports, searches };
 }
 
 /**
@@ -526,3 +644,37 @@ export function questionNeeds(questions: Schemas["StakeholderQuestionOut"][], do
     };
   });
 }
+
+/**
+ * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
+ * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke (owners), feedback items and the questions asked
+ * of me are New or Open; feedback items also Staged, Declined or Done. Home's Needs you is
+ * the New and Open rows, so the badge, Home and /inbox count the same items.
+ */
+export function allNeeds(
+  inbox: InboxOut,
+  asked: Need[],
+  busy: string | null,
+  act: Act,
+  seenBefore: string | null | undefined,
+  compact = false,
+): StatedNeed[] {
+  const n = inboxNeeds(inbox, busy, act, compact);
+  const stated = (rows: Need[], group: NeedGroup, counted = true): StatedNeed[] =>
+    rows.map((r) => ({ ...r, state: isNew(r.at, seenBefore) ? "new" : "open", counted, group }));
+  return [
+    ...stated(n.checkpoints, "checkpoints"),
+    ...stated(n.approvals, "approvals"),
+    ...stated(n.overruns, "overruns"),
+    ...stated(n.lookups, "lookups"),
+    ...stated(n.imports, "imports"),
+    ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
+    ...feedbackNeeds(inbox, seenBefore),
+    ...stated(asked, "questions"),
+    // Shown only, under Open: nothing to decide, not an item.
+    ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
+  ];
+}
+
+/** What the rail badge counts: the new and open items. */
+export const waitingNeeds = (rows: StatedNeed[]) => rows.filter((r) => r.counted && (r.state === "new" || r.state === "open"));

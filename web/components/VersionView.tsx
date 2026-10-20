@@ -22,13 +22,14 @@ import {
 import { Kbd } from "@/components/review/parts";
 import { ReviewPanel, type PanelTab } from "@/components/review/ReviewPanel";
 import { RoleNote } from "@/components/RoleNote";
-import type { ExpandCtx, Highlight } from "@/components/MarkdownBody";
+import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
+import { BuildDraftButton } from "@/components/NextDraft";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
-import { api, unwrap, type CitationOut, type SectionOut, type Verdict } from "@/lib/api/client";
+import { api, unwrap, type CitationOut, type DateMarkOut, type SectionOut, type Verdict } from "@/lib/api/client";
 import { feedbackEntries, openBySection } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
 import { blocksText, parseBlocks } from "@/lib/markdown";
@@ -148,8 +149,13 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   useEffect(() => {
     const h = window.location.hash || null;
     scrolledTo.current = null;
-    const toFeedback = new URLSearchParams(window.location.search).get("feedback") === "open";
+    const params = new URLSearchParams(window.location.search);
+    // ?feedback=open or ?feedback=staged (the Inbox's link for a document whose items are all staged).
+    const feedbackParam = params.get("feedback");
+    const toFeedback = feedbackParam === "open" || feedbackParam === "staged";
     arrivedAtFeedback.current = toFeedback;
+    // ?tab=reports: where applying a next draft lands, on the version's History (C1e).
+    const toHistory = params.get("tab") === "reports";
     // Next writes an in-app navigation's URL, #hash included, only once the new page has
     // committed, so the hash cannot be read while rendering: read it here. This also runs
     // when Next shows a kept route again.
@@ -158,10 +164,12 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     setHashLink(h ? { n, hash: h } : null);
     if (toFeedback) {
       setTab("feedback");
-      setFilters({ ...DEFAULT_FILTERS, state: "open", scope: "all" });
+      setFilters({ ...DEFAULT_FILTERS, state: feedbackParam === "staged" ? "staged" : "open", scope: "all" });
       setFeedbackFocus(true);
       // On a phone the panel lives in the Review sheet.
       if (window.matchMedia("(max-width: 639px)").matches) setSheet("review");
+    } else if (toHistory) {
+      setTab("history");
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [doc, n]);
@@ -468,6 +476,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+      // Not inside a dialog (the sheets, the build sheet, the switcher): its keys are its own.
+      if ((e.target as HTMLElement | null)?.closest?.("[role=dialog]")) return;
       if (e.key === "/") {
         e.preventDefault();
         focusFilter();
@@ -532,6 +542,25 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const changedLocks = new Set(
     version?.warnings.filter((w) => w.code === "locked_section_changed").flatMap((w) => w.section_keys) ?? [],
   );
+  // O4 'document dates': a roadmap's dates that rest on no verified basis now, by section.
+  const dateMarks = useMemo(() => {
+    const bySection = new Map<string, DateMarkOut[]>();
+    for (const m of version?.date_marks ?? []) {
+      if (m.label) bySection.set(m.section_key, [...(bySection.get(m.section_key) ?? []), m]);
+    }
+    return bySection;
+  }, [version]);
+  const titleMarks = (version?.date_marks ?? []).filter((m) => m.label && m.where === "title");
+  // Owner, 2026-10-20: a roadmap version cannot be approved while a date is marked.
+  const flaggedDates = [
+    ...new Map((version?.date_marks ?? []).filter((m) => m.label).map((m) => [`${m.text}|${m.label}`, m])).values(),
+  ];
+  const approveBlocked =
+    flaggedDates.length > 0
+      ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " rests" : "s rest"} on no verified schedule basis: ${flaggedDates
+          .map((m) => `${m.text} (${m.label})`)
+          .join(", ")}. Record a basis or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
+      : undefined;
   const sectionProps = (s: SectionOut) => ({
     section: s,
     blocks: parsed.get(s.section_key)!.blocks,
@@ -545,6 +574,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     onHighlightClick,
     onVerdict,
     showLayer: hasBrief,
+    dateMarks: dateMarks.get(s.section_key),
   });
   const expandFor = (origin: string): ExpandCtx => ({
     keys: expandable,
@@ -557,6 +587,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       )),
   });
 
+  // A section is locked once its version is approved; before that an approved section is
+  // 'Approved'. A lapsed approval (C2) does not lock it.
   const lockedCount =
     version?.sections.filter((s) => s.verdict?.verdict === "approved" && !s.verdict.lapsed_at).length ?? 0;
   const reviewedCount = version?.sections.filter((s) => s.verdict).length ?? 0;
@@ -685,7 +717,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       version={version}
       doc={doc}
       n={n}
-      stats={{ reviewed: reviewedCount, total: sections.length, locked: lockedCount, openFeedback }}
+      stats={{ reviewed: reviewedCount, total: sections.length, locked: lockedCount, lockedLabel: version?.approved_at ? "Locked" : "Approved", openFeedback }}
       openFeedback={openFeedback}
       tab={tab}
       setTab={openTab}
@@ -732,7 +764,18 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
         <PageHeader
           testId="doc-header"
           back={<DocCrumb doc={document_} withTitle={false} />}
-          title={document_?.title ?? "…"}
+          title={
+            titleMarks.length ? (
+              <>
+                {document_?.title ?? "…"}
+                {titleMarks.map((m) => (
+                  <DateMarker key={m.text} mark={m} />
+                ))}
+              </>
+            ) : (
+              (document_?.title ?? "…")
+            )
+          }
           suffix={<span className="font-mono">v{n}</span>}
           status={
             <>
@@ -751,31 +794,36 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             </>
           }
           action={
-            version &&
-            (version.approved_at || canDecide) &&
-            (document_?.kind === "prd" && !version.approved_at ? (
-              // T2 publish gate: a PRD is published from the Publish screen, latest version only.
-              <LinkButton
-                variant="primary"
-                icon="check"
-                href={`/documents/${doc}/publish`}
-                aria-description={n !== latest && latest != null ? `Publishes v${latest}, the latest version` : undefined}
-                data-testid="publish-link"
-              >
-                Publish
-              </LinkButton>
-            ) : (
-              <ApproveButton
-                doc={doc}
-                n={n}
-                approvedAt={version.approved_at}
-                isLatest={n === latest}
-                onApproved={() => {
-                  verQ.reload();
-                  docQ.reload();
-                }}
-              />
-            ))
+            <>
+              {/* C1e: accepted changes staged for the next draft, built in one job. */}
+              {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
+              {version &&
+                (version.approved_at || canDecide) &&
+                (document_?.kind === "prd" && !version.approved_at ? (
+                  // T2 publish gate: a PRD is published from the Publish screen, latest version only.
+                  <LinkButton
+                    variant="primary"
+                    icon="check"
+                    href={`/documents/${doc}/publish`}
+                    aria-description={n !== latest && latest != null ? `Publishes v${latest}, the latest version` : undefined}
+                    data-testid="publish-link"
+                  >
+                    Publish
+                  </LinkButton>
+                ) : (
+                  <ApproveButton
+                    doc={doc}
+                    n={n}
+                    approvedAt={version.approved_at}
+                    isLatest={n === latest}
+                    blockedReason={approveBlocked}
+                    onApproved={() => {
+                      verQ.reload();
+                      docQ.reload();
+                    }}
+                  />
+                ))}
+            </>
           }
         />
 

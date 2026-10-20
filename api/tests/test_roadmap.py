@@ -3,6 +3,7 @@ the roadmap draft's import with provenance and PRD links, exports, the feedback 
 on a roadmap, roles, and MCP. Against Postgres with the FakeRuntime."""
 
 import uuid
+from datetime import date
 
 import pytest
 from sqlalchemy import select
@@ -52,6 +53,7 @@ ROADMAP_MD = """\
 document: checkout-redesign-roadmap
 title: Checkout roadmap
 kind: roadmap
+prd: {document: checkout-redesign, version: 1}
 template: now-next-later
 template_version: "1"
 theme: roadmap-board
@@ -107,9 +109,22 @@ def runtime():
     set_runtime(None)
 
 
+async def verified_estimate(client, auth, reference: str = "ENG-412") -> None:
+    """CR-11, O4: a date needs a verified basis recorded for its PRD. ITEMS' Beta date
+    rests on ENG-412."""
+    resp = await client.post(
+        "/v1/schedule-bases",
+        json={"kind": "estimate", "reference": reference, "supports_date": "2026-11-30",
+              "prd": PRD},
+        headers=auth,
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+
+
 @pytest.fixture
 async def owner():
-    return await seed_auth()
+    tenant_id, auth = await seed_auth()
+    return tenant_id, auth
 
 
 async def as_user(tenant_id: uuid.UUID, role: str) -> dict[str, str]:
@@ -121,7 +136,9 @@ async def as_user(tenant_id: uuid.UUID, role: str) -> dict[str, str]:
 
 
 async def approved_prd(client, auth, approve: bool = True) -> None:
+    """The PRD, with the ENG-412 estimate recorded for it, approved unless not."""
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
+    await verified_estimate(client, auth)
     if approve:
         resp = await client.post(f"/v1/documents/{PRD}/versions/1/approve", headers=auth)
         assert resp.status_code == 200, resp.text
@@ -681,6 +698,51 @@ async def test_a_bad_items_file_waits_at_its_checkpoint_or_fails_the_run(client,
     assert run["error"].startswith("roadmap_items.yaml was rejected: [invalid_horizon]")
 
 
+async def test_a_date_without_a_verified_basis_is_refused(client, owner, runtime):
+    """O4 and CR-11: Oracle never invents dates. A milestone date whose date_source
+    names no verified estimate, capacity or commitment (or one for another date) is a
+    problem at the checkpoint, and fails the run with the checkpoint off."""
+    _, auth = owner
+    await approved_prd(client, auth)
+    guessed = ITEMS.replace("date_source: ENG-412 estimate", "date_source: the team thinks so")
+    other_day = ITEMS.replace("date: 2026-11-30", "date: 2026-12-15")
+    runtime.script["roadmap_items"] = [
+        Outcome(artifacts={"roadmap_items.yaml": guessed}),
+        Outcome(artifacts={"roadmap_items.yaml": other_day}),
+    ]
+    run = await start(client, auth, await create(client, auth, source=PRD))
+    assert "- ENG-412 (estimate) supports 2026-11-30" in runtime.submitted[0].steps[-1].prompt
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert [p["code"] for p in pending(run)["payload"]["items_check"]["problems"]] == [
+        "unverified_date"
+    ]
+    off = {"roadmap_items": False, "roadmap_review": False}
+    run = await start(
+        client,
+        auth,
+        await create(client, auth, source=PRD, document="r2", knobs={"checkpoints": off}),
+    )
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "failed"
+    assert run["error"].startswith("roadmap_items.yaml was rejected: [unverified_date]")
+
+
+def test_items_check_dates_against_verified_bases():
+    from oracle.roadmap.schedule import Basis
+
+    eng = Basis(uuid.uuid4(), "estimate", "ENG-412", date(2026, 11, 30))
+    assert check_items(ITEMS, date_bases=[eng]).ok
+    assert check_items(ITEMS).ok  # without bases (pure parsing) dates are not checked
+    for bases in ([], [Basis(uuid.uuid4(), "estimate", "ENG-41", date(2026, 11, 30))]):
+        codes = [p["code"] for p in check_items(ITEMS, date_bases=bases).problems]
+        assert codes == ["unverified_date"], bases
+    dated = "milestone: {name: Beta, date: 2026-11-30, date_source: ENG-412 estimate}"
+    undated = ITEMS.replace(dated, "milestone: Beta")
+    assert check_items(undated, date_bases=[]).ok
+
+
 async def test_existing_roadmap_gets_the_next_version(client, owner, runtime):
     _, auth = owner
     await approved_prd(client, auth)
@@ -913,7 +975,8 @@ def test_app_links_default_to_the_public_url(monkeypatch):
 async def test_a_new_document_takes_its_kind_from_the_draft_and_stays_importable(client, owner):
     _, auth = owner
     # No kind line: the roadmap template makes it a roadmap, and it takes new versions.
-    first = ROADMAP_MD.replace("kind: roadmap\n", "")
+    # (No PRD to verify a date against: round 3, a date in the text would be refused.)
+    first = ROADMAP_MD.replace("kind: roadmap\n", "").replace("Beta by 2026-11-30.", "Beta first.")
     assert (await import_draft(client, auth, first, doc=ROADMAP)).status_code == 201
     doc = (await client.get(f"/v1/documents/{ROADMAP}", headers=auth)).json()
     assert doc["kind"] == "roadmap"

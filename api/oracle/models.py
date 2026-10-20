@@ -71,6 +71,13 @@ from oracle.review.models import (  # noqa: E402
     SectionReview,
     SectionReviewState,
 )
+from oracle.roadmap.models import (  # noqa: E402
+    ProductTrack,
+    RoadmapItem,
+    ScheduleBasis,
+    TrackerRecord,
+    TrackMilestone,
+)
 from oracle.runs.models import Checkpoint, Run, RunSegment  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
 from oracle.sources.models import (  # noqa: E402
@@ -158,12 +165,15 @@ __all__ = [
     "OutcomeRecord",
     "PrioritySnapshot",
     "ProductIntake",
+    "ProductTrack",
     "Proposal",
     "ReviewCampaign",
     "QualityLearning",
+    "RoadmapItem",
     "Run",
     "RunSegment",
     "RunToken",
+    "ScheduleBasis",
     "Section",
     "SectionPatch",
     "SectionReview",
@@ -180,6 +190,8 @@ __all__ = [
     "Tenant",
     "TenantSetting",
     "Theme",
+    "TrackMilestone",
+    "TrackerRecord",
     "User",
     "UserPreference",
 ]

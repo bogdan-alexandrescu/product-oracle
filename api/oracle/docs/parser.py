@@ -33,6 +33,18 @@ CITATION_RE = re.compile(r"\[c:([^\]\s]+)\]")
 CITATION_STRIP_RE = re.compile(r"[ \t]*\[c:[^\]\s]+\]")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
+# The markers an export writes after a roadmap date that rests on no verified basis
+# (oracle.roadmap.doc_dates.annotate_markdown): dropped on import, so an exported body
+# imports as the text it was exported from.
+DATE_MARK_COMMENT_RE = re.compile(
+    r"[ \t]?(?:<!-- oracle: date (?:unverified|withdrawn) -->"
+    r"|# oracle: date (?:unverified|withdrawn)$)",
+    re.M,
+)
+# The banner line a markdown export writes after the front matter
+# (oracle.export.render.render_markdown), dropped on import with the markers above.
+EXPORT_BANNER_RE = re.compile(r"^<!-- Product Oracle export: [^\n]*? -->\n", re.M)
+
 _md = MarkdownIt("commonmark", {"html": False}).enable("table")
 
 
@@ -434,14 +446,16 @@ def _check_citations(
 
 
 def parse_draft(markdown: str) -> ParsedDraft:
-    """Parse and validate a draft. Raises :class:`DraftError` listing every problem."""
+    """Parse and validate a draft. Raises :class:`DraftError` listing every problem.
+
+    CPU-bound: async callers run it with :func:`parse_draft_async`."""
     # The request body is capped (413); a run's file is not, so the draft is too.
     limit = get_settings().max_body_bytes
     if len(markdown.encode("utf-8")) > limit:
         raise DraftError(
             [ImportProblem(code="draft_too_large", message=f"draft is larger than {limit} bytes")]
         )
-    text = normalize(markdown)
+    text = normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
     problems: list[ImportProblem] = []
 
     yaml_text, body, offset = split_front_matter(text)
@@ -483,6 +497,15 @@ def parse_draft(markdown: str) -> ParsedDraft:
         content_hash=sha256(text),
         brief=layers.marked_brief(fm),
     )
+
+
+async def parse_draft_async(markdown: str) -> ParsedDraft:
+    """:func:`parse_draft` on the parse pool (:func:`oracle.safe_yaml.run_parse_within`), at
+    most ``PARSE_SECONDS``: the event loop never parses a draft (untrusted text)."""
+    try:
+        return await safe_yaml.run_parse_within(parse_draft, markdown, name="the draft")
+    except safe_yaml.ParseTimeout as exc:
+        raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
 
 
 def is_uuid(value: str) -> bool:

@@ -182,7 +182,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Version Markdown */
+        /**
+         * Get Version Markdown
+         * @description The version's markdown as stored; a roadmap's date that rests on no verified basis
+         *     now has ``<!-- oracle: date unverified -->`` (or ``date withdrawn``) after it, which
+         *     an import drops.
+         */
         get: operations["get_version_markdown"];
         put?: never;
         post?: never;
@@ -976,6 +981,111 @@ export interface paths {
          * @description Accept a refinement: import it as the next version, with its resolutions.
          */
         post: operations["apply_refinement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/staged-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Staged Changes
+         * @description Accepted suggestions waiting for the next draft, from whichever draft they were
+         *     raised on, with who accepted them and when, and the build in progress if any.
+         */
+        get: operations["list_staged_changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Build Next Draft
+         * @description Build the next draft: one job rewrites every section the chosen staged suggestions
+         *     touch (default: all staged), over the latest version. Locked sections are refused
+         *     (409, naming them).
+         */
+        post: operations["build_next_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Next Draft
+         * @description The combined preview: each revised section with its word diff, notes and
+         *     resolutions. Sections are empty until the build has finished.
+         */
+        get: operations["preview_next_draft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft/{job_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Next Draft
+         * @description Apply as ONE new version, without the dropped sections (they stay staged).
+         *     Refused (409) when a newer version appeared since the build started.
+         */
+        post: operations["apply_next_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/next-draft/{job_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discard Next Draft
+         * @description Discard a build (cancel it while it runs); every staged item stays staged.
+         */
+        post: operations["discard_next_draft"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3117,6 +3227,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Draft Import
+         * @description Import a segment's draft again after its import at segment end was refused
+         *     (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).
+         *     While the run waits at that segment's review: the review's approver role or above, and
+         *     nothing is decided (the review stays open for a person). After the run finished with
+         *     the review approved past the refusal: owners only, while no version from the run
+         *     exists; the run's checkpoints do not change. Imported, the run names the document and
+         *     the error is replaced by the import; refused again, by the new error (200 either way:
+         *     read ``draft_import``). 409 when there is nothing to retry (imported already, a version
+         *     from the run exists, no draft file, changes requested, the run cancelled or failed).
+         *     Audited. Not the stopped advance of ``retry_import_run``.
+         */
+        post: operations["retry_draft_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/cancel-again": {
         parameters: {
             query?: never;
@@ -3173,7 +3312,8 @@ export interface paths {
         /**
          * Decide Checkpoint
          * @description Approve a checkpoint (the next segment starts) or request changes (the segment
-         *     runs again with the note).
+         *     runs again with the note). Approving is refused (409) while the draft its segment left
+         *     is not imported (``cannot_approve``): retry the import, or request changes.
          */
         post: operations["decide_checkpoint"];
         delete?: never;
@@ -3209,7 +3349,8 @@ export interface paths {
         /**
          * Get Inbox
          * @description What waits on me: checkpoints for my role, runs waiting for an owner's approval
-         *     or overrun decision, and open feedback on documents I can approve.
+         *     or overrun decision, and feedback on documents I can approve, by state (new, open,
+         *     staged for the next draft, declined, done) with the staged rows per document.
          */
         get: operations["get_inbox"];
         put?: never;
@@ -5069,6 +5210,382 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/roadmaps/{doc}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Roadmap Items
+         * @description A roadmap version's items (default: the latest version with items), each traced to
+         *     the exact PRD version, section, feature and requirements, with its blocker
+         *     dependencies, validation gates, economics, freshness and engineering status. The
+         *     brief view keeps the headline fields only.
+         */
+        get: operations["list_roadmap_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/versions/{n}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Import Roadmap Items
+         * @description Store ``roadmap_items.yaml`` as a roadmap version's items (the file a
+         *     ``prd_to_roadmap`` run writes), replacing any it had. Refused (422, with the
+         *     problems) on any problem, a date without a verified basis included; an approved
+         *     version's items cannot be replaced (409).
+         */
+        put: operations["import_roadmap_items"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/items/staleness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Act On Roadmap Item Staleness
+         * @description Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still
+         *     valid, with a reason; re-anchored on the PRD's latest approved version). 409 when no
+         *     item is in a state the action applies to.
+         */
+        post: operations["act_on_roadmap_item_staleness"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/alignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Roadmap Alignment
+         * @description The roadmap against the tracker's state, read-only (E1): per item aligned, drift
+         *     (ahead, date slip, overdue, cancelled), untracked or done, and tracker work no item
+         *     names. Works without any tracker write permission.
+         */
+        get: operations["get_roadmap_alignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Schedule Bases */
+        get: operations["list_schedule_bases"];
+        put?: never;
+        /**
+         * Create Schedule Basis
+         * @description Record a verified estimate, capacity figure or commitment supporting a date for
+         *     one PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a
+         *     tracker issue is matched to (``tracker_key``). The approver recording it verifies it.
+         *     From a tracker record, the record's own target date must be that date, and the record
+         *     must be this PRD's.
+         */
+        post: operations["create_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases/{basis_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Schedule Basis
+         * @description Withdraw a basis: it supports nothing from now on. Milestones lose a date no other
+         *     verified basis supports, and roadmap items whose date rested on it go potentially
+         *     stale. 409 when already withdrawn.
+         */
+        post: operations["withdraw_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracker/connector": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tracker Connector
+         * @description The two-way tracker connector's gate: off, so Oracle makes no tracker writes.
+         */
+        get: operations["get_tracker_connector"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracker/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tracker Records */
+        get: operations["list_tracker_records"];
+        put?: never;
+        /**
+         * Import Tracker Records
+         * @description Record engineering status read from a tracker (latest state per issue). Read-only
+         *     toward the tracker: Oracle stores what was read and writes nothing back. The tracks
+         *     the records belong to are monitored again.
+         */
+        post: operations["import_tracker_records"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tracks
+         * @description Product tracks, newest first, each with its health and a one-line headline.
+         */
+        get: operations["list_tracks"];
+        put?: never;
+        /**
+         * Create Track
+         * @description Start the track of an accepted PRD (its latest approved version; approving a PRD
+         *     version starts it too). A PRD has one track: 409 when it already has one; 200 with
+         *     that track when a concurrent start made it first.
+         */
+        post: operations["create_track"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Track
+         * @description The track's overview: health, headline, the next milestone, items at risk
+         *     (blocked, stale or slipping), drift from engineering status where known, and
+         *     whether the PRD moved on since the roadmap was built.
+         */
+        get: operations["get_track"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Track */
+        patch: operations["update_track"];
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Monitor Track
+         * @description Check the track now: a ``product_track`` change event is recorded when its health,
+         *     its items at risk or its next milestone changed since the last check.
+         */
+        post: operations["monitor_track"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Track Changes
+         * @description The track's monitoring change events, newest first.
+         */
+        get: operations["list_track_changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/roadmap-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Track Roadmap Run
+         * @description Draft a ``prd_to_roadmap`` run (SwarmCloud) from the track's latest approved PRD
+         *     version into its roadmap. Nothing runs or is spent until it is estimated and started
+         *     (the $50 owner approval and the 1.5x pause apply as for every run).
+         */
+        post: operations["create_track_roadmap_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/tracker-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Track Tracker Plan
+         * @description What a two-way tracker connector would create from the roadmap (an epic per Now
+         *     and Next item, an issue per requirement): a preview, never written.
+         */
+        get: operations["get_track_tracker_plan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/tracker-push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push Track To Tracker
+         * @description Write the tracker plan to Linear or Jira. Refused: two-way sync is off (409), or
+         *     on but no connector is verified (501). Oracle makes no unattended external writes.
+         */
+        post: operations["push_track_to_tracker"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracks/{track_id}/milestones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Track Milestones */
+        get: operations["list_track_milestones"];
+        put?: never;
+        /**
+         * Create Track Milestone
+         * @description Add a milestone. Undated by default; a date only in Now and only with verified
+         *     schedule bases that support exactly that date (422 otherwise).
+         */
+        post: operations["create_track_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/milestones/{milestone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Milestone
+         * @description Edit a milestone. Setting or keeping a date re-checks its verified bases.
+         */
+        patch: operations["update_milestone"];
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -5320,6 +5837,61 @@ export interface components {
             model?: boolean | null;
             /** Human */
             human?: number | null;
+        };
+        /** AlignmentItem */
+        AlignmentItem: {
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Milestone */
+            milestone: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Alignment
+             * @enum {string}
+             */
+            alignment: "aligned" | "drift" | "untracked" | "done";
+            /** Tracker */
+            tracker: components["schemas"]["TrackerRecordRef"][];
+            /** Drift */
+            drift: components["schemas"]["DriftEntry"][];
+        };
+        /**
+         * AlignmentReport
+         * @description The roadmap against the tracker's state, read-only: the path that works without
+         *     tracker write permission (E1).
+         */
+        AlignmentReport: {
+            /**
+             * Mode
+             * @default read_only
+             * @constant
+             */
+            mode: "read_only";
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            roadmap: components["schemas"]["DocumentRef"];
+            /** Track Id */
+            track_id: string | null;
+            connector: components["schemas"]["TrackerConnectorOut"];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Items */
+            items: components["schemas"]["AlignmentItem"][];
+            /** Unplanned */
+            unplanned: components["schemas"]["DriftEntry"][];
         };
         /** ApiTokenOut */
         ApiTokenOut: {
@@ -5682,6 +6254,22 @@ export interface components {
              */
             created_at: string;
         };
+        /** AtRiskItem */
+        AtRiskItem: {
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Reasons */
+            reasons: {
+                [key: string]: string;
+            }[];
+        };
         /** AuthorizationServerMetadata */
         AuthorizationServerMetadata: {
             /** Issuer */
@@ -5821,6 +6409,32 @@ export interface components {
             status: "open" | "mitigating";
             /** Reason */
             reason?: string | null;
+        };
+        /** BlockerDependency */
+        BlockerDependency: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Blocker Status */
+            blocker_status: string;
+            /** Severity */
+            severity?: string | null;
+            /** Blocker Type */
+            blocker_type?: string | null;
+            /** Resolved */
+            resolved: boolean;
+            /** Critical */
+            critical: boolean;
         };
         /** BlockerDocumentRef */
         BlockerDocumentRef: {
@@ -6665,7 +7279,7 @@ export interface components {
              * Subject Kind
              * @enum {string}
              */
-            subject_kind: "document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version" | "member";
+            subject_kind: "document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version" | "member" | "product_track";
             /** Subject Id */
             subject_id?: string | null;
             /** Subject Ref */
@@ -6790,6 +7404,8 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /** Cannot Approve */
+            cannot_approve?: string | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
         };
         /** Choice */
@@ -6812,7 +7428,7 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web";
+            source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web" | "oracle";
             /** Ref */
             ref: string;
             /** Title */
@@ -7618,6 +8234,42 @@ export interface components {
             reads: string[];
         };
         /**
+         * DateMarkOut
+         * @description A date written in a roadmap's text, checked against its PRD's schedule bases now
+         *     (O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next
+         *     to the date (``unverified``, ``date withdrawn``); None for a verified date. The
+         *     text itself is never rewritten.
+         */
+        DateMarkOut: {
+            /** Section Key */
+            section_key: string;
+            /** Text */
+            text: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "verified" | "unverified" | "withdrawn";
+            /** Label */
+            label?: string | null;
+            /**
+             * Bases
+             * @default []
+             */
+            bases: string[];
+            /**
+             * Where
+             * @default body
+             * @enum {string}
+             */
+            where: "title" | "heading" | "body";
+        };
+        /**
          * DeckOut
          * @description The brief layer as slides, for Present mode: one slide per brief section after a
          *     title slide, Sources and data points slides last when the version has sources.
@@ -7764,6 +8416,22 @@ export interface components {
              */
             versions: components["schemas"]["VersionSummary"][];
         };
+        /** DocumentRef */
+        DocumentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version?: number | null;
+            /** Approved */
+            approved?: boolean | null;
+        };
         /** DocumentSectionLinkOut */
         DocumentSectionLinkOut: {
             /**
@@ -7895,6 +8563,20 @@ export interface components {
             error?: string | null;
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
+        };
+        /** DriftEntry */
+        DriftEntry: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ahead" | "date_slip" | "overdue" | "cancelled" | "unplanned";
+            /** Detail */
+            detail: string;
+            /** Item Key */
+            item_key?: string | null;
+            /** Tracker Ref */
+            tracker_ref?: string | null;
         };
         /** EdgeCreate */
         EdgeCreate: {
@@ -8279,6 +8961,22 @@ export interface components {
             run_id?: string | null;
             /** Reason */
             reason?: string | null;
+        };
+        /** EntityRef */
+        EntityRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
         };
         /** EntityTrace */
         EntityTrace: {
@@ -8807,6 +9505,14 @@ export interface components {
              */
             updated_at: string;
             suggestion?: components["schemas"]["SuggestionOut"] | null;
+            /**
+             * State
+             * @default open
+             * @enum {string}
+             */
+            state: "open" | "staged" | "declined" | "done";
+            /** Staged For Version */
+            staged_for_version?: number | null;
         };
         /**
          * FeedbackPackage
@@ -9226,6 +9932,8 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /** Cannot Approve */
+            cannot_approve?: string | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
             /**
              * Flow
@@ -9238,6 +9946,34 @@ export interface components {
             document_slug?: string | null;
             /** Segment Title */
             segment_title?: string | null;
+        };
+        /** InboxCounts */
+        InboxCounts: {
+            /**
+             * New
+             * @default 0
+             */
+            new: number;
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+            /**
+             * Staged
+             * @default 0
+             */
+            staged: number;
+            /**
+             * Declined
+             * @default 0
+             */
+            declined: number;
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
         };
         /** InboxDocument */
         InboxDocument: {
@@ -9314,8 +10050,32 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Document Id */
+            document_id?: string | null;
+            /** Slug */
+            slug?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Latest Version */
+            latest_version?: number | null;
+            /**
+             * State
+             * @default open
+             * @enum {string}
+             */
+            state: "new" | "open" | "staged" | "declined" | "done";
+            /** Updated At */
+            updated_at?: string | null;
+            /** Resolution Note */
+            resolution_note?: string | null;
+            /** Addressed In Version */
+            addressed_in_version?: number | null;
+            /** Staged For Version */
+            staged_for_version?: number | null;
             /** Suggestion Status */
             suggestion_status?: ("open" | "accepted" | "dismissed" | "applied" | "superseded") | null;
+            /** Suggestion Kind */
+            suggestion_kind?: string | null;
         };
         /** InboxOut */
         InboxOut: {
@@ -9349,6 +10109,33 @@ export interface components {
             revoke_failures: components["schemas"]["InboxRevokeFailure"][];
             /** Total */
             total: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["InboxFeedbackItem"][];
+            /**
+             * @default {
+             *       "new": 0,
+             *       "open": 0,
+             *       "staged": 0,
+             *       "declined": 0,
+             *       "done": 0
+             *     }
+             */
+            counts: components["schemas"]["InboxCounts"];
+            /**
+             * Staged
+             * @default []
+             */
+            staged: components["schemas"]["InboxStaged"][];
+            /**
+             * Needs Me
+             * @default 0
+             */
+            needs_me: number;
+            /** Last Seen At */
+            last_seen_at?: string | null;
         };
         /**
          * InboxRevokeFailure
@@ -9397,6 +10184,36 @@ export interface components {
              * Format: date-time
              */
             retry_until: string;
+        };
+        /**
+         * InboxStaged
+         * @description 'N changes staged for draft N+1' on one document, with the build action.
+         */
+        InboxStaged: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Latest Version */
+            latest_version?: number | null;
+            /** Next Version */
+            next_version: number;
+            /** Count */
+            count: number;
+            /**
+             * Gone Count
+             * @default 0
+             */
+            gone_count: number;
+            /** Draft Job Id */
+            draft_job_id?: string | null;
+            /** Draft Job Status */
+            draft_job_status?: string | null;
         };
         /** InspectedModule */
         InspectedModule: {
@@ -9764,6 +10581,38 @@ export interface components {
             fetched_at: string | null;
             confidence: components["schemas"]["ConfidenceOut"];
         };
+        /** ItemProblem */
+        ItemProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Item */
+            item?: string | null;
+        };
+        /** ItemStalenessAction */
+        ItemStalenessAction: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "review" | "reconcile";
+            /** Version */
+            version?: number | null;
+            /** Item Keys */
+            item_keys?: string[];
+            /** Reason */
+            reason?: string | null;
+        };
+        /** ItemStalenessOut */
+        ItemStalenessOut: {
+            /** Changed */
+            changed: {
+                [key: string]: unknown;
+            }[];
+            /** Items */
+            items: components["schemas"]["RoadmapItemOut"][];
+        };
         /**
          * ItemsCheck
          * @description The check of roadmap_items.yaml (oracle.runs.roadmap).
@@ -9777,6 +10626,32 @@ export interface components {
             };
             /** Problems */
             problems: components["schemas"]["ItemsProblem"][];
+        };
+        /**
+         * ItemsImport
+         * @description ``roadmap_items.yaml`` for a roadmap version (the format the run writes).
+         */
+        ItemsImport: {
+            /** Yaml */
+            yaml: string;
+        };
+        /** ItemsImportOut */
+        ItemsImportOut: {
+            roadmap: components["schemas"]["DocumentRef"];
+            source: components["schemas"]["DocumentRef"] | null;
+            /** Track Id */
+            track_id: string | null;
+            /**
+             * View
+             * @enum {string}
+             */
+            view: "brief" | "full";
+            /** Items */
+            items: components["schemas"]["RoadmapItemOut"][];
+            /** Problems */
+            problems: components["schemas"]["ItemProblem"][];
+            /** Refused Dates */
+            refused_dates: string[];
         };
         /** ItemsProblem */
         ItemsProblem: {
@@ -10194,7 +11069,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch";
             /**
              * Document Id
              * Format: uuid
@@ -10432,6 +11307,83 @@ export interface components {
              */
             role: "viewer" | "commenter" | "approver" | "owner";
         };
+        /** MilestoneCreate */
+        MilestoneCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Horizon
+             * @default now
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Target Date */
+            target_date?: string | null;
+            /** Basis Ids */
+            basis_ids?: string[];
+            /** Item Keys */
+            item_keys?: string[];
+        };
+        /** MilestoneOut */
+        MilestoneOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Target Date */
+            target_date: string | null;
+            /** Basis Ids */
+            basis_ids: string[];
+            /** Item Keys */
+            item_keys: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "planned" | "done" | "dropped";
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** MilestonePatch */
+        MilestonePatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Name */
+            name?: string | null;
+            /** Horizon */
+            horizon?: ("now" | "next" | "later") | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Basis Ids */
+            basis_ids?: string[] | null;
+            /** Item Keys */
+            item_keys?: string[] | null;
+            /** Status */
+            status?: ("planned" | "done" | "dropped") | null;
+        };
         /** ModelReviewInfo */
         ModelReviewInfo: {
             /**
@@ -10620,6 +11572,14 @@ export interface components {
              */
             created_at: string;
         };
+        /** MonitorOut */
+        MonitorOut: {
+            overview: components["schemas"]["TrackOverview"];
+            /** Change Event Id */
+            change_event_id: string | null;
+            /** Changed */
+            changed: string[];
+        };
         /** NewSource */
         NewSource: {
             /** Title */
@@ -10635,6 +11595,175 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+        };
+        /** NextDraftApply */
+        NextDraftApply: {
+            /**
+             * Drop Sections
+             * @default []
+             */
+            drop_sections: string[];
+            /**
+             * Edits
+             * @default {}
+             */
+            edits: {
+                [key: string]: string;
+            };
+        };
+        /** NextDraftDataPoint */
+        NextDraftDataPoint: {
+            /** Value */
+            value: string;
+            /**
+             * As Of
+             * @default
+             */
+            as_of: string;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+        };
+        /** NextDraftFeedback */
+        NextDraftFeedback: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Summary */
+            summary: string;
+        };
+        /** NextDraftIn */
+        NextDraftIn: {
+            /** Suggestion Ids */
+            suggestion_ids?: string[] | null;
+        };
+        /**
+         * NextDraftPreview
+         * @description The combined preview of a next-draft build: one entry per revised section.
+         *
+         *     Sections are empty until the job has succeeded (``job.status`` says where it is).
+         */
+        NextDraftPreview: {
+            job: components["schemas"]["LlmJobOut"];
+            /** Base Version */
+            base_version?: number | null;
+            /** Next Version */
+            next_version?: number | null;
+            /** Latest Version */
+            latest_version?: number | null;
+            /**
+             * Stale
+             * @default false
+             */
+            stale: boolean;
+            /** Applied Version */
+            applied_version?: number | null;
+            /**
+             * Discarded
+             * @default false
+             */
+            discarded: boolean;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["NextDraftSection"][];
+            /**
+             * Skipped
+             * @default []
+             */
+            skipped: components["schemas"]["SkippedSection"][];
+        };
+        /** NextDraftResolution */
+        NextDraftResolution: {
+            /**
+             * Feedback Id
+             * Format: uuid
+             */
+            feedback_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "addressed" | "declined";
+            /** Note */
+            note?: string | null;
+        };
+        /** NextDraftSection */
+        NextDraftSection: {
+            /** Section Key */
+            section_key: string;
+            /** Heading */
+            heading: string;
+            /** Before Heading */
+            before_heading: string;
+            /** Before Body Md */
+            before_body_md: string;
+            /** Body Md */
+            body_md: string;
+            /** Words */
+            words: components["schemas"]["WordOp"][];
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * O1C Fixes
+             * @default []
+             */
+            o1c_fixes: string[];
+            /**
+             * Data Points
+             * @default []
+             */
+            data_points: components["schemas"]["NextDraftDataPoint"][];
+            /**
+             * Resolutions
+             * @default []
+             */
+            resolutions: components["schemas"]["NextDraftResolution"][];
+            /**
+             * Suggestion Ids
+             * @default []
+             */
+            suggestion_ids: string[];
+            /**
+             * Feedback
+             * @default []
+             */
+            feedback: components["schemas"]["NextDraftFeedback"][];
+        };
+        /** NextMilestone */
+        NextMilestone: {
+            /** Name */
+            name: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Target Date */
+            target_date: string | null;
+            /** Dated */
+            dated: boolean;
+            /** Bases */
+            bases: {
+                [key: string]: unknown;
+            }[];
+            /** Items */
+            items: number;
+            /** Milestone Id */
+            milestone_id?: string | null;
         };
         /** NotificationOut */
         NotificationOut: {
@@ -10860,6 +11989,20 @@ export interface components {
             categories: string[];
             /** Modules */
             modules: components["schemas"]["PackModuleOut"][];
+        };
+        /** PrdAnchor */
+        PrdAnchor: {
+            document: components["schemas"]["DocumentRef"] | null;
+            /** Section Key */
+            section_key: string | null;
+            /** Section Hash */
+            section_hash: string | null;
+            /** Link */
+            link: string | null;
+            /** Reconciled Version */
+            reconciled_version?: number | null;
+            /** Reconciled Section Hash */
+            reconciled_section_hash?: string | null;
         };
         /**
          * PrdAnswers
@@ -11295,13 +12438,20 @@ export interface components {
         };
         /**
          * PublishBlockedOut
-         * @description 409 from approve: the PRD version may not be published (T2 publish gate, C5).
+         * @description 409 from approve: the PRD version may not be published (T2 publish gate, C5), or
+         *     the roadmap version writes dates that rest on no verified basis (O4 'document dates',
+         *     owner 2026-10-20: ``dates`` lists them).
          */
         PublishBlockedOut: {
             /** Detail */
             detail: string;
             /** Blocking */
             blocking: components["schemas"]["PublishBlock"][];
+            /**
+             * Dates
+             * @default []
+             */
+            dates: components["schemas"]["DateMarkOut"][];
         };
         /**
          * PublishCheckOut
@@ -12201,6 +13351,107 @@ export interface components {
             /** Public Version */
             public_version?: boolean | null;
         };
+        /** RoadmapItemOut */
+        RoadmapItemOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Item Key */
+            item_key: string;
+            /** Position */
+            position: number;
+            /** Title */
+            title: string;
+            /** Outcome */
+            outcome: string | null;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Milestone */
+            milestone: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "fresh" | "potentially_stale" | "under_review" | "reconciled";
+            /** Stale Reasons */
+            stale_reasons: string[];
+            /** Stale Since */
+            stale_since: string | null;
+            /** Caused By Change Id */
+            caused_by_change_id: string | null;
+            prd: components["schemas"]["PrdAnchor"];
+            /** Track Id */
+            track_id: string | null;
+            feature?: components["schemas"]["EntityRef"] | null;
+            /**
+             * Requirements
+             * @default []
+             */
+            requirements: components["schemas"]["EntityRef"][];
+            /**
+             * Blockers
+             * @default []
+             */
+            blockers: components["schemas"]["BlockerDependency"][];
+            /**
+             * Trace
+             * @default []
+             */
+            trace: components["schemas"]["TraceLink"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Validation Gates
+             * @default []
+             */
+            validation_gates: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Economics
+             * @default {}
+             */
+            economics: {
+                [key: string]: unknown;
+            };
+            /** Priority */
+            priority?: {
+                [key: string]: unknown;
+            } | null;
+            /** Confidence */
+            confidence?: string | null;
+            /**
+             * Engineering
+             * @default []
+             */
+            engineering: components["schemas"]["TrackerRecordRef"][];
+            /** Note */
+            note?: string | null;
+        };
+        /** RoadmapItemsOut */
+        RoadmapItemsOut: {
+            roadmap: components["schemas"]["DocumentRef"];
+            source: components["schemas"]["DocumentRef"] | null;
+            /** Track Id */
+            track_id: string | null;
+            /**
+             * View
+             * @enum {string}
+             */
+            view: "brief" | "full";
+            /** Items */
+            items: components["schemas"]["RoadmapItemOut"][];
+        };
         /** RunCreate */
         RunCreate: {
             /**
@@ -12515,6 +13766,95 @@ export interface components {
             notes: string[];
             /** Error */
             error?: string | null;
+        };
+        /**
+         * ScheduleBasisCreate
+         * @description A verified estimate, capacity figure or commitment. Recording it is the
+         *     verification: the approver says this source supports this date, for this PRD's
+         *     roadmap items (O4).
+         */
+        ScheduleBasisCreate: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "estimate" | "capacity" | "commitment";
+            /** Reference */
+            reference: string;
+            /**
+             * Supports Date
+             * Format: date
+             */
+            supports_date: string;
+            /** Detail */
+            detail?: string | null;
+            /** Prd */
+            prd: string;
+            /** Item Key */
+            item_key?: string | null;
+            /** Tracker Key */
+            tracker_key?: string | null;
+            /** Tracker Record Id */
+            tracker_record_id?: string | null;
+        };
+        /** ScheduleBasisOut */
+        ScheduleBasisOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "estimate" | "capacity" | "commitment";
+            /** Reference */
+            reference: string;
+            /**
+             * Supports Date
+             * Format: date
+             */
+            supports_date: string;
+            /** Detail */
+            detail: string | null;
+            /**
+             * Prd Document Id
+             * Format: uuid
+             */
+            prd_document_id: string;
+            /** Item Key */
+            item_key: string | null;
+            /** Tracker Key */
+            tracker_key: string | null;
+            /** Tracker Record Id */
+            tracker_record_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "verified" | "withdrawn";
+            /** Verified By */
+            verified_by: string | null;
+            /**
+             * Verified At
+             * Format: date-time
+             */
+            verified_at: string;
+            /** Withdrawn By */
+            withdrawn_by: string | null;
+            /** Withdrawn At */
+            withdrawn_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ScheduleBasisWithdraw */
+        ScheduleBasisWithdraw: {
+            /** Reason */
+            reason: string;
         };
         /** ScopeOut */
         ScopeOut: {
@@ -13262,6 +14602,11 @@ export interface components {
             /** Attempts */
             attempts: components["schemas"]["SegmentAttempt"][];
             draft_import?: components["schemas"]["DraftImport"] | null;
+            /**
+             * Can Retry Draft Import
+             * @default false
+             */
+            can_retry_draft_import: boolean;
             items_check?: components["schemas"]["ItemsCheck"] | null;
             /** Started At */
             started_at?: string | null;
@@ -13287,6 +14632,18 @@ export interface components {
             is_default: boolean;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** SkippedSection */
+        SkippedSection: {
+            /** Section Key */
+            section_key?: string | null;
+            /**
+             * Suggestion Ids
+             * @default []
+             */
+            suggestion_ids: string[];
+            /** Reason */
+            reason: string;
         };
         /** SlideOut */
         SlideOut: {
@@ -13477,6 +14834,74 @@ export interface components {
             swapped_to: string | null;
             /** Swapped To Reason */
             swapped_to_reason: string | null;
+        };
+        /**
+         * StagedChange
+         * @description An accepted section-text suggestion not applied in any draft yet.
+         */
+        StagedChange: {
+            /**
+             * Suggestion Id
+             * Format: uuid
+             */
+            suggestion_id: string;
+            /**
+             * Feedback Item Id
+             * Format: uuid
+             */
+            feedback_item_id: string;
+            /** Section Key */
+            section_key: string;
+            /** Section Heading */
+            section_heading: string;
+            /** Feedback Summary */
+            feedback_summary: string;
+            /** Text */
+            text: string;
+            /** Accepted By */
+            accepted_by?: string | null;
+            /** Accepted By Name */
+            accepted_by_name?: string | null;
+            /** Accepted At */
+            accepted_at?: string | null;
+            /** Raised On Version */
+            raised_on_version: number;
+            /** Suggested On Version */
+            suggested_on_version: number;
+            /**
+             * Section Gone
+             * @default false
+             */
+            section_gone: boolean;
+            /**
+             * Section Locked
+             * @default false
+             */
+            section_locked: boolean;
+        };
+        /** StagedChanges */
+        StagedChanges: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Latest Version */
+            latest_version?: number | null;
+            /** Next Version */
+            next_version: number;
+            /** Items */
+            items: components["schemas"]["StagedChange"][];
+            /**
+             * Gone Count
+             * @default 0
+             */
+            gone_count: number;
+            /** Estimate Usd */
+            estimate_usd?: number | null;
+            draft_job?: components["schemas"]["LlmJobOut"] | null;
         };
         /** StakeholderAnswerOut */
         StakeholderAnswerOut: {
@@ -14541,6 +15966,25 @@ export interface components {
             /** Contribution */
             contribution: number;
         };
+        /** TraceLink */
+        TraceLink: {
+            /**
+             * Target
+             * @enum {string}
+             */
+            target: "feature" | "requirement" | "blocker";
+            /** Id */
+            id?: string | null;
+            /** Key */
+            key: string;
+            /** Via */
+            via?: ("declared" | "section_link" | "key_match" | "graph") | null;
+            /**
+             * Unresolved
+             * @default false
+             */
+            unresolved: boolean;
+        };
         /**
          * TraceOutput
          * @description A derived output: an artifact version or a document version (a roadmap).
@@ -14744,6 +16188,332 @@ export interface components {
             /** Entity Id */
             entity_id?: string | null;
         };
+        /** TrackChange */
+        TrackChange: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Cause */
+            cause: string;
+            /** Actor */
+            actor: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** TrackCreate */
+        TrackCreate: {
+            /** Prd */
+            prd: string;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * TrackOverview
+         * @description One calm overview per track: health, the next milestone, what needs attention.
+         */
+        TrackOverview: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "closed";
+            /** Owner Id */
+            owner_id: string | null;
+            prd: components["schemas"]["DocumentRef"];
+            /** Started Version */
+            started_version: number | null;
+            /** Current Version */
+            current_version: number | null;
+            /** Latest Approved Version */
+            latest_approved_version: number | null;
+            roadmap: components["schemas"]["DocumentRef"] | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Monitored At */
+            monitored_at: string | null;
+            /**
+             * Health
+             * @enum {string}
+             */
+            health: "on_track" | "at_risk" | "off_track" | "no_roadmap" | "paused" | "closed";
+            /** Headline */
+            headline: string;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            next_milestone: components["schemas"]["NextMilestone"] | null;
+            /** At Risk */
+            at_risk: components["schemas"]["AtRiskItem"][];
+            /** Drift */
+            drift: components["schemas"]["DriftEntry"][];
+            /** Engineering Known */
+            engineering_known: boolean;
+            /** Prd Moved */
+            prd_moved: boolean;
+            /** Milestones */
+            milestones: components["schemas"]["MilestoneOut"][];
+        };
+        /** TrackPatch */
+        TrackPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Status */
+            status?: ("active" | "paused" | "closed") | null;
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** TrackSummary */
+        TrackSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "closed";
+            /** Owner Id */
+            owner_id: string | null;
+            prd: components["schemas"]["DocumentRef"];
+            /** Started Version */
+            started_version: number | null;
+            /** Current Version */
+            current_version: number | null;
+            /** Latest Approved Version */
+            latest_approved_version: number | null;
+            roadmap: components["schemas"]["DocumentRef"] | null;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Monitored At */
+            monitored_at: string | null;
+            /**
+             * Health
+             * @enum {string}
+             */
+            health: "on_track" | "at_risk" | "off_track" | "no_roadmap" | "paused" | "closed";
+            /** Headline */
+            headline: string;
+        };
+        /**
+         * TrackerConnectorOut
+         * @description The two-way tracker connector's gate (E1, §11.1): off unless verified.
+         */
+        TrackerConnectorOut: {
+            /** Two Way Enabled */
+            two_way_enabled: boolean;
+            /** Writes Allowed */
+            writes_allowed: boolean;
+            /** Read Only Alignment */
+            read_only_alignment: boolean;
+            /** Reason */
+            reason: string;
+        };
+        /** TrackerImportOut */
+        TrackerImportOut: {
+            /** Created */
+            created: number;
+            /** Updated */
+            updated: number;
+            /** Records */
+            records: components["schemas"]["TrackerRecordOut"][];
+        };
+        /** TrackerPlanEpic */
+        TrackerPlanEpic: {
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /** Description */
+            description: string | null;
+            /** Prd Link */
+            prd_link: string | null;
+            /** Issues */
+            issues: components["schemas"]["TrackerPlanIssue"][];
+        };
+        /** TrackerPlanIssue */
+        TrackerPlanIssue: {
+            /** Title */
+            title: string;
+            /** Requirement Key */
+            requirement_key?: string | null;
+        };
+        /**
+         * TrackerPlanOut
+         * @description What a two-way connector would create: a preview only, never written.
+         */
+        TrackerPlanOut: {
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /**
+             * Would Write
+             * @default false
+             * @constant
+             */
+            would_write: false;
+            connector: components["schemas"]["TrackerConnectorOut"];
+            /** Epics */
+            epics: components["schemas"]["TrackerPlanEpic"][];
+        };
+        /** TrackerRecordIn */
+        TrackerRecordIn: {
+            /** External Ref */
+            external_ref: string;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "todo" | "in_progress" | "done" | "cancelled" | "unknown";
+            /** Raw Status */
+            raw_status?: string | null;
+            /** Estimate */
+            estimate?: number | string | null;
+            /** Estimate Unit */
+            estimate_unit?: string | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Observed At */
+            observed_at?: string | null;
+            /** Track Id */
+            track_id?: string | null;
+            /** Item Key */
+            item_key?: string | null;
+        };
+        /** TrackerRecordOut */
+        TrackerRecordOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tracker
+             * @enum {string}
+             */
+            tracker: "linear" | "jira" | "github" | "other";
+            /** External Ref */
+            external_ref: string;
+            /** Title */
+            title: string | null;
+            /** Url */
+            url: string | null;
+            /** Track Id */
+            track_id: string | null;
+            /** Item Key */
+            item_key: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "todo" | "in_progress" | "done" | "cancelled" | "unknown";
+            /** Raw Status */
+            raw_status: string | null;
+            /** Estimate */
+            estimate: string | null;
+            /** Estimate Unit */
+            estimate_unit: string | null;
+            /** Target Date */
+            target_date: string | null;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /** Recorded By */
+            recorded_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** TrackerRecordRef */
+        TrackerRecordRef: {
+            /**
+             * Tracker
+             * @enum {string}
+             */
+            tracker: "linear" | "jira" | "github" | "other";
+            /** External Ref */
+            external_ref: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "todo" | "in_progress" | "done" | "cancelled" | "unknown";
+            /** Raw Status */
+            raw_status?: string | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Estimate */
+            estimate?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /**
+         * TrackerRecordsImport
+         * @description Engineering status as read from a tracker, posted by an approver (an export, the
+         *     CLI, an MCP client acting for them; not a run's token). Oracle stores it; it never
+         *     writes back.
+         */
+        TrackerRecordsImport: {
+            /**
+             * Tracker
+             * @enum {string}
+             */
+            tracker: "linear" | "jira" | "github" | "other";
+            /** Records */
+            records: components["schemas"]["TrackerRecordIn"][];
+        };
         /** UploadResult */
         UploadResult: {
             /** Items */
@@ -14884,6 +16654,11 @@ export interface components {
              * @default []
              */
             citations: components["schemas"]["CitationOut"][];
+            /**
+             * Date Marks
+             * @default []
+             */
+            date_marks: components["schemas"]["DateMarkOut"][];
         };
         /** VersionPublishIn */
         VersionPublishIn: {
@@ -15028,6 +16803,14 @@ export interface components {
             resets_at: string;
             /** Reset */
             reset: boolean;
+        };
+        /** WithdrawOut */
+        WithdrawOut: {
+            basis: components["schemas"]["ScheduleBasisOut"];
+            /** Undated Milestones */
+            undated_milestones: string[];
+            /** Stale Items */
+            stale_items: string[];
         };
         /** WordOp */
         WordOp: {
@@ -17049,6 +18832,175 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_staged_changes: {
+        parameters: {
+            query?: {
+                /** @description Also list staged items whose section is gone */
+                include_gone?: boolean;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StagedChanges"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    build_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextDraftIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextDraftPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextDraftApply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_next_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
                 };
             };
             /** @description Validation Error */
@@ -21467,6 +23419,38 @@ export interface operations {
             };
         };
     };
+    retry_draft_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_again_run: {
         parameters: {
             query?: never;
@@ -21604,7 +23588,10 @@ export interface operations {
     };
     get_inbox: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Record this visit as my last one (what 'new' is measured from) */
+                mark_seen?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -21618,6 +23605,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -22564,7 +24560,7 @@ export interface operations {
     list_change_events: {
         parameters: {
             query?: {
-                subject_kind?: ("document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version" | "member") | null;
+                subject_kind?: ("document_section" | "requirement" | "decision" | "source_permission" | "blocker_status" | "composition_revision" | "document_version" | "entity" | "artifact_version" | "member" | "product_track") | null;
                 subject_id?: string | null;
                 document_id?: string | null;
                 limit?: number;
@@ -24819,6 +26815,745 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BlockerModuleRender"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roadmap_items: {
+        parameters: {
+            query?: {
+                version?: number | null;
+                view?: "brief" | "full";
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoadmapItemsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_roadmap_items: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemsImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemsImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    act_on_roadmap_item_staleness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemStalenessAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemStalenessOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_roadmap_alignment: {
+        parameters: {
+            query?: {
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlignmentReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_schedule_bases: {
+        parameters: {
+            query?: {
+                prd?: string | null;
+                status?: ("verified" | "withdrawn") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBasisOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_schedule_basis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleBasisCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBasisOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_schedule_basis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                basis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleBasisWithdraw"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WithdrawOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tracker_connector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerConnectorOut"];
+                };
+            };
+        };
+    };
+    list_tracker_records: {
+        parameters: {
+            query?: {
+                track_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerRecordOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_tracker_records: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackerRecordsImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tracks: {
+        parameters: {
+            query?: {
+                status?: ("active" | "paused" | "closed") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackCreate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monitor_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_track_changes: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackChange"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_track_roadmap_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["KnobsIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_track_tracker_plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerPlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    push_track_to_tracker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_track_milestones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_track_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MilestoneCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MilestonePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneOut"];
                 };
             };
             /** @description Validation Error */

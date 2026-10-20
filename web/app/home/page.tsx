@@ -9,7 +9,7 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
-import { CountChip, inboxNeeds, NeedTable, questionNeeds, revokeNeeds, type Need } from "../inbox/_needs";
+import { allNeeds, CountChip, NeedTable, questionNeeds, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
 import { goalViews, historyOf, shownGoals, type Point } from "./_goals";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
@@ -21,10 +21,33 @@ const MAX_NEEDS = 7;
 /** A goal's trend reads at most this many of its newest revisions (six monthly readings and change). */
 const TREND_REVISIONS = 24;
 
-/** At most `max` lines, in order, but never without a question when there is one (I3). */
-function pickNeeds(others: Need[], questions: Need[], max: number): Need[] {
-  if (questions.length === 0 || others.length < max) return [...others, ...questions].slice(0, max);
-  return [...others.slice(0, max - 1), questions[0]];
+/**
+ * At most `max` lines, in the Inbox's order, never without a question when there is one
+ * (I3); past `max`, the last line says how many more wait in the Inbox.
+ */
+function pickNeeds(rows: StatedNeed[], max: number): Need[] {
+  if (rows.length <= max) return rows;
+  const questions = rows.filter((r) => r.group === "questions");
+  const others = rows.filter((r) => r.group !== "questions");
+  const keep = max - 1;
+  const shown = questions.length === 0 || others.length < keep ? rows.slice(0, keep) : [...others.slice(0, keep - 1), questions[0]];
+  const more = rows.length - shown.length;
+  return [
+    ...shown,
+    {
+      key: "more",
+      icon: "inbox",
+      kind: "More",
+      item: (
+        <Link href="/inbox" className="font-semibold text-accent-ink hover:underline" data-testid="home-needs-more">
+          +{more} more in Inbox
+        </Link>
+      ),
+      context: null,
+      at: null,
+      action: null,
+    },
+  ];
 }
 
 /**
@@ -106,18 +129,20 @@ export default function HomePage() {
     }
   }
   const inbox = inboxQ.data;
-  const needs = inbox ? inboxNeeds(inbox, busy, act, true) : null;
   // The API filters (asked of me, still asked): Home counts exactly what the badge counts.
   const questions = questionNeeds(questionsQ.data ?? [], docs);
-  const decisions = needs ? [...needs.checkpoints, ...needs.approvals, ...needs.overruns] : [];
+  // Needs you: the Inbox's New and Open items, each once (owner, 2026-10-20).
+  const needs = inbox ? waitingNeeds(allNeeds(inbox, questions, busy, act, inbox.last_seen_at ?? null, true)) : [];
+  const decisions = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
   // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
-  const runs = needs ? [...needs.lookups, ...needs.imports] : [];
+  const runs = needs.filter((r) => r.group === "lookups" || r.group === "imports");
   // Revokes a removed member's disable could not make (owners only), as the Inbox lists them.
-  const access = inbox ? revokeNeeds(inbox.revoke_failures ?? [], busy, act) : [];
-  const reviews = needs?.feedback ?? [];
-  const shownNeeds = pickNeeds([...decisions, ...runs, ...access, ...reviews], questions, MAX_NEEDS);
-  // The rail badge's count: the Inbox's rows and the questions asked of me.
-  const waiting = inbox ? inbox.total + questions.length : undefined;
+  const access = needs.filter((r) => r.group === "revoke-failures");
+  const reviews = needs.filter((r) => r.group === "feedback");
+  const asked = needs.filter((r) => r.group === "questions");
+  const shownNeeds = pickNeeds(needs, MAX_NEEDS);
+  // The rail badge's count: the Inbox's New + Open items.
+  const waiting = inbox ? needs.length : undefined;
   const openItems = new Map((inbox?.feedback ?? []).map((d) => [d.document_id, d.open_count]));
 
   const nothingInFlight = flights !== undefined && flights.length === 0;
@@ -163,7 +188,7 @@ export default function HomePage() {
               {runs.length > 0 && <CountChip label="Runs" n={runs.length} />}
               {access.length > 0 && <CountChip label="Access" n={access.length} />}
               {reviews.length > 0 && <CountChip label="Reviews" n={reviews.length} />}
-              {questions.length > 0 && <CountChip label="Questions" n={questions.length} />}
+              {asked.length > 0 && <CountChip label="Questions" n={asked.length} />}
               <Link
                 href="/inbox"
                 data-testid="home-inbox-link"
