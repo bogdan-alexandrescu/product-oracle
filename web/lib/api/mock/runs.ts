@@ -189,6 +189,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     artifacts: [],
     attempts: [],
     draft_import: null,
+    can_retry_draft_import: false,
     items_check: null,
     started_at: null,
     finished_at: null,
@@ -202,11 +203,20 @@ function progressOf(r: RunOut): Schemas["RunProgress"] {
   return { done: r.segments.filter((s) => s.status === "succeeded").length, total: r.segments.length, now: now?.title ?? null };
 }
 
+/** The open review of a segment, if the run waits at it. */
+function reviewOf(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
+  if (r.status !== "awaiting_checkpoint") return undefined;
+  return r.checkpoints.find((c) => c.status === "pending" && c.segment_seq === s.seq);
+}
+
 function refresh(r: RunOut) {
   r.progress = progressOf(r);
   r.spent_usd = round2(r.segments.reduce((sum, s) => sum + s.cost_usd, 0));
   r.waiting_on = r.checkpoints.find((c) => c.status === "pending")?.kind ?? null;
   for (const c of r.checkpoints) c.can_decide = c.status === "pending";
+  // As the API: a refused draft whose file is kept, while the run waits at its review.
+  const file = r.document_kind === "roadmap" ? "roadmap.md" : "prd.md";
+  for (const s of r.segments) s.can_retry_draft_import = !!s.draft_import?.error && s.artifacts.includes(file) && !!reviewOf(r, s);
 }
 
 function submit(ctx: RunsContext, r: RunOut, s: SegmentOut, note: string | null = null) {
@@ -637,6 +647,21 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const s = r.segments.find((x) => x.seq === cp.segment_seq)!;
     if (decision === "approved") next(ctx, r, s);
     else submit(ctx, r, s, text);
+    return done();
+  }
+  if (action === "segments" && p[5] === "retry-draft-import" && m === "POST") {
+    const s = r.segments.find((x) => x.seq === Number(p[4]));
+    if (!s) return fail(404, `run ${r.id} has no segment ${p[4]}`);
+    refresh(r);
+    const review = reviewOf(r, s);
+    if (!s.can_retry_draft_import || !review || !r.document_slug) {
+      return fail(409, `nothing to retry: no refused draft of ${s.name} waits at its review`);
+    }
+    // Imported as at segment end; the review stays open for a person.
+    const imp = ctx.importDraft(r.document_slug, r);
+    s.draft_import = { ...imp, created: true, warnings: [], error: null };
+    r.document_id = imp.document_id ?? null;
+    review.payload = { ...review.payload, import: s.draft_import };
     return done();
   }
   if (action === "segments" && p[5] === "artifacts" && m === "GET") {

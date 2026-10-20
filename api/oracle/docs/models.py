@@ -23,7 +23,9 @@ DOCUMENT_KINDS = ("prd", "roadmap")
 # O1f: a section belongs to the brief layer or is detail (oracle.docs.layers).
 SECTION_LAYERS = ("brief", "detail")
 BRIEF_SOURCES = ("draft", "template", "full_heading", "none")
-CITATION_SOURCES = ("slack", "notion", "gdocs", "github", "fireflies", "upload", "web")
+# "oracle": the baseline itself (oracle.docs.schemas.CitationSource); added by migration
+# 0017_citation_source_oracle.
+CITATION_SOURCES = ("slack", "notion", "gdocs", "github", "fireflies", "upload", "web", "oracle")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:

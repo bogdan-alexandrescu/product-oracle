@@ -201,6 +201,9 @@ class SegmentOut(BaseModel):
     artifacts: list[str]
     attempts: list[SegmentAttempt]
     draft_import: DraftImport | None = None
+    # Retry import (owner, 2026-10-20): the draft's import was refused, its file is kept
+    # and its review is still open, and I have the review's approver role or above.
+    can_retry_draft_import: bool = False
     items_check: ItemsCheck | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None

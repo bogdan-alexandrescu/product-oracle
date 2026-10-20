@@ -3,7 +3,8 @@
 Roles: anyone signed in reads runs; an approver creates, estimates and starts one; an
 owner approves a run over the cost threshold and resumes one paused on overrun; an
 owner or the approver who created a run cancels it; a checkpoint is decided by its
-``approver_role`` or above. The tick takes an owner or an API token.
+``approver_role`` or above, who may also retry importing the draft it waits on after the
+import was refused. The tick takes an owner or an API token.
 """
 
 import asyncio
@@ -206,6 +207,22 @@ async def retry_import_run(run_id: uuid.UUID, principal: Owner, db: TenantDB) ->
     stopped after its resumed advance failed 5 times in a row; the next tick tries again,
     the count reset. Owners only; audited."""
     await _call(service.retry_import(db, principal, run_id))
+    return await service.read_run(db, run_id, principal)
+
+
+@router.post("/runs/{run_id}/segments/{seq}/retry-draft-import", response_model=RunOut)
+async def retry_draft_import(
+    run_id: uuid.UUID, seq: int, principal: CurrentPrincipal, db: TenantDB
+) -> RunOut:
+    """Import a segment's draft again after its import at segment end was refused
+    (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``),
+    while the run waits at that segment's review. Imported, the run names the document and
+    the error is replaced by the import; refused again, by the new error (200 either way:
+    read ``draft_import``). Nothing is decided: the review stays open for a person. 409 when
+    there is nothing to retry (imported already, no draft file, the review decided, the run
+    ended). The review's approver role or above; audited. Not the stopped advance of
+    ``retry_import_run``."""
+    await _call(service.retry_draft_import(db, principal, run_id, seq))
     return await service.read_run(db, run_id, principal)
 
 

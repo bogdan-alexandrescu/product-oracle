@@ -109,6 +109,9 @@ export function RunDetail({ id }: { id: string }) {
         }),
       ),
     );
+  // Imports a segment's refused draft again (the review still waits for a person).
+  const retryImport = (seq: number) =>
+    act(() => unwrap(api.POST("/v1/runs/{run_id}/segments/{seq}/retry-draft-import", { params: { path: { run_id: id, seq } } })));
   const done = run.segments.filter((s) => s.status === "succeeded").length;
   const deciding = run.checkpoints.some((c) => c.status === "pending" && c.can_decide);
   const open = !FINAL_STATUSES.includes(run.status) && run.status !== "draft";
@@ -308,6 +311,7 @@ export function RunDetail({ id }: { id: string }) {
                 checkpoints={run.checkpoints.filter((c) => c.segment_seq === s.seq)}
                 busy={busy}
                 onDecide={decide}
+                onRetryImport={retryImport}
               />
             ))}
           </ol>
@@ -424,12 +428,14 @@ function SegmentItem({
   checkpoints,
   busy,
   onDecide,
+  onRetryImport,
 }: {
   run: RunOut;
   segment: SegmentOut;
   checkpoints: CheckpointOut[];
   busy: boolean;
   onDecide: Decide;
+  onRetryImport: (seq: number) => void;
 }) {
   const kind = s.checkpoint;
   const deciding = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
@@ -520,7 +526,12 @@ function SegmentItem({
         <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
           {s.error && <p className="text-crit">{s.error}</p>}
           {s.items_check && <ItemsCheckLine check={s.items_check} />}
-          {s.draft_import && <DraftImportLine imp={s.draft_import} />}
+          {s.draft_import && (
+            <DraftImportLine
+              imp={s.draft_import}
+              retry={s.can_retry_draft_import ? { busy, onRetry: () => onRetryImport(s.seq) } : undefined}
+            />
+          )}
           {s.artifacts.length > 0 && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} />}
           {deciding.map((cp, i) => (
             <CheckpointRow key={cp.id} cp={cp} busy={busy} onDecide={onDecide} anchor={i === 0} />
@@ -531,8 +542,26 @@ function SegmentItem({
   );
 }
 
-function DraftImportLine({ imp }: { imp: NonNullable<SegmentOut["draft_import"]> }) {
-  if (imp.error) return <p className="text-crit">Draft not imported: {imp.error}</p>;
+function DraftImportLine({
+  imp,
+  retry,
+}: {
+  imp: NonNullable<SegmentOut["draft_import"]>;
+  /** The import was refused and its review is open: Retry import (owners and approvers). */
+  retry?: { busy: boolean; onRetry: () => void };
+}) {
+  if (imp.error) {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-crit">Draft not imported: {imp.error}</p>
+        {retry && (
+          <Button disabled={retry.busy} onClick={retry.onRetry}>
+            Retry import
+          </Button>
+        )}
+      </div>
+    );
+  }
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text">
       <span>

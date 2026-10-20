@@ -615,7 +615,12 @@ def _checkpoint_out(cp: Checkpoint, principal: Principal | None) -> CheckpointOu
 
 
 def _segment_out(
-    run: Run, segment: RunSegment, knobs: flows.Knobs, kind: str = "prd"
+    run: Run,
+    segment: RunSegment,
+    knobs: flows.Knobs,
+    kind: str = "prd",
+    checkpoints: list[Checkpoint] | None = None,
+    principal: Principal | None = None,
 ) -> SegmentOut:
     sdef = _flow(run).segment(segment.name)
     art = segment.artifacts or {}
@@ -637,6 +642,9 @@ def _segment_out(
         artifacts=sorted((art.get("files") or {}).keys()),
         attempts=[SegmentAttempt(**a) for a in art.get("attempts") or []],
         draft_import=DraftImport(**imp) if imp else None,
+        can_retry_draft_import=_may_retry_draft(
+            run, segment, _review_of(checkpoints or [], segment.seq), kind, principal
+        ),
         items_check=ItemsCheck(**check) if check else None,
         started_at=segment.started_at,
         finished_at=segment.finished_at,
@@ -678,7 +686,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         overrun_ceiling_usd=_usd(_ceiling(run)),
         runtime=runtime.name,
         notes=notes,
-        segments=[_segment_out(run, s, knobs, kind) for s in segments],
+        segments=[_segment_out(run, s, knobs, kind, checkpoints, principal) for s in segments],
         checkpoints=[_checkpoint_out(c, principal) for c in checkpoints],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
     )
@@ -5070,6 +5078,126 @@ async def retry_import(db: AsyncSession, principal: Principal, run_id: uuid.UUID
         "run",
         run.id,
         {"segment": segment.name, "error": failed.get("error"), "tries": failed.get("count")},
+    )
+    await db.commit()
+
+
+def _review_of(checkpoints: list[Checkpoint], seq: int) -> Checkpoint | None:
+    """The segment's open checkpoint, if it waits at one."""
+    return next(
+        (
+            c
+            for c in checkpoints
+            if c.status == "pending" and (c.payload or {}).get("segment_seq") == seq
+        ),
+        None,
+    )
+
+
+def _draft_retry_refusal(
+    run: Run, segment: RunSegment, review: Checkpoint | None, kind: str
+) -> str | None:
+    """Why the segment's draft cannot be imported again now; None when it can: its import
+    at segment end was refused, its draft file is kept, and the run waits at its review."""
+    name = flows.draft_file(kind)
+    if not _flow(run).segment(segment.name).imports_draft:
+        return f"{segment.name} imports no draft"
+    art = segment.artifacts or {}
+    imp = art.get("import")
+    if not isinstance(imp, dict) or not imp.get("error"):
+        if isinstance(imp, dict) and imp.get("version") is not None:
+            return f"{name} of {segment.name} was imported ({imp.get('slug')} v{imp['version']})"
+        return f"no import of {segment.name}'s {name} was refused"
+    if run.status in FINAL:
+        return f"the run has ended (it is {run.status})"
+    if review is None:
+        return f"{segment.name}'s review was decided; its draft is no longer waiting"
+    if run.status != "awaiting_checkpoint":
+        return f"the run is {run.status}, not waiting at {segment.name}'s review"
+    if (art.get("files") or {}).get(name) is None:
+        return f"the segment left no {name} to import"
+    return None
+
+
+def _may_retry_draft(
+    run: Run,
+    segment: RunSegment,
+    review: Checkpoint | None,
+    kind: str,
+    principal: Principal | None,
+) -> bool:
+    return (
+        review is not None
+        and principal is not None
+        and has_role(principal.role, review.approver_role)  # type: ignore[arg-type]
+        and _draft_retry_refusal(run, segment, review, kind) is None
+    )
+
+
+async def retry_draft_import(
+    db: AsyncSession, principal: Principal, run_id: uuid.UUID, seq: int
+) -> None:
+    """Retry import from the run page (owner, 2026-10-20): the draft a segment left, whose
+    import at segment end was refused, is imported again as at segment end (an Oracle that
+    now accepts it, or a cause that went away). By the review's approver role or above,
+    while the run waits at that review; the review stays open, and its SwarmCloud wait is
+    untouched: the person still decides.
+
+    Imported, the run names the document and the import replaces the error on the segment
+    and in the review's payload; refused again, the new error replaces the old. Either way
+    noted on the segment and audited. Once imported there is nothing to retry (409).
+    The run's row stays locked through the import, so a second retry waits and then finds
+    nothing to retry."""
+    run = await _get_run(db, run_id, lock=True)
+    segments = await _segments(db, run.id)
+    segment = next((s for s in segments if s.seq == seq), None)
+    if segment is None:
+        raise NotFound(f"run {run_id} has no segment {seq}")
+    review = _review_of(await _checkpoints(db, [run.id]), seq)
+    role = review.approver_role if review else _flow(run).segment(segment.name).approver_role
+    if not has_role(principal.role, role):  # type: ignore[arg-type]
+        raise Forbidden(f"Requires the {role} role")
+    kind = await _target_kind(db, run)
+    refusal = _draft_retry_refusal(run, segment, review, kind)
+    if refusal is not None or review is None:
+        raise RunError(f"nothing to retry: {refusal}")
+    name = flows.draft_file(kind)
+    art = _art(segment)
+    previous = art["import"]["error"]
+    imported = await _import_draft(db, run, kind, art["files"][name])
+    who = "An owner" if principal.role == "owner" else "An approver"
+    if imported.get("document_id"):
+        # As at segment end (:func:`_advance`).
+        run.document_id = uuid.UUID(imported["document_id"])
+        _set_knob(run, "document_slug", None)
+        _note_art(
+            art,
+            f"{who} retried importing {name}: imported as {imported.get('slug')} "
+            f"v{imported.get('version')}.",
+        )
+    else:
+        _note_art(
+            art,
+            f"{who} retried importing {name}: still not imported (the segment shows why).",
+        )
+    art["import"] = imported
+    _set_art(segment, art)
+    review.payload = {**(review.payload or {}), "import": imported}
+    await audit.record(
+        db,
+        principal,
+        "run.draft_import_retried",
+        "run",
+        run.id,
+        {
+            "segment": segment.name,
+            "seq": seq,
+            "file": name,
+            "previous_error": previous,
+            "error": imported.get("error"),
+            "document_id": imported.get("document_id"),
+            "version": imported.get("version"),
+        },
     )
     await db.commit()
 

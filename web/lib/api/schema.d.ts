@@ -2649,6 +2649,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Draft Import
+         * @description Import a segment's draft again after its import at segment end was refused
+         *     (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``),
+         *     while the run waits at that segment's review. Imported, the run names the document and
+         *     the error is replaced by the import; refused again, by the new error (200 either way:
+         *     read ``draft_import``). Nothing is decided: the review stays open for a person. 409 when
+         *     there is nothing to retry (imported already, no draft file, the review decided, the run
+         *     ended). The review's approver role or above; audited. Not the stopped advance of
+         *     ``retry_import_run``.
+         */
+        post: operations["retry_draft_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/cancel-again": {
         parameters: {
             query?: never;
@@ -6671,7 +6698,7 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web";
+            source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web" | "oracle";
             /** Ref */
             ref: string;
             /** Title */
@@ -12930,6 +12957,11 @@ export interface components {
             /** Attempts */
             attempts: components["schemas"]["SegmentAttempt"][];
             draft_import?: components["schemas"]["DraftImport"] | null;
+            /**
+             * Can Retry Draft Import
+             * @default false
+             */
+            can_retry_draft_import: boolean;
             items_check?: components["schemas"]["ItemsCheck"] | null;
             /** Started At */
             started_at?: string | null;
@@ -20525,6 +20557,38 @@ export interface operations {
             header?: never;
             path: {
                 run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_draft_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                seq: number;
             };
             cookie?: never;
         };

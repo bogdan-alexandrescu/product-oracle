@@ -9424,6 +9424,67 @@
         }
       }
     },
+    "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Draft Import",
+        "description": "Import a segment's draft again after its import at segment end was refused\n(``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``),\nwhile the run waits at that segment's review. Imported, the run names the document and\nthe error is replaced by the import; refused again, by the new error (200 either way:\nread ``draft_import``). Nothing is decided: the review stays open for a person. 409 when\nthere is nothing to retry (imported already, no draft file, the review decided, the run\nended). The review's approver role or above; audited. Not the stopped advance of\n``retry_import_run``.",
+        "operationId": "retry_draft_import",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "seq",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Seq"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runs/{run_id}/cancel-again": {
       "post": {
         "tags": [
@@ -23158,7 +23219,8 @@
               "github",
               "fireflies",
               "upload",
-              "web"
+              "web",
+              "oracle"
             ],
             "title": "Source"
           },
@@ -40332,6 +40394,11 @@
                 "type": "null"
               }
             ]
+          },
+          "can_retry_draft_import": {
+            "type": "boolean",
+            "title": "Can Retry Draft Import",
+            "default": false
           },
           "items_check": {
             "anyOf": [
