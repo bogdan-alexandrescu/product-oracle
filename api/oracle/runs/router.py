@@ -4,7 +4,8 @@ Roles: anyone signed in reads runs; an approver creates, estimates and starts on
 owner approves a run over the cost threshold and resumes one paused on overrun; an
 owner or the approver who created a run cancels it; a checkpoint is decided by its
 ``approver_role`` or above, who may also retry importing the draft it waits on after the
-import was refused. The tick takes an owner or an API token.
+import was refused (owners also once the run finished). The tick takes an owner or an API
+token.
 """
 
 import asyncio
@@ -215,13 +216,15 @@ async def retry_draft_import(
     run_id: uuid.UUID, seq: int, principal: CurrentPrincipal, db: TenantDB
 ) -> RunOut:
     """Import a segment's draft again after its import at segment end was refused
-    (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``),
-    while the run waits at that segment's review. Imported, the run names the document and
+    (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).
+    While the run waits at that segment's review: the review's approver role or above, and
+    nothing is decided (the review stays open for a person). After the run finished with
+    the review approved past the refusal: owners only, while no version from the run
+    exists; the run's checkpoints do not change. Imported, the run names the document and
     the error is replaced by the import; refused again, by the new error (200 either way:
-    read ``draft_import``). Nothing is decided: the review stays open for a person. 409 when
-    there is nothing to retry (imported already, no draft file, the review decided, the run
-    ended). The review's approver role or above; audited. Not the stopped advance of
-    ``retry_import_run``."""
+    read ``draft_import``). 409 when there is nothing to retry (imported already, a version
+    from the run exists, no draft file, changes requested, the run cancelled or failed).
+    Audited. Not the stopped advance of ``retry_import_run``."""
     await _call(service.retry_draft_import(db, principal, run_id, seq))
     return await service.read_run(db, run_id, principal)
 
@@ -255,7 +258,8 @@ async def decide_checkpoint(
     db: TenantDB,
 ) -> RunOut:
     """Approve a checkpoint (the next segment starts) or request changes (the segment
-    runs again with the note)."""
+    runs again with the note). Approving is refused (409) while the draft its segment left
+    is not imported (``cannot_approve``): retry the import, or request changes."""
     await _call(
         service.decide_checkpoint(db, principal, run_id, checkpoint_id, body.decision, body.note)
     )

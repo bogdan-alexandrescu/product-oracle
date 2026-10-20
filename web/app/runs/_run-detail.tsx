@@ -669,6 +669,8 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
   const redoOrContinue = answer?.needs === "redo_or_continue";
   // Redo carries the console's findings, else the note: the API refuses it without either.
   const redoBlocked = !answer?.can_redo && !note.trim();
+  // The draft was not imported: approving is refused until Retry import imports it.
+  const approveBlocked = cp.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null;
   return (
     <div
       id={anchor ? "decide" : undefined}
@@ -689,6 +691,11 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
       </div>
       {cp.note && <p className="mt-1.5 text-text2">{cp.note}</p>}
       {answer && <ConsolePanel answer={answer} />}
+      {approveBlocked && (
+        <p className="mt-2 text-sm text-warn" data-testid="cannot-approve">
+          {approveBlocked}
+        </p>
+      )}
       <textarea
         aria-label="Note for the agents"
         placeholder={redoOrContinue ? "Note (optional, added to the findings)" : "Note (required to request changes)"}
@@ -700,7 +707,13 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
       <div className="mt-2 flex flex-wrap gap-2">
         {redoOrContinue ? (
           <>
-            <Button variant="solid" icon="check" disabled={busy} onClick={() => onDecide(cp, "continue", note)}>
+            <Button
+              variant="solid"
+              icon="check"
+              disabled={busy || !!approveBlocked}
+              title={approveBlocked ?? undefined}
+              onClick={() => onDecide(cp, "continue", note)}
+            >
               Continue
             </Button>
             <Button
@@ -714,14 +727,21 @@ function CheckpointRow({ cp, busy, onDecide, anchor }: { cp: CheckpointOut; busy
         ) : (
           <>
             {answer?.needs === "confirm" && (
-              <Button variant="solid" icon="check" disabled={busy} onClick={() => onDecide(cp, "confirm", note)}>
+              <Button
+                variant="solid"
+                icon="check"
+                disabled={busy || (answer.verdict === "MERGE" && !!approveBlocked)}
+                title={answer.verdict === "MERGE" ? (approveBlocked ?? undefined) : undefined}
+                onClick={() => onDecide(cp, "confirm", note)}
+              >
                 Confirm {answer.verdict === "MERGE" ? "approval" : "change request"}
               </Button>
             )}
             <Button
               variant={answer?.needs === "confirm" ? "secondary" : "solid"}
               icon={answer?.needs === "confirm" ? undefined : "check"}
-              disabled={busy}
+              disabled={busy || !!approveBlocked}
+              title={approveBlocked ?? undefined}
               onClick={() => onDecide(cp, "approved", note)}
             >
               Approve and continue

@@ -2661,13 +2661,15 @@ export interface paths {
         /**
          * Retry Draft Import
          * @description Import a segment's draft again after its import at segment end was refused
-         *     (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``),
-         *     while the run waits at that segment's review. Imported, the run names the document and
+         *     (``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).
+         *     While the run waits at that segment's review: the review's approver role or above, and
+         *     nothing is decided (the review stays open for a person). After the run finished with
+         *     the review approved past the refusal: owners only, while no version from the run
+         *     exists; the run's checkpoints do not change. Imported, the run names the document and
          *     the error is replaced by the import; refused again, by the new error (200 either way:
-         *     read ``draft_import``). Nothing is decided: the review stays open for a person. 409 when
-         *     there is nothing to retry (imported already, no draft file, the review decided, the run
-         *     ended). The review's approver role or above; audited. Not the stopped advance of
-         *     ``retry_import_run``.
+         *     read ``draft_import``). 409 when there is nothing to retry (imported already, a version
+         *     from the run exists, no draft file, changes requested, the run cancelled or failed).
+         *     Audited. Not the stopped advance of ``retry_import_run``.
          */
         post: operations["retry_draft_import"];
         delete?: never;
@@ -2732,7 +2734,8 @@ export interface paths {
         /**
          * Decide Checkpoint
          * @description Approve a checkpoint (the next segment starts) or request changes (the segment
-         *     runs again with the note).
+         *     runs again with the note). Approving is refused (409) while the draft its segment left
+         *     is not imported (``cannot_approve``): retry the import, or request changes.
          */
         post: operations["decide_checkpoint"];
         delete?: never;
@@ -6676,6 +6679,8 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /** Cannot Approve */
+            cannot_approve?: string | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
         };
         /** Choice */
@@ -9102,6 +9107,8 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /** Cannot Approve */
+            cannot_approve?: string | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
             /**
              * Flow

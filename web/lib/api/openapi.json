@@ -9430,7 +9430,7 @@
           "runs"
         ],
         "summary": "Retry Draft Import",
-        "description": "Import a segment's draft again after its import at segment end was refused\n(``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``),\nwhile the run waits at that segment's review. Imported, the run names the document and\nthe error is replaced by the import; refused again, by the new error (200 either way:\nread ``draft_import``). Nothing is decided: the review stays open for a person. 409 when\nthere is nothing to retry (imported already, no draft file, the review decided, the run\nended). The review's approver role or above; audited. Not the stopped advance of\n``retry_import_run``.",
+        "description": "Import a segment's draft again after its import at segment end was refused\n(``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).\nWhile the run waits at that segment's review: the review's approver role or above, and\nnothing is decided (the review stays open for a person). After the run finished with\nthe review approved past the refusal: owners only, while no version from the run\nexists; the run's checkpoints do not change. Imported, the run names the document and\nthe error is replaced by the import; refused again, by the new error (200 either way:\nread ``draft_import``). 409 when there is nothing to retry (imported already, a version\nfrom the run exists, no draft file, changes requested, the run cancelled or failed).\nAudited. Not the stopped advance of ``retry_import_run``.",
         "operationId": "retry_draft_import",
         "security": [
           {
@@ -9605,7 +9605,7 @@
           "runs"
         ],
         "summary": "Decide Checkpoint",
-        "description": "Approve a checkpoint (the next segment starts) or request changes (the segment\nruns again with the note).",
+        "description": "Approve a checkpoint (the next segment starts) or request changes (the segment\nruns again with the note). Approving is refused (409) while the draft its segment left\nis not imported (``cannot_approve``): retry the import, or request changes.",
         "operationId": "decide_checkpoint",
         "security": [
           {
@@ -23152,6 +23152,17 @@
             "title": "Can Decide",
             "default": false
           },
+          "cannot_approve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cannot Approve"
+          },
           "console": {
             "anyOf": [
               {
@@ -29763,6 +29774,17 @@
             "type": "boolean",
             "title": "Can Decide",
             "default": false
+          },
+          "cannot_approve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cannot Approve"
           },
           "console": {
             "anyOf": [
