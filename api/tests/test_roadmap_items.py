@@ -256,3 +256,19 @@ async def test_items_routes_are_company_scoped(client, owner, runtime):  # noqa:
     assert resp.status_code == 404
     # A PRD is not a roadmap.
     assert (await client.get(f"/v1/roadmaps/{PRD}/items", headers=auth)).status_code == 422
+
+
+async def test_items_need_a_roadmap_built_from_a_prd_version(client, owner):  # noqa: F811
+    """§16.18: a roadmap stays sourced from an approved PRD. A roadmap version with no
+    source PRD version (pushed by hand) gets no untraced items."""
+    _, auth = owner
+    resp = await client.post(
+        f"/v1/documents/{ROADMAP}/versions",
+        content=ROADMAP_MD.encode(),
+        headers={**auth, "Content-Type": "text/markdown"},
+    )
+    assert resp.status_code == 201, resp.text
+    resp = await client.put(
+        f"/v1/roadmaps/{ROADMAP}/versions/1/items", json={"yaml": ITEMS}, headers=auth
+    )
+    assert resp.status_code == 422 and "built from no PRD version" in resp.json()["detail"]
