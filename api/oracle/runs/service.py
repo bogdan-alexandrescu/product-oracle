@@ -3197,14 +3197,6 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
     run_id = run.id
     runtime = get_runtime()
     segments = await _segments(db, run.id)
-    if (run.knobs or {}).get("searches"):
-        await _search_earlier(db, run, segments, stats)
-        # Committed on its own: what was found, cancelled and counted stays so, whatever
-        # the rest of this tick does. The commit released the run's row lock: taken
-        # again, the run and its segments are read as they are now.
-        await db.commit()
-        run = await _get_run(db, run.id, lock=True)
-        segments = await _segments(db, run.id, fresh=True)
     wf = _live(run)
     if wf is not None and (wf.get("cancel_pending") or run.status in FINAL):
         if not await _retry_pending_cancel(db, run, wf, segments, stats) or run.status != "running":
@@ -3214,6 +3206,14 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         if (ceiling := _overrun(run)) is not None:
             await _pause_overrun(db, run, ceiling, stats)
             return
+    # The workflow's status is read before anything that commits (a resumed advance): a pass
+    # run again after a runtime call (:func:`_replay`) must not redo what it committed.
+    status: WorkflowStatus | None = None
+    if wf is not None and not wf.get("cancel_pending") and run.status not in FINAL:
+        try:
+            status = await _rt().status(wf["id"])
+        except RuntimeUnavailable:
+            status = None  # read again where it is needed, and failing there as before
     resuming = _resuming(run, segments)
     if resuming is not None:
         try:
@@ -3225,10 +3225,10 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         if wf is not None and not wf.get("cancel_pending") and run.status not in FINAL:
             # Its status, cost and the ceiling, a wait's expiry and the workflow's end:
             # read whatever the resume did.
-            await _tick_workflow(db, run, wf, segments, stats)
+            await _tick_workflow(db, run, wf, segments, stats, status)
         return
     if wf is not None:
-        await _tick_workflow(db, run, wf, segments, stats)
+        await _tick_workflow(db, run, wf, segments, stats, status)
         return
     if run.status in FINAL:
         return
@@ -4090,11 +4090,14 @@ async def _tick_workflow(
     wf: dict[str, Any],
     segments: list[RunSegment],
     stats: _TickStats,
+    status: WorkflowStatus | None = None,
 ) -> None:
     """Advance a run that is one live workflow: record its cost, take each segment's files
     when the wait after it opens (or when it is done, checkpoint off), open the checkpoint
-    with the wait to answer, and notice expiry, failures and the end."""
-    status = await _rt().status(wf["id"])
+    with the wait to answer, and notice expiry, failures and the end. ``status``: the
+    workflow's status, when the pass read it already."""
+    if status is None:
+        status = await _rt().status(wf["id"])
     start = _take_cost(run, wf, status, segments)
     current = next((s for s in segments if s.status == "running"), None)
     for parked in status.parked:
@@ -4698,6 +4701,19 @@ async def _wait_ended(
     await _detach(db, run, cancel=False, state="expired" if expired else "ended")
 
 
+async def _tick_searches(db: AsyncSession, run_id: uuid.UUID, stats: _TickStats) -> bool:
+    """Look for the submissions Oracle gave up on (:func:`_search_earlier`), committed on
+    its own: what was found, cancelled and counted stays so, whatever the rest of this
+    tick does, and is never counted again by a pass run again for a runtime call."""
+    run = await db.scalar(select(Run).where(Run.id == run_id).with_for_update(skip_locked=True))
+    if run is None or not (run.knobs or {}).get("searches"):
+        await db.rollback()
+        return False
+    await _search_earlier(db, run, await _segments(db, run_id), stats)
+    await db.commit()
+    return True
+
+
 async def _tick_one(
     db: AsyncSession, run_id: uuid.UUID, stats: _TickStats, deadline: float
 ) -> bool:
@@ -4769,13 +4785,21 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
                 # An Inbox decision recorded, its post to SwarmCloud not finished.
                 stats.checked += 1
                 await _complete_decision(db, run_id, owed, deadline)
-            elif not await _replay(
-                db,
-                deadline,
-                lambda run_id=run_id, deadline=deadline: _tick_one(db, run_id, stats, deadline),
-                reset=reset,
-            ):
-                continue
+            else:
+                await _replay(
+                    db,
+                    deadline,
+                    lambda run_id=run_id: _tick_searches(db, run_id, stats),
+                    reset=reset,
+                )
+                ran = await _replay(
+                    db,
+                    deadline,
+                    lambda run_id=run_id, deadline=deadline: _tick_one(db, run_id, stats, deadline),
+                    reset=reset,
+                )
+                if not ran:
+                    continue
             if await _has_waiting(db, run_id):
                 await submit_queued(db, run_id, deadline=deadline)
         except RuntimeUnavailable as exc:

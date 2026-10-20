@@ -689,29 +689,27 @@ async def test_already_answered_by_oracles_lost_post_with_the_same_verdict(clien
     cp = pending(run)
     swarm.lose_next_answer = True
     resp = await _decide_raw(client, auth, run, "changes_requested", "Add a guardrail metric")
-    assert resp.status_code == 503 and "decide again" in resp.text
+    assert resp.status_code == 503 and "recorded" in resp.text
     run = await get(client, auth, run["id"])
-    assert run["status"] == "awaiting_checkpoint" and pending(run)["id"] == cp["id"]
+    # The decision is recorded (nothing to decide again); the post is the tick's.
+    assert run["status"] == "awaiting_checkpoint"
+    assert next(c for c in run["checkpoints"] if c["id"] == cp["id"])["status"] == (
+        "changes_requested"
+    )
     # Meanwhile the workflow went on with the recorded answer.
     assert swarm.workflows["wf_1"].step("next_draft-revise1").state == "SUCCEEDED"
-    run = await decide(client, auth, run, "changes_requested", note="Add a guardrail KPI")
-    assert run["status"] == "running"
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "running" and len(swarm.answers) == 1
     assert len(swarm.submissions()) == 1 and _live_with(swarm, "next_draft") == ["wf_1"]
-    assert any("kept the earlier wording" in n for n in run["notes"]), run["notes"]
     assert not any("decided outside Oracle" in n for n in run["notes"])
     decided = next(c for c in run["checkpoints"] if c["id"] == cp["id"])
     answered = decided["payload"]["wait"]["answered"]
-    assert answered["answer_id"] == cp["id"] and answered["kept_earlier"] is True
-    assert answered["answered_by"] == SERVICE_PRINCIPAL and answered["at"]
-    # What was applied is SwarmCloud's recorded wording, by whom; the Inbox's is kept apart.
-    recorded = decided["payload"]["wait"]["recorded"]
-    assert recorded["findings"] == ["Add a guardrail metric"]
-    assert answered["not_applied"] == "Add a guardrail KPI"
+    assert answered["answer_id"] == cp["id"] and answered["replayed"] is True
+    assert answered["at"]
+    # The replay carries the first wording, so the revision applies it.
     attempt = run["segments"][0]["attempts"][-1]
     assert attempt["note"] == "Add a guardrail metric"
-    # Whose: who SwarmCloud recorded as answering (answered_by), never the label.
-    assert attempt["note_by"] == recorded["answered_by"] == SERVICE_PRINCIPAL
-    assert attempt["not_applied"] == "Add a guardrail KPI"
     # The revision used the first wording; the run goes on to round 2 in the same workflow.
     staged = json.loads(swarm.workflows["wf_1"].step("next_draft-revise1").staged["review1.json"])
     assert staged["findings"] == ["Add a guardrail metric"]
@@ -723,9 +721,10 @@ async def test_already_answered_by_oracles_lost_post_with_the_same_verdict(clien
 
 
 async def test_a_lost_approval_corrected_to_changes_continues_as_a_new_workflow(client, owner):
-    """(c) A lost approval, then a request for changes: the recorded MERGE differs, so the
-    Inbox decision is a correction. The workflow is cancelled and the run continues as a
-    new workflow carrying it, with no segment running twice."""
+    """(c) A lost approval: the decision is recorded and cannot be changed (no second
+    decision, so no double answer); the tick posts it again (the same answer id, so one
+    answer) and the run follows the approval. A different verdict recorded outside Oracle
+    is still a correction (below)."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -733,14 +732,16 @@ async def test_a_lost_approval_corrected_to_changes_continues_as_a_new_workflow(
     resp = await _decide_raw(client, auth, run, "approved")
     assert resp.status_code == 503
     assert swarm.verdict("wf_1", "next_draft-review1") == "MERGE"
+    # Decided already: a second decision is refused, never a second answer.
+    again = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{pending(run)['id']}/decide",
+        json={"decision": "changes_requested", "note": "Split the rollout"},
+        headers=auth,
+    )
+    assert again.status_code == 409, again.text
+    await tick(client, auth)
     run = await get(client, auth, run["id"])
-    run = await decide(client, auth, run, "changes_requested", note="Split the rollout")
-    assert swarm.workflows["wf_1"].state == "CANCELLED"
-    assert len(swarm.submissions()) == 2 and run["status"] == "running"
-    assert "Split the rollout" in swarm.submissions()[1]["steps"][0]["input"]["prompt"]
-    assert _live_with(swarm, "next_draft") == ["wf_2"]
-    assert any("correction" in n for n in run["notes"]), run["notes"]
-    # One answer posted (the lost one); nothing posted to the new workflow yet.
+    assert run["status"] == "succeeded"
     assert [a["payload"]["verdict"] for a in swarm.answers] == ["MERGE"]
 
 
@@ -865,10 +866,11 @@ async def test_503_is_retried(client, owner, reason):
         503, json={"code": "unavailable", "message": "try later", "detail": {"reason": reason}}
     )
     resp = await _decide_raw(client, auth, run, "changes_requested", "Cover returns")
-    assert resp.status_code == 503 and "decide again" in resp.text
+    assert resp.status_code == 503 and "recorded" in resp.text
     run = await get(client, auth, run["id"])
     assert run["status"] == "awaiting_checkpoint" and swarm.answers == []
-    run = await decide(client, auth, run, "changes_requested", note="Cover returns")
+    await tick(client, auth)  # the recorded decision is posted
+    run = await get(client, auth, run["id"])
     assert len(swarm.answers) == 1 and len(swarm.submissions()) == 1
     assert run["status"] == "running"
 
@@ -1467,7 +1469,9 @@ def _refuse_closed(swarm: FakeSwarmCloud) -> None:
 
 
 @pytest.mark.parametrize("path", _DECIDE_PATHS)
-async def test_a_failed_cancel_on_a_decision_says_decide_again(client, owner, monkeypatch, path):
+async def test_a_failed_cancel_on_a_decision_is_finished_by_the_tick(
+    client, owner, monkeypatch, path
+):
     tenant_id, auth = owner
     swarm = on()
     run, decision, prefix = await _arm(client, auth, tenant_id, swarm, path, monkeypatch)
@@ -1477,18 +1481,21 @@ async def test_a_failed_cancel_on_a_decision_says_decide_again(client, owner, mo
         _refuse_closed(swarm)
     swarm.fail_cancels = 1
     resp = await _decide_raw(client, auth, run, decision, "Cover returns")
-    assert resp.status_code == 503 and "decide again" in resp.text, resp.text
+    assert resp.status_code == 503 and "recorded" in resp.text, resp.text
     assert swarm.cancels == ["wf_1"]  # tried, not confirmed
     assert swarm.workflows["wf_1"].state != "CANCELLED"
-    # Nothing submitted after it, and nothing changed in Oracle.
+    # Nothing submitted after it; the decision is recorded, the run still waits.
     assert len(swarm.submissions()) == 1
     run = await get(client, auth, run["id"])
-    assert run["status"] == "awaiting_checkpoint" and pending(run)["id"] == cp["id"]
+    assert run["status"] == "awaiting_checkpoint"
+    assert next(c for c in run["checkpoints"] if c["id"] == cp["id"])["status"] == decision
     assert await verify_run_token(token) is not None
-    # Deciding again: the cancel is confirmed first, then the run goes on.
+    # The tick makes the decision's calls again: the cancel is confirmed first, then the
+    # run goes on.
     if path == "closed":
         _refuse_closed(swarm)
-    run = await decide(client, auth, run, decision, note="Cover returns")
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
     assert swarm.workflows["wf_1"].state == "CANCELLED"
     if path == "stop_rest":
         assert run["status"] == "succeeded" and len(swarm.submissions()) == 1
@@ -2113,9 +2120,9 @@ async def test_redo_from_a_console_not_yet_reruns_the_segment_once_with_the_find
     run = await get(client, auth, run["id"])
     swarm.fail_cancels = 1
     resp = await _decide_raw(client, auth, run, "redo")
-    assert resp.status_code == 503 and "decide again" in resp.text
+    assert resp.status_code == 503 and "recorded" in resp.text
     assert len(swarm.submissions()) == 1
-    run = await decide(client, auth, await get(client, auth, run["id"]), "redo")
+    await tick(client, auth)
     assert swarm.workflows["wf_1"].state == "CANCELLED"
     assert len(swarm.submissions()) == 2
     # The findings go to the agents whole (only what is logged is clipped).
