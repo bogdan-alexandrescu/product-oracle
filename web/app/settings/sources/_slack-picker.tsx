@@ -16,8 +16,9 @@ export const MAX_CHANNELS = 100;
 /**
  * Slack source picker (S5): public channels and the private ones you are in, never DMs;
  * writes `{channels, since, until}` (days, UTC; the same range shape as Fireflies). Only
- * messages from `since` through `until` are read, plus later replies in threads started
- * inside the range; narrowing the range deletes what falls outside it on the next sync.
+ * messages from `since` through `until` are read; nothing posted after `until` is, thread
+ * replies included (S5, owner 2026-10-20). Narrowing the range removes what falls outside
+ * it on the next sync.
  */
 export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
   const sinceId = useId();
@@ -106,8 +107,8 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
             </p>
           ) : (
             <p id={hintId} className="text-[13px] leading-5 text-text2">
-              Optional, in UTC. Later replies in threads started in the range are kept. Narrowing the range removes
-              messages outside it at the next sync.
+              Optional, in UTC. Nothing posted after Until is read, thread replies included. Narrowing the
+              range removes messages outside it at the next sync.
             </p>
           )}
         </div>
