@@ -20,13 +20,13 @@ import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeQuality, seedQuality, type QualityDb } from "./quality";
-import { routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { dateMarks, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeTrace } from "./trace";
 import { routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
-export type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
+export type VersionRow = Omit<Schemas["VersionOut"], "sections" | "date_marks"> & {
   sections: Omit<Schemas["SectionOut"], "verdict">[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
@@ -528,6 +528,7 @@ function latestReview(db: Db, versionId: string, key: string): ReviewRow | undef
 function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
   return {
     ...v,
+    date_marks: [],
     sections: v.sections.map((s) => {
       const r = latestReview(db, v.id, s.section_key);
       return {
@@ -1059,7 +1060,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (!v) return notFound("Version");
   const sub = p[5];
 
-  if (!sub) return json(200, versionOut(db, v));
+  if (!sub) {
+    // O4 'document dates': a roadmap's dates against its PRD's schedule bases now.
+    const marks = doc.kind === "roadmap" && db.roadmap ? dateMarks(db.roadmap, v.source?.document_id, v.sections) : [];
+    return json(200, { ...versionOut(db, v), date_marks: marks });
+  }
   if (sub === "markdown") {
     return new Response(versionMarkdown(doc, v), { headers: { "content-type": "text/markdown" } });
   }

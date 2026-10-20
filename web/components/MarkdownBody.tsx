@@ -3,7 +3,7 @@ import { Fragment, type ReactNode } from "react";
 
 import { CitationChip } from "@/components/CitationChip";
 import { IGNORE_ATTR } from "@/lib/anchor";
-import type { CitationOut } from "@/lib/api/client";
+import type { CitationOut, DateMarkOut } from "@/lib/api/client";
 import type { Block, Inline } from "@/lib/markdown";
 
 /** A highlighted span of a section's anchorable text. */
@@ -35,6 +35,11 @@ type Ctx = {
   found: string[];
   /** Detail sections already shown in this body (a key linked twice shows once). */
   shown: Set<string>;
+  /**
+   * O4 'document dates': this section's dates that rest on no verified basis now. Each
+   * gets its marker ("unverified", "date withdrawn") after it; the text is unchanged.
+   */
+  dateMarks?: DateMarkOut[];
 };
 
 const ignore = { [IGNORE_ATTR]: "" };
@@ -106,12 +111,52 @@ function renderText(text: string, ctx: Ctx, key: string): ReactNode {
   return out;
 }
 
+function escapeRe(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** The marker after a date that rests on no verified basis (not part of the anchored text). */
+export function DateMarker({ mark }: { mark: DateMarkOut }) {
+  return (
+    <span
+      {...ignore}
+      className="date-mark"
+      data-date-mark={mark.status}
+      title={
+        mark.status === "withdrawn"
+          ? `The basis of this date (${mark.bases.join(", ")}) was withdrawn`
+          : "No verified estimate, capacity or commitment of the PRD supports this date"
+      }
+    >
+      {mark.label}
+    </span>
+  );
+}
+
+/** Text with the marker after each flagged date (O4 'document dates'). */
+function renderMarkedText(text: string, ctx: Ctx, key: string): ReactNode {
+  const marks = (ctx.dateMarks ?? []).filter((m) => m.label && text.includes(m.text));
+  if (!marks.length) return renderText(text, ctx, key);
+  const byText = new Map(marks.map((m) => [m.text, m]));
+  const re = new RegExp(`(${[...byText.keys()].sort((a, b) => b.length - a.length).map(escapeRe).join("|")})`);
+  return text.split(re).map((piece, i) => {
+    if (!piece) return null;
+    const mark = i % 2 === 1 ? byText.get(piece) : undefined;
+    return (
+      <Fragment key={`${key}~${i}`}>
+        {renderText(piece, ctx, `${key}~${i}`)}
+        {mark && <DateMarker mark={mark} />}
+      </Fragment>
+    );
+  });
+}
+
 function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
   return nodes.map((n, i) => {
     const k = `${key}.${i}`;
     switch (n.t) {
       case "text":
-        return <span key={k}>{renderText(n.v, ctx, k)}</span>;
+        return <span key={k}>{renderMarkedText(n.v, ctx, k)}</span>;
       case "code":
         return <code key={k}>{renderText(n.v, ctx, k)}</code>;
       case "strong":
@@ -195,8 +240,19 @@ export function MarkdownBody({
   citations,
   onHighlightClick,
   expand,
+  dateMarks,
 }: Omit<Ctx, "pos" | "found" | "shown"> & { blocks: Block[] }) {
-  const ctx: Ctx = { pos: 0, highlights, activeId, citations, onHighlightClick, expand, found: [], shown: new Set() };
+  const ctx: Ctx = {
+    pos: 0,
+    highlights,
+    activeId,
+    citations,
+    onHighlightClick,
+    expand,
+    found: [],
+    shown: new Set(),
+    dateMarks,
+  };
   // Renders a block, then the detail its links opened.
   const withDetail = (k: string, node: ReactNode) => {
     const keys = opened(ctx);

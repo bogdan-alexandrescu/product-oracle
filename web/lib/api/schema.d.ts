@@ -7072,6 +7072,36 @@ export interface components {
             reads: string[];
         };
         /**
+         * DateMarkOut
+         * @description A date written in a roadmap's text, checked against its PRD's schedule bases now
+         *     (O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next
+         *     to the date (``unverified``, ``date withdrawn``); None for a verified date. The
+         *     text itself is never rewritten.
+         */
+        DateMarkOut: {
+            /** Section Key */
+            section_key: string;
+            /** Text */
+            text: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "verified" | "unverified" | "withdrawn";
+            /** Label */
+            label?: string | null;
+            /**
+             * Bases
+             * @default []
+             */
+            bases: string[];
+        };
+        /**
          * DeckOut
          * @description The brief layer as slides, for Present mode: one slide per brief section after a
          *     title slide, Sources and data points slides last when the version has sources.
@@ -13921,6 +13951,11 @@ export interface components {
              * @default []
              */
             citations: components["schemas"]["CitationOut"][];
+            /**
+             * Date Marks
+             * @default []
+             */
+            date_marks: components["schemas"]["DateMarkOut"][];
         };
         /** VersionReports */
         VersionReports: {

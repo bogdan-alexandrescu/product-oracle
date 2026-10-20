@@ -36,7 +36,7 @@ import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
-import { api, unwrap, type CitationOut, type SectionOut, type Verdict } from "@/lib/api/client";
+import { api, unwrap, type CitationOut, type DateMarkOut, type SectionOut, type Verdict } from "@/lib/api/client";
 import { formatDate, formatDateTime, SOURCE_LABEL, VERDICT_LABEL } from "@/lib/format";
 import { blocksText, parseBlocks } from "@/lib/markdown";
 import { hasRole, useMe } from "@/lib/me";
@@ -490,6 +490,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const changedLocks = new Set(
     version?.warnings.filter((w) => w.code === "locked_section_changed").flatMap((w) => w.section_keys) ?? [],
   );
+  // O4 'document dates': a roadmap's dates that rest on no verified basis now, by section.
+  const dateMarks = new Map<string, DateMarkOut[]>();
+  for (const m of version?.date_marks ?? []) {
+    if (m.label) dateMarks.set(m.section_key, [...(dateMarks.get(m.section_key) ?? []), m]);
+  }
   const sectionProps = (s: SectionOut) => ({
     section: s,
     blocks: parsed.get(s.section_key)!.blocks,
@@ -503,6 +508,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     onHighlightClick,
     onVerdict,
     showLayer: hasBrief,
+    dateMarks: dateMarks.get(s.section_key),
   });
   const expandFor = (origin: string): ExpandCtx => ({
     keys: expandable,

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { routeRoadmap, seedRoadmap, type RoadmapContext } from "../lib/api/mock/roadmap";
+import { dateMarks, routeRoadmap, seedRoadmap, type RoadmapContext } from "../lib/api/mock/roadmap";
 
 // The mock's roadmap alignment and track routes mirror the API's (CR-11; no page yet:
 // the UI wave builds the screens).
@@ -102,4 +102,19 @@ test("viewers read but cannot write", async () => {
   expect((await call("POST", `tracks/${track.id}/monitor`)).status).toBe(403);
   expect((await call("POST", "schedule-bases", { kind: "estimate", reference: "X", supports_date: "2027-01-01" })).status).toBe(403);
   expect((await call("GET", "tracks/00000000-0000-4000-8000-000000000000")).status).toBe(404);
+});
+
+test("document dates: a withdrawn basis marks the roadmap's date, a verified one does not", async () => {
+  const { db, call } = api("approver");
+  const sections = [
+    { section_key: "item-thresholds", level: 3, heading: "Thresholds", body_md: "Beta by 2026-11-30 (ENG-412 estimate)." },
+    { section_key: "sources", level: 2, heading: "Sources", body_md: "- Retrieved 2026-11-30" },
+  ];
+  const statuses = () => dateMarks(db, PRD.id, sections).map((m) => [m.section_key, m.text, m.status, m.label]);
+  const eng412 = db.bases.find((b) => b.reference === "ENG-412")!;
+  expect(statuses()).toEqual([["item-thresholds", "2026-11-30", "verified", null]]);
+  expect((await call("POST", `schedule-bases/${eng412.id}/withdraw`, { reason: "Re-estimated" })).status).toBe(200);
+  expect(statuses()).toEqual([["item-thresholds", "2026-11-30", "withdrawn", "date withdrawn"]]);
+  // A date nothing ever supported.
+  expect(dateMarks(db, PRD.id, [{ ...sections[0], body_md: "GA 2027-02-01." }]).map((m) => m.status)).toEqual(["unverified"]);
 });

@@ -431,6 +431,23 @@ mark.hl-pending {
   color: inherit;
 }
 
+/* O4 'document dates': the marker after a roadmap date with no verified basis now. */
+.date-mark {
+  margin-left: 0.35em;
+  padding: 0 0.4em;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: 0.1em;
+  background: var(--color-amber-100);
+  color: var(--color-amber-900);
+}
+.date-mark[data-date-mark="withdrawn"] {
+  background: var(--color-rose-100);
+  color: var(--color-rose-900);
+}
+
 /* Word-level diff. */
 .diff-ins {
   background: var(--color-emerald-100);

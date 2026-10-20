@@ -139,6 +139,15 @@ export function seedRoadmap(ctx: RoadmapContext): RoadmapDb {
     db.tracks.push(track);
     const rv = roadmap && latest(ctx, roadmap.id);
     if (rv) db.items[rv.id] = itemsFor(ctx, rv, track.id);
+    // O4 'document dates': the roadmap's Beta date rests on ENG-412; its GA date's basis
+    // (ENG-413) was withdrawn, so the version view marks it "date withdrawn".
+    for (const [reference, day, status] of [["ENG-412", "2026-11-30", "verified"], ["ENG-413", "2026-12-15", "withdrawn"]] as const) {
+      db.bases.push({
+        id: mockUuid(), kind: "estimate", reference, supports_date: day, detail: null, prd_document_id: prd.id,
+        item_key: null, tracker_key: null, tracker_record_id: null, status, verified_by: ctx.userId, verified_at: AT,
+        withdrawn_by: status === "withdrawn" ? ctx.userId : null, withdrawn_at: status === "withdrawn" ? AT : null, created_at: AT,
+      });
+    }
     db.milestones.push({
       id: mockUuid(), track_id: track.id, name: "First release", horizon: "now", target_date: null, basis_ids: [],
       item_keys: (rv ? db.items[rv.id] : []).filter((i) => i.horizon === "now").map((i) => i.item_key),
@@ -524,4 +533,52 @@ export function trackRunBody(ctx: RoadmapContext, db: RoadmapDb, trackId: string
   const prd = ctx.documents.find((d) => d.id === t.prd_id)!;
   const roadmap = t.roadmap_id ? ctx.documents.find((d) => d.id === t.roadmap_id) : undefined;
   return { flow: "prd_to_roadmap", source: prd.slug, document: roadmap?.slug ?? null, knobs: { depth: "standard", roles: {}, checkpoints: {} } };
+}
+
+// --- O4 'document dates' ---------------------------------------------------------------
+
+const ISO_DATE = /(?<![\w/.-])(\d{4})-(\d{2})-(\d{2})(?![\w-])/g;
+const MARK_RANK = { withdrawn: 0, unverified: 1, verified: 2 } as const;
+
+/**
+ * The dates a roadmap version's text writes, each checked against its PRD's schedule
+ * bases now (oracle.roadmap.doc_dates, simplified: ISO dates; a basis with an item key
+ * counts where the section names it). One mark per date and section, worst status.
+ */
+export function dateMarks(
+  db: RoadmapDb,
+  prdId: string | undefined,
+  sections: { section_key: string; level: number; heading: string; body_md: string }[],
+): Schemas["DateMarkOut"][] {
+  const out = new Map<string, Schemas["DateMarkOut"]>();
+  let sourcesLevel: number | null = null;
+  for (const s of sections) {
+    if (s.section_key === "sources") {
+      sourcesLevel = s.level;
+      continue;
+    }
+    if (sourcesLevel != null && s.level > sourcesLevel) continue;
+    sourcesLevel = null;
+    const text = `${s.heading}\n${s.body_md.replace(/\]\([^)\n]*\)/g, "]()")}`;
+    for (const m of text.matchAll(ISO_DATE)) {
+      const day = m[0];
+      const covers = (b: Basis) =>
+        b.prd_document_id === prdId && b.supports_date === day && (!b.item_key || s.section_key.endsWith(b.item_key));
+      const verified = db.bases.filter((b) => b.status === "verified" && covers(b));
+      const withdrawn = db.bases.filter((b) => b.status === "withdrawn" && covers(b));
+      const status = verified.length ? "verified" : withdrawn.length ? "withdrawn" : "unverified";
+      const mark: Schemas["DateMarkOut"] = {
+        section_key: s.section_key,
+        text: day,
+        date: day,
+        status,
+        label: status === "verified" ? null : status === "withdrawn" ? "date withdrawn" : "unverified",
+        bases: (verified.length ? verified : withdrawn).map((b) => b.reference),
+      };
+      const key = `${s.section_key}|${day}`;
+      const had = out.get(key);
+      if (!had || MARK_RANK[status] < MARK_RANK[had.status]) out.set(key, mark);
+    }
+  }
+  return [...out.values()];
 }

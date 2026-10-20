@@ -23985,6 +23985,60 @@
         ],
         "title": "CriterionInfo"
       },
+      "DateMarkOut": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "unverified",
+              "withdrawn"
+            ],
+            "title": "Status"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "bases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Bases",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_key",
+          "text",
+          "date",
+          "status"
+        ],
+        "title": "DateMarkOut",
+        "description": "A date written in a roadmap's text, checked against its PRD's schedule bases now\n(O4 'document dates', oracle.roadmap.doc_dates). ``label`` is the marker shown next\nto the date (``unverified``, ``date withdrawn``); None for a verified date. The\ntext itself is never rewritten."
+      },
       "DeckOut": {
         "properties": {
           "document_id": {
@@ -43644,6 +43698,14 @@
             },
             "type": "array",
             "title": "Citations",
+            "default": []
+          },
+          "date_marks": {
+            "items": {
+              "$ref": "#/components/schemas/DateMarkOut"
+            },
+            "type": "array",
+            "title": "Date Marks",
             "default": []
           }
         },

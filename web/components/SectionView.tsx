@@ -4,11 +4,11 @@ import { memo, useMemo, useState, type ReactNode } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { Button, Chip } from "@/components/ds";
-import { MarkdownBody, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
+import { DateMarker, MarkdownBody, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
 import { LayerChip, Menu } from "@/components/review/parts";
-import type { CitationOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
+import type { CitationOut, DateMarkOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
 import type { Block } from "@/lib/markdown";
 
 const HEADING_CLASS: Record<number, string> = {
@@ -42,6 +42,7 @@ export const SectionView = memo(function SectionView({
   nested = false,
   showLayer = true,
   headTools,
+  dateMarks,
 }: {
   section: SectionOut;
   blocks: Block[];
@@ -66,6 +67,8 @@ export const SectionView = memo(function SectionView({
   showLayer?: boolean;
   /** Extra controls in the head, before the ⋯ menu (the phone's Comments button). */
   headTools?: ReactNode;
+  /** A roadmap's dates in this section that rest on no verified basis (O4). */
+  dateMarks?: DateMarkOut[];
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
   const locked = section.verdict?.verdict === "approved";
@@ -99,6 +102,9 @@ export const SectionView = memo(function SectionView({
           className={`min-w-0 ${nested ? HEADING_CLASS[3] : HEADING_CLASS[Math.min(section.level, 3)]} text-text`}
         >
           {section.heading}
+          {dateMarks
+            ?.filter((m) => m.label && section.heading.includes(m.text))
+            .map((m) => <DateMarker key={m.text} mark={m} />)}
         </Heading>
         <LayerChip layer={showLayer ? section.layer : null} />
         {changedLock && (
@@ -158,6 +164,7 @@ export const SectionView = memo(function SectionView({
           citations={citations}
           onHighlightClick={onHighlightClick}
           expand={expand}
+          dateMarks={dateMarks}
         />
       </div>
       {!nested && (
