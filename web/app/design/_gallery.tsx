@@ -250,7 +250,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         >
           <InspectorSection label="Goal" tools={<GoalTag id={sel.goal} proposed={sel.proposed} />}>
             <div className="flex items-center justify-between gap-3">
-              <ToGo current={87} target={92} unit="%" />
+              <ToGo amount={5} unit="%" />
               <Sparkline values={[84, 85, 85, 86, 88, 87]} target={92} />
             </div>
           </InspectorSection>
@@ -559,16 +559,16 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
       <Panel title="To go" testId={id("to-go")}>
         <Body className="flex-col">
           <State name="Points">
-            <ToGo current={87} target={92} unit="%" />
+            <ToGo amount={5} unit="%" />
           </State>
           <State name="Minutes">
-            <ToGo current={4.6} target={3} unit="min" />
+            <ToGo amount={1.6} unit="min" />
           </State>
           <State name="Count">
-            <ToGo current={236} target={400} />
+            <ToGo amount={164} />
           </State>
           <State name="At target">
-            <ToGo current={92} target={92} unit="%" />
+            <ToGo amount={0} unit="%" />
           </State>
         </Body>
       </Panel>

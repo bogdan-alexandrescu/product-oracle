@@ -159,14 +159,17 @@ export function KpiStrip({ items, label, hero = false }: { items: Kpi[]; label?:
   );
 }
 
-/** Goal progress (I3 rule 4): distance to go in the goal's own unit, "5 pts to go". */
-export function ToGo({ current, target, unit }: { current: number; target: number; unit?: string | null }) {
-  const d = Math.round(Math.abs(target - current) * 10) / 10;
+/**
+ * Goal progress (I3 rule 4): distance to go in the goal's own unit, "5 pts to go". The caller
+ * works out the distance in the goal's direction (app/home/_goals.ts); `amount` is never
+ * negative and may carry its currency and k/M/B ("$900k"). Zero reads "At target".
+ */
+export function ToGo({ amount, unit }: { amount: number | string; unit?: string | null }) {
   const u = unit === "%" ? " pts" : unit && unit !== "" ? ` ${unit}` : "";
-  if (d === 0) return <span className="font-semibold whitespace-nowrap text-pass">At target</span>;
+  if (amount === 0 || amount === "0") return <span className="font-semibold whitespace-nowrap text-pass">At target</span>;
   return (
     <span className="font-semibold whitespace-nowrap">
-      <b className="tnum font-bold">{d}</b>
+      <b className="tnum font-bold">{typeof amount === "number" ? Math.round(amount * 10) / 10 : amount}</b>
       {u} to go
     </span>
   );

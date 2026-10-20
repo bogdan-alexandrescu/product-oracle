@@ -10,27 +10,39 @@ Claude accounts) or the deterministic :class:`FakeRuntime`, which tests choose w
 from oracle.swarm.fake import FakeRuntime, Outcome
 from oracle.swarm.runtime import (
     AgentRuntime,
+    Answer,
+    Features,
     McpAccess,
+    Parked,
+    RecordedAnswer,
     RuntimeUnavailable,
     StepSpec,
+    StepStatus,
     WorkflowSpec,
     WorkflowStatus,
 )
 from oracle.swarm.settings import get_runtime_settings
-from oracle.swarm.swarmcloud import SwarmCloudRuntime, UnconfiguredSwarmCloud
+from oracle.swarm.swarmcloud import SwarmCloudRuntime, UnconfiguredSwarmCloud, redact
 
 __all__ = [
     "AgentRuntime",
+    "Answer",
     "FakeRuntime",
+    "Features",
     "McpAccess",
     "Outcome",
+    "Parked",
+    "RecordedAnswer",
     "RuntimeUnavailable",
     "StepSpec",
+    "StepStatus",
     "SwarmCloudRuntime",
     "UnconfiguredSwarmCloud",
     "WorkflowSpec",
     "WorkflowStatus",
     "get_runtime",
+    "redact",
+    "close_runtime",
     "set_runtime",
 ]
 
@@ -55,3 +67,10 @@ def set_runtime(runtime: AgentRuntime | None) -> None:
     """Replace the process-wide runtime (``None``: rebuild from settings on next use)."""
     global _runtime
     _runtime = runtime
+
+
+async def close_runtime() -> None:
+    """Close the runtime's shared HTTP client, if it made one (on shutdown)."""
+    close = getattr(_runtime, "aclose", None)
+    if close is not None:
+        await close()

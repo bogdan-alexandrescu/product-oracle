@@ -1,9 +1,11 @@
 """Code-defined flows (W1) with their knobs, cost table and segment prompts.
 
 A flow is a list of segments. A segment is one agent workflow (one step per agent
-role) that ends at a checkpoint (W2); until SwarmCloud's ``await_input`` (#1436)
-lands, Oracle submits one workflow per segment and re-sends earlier outputs in the
-next segment's prompt. Each segment's run token carries only the scopes it needs.
+role) that ends at a checkpoint (W2). While SwarmCloud's ``await_input`` (#1436) or caller
+MCP (#1433) is off, Oracle submits one workflow per segment and re-sends earlier outputs
+in the next segment's prompt; each segment's run token carries only the scopes it needs.
+Once both are on, a run is one workflow (oracle.runs.workflow) and prompts name the
+Oracle tools that read earlier outputs instead.
 
 Knobs: ``depth`` (quick | standard | deep), agent ``roles`` per segment, which
 ``checkpoints`` are on (all by default) and ``budget_usd`` (a cap on the estimate).
@@ -44,6 +46,7 @@ MCP_TOOLS = {
     "get_feedback_package": "a version's open feedback items and locked sections",
     "propose_change": "propose a baseline change (locked items become proposals)",
     "push_draft": "hand back a draft for import as the document's next version",
+    "get_run_output": "a file an earlier segment of this run wrote (seq and name)",
 }
 
 
@@ -449,6 +452,11 @@ class PromptContext:
     change_request: str | None = None
     # False until the runtime can attach Oracle's MCP server (SwarmCloud #1433).
     mcp_reachable: bool = True
+    # True when the run token reaches the agents through the runtime: earlier outputs are
+    # read with get_run_output instead of pasted.
+    mcp_attached: bool = False
+    # (seq, segment title, file names) of the earlier segments' outputs.
+    prior_files: list[tuple[int, str, list[str]]] = field(default_factory=list)
     # The kind of the document the run writes (prd | roadmap).
     kind: str = "prd"
     # prd_to_roadmap: the approved PRD version the roadmap is built from.
@@ -516,10 +524,19 @@ def step_prompt(
     if ctx.locked_sections:
         lines += ["", "Locked (approved) sections: " + ", ".join(ctx.locked_sections)]
     if ctx.source is not None:
-        lines += source_lines(ctx.source)
+        lines += source_lines(ctx.source, paste=not ctx.mcp_attached)
     if ctx.roadmap is not None:
         lines += roadmap_lines(ctx.roadmap, ctx.source)
-    if ctx.prior_outputs:
+    if ctx.mcp_attached:
+        if ctx.prior_files:
+            lines += [
+                "",
+                "Outputs of earlier segments are in Oracle: read each with "
+                f"get_run_output(seq, name) ({MCP_TOOLS['get_run_output']}):",
+            ]
+            for seq, title, names in ctx.prior_files:
+                lines.append(f"- seq {seq} ({title}): {', '.join(names)}")
+    elif ctx.prior_outputs:
         lines += ["", "Outputs of earlier segments:"]
         budget = MAX_PRIOR_CHARS
         for name, content in ctx.prior_outputs.items():
@@ -542,13 +559,14 @@ def basis_line(b: dict[str, Any]) -> str:
     return line
 
 
-def source_lines(src: SourceContext) -> list[str]:
+def source_lines(src: SourceContext, *, paste: bool = True) -> list[str]:
     """The prd_to_roadmap prompt's inputs: the PRD version, horizons, goals, priority
-    order and dependency edges."""
+    order and dependency edges (and the PRD itself unless agents read it from Oracle)."""
     lines = [
         "",
         f"Source: approved PRD '{src.title}' ({src.slug}), version {src.version}. Read it "
-        f"with get_document_markdown(doc={src.slug}, version={src.version}); it is below too.",
+        f"with get_document_markdown(doc={src.slug}, version={src.version})"
+        + ("; it is below too." if paste else "."),
         "PRD section ids: " + ", ".join(f"{k} ({h})" for k, h in src.sections),
         "",
         "Horizons (B2): "
@@ -587,6 +605,8 @@ def source_lines(src: SourceContext) -> list[str]:
         lines += [f"- {e['src']} {e['type']} {e['dst']}" for e in src.edges]
     else:
         lines.append("- none recorded")
+    if not paste:
+        return lines
     text = src.markdown[:MAX_SOURCE_CHARS]
     lines += ["", f"--- PRD {src.slug} v{src.version} ---", text]
     if len(text) < len(src.markdown):

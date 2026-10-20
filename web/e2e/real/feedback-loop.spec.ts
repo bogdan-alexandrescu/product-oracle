@@ -21,7 +21,7 @@ async function login(page: Page) {
 
 type OpenItem = { id: string; kind: string; section_key: string | null; status: string };
 
-test("full loop: push, review, pull, push v2 with resolutions, diff, approve, export", async ({ page }) => {
+test("full loop: push, review, pull, push v2 with resolutions, diff, publish, export", async ({ page }) => {
   const work = await mkdtemp(path.join(tmpdir(), "oracle-e2e-"));
 
   // The agent track imports v1.
@@ -74,6 +74,14 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, approve, ex
   ]);
   expect(JSON.parse(await readFile(path.join(work, `${DOC}-v1.locked.json`), "utf8"))).toEqual(["goal"]);
 
+  // Home on the real API: the open feedback needs the reviewer; a fresh company has no goals yet.
+  await page.goto("/home");
+  await expect(page.getByTestId("home-needs-table")).toContainText("Team invoices PRD");
+  await expect(page.getByTestId("home-goals-empty")).toContainText("No goals yet");
+  await expect(page.getByTestId("home-inspector").getByRole("img", { name: "1 of 5 sections approved" })).toBeVisible();
+  // Error notices are <p role="alert">; Next's route announcer is the only other alert.
+  await expect(page.locator("main p[role=alert], [data-testid^=home] p[role=alert]")).toHaveCount(0);
+
   // v2 answers both items.
   const byKind = (kind: string) => items.find((i) => i.kind === kind)!.id;
   const v2 = (await readFile(path.join(FIXTURES, "draft_v2.md"), "utf8"))
@@ -108,9 +116,15 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, approve, ex
     await expect(row).toContainText("addressed in v2");
   }
 
-  // Approve v2, then export it.
-  await page.getByRole("button", { name: "Approve version" }).click();
-  await page.getByRole("button", { name: "Confirm" }).click();
+  // Publish v2 (the PRD has no blocks: the API's publish gate lets it through), then export it.
+  await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+  await page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/publish$`));
+  await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v2");
+  await page.getByTestId("publish-button").click();
+  await page.getByRole("dialog", { name: "Publish v2?" }).getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByTestId("published-chip")).toHaveText("Published v2");
+  await page.goto(`/documents/${DOC}/v/2`);
   await expect(page.getByText(/✓ Approved/)).toBeVisible();
   await expect(page.getByText(/review is closed/)).toBeVisible();
 

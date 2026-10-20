@@ -160,7 +160,7 @@ test("open the diff: section badges and word-level changes", async ({ page }) =>
   await expect(byKey("goal-trace")).toHaveAttribute("data-status", "unchanged");
 });
 
-test("approve a version and export it", async ({ page }) => {
+test("publish a version and export it", async ({ page }) => {
   await login(page);
   await page.goto("/documents/team-workspaces/v/2");
   await expect(page.getByRole("status").filter({ hasText: "scope" })).toBeVisible();
@@ -170,8 +170,15 @@ test("approve a version and export it", async ({ page }) => {
   await page.getByRole("button", { name: "Export PDF" }).click();
   expect((await download).suggestedFilename()).toBe("team-workspaces-v2.pdf");
 
-  await page.getByRole("button", { name: "Approve version" }).click();
-  await page.getByRole("button", { name: "Confirm" }).click();
+  // A PRD is published from the Publish screen (T2 publish gate); team-workspaces is ready.
+  await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+  await page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true }).click();
+  await expect(page).toHaveURL(/\/documents\/team-workspaces\/publish$/);
+  await page.getByTestId("publish-button").click();
+  await page.getByRole("dialog", { name: "Publish v2?" }).getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByTestId("published-chip")).toHaveText("Published v2");
+
+  await page.goto("/documents/team-workspaces/v/2");
   await expect(page.getByText(/✓ Approved/)).toBeVisible();
   await expect(page.getByTestId("doc-status")).toHaveText("Approved");
   await expect(page.getByText(/review is closed/)).toBeVisible();

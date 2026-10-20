@@ -7,6 +7,7 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { resetMockData } from "@/lib/api/mock/server";
 import { useMe } from "@/lib/me";
+import { loadInbox, loadMyQuestions, onWaitingChanged } from "@/lib/waiting";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
 import { Mark } from "./Brand";
@@ -38,21 +39,25 @@ function isActive(pathname: string, d: Dest): boolean {
   return pathname === base || pathname.startsWith(`${base}/`);
 }
 
-/** Inbox count for the badge, re-read on every navigation. */
+/**
+ * The badge: what waits on me, the Inbox's rows and the questions asked of me (I3), as Home
+ * and /inbox count them. Re-read on every navigation and after an action (lib/waiting).
+ */
 function useInboxCount(enabled: boolean): number | null {
   const pathname = usePathname();
   const [n, setN] = useState<number | null>(null);
+  const [changes, setChanges] = useState(0);
+  useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    api
-      .GET("/v1/inbox")
-      .then((r) => alive && r.response.ok && setN(r.data?.total ?? null))
+    Promise.all([loadInbox(), loadMyQuestions().catch(() => [])])
+      .then(([inbox, questions]) => alive && setN(inbox.total + questions.length))
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [enabled, pathname]);
+  }, [enabled, pathname, changes]);
   return n;
 }
 

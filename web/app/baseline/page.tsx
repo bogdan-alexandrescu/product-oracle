@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, type Kpi } from "@/components/ds";
 import { Loading } from "@/components/ui";
@@ -17,6 +18,15 @@ import { ProposalsTab } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
 
 type Tab = "graph" | "flagged" | "conflicts" | "proposals";
+
+/** ?entity=<id> opens that item (Publish's Resolve links here). */
+function OpenFromUrl({ onOpen }: { onOpen: (id: string) => void }) {
+  const id = useSearchParams().get("entity");
+  useEffect(() => {
+    if (id) onOpen(id);
+  }, [id, onOpen]);
+  return null;
+}
 
 export default function BaselinePage() {
   const { me, role } = useMe();
@@ -121,6 +131,9 @@ export default function BaselinePage() {
 
   return (
     <Page>
+      <Suspense fallback={null}>
+        <OpenFromUrl onOpen={setOpenId} />
+      </Suspense>
       <PageHeader
         title="Baseline"
         status={

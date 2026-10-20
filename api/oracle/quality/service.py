@@ -31,7 +31,7 @@ from oracle.quality.schemas import (
     ReadinessItem,
     ReportRef,
 )
-from oracle.readiness import ReadinessContext, ReadinessReport
+from oracle.readiness import Purpose, ReadinessContext, ReadinessReport
 from oracle.v2 import models as m
 from oracle.v2.schemas import EvaluationFindingOut, EvaluationReportDetail
 
@@ -63,10 +63,13 @@ async def get_version(db: AsyncSession, doc: str, n: int) -> tuple[Document, Doc
 
 
 async def evaluate(
-    db: AsyncSession, document: Document, version: DocumentVersion
+    db: AsyncSession,
+    document: Document,
+    version: DocumentVersion,
+    purpose: Purpose = "advisory",
 ) -> ReadinessReport:
     criteria.register()
-    return await readiness.evaluate(ReadinessContext(db, document.id, version.id))
+    return await readiness.evaluate(ReadinessContext(db, document.id, version.id, purpose=purpose))
 
 
 def _counts(statuses: list[str]) -> dict[str, int]:
@@ -101,9 +104,11 @@ async def _findings(db: AsyncSession, ids: list[uuid.UUID]) -> list[m.Evaluation
     )
 
 
-async def dashboard(db: AsyncSession, doc: str, n: int) -> ReadinessDashboard:
+async def dashboard(
+    db: AsyncSession, doc: str, n: int, purpose: Purpose = "advisory"
+) -> ReadinessDashboard:
     document, version = await get_version(db, doc, n)
-    report = await evaluate(db, document, version)
+    report = await evaluate(db, document, version, purpose)
 
     model_reports = await _reports(db, version.id, "llm_job")
     latest_model = model_reports[0] if model_reports else None
@@ -177,6 +182,7 @@ async def dashboard(db: AsyncSession, doc: str, n: int) -> ReadinessDashboard:
         version_id=version.id,
         composition_revision=await _composition_revision(db, document.id),
         policy_note=POLICY_NOTE,
+        purpose=purpose,
         evaluated_at=datetime.now(UTC),
         blocked=report.blocked,
         blocking=[r.key for r in report.blocking],
