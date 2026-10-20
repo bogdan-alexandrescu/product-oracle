@@ -5,12 +5,19 @@ import httpx
 import pytest
 from sqlalchemy import select
 
-from oracle.sources import base, service
+from oracle.sources import base, fireflies_browse, service
 from oracle.sources.connectors.fireflies import FirefliesConnector
 from oracle.sources.models import SourceItem
 from oracle.tenancy import tenant_session
 from tests.connection_helpers import clear_provider_http, use_provider_http
-from tests.fireflies_fake import API_KEY, SAMPLE, STANDUP_CAL, FakeFireflies, rate_limited
+from tests.fireflies_fake import (
+    API_KEY,
+    SAMPLE,
+    STANDUP_CAL,
+    FakeFireflies,
+    meeting,
+    rate_limited,
+)
 from tests.sources_helpers import client_for, make_connection, make_user
 
 STANDUP = f"cal:{STANDUP_CAL}"
@@ -21,8 +28,10 @@ PLANNING = "title:ai agents sprint planning|lin@x.io"
 def fake():
     fake = FakeFireflies(list(SAMPLE))
     use_provider_http(fake)
+    fireflies_browse.reset_limits()
     yield fake
     clear_provider_http()
+    fireflies_browse.reset_limits()
 
 
 @pytest.fixture
@@ -403,3 +412,103 @@ async def test_a_full_pass_on_a_broken_answer_keeps_the_items(
             assert sync["outcome"] == "error", sync
             assert sync["deleted"] == 0
             assert all((await _items(tenant_id, source_id)).values())
+
+
+# --- Cost: cache and per-connection limit ---------------------------------------------
+
+
+class Clock:
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    clock = Clock()
+    monkeypatch.setattr(fireflies_browse, "_clock", clock)
+    return clock
+
+
+async def test_answers_are_cached_for_a_minute(fake, alice, conn, clock):
+    url = f"/v1/connections/{conn}/fireflies/meetings"
+    async with client_for(alice) as a:
+        first = await a.get(url, params={"search": "standup"})
+        assert first.status_code == 200
+        calls = len(fake.requests)
+        clock.now += 30
+        again = await a.get(url, params={"search": "standup"})
+        assert again.json() == first.json()
+        assert len(fake.requests) == calls
+        # Other parameters are another answer.
+        await a.get(url, params={"search": "planning"})
+        assert len(fake.requests) == calls + 1
+        clock.now += 31
+        await a.get(url, params={"search": "standup"})
+        assert len(fake.requests) == calls + 2
+
+        series = f"/v1/connections/{conn}/fireflies/series"
+        await a.get(series)
+        calls = len(fake.requests)
+        await a.get(series)
+        assert len(fake.requests) == calls
+
+
+async def test_a_looping_client_is_limited_per_connection(fake, tenant_id, alice, conn, clock):
+    url = f"/v1/connections/{conn}/fireflies/meetings"
+    statuses = []
+    async with client_for(alice) as a:
+        for i in range(200):
+            resp = await a.get(url, params={"search": f"loop {i}"})
+            statuses.append(resp.status_code)
+        assert len(fake.requests) <= fireflies_browse.CALLS_PER_MINUTE
+        limited = await a.get(url, params={"search": "one more"})
+        assert limited.status_code == 429
+        assert 0 < int(limited.headers["Retry-After"]) <= 60
+        assert "try again" in limited.json()["detail"].lower()
+        # Cached answers are still served.
+        assert (await a.get(url, params={"search": "loop 0"})).status_code == 200
+
+        # Another connection of the same person has its own budget.
+        other = await make_connection(
+            tenant_id, alice, "fireflies", credential={"access_token": API_KEY}
+        )
+        resp = await a.get(f"/v1/connections/{other}/fireflies/meetings")
+        assert resp.status_code == 200, resp.text
+
+        # A minute later, the connection may call Fireflies again, up to the hourly cap.
+        clock.now += 61
+        assert (await a.get(url, params={"search": "later"})).status_code == 200
+        for i in range(400):
+            clock.now += 3
+            await a.get(url, params={"search": f"slow {i}"})
+        # All within half an hour: the hourly cap holds (+1: the other connection).
+        assert len(fake.requests) <= fireflies_browse.CALLS_PER_HOUR + 1
+    assert statuses.count(200) <= fireflies_browse.CALLS_PER_MINUTE
+
+
+async def test_the_series_list_makes_a_fixed_number_of_calls(fake, alice, conn, clock):
+    fake.meetings = [
+        meeting(f"M{i}", f"Meeting {i}", f"2026-{1 + i % 9:02d}-{1 + i % 28:02d}T09:00:00Z")
+        for i in range(1000)
+    ]
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/connections/{conn}/fireflies/series")
+    assert resp.status_code == 200
+    assert resp.json()["truncated"] is True
+    assert len(fake.requests) == fireflies_browse.SERIES_CALLS
+
+
+async def test_mcp_clients_acting_as_the_person_can_browse(fake, tenant_id, alice, conn, clock):
+    """Owner, 2026-10-19: the browse lists are open to MCP clients acting as the person."""
+    from tests.test_mcp import mcp_client, user_token
+
+    token = await user_token(tenant_id, alice)
+    async with mcp_client(token) as c:
+        meetings = await c.call_tool("list_fireflies_meetings", {"connection_id": str(conn)})
+        assert not meetings.is_error, meetings
+        assert [m["id"] for m in meetings.structured_content["meetings"]][:2] == ["P2", "S3"]
+        series = await c.call_tool("list_fireflies_series", {"connection_id": str(conn)})
+        assert not series.is_error, series
