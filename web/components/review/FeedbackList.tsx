@@ -107,9 +107,11 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
   const key = item.section_key;
   const heading = key ? ctx.headings.get(key) ?? key : null;
   const mine = !!comment && ctx.userId !== null && comment.author_id === ctx.userId;
-  // A suggestion's actions are Accept / Edit / Dismiss; a comment's, Reply / Resolve.
-  const commentActions =
-    comment && kind !== "suggestion" && !ctx.readOnly && ctx.canComment ? (
+  // A suggestion's actions are Accept / Edit / Dismiss; a comment's, Reply / Resolve. A
+  // suggestion on a comment offers the thread's own actions when it has none to take
+  // (a commenter's own thread, or a suggestion already decided).
+  const commentActions = (shown: boolean) =>
+    comment && !shown && !ctx.readOnly && ctx.canComment ? (
       <>
         {!replying && (
           <Button variant="ghost" icon="comment" onClick={() => setReplying(true)}>
@@ -142,10 +144,10 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
           {FEEDBACK_STATE_LABEL[state]}
         </Chip>
       </div>
-      {(suggestionActions || commentActions) && (
+      {(suggestionActions || commentActions(false)) && (
         <div className={`mt-2 flex flex-wrap items-center gap-1 ${suggestionActions ? "" : "-ml-2.5"}`} data-testid="feedback-actions">
           {suggestionActions}
-          {commentActions}
+          {commentActions(!!suggestionActions)}
         </div>
       )}
       {forms}

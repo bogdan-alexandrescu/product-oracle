@@ -76,6 +76,7 @@ export function ScrollStrip({
   // reveal() runs when the current item CHANGES (and on mount), never on a plain re-render,
   // so the reader can still scroll the current item away with the chevrons or a swipe.
   const revealed = useRef<Element | null>(null);
+  const again = useRef(0);
   useEffect(() => {
     const s = el.current;
     if (!s) return;
@@ -84,7 +85,17 @@ export function ScrollStrip({
     revealed.current = on;
     reveal(s);
     measure();
+    // Showing a chevron narrows the strip a frame or two later: reveal once more, for this
+    // change only (the re-render that shows the chevron must not cancel it).
+    cancelAnimationFrame(again.current);
+    again.current = requestAnimationFrame(() => {
+      again.current = requestAnimationFrame(() => {
+        reveal(s);
+        measure();
+      });
+    });
   });
+  useEffect(() => () => cancelAnimationFrame(again.current), []);
 
   const setRef = (node: HTMLDivElement | null) => {
     el.current = node;

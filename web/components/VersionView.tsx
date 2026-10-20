@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
-import { BuildRoadmapButton } from "@/components/BuildRoadmap";
+import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
@@ -763,6 +763,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             <LinkButton variant="ghost" href={`/documents/${doc}/diff?from=${n - 1}&to=${n}`}>
               Compare with v{n - 1}
             </LinkButton>
+          )}
+          {version?.source && (
+            <span className="text-sm text-text2">
+              <SourceLink source={version.source} />
+            </span>
           )}
           <span className="flex-1" />
           {hasBrief && (

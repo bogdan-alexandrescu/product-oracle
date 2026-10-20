@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { openSection, section, selectText, showAll } from "../helpers";
+import { openSection, section, selectText } from "../helpers";
 import { oracle, stackState } from "./stack";
 
 const DOC = "e2e-team-invoices";
@@ -33,7 +33,7 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   await page.getByRole("link", { name: "Version 1" }).click();
   await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/v/1$`));
 
-  // One section is open at a time: open each from the section strip before using it.
+  // One section is open at a time: open each from the outline before using it.
   await openSection(page, "solution");
   await selectText(page, "solution", "Each row has a download link");
   await page.getByRole("button", { name: /^Comment/ }).click();
@@ -104,10 +104,9 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
 
   // The resolution report on v2 shows both items addressed.
   await page.goto(`/documents/${DOC}/v/2`);
-  await page.getByRole("tab", { name: "Resolutions" }).click();
-  // The inspector lists the open section's items first; All covers both sections.
-  await showAll(page);
-  const report = page.getByRole("tabpanel");
+  // History holds the resolution report (Resolutions, Reports and Jobs), every section.
+  await page.getByRole("tab", { name: /^History/ }).click();
+  const report = page.getByTestId("history-resolutions");
   const rows = report.getByTestId("feedback-item");
   await expect(rows).toHaveCount(2);
   for (const note of ["bulk download as a zip archive", "numeric target for support tickets"]) {

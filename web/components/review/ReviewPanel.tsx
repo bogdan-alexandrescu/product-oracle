@@ -2,7 +2,6 @@
 
 import { useId, useState, type ComponentProps, type ReactNode } from "react";
 
-import { SourceLink } from "@/components/BuildRoadmap";
 import { ResolutionPanel } from "@/components/FeedbackPanel";
 import { JobsPanel } from "@/components/JobsPanel";
 import { ReportsPanel } from "@/components/ReportsPanel";
@@ -132,11 +131,6 @@ function SourcesTab({ version }: { version: VersionOut }) {
           >
             Sources as of
           </InspectorRow>
-        )}
-        {version.source && (
-          <div className="flex min-h-8 items-center text-sm text-text2">
-            <SourceLink source={version.source} />
-          </div>
         )}
       </div>
       {version.citations.length === 0 ? (
