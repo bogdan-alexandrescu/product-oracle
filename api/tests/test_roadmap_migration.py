@@ -181,3 +181,130 @@ def test_the_model_lists_every_subject_the_migrated_check_allows(scratch_db):
 
     command.upgrade(_cfg(), REVISION)
     assert _subjects() == set(CHANGE_SUBJECTS)
+
+
+# ------------------------------------------------------------- 0014_review after 0016
+
+# PR #69's 0014_review as it stands: change_events.subject_kind "as of 0013", rebuilt
+# from this fixed list plus 'member' (upgrade) or without it (downgrade).
+REVIEW_0013_SUBJECTS = (
+    "document_section",
+    "requirement",
+    "decision",
+    "source_permission",
+    "blocker_status",
+    "composition_revision",
+    "document_version",
+    "entity",
+    "artifact_version",
+)
+
+
+def _review_fixed_list(upgrade: bool) -> None:
+    """0014_review's subject check, as written in PR #69: drop and recreate from a list."""
+    values = REVIEW_0013_SUBJECTS + (("member",) if upgrade else ())
+    if not upgrade:
+        _run("DELETE FROM change_events WHERE subject_kind = 'member'")
+    _run("ALTER TABLE change_events DROP CONSTRAINT ck_change_events_subject_kind")
+    _run(
+        "ALTER TABLE change_events ADD CONSTRAINT ck_change_events_subject_kind "
+        "CHECK (subject_kind IN (" + ", ".join(f"'{v}'" for v in values) + "))"
+    )
+
+
+def _review_additive(upgrade: bool) -> None:
+    """The change PR #69's 0014_review needs: add or remove only 'member', through
+    oracle.migration_checks, as 0016 does for 'product_track'."""
+    from alembic.operations import Operations
+    from alembic.runtime.migration import MigrationContext
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    from oracle.migration_checks import add_check_values, remove_check_values
+
+    check = ("change_events", "ck_change_events_subject_kind", "subject_kind")
+
+    def go(conn) -> None:
+        with Operations.context(MigrationContext.configure(conn)):
+            if upgrade:
+                add_check_values(*check, ("member",))
+            else:
+                remove_check_values(*check, ("member",))
+
+    async def run() -> None:
+        engine = create_async_engine(SCRATCH_URL)
+        try:
+            async with engine.begin() as conn:
+                if not upgrade:
+                    await conn.execute(
+                        text("DELETE FROM change_events WHERE subject_kind = 'member'")
+                    )
+                await conn.run_sync(go)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "review",
+    [
+        pytest.param(
+            _review_fixed_list,
+            marks=pytest.mark.xfail(
+                strict=True,
+                raises=(AssertionError, IntegrityError),
+                reason="PR #69's 0014_review rebuilds the check from a fixed list: run "
+                "after 0016 it drops product_track (and fails once a product_track "
+                "event exists)",
+            ),
+            id="fixed_list",
+        ),
+        pytest.param(_review_additive, id="additive"),
+    ],
+)
+def test_0014_review_after_0016_keeps_product_track(scratch_db, review):
+    """The integrator may chain 0014_review after 0016. 0016 is additive in both orders
+    (test above); 0014_review must be too, or the track monitor's change events break."""
+    cfg = _cfg()
+    command.upgrade(cfg, REVISION)
+    tenant = uuid.uuid4()
+    _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
+    before = _subjects()
+    assert "product_track" in before
+
+    # A fresh database (CI): no product_track event yet. The rebuild succeeds...
+    review(upgrade=True)
+    # ...and must still allow both lanes' subjects.
+    assert _subjects() == before | {"member"}
+    _event(tenant, "product_track")
+    _event(tenant, "member")
+
+    # A deployed database: product_track events exist when 0014_review is undone.
+    review(upgrade=False)
+    assert _subjects() == before
+    _event(tenant, "product_track")
+
+    # And applied again with product_track events present.
+    review(upgrade=True)
+    assert _subjects() == before | {"member"}
+
+
+def test_what_breaks_when_the_fixed_list_rebuild_runs_after_0016(scratch_db):
+    """What PR #69's 0014_review does today, chained after 0016: on a fresh database it
+    silently drops product_track (the track monitor's change events are then refused);
+    on a database with a product_track event the upgrade itself fails."""
+    cfg = _cfg()
+    command.upgrade(cfg, REVISION)
+    tenant = uuid.uuid4()
+    _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
+
+    _review_fixed_list(upgrade=True)
+    assert "product_track" not in _subjects()
+    with pytest.raises(IntegrityError):
+        _event(tenant, "product_track")
+
+    command.downgrade(cfg, "0014_blockers_snapshot")
+    command.upgrade(cfg, REVISION)
+    _event(tenant, "product_track")
+    with pytest.raises(IntegrityError, match="ck_change_events_subject_kind"):
+        _review_fixed_list(upgrade=True)
