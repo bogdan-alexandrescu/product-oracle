@@ -193,19 +193,29 @@ test("connections › Google: a drive.readonly grant needs no reconnect; a drive
   await expect(google.getByRole("button", { name: "Reconnect to choose files" })).toHaveCount(0);
 });
 
-test("CSP: every page allows exactly Google's picker hosts, so in-app navigation to Sources is covered", async ({ page }) => {
+test("CSP: every page allows exactly Google's picker hosts (and Notion's icon hosts for images), so in-app navigation to Sources is covered", async ({ page }) => {
   for (const path of ["/settings/sources", "/", "/settings/connections"]) {
     const resp = await page.request.get(path);
     const csp = resp.headers()["content-security-policy"];
     expect(csp, path).toBeTruthy();
-    const hosts = new Set([...csp.matchAll(/https:\/\/([^/\s;]+)/g)].map((m) => m[1]));
-    expect([...hosts].sort()).toEqual(["accounts.google.com", "apis.google.com", "docs.google.com"]);
-    expect(csp).not.toMatch(/\*|https:(?!\/\/)|'unsafe-eval'|blob:/);
     const directive = (name: string) => csp.split("; ").find((d) => d.startsWith(`${name} `));
+    // Outside this origin: Google's picker hosts for scripts, frames, requests and styles.
+    const notImages = csp
+      .split("; ")
+      .filter((d) => !d.startsWith("img-src "))
+      .join("; ");
+    const hosts = new Set([...notImages.matchAll(/https:\/\/([^/\s;]+)/g)].map((m) => m[1]));
+    expect([...hosts].sort()).toEqual(["accounts.google.com", "apis.google.com", "docs.google.com"]);
+    expect(notImages).not.toMatch(/\*|https:(?!\/\/)|'unsafe-eval'|blob:/);
+    expect(csp).not.toMatch(/ \*[ ;]|https:(?!\/\/)|blob:/);
     // Everything not named below stays on this origin.
     expect(directive("default-src")).toBe("default-src 'self'");
     expect(directive("style-src")).toBe("style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style");
-    expect(directive("img-src")).toBe("img-src 'self' data:");
+    // Images: this origin, data:, and only the hosts Notion serves page icons from.
+    expect(directive("img-src")).toBe(
+      "img-src 'self' data: https://notion.so https://*.notion.so https://notion.site https://*.notion.site " +
+        "https://notion-static.com https://*.notion-static.com https://prod-files-secure.s3.us-west-2.amazonaws.com",
+    );
     expect(directive("font-src")).toBe("font-src 'self' data:");
     expect(directive("script-src")).toBe("script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com/gsi/");
     expect(directive("frame-src")).toBe("frame-src 'self' https://docs.google.com https://accounts.google.com/gsi/");
