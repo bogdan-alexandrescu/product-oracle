@@ -16,7 +16,7 @@ interface SourcesDb {
   snapshots: Schemas["SnapshotOut"][];
 }
 
-export const SOURCES_STORAGE_KEY = "po-mock-sources-v1";
+export const SOURCES_STORAGE_KEY = "po-mock-sources-v2";
 
 const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
   slack: [
@@ -46,6 +46,11 @@ const AVAILABLE: Record<Source["kind"], boolean> = {
 };
 // Source factor per kind, as in oracle.confidence DEFAULTS.
 const SOURCE_FACTOR: Record<string, number> = { github: 0.85, upload: 0.7, notion: 0.7, slack: 0.5 };
+
+// The Slack connector's limits (oracle.sources.connectors.slack).
+const MAX_CHANNELS = 100;
+const FIRST_DAY = "2000-01-01";
+const LAST_DAY = "2100-12-31";
 
 const now = () => new Date().toISOString();
 const uuid = mockUuid;
@@ -89,6 +94,22 @@ function seed(): SourcesDb {
     item_count: 1,
     connector_available: true,
   };
+  // Saved before the 100-channel rule (as the API's 0016 migration leaves such a source):
+  // syncs answer needs_attention until it is edited back within the rules.
+  const legacy: Source = {
+    id: "50000000-0000-4000-8000-000000000003",
+    kind: "slack",
+    name: "Legacy all-hands chat",
+    connection_id: CONNECTIONS.slack[0].id,
+    config: { channels: Array.from({ length: 120 }, (_, i) => `C9${String(i + 1).padStart(3, "0")}LEGACY`) },
+    status: "needs_attention",
+    last_error: `Allowlist at most ${MAX_CHANNELS} channels: edit this source to sync it again`,
+    last_synced_at: "2026-10-01T08:00:00Z",
+    created_at: "2026-03-02T09:00:00Z",
+    updated_at: "2026-10-18T08:00:00Z",
+    item_count: 0,
+    connector_available: true,
+  };
   const item = (source: Source, external_id: string, kind: string, title: string, content: string, freshness: number): Item => ({
     id: uuid(),
     source_id: source.id,
@@ -109,7 +130,7 @@ function seed(): SourcesDb {
     content,
   });
   return {
-    sources: [chat, repo],
+    sources: [chat, repo, legacy],
     items: [
       item(repo, "readme", "readme", "README", "The onboarding checklist guides new accounts through setup in five steps.", 0.95),
       item(chat, "m1", "message", "Customer question", "Customers keep asking whether the onboarding checklist can be skipped.", 0.4),
@@ -169,13 +190,28 @@ function search(db: SourcesDb, q: URLSearchParams): Schemas["SearchResults"] {
   return { query, as_of: q.get("as_of"), hits };
 }
 
-/** Handles /v1/sources*, /v1/source-items*, /v1/snapshots* and /v1/search. */
-/** The API's date range check (Slack's `{since, until}`), as the connector words it. */
-function badRange(config: Record<string, unknown>): string | null {
+/**
+ * The API's Slack config rules (oracle.sources.connectors.slack check_config), as the
+ * connector words them: at most 100 channels, dates from 2000-01-01 to 2100-12-31, until
+ * not before since. Other kinds pass.
+ */
+function badConfig(kind: Source["kind"], config: Record<string, unknown>): string | null {
+  if (kind !== "slack") return null;
+  const channels = config.channels;
+  if (Array.isArray(channels) && channels.length > MAX_CHANNELS) return `allowlist at most ${MAX_CHANNELS} channels`;
+  for (const key of ["since", "until"] as const) {
+    const v = config[key];
+    if (v == null) continue;
+    if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v < FIRST_DAY || v > LAST_DAY) {
+      return `${key} must be a date (YYYY-MM-DD) from ${FIRST_DAY} to ${LAST_DAY}`;
+    }
+  }
   const { since, until } = config;
   if (typeof since === "string" && typeof until === "string" && until < since) return "until must be on or after since";
   return null;
 }
+
+/** Handles /v1/sources*, /v1/source-items*, /v1/snapshots* and /v1/search. */
 
 export async function routeSources(req: Request, p: string[], q: URLSearchParams): Promise<Response> {
   const db = load();
@@ -207,7 +243,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (m === "GET") return json(200, db.sources.map((s) => counted(db, s)));
     const body = (await req.json()) as Schemas["SourceCreate"];
     if (!AVAILABLE[body.kind]) return json(422, { detail: "connector not available yet" });
-    const invalid = badRange(body.config ?? {});
+    const invalid = badConfig(body.kind, body.config ?? {});
     if (invalid) return json(422, { detail: invalid });
     if (db.sources.some((s) => s.name === body.name.trim())) {
       return json(409, { detail: "You already have a source with this name" });
@@ -252,10 +288,17 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     }
     if (m === "PATCH") {
       const patch = (await req.json()) as Schemas["SourcePatch"];
-      const invalid = patch.config ? badRange(patch.config) : null;
+      const invalid = patch.config ? badConfig(s.kind, patch.config) : null;
       if (invalid) return json(422, { detail: invalid });
       if (patch.name) s.name = patch.name;
-      if (patch.config) s.config = patch.config;
+      if (patch.config) {
+        s.config = patch.config;
+        // A changed selection takes a source in error or needing attention back to active.
+        if (s.status === "error" || s.status === "needs_attention") {
+          s.status = "active";
+          s.last_error = null;
+        }
+      }
       s.updated_at = now();
     }
     return json(200, counted(db, s));
@@ -268,6 +311,12 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
   if (sub === "sync") {
     if (s.kind === "upload") return json(409, { detail: "Upload sources have nothing to sync: upload files instead" });
     if (s.status === "paused") return json(409, { detail: "This source is paused: resume it first" });
+    const broken = badConfig(s.kind, s.config);
+    if (broken) {
+      s.status = "needs_attention";
+      s.last_error = `${broken[0].toUpperCase()}${broken.slice(1)}: edit this source to sync it again`;
+      return json(200, { source_id: s.id, outcome: "needs_attention", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
+    }
     if (s.status === "error") {
       return json(200, { source_id: s.id, outcome: "error", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }

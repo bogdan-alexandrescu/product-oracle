@@ -1,6 +1,6 @@
 "use client";
 
-import { type ComponentType, type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ComponentType, type FormEvent, type ReactNode, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 
 import { KIND_LABEL } from "@/app/sources/_components/confidence";
 import {
@@ -47,8 +47,20 @@ const PICKER: Partial<Record<Kind, ComponentType<PickerProps>>> = {
   github: GithubPicker,
 };
 
-const STATUS_KIND: Record<Source["status"], ChipKind> = { active: "pass", paused: "na", error: "crit" };
-const STATUS_LABEL: Record<Source["status"], string> = { active: "Active", paused: "Paused", error: "Error" };
+const STATUS_KIND: Record<Source["status"], ChipKind> = {
+  active: "pass",
+  paused: "na",
+  error: "crit",
+  needs_attention: "warn",
+};
+const STATUS_LABEL: Record<Source["status"], string> = {
+  active: "Active",
+  paused: "Paused",
+  error: "Error",
+  needs_attention: "Needs attention",
+};
+
+type RowNotice = { tone: "pass" | "warn"; text: string };
 
 /**
  * A row's rarely used actions (Edit allowlist, Delete) behind one "More" button, so the
@@ -204,9 +216,25 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
   );
 }
 
-function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (s: Source) => void; onDelete: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+function SourceRow({
+  source,
+  onChange,
+  onDelete,
+  targeted = false,
+}: {
+  source: Source;
+  onChange: (s: Source) => void;
+  onDelete: () => void;
+  /** The page's #source-<id> (the Inbox's Edit): scrolled to, its editor open if it needs attention. */
+  targeted?: boolean;
+}) {
+  // Rows mount once the list has loaded, after the hash is read: open from the start.
+  const [editing, setEditing] = useState(targeted && source.status === "needs_attention");
+  const rowRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (targeted) rowRef.current?.scrollIntoView({ block: "center" });
+  }, [targeted]);
+  const [notice, setNotice] = useState<RowNotice | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { act, error, busy } = useAction();
   const path = { params: { path: { source_id: source.id } } };
@@ -218,10 +246,16 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
     if (!r) return;
     onChange(r.source);
     if (r.outcome === "completed") {
-      setNotice(`Synced: ${r.upserted} item(s) seen, ${r.versions_written} new version(s), ${r.deleted} deleted.`);
+      setNotice({
+        tone: "pass",
+        text: `Synced: ${r.upserted} item(s) seen, ${r.versions_written} new version(s), ${r.deleted} deleted.`,
+      });
     } else if (r.outcome === "rate_limited") {
-      setNotice("Rate limited: the next sync resumes where this one stopped.");
+      setNotice({ tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
+    } else if (r.outcome === "superseded") {
+      setNotice({ tone: "warn", text: "Not synced: this source was edited while it synced. Sync again to use the new selection." });
     }
+    // error and needs_attention: the returned source carries the status and last_error shown below.
   }
 
   async function togglePause() {
@@ -254,25 +288,28 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
     if (fileRef.current) fileRef.current.value = "";
     if (!r) return;
     const added = r.items.length - r.unchanged.length;
-    setNotice(`Uploaded ${added} file(s)${r.unchanged.length ? `, ${r.unchanged.length} unchanged` : ""}.`);
+    setNotice({ tone: "pass", text: `Uploaded ${added} file(s)${r.unchanged.length ? `, ${r.unchanged.length} unchanged` : ""}.` });
     const fresh = await act(() => unwrap(api.GET("/v1/sources/{source_id}", path)));
     if (fresh) onChange(fresh);
   }
 
   const items = allowlist ? entries(source.config, allowlist.key) : [];
+  const attention = source.status === "needs_attention";
   const synced = source.last_synced_at
     ? `last ${source.kind === "upload" ? "upload" : "sync"} ${formatDateTime(source.last_synced_at)}`
     : "never synced";
 
   return (
     <li
+      ref={rowRef}
       className="border-t border-line px-4 py-2.5 first:border-t-0 max-[600px]:px-3"
+      id={`source-${source.id}`}
       data-testid="source-card"
       aria-label={source.name}
     >
       <div className="flex min-h-9 flex-wrap items-center gap-x-2.5 gap-y-2">
-        <span className="flex min-w-0 flex-1 basis-56 items-center gap-2">
-          <span className="min-w-0 truncate font-semibold" title={source.name}>
+        <span className="flex min-w-0 flex-1 basis-56 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="min-w-0 max-w-full truncate font-semibold" title={source.name}>
             {source.name}
           </span>
           <Chip kind="acc">{KIND_LABEL[source.kind]}</Chip>
@@ -340,12 +377,31 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
       </div>
       {(source.last_error || notice || error) && (
         <div className="mt-2 flex flex-col gap-2">
-          {source.last_error && (
+          {source.last_error && attention && (
+            // Saved before a newer rule it breaks: not synced until edited back within the rules.
+            <div
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn"
+              data-testid="needs-attention"
+            >
+              <span className="flex min-w-0 flex-1 basis-60 items-start gap-2">
+                <Icon name="alert" size={16} className="mt-0.5 flex-none" />
+                <span className="min-w-0 break-words" data-testid="last-error">
+                  {source.last_error}
+                </span>
+              </span>
+              {allowlist && !editing && (
+                <Button onClick={() => setEditing(true)} aria-label={`Edit ${source.name}`}>
+                  Edit
+                </Button>
+              )}
+            </div>
+          )}
+          {source.last_error && !attention && (
             <p className="rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit" data-testid="last-error">
               {source.last_error}
             </p>
           )}
-          {notice && <Notice tone="pass">{notice}</Notice>}
+          {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
           {error && <Notice tone="error">{error}</Notice>}
         </div>
       )}
@@ -355,7 +411,7 @@ function SourceRow({ source, onChange, onDelete }: { source: Source; onChange: (
           onSaved={(s) => {
             onChange(s);
             setEditing(false);
-            setNotice("Allowlist saved.");
+            setNotice({ tone: "pass", text: "Allowlist saved." });
           }}
         />
       )}
@@ -476,13 +532,27 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   );
 }
 
+function subscribeHash(onChange: () => void) {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+}
+
+/** The source named by the URL's #source-<id> (the Inbox's Edit links there), or null. */
+function useTargetedSource(): string | null {
+  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash, () => "");
+  const m = /^#source-(.+)$/.exec(hash);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 export default function SourceSettingsPage() {
   const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
   const kinds = useQuery("source-kinds", () => unwrap(api.GET("/v1/sources/kinds")));
   const list = sources.data ?? [];
   const errors = list.filter((s) => s.status === "error").length;
+  const attention = list.filter((s) => s.status === "needs_attention").length;
   const items = list.reduce((n, s) => n + s.item_count, 0);
 
+  const target = useTargetedSource();
   const replace = (s: Source) => sources.setData((prev) => (prev ?? []).map((x) => (x.id === s.id ? s : x)));
 
   const inspector = (
@@ -527,6 +597,11 @@ export default function SourceSettingsPage() {
                 {errors} in error
               </Chip>
             )}
+            {attention > 0 && (
+              <Chip kind="warn" dot data-testid="sources-attention">
+                {attention} need{attention === 1 ? "s" : ""} attention
+              </Chip>
+            )}
           </>
         }
         action={
@@ -555,6 +630,7 @@ export default function SourceSettingsPage() {
                   key={s.id}
                   source={s}
                   onChange={replace}
+                  targeted={s.id === target}
                   onDelete={() => sources.setData((prev) => (prev ?? []).filter((x) => x.id !== s.id))}
                 />
               ))}

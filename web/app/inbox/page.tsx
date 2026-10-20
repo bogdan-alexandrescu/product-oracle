@@ -9,15 +9,18 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
 import type { InboxOut } from "../runs/_lib";
-import { CountChip, inboxNeeds, NeedTable, questionNeeds, type Act } from "./_needs";
+import { CountChip, inboxNeeds, NeedTable, questionNeeds, sourceNeeds, type Act } from "./_needs";
 
 type Question = Schemas["StakeholderQuestionOut"];
+type Source = Schemas["SourceOut"];
 
 export default function InboxPage() {
   const q = useQuery("inbox", loadInbox);
   // Questions asked of me (I3): their own group, counted with the rest as the rail badge counts.
   const questionsQ = useQuery("inbox|questions", loadMyQuestions);
   const docsQ = useQuery("inbox|documents", () => unwrap(api.GET("/v1/documents")));
+  // My sources needing an edit before they sync again (a failure here only hides the group).
+  const sourcesQ = useQuery("inbox|sources", () => unwrap(api.GET("/v1/sources")));
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inbox = q.data;
@@ -60,7 +63,24 @@ export default function InboxPage() {
           act={act}
         />
       )}
+      {sourcesQ.data && <SourcesNeedingAttention sources={sourcesQ.data} />}
     </Page>
+  );
+}
+
+/**
+ * My sources that need an edit before they sync again: their own panel, outside "Needs you",
+ * whose count is the rail badge's and Home's (lib/waiting), as is the header's.
+ */
+function SourcesNeedingAttention({ sources }: { sources: Source[] }) {
+  const rows = sourceNeeds(sources);
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-3">
+      <Panel title="Sources that need attention" count={rows.length}>
+        <NeedTable title="Sources that need attention" testId="inbox-sources" rows={rows} />
+      </Panel>
+    </div>
   );
 }
 

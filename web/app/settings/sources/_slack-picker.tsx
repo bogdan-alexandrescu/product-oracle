@@ -10,6 +10,9 @@ import { BrowseList, listOf, type BrowsePage, type PickerProps } from "./_browse
 
 const LABEL = "text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2";
 
+/** As oracle.sources.connectors.slack MAX_CHANNELS: a source allowlists at most this many. */
+export const MAX_CHANNELS = 100;
+
 /**
  * Slack source picker (S5): public channels and the private ones you are in, never DMs;
  * writes `{channels, since, until}` (days, UTC; the same range shape as Fireflies). Only
@@ -23,6 +26,7 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
   const since = typeof config.since === "string" ? config.since : "";
   const until = typeof config.until === "string" ? config.until : "";
   const backwards = since !== "" && until !== "" && until < since;
+  const over = listOf(config, "channels").length - MAX_CHANNELS;
 
   async function load(search: string, cursor: string | null): Promise<BrowsePage> {
     const page = await unwrap(
@@ -60,6 +64,11 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
       load={load}
       extra={
         <div className="flex min-w-0 flex-col gap-1.5">
+          {over > 0 && (
+            <p role="alert" data-testid="too-many-channels" className="text-sm font-medium text-crit">
+              A source takes at most {MAX_CHANNELS} channels: untick {over} to save it.
+            </p>
+          )}
           <div className="grid max-w-96 grid-cols-2 gap-2.5">
             <span className="flex min-w-0 flex-col gap-1.5">
               <label htmlFor={sinceId} className={LABEL}>

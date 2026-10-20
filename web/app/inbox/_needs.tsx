@@ -431,3 +431,30 @@ export function questionNeeds(questions: Schemas["StakeholderQuestionOut"][], do
     };
   });
 }
+
+/**
+ * My sources that need attention: saved before a newer rule they break (more than 100 Slack
+ * channels, a date out of range), so they are not synced until edited. GET /v1/sources
+ * filtered here; each row opens the source on Settings › Sources, where Edit is.
+ */
+export function sourceNeeds(sources: Schemas["SourceOut"][]): Need[] {
+  return sources
+    .filter((s) => s.status === "needs_attention")
+    .map((s) => ({
+      key: s.id,
+      icon: "sources",
+      kind: "Source",
+      item: (
+        <span className="truncate" title={s.last_error ?? undefined}>
+          {s.last_error ?? "Needs attention: edit this source to sync it again"}
+        </span>
+      ),
+      context: <span className="block truncate">{s.name}</span>,
+      at: s.updated_at,
+      action: (
+        <LinkButton href={`/settings/sources#source-${s.id}`} aria-label={`Edit ${s.name}`}>
+          Edit
+        </LinkButton>
+      ),
+    }));
+}

@@ -188,7 +188,7 @@ test("phone sources: each source's actions stay on one line", async ({ page }) =
   await login(page);
   await page.goto("/settings/sources");
   const cards = page.getByTestId("source-card");
-  await expect(cards).toHaveCount(2);
+  await expect(cards).toHaveCount(3);
   for (const card of await cards.all()) {
     const tops = new Set<number>();
     for (const button of await card.locator("div").first().getByRole("button").all()) {
