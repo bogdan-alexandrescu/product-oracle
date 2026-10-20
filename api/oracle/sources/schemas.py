@@ -62,7 +62,9 @@ class SyncResult(BaseModel):
     source_id: uuid.UUID
     # completed: ran to the end; rate_limited: stopped cleanly, resumes from the saved
     # cursor; error: the source is now in status error (see error).
-    outcome: Literal["completed", "rate_limited", "error"]
+    # superseded: the source's config or connection changed while it synced; nothing
+    # after its last checkpoint was kept and the next sync starts over.
+    outcome: Literal["completed", "rate_limited", "error", "superseded"]
     upserted: int = 0
     versions_written: int = 0
     deleted: int = 0

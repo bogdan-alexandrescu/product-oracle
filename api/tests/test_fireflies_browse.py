@@ -1,13 +1,16 @@
 """Browsing a Fireflies connection's meetings and series, and syncing a picked source
 (S5, owner 2026-10-19). Fireflies is mocked: no network."""
 
+import uuid
+
 import httpx
 import pytest
 from sqlalchemy import select
 
+from oracle.connections.models import Connection
 from oracle.sources import base, fireflies_browse, service
 from oracle.sources.connectors.fireflies import FirefliesConnector
-from oracle.sources.models import SourceItem
+from oracle.sources.models import Source, SourceItem
 from oracle.tenancy import tenant_session
 from tests.connection_helpers import clear_provider_http, use_provider_http
 from tests.fireflies_fake import (
@@ -304,6 +307,74 @@ async def test_narrowing_deletes_what_falls_outside_on_the_next_sync(
         resp = await a.get(f"/v1/sources/{source_id}/items")
         assert resp.status_code == 200, resp.text
         assert {i["external_id"] for i in resp.json()} == kept
+
+
+async def _change_source(tenant_id, source_id, alice, what: str) -> None:
+    """What another request does while a sync runs (oracle.sources.service.update_source
+    resets the cursor; a reconnect changes the connection's account)."""
+    other = None
+    if what == "connection":
+        other = await make_connection(
+            tenant_id, alice, "fireflies", credential={"access_token": API_KEY}
+        )
+    async with tenant_session(tenant_id) as s:
+        source = await s.get(Source, source_id)
+        if what == "config":
+            source.config = {"mode": "selected", "meetings": ["K1"]}
+            source.cursor = None
+        elif what == "connection":
+            source.connection_id = other
+            source.cursor = None
+        else:
+            conn = await s.get(Connection, source.connection_id)
+            conn.account_id = "another-fireflies-account"
+        await s.commit()
+
+
+@pytest.mark.parametrize("what", ["config", "connection", "account"])
+async def test_a_sync_saves_no_cursor_once_its_source_changed(
+    fake, connector, monkeypatch, tenant_id, alice, conn, what
+):
+    """A sync that started before the source's config or connection changed must not
+    save its cursor (or anything after its last checkpoint) under the new one."""
+    async with client_for(alice) as a:
+        resp = await a.post(
+            "/v1/sources",
+            json={
+                "kind": "fireflies",
+                "name": "Meetings",
+                "connection_id": str(conn),
+                "config": {"mode": "all"},
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        source_id = uuid.UUID(resp.json()["id"])
+
+        original = connector.sync
+        raced = []
+
+        async def racing(config, credential, cursor, **kw):
+            async for event in original(config, credential, cursor, **kw):
+                if not raced:
+                    raced.append(1)
+                    await _change_source(tenant_id, source_id, alice, what)
+                yield event
+
+        monkeypatch.setattr(connector, "sync", racing)
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert sync["outcome"] == "superseded", sync
+        async with tenant_session(tenant_id) as s:
+            source = await s.get(Source, source_id)
+            assert source.cursor is None
+            assert source.last_synced_at is None
+        assert await _items(tenant_id, source_id) == {}
+
+        # The next sync runs under the new config and connection, from the start.
+        monkeypatch.setattr(connector, "sync", original)
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert sync["outcome"] == "completed", sync
+        expected = {"K1"} if what == "config" else {m["id"] for m in SAMPLE}
+        assert set(await _items(tenant_id, source_id)) == expected
 
 
 # --- Safety -------------------------------------------------------------------------
