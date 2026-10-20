@@ -11,6 +11,7 @@ from oracle.specs.contract import RequirementRef, SpecInputs, compose, part_of
 from oracle.specs.design import check_design
 from oracle.specs.sanitize import (
     DOWNLOAD_CSP,
+    SVG_NS,
     sanitize_svg,
     sanitize_wireframe,
     static_problems,
@@ -58,6 +59,12 @@ HOSTILE_SVG = [
     SVG_HEAD + '<rect style="fill:url(https://evil.example/p.svg#g)"/></svg>',
     SVG_HEAD + '<rect fill="url(https://evil.example/p.svg#g)"/></svg>',
     SVG_HEAD + "<style>@import url(https://evil.example/x.css);</style></svg>",
+    # CSS-escaped url() in presentation attributes (review round 2).
+    SVG_HEAD + '<path id="p" d="M0 0" fill="\\75rl(https://evil.example/p.svg#g)"/></svg>',
+    SVG_HEAD + '<path d="M0 0" marker-end="\\75 rl(https://evil.example/m.svg#m)"/></svg>',
+    SVG_HEAD + '<path d="M0 0" clip-path="\\55RL(https://evil.example/c.svg#c)"/></svg>',
+    SVG_HEAD + '<path d="M0 0" stroke="\\000075rl(https://evil.example/p.svg#g)"/></svg>',
+    SVG_HEAD + '<path d="M0 0" mask="\\75&#9;rl(https://evil.example/k.svg#k)"/></svg>',
     SVG_HEAD + '<animate attributeName="href" to="javascript:alert(1)"/></svg>',
     SVG_HEAD + '<set attributeName="onmouseover" to="alert(1)"/></svg>',
     '<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY x "y">]>' + SVG_HEAD + "<text>&x;</text></svg>",
@@ -316,3 +323,83 @@ def test_the_static_check_decodes_entities_and_slash_separated_handlers():
     assert static_problems('<meta http-equiv=&#114;efresh content="0">', "svg")
     assert static_problems("<svg/onload=alert(1)>", "svg")
     assert static_problems('<p class="a"onclick=alert(1)>', "svg")
+
+
+# --------------------------------------------------------------------------- review round 2
+
+# A CSS escape spells url( in a presentation attribute: \75 is 'u'. The attribute never
+# contains the literal 'url(', so it must be refused for the backslash itself.
+ESCAPED_URL_ATTRS = [
+    ("fill", "\\75rl(https://evil.example/p.svg#g)"),
+    ("marker-end", "\\75 rl(https://evil.example/m.svg#m)"),
+    ("stroke", "\\55RL(https://evil.example/p.svg#g)"),
+    ("fill", "\\000075rl(https://evil.example/p.svg#g)"),
+    ("marker-start", "\\000075\trl(https://evil.example/m.svg#m)"),
+    ("fill", "u\\72l(https://evil.example/p.svg#g)"),
+    ("stroke", "\\u\\r\\l(https://evil.example/p.svg#g)"),
+    ("fill", "\\75\nrl(https://evil.example/p.svg#g)"),
+    ("opacity", "\\31"),
+]
+
+
+@pytest.mark.parametrize(("attr", "value"), ESCAPED_URL_ATTRS)
+def test_a_css_escaped_url_in_a_presentation_attribute_is_refused(attr, value):
+    """§16.20: \\75rl( is url( to the CSS parser, in fill, stroke, marker-* and the rest."""
+    quoted = value.replace("\n", "&#10;").replace("\t", "&#9;")
+    out = sanitize_svg(f'{SVG_HEAD}<path id="p" d="M0 0" {attr}="{quoted}"/></svg>', title="x")
+    assert not out.safe, value
+    assert any("escape" in b for b in out.blocked), out.blocked
+    assert "evil.example" not in out.content
+    # The final check sees through the escape too, whatever produced the markup.
+    raw = f'<svg xmlns="{SVG_NS}"><path d="M0 0" {attr}="{quoted}"/></svg>'
+    assert static_problems(raw, "svg"), raw
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["\\75rl(https://evil.example/p.svg#g)", "\\000055 RL(https://evil.example/x)"],
+)
+def test_a_css_escaped_url_is_refused_in_wireframe_attributes(value):
+    out = sanitize_wireframe(f'<p id="a" title="{value}">x</p>', title="x")
+    assert not out.safe, out.content
+    assert "evil.example" not in out.content
+
+
+def test_css_unescape():
+    from oracle.specs.sanitize import css_unescape
+
+    assert css_unescape("\\75rl(") == "url("
+    assert css_unescape("\\75 rl(") == "url("
+    assert css_unescape("\\000075rl(") == "url("
+    assert css_unescape("\\55\r\nRL(") == "URL("
+    assert css_unescape("u\\rl(") == "url("
+    assert css_unescape("plain") == "plain"
+
+
+def test_words_in_text_and_class_names_do_not_refuse_a_wireframe():
+    """The final check reads markup, not prose: a screen may say 'javascript: links are
+    disabled', and a class may be called behavior-panel."""
+    out = sanitize_wireframe(
+        "<style>.behavior-panel{border:1px solid #999}</style>"
+        '<div class="behavior-panel"><p>Note: javascript: links are disabled; '
+        "see url(docs) later.</p></div>",
+        title="x",
+    )
+    assert out.safe, out.blocked
+    assert static_problems(out.content, "html") == []
+    # The property itself is still refused.
+    assert sanitize_wireframe("<style>a{behavior:url(x.htc)}</style>", title="x").blocked
+    assert sanitize_wireframe("<style>a{behavior :none}</style>", title="x").blocked
+
+
+@pytest.mark.parametrize(
+    "css",
+    [
+        "a{background:src('https://evil.example/x.png')}",
+        "a{background:cross-fade(url(#a), url(#b))}",
+        "a{background:-webkit-cross-fade(url(#a), url(#b), 50%)}",
+    ],
+)
+def test_newer_css_fetching_functions_are_refused(css):
+    assert sanitize_wireframe(f"<style>{css}</style><p>x</p>", title="x").blocked
+    assert sanitize_svg(f"{SVG_HEAD}<style>{css}</style></svg>", title="x").blocked

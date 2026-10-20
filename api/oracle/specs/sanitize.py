@@ -76,14 +76,31 @@ _CSS_BANNED = (
     "expression(",
     "javascript:",
     "vbscript:",
-    "behavior",
     "-moz-binding",
     "image-set(",
     "image(",
     "element(",
+    "cross-fade(",
+    "src(",
     "</",
     "<!--",
 )
+# IE's behavior property (a class name like .behavior-panel is fine).
+_CSS_BEHAVIOR = re.compile(r"(?<![\w-])behavior\s*:")
+_CSS_ESCAPE = re.compile(r"\\(?:([0-9a-fA-F]{1,6})(?:\r\n|[ \t\r\n\f])?|(.))", re.S)
+
+
+def css_unescape(text: str) -> str:
+    """``text`` as the CSS tokenizer reads it: ``\\75rl(``, ``\\000075 rl(`` and ``\\u\\rl(``
+    are all ``url(``."""
+
+    def one(m: re.Match[str]) -> str:
+        if m.group(1):
+            code = int(m.group(1), 16)
+            return chr(code) if 0 < code <= 0x10FFFF and not 0xD800 <= code <= 0xDFFF else "\ufffd"
+        return "" if m.group(2) in ("\n", "\r", "\f") else m.group(2)
+
+    return _CSS_ESCAPE.sub(one, text)
 
 
 def css_problems(css: str, *, local_urls: bool = False) -> list[str]:
@@ -101,6 +118,8 @@ def css_problems(css: str, *, local_urls: bool = False) -> list[str]:
         for word in _CSS_BANNED:
             if word in lowered:
                 out.append(f"CSS {word.strip('(:<')!r} is not allowed")
+        if _CSS_BEHAVIOR.search(lowered):
+            out.append("CSS 'behavior' is not allowed")
         if re.search(r"@(?!media\b)", lowered):
             out.append("CSS at-rules other than @media are not allowed")
         for m in _CSS_URL.finditer(text):
@@ -194,6 +213,9 @@ class _HtmlRebuilder(HTMLParser):
                 continue
             if "javascript:" in value.lower().replace(" ", "") or "vbscript:" in value.lower():
                 self._block(f"script URL in {name} on <{tag}>")
+                continue
+            if "\\" in value and _ANY_URL.search(css_unescape(value)):
+                self._block(f"CSS escape sequences are not allowed ({name} on <{tag}>)")
                 continue
             if name in URL_ATTRS:
                 if name == "href" and tag == "a" and _FRAGMENT.fullmatch(value.strip()):
@@ -451,6 +473,11 @@ def sanitize_svg(candidate: str, *, title: str) -> Sanitized:
             if "javascript:" in lowered or "vbscript:" in lowered:
                 note(blocked, f"script URL in {name} on <{tag}>")
                 continue
+            # Presentation attributes (fill, stroke, marker-*, clip-path, mask, filter...)
+            # are CSS: \\75rl( is url(. No SVG attribute needs a backslash.
+            if "\\" in value:
+                note(blocked, f"CSS escape sequences are not allowed ({name} on <{tag}>)")
+                continue
             if name == "href" and ans in (None, XLINK_NS):
                 if tag == "use" and _FRAGMENT.fullmatch(value.strip()):
                     dst.set("href", value.strip())
@@ -463,7 +490,7 @@ def sanitize_svg(candidate: str, *, title: str) -> Sanitized:
             if name.startswith("aria-") or name.startswith("data-"):
                 dst.set(name, value)
             elif name in SVG_ATTRS:
-                if name == "style" or "url(" in lowered:
+                if name == "style" or _ANY_URL.search(css_unescape(value)) or "url(" in lowered:
                     problems = css_problems(value, local_urls=True)
                     for p in problems:
                         note(blocked, f"{p} ({name} on <{tag}>)")
@@ -538,22 +565,36 @@ _STATIC_CHECKS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("a refresh", re.compile(r"http-equiv\s*=\s*['\"]?refresh", re.I)),
     ("a foreignObject", re.compile(r"foreignObject", re.I)),
     ("a CSS import", re.compile(r"@import", re.I)),
-    ("a CSS escape", re.compile(r"<style[^>]*>[^<]*\\", re.I)),
 )
 _ANY_URL = re.compile(r"url\s*\(\s*['\"]?\s*(?!#)", re.I)
+# What a browser reads as markup or CSS: tags (quoted attribute values may hold '>') and
+# the text of <style> elements, not text: 'javascript: links are disabled' is only words.
+_TAG = re.compile(r"""<(?:[^>"']|"[^"]*"|'[^']*')*>?""")
+_STYLE_TEXT = re.compile(r"<style\b[^>]*>(.*?)(?:</style\s*>|$)", re.I | re.S)
+_ATTR = re.compile(r"""([^\s=/<>"']+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)""")
 
 
 def static_problems(content: str, kind: str) -> list[str]:
-    """What in a design output could run or fetch; empty when it is static and offline."""
-    # Entities decoded too: &#114;efresh is a refresh.
-    decoded = html.unescape(content)
-    out = [
-        f"contains {what}"
-        for what, rx in _STATIC_CHECKS
-        if rx.search(content) or rx.search(decoded)
-    ]
-    if _ANY_URL.search(content) or _ANY_URL.search(decoded):
+    """What in a design output could run or fetch; empty when it is static and offline.
+    Checks the markup (tags, attribute values and stylesheets), as written, with entities
+    decoded (&#114;efresh is a refresh) and with CSS escapes read (\\75rl( is url()."""
+    tags, styles = _TAG.findall(content), _STYLE_TEXT.findall(content)
+    # Fails closed: text that decodes to a tag (&lt;script&gt;) is read as one too.
+    whole = html.unescape(content)
+    pieces = tags + styles + _TAG.findall(whole) + _STYLE_TEXT.findall(whole)
+    decoded = [html.unescape(p) for p in pieces]
+    readings = pieces + decoded + [css_unescape(p) for p in decoded if "\\" in p]
+    out = [f"contains {what}" for what, rx in _STATIC_CHECKS if any(rx.search(p) for p in readings)]
+    if any(_ANY_URL.search(p) for p in readings):
         out.append("contains a CSS url() that is not an in-document reference")
+    css = styles + [
+        v
+        for t in tags
+        for n, v in _ATTR.findall(html.unescape(t))
+        if kind == "svg" or n.lower() == "style"
+    ]
+    if any("\\" in c for c in css):
+        out.append("contains a CSS escape")
     if kind == "html" and "Content-Security-Policy" not in content:
         out.append("has no Content-Security-Policy")
     return out
