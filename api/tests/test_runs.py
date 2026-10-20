@@ -763,7 +763,15 @@ async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
     run = await started(client, auth, depth="deep")  # awaiting approval
     assert run["status"] == "awaiting_approval"
     inbox = (await client.get("/v1/inbox", headers=viewer)).json()
-    assert inbox == {"checkpoints": [], "approvals": [], "overruns": [], "feedback": [], "total": 0}
+    assert {k: inbox[k] for k in ("checkpoints", "approvals", "overruns", "feedback", "total")} == {
+        "checkpoints": [],
+        "approvals": [],
+        "overruns": [],
+        "feedback": [],
+        "total": 0,
+    }
+    # No feedback states for a viewer either (C1e).
+    assert (inbox["items"], inbox["staged"], inbox["needs_me"]) == ([], [], 0)
     assert (await client.get("/v1/inbox", headers=auth)).json()["total"] == 2
 
 

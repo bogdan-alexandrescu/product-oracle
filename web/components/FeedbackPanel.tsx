@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { SuggestionCard } from "@/components/SuggestionCard";
+import { FeedbackStateChip } from "@/components/review/FeedbackState";
 import { Chip, Empty } from "@/components/ds";
 import { FeedbackStatusChip, Quote, SELECT, VerdictChip } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -30,11 +31,10 @@ function FeedbackRow({
   return (
     <li className="border-b border-line py-3 last:border-b-0" data-testid="feedback-item">
       <div className="flex flex-wrap items-center gap-1.5">
-        <FeedbackStatusChip status={item.status} />
+        <FeedbackStateChip item={item} />
         {item.verdict ? <VerdictChip verdict={item.verdict} /> : <Chip kind="line">{item.kind === "comment" ? "Comment" : "General"}</Chip>}
         <span className="tnum ml-auto text-[13px] text-text2">
           raised on v{item.raised_on_version}
-          {item.addressed_in_version != null && ` · addressed in v${item.addressed_in_version}`}
         </span>
       </div>
       <p className="mt-1.5 text-[15px] leading-[22px] text-text">{item.summary}</p>

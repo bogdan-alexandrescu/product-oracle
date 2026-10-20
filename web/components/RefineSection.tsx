@@ -11,8 +11,8 @@ import { JOB_STATUS_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
 /**
- * An approver's "Refine section": Oracle revises this one section from the accepted
- * suggestions on it (and/or an instruction), keeping its id and the house rules (no
+ * An approver's "Refine section": Oracle revises this one section from an instruction
+ * (accepted suggestions are staged for the next draft instead, C1e), keeping its id and the house rules (no
  * evidence in the body), shows a diff preview, and on accept imports it as the next
  * version with the feedback resolutions recorded.
  */
@@ -36,7 +36,6 @@ export function RefineSection({
   const router = useRouter();
   const [open, setOpen] = useState(defaultOpen);
   const [instruction, setInstruction] = useState("");
-  const [picked, setPicked] = useState<Set<string> | null>(null);
   const [job, setJob] = useState<LlmJob | null>(null);
   const [preview, setPreview] = useState<RefinementPreview | null>(null);
   const [edit, setEdit] = useState<string | null>(null);
@@ -52,7 +51,6 @@ export function RefineSection({
         ).then((rows) => rows.filter((s) => s.kind === "section_text"))
       : Promise.resolve([]),
   );
-  const chosen = picked ?? new Set((accepted.data ?? []).map((s) => s.id));
 
   const running = job?.status === "queued" || job?.status === "running";
   usePolling(running, async () => {
@@ -71,7 +69,6 @@ export function RefineSection({
     setJob(null);
     setPreview(null);
     setEdit(null);
-    setPicked(null);
     setInstruction("");
     setError(null);
     onClose?.();
@@ -84,7 +81,8 @@ export function RefineSection({
       const j = await unwrap(
         api.POST("/v1/documents/{doc}/versions/{n}/sections/{key}/refine", {
           params: { path: { doc, n, key: sectionKey } },
-          body: { suggestion_ids: [...chosen], instruction: instruction.trim() || null },
+          // C1e: accepted suggestions go into the next draft as one batch, not one section at a time.
+          body: { suggestion_ids: [], instruction: instruction.trim() || null },
         }),
       );
       setJob(j);
@@ -130,8 +128,8 @@ export function RefineSection({
       <div className="flex items-center gap-2">
         <p className="min-w-0 truncate font-semibold text-text">Refine “{heading}”</p>
         <InfoTip label="refining a section" align="start">
-          Oracle revises this one section from the accepted suggestions on it and your instruction, keeping its id; you
-          review a diff and accept it as the next version.
+          Oracle revises this one section from your instruction, keeping its id; you review a diff and accept it as the
+          next version. Accepted suggestions wait for Build draft.
         </InfoTip>
         <Button variant="ghost" className="ml-auto" onClick={reset}>
           Close
@@ -139,35 +137,18 @@ export function RefineSection({
       </div>
       {!job && (
         <div className="mt-2 flex flex-col gap-2.5">
-          {(accepted.data ?? []).length > 0 ? (
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">Accepted suggestions</legend>
-              {accepted.data!.map((s) => (
-                <label key={s.id} className="flex items-start gap-2 text-sm leading-5 text-text">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 size-4 accent-[var(--accent)]"
-                    checked={chosen.has(s.id)}
-                    onChange={(e) => {
-                      const next = new Set(chosen);
-                      if (e.target.checked) next.add(s.id);
-                      else next.delete(s.id);
-                      setPicked(next);
-                    }}
-                  />
-                  <span className="line-clamp-2">{s.edited_text ?? s.text}</span>
-                </label>
-              ))}
-            </fieldset>
-          ) : (
-            <p className="text-sm text-text2">No accepted suggestions on this section; give Oracle an instruction.</p>
+          {(accepted.data ?? []).length > 0 && (
+            <p className="flex items-center gap-1.5 text-sm font-medium text-text2" data-testid="refine-staged">
+              <Chip kind="now">{accepted.data!.length} staged</Chip>
+              Build draft · page header
+            </p>
           )}
           <label className={FIELD_LABEL}>
-            Instruction (optional)
+            Instruction
             <textarea rows={2} value={instruction} onChange={(e) => setInstruction(e.target.value)} className={TEXTAREA} />
           </label>
           <div>
-            <Button variant="solid" disabled={busy || (chosen.size === 0 && !instruction.trim())} onClick={refine}>
+            <Button variant="solid" disabled={busy || !instruction.trim()} onClick={refine}>
               Refine
             </Button>
           </div>

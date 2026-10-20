@@ -9,7 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
 type CheckpointOut = Schemas["CheckpointOut"];
-type FeedbackRow = Schemas["FeedbackItemOut"];
+type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version">;
 type DocumentRow = Pick<Schemas["DocumentSummary"], "id" | "slug" | "title" | "kind" | "template" | "theme">;
 type VersionSource = Schemas["VersionSource"];
 type Kind = DocumentRow["kind"];
@@ -339,6 +339,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
           section_key: f.section_key ?? null,
           raised_on_version: f.raised_on_version,
           created_at: f.created_at,
+          state: "open" as const,
         })),
       },
     ];
@@ -349,6 +350,12 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     overruns,
     feedback,
     total: checkpoints.length + approvals.length + overruns.length + feedback.length,
+    // Feedback states (C1e) are added by the server, which holds the suggestions (./next-draft.ts).
+    items: [],
+    counts: { new: 0, open: 0, staged: 0, declined: 0, done: 0 },
+    staged: [],
+    needs_me: 0,
+    last_seen_at: null,
   };
 }
 

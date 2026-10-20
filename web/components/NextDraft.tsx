@@ -1,0 +1,592 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+
+import { usePolling } from "@/components/JobsPanel";
+import { Button, Chip, CostFigure, Icon, InfoTip, Notice } from "@/components/ds";
+import { JobStatusChip } from "@/components/review/parts";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatDateTime, NO_ACCOUNT_REASON } from "@/lib/format";
+import { hasRole, useMe } from "@/lib/me";
+import { errorMessage, useQuery } from "@/lib/use-query";
+import { invalidateWaiting, onWaitingChanged, waitingChanged } from "@/lib/waiting";
+
+type Staged = Schemas["StagedChanges"];
+type StagedItem = Schemas["StagedChange"];
+type Preview = Schemas["NextDraftPreview"];
+type PreviewSection = Schemas["NextDraftSection"];
+
+/** `?build=1` on a document page (the Inbox's "Build draft" action) opens the sheet. */
+export const BUILD_PARAM = "build";
+
+const building = (status?: string | null) => status === "queued" || status === "running";
+
+/**
+ * C1e: "Build draft N+1 · K staged" next to Publish when accepted changes wait for the
+ * next draft (or a build is in progress). Opens the build sheet: pick the staged items,
+ * build them in one job, review one combined preview, apply it as exactly one version.
+ */
+export function BuildDraftButton({ doc }: { doc: string }) {
+  const { role } = useMe();
+  const canBuild = hasRole(role, "approver");
+  const [reload, setReload] = useState(0);
+  const q = useQuery(`staged|${doc}|${reload}`, () =>
+    unwrap(
+      api.GET("/v1/documents/{doc}/staged-changes", {
+        params: { path: { doc } },
+      }),
+    ),
+  );
+  // The sheet opens on arrival from the Inbox's "Build draft" (?build=1); the button shows
+  // only once the staged list has loaded on the client, so the server render never differs.
+  const [open, setOpen] = useState(
+    () => typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get(BUILD_PARAM),
+  );
+  // Accepting or dismissing a suggestion elsewhere on the page changes what is staged.
+  useEffect(() => onWaitingChanged(() => setReload((k) => k + 1)), []);
+
+  const data = q.data;
+  if (!canBuild || !data) return null;
+  const job = data.draft_job;
+  const count = data.items.length;
+  if (!count && !job) return null;
+  const label = building(job?.status)
+    ? `Building draft ${data.next_version}`
+    : job?.status === "succeeded"
+      ? `Draft ${data.next_version} ready`
+      : `Build draft ${data.next_version}`;
+  return (
+    <>
+      <Button variant="primary" icon="doc" onClick={() => setOpen(true)} data-testid="build-draft" aria-haspopup="dialog">
+        {label}
+        {count > 0 && (
+          <span className="tnum font-semibold opacity-85" data-testid="build-draft-count">
+            · {count} staged
+          </span>
+        )}
+      </Button>
+      {open &&
+        createPortal(
+          <NextDraftSheet
+            doc={doc}
+            staged={data}
+            onClose={() => {
+              setOpen(false);
+              setReload((k) => k + 1);
+            }}
+          />,
+          document.body,
+        )}
+    </>
+  );
+}
+
+/** The sheet's frame: a dark head (eyebrow, title, chips) and a body; Escape closes. */
+function Sheet({
+  eyebrow,
+  title,
+  chips,
+  onClose,
+  children,
+  footer,
+}: {
+  eyebrow: string;
+  title: string;
+  chips?: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  const id = useId();
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${id}-title`}
+        data-testid="next-draft-sheet"
+        className="w-full max-w-3xl overflow-hidden rounded-inspector border border-line bg-surface text-text shadow-tip"
+      >
+        <div className="bg-hero px-5 pt-4 pb-[18px] text-hero-text max-[600px]:px-4">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">{eyebrow}</span>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="grid size-8 place-items-center rounded-lg text-hero-text2 hover:bg-hero-2 hover:text-hero-text"
+            >
+              <Icon name="x" size={20} />
+            </button>
+          </div>
+          <h2 id={`${id}-title`} className="mt-1 font-display text-[22px] leading-[27px] font-bold tracking-heading">
+            {title}
+          </h2>
+          {chips && <div className="mt-2 flex flex-wrap items-center gap-2">{chips}</div>}
+        </div>
+        <div className="space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4">{children}</div>
+        {footer && (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HeroChip({ children, tone = "plain" }: { children: ReactNode; tone?: "plain" | "accent" }) {
+  return (
+    <span
+      className={`tnum inline-flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-[13px] font-semibold ${
+        tone === "accent" ? "bg-accent-soft text-accent-ink" : "bg-hero-2 text-hero-text"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Pick → build (progress) → combined preview → apply, or discard (everything stays staged). */
+export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: Staged; onClose: () => void }) {
+  const router = useRouter();
+  const [jobId, setJobId] = useState<string | null>(staged.draft_job?.id ?? null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const next = staged.next_version;
+
+  // The build's preview; while it runs, its job status only (polled).
+  const pq = useQuery(`next-draft|${doc}|${jobId}`, () =>
+    jobId
+      ? unwrap(
+          api.GET("/v1/documents/{doc}/next-draft/{job_id}", {
+            params: { path: { doc, job_id: jobId } },
+          }),
+        )
+      : Promise.resolve(null),
+  );
+  const preview: Preview | null = pq.data ?? null;
+  const load = pq.reload;
+  usePolling(!!jobId && (!preview || building(preview.job.status)), load);
+
+  async function act(call: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await call();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const build = (ids: string[]) =>
+    act(async () => {
+      const job = await unwrap(
+        api.POST("/v1/documents/{doc}/next-draft", {
+          params: { path: { doc } },
+          body: { suggestion_ids: ids },
+        }),
+      );
+      setJobId(job.id);
+    });
+
+  const discard = () =>
+    act(async () => {
+      if (jobId)
+        await unwrap(
+          api.POST("/v1/documents/{doc}/next-draft/{job_id}/discard", {
+            params: { path: { doc, job_id: jobId } },
+          }),
+        );
+      invalidateWaiting();
+      waitingChanged();
+      onClose();
+    });
+
+  const retry = () =>
+    act(async () => {
+      if (!jobId) return;
+      await unwrap(
+        api.POST("/v1/llm-jobs/{job_id}/retry", {
+          params: { path: { job_id: jobId } },
+        }),
+      );
+      await load();
+    });
+
+  const apply = (drop: string[]) =>
+    act(async () => {
+      if (!jobId) return;
+      const v = await unwrap(
+        api.POST("/v1/documents/{doc}/next-draft/{job_id}/apply", {
+          params: { path: { doc, job_id: jobId } },
+          body: { drop_sections: drop, edits: {} },
+        }),
+      );
+      invalidateWaiting();
+      waitingChanged();
+      onClose();
+      router.push(`/documents/${doc}/v/${v.number}?tab=reports`);
+    });
+
+  if (!jobId) return <PickStep staged={staged} busy={busy} error={error} onBuild={build} onClose={onClose} />;
+
+  const job = preview?.job;
+  const chips = (
+    <>
+      <HeroChip>
+        v{preview?.base_version ?? staged.latest_version} → v{preview?.next_version ?? next}
+      </HeroChip>
+      {job && <JobStatusChip status={job.status} />}
+      {job?.cost_usd != null && (
+        <HeroChip>
+          <CostFigure usd={job.cost_usd} />
+        </HeroChip>
+      )}
+    </>
+  );
+
+  if (!preview || building(job?.status) || job?.status === "failed" || job?.status === "cancelled") {
+    return (
+      <Sheet
+        eyebrow="Next draft"
+        title={`Building draft ${next}`}
+        chips={chips}
+        onClose={onClose}
+        footer={
+          <>
+            <Button variant="ghost" disabled={busy} onClick={discard}>
+              Discard
+            </Button>
+            {job?.status === "failed" && (
+              <Button variant="primary" disabled={busy} onClick={retry}>
+                Retry
+              </Button>
+            )}
+          </>
+        }
+      >
+        {job?.status === "failed" ? (
+          <Notice tone="error">
+            {job.error ?? "The build failed"} {job.error_reason && NO_ACCOUNT_REASON[job.error_reason]}
+          </Notice>
+        ) : (
+          <div data-testid="next-draft-progress" className="flex flex-col gap-2.5 py-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-text2">
+              <Icon name="clock" size={16} />
+              {job?.status === "running" ? "Writing every affected section" : "Waiting for a Claude account"}
+            </div>
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-surface2"
+              role="progressbar"
+              aria-label="Building the next draft"
+            >
+              <div className={`h-full rounded-full bg-accent ${job?.status === "running" ? "w-2/3" : "w-1/4"} animate-pulse`} />
+            </div>
+          </div>
+        )}
+        {(error || pq.error) && <Notice tone="error">{error ?? pq.error}</Notice>}
+      </Sheet>
+    );
+  }
+
+  return (
+    <PreviewStep
+      preview={preview}
+      chips={chips}
+      busy={busy}
+      error={error}
+      onApply={apply}
+      onDiscard={discard}
+      onClose={onClose}
+    />
+  );
+}
+
+function why(item: StagedItem, latest: number | null | undefined): string | null {
+  if (item.section_gone) return `Section gone in v${latest}`;
+  if (item.section_locked) return "Section approved · locked";
+  return null;
+}
+
+function PickStep({
+  staged,
+  busy,
+  error,
+  onBuild,
+  onClose,
+}: {
+  staged: Staged;
+  busy: boolean;
+  error: string | null;
+  onBuild: (ids: string[]) => void;
+  onClose: () => void;
+}) {
+  // Every staged item is in, unless its section is gone or locked; "section gone" ones are listed too.
+  const all = useQuery(`staged-all|${staged.slug}`, () =>
+    unwrap(
+      api.GET("/v1/documents/{doc}/staged-changes", {
+        params: { path: { doc: staged.slug }, query: { include_gone: true } },
+      }),
+    ),
+  );
+  const items = all.data?.items ?? staged.items;
+  const [off, setOff] = useState<Set<string>>(new Set());
+  const blocked = (i: StagedItem) => !!why(i, staged.latest_version);
+  const chosen = items.filter((i) => !blocked(i) && !off.has(i.suggestion_id));
+  const sections = new Set(chosen.map((i) => i.section_key));
+  // The estimate covers every buildable section; scale it to the sections still chosen.
+  const allSections = new Set(staged.items.filter((i) => !i.section_gone).map((i) => i.section_key)).size;
+  const perSection = staged.estimate_usd != null && allSections ? staged.estimate_usd / allSections : null;
+
+  return (
+    <Sheet
+      eyebrow="Next draft"
+      title={`Build draft ${staged.next_version}`}
+      chips={
+        <>
+          <HeroChip>
+            v{staged.latest_version} → v{staged.next_version}
+          </HeroChip>
+          <HeroChip tone="accent">
+            <span data-testid="pick-count">{chosen.length}</span> of {items.length} staged
+          </HeroChip>
+          <InfoTip label="Build draft" align="start" side="bottom" hero>
+            One Oracle job rewrites every section these changes touch, together; you review one preview and apply it as one draft.
+          </InfoTip>
+        </>
+      }
+      onClose={onClose}
+      footer={
+        <>
+          <span className="mr-auto flex items-center gap-2 text-sm text-text2" data-testid="build-estimate">
+            Est.{" "}
+            {perSection != null ? (
+              <CostFigure usd={Math.round(perSection * sections.size * 10000) / 10000} est />
+            ) : (
+              <span>–</span>
+            )}
+          </span>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={busy || chosen.length === 0}
+            onClick={() => onBuild(chosen.map((i) => i.suggestion_id))}
+          >
+            Build draft {staged.next_version}
+          </Button>
+        </>
+      }
+    >
+      <ul className="flex flex-col" aria-label="Staged changes" data-testid="staged-list">
+        {items.map((i) => {
+          const reason = why(i, staged.latest_version);
+          const checked = !reason && !off.has(i.suggestion_id);
+          return (
+            <li key={i.suggestion_id} className="border-b border-line py-2.5 last:border-b-0" data-testid="staged-item">
+              <label className={`flex items-start gap-3 ${reason ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4 flex-none accent-[var(--accent)]"
+                  checked={checked}
+                  disabled={!!reason}
+                  aria-label={`Include ${i.section_heading}: ${i.feedback_summary}`}
+                  onChange={(e) => {
+                    const nextOff = new Set(off);
+                    if (e.target.checked) nextOff.delete(i.suggestion_id);
+                    else nextOff.add(i.suggestion_id);
+                    setOff(nextOff);
+                  }}
+                />
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className={`font-semibold ${reason ? "text-text2" : "text-text"}`}>{i.section_heading}</span>
+                    <Chip kind="line">v{i.raised_on_version}</Chip>
+                    {reason && (
+                      <Chip kind={i.section_locked ? "warn" : "na"}>
+                        {i.section_locked && <Icon name="lock" size={16} />}
+                        {reason}
+                      </Chip>
+                    )}
+                  </span>
+                  <span className={`text-[15px] leading-[22px] ${reason ? "text-text2" : "text-text"}`}>
+                    {i.feedback_summary}
+                  </span>
+                  <span className="tnum text-[13px] text-text2">
+                    {i.accepted_by_name ?? "Accepted"}
+                    {i.accepted_at && ` · ${formatDateTime(i.accepted_at)}`}
+                  </span>
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      {error && <Notice tone="error">{error}</Notice>}
+    </Sheet>
+  );
+}
+
+function Words({ words }: { words: Schemas["WordOp"][] }) {
+  return (
+    <p className="rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px] leading-6 whitespace-pre-wrap text-text">
+      {words.map((w, i) =>
+        w.op === "insert" ? (
+          <ins key={i} className="diff-ins">
+            {w.text}
+          </ins>
+        ) : w.op === "delete" ? (
+          <del key={i} className="diff-del">
+            {w.text}
+          </del>
+        ) : (
+          <span key={i}>{w.text}</span>
+        ),
+      )}
+    </p>
+  );
+}
+
+function PreviewSectionCard({ s, keep, onKeep }: { s: PreviewSection; keep: boolean; onKeep: (keep: boolean) => void }) {
+  return (
+    <section
+      aria-label={s.heading}
+      data-testid="next-draft-section"
+      data-section={s.section_key}
+      data-keep={keep ? "true" : "false"}
+      className={`rounded-panel border px-3.5 py-3 ${keep ? "border-line" : "border-dashed border-line bg-surface2"}`}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className={`min-w-0 font-semibold ${keep ? "text-text" : "text-text2 line-through"}`}>{s.heading}</h3>
+        <span className="font-mono text-[13px] text-text2">#{s.section_key}</span>
+        <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-text">
+          <input
+            type="checkbox"
+            role="switch"
+            className="size-4 accent-[var(--accent)]"
+            checked={keep}
+            onChange={(e) => onKeep(e.target.checked)}
+            aria-label={`Keep ${s.heading}`}
+          />
+          Keep
+        </label>
+      </div>
+      {keep ? (
+        <div className="mt-2 flex flex-col gap-2">
+          <Words words={s.words} />
+          <div className="flex flex-wrap items-center gap-1.5">
+            {s.feedback.map((f) => (
+              <Chip key={f.id} kind="pass">
+                <Icon name="check" size={16} />
+                <span className="max-w-[28ch] truncate" title={f.summary}>
+                  {f.summary}
+                </span>
+              </Chip>
+            ))}
+            {s.notes && (
+              <InfoTip label={`Oracle on ${s.heading}`} align="start">
+                {s.notes}
+              </InfoTip>
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-1 text-sm font-medium text-text2">Stays staged</p>
+      )}
+    </section>
+  );
+}
+
+function PreviewStep({
+  preview,
+  chips,
+  busy,
+  error,
+  onApply,
+  onDiscard,
+  onClose,
+}: {
+  preview: Preview;
+  chips: ReactNode;
+  busy: boolean;
+  error: string | null;
+  onApply: (drop: string[]) => void;
+  onDiscard: () => void;
+  onClose: () => void;
+}) {
+  const [dropped, setDropped] = useState<Set<string>>(new Set());
+  const kept = preview.sections.filter((s) => !dropped.has(s.section_key));
+  return (
+    <Sheet
+      eyebrow="Next draft · preview"
+      title={`Draft ${preview.next_version}`}
+      chips={
+        <>
+          {chips}
+          <HeroChip tone="accent">
+            <span data-testid="kept-count">{kept.length}</span> of {preview.sections.length} sections
+          </HeroChip>
+          {preview.notes && (
+            <InfoTip label="Oracle's notes" align="start" side="bottom" hero>
+              {preview.notes}
+            </InfoTip>
+          )}
+        </>
+      }
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" disabled={busy} onClick={onDiscard}>
+            Discard
+          </Button>
+          <Button
+            variant="primary"
+            icon="check"
+            disabled={busy || kept.length === 0 || preview.stale}
+            onClick={() => onApply([...dropped])}
+          >
+            Apply as draft {preview.next_version}
+          </Button>
+        </>
+      }
+    >
+      {preview.stale && <Notice tone="error">v{preview.latest_version} exists now · build again</Notice>}
+      <div className="flex flex-col gap-3" data-testid="next-draft-preview">
+        {preview.sections.map((s) => (
+          <PreviewSectionCard
+            key={s.section_key}
+            s={s}
+            keep={!dropped.has(s.section_key)}
+            onKeep={(keep) => {
+              const next = new Set(dropped);
+              if (keep) next.delete(s.section_key);
+              else next.add(s.section_key);
+              setDropped(next);
+            }}
+          />
+        ))}
+      </div>
+      {preview.skipped.length > 0 && (
+        <ul className="flex flex-col gap-1" aria-label="Not in this draft">
+          {preview.skipped.map((s, i) => (
+            <li key={i} className="flex items-center gap-2 text-sm text-text2">
+              <Chip kind="na">Stays staged</Chip>
+              <span className="font-mono text-[13px]">#{s.section_key}</span>
+              <span>{s.reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <Notice tone="error">{error}</Notice>}
+    </Sheet>
+  );
+}

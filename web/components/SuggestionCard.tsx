@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 
-import { Avatar, Button, Chip, type ChipKind } from "@/components/ds";
+import { Avatar, Button, Chip, Icon, type ChipKind } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Suggestion } from "@/lib/api/client";
 import { CLASSIFICATION_LABEL } from "@/lib/format";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 const STATUS: Record<Suggestion["status"], { label: string; kind: ChipKind }> = {
   open: { label: "Suggested", kind: "warn" },
@@ -21,7 +22,8 @@ type Mode = null | "edit" | "keep" | "dismiss";
  * Oracle's suggestion on a feedback item: its classification and group, the proposed
  * section text or answer, and a pushback when the feedback contradicts confirmed goals or
  * high-confidence evidence. Approvers accept, edit or dismiss it; nothing changes the
- * document until a refinement built from it is accepted.
+ * document until the next draft built from it is applied (C1e: accepted section text is
+ * staged; "Build draft N+1" on the PRD page builds every staged change in one job).
  */
 export function SuggestionCard({
   suggestion: s,
@@ -47,6 +49,9 @@ export function SuggestionCard({
       await call();
       setMode(null);
       onChanged();
+      // What is staged and what waits in the Inbox changed: the build action and the badge re-read.
+      invalidateWaiting();
+      waitingChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save.");
     } finally {
@@ -147,8 +152,11 @@ export function SuggestionCard({
           </Button>
         </div>
       )}
-      {canDecide && s.status === "accepted" && s.kind === "section_text" && (
-        <p className="mt-1.5 text-sm text-text2">Accepted: use “Refine section” on #{s.section_key} for the next version.</p>
+      {s.status === "accepted" && s.kind === "section_text" && s.applied_in_version == null && (
+        <p className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-text2" data-testid="suggestion-staged">
+          <Icon name="doc" size={16} />
+          Staged for the next draft
+        </p>
       )}
 
       {mode === "edit" && (

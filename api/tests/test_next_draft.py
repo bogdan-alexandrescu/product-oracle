@@ -527,7 +527,7 @@ async def test_inbox_states_new_and_staged_rows(client, ctx, pool, fake):
     )
     declined = next(i for i in inbox["items"] if i["id"] == ids["drop"])
     assert declined["resolution_note"] == "Half is what the funnel shows."
-    assert declined["slug"] == SLUG and declined["title"]
+    assert declined["slug"] == SLUG and declined["title"] and declined["latest_version"] == 1
     new = next(i for i in inbox["items"] if i["id"] == ids["still"])
     assert new["suggestion_status"] == "open"
     # Open feedback no longer counts staged or declined items.

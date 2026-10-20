@@ -16,6 +16,7 @@ import { connectionsRoute } from "./connections";
 import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { inboxStates } from "./next-draft";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
@@ -30,7 +31,8 @@ export type VersionRow = Omit<Schemas["VersionOut"], "sections"> & {
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
 type ReviewRow = Schemas["SectionReviewOut"];
-type FeedbackRow = Schemas["FeedbackItemOut"];
+/** Stored without its derived C1e state (withSuggestion adds it on the way out). */
+type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version">;
 type MemberRow = Schemas["MemberOut"];
 type InviteRow = Schemas["InviteOut"];
 type Role = MemberRow["role"];
@@ -63,6 +65,8 @@ export interface Db {
   modules?: ModulesDb;
   /** Blocker strategies (./blockers.ts) on the v2 rows; absent in older saved data. */
   blockers?: BlockersDb;
+  /** C1e: each member's last Inbox visit (what "new" is measured from), by member id. */
+  inbox_seen?: Record<string, string>;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
 }
@@ -312,6 +316,40 @@ function seed(): Db {
   }, at("2026-10-13T11:00:00Z"));
   docs.get("team-workspaces")!.status = "in_review";
 
+  // Clinic outreach (C1e): feedback in every state; the suggestions are in ./llm-jobs.ts.
+  addComment(db, ver("clinic-outreach", 3), {
+    section_key: "problem",
+    anchor: { exact: "in every pilot clinic", prefix: "from paper lists, ", suffix: "." },
+    body: "Name the clinics in the pilot.",
+  }, at("2026-10-16T12:00:00Z"));
+  for (const f of db.feedback) {
+    if (f.summary === "Name the clinics in the pilot.") {
+      Object.assign(f, { status: "addressed", addressed_in_version: 4, resolution_note: "The three pilot clinics are named in the problem.", updated_at: "2026-10-17T10:00:00Z" });
+    }
+  }
+  addComment(db, ver("clinic-outreach", 4), {
+    section_key: "goal-trace",
+    anchor: { exact: "Serves G1 activation", prefix: "", suffix: ": more new patients" },
+    body: "Trace this to G2 retention, not activation: these are returning patients.",
+  }, at("2026-10-17T15:00:00Z"));
+  const o5 = ver("clinic-outreach", 5);
+  addComment(db, o5, {
+    section_key: "f-38",
+    anchor: { exact: "After each outbound call", prefix: "", suffix: ", the agent checks" },
+    body: "Run the outbound check before the call is placed, not after.",
+  }, at("2026-10-18T14:00:00Z"));
+  addComment(db, o5, {
+    section_key: "problem",
+    anchor: { exact: "40% of missed visits", prefix: "", suffix: " are never rebooked" },
+    body: "Drop the 40% figure; it is from 2024.",
+  }, at("2026-10-18T14:20:00Z"));
+  addComment(db, o5, {
+    section_key: "metrics",
+    anchor: { exact: "Calls per rebooking", prefix: "- ", suffix: ": 3.1 today" },
+    body: "Add a metric that shows the outbound check works.",
+  }, at("2026-10-19T09:30:00Z"));
+  docs.get("clinic-outreach")!.status = "in_review";
+
   // Usage alerts: fully approved.
   const a1 = ver("usage-alerts", 1);
   for (const s of a1.sections) addReview(db, a1, s.section_key, { verdict: "approved", note: null }, at("2026-10-03T10:00:00Z"));
@@ -346,43 +384,96 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       if (!parent) return;
       db.comments.push({ ...parent, id: uuid(), anchor: null, body, author_id: userId, parent_id: parent.id, created_at: now(), feedback_item_id: null });
     },
-    importRevision: (doc, base, key, heading, body, resolutions) => {
-      const row = findDocument(db, doc.id)!;
-      const from = base as VersionRow;
-      const v = buildVersion(row, {
-        number: base.number + 1,
-        created_at: now(),
-        snapshot: from.snapshot ?? undefined,
-        sections: from.sections.map((x) =>
-          x.section_key === key
-            ? { key, level: x.level, heading, body }
-            : { key: x.section_key, level: x.level, heading: x.heading, body: x.body_md },
-        ),
-        citations: from.citations.map((c) => ({
-          id: c.cite_key,
-          source: c.source,
-          ref: c.ref,
-          title: c.title ?? "",
-          excerpt: c.excerpt ?? "",
-          retrieved_at: c.retrieved_at ?? "",
-        })),
-      });
-      db.versions.push(v);
-      for (const r of resolutions) {
-        const f = db.feedback.find((x) => x.id === r.feedback_id);
-        if (f && f.status === "open") Object.assign(f, { status: r.status, resolution_note: r.note, addressed_in_version: v.number, updated_at: now() });
-      }
-      // Duplicates of what was resolved go with it.
-      for (const s of db.llm?.suggestions ?? []) {
-        const f = db.feedback.find((x) => x.id === s.feedback_item_id);
-        if (s.kind === "duplicate" && f?.status === "open" && resolutions.some((r) => r.feedback_id === s.duplicate_of)) {
-          Object.assign(f, { status: "addressed", resolution_note: "Addressed with the item it duplicates", addressed_in_version: v.number, updated_at: now() });
-        }
-      }
-      touch(db, doc.id);
-      return v;
-    },
+    importRevision: (doc, base, key, heading, body, resolutions) =>
+      importSections(db, doc, base as VersionRow, { [key]: { heading, body } }, resolutions),
+    importSections: (doc, base, replace, resolutions) => importSections(db, doc, base as VersionRow, replace, resolutions),
+    memberName: (id) => db.members.find((m) => m.id === id)?.email ?? null,
   };
+}
+
+/**
+ * C1e: the Inbox's feedback by state for approvers (new since my last visit, open, staged,
+ * declined, done), the staged rows, and open feedback that leaves staged and settled items out.
+ */
+function withInboxStates(
+  db: Db,
+  llm: LlmContext,
+  me: { id: string; role: Role },
+  base: Schemas["InboxOut"],
+  markSeen: boolean,
+): Schemas["InboxOut"] {
+  db.inbox_seen ??= {};
+  const seen = db.inbox_seen[me.id] ?? null;
+  if (markSeen) db.inbox_seen[me.id] = now();
+  if (!atLeast(me.role, "approver")) return { ...base, last_seen_at: seen };
+  const states = inboxStates(llm, seen);
+  const waiting = states.items.filter((i) => i.state === "new" || i.state === "open");
+  const feedback = db.documents.flatMap((d) => {
+    const items = waiting.filter((i) => i.document_id === d.id);
+    if (!items.length) return [];
+    return [
+      {
+        document_id: d.id,
+        slug: d.slug,
+        title: d.title,
+        latest_version: docVersions(db, d).at(-1)?.number ?? null,
+        open_count: items.length,
+        items: items.slice(0, 5),
+      },
+    ];
+  });
+  feedback.sort((a, b) => b.items[0].created_at.localeCompare(a.items[0].created_at));
+  return {
+    ...base,
+    feedback,
+    total: base.checkpoints.length + base.approvals.length + base.overruns.length + feedback.length,
+    ...states,
+    last_seen_at: seen,
+  };
+}
+
+/** The next version: the base with some sections replaced, and the resolutions recorded. */
+function importSections(
+  db: Db,
+  doc: { id: string },
+  from: VersionRow,
+  replace: Record<string, { heading: string; body: string }>,
+  resolutions: { feedback_id: string; status: "addressed" | "declined"; note: string | null }[],
+): VersionRow {
+  const row = findDocument(db, doc.id)!;
+  const v = buildVersion(row, {
+    number: from.number + 1,
+    created_at: now(),
+    snapshot: from.snapshot ?? undefined,
+    sections: from.sections.map((x) => ({
+      key: x.section_key,
+      level: x.level,
+      heading: replace[x.section_key]?.heading ?? x.heading,
+      body: replace[x.section_key]?.body ?? x.body_md,
+    })),
+    citations: from.citations.map((c) => ({
+      id: c.cite_key,
+      source: c.source,
+      ref: c.ref,
+      title: c.title ?? "",
+      excerpt: c.excerpt ?? "",
+      retrieved_at: c.retrieved_at ?? "",
+    })),
+  });
+  db.versions.push(v);
+  for (const r of resolutions) {
+    const f = db.feedback.find((x) => x.id === r.feedback_id);
+    if (f && f.status === "open") Object.assign(f, { status: r.status, resolution_note: r.note, addressed_in_version: v.number, updated_at: now() });
+  }
+  // Duplicates of what was resolved go with it.
+  for (const s of db.llm?.suggestions ?? []) {
+    const f = db.feedback.find((x) => x.id === s.feedback_item_id);
+    if (s.kind === "duplicate" && f?.status === "open" && resolutions.some((r) => r.feedback_id === s.duplicate_of)) {
+      Object.assign(f, { status: "addressed", resolution_note: "Addressed with the item it duplicates", addressed_in_version: v.number, updated_at: now() });
+    }
+  }
+  touch(db, doc.id);
+  return v;
 }
 
 function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
@@ -1080,6 +1171,10 @@ async function route(db: Db, req: Request): Promise<Response> {
 
   db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
+  if (runs && p[1] === "inbox") {
+    tick(llm);
+    return json(200, withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true"));
+  }
   if (runs) return runs;
 
   if (p[1] !== "documents") return notFound("Route");
@@ -1115,7 +1210,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       .filter((f) => !status || f.status === status)
       .filter((f) => !version || f.raised_on_version === Number(version))
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
-      .map((f) => withSuggestion(db.llm, f));
+      .map((f) => withSuggestion(db.llm, f, docVersions(db, doc).at(-1)?.number ?? null));
     return json(200, items);
   }
 
@@ -1174,7 +1269,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (sub === "resolution-report") {
     const items = db.feedback
       .filter((f) => f.document_id === doc.id && f.raised_on_version < v.number)
-      .map((f) => withSuggestion(db.llm, f));
+      .map((f) => withSuggestion(db.llm, f, docVersions(db, doc).at(-1)?.number ?? null));
     const counts: Record<string, number> = {};
     for (const f of items) counts[f.status] = (counts[f.status] ?? 0) + 1;
     return json(200, { document_id: doc.id, version: v.number, items, counts });

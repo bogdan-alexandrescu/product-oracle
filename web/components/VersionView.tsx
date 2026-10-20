@@ -29,6 +29,7 @@ import { Kbd, TabBar } from "@/components/review/parts";
 import { RoleNote } from "@/components/RoleNote";
 import { FeedbackPanel, ResolutionPanel } from "@/components/FeedbackPanel";
 import { JobsPanel } from "@/components/JobsPanel";
+import { BuildDraftButton } from "@/components/NextDraft";
 import { ReportsPanel } from "@/components/ReportsPanel";
 import type { ExpandCtx, Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
@@ -130,7 +131,10 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [composing, setComposing] = useState<Selection | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("comments");
+  // ?tab=reports opens on the version's reports: where applying a next draft lands (C1e).
+  const [tab, setTab] = useState<Tab>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "reports" ? "reports" : "comments",
+  );
   const [scope, setScope] = useState<Scope>("section");
   const [refreshKey, setRefreshKey] = useState(0);
   // O1f: the brief or the whole version; the choice is remembered per user. A comment
@@ -740,31 +744,35 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             </>
           }
           action={
-            version &&
-            (version.approved_at || canDecide) &&
-            (document_?.kind === "prd" && !version.approved_at ? (
-              // T2 publish gate: a PRD is published from the Publish screen, latest version only.
-              <LinkButton
-                variant="primary"
-                icon="check"
-                href={`/documents/${doc}/publish`}
-                aria-description={n !== latest && latest != null ? `Publishes v${latest}, the latest version` : undefined}
-                data-testid="publish-link"
-              >
-                Publish
-              </LinkButton>
-            ) : (
-              <ApproveButton
-                doc={doc}
-                n={n}
-                approvedAt={version.approved_at}
-                isLatest={n === latest}
-                onApproved={() => {
-                  verQ.reload();
-                  docQ.reload();
-                }}
-              />
-            ))
+            <>
+              {/* C1e: accepted changes staged for the next draft, built in one job. */}
+              {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
+              {version &&
+                (version.approved_at || canDecide) &&
+                (document_?.kind === "prd" && !version.approved_at ? (
+                  // T2 publish gate: a PRD is published from the Publish screen, latest version only.
+                  <LinkButton
+                    variant="primary"
+                    icon="check"
+                    href={`/documents/${doc}/publish`}
+                    aria-description={n !== latest && latest != null ? `Publishes v${latest}, the latest version` : undefined}
+                    data-testid="publish-link"
+                  >
+                    Publish
+                  </LinkButton>
+                ) : (
+                  <ApproveButton
+                    doc={doc}
+                    n={n}
+                    approvedAt={version.approved_at}
+                    isLatest={n === latest}
+                    onApproved={() => {
+                      verQ.reload();
+                      docQ.reload();
+                    }}
+                  />
+                ))}
+            </>
           }
         />
 

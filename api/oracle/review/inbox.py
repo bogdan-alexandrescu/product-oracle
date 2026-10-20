@@ -123,6 +123,7 @@ async def feedback_states(
                 document_id=f.document_id,
                 slug=d.slug if d else None,
                 title=d.title if d else None,
+                latest_version=latest.get(f.document_id),
                 state=state,  # type: ignore[arg-type]
                 resolution_note=f.resolution_note,
                 addressed_in_version=f.addressed_in_version,

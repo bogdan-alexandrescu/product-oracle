@@ -323,6 +323,8 @@ class InboxFeedbackItem(BaseModel):
     document_id: uuid.UUID | None = None
     slug: str | None = None
     title: str | None = None
+    # The document's latest version: where its actions open.
+    latest_version: int | None = None
     state: InboxState = "open"
     updated_at: datetime | None = None
     # Declined: why; done: the version that addressed it.
