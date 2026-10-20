@@ -231,11 +231,14 @@ def test_the_configured_runtime_keeps_what_it_learns_in_the_database():
     assert isinstance(runtime.learned_store, DatabaseLearnedStore)
 
 
-async def test_a_database_failure_keeps_this_process_s_learning(caplog):
+async def test_a_database_failure_keeps_this_process_s_learning(caplog, monkeypatch):
     class Broken:
         async def sync(self, save, forget):
             raise OSError("database unreachable")
 
+    # The test session's in-process `alembic upgrade` (logging.config.fileConfig) disables
+    # the loggers that exist by then.
+    monkeypatch.setattr(logging.getLogger("oracle.swarm.swarmcloud"), "disabled", False)
     swarm = on()
     runtime = swarm.runtime(learned_store=Broken())
     with caplog.at_level(logging.WARNING):

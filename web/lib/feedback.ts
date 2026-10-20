@@ -40,16 +40,20 @@ export function feedbackKind(f: FeedbackItem): FeedbackKind {
  * The item's state. Accepting a suggestion stages it for the next draft (C1e); a dismissed
  * suggestion leaves its feedback open unless the approver also declined it; a resolved
  * comment thread is done.
+ *
+ * The API's state is the one rule (owner, 2026-10-20), the Inbox's too. Staged comes
+ * first: an accepted change carries into the next draft until a draft applies it or
+ * someone discards it, even once its item is closed (by a draft, an approval or by hand),
+ * so the panel, the Inbox and "Build draft N · M staged" count the same changes.
  */
 export function feedbackState(f: FeedbackItem, comment?: Pick<CommentOut, "resolved_at"> | null): FeedbackState {
+  if (f.state) return f.state === "open" && comment?.resolved_at ? "done" : f.state;
+  // No state from the API: the same rule from the item and its live suggestion.
+  const s = liveSuggestion(f);
+  if (s?.kind === "section_text" && s.status === "accepted" && s.applied_in_version == null) return "staged";
   if (f.status === "declined") return "declined";
   if (f.status === "addressed" || f.status === "superseded") return "done";
-  // The API's state is the one rule (owner, 2026-10-20), the Inbox's too: an accepted
-  // (staged) suggestion is not open; a dismissed one leaves the item open.
-  if (f.state && f.state !== "open") return f.state;
-  const s = liveSuggestion(f);
-  if (!f.state && s?.status === "applied") return "done";
-  if (!f.state && s?.status === "accepted") return "staged";
+  if (s?.status === "applied") return "done";
   if (comment?.resolved_at) return "done";
   return "open";
 }
