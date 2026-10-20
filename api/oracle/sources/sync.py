@@ -133,9 +133,7 @@ async def _write(db: AsyncSession, start: _Start, **values: Any) -> None:
     roll back and raise :class:`_Superseded`. The UPDATE locks the row, so a status it
     reads (a pause) is the one it writes over."""
     account = (
-        select(Connection.account_id)
-        .where(Connection.id == Source.connection_id)
-        .scalar_subquery()
+        select(Connection.account_id).where(Connection.id == Source.connection_id).scalar_subquery()
     )
     result = await db.execute(
         update(Source)
@@ -223,7 +221,9 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     # source points at by then.
     used_id = used.id if used is not None else None
 
-    scope_fp = fingerprint(service.normalize_config(kind, config), start.connection_id, start.account_id)
+    scope_fp = fingerprint(
+        service.normalize_config(kind, config), start.connection_id, start.account_id
+    )
     saved = start.cursor or {}
     cursor: dict[str, Any] | None = {k: v for k, v in saved.items() if k != base.SCOPE_KEY}
 
@@ -289,7 +289,9 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         await db.rollback()
         wait = f" (retry after {e.retry_after:g}s)" if e.retry_after is not None else ""
         try:
-            await _write(db, start, last_error=f"Rate limited by {kind}; the next sync resumes{wait}")
+            await _write(
+                db, start, last_error=f"Rate limited by {kind}; the next sync resumes{wait}"
+            )
         except _Superseded:
             stats.outcome = "superseded"
             return stats
