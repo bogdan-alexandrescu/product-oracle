@@ -825,7 +825,16 @@ async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
     inbox = (await client.get("/v1/inbox", headers=viewer)).json()
     assert {
         k: inbox[k]
-        for k in ("checkpoints", "approvals", "overruns", "lookups", "searches", "imports", "feedback", "total")
+        for k in (
+            "checkpoints",
+            "approvals",
+            "overruns",
+            "lookups",
+            "searches",
+            "imports",
+            "feedback",
+            "total",
+        )
     } == {
         "checkpoints": [],
         "approvals": [],
