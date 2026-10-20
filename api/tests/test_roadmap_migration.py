@@ -69,7 +69,7 @@ def test_0016_roadmap_follows_the_wave_1_head():
     assert script.get_revision(REVISION).down_revision == "0014_blockers_snapshot"
     # 0016_refinement_batch (C1e) chains on it, and 0017_citation_source_oracle on that;
     # still a single head.
-    assert script.get_heads() == ["0017_citation_source_oracle"]
+    assert script.get_heads() == ["0018_runtime_features"]
     assert script.get_revision("0016_refinement_batch").down_revision == REVISION
 
 

@@ -10,7 +10,7 @@ export async function login(page: Page, email: string = ADMIN.email) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(ADMIN.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page).toHaveURL(/\/home$/);
 }
 
 /** A section of the visible version (Next keeps recently visited routes mounted but hidden). */
