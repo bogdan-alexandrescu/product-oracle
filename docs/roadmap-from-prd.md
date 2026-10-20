@@ -103,6 +103,25 @@ every export work as before. What it adds (code in `api/oracle/roadmap/`, migrat
   Otherwise `items_check` reports `unverified_date` (the run waits at its checkpoint, or
   fails with the checkpoint off), and a stored item keeps the milestone's name but never
   the date. The prompt lists the verified bases; with none, it asks for horizons only.
+- **Dates in the roadmap's text (O4 'document dates', owner 2026-10-19/20).** Every
+  day-precision date a reader sees (title, headings, bodies, `notes` blocks, code, link
+  text; ISO, `30/11/2026`, `11/30/2026`, `2026.11.30`, `20261130`, ISO datetimes,
+  `Nov 30, 2026`, `the 30th of November`, year-less `Nov 30`; read after markdown
+  rendering, with no-break spaces, Unicode hyphens, zero-width and fullwidth characters
+  normalized) must rest on a verified basis of the roadmap's PRD. The PRD is the one the
+  version was built from, its track's, or the one its front matter names
+  (`prd: {document: <slug>, version: <n>}`); never one its text merely links to. An
+  item-scoped basis counts only where that item owns the date (its section, or the row,
+  list item or line whose first item link is that item's). Sources and data points is
+  exempt and must be the last part (`sources_not_last`); a company template's literal
+  dates are exempt. A person's import with an unverified date is refused (422
+  `unverified_date`); a run's import keeps the draft, marks each date `unverified` and
+  records a warning, and the version cannot be approved (409 listing the dates) until
+  every marker is resolved. A withdrawn basis never rewrites approved text: every place
+  the date shows gets `date withdrawn`. The markdown (`GET .../markdown`, the md export,
+  MCP `get_document_markdown`, which also returns `date_marks`) carries
+  `<!-- oracle: date unverified -->` / `<!-- oracle: date withdrawn -->` right after the
+  date; the import drops these comments, so the body imports again.
 - **Staleness.** A new PRD version that changes an item's section, or a change to its
   feature, requirements or blockers, marks the item `potentially_stale` (with reasons and
   the causing change). `POST /v1/roadmaps/{doc}/items/staleness` reviews or reconciles.
