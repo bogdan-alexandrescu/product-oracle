@@ -7,9 +7,10 @@ recursion limit, and anchors expand into billions of nodes. :func:`load` is a
 
 * anchors and aliases, explicit tags (``!x``, ``!!binary``, ``!<...>``) and directives
   (``%TAG``, ``%YAML``) are refused;
-* numbers are plain decimals only (``42``, ``-1.5``, ``2.5e3``): base-60 (``1:30``),
-  hex, octal and ``1_000`` stay strings; ``.nan``, ``.inf`` and values that overflow
-  (``1e999``) are refused, and so is a number of more than 30 digits;
+* numbers are plain decimals only (``42``, ``-1.5``, ``2.5e+3``): base-60 (``1:30``),
+  hex, octal and ``1_000`` stay strings, as does ``1e5`` (no dot: a string in YAML 1.1
+  too); ``.nan``, ``.inf`` and values that overflow (``1.0e+999``) are refused, and so is
+  a number of more than 30 digits;
 * booleans are ``true``/``false`` only: ``yes``, ``no``, ``on`` and ``off`` stay strings;
 * duplicate keys and non-printable characters are refused;
 * the input is at most ``ORACLE_YAML_MAX_BYTES`` (1 MiB), nested at most 32 deep, with
@@ -59,7 +60,9 @@ MAX_DIGITS = 30
 # in the input and in the value of an escaped ("\x00") double-quoted scalar.
 _NON_PRINTABLE = re.compile("[^\x09\x0a\x0d\x20-\x7e\x85\xa0-퟿-�\U00010000-\U0010ffff]")
 _INT = re.compile(r"^[-+]?(?:0|[1-9][0-9]*)$")
-_FLOAT = re.compile(r"^[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+|[0-9]+(?=[eE]))(?:[eE][-+]?[0-9]+)?$")
+# YAML 1.1's decimal float (a dot; an exponent has a sign), as yaml.safe_load reads it:
+# so whatever yaml.safe_dump wrote unquoted as a string (1e5) is still a string here.
+_FLOAT = re.compile(r"^[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+][0-9]+)?$")
 _SPECIAL_FLOAT = re.compile(r"^[-+]?\.(?:inf|Inf|INF|nan|NaN|NAN)$")
 _INT_TAG = "tag:yaml.org,2002:int"
 _FLOAT_TAG = "tag:yaml.org,2002:float"

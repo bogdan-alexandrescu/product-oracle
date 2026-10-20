@@ -54,8 +54,8 @@ REFUSED = {
     "tag_local": ("probe: !thing x\n", r"tags are not allowed"),
     "nan": ("probe: .nan\n", r"must be finite"),
     "inf": ("probe: -.inf\n", r"must be finite"),
-    "overflow": ("probe: 1e999\n", r"out of range"),
-    "overflow_float": ("probe: 1.0e+999\n", r"out of range"),
+    "overflow": ("probe: 1.0e+999\n", r"out of range"),
+    "overflow_negative": ("probe: -9.9e+999\n", r"out of range"),
     "duplicate_key": ("probe: 1\nprobe: 2\n", r"duplicate key 'probe'"),
     "control_escape": ('probe: "a\\x00b"\n', r"non-printable"),
     "control_raw": ("probe: a\x07b\n", r"non-printable"),
@@ -106,7 +106,8 @@ def test_base60_is_a_string_and_fast():
 def test_narrowed_types():
     data = safe_yaml.load(
         "a: yes\nb: no\nc: on\nd: off\ne: true\nf: False\ng: 1:30\nh: 0x1F\ni: 012\n"
-        "j: 1_000\nk: 4.2\nl: -3\nm: ~\nn: 2026-11-30\no: 2.5e3\np: '1'\n'<<': {x: 1}\n"
+        "j: 1_000\nk: 4.2\nl: -3\nm: ~\nn: 2026-11-30\no: 2.5e+3\np: '1'\n'<<': {x: 1}\n"
+        "q: 1e999\nr: 1.0e5\n"
     )
     assert data == {
         "a": "yes",
@@ -126,7 +127,21 @@ def test_narrowed_types():
         "o": 2500.0,
         "p": "1",
         "<<": {"x": 1},
+        "q": "1e999",  # no dot: a string in YAML 1.1 (yaml.safe_load) too
+        "r": "1.0e5",  # an exponent needs its sign in YAML 1.1
     }
+
+
+def test_what_safe_dump_writes_reads_back_the_same():
+    """Exports (baseline YAML, a draft's front matter) are written by yaml.safe_dump."""
+    data = {
+        "strings": ["yes", "no", "on", "1:30", "0x1F", "012", "1_000", "1e5", "1.0e5", "~"],
+        "more": ["2026-11-30", "null", "true", "<<", "=", "1e999", "+5", "", " x "],
+        "numbers": [1, -3, 4.2, 2500.0, 1e20, 0.1, -0.0],
+        "flags": [True, False, None],
+        "date": __import__("datetime").date(2026, 11, 30),
+    }
+    assert safe_yaml.load(yaml.safe_dump(data, sort_keys=False, allow_unicode=True)) == data
 
 
 def test_directives_and_internal_errors_are_one_error():
