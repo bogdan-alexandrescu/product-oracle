@@ -9,15 +9,17 @@ import { Icon } from "./Icon";
  * with more to see fades and a chevron button beside the strip scrolls it, so a cut-off
  * item reads as "more". The buttons sit outside the scrolling area: the strip never runs
  * under adjacent content. The current item (aria-current or aria-selected) is kept in full
- * view, clear of the fades. `ref` and the other props go to the scrolling element.
+ * view, clear of the fades, when it changes. `ref` and the other props go to the scrolling element.
  */
 /** Room kept between the current item and an edge: the fade (32 px) plus a little air. */
 const REVEAL_PAD = 40;
 
+const CURRENT = '[aria-current="page"], [aria-current="true"], [aria-selected="true"]';
+
 /** Scrolls the strip so its current item sits in full view, clear of the edge fades. */
 function reveal(s: HTMLElement) {
   if (s.scrollWidth <= s.clientWidth) return;
-  const on = s.querySelector<HTMLElement>('[aria-current="page"], [aria-current="true"], [aria-selected="true"]');
+  const on = s.querySelector<HTMLElement>(CURRENT);
   if (!on) return;
   const box = s.getBoundingClientRect();
   const item = on.getBoundingClientRect();
@@ -51,27 +53,38 @@ export function ScrollStrip({
     setMore((m) => (m.left === left && m.right === right ? m : { left, right }));
   }, []);
 
+  // Observers on mount only: re-running them on every render (children change identity on
+  // each one) re-ran reveal() and snapped the strip back after every chevron scroll.
   useEffect(() => {
     const s = el.current;
     if (!s) return;
-    // On mount and resize only, so the reader can still scroll the current item away.
-    const settle = () => {
-      reveal(s);
-      measure();
-    };
-    settle();
-    // Showing a chevron narrows the strip after the first measure: settle again.
-    const raf = requestAnimationFrame(settle);
-    const ro = new ResizeObserver(settle);
+    // Showing a chevron narrows the strip after the first measure: measure again.
+    const raf = requestAnimationFrame(measure);
+    const ro = new ResizeObserver(measure);
     ro.observe(s);
-    for (const c of s.children) ro.observe(c);
+    const mo = new MutationObserver(measure);
+    mo.observe(s, { childList: true, subtree: true });
     s.addEventListener("scroll", measure, { passive: true });
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      mo.disconnect();
       s.removeEventListener("scroll", measure);
     };
-  }, [measure, children]);
+  }, [measure]);
+
+  // reveal() runs when the current item CHANGES (and on mount), never on a plain re-render,
+  // so the reader can still scroll the current item away with the chevrons or a swipe.
+  const revealed = useRef<Element | null>(null);
+  useEffect(() => {
+    const s = el.current;
+    if (!s) return;
+    const on = s.querySelector(CURRENT);
+    if (on === revealed.current) return;
+    revealed.current = on;
+    reveal(s);
+    measure();
+  });
 
   const setRef = (node: HTMLDivElement | null) => {
     el.current = node;
@@ -103,7 +116,10 @@ export function ScrollStrip({
         {...rest}
         data-more-left={more.left || undefined}
         data-more-right={more.right || undefined}
-        className={`flex min-w-0 flex-1 overflow-x-auto scroll-fade ${stripClassName}`}
+        // relative: absolutely positioned children (.sr-only labels) are clipped by the
+        // strip; without it they escaped to the page and widened it (21,825 px on a
+        // 102-section PRD).
+        className={`relative flex min-w-0 flex-1 overflow-x-auto scroll-fade ${stripClassName}`}
       >
         {children}
       </div>

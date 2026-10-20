@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { Button, Chip, CostFigure, DataTable, Icon, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
+import { sectionHref } from "@/lib/section-link";
 
 import { CHECKPOINT_LABEL, age, shortId, usd, type InboxOut, type RunSummary } from "../runs/_lib";
 
@@ -217,8 +218,10 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
   }));
 
   const feedback: Need[] = inbox.feedback.map((d) => {
-    const href = d.latest_version ? `/documents/${d.slug}/v/${d.latest_version}` : `/documents/${d.slug}`;
-    const latest = d.items.map((f) => f.created_at).sort().at(-1);
+    // Resolve opens the latest version at the section of the newest open item.
+    const newest = [...d.items].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    const href = d.latest_version ? sectionHref(d.slug, d.latest_version, newest?.section_key) : `/documents/${d.slug}`;
+    const latest = newest?.created_at;
     return {
       key: d.document_id,
       icon: "comment",
