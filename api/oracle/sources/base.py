@@ -48,7 +48,7 @@ item in the source.
     register(GithubConnector())
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
@@ -155,6 +155,32 @@ class Scope:
     occurred_from: datetime | None = None
     occurred_before: datetime | None = None
     provenance: tuple[tuple[str, frozenset[str]], ...] | None = None
+
+
+def scope_narrows(old: Scope, new: Scope) -> bool:
+    """Whether ``new`` keeps strictly less than ``old`` and nothing ``old`` did not: no
+    new pick, no wider date. Such a change needs no provider call to be trusted (S5,
+    owner 2026-10-20: a narrowing save makes none); an unconstrained field of ``old``
+    admits anything, an unconstrained field of ``new`` under a constrained ``old`` is wider."""
+    if new == old:
+        return False
+
+    def within(n: Any, o: Any, inside: Callable[[Any, Any], bool]) -> bool:
+        if o is None:
+            return True
+        return n is not None and inside(n, o)
+
+    def picks(n: tuple[tuple[str, frozenset[str]], ...], o: tuple[tuple[str, frozenset[str]], ...]):
+        allowed = dict(o)
+        return all(key in allowed and values <= allowed[key] for key, values in n)
+
+    return (
+        within(new.groups, old.groups, lambda n, o: n <= o)
+        and within(new.kinds, old.kinds, lambda n, o: n <= o)
+        and within(new.occurred_from, old.occurred_from, lambda n, o: n >= o)
+        and within(new.occurred_before, old.occurred_before, lambda n, o: n <= o)
+        and within(new.provenance, old.provenance, picks)
+    )
 
 
 @runtime_checkable

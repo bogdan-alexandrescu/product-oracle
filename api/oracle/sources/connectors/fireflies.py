@@ -81,6 +81,7 @@ from oracle.sources.base import (
     Scope,
     SyncEvent,
     register,
+    scope_narrows,
 )
 
 log = logging.getLogger(__name__)
@@ -733,6 +734,15 @@ class FirefliesConnector:
         return Scope(
             occurred_from=picked.date_from, occurred_before=picked.date_to_end, provenance=picks
         )
+
+    def narrows(self, old: dict[str, Any], new: dict[str, Any]) -> bool:
+        """Whether ``new`` only takes less than ``old`` (no provider call needed to save
+        it). A title rule (a config saved before the picker) filters at Fireflies, which
+        the stored items cannot show: changing from or to one is never a pure narrowing."""
+        before, after = selection(old), selection(new)
+        if before.titles or after.titles or before.legacy or after.legacy:
+            return False
+        return scope_narrows(self.scope(old), self.scope(new))
 
     def rescope_cursor(
         self, old_cursor: dict[str, Any] | None, new_config: dict[str, Any]

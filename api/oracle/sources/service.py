@@ -290,27 +290,33 @@ async def create_source(
 async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any]) -> Source:
     if changes.get("config") is not None:
         changes = {**changes, "config": normalize_config(source.kind, changes["config"])}
-    reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
-    reconfigure = changes.get("config") is not None and changes["config"] != source.config
     asks = "connection_id" in changes or changes.get("config") is not None
-    if reconnect or reconfigure:
-        connection_id = changes["connection_id"] if reconnect else source.connection_id
-        config = changes["config"] if reconfigure else source.config
-        conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
-        # Validating reads the credential, which commits: change nothing before it.
-        await _validate(db, source.kind, config, conn)
     if asks:
         # The row was loaded when the request started (sessions do not expire on
         # commit): a sync, or another save, may have changed it since. Read it again,
         # locked until the commit below, and compare what is asked with THAT copy (a
-        # request asking for the config it loaded, after another save changed it, is a
-        # change). A running sync takes the same row lock before it writes items
-        # (sync._hold), so this sweep and its checkpoints never wait on each other's rows.
+        # request asking for the config it loaded, after another save narrowed it, is a
+        # widening, and is validated as one). A running sync takes the same row lock
+        # before it writes items (sync._hold), so this sweep and its checkpoints never
+        # wait on each other's rows.
         await db.refresh(source, with_for_update=True)
+        reconnect, reconfigure, narrowing = _what_changed(source, changes)
+        if reconnect or (reconfigure and not narrowing):
+            connection_id = changes["connection_id"] if reconnect else source.connection_id
+            config = changes["config"] if reconfigure else source.config
+            # Validating reads the credential, which commits (and so frees the lock):
+            # nothing is changed before it, and the row is read again, locked, after it.
+            # What was validated is the target (connection and config), whatever the row
+            # looked like meanwhile.
+            await db.commit()
+            conn = await _check_connection(db, source.owner_user_id, source.kind, connection_id)
+            await _validate(db, source.kind, config, conn)
+            await db.refresh(source, with_for_update=True)
+            reconnect, reconfigure, narrowing = _what_changed(source, changes)
         old_config = dict(source.config or {})
         connection_id = changes.get("connection_id", source.connection_id)
-        reconnect = connection_id != source.connection_id
-        reconfigure = changes.get("config") is not None and changes["config"] != source.config
+    else:
+        reconnect = reconfigure = False
     if reconnect or reconfigure:
         config = changes["config"] if reconfigure else source.config
         if reconnect:
@@ -337,6 +343,35 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         source.name = changes["name"].strip()
     await _commit_unique(db)
     return source
+
+
+def _what_changed(source: Source, changes: dict[str, Any]) -> tuple[bool, bool, bool]:
+    """(connection changed, config changed, the config change only narrows), each against
+    ``source`` as it is now. A pure narrowing (no new pick, no wider date, same connection;
+    owner S5 2026-10-20: "no provider call") needs neither the provider nor an active
+    connection."""
+    reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
+    reconfigure = changes.get("config") is not None and changes["config"] != source.config
+    narrowing = (
+        reconfigure
+        and not reconnect
+        and _only_narrows(source.kind, source.config, changes["config"])
+    )
+    return reconnect, reconfigure, narrowing
+
+
+def _only_narrows(kind: str, old: dict[str, Any] | None, new: dict[str, Any]) -> bool:
+    connector = connector_for(kind)
+    scope = getattr(connector, "scope", None)
+    if scope is None:
+        return False
+    try:
+        narrows = getattr(connector, "narrows", None)
+        if narrows is not None:
+            return bool(narrows(dict(old or {}), new))
+        return base.scope_narrows(scope(dict(old or {})), scope(new))
+    except base.ConnectorConfigError:
+        return False  # saved before a rule it now breaks, or refused now: validate
 
 
 async def _sweep(
