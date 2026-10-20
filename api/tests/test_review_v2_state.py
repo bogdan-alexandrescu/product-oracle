@@ -97,7 +97,11 @@ async def test_an_edit_invalidates_only_the_affected_section(client):
     assert s2["risks"]["status"] == "approved"
 
     async with tenant_session(ctx.tenant_id) as s:
-        events = (await s.scalars(select(ChangeEvent))).all()
+        events = [
+            e
+            for e in (await s.scalars(select(ChangeEvent))).all()
+            if e.subject_kind == "document_section"
+        ]
         # One change, for the edited section only, handled by the review lane's handler.
         assert [(e.subject_kind, e.cause, e.data["section_key"]) for e in events] == [
             ("document_section", "section_edited", "problem")
@@ -189,6 +193,7 @@ async def test_an_accepted_ai_patch_invalidates_the_section_approval(client):
         causes = [
             (e.cause, e.data["section_key"])
             for e in (await s.scalars(select(ChangeEvent).order_by(ChangeEvent.created_at)))
+            if e.subject_kind == "document_section"
         ]
     assert ("patch_accepted", "problem") in causes
     assert ("patch_accepted", "solution") not in causes

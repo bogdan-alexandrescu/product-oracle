@@ -112,10 +112,16 @@ async def test_a_cited_source_deleted_blocks_publish(client):
     assert resp.status_code == 409
     assert resp.json()["check"]["blockers"][0]["code"] == "source_permission_revoked"
     async with tenant_session(ctx.tenant_id) as s:
-        [event] = (await s.scalars(select(ChangeEvent))).all()
+        # One tombstone; the sections it reaches are recorded as changes of their own
+        # (oracle.trace).
+        [event] = (
+            await s.scalars(
+                select(ChangeEvent).where(ChangeEvent.subject_kind == "source_permission")
+            )
+        ).all()
         assert (event.subject_kind, event.cause, event.subject_id) == (
             "source_permission",
-            "source_revoked",
+            "source_deleted",
             source_id,
         )
         assert str(item_id) in event.data["item_ids"]
@@ -463,7 +469,11 @@ async def test_a_citation_change_changes_the_revision_and_invalidates(client):
     assert s2["goal-trace"]["status"] == "approval_stale"
     assert s2["problem"]["status"] == "approved"
     async with tenant_session(ctx.tenant_id) as s:
-        keys = [e.data["section_key"] for e in await s.scalars(select(ChangeEvent))]
+        keys = [
+            e.data["section_key"]
+            for e in await s.scalars(select(ChangeEvent))
+            if e.subject_kind == "document_section"
+        ]
     assert keys == ["goal-trace"]
 
 

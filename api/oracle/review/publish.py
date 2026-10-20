@@ -305,7 +305,9 @@ async def record_source_revocation(
     for source in sources:
         record = await revocation_record(db, [source.id])
         # The name stays out: a source is private to its owner.
-        record.update({"source_kind": source.kind})
+        record.update(
+            {"source_kind": source.kind, "source": {"id": str(source.id), "kind": source.kind}}
+        )
         events.append(
             await changes.record_change(
                 db,

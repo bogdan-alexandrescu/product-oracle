@@ -2603,7 +2603,7 @@ async def _writes(token: str) -> dict[str, str]:
         names = {t.name for t in (await c.list_tools()).tools}
         assert {"push_draft", "import_version", "propose_change"} <= names
         for name, args in (
-            ("push_draft", {"doc": "w5-draft", "markdown": _draft_markdown()}),
+            ("push_draft", {"doc": "w5-draft", "markdown": _draft_markdown(), "base_version": 0}),
             ("import_version", {"doc": "w5-draft-2", "body": _draft_markdown()}),
             ("propose_change", {"body": {"op": "add", "kind": "goal", "data": {}}}),
             ("get_run_output", {"seq": 1, "name": "summary.md"}),
@@ -2661,13 +2661,17 @@ async def test_deciding_over_a_console_answer_that_did_not_count_ends_the_hold(c
     run = await get(client, auth, run["id"])
     assert run["token_read_only"] is True
     async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
-        res = await c.call_tool("push_draft", {"doc": "w5", "markdown": _draft_markdown()})
+        res = await c.call_tool(
+            "push_draft", {"doc": "w5", "markdown": _draft_markdown(), "base_version": 0}
+        )
         assert res.is_error and "waiting for approval" in res.content[0].text
     # Requesting changes (the workflow's revision runs with them): the hold ends.
     run = await decide(client, auth, run, "changes_requested", note="Add a metric")
     assert run["token_read_only"] is False and run["status"] == "running"
     async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
-        res = await c.call_tool("push_draft", {"doc": "w5", "markdown": _draft_markdown()})
+        res = await c.call_tool(
+            "push_draft", {"doc": "w5", "markdown": _draft_markdown(), "base_version": 0}
+        )
         assert "waiting for approval" not in res.content[0].text
 
 

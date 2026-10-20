@@ -362,7 +362,7 @@ async def _curated_writes(token: str) -> dict[str, tuple[bool, str]]:
     out = {}
     async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
         for name, args in (
-            ("push_draft", {"doc": "r9-held", "markdown": _draft_markdown()}),
+            ("push_draft", {"doc": "r9-held", "markdown": _draft_markdown(), "base_version": 0}),
             ("propose_change", {"body": {"op": "add", "kind": "goal", "data": {"key": "g9"}}}),
         ):
             res = await c.call_tool(name, args)

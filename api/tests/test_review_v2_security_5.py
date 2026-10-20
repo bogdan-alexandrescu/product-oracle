@@ -529,9 +529,9 @@ async def test_follow_ups_run_after_runs_and_jobs_within_a_time_budget(
         order.append("runs")
         return await real_tick(db, principal)
 
-    async def jobs(tenant_id):
+    async def jobs(tenant_id, **kwargs):
         order.append("jobs")
-        return await real_jobs(tenant_id)
+        return await real_jobs(tenant_id, **kwargs)
 
     async def slow(http, conn):
         order.append("revoke")

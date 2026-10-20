@@ -653,7 +653,7 @@ async def test_follow_ups_still_run_when_an_earlier_part_of_the_tick_fails(clien
     await _disabled_with_connection(client, ctx, monkeypatch)
     await _due(ctx)
 
-    async def broken(tenant_id):
+    async def broken(tenant_id, **kwargs):
         raise RuntimeError("the model jobs broke")
 
     monkeypatch.setattr(runs_router, "run_llm_jobs", broken)
