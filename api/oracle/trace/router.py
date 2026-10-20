@@ -223,7 +223,7 @@ async def get_entity_trace(entity_id: uuid.UUID, principal: Reader, db: TenantDB
     acceptance criteria, the sections linking it and the outputs built on it; for a
     requirement, its assumptions, blockers, alternatives, experiments, decisions, owners
     and risks. A feature serving no confirmed goal is flagged, with its priority."""
-    return await views.entity_trace(db, await _entity(db, entity_id))
+    return await views.entity_trace(db, await _entity(db, entity_id), principal)
 
 
 @router.get("/baseline/entities/{entity_id}/impact", response_model=ImpactReport)

@@ -44,6 +44,7 @@ def _blocker_out(
     gate: BlockerGate,
     evidence_count: int,
     impacted: list[BlockerImpactRef],
+    confidence: float | None,
 ) -> BlockerOut:
     return BlockerOut(
         id=entity.id,
@@ -52,7 +53,7 @@ def _blocker_out(
         detail=entity.body,
         entity_status=entity.status,
         locked=entity.locked,
-        confidence=float(entity.confidence) if entity.confidence is not None else None,
+        confidence=confidence,
         evidence_count=evidence_count,
         type=spec.type,
         limit_kind=spec.limit_kind,
@@ -181,6 +182,13 @@ async def strategies(
                     gate,
                     len(evidence),
                     [impacted[i] for i in spec.impacted_entity_ids if i in impacted],
+                    # A run reads the entity's score as of its pin, as the entity
+                    # detail does (S6); people read the stored live one.
+                    baseline_evidence.as_read(
+                        principal,
+                        float(entity.confidence) if entity.confidence is not None else None,
+                        evidence,
+                    ),
                 ),
                 gate=gate,
                 evidence=evidence,

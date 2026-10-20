@@ -13,10 +13,11 @@ everyone sees the snapshot too. Refreshing fetches it again and rescores.
 """
 
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes, confidence
@@ -94,6 +95,60 @@ async def run_pin(db: AsyncSession, principal: Principal) -> Snapshot | None:
     return await db.scalar(
         select(Snapshot).join(Run, Run.snapshot_id == Snapshot.id).where(Run.id == principal.run_id)
     )
+
+
+class RunView:
+    """What a run reads as the confidence of entities and edges (S6, owner 2026-10-20):
+    each evidence row as of the run's pin (``scoring.as_of_pin``, through ``present``),
+    aggregated as the detail routes do. One shared helper for every output builder; build
+    it with ``run_view`` (None for people, who read the stored live value, and for a run
+    that pinned no snapshot, which keeps reading the stored value)."""
+
+    def __init__(
+        self,
+        rows: dict[tuple[str, uuid.UUID], list[float | None]],
+        by_evidence: dict[uuid.UUID, float | None] | None = None,
+    ) -> None:
+        self.rows = rows
+        self.by_evidence = by_evidence or {}
+
+    def scores(self, kind: str, target_id: uuid.UUID) -> list[float | None]:
+        return self.rows.get((kind, target_id), [])
+
+    def confidence(self, kind: str, target_id: uuid.UUID) -> float | None:
+        value = confidence.aggregate([c for c in self.scores(kind, target_id) if c is not None])
+        return None if value is None else round(value, 3)
+
+
+async def run_view(
+    db: AsyncSession,
+    principal: Principal | None,
+    *,
+    entity_ids: Iterable[uuid.UUID] = (),
+    edge_ids: Iterable[uuid.UUID] = (),
+) -> RunView | None:
+    """Batched: one evidence read for all the ids, however many (no N+1 over a graph)."""
+    if principal is None or not principal.is_run:
+        return None
+    entity_ids, edge_ids = list(entity_ids), list(edge_ids)
+    if not entity_ids and not edge_ids:
+        return RunView({})
+    if await run_pin(db, principal) is None:
+        return None
+    stmt = select(Evidence).where(
+        or_(Evidence.entity_id.in_(entity_ids), Evidence.edge_id.in_(edge_ids))
+    )
+    rows = list((await db.scalars(stmt)).all())
+    shown = await present(db, principal, rows)
+    by_row = {r.id: r for r in rows}
+    grouped: dict[tuple[str, uuid.UUID], list[float | None]] = {}
+    for ev in shown:
+        row = by_row[ev.id]
+        if row.entity_id is not None:
+            grouped.setdefault(("entity", row.entity_id), []).append(ev.confidence)
+        if row.edge_id is not None:
+            grouped.setdefault(("edge", row.edge_id), []).append(ev.confidence)
+    return RunView(grouped, {ev.id: ev.confidence for ev in shown})
 
 
 async def _own_item(
