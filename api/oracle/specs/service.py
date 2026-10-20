@@ -31,6 +31,7 @@ from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import SLUG_RE as PARSER_SLUG_RE
 from oracle.docs.parser import DraftError, is_uuid
+from oracle.docs.schemas import ImportProblem
 from oracle.review import service as review_service
 from oracle.runs import service as runs_service
 from oracle.runs.flows import MAX_SOURCE_CHARS
@@ -362,9 +363,12 @@ async def _run_request(db: AsyncSession, run: Run) -> ArtifactRequest | None:
 
 
 async def _inputs(
-    db: AsyncSession, request: ArtifactRequest, run: Run | None
+    db: AsyncSession,
+    request: ArtifactRequest,
+    run: Run | None,
+    source_version_id: uuid.UUID | None = None,
 ) -> tuple[contract.SpecInputs, Document, DocumentVersion]:
-    version = await db.get(DocumentVersion, request.source_version_id)
+    version = await db.get(DocumentVersion, source_version_id or request.source_version_id)
     if version is None:
         raise Invalid("the PRD version this spec is built from no longer exists")
     prd = await db.get(Document, version.document_id)
@@ -663,6 +667,55 @@ async def import_spec(
 
 async def _section_keys(db: AsyncSession, version_id: uuid.UUID) -> list[tuple[str, str]]:
     return [(s.section_key, s.heading) for s in await _section_rows(db, version_id)]
+
+
+# --------------------------------------------------------------------------- edits
+
+
+async def check_edit(
+    db: AsyncSession,
+    request: ArtifactRequest,
+    previous: ArtifactVersion | None,
+    markdown: str,
+) -> None:
+    """E1: an edit of a spec version (the API, ``push_draft``, ``oracle push``) may change
+    only its engineering parts. The parts Oracle writes from the PRD (requirements, the
+    decided half of the acceptance criteria, sources) must read as Oracle composes them
+    from the request's inputs, or as the version the edit replaces has them; otherwise
+    the edit is refused (DraftError, 422)."""
+    versions = await _versions(db, request.id)
+    by_run = next(
+        (v for v in reversed(versions) if (v.provenance or {}).get("origin") == "run"), None
+    )
+    run_id = (by_run.provenance or {}).get("run_id") if by_run else None
+    run = await db.get(Run, uuid.UUID(run_id)) if run_id and is_uuid(run_id) else None
+    source_version_id = by_run.source_version_id if by_run else None
+    try:
+        inputs, _, version = await _inputs(db, request, run, source_version_id)
+    except Invalid as exc:
+        raise DraftError([ImportProblem(code="spec_inputs", message=str(exc))]) from exc
+    allowed = [contract.expected_prd_parts(inputs)]
+    if previous is not None and (dv_id := _doc_version_id(previous)) is not None:
+        dv = await db.get(DocumentVersion, dv_id)
+        if dv is not None:
+            allowed.append(contract.prd_parts(dv.markdown))
+    submitted = contract.prd_parts(markdown)
+    if submitted in allowed:
+        return
+    changed = sorted(
+        {k for a in allowed for k in set(a) | set(submitted) if a.get(k) != submitted.get(k)}
+    )
+    raise DraftError(
+        [
+            ImportProblem(
+                code="prd_part_changed",
+                message=f"Product requirements come from PRD v{version.number}. "
+                "Change them in the PRD.",
+                section_key=key if key != "front_matter" else None,
+            )
+            for key in changed[:1] or [None]
+        ]
+    )
 
 
 # --------------------------------------------------------------------------- views

@@ -13,7 +13,10 @@ The ``specs.lineage`` change handler runs inside every document import:
   the run's provenance and fresh dependencies on the PRD sections and requirements;
 - a version a person imports (``oracle push``, the API) gets an artifact version that
   copies the previous one's dependencies as they are (anchors, freshness and the change
-  that marked them): an edit does not make a stale spec fresh;
+  that marked them): an edit does not make a stale spec fresh. An edit may change only
+  the engineering parts: one that changes a part Oracle writes from the PRD
+  (requirements, the decided acceptance criteria, sources) is refused (E1,
+  :func:`oracle.specs.service.check_edit`);
 - a new spec document that no spec request owns is refused: every spec has lineage.
 
 Flows and wireframes are stored by :func:`record_design`. Nothing here rewrites an
@@ -259,6 +262,10 @@ async def on_document_version(db: AsyncSession, event: ChangeEvent) -> None:
             .order_by(ArtifactVersion.number.desc())
             .limit(1)
         )
+        # E1: an edit changes only engineering parts (the service imports this module).
+        from oracle.specs.service import check_edit
+
+        await check_edit(db, request, previous, version.markdown)
         av = ArtifactVersion(
             request_id=request.id,
             number=await next_number(db, request.id),

@@ -296,6 +296,33 @@ def _build_request(op: Operation, args: dict[str, Any]) -> tuple[str, dict, Any,
     return path, query, body, op.body_media_type
 
 
+async def _run_document_refusal(caller: McpCaller, doc: str) -> str | None:
+    """Why a run token may not push a draft to ``doc``, or None. A run pushes only to its
+    own run's document (its ``document_id``, or the slug it was created for); a run with
+    no document of its own may not push to a spec (E1: a spec version is its request's)."""
+    from oracle.docs.models import Document
+    from oracle.docs.service import find_document
+    from oracle.runs.models import Run
+    from oracle.tenancy import tenant_session
+
+    async with tenant_session(caller.tenant_id) as s:
+        run = await s.get(Run, caller.run_id) if caller.run_id else None
+        if run is None:
+            return "Refused: the run of this token is gone."
+        target = await find_document(s, doc)
+        own_slug = (run.knobs or {}).get("document_slug")
+        own = await s.get(Document, run.document_id) if run.document_id else None
+    if target is not None and own is not None and target.id == own.id:
+        return None
+    if own_slug and doc == own_slug and own is None:
+        return None
+    if own is None and not own_slug and (target is None or target.kind != "spec"):
+        return None
+    name = own.slug if own is not None else own_slug
+    mine = f" ('{name}')" if name else " (this run has none)"
+    return f"Refused: a run token pushes drafts only to its own run's document{mine}, not '{doc}'."
+
+
 async def call_operation(
     app: FastAPI, caller: McpCaller, op: Operation, args: dict[str, Any]
 ) -> RestResponse:
@@ -305,6 +332,10 @@ async def call_operation(
         reason = f"needs the {needed} scope" if needed else "is not available to run tokens"
         raise ToolError(f"Refused: {op.method} {op.path} {reason}.")
     path, query, body, media = _build_request(op, args)
+    if caller.kind == "run" and scopes.required_scope(op.method, op.path) == "write:drafts":
+        refusal = await _run_document_refusal(caller, str(args.get("doc") or ""))
+        if refusal:
+            raise ToolError(refusal)
     headers = {"accept": "application/json, text/*;q=0.9, */*;q=0.5", **caller.credentials}
     content = None
     if body is not None and media == "application/json":

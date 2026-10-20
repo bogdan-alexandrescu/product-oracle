@@ -380,6 +380,37 @@ def compose(agent_md: str, inputs: SpecInputs) -> Composed:
     return Composed("\n".join(out).rstrip() + "\n", problems)
 
 
+# E1 (owner, 2026-10-19): the sections Oracle writes from the approved PRD. An edit of a
+# spec version may change only its engineering parts: these stay as Oracle wrote them
+# (for acceptance criteria, the half decided with the PRD; proposals may change).
+PRD_PARTS = ("requirements", "acceptance-criteria", "sources")
+_PROPOSED_SPLIT = re.compile(r"\n\s*Proposed by this spec \(")
+
+
+def prd_parts(markdown: str) -> dict[str, object]:
+    """What of a spec version comes from the PRD: (heading, body) of each PRD part, and
+    the front matter's ``spec`` block (source and requirement ids)."""
+    try:
+        draft = parse_draft(markdown)
+    except DraftError:
+        return {}
+    out: dict[str, object] = {"front_matter": (draft.front_matter or {}).get("spec")}
+    for s in draft.sections:
+        if s.section_key in PRD_PARTS:
+            body = s.body_md.strip()
+            if s.section_key == "acceptance-criteria":
+                body = _PROPOSED_SPLIT.split(body, maxsplit=1)[0].rstrip()
+            out[s.section_key] = (s.heading, body)
+    return out
+
+
+def expected_prd_parts(inputs: SpecInputs) -> dict[str, object]:
+    """:func:`prd_parts` of the version :func:`compose` writes from ``inputs`` today."""
+    stub = "\n\n".join(f"## {s.title} {{#{s.key}}}\n\n-" for s in agent_sections(inputs.depth))
+    composed = compose(stub, inputs)
+    return prd_parts(composed.markdown) if composed.markdown else {}
+
+
 SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
