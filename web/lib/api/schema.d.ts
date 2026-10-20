@@ -8191,8 +8191,42 @@ export interface components {
             latest_version?: number | null;
             /** Open Count */
             open_count: number;
+            counts?: components["schemas"]["InboxFeedbackCounts"];
+            /** First Section Key */
+            first_section_key?: string | null;
             /** Items */
             items: components["schemas"]["InboxFeedbackItem"][];
+        };
+        /**
+         * InboxFeedbackCounts
+         * @description What a document's open items wait for; the five add up to ``open_count``.
+         */
+        InboxFeedbackCounts: {
+            /**
+             * Suggestions
+             * @default 0
+             */
+            suggestions: number;
+            /**
+             * Accepted
+             * @default 0
+             */
+            accepted: number;
+            /**
+             * Comments
+             * @default 0
+             */
+            comments: number;
+            /**
+             * Verdicts
+             * @default 0
+             */
+            verdicts: number;
+            /**
+             * Other
+             * @default 0
+             */
+            other: number;
         };
         /** InboxFeedbackItem */
         InboxFeedbackItem: {
@@ -8203,6 +8237,11 @@ export interface components {
             id: string;
             /** Summary */
             summary: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "comment" | "section_review" | "general";
             /** Section Key */
             section_key?: string | null;
             /** Raised On Version */
@@ -8212,6 +8251,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Suggestion Status */
+            suggestion_status?: ("open" | "accepted" | "dismissed" | "applied" | "superseded") | null;
         };
         /** InboxOut */
         InboxOut: {

@@ -115,12 +115,11 @@ test("roles: a commenter comments and resolves their own thread, not others'", a
   const mine = page.getByTestId("feedback-item").filter({ visible: true, hasText: "Which month is this from?" });
   await expect(mine).toBeVisible();
   await mine.getByRole("button", { name: "Resolve" }).click();
-  // Done: it stays in view, in its new state, until the filter changes.
+  // Resolved: it leaves the Open list; Done shows it, with Reopen.
+  await expect(mine).toHaveCount(0);
+  await feedbackState(page, "Done");
   await expect(mine.getByTestId("feedback-state-chip")).toHaveText("Done");
   await expect(mine.getByRole("button", { name: "Reopen" })).toBeVisible();
-  await feedbackState(page, "Done");
-  await feedbackState(page, "Open");
-  await expect(mine).toHaveCount(0);
 });
 
 test("roles: an approver sets verdicts and publishes a ready PRD, but cannot manage members", async ({ page }) => {

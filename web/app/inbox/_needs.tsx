@@ -73,7 +73,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
 
 /** Home's narrower lines: no run id, one action each. */
 export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.filter((c) => c.key !== "run").map((c) =>
-  c.key === "kind" ? { ...c, width: "164px" } : c.key === "context" ? { ...c, width: "24%" } : c.key === "act" ? { ...c, width: "112px" } : c,
+  c.key === "kind" ? { ...c, width: "164px" } : c.key === "context" ? { ...c, width: "24%" } : c.key === "act" ? { ...c, width: "200px" } : c,
 );
 
 export function NeedTable({
@@ -120,6 +120,31 @@ function RunName({ run }: { run: Pick<RunSummary, "flow_title" | "document_slug"
 }
 
 export type Act = (key: string, call: () => Promise<unknown>) => Promise<void>;
+
+type InboxDocument = InboxOut["feedback"][number];
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** What a document's open items wait for ("3 suggestions to accept or dismiss"), and the button's verb. */
+export function feedbackWaits(d: InboxDocument): { parts: string[]; verb: string } {
+  const c = d.counts ?? { suggestions: 0, accepted: 0, comments: 0, verdicts: 0, other: d.open_count };
+  const parts = [
+    c.suggestions > 0 && `${plural(c.suggestions, "suggestion")} to accept or dismiss`,
+    c.accepted > 0 && `${plural(c.accepted, "accepted suggestion")} to refine`,
+    c.comments > 0 && `${plural(c.comments, "comment")} to resolve`,
+    c.verdicts > 0 && `${plural(c.verdicts, "section verdict")} to address`,
+    c.other > 0 && `${plural(c.other, "item")} to address`,
+  ].filter((p): p is string => !!p);
+  const only = (n: number) => n > 0 && n === d.open_count;
+  const verb = only(c.suggestions) ? "Review suggestions" : only(c.comments) ? "Review comments" : "Review feedback";
+  return { parts: parts.length ? parts : [plural(d.open_count, "open item")], verb };
+}
+
+/** The latest version, its review panel on the open feedback, at the first open item's section. */
+export function feedbackHref(d: InboxDocument): string {
+  if (!d.latest_version) return `/documents/${d.slug}`;
+  return sectionHref(d.slug, d.latest_version, d.first_section_key, { feedback: "open" });
+}
 
 const path = (id: string) => ({ params: { path: { run_id: id } } });
 
@@ -218,24 +243,23 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
   }));
 
   const feedback: Need[] = inbox.feedback.map((d) => {
-    // Resolve opens the latest version at the section of the newest open item.
-    const newest = [...d.items].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-    const href = d.latest_version ? sectionHref(d.slug, d.latest_version, newest?.section_key) : `/documents/${d.slug}`;
-    const latest = newest?.created_at;
+    const href = feedbackHref(d);
+    const latest = d.items.map((f) => f.created_at).sort().at(-1);
+    const { parts, verb } = feedbackWaits(d);
     return {
       key: d.document_id,
       icon: "comment",
       kind: "Feedback",
       item: (
         <span className="tnum truncate" title={d.items.map((f) => `v${f.raised_on_version} · ${f.summary}`).join("\n")}>
-          {d.open_count} open item{d.open_count === 1 ? "" : "s"}
+          {parts.join(" · ")}
         </span>
       ),
       context: <span className="block truncate">{d.title}</span>,
       at: latest,
       action: (
-        <LinkButton href={href} aria-label={`Resolve ${d.title}`}>
-          Resolve
+        <LinkButton href={href} aria-label={`${verb} ${d.title}`}>
+          {verb}
         </LinkButton>
       ),
     };

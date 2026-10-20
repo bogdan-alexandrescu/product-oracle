@@ -322,9 +322,9 @@ test("review panel: three tabs; Feedback is one list by state, scope and kind, w
       const t = el.querySelector('[data-testid="comment"]')!;
       return !!(a.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING);
     });
-  await expect(suggestion.getByTestId("feedback-actions").getByRole("button")).toHaveText(["Accept", "Edit", "Dismiss"]);
+  await expect(suggestion.getByTestId("feedback-actions").getByRole("button")).toHaveText(["Accept", "Edit and accept", "Dismiss"]);
   expect(await order(suggestion)).toBe(true);
-  await expect(comment.getByTestId("feedback-actions").getByRole("button")).toHaveText(["Reply", "Resolve"]);
+  await expect(comment.getByTestId("feedback-actions").getByRole("button")).toHaveText(["Resolve", "Reply"]);
   expect(await order(comment)).toBe(true);
   // Go to <section> uses the one section link.
   await expect(comment.getByTestId("feedback-goto")).toHaveText("Go to 5.4 Import from a spreadsheet");
@@ -361,7 +361,7 @@ test("review panel: three tabs; Feedback is one list by state, scope and kind, w
   await page.goto(`${BIG}#5-4-import-from-a-spreadsheet`);
   await page.reload();
   const staged = panel.getByTestId("feedback-item").filter({ has: page.getByTestId("suggestion") });
-  await staged.getByRole("button", { name: "Accept" }).click();
+  await staged.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(staged.getByTestId("feedback-state-chip")).toHaveText("Staged");
   await expect(panel.getByRole("tab", { name: /^Feedback/ })).toHaveText(/Feedback\s*11/);
   await expect(outlineRow(page, "5-4-import-from-a-spreadsheet").getByTestId("outline-count")).toHaveText("1");

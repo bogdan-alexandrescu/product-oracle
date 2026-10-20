@@ -9,6 +9,7 @@ import { CommentPopover, SelectionButton, type PageRect } from "@/components/Com
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
 import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, SegmentedControl, Sheet } from "@/components/ds";
+import type { GoTo } from "@/components/FeedbackPanel";
 import { DEFAULT_FILTERS, type FeedbackFilters, type PlacedComment } from "@/components/review/FeedbackList";
 import {
   OutlineRail,
@@ -107,8 +108,10 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   );
   const [refreshKey, setRefreshKey] = useState(0);
   // Every feedback item on the document: the panel's list and every open-feedback count.
-  const feedbackQ = useQuery(`feedback|${doc}|${refreshKey}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/feedback", { params: { path: { doc } } })),
+  const feedbackQ = useQuery(
+    `feedback|${doc}|${refreshKey}`,
+    () => unwrap(api.GET("/v1/documents/{doc}/feedback", { params: { path: { doc } } })),
+    { keepPrevious: true },
   );
 
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -116,6 +119,10 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<PanelTab>("feedback");
   const [filters, setFilters] = useState<FeedbackFilters>(DEFAULT_FILTERS);
+  // A link with ?feedback=open (the Inbox's): the Feedback tab on every section's open items,
+  // the first one brought into view, once (ffb19 lane).
+  const [feedbackFocus, setFeedbackFocus] = useState(false);
+  const arrivedAtFeedback = useRef(false);
   // Navigation: the switcher's popover, the phone's sheets, the rail's collapsed state.
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [sheet, setSheet] = useState<"sections" | "review" | null>(null);
@@ -141,12 +148,21 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   useEffect(() => {
     const h = window.location.hash || null;
     scrolledTo.current = null;
+    const toFeedback = new URLSearchParams(window.location.search).get("feedback") === "open";
+    arrivedAtFeedback.current = toFeedback;
     // Next writes an in-app navigation's URL, #hash included, only once the new page has
     // committed, so the hash cannot be read while rendering: read it here. This also runs
     // when Next shows a kept route again.
     /* eslint-disable react-hooks/set-state-in-effect */
     setHash(h);
     setHashLink(h ? { n, hash: h } : null);
+    if (toFeedback) {
+      setTab("feedback");
+      setFilters({ ...DEFAULT_FILTERS, state: "open", scope: "all" });
+      setFeedbackFocus(true);
+      // On a phone the panel lives in the Review sheet.
+      if (window.matchMedia("(max-width: 639px)").matches) setSheet("review");
+    }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [doc, n]);
   // Back and forward between sections, and plain #links (a warning's section).
@@ -502,6 +518,11 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     if (!version || !hashLink || hashLink.n !== n || !openKey || openKey !== keyFromHash(hashLink.hash, allKeys)) return;
     if (scrolledTo.current === `${n}${hashLink.hash}`) return;
     scrolledTo.current = `${n}${hashLink.hash}`;
+    // Arriving at the open feedback, the review panel scrolls to the first item instead.
+    if (arrivedAtFeedback.current) {
+      arrivedAtFeedback.current = false;
+      return;
+    }
     const panel = panelRef.current;
     if (panel && (panel.getBoundingClientRect().top < 0 || panel.getBoundingClientRect().top > window.innerHeight * 0.6)) {
       panel.scrollIntoView({ block: "start" });
@@ -553,19 +574,25 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   const headings = useMemo(() => new Map(sections.map((s) => [s.section_key, s.heading])), [sections]);
   const placedById = useMemo(() => new Map(placed.map((c) => [c.id, c])), [placed]);
 
-  /** A feedback item's "Go to": this version's section here, an earlier version's on its page. */
-  const goTo = useCallback(
-    (key: string, version: number) => {
-      setSheet(null);
-      if (version !== n || !allKeys.has(key)) {
-        router.push(sectionHref(doc, version, key));
-        return;
-      }
-      if (!shownSections.some((s) => s.section_key === key)) setViewOverride("full");
-      select(key);
-    },
-    [n, allKeys, router, doc, shownSections, select],
+  /** A feedback item's "Go to": this version's section here (the full document when the brief hides it). */
+  const goTo: GoTo = useMemo(
+    () => ({
+      keys: allKeys,
+      headings,
+      open: (key: string) => {
+        setSheet(null);
+        if (!shownSections.some((s) => s.section_key === key)) setViewOverride("full");
+        select(key);
+      },
+    }),
+    [allKeys, headings, shownSections, select],
   );
+  const feedbackFocused = useCallback(() => setFeedbackFocus(false), []);
+  // Opening Feedback reads the items again: Oracle may have answered a comment meanwhile.
+  const openTab = (t: PanelTab) => {
+    if (t === "feedback" && tab !== "feedback") void feedbackQ.reload();
+    setTab(t);
+  };
 
   const showFeedback = () => {
     setTab("feedback");
@@ -660,7 +687,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       stats={{ reviewed: reviewedCount, total: sections.length, locked: lockedCount, openFeedback }}
       openFeedback={openFeedback}
       tab={tab}
-      setTab={setTab}
+      setTab={openTab}
+      goTo={goTo}
       refreshKey={refreshKey}
       shortcuts={variant === "side" ? shortcuts : undefined}
       feedback={{
@@ -679,15 +707,19 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
         canDecide,
         userId: me?.user_id ?? me?.token_id ?? null,
         showLayer: hasBrief,
-        onGoTo: goTo,
+        goTo,
+        focus: feedbackFocus && !!version,
+        onFocused: feedbackFocused,
         onShowComment: (c) => {
           setSheet(null);
           scrollToComment(c);
         },
         onReply: reply,
         onResolve: resolve,
+        // A decision on an item: its counts, and the comment it may have resolved.
         onChanged: () => {
           void feedbackQ.reload();
+          void commentsQ.reload();
         },
       }}
     />

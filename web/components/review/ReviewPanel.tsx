@@ -2,7 +2,7 @@
 
 import { useId, useState, type ComponentProps, type ReactNode } from "react";
 
-import { ResolutionPanel } from "@/components/FeedbackPanel";
+import { ResolutionPanel, type GoTo } from "@/components/FeedbackPanel";
 import { JobsPanel } from "@/components/JobsPanel";
 import { ReportsPanel } from "@/components/ReportsPanel";
 import { Icon, Inspector, InspectorRow } from "@/components/ds";
@@ -38,6 +38,7 @@ export function ReviewPanel({
   refreshKey,
   shortcuts,
   variant,
+  goTo,
 }: {
   version: VersionOut | undefined;
   doc: string;
@@ -51,6 +52,8 @@ export function ReviewPanel({
   refreshKey: number;
   shortcuts?: ReactNode;
   variant: "side" | "sheet";
+  /** Section links in History open here. */
+  goTo?: GoTo;
 }) {
   const uid = useId();
   const idFor = (t: PanelTab) => `${uid}-${t}`;
@@ -105,7 +108,7 @@ export function ReviewPanel({
         {tab === "feedback" &&
           (error ? <ErrorNote>{error}</ErrorNote> : !entries ? <Loading /> : <FeedbackList entries={entries} {...list} />)}
         {tab === "sources" && version && <SourcesTab version={version} />}
-        {tab === "history" && <HistoryTab doc={doc} n={n} refreshKey={refreshKey} />}
+        {tab === "history" && <HistoryTab doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} />}
       </div>
     </Inspector>
   );
@@ -158,11 +161,11 @@ function SourcesTab({ version }: { version: VersionOut }) {
   );
 }
 
-function HistoryTab({ doc, n, refreshKey }: { doc: string; n: number; refreshKey: number }) {
+function HistoryTab({ doc, n, refreshKey, goTo }: { doc: string; n: number; refreshKey: number; goTo?: GoTo }) {
   return (
     <div className="flex flex-col" data-testid="history">
       <Fold title="Resolutions" testId="history-resolutions">
-        <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} />
+        <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} />
       </Fold>
       <Fold title="Reports" testId="history-reports">
         <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} />

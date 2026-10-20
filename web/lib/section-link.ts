@@ -10,9 +10,13 @@ export function sectionHash(key: string): string {
   return `#${encodeURIComponent(key)}`;
 }
 
-/** The app path of a version, at a section when `key` is given: `/documents/x/v/2#problem`. */
-export function sectionHref(doc: string, n: number, key?: string | null): string {
-  return `/documents/${doc}/v/${n}${key ? sectionHash(key) : ""}`;
+/**
+ * The app path of a version, at a section when `key` is given: `/documents/x/v/2#problem`.
+ * `query` adds search parameters before the hash (the Inbox's `?feedback=open`).
+ */
+export function sectionHref(doc: string, n: number, key?: string | null, query?: Record<string, string>): string {
+  const q = query && Object.keys(query).length ? `?${new URLSearchParams(query)}` : "";
+  return `/documents/${doc}/v/${n}${q}${key ? sectionHash(key) : ""}`;
 }
 
 /** The section a URL hash names: `#problem`, or the older `#s-problem`. A key that itself starts with `s-` matches first. */

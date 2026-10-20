@@ -47,13 +47,13 @@ test("suggestion cards: classification, duplicates, edit and accept, and a pushb
 
   await expect(feedbackItem(page, "quantify the demand").getByTestId("suggestion")).toContainText("Duplicate of an earlier item");
 
-  // The item's actions sit at its top, above the suggestion.
-  await demand.getByRole("button", { name: "Edit" }).click();
+  // The decision buttons and the editor sit at the top of the item.
+  await demand.getByRole("button", { name: "Edit and accept" }).click();
   await demand.getByLabel("Proposed section text").fill("Seven in ten sales calls with teams asked for shared editing this quarter.");
   await demand.getByRole("button", { name: "Save edit" }).click();
   await expect(card.getByTestId("suggestion-text")).toHaveText("Seven in ten sales calls with teams asked for shared editing this quarter.");
   await expect(card).toContainText("(edited)");
-  await demand.getByRole("button", { name: "Accept" }).click();
+  await demand.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(card).toContainText("Accepted");
   await expect(demand.getByTestId("feedback-state-chip")).toHaveText("Staged");
   await expect(card).toContainText("use “Refine section” on #problem");
@@ -88,7 +88,7 @@ test("refine a section from an accepted suggestion: diff preview, accept, next v
   await login(page);
   await page.goto("/documents/team-workspaces/v/2");
   await openTab(page, "Feedback");
-  await feedbackItem(page, "how many teams asked").getByRole("button", { name: "Accept" }).click();
+  await feedbackItem(page, "how many teams asked").getByRole("button", { name: "Accept", exact: true }).click();
   await expect(feedbackItem(page, "how many teams asked").getByTestId("suggestion")).toContainText("Accepted");
 
   const problem = await openSection(page, "problem");
