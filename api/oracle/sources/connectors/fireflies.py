@@ -26,10 +26,13 @@ keywords) followed by the sentences as ``speaker: text``. Participants are the `
 
 Cursor::
 
-    {"since": "2026-10-01T09:00:00Z", "recent": {"id1": "2026-10-01T09:00:00Z"},
-     "aliases": ["title:standup|ada@example.com"]}
+    {"since": "2026-10-01T09:00:00Z", "listed": "2026-10-03T15:00:00Z",
+     "recent": {"id1": "2026-10-01T09:00:00Z"}, "aliases": ["title:standup|ada@example.com"]}
 
-``since`` is the date of the newest transcript synced. Fireflies can finish processing
+``since`` is the date of the newest transcript synced; ``listed`` that of the newest
+meeting listed when it is later (one not picked), so the position moves on even when
+nothing new is picked and an old pick does not make every sync list the account's
+history since then. Fireflies can finish processing
 an earlier meeting after a later one, so a sync reads back ``OVERLAP`` before ``since``
 and skips the ids in ``recent`` (those synced within that window, with their dates).
 
@@ -37,7 +40,7 @@ and skips the ids in ``recent`` (those synced within that window, with their dat
 whose calendar id changed (or that has none) still matches the series by its title and
 organizer.
 
-A pass without ``since`` (a new source, or one whose config changed) lists the whole date
+A pass without a position (a new source, or one whose config changed) lists the whole date
 range: stored items no longer picked are deleted, stored items still picked are not
 fetched again. The engine passes ``known`` (the source's stored ids) for this.
 """
@@ -451,10 +454,15 @@ class _Fireflies:
         return body.get("data") or {}
 
 
-def _cursor(since: datetime | None, recent: dict[str, str], aliases: set[str]) -> dict[str, Any]:
+def _cursor(
+    since: datetime | None, listed: datetime | None, recent: dict[str, str], aliases: set[str]
+) -> dict[str, Any]:
     cursor: dict[str, Any] = {"recent": dict(recent)}
     if since is not None:
         cursor = {"since": _iso(since), **cursor}
+    # Only past ``since``: the newest meeting listed, when it was not picked.
+    if listed is not None and (since is None or listed > since):
+        cursor["listed"] = _iso(listed)
     if aliases:
         cursor["aliases"] = sorted(aliases)
     return cursor
@@ -507,13 +515,15 @@ class FirefliesConnector:
     ) -> AsyncIterator[SyncEvent]:
         picked = selection(config)
         since = _parse_date((cursor or {}).get("since"))
+        listed_before = _parse_date((cursor or {}).get("listed"))
         recent: dict[str, str] = dict((cursor or {}).get("recent") or {})
         aliases = {a for a in (cursor or {}).get("aliases") or [] if isinstance(a, str)}
-        stop = since - OVERLAP if since else picked.date_from
-        if since and picked.date_from and picked.date_from > stop:
+        position = max((d for d in (since, listed_before) if d), default=None)
+        stop = position - OVERLAP if position else picked.date_from
+        if position and picked.date_from and picked.date_from > stop:
             stop = picked.date_from
-        # A full pass (no cursor) knows the whole selection, so it can prune.
-        stored = await known() if known is not None and since is None else None
+        # A full pass (no position) knows the whole selection, so it can prune.
+        stored = await known() if known is not None and position is None else None
 
         async with self._session(credential) as fireflies:
             variables: dict[str, Any] = {}
@@ -523,6 +533,7 @@ class FirefliesConnector:
                 variables["toDate"] = _iso(picked.date_to_end - timedelta(milliseconds=1))
             # Newest first: page until a transcript is older than the stop date.
             listed: list[tuple[datetime | None, dict[str, Any]]] = []
+            newest_listed = listed_before
             done = False
             async for page in self._pages(fireflies, variables):
                 for entry in page:
@@ -531,6 +542,8 @@ class FirefliesConnector:
                         done = True
                         break
                     listed.append((when, entry))
+                    if when and (newest_listed is None or when > newest_listed):
+                        newest_listed = when
                     if series_key(entry) in picked.series and len(aliases) < MAX_ALIASES:
                         aliases.add(title_key(entry))
                 if done:
@@ -548,14 +561,13 @@ class FirefliesConnector:
                 fetch = stored is None or entry["id"] not in stored
                 pending.append((when or datetime.min.replace(tzinfo=UTC), entry, fetch))
 
-            changed = False
             for external_id in sorted((stored or set()) - matched):
                 yield ItemDelete(external_id)
-                changed = True
 
             # Oldest first, so each checkpoint covers everything before it.
             pending.sort(key=lambda p: p[0])
             newest = since
+            written = cursor or None
             for when, entry, fetch in pending:
                 if fetch:
                     data = await fireflies.query(DETAIL_QUERY, id=entry["id"])
@@ -567,12 +579,17 @@ class FirefliesConnector:
                 recent[entry["id"]] = _iso(when)
                 horizon = newest - OVERLAP
                 recent = {i: d for i, d in recent.items() if _parse_date(d) >= horizon}
-                changed = True
                 if fetch:
-                    yield CursorCheckpoint(_cursor(newest, recent, aliases))
-                    changed = False
-            if changed or sorted(aliases) != sorted((cursor or {}).get("aliases") or []):
-                yield CursorCheckpoint(_cursor(newest, recent, aliases))
+                    written = _cursor(newest, listed_before, recent, aliases)
+                    yield CursorCheckpoint(written)
+            # The whole listing is done: the position moves to the newest meeting listed,
+            # picked or not. Written whenever it changed, deletes and all.
+            end = max((d for d in (newest, newest_listed) if d), default=None)
+            if end is not None:
+                recent = {i: d for i, d in recent.items() if _parse_date(d) >= end - OVERLAP}
+            final = _cursor(newest, newest_listed, recent, aliases)
+            if final != written:
+                yield CursorCheckpoint(final)
 
     async def browse_meetings(
         self,

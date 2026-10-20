@@ -2,6 +2,7 @@
 series and single meetings (S5, owner 2026-10-19)."""
 
 import time
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -17,6 +18,7 @@ from oracle.sources.connectors import fireflies
 from oracle.sources.connectors.fireflies import (
     FirefliesConnector,
     Selection,
+    _iso,
     normalise_title,
     selection,
     series_key,
@@ -297,8 +299,9 @@ async def test_a_new_meeting_of_a_series_is_picked_up_on_the_next_sync():
     second = await collect(conn, config, cursor)
     assert upserted(second) == ["S4"]
     assert fake.detail_ids() == ["S4"]
-    # Incremental: only the overlap window is listed again.
-    assert fake.list_variables()[0]["fromDate"] == "2026-10-11T09:00:00Z"
+    # Incremental: only the day before the newest meeting listed (P2, not picked) is
+    # listed again.
+    assert fake.list_variables()[0]["fromDate"] == "2026-10-13T14:00:00Z"
 
 
 async def test_a_full_pass_deletes_what_is_no_longer_picked_and_skips_what_is_stored():
@@ -313,7 +316,10 @@ async def test_a_full_pass_deletes_what_is_no_longer_picked_and_skips_what_is_st
     assert events[-1] == CursorCheckpoint(
         {
             "since": "2026-10-12T09:00:00Z",
-            "recent": {"S3": "2026-10-12T09:00:00Z"},
+            # S3 is before the next sync's window (a day before "listed").
+            "recent": {},
+            # The newest meeting listed (P2, not picked).
+            "listed": "2026-10-14T14:00:00Z",
             # The series' title key, should its calendar id change.
             "aliases": ["title:ai agents daily standup|ada@example.com"],
         }
@@ -340,6 +346,47 @@ async def test_an_incremental_sync_deletes_nothing_and_does_not_read_stored_ids(
     cursor = {"since": "2026-10-14T14:00:00Z", "recent": {"P2": "2026-10-14T14:00:00Z"}}
     events = await collect(connector(FakeFireflies(SAMPLE)), {"mode": "all"}, cursor, known=load)
     assert events == [] and calls == []
+
+
+async def test_an_old_pick_does_not_make_every_sync_reread_the_history(monkeypatch):
+    """The position advances on the newest meeting listed, not only on picked ones."""
+    monkeypatch.setattr(fireflies, "PAGE_SIZE", 50)
+    now = datetime(2026, 10, 19, 9, 0, tzinfo=UTC)
+    account = [
+        meeting(f"M{i}", f"Meeting {i}", (now - timedelta(days=i)).isoformat()) for i in range(1000)
+    ]
+    fake = FakeFireflies(account)
+    conn = connector(fake)
+    config = {"mode": "selected", "meetings": ["M900"]}
+    first = await collect(conn, config, None, known=known())
+    assert upserted(first) == ["M900"]
+    cursor = next(e for e in reversed(first) if isinstance(e, CursorCheckpoint)).cursor
+
+    fake.requests.clear()
+    second = await collect(conn, config, cursor, known=known("M900"))
+    assert 1 <= len(fake.list_variables()) <= 2
+    assert upserted(second) == [] and deleted(second) == []
+
+    # A new meeting of the account, not picked: the position still moves on.
+    fake.meetings.append(meeting("N1", "Lunch", (now + timedelta(days=2)).isoformat()))
+    third = await collect(conn, config, cursor, known=known("M900"))
+    moved = next(e for e in reversed(third) if isinstance(e, CursorCheckpoint)).cursor
+    fake.requests.clear()
+    await collect(conn, config, moved, known=known("M900"))
+    assert fake.list_variables()[0]["fromDate"] == _iso(now + timedelta(days=1))
+
+
+async def test_a_full_pass_that_matches_and_deletes_nothing_still_checkpoints():
+    fake = FakeFireflies(SAMPLE)
+    conn = connector(fake)
+    config = {"mode": "selected", "meetings": ["gone"]}
+    events = await collect(conn, config, None, known=known())
+    assert upserted(events) == [] and deleted(events) == []
+    assert isinstance(events[-1], CursorCheckpoint)
+    # So the next sync is incremental: it reads only the last day again.
+    fake.requests.clear()
+    await collect(conn, config, events[-1].cursor, known=known())
+    assert fake.list_variables()[0]["fromDate"] == "2026-10-13T14:00:00Z"
 
 
 async def test_legacy_title_rule_still_filters():
