@@ -353,14 +353,18 @@ def test_full_shares_are_frozen_at_the_pins_versions_and_null_findings_migrate(s
 
 
 def test_versions_keep_their_link_and_notion_links_lose_the_title(scratch_db):
-    """Round 9 (links, owner 2026-10-20): every existing version gets its item's link;
-    a Notion page's link carries its current title, so its versions get the id-only
-    page link instead (fail closed), and an id that is not a page id gets none."""
+    """Round 9 (links, owner 2026-10-20): every existing version gets a link built from
+    its item's id only, never the item's current link, which can carry a name that
+    changed after sharing: a Notion page's id-only link, a Fireflies transcript's id, a
+    Google Doc's file id, a GitHub issue or pull request under the repository its source
+    names; a Slack permalink (ids only) as it is. An id not of the expected form, a
+    GitHub release and an upload get none (fail closed)."""
     cfg = _cfg()
     command.upgrade(cfg, "0013")
     t, author = uuid.uuid4(), uuid.uuid4()
-    slack, notion = uuid.uuid4(), uuid.uuid4()
+    slack, notion, fireflies, gdocs, github, upload = (uuid.uuid4() for _ in range(6))
     message, page, odd = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    meeting, doc, issue, pull, release, file_ = (uuid.uuid4() for _ in range(6))
     page_id = "1f2e3d4c-5b6a-4987-8a1b-2c3d4e5f6a7b"
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     _run(
@@ -369,7 +373,10 @@ def test_versions_keep_their_link_and_notion_links_lose_the_title(scratch_db):
         u=author,
         t=t,
     )
-    for source, kind in ((slack, "slack"), (notion, "notion")):
+    for source, kind in (
+        (slack, "slack"), (notion, "notion"), (fireflies, "fireflies"),
+        (gdocs, "google_docs"), (github, "github"), (upload, "upload"),
+    ):  # fmt: skip
         _run(
             "INSERT INTO sources (id, tenant_id, owner_user_id, kind, name, status) "
             "VALUES (:s, :t, :u, :k, :k, 'active')",
@@ -379,6 +386,37 @@ def test_versions_keep_their_link_and_notion_links_lose_the_title(scratch_db):
         (message, slack, "C1-p1", "https://chat.example.com/archives/C1/p1"),
         (page, notion, page_id, "https://www.notion.so/Acquisition-of-Example-Corp-1f2e3d4c"),
         (odd, notion, "not-a-page-id", "https://www.notion.so/Acquisition-of-Example-Corp"),
+        (
+            meeting,
+            fireflies,
+            "01TRANSCRIPT9",
+            "https://app.fireflies.ai/view/Acquisition-of-Example-Corp::01TRANSCRIPT9",
+        ),
+        (
+            doc,
+            gdocs,
+            "1AbC_dEf-2",
+            "https://docs.google.com/document/d/1AbC_dEf-2/edit?usp=drivesdk",
+        ),
+        (
+            issue,
+            github,
+            "example/checkout:issue:42",
+            "https://github.com/example/acquisition-of-example-corp/issues/42",
+        ),
+        (
+            pull,
+            github,
+            "example/checkout:pull:7",
+            "https://github.com/example/acquisition-of-example-corp/pull/7",
+        ),
+        (
+            release,
+            github,
+            "example/checkout:release:991",
+            "https://github.com/example/acquisition-of-example-corp/releases/tag/v1",
+        ),
+        (file_, upload, "notes.md", None),
     ):
         _run(
             "INSERT INTO source_items (id, tenant_id, source_id, external_id, kind, url) "
@@ -396,6 +434,12 @@ def test_versions_keep_their_link_and_notion_links_lose_the_title(scratch_db):
         message: "https://chat.example.com/archives/C1/p1",
         page: "https://www.notion.so/1f2e3d4c5b6a49878a1b2c3d4e5f6a7b",
         odd: None,
+        meeting: "https://app.fireflies.ai/view/01TRANSCRIPT9",
+        doc: "https://docs.google.com/document/d/1AbC_dEf-2/edit",
+        issue: "https://github.com/example/checkout/issues/42",
+        pull: "https://github.com/example/checkout/pull/7",
+        release: None,
+        file_: None,
     }
     command.downgrade(cfg, "0013")
     command.upgrade(cfg, "0014_intake")

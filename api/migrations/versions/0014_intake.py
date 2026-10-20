@@ -222,20 +222,36 @@ WHERE i.author_id IS NOT NULL AND jsonb_typeof(f.value) = 'object'
 ON CONFLICT DO NOTHING
 """
 TXN_SNAPSHOT = "pg_current_snapshot()::text"
-# Round 9 (links): a version's link from its item's; a Notion page's from its id only.
-# Round 10: rows whose link would be NULL are not written. A frozen copy of
-# oracle.sources.repair, which runs it again at startup for versions an old image wrote
-# during the rollout.
-NOTION_ID = "'^[0-9a-f]{32}$'"
-VERSION_URL = (
-    """CASE
-    WHEN so.kind <> 'notion' THEN si.url
-    WHEN lower(replace(si.external_id, '-', '')) ~ """
-    + NOTION_ID
-    + """
-        THEN 'https://www.notion.so/' || lower(replace(si.external_id, '-', ''))
-    END"""
-)
+# Round 9 (links): a version's link. Round 10: rows whose link would be NULL are not
+# written. A frozen copy of oracle.sources.repair, which runs it again at startup for
+# versions an old image wrote during the rollout. Built from the item's
+# id only, never the item's current link, which can carry a name that changed after
+# sharing (a Notion page's or Fireflies meeting's title, a GitHub repository's name).
+# Notion: the id-only page link; Fireflies: the transcript id; Google Docs: the file id;
+# GitHub: the repository as the source names it in the item's id (issues, pull requests
+# and milestones; a release or file names no link by id); Slack: the permalink, which
+# carries channel and message ids only. Anything else (an upload), or an id not of the
+# expected form, gets none (fail closed).
+VERSION_URL = """CASE so.kind
+    WHEN 'notion' THEN CASE
+        WHEN lower(replace(si.external_id, '-', '')) ~ '^[0-9a-f]{32}$'
+        THEN 'https://www.notion.so/' || lower(replace(si.external_id, '-', '')) END
+    WHEN 'fireflies' THEN CASE
+        WHEN si.external_id ~ '^[A-Za-z0-9]+$'
+        THEN 'https://app.fireflies.ai/view/' || si.external_id END
+    WHEN 'google_docs' THEN CASE
+        WHEN si.external_id ~ '^[A-Za-z0-9_-]+$'
+        THEN 'https://docs.google.com/document/d/' || si.external_id || '/edit' END
+    WHEN 'github' THEN CASE
+        WHEN si.external_id ~ '^[a-z0-9._-]+/[a-z0-9._-]+:(issue|pull|milestone):[0-9]+$'
+        THEN 'https://github.com/' || split_part(si.external_id, ':', 1) || '/'
+            || CASE split_part(si.external_id, ':', 2) WHEN 'issue' THEN 'issues'
+                ELSE split_part(si.external_id, ':', 2) END
+            || '/' || split_part(si.external_id, ':', 3) END
+    WHEN 'slack' THEN CASE
+        WHEN si.url ~ '^https://[^/?#]+/archives/[A-Z0-9]+/p[0-9]+$' THEN si.url END
+END"""
+
 VERSION_URL_BACKFILL = f"""
 UPDATE source_item_versions v
 SET url = {VERSION_URL}

@@ -13,7 +13,8 @@ confidence); (2) a run's own deleted item is missing from baseline evidence; (3)
 run's YAML import never links its deleted or frozen-but-unreleased items; (4, 5) the
 link backfill repairs versions an old image wrote, writing only rows it gives a link;
 (6) another user's hidden item never scores by when the item changed upstream (baseline
-evidence: people read it live, runs as of their pin, owner 2026-10-20); (7) owners see their item's current title and link.
+evidence: people read it live, runs as of their pin, owner 2026-10-20); (7) owners see
+their item's current title and link.
 
 Synthetic placeholders only.
 """
@@ -280,9 +281,11 @@ async def test_a_runs_yaml_import_never_links_what_it_may_not_read(client, fake)
 
 
 async def test_the_link_repair_fills_old_image_versions_only_where_it_has_a_link(client):
-    """(4, 5) Versions an old image wrote without a link get the one 0014_intake gives
-    (a Notion page's id-only link); a version whose link would stay NULL is not written;
-    a second run changes nothing."""
+    """(4, 5) Versions an old image wrote without a link get the one 0014_intake gives,
+    built from the item's id only (a Notion page's id-only link, a Fireflies transcript
+    and a GitHub issue by id, never their current links, which carry a title or
+    repository name that may have changed since); a version whose link would stay NULL
+    is not written; a second run changes nothing."""
     from oracle.sources.repair import repair_version_urls
     from tests.intake_helpers import company
     from tests.test_intake_sharing import add_author
@@ -293,9 +296,19 @@ async def test_the_link_repair_fills_old_image_versions_only_where_it_has_a_link
     page = await make_item(ctx, "author", kind="notion", url=NEW_LINK)
     chat = await make_item(ctx, "author")
     upload = await make_item(ctx, "author", kind="upload", url=None)
+    meeting = await make_item(
+        ctx, "author", kind="fireflies", item_kind="transcript",
+        url="https://app.fireflies.ai/view/Acquisition-of-Example-Corp::01TRANSCRIPT9",
+    )  # fmt: skip
+    issue = await make_item(
+        ctx, "author", kind="github", item_kind="issue",
+        url="https://github.com/example/acquisition-of-example-corp/issues/42",
+    )  # fmt: skip
     async with tenant_session(ctx.tenant_id) as s:
         (await s.get(SourceItem, page)).external_id = PAGE_ID
-        for item_id in (page, chat, upload):
+        (await s.get(SourceItem, meeting)).external_id = "01TRANSCRIPT9"
+        (await s.get(SourceItem, issue)).external_id = "example/checkout:issue:42"
+        for item_id in (page, chat, upload, meeting, issue):
             item = await s.get(SourceItem, item_id)
             (await s.get(SourceItemVersion, item.current_version_id)).url = None
         await s.commit()
@@ -305,16 +318,18 @@ async def test_the_link_repair_fills_old_image_versions_only_where_it_has_a_link
             rows = await s.execute(
                 text(
                     "SELECT v.item_id, v.url, v.xmin::text FROM source_item_versions v "
-                    "WHERE v.item_id IN (:a, :b, :c)"
-                ).bindparams(a=page, b=chat, c=upload)
+                    "WHERE v.item_id IN (:a, :b, :c, :d, :e)"
+                ).bindparams(a=page, b=chat, c=upload, d=meeting, e=issue)
             )
             return {i: (url, xmin) for i, url, xmin in rows.all()}
 
     before = await state()
-    assert await repair_version_urls() == 2
+    assert await repair_version_urls() == 4
     after = await state()
     assert after[page][0] == f"https://www.notion.so/{PAGE_HEX}"
     assert after[chat][0] == "https://chat.example.com/archives/C1/p1"
+    assert after[meeting][0] == "https://app.fireflies.ai/view/01TRANSCRIPT9"
+    assert after[issue][0] == "https://github.com/example/checkout/issues/42"
     assert after[upload] == before[upload]  # not written at all
     assert await repair_version_urls() == 0
 

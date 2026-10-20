@@ -135,7 +135,12 @@ limits, configurability and scaling (`categories.CATEGORIES`).
   by then), and by hand with `python -m oracle.sources.repair` (prints the rows
   repaired). Both skip rows whose link would stay NULL, so nothing is rewritten needlessly
   and a second run changes nothing. Until repaired, such a version reads as having no
-  link (fail closed).
+  link (fail closed). Both build the link from the item's id only, never the item's
+  current link, which can carry a name that changed after sharing: a Notion page's
+  id-only link, a Fireflies transcript's id, a Google Doc's file id, a GitHub issue,
+  pull request or milestone under the repository the item's id names, a Slack permalink
+  (channel and message ids only) as it is; a GitHub release or file, an upload and an
+  id not of the expected form get none.
 - Lowering stays consistent (round 7): a re-analysis brings open baseline proposals
   down to their finding's level as setting the level does (private withdraws them); a
   withdrawn proposal keeps only the category's question. Deciding and withdrawing take
