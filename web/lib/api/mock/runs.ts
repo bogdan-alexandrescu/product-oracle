@@ -9,7 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
 type CheckpointOut = Schemas["CheckpointOut"];
-type FeedbackRow = Schemas["FeedbackItemOut"];
+type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version">;
 type DocumentRow = Pick<Schemas["DocumentSummary"], "id" | "slug" | "title" | "kind" | "template" | "theme">;
 type VersionSource = Schemas["VersionSource"];
 type Kind = DocumentRow["kind"];
@@ -28,6 +28,8 @@ export interface RunsContext {
   latestVersion: (documentId: string) => number | null;
   /** The status of Oracle's live suggestion on a feedback item, if it has one. */
   suggestionStatus?: (feedbackId: string) => Schemas["SuggestionOut"]["status"] | null;
+  /** C1e: the item's accepted suggestion is staged for the next draft (not open feedback). */
+  staged?: (feedbackId: string) => boolean;
   /** Section keys of a version (a roadmap's items check their PRD sections). */
   sectionKeys: (versionId: string) => string[];
   /** The approved version of a document a run reads (the one named, else the latest approved), or why not. */
@@ -331,7 +333,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   const approvals = ctx.db.runs.filter((r) => r.status === "awaiting_approval").map(bare);
   const overruns = ctx.db.runs.filter((r) => r.status === "paused_overrun").map(bare);
   const byDoc = new Map<string, FeedbackRow[]>();
-  for (const f of ctx.feedback.filter((x) => x.status === "open").sort((a, b) => b.created_at.localeCompare(a.created_at))) {
+  for (const f of ctx.feedback.filter((x) => x.status === "open" && !ctx.staged?.(x.id)).sort((a, b) => b.created_at.localeCompare(a.created_at))) {
     byDoc.set(f.document_id, [...(byDoc.get(f.document_id) ?? []), f]);
   }
   const feedback = [...byDoc.entries()].flatMap(([docId, items]) => {
@@ -365,6 +367,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
           section_key: f.section_key ?? null,
           raised_on_version: f.raised_on_version,
           created_at: f.created_at,
+          state: "open" as const,
           suggestion_status: status(f),
         })),
       },
@@ -384,7 +387,14 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     searches,
     imports,
     feedback,
-    total: checkpoints.length + approvals.length + overruns.length + lookups.length + imports.length + feedback.length,
+    // Every new or open item (C1e, 2026-10-20): the server adds the feedback items' New + Open (./next-draft.ts).
+    total: checkpoints.length + approvals.length + overruns.length + lookups.length + imports.length,
+    // Feedback states (C1e) are added by the server, which holds the suggestions (./next-draft.ts).
+    items: [],
+    counts: { new: 0, open: 0, staged: 0, declined: 0, done: 0 },
+    staged: [],
+    needs_me: 0,
+    last_seen_at: null,
   };
 }
 

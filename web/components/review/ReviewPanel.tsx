@@ -43,7 +43,7 @@ export function ReviewPanel({
   version: VersionOut | undefined;
   doc: string;
   n: number;
-  stats: { reviewed: number; total: number; locked: number; openFeedback: number | null };
+  stats: { reviewed: number; total: number; locked: number; lockedLabel?: string; openFeedback: number | null };
   tab: PanelTab;
   setTab: (t: PanelTab) => void;
   feedback: FeedbackProps;
@@ -80,7 +80,7 @@ export function ReviewPanel({
             {(
               [
                 ["Reviewed", `${stats.reviewed}/${stats.total}`, "stat-reviewed"],
-                ["Locked", stats.locked, "stat-locked"],
+                [stats.lockedLabel ?? "Locked", stats.locked, "stat-locked"],
                 ["Open feedback", stats.openFeedback ?? "–", "stat-open-feedback"],
               ] as const
             ).map(([label, value, testId]) => (
@@ -162,13 +162,15 @@ function SourcesTab({ version }: { version: VersionOut }) {
 }
 
 function HistoryTab({ doc, n, refreshKey, goTo }: { doc: string; n: number; refreshKey: number; goTo?: GoTo }) {
+  // ?tab=reports (where applying a next draft lands, C1e): Reports opens on What changed.
+  const [landed] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "reports");
   return (
     <div className="flex flex-col" data-testid="history">
       <Fold title="Resolutions" testId="history-resolutions">
         <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} />
       </Fold>
       <Fold title="Reports" testId="history-reports">
-        <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} />
+        <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} initialTab={landed ? "changes" : "resolution"} />
       </Fold>
       <Fold title="Jobs" testId="history-jobs">
         <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />

@@ -696,13 +696,16 @@ async def test_inbox_feedback_says_what_waits_and_where_the_first_item_is(client
 
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
     row = inbox["feedback"][0]
-    assert row["open_count"] == 6
-    counts = {"suggestions": 3, "accepted": 1, "comments": 1, "verdicts": 0, "other": 1}
+    # C1e: the accepted section-text suggestion is staged for the next draft, so its item
+    # is not open feedback; it is in the document's staged row instead.
+    assert row["open_count"] == 5
+    counts = {"suggestions": 3, "accepted": 0, "comments": 1, "verdicts": 0, "other": 1}
     assert row["counts"] == counts
     assert row["first_section_key"] == "problem"
     by_key = {(i["section_key"], i["kind"]): i for i in row["items"]}
     assert by_key[("metrics", "general")]["suggestion_status"] == "open"
     assert by_key[("solution", "comment")]["suggestion_status"] is None
+    assert [r["count"] for r in inbox["staged"]] == [1]
 
 
 async def test_a_rejected_draft_waits_at_review_and_reruns(client, owner, runtime):
@@ -820,7 +823,19 @@ async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
     run = await started(client, auth, depth="deep")  # awaiting approval
     assert run["status"] == "awaiting_approval"
     inbox = (await client.get("/v1/inbox", headers=viewer)).json()
-    assert inbox == {
+    assert {
+        k: inbox[k]
+        for k in (
+            "checkpoints",
+            "approvals",
+            "overruns",
+            "lookups",
+            "searches",
+            "imports",
+            "feedback",
+            "total",
+        )
+    } == {
         "checkpoints": [],
         "approvals": [],
         "overruns": [],
@@ -830,6 +845,8 @@ async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
         "feedback": [],
         "total": 0,
     }
+    # No feedback states for a viewer either (C1e).
+    assert (inbox["items"], inbox["staged"], inbox["needs_me"]) == ([], [], 0)
     assert (await client.get("/v1/inbox", headers=auth)).json()["total"] == 2
 
 

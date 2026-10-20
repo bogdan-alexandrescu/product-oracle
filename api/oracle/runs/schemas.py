@@ -389,6 +389,11 @@ class InboxCheckpoint(CheckpointOut):
     segment_title: str | None = None
 
 
+# C1e Inbox states: new (open, raised after my last Inbox visit), open, staged (accepted,
+# waiting for the next draft), declined, done (addressed or applied).
+InboxState = Literal["new", "open", "staged", "declined", "done"]
+
+
 class InboxFeedbackItem(BaseModel):
     id: uuid.UUID
     summary: str
@@ -396,8 +401,21 @@ class InboxFeedbackItem(BaseModel):
     section_key: str | None = None
     raised_on_version: int
     created_at: datetime
-    # The status of Oracle's live suggestion on the item, if it has one.
+    document_id: uuid.UUID | None = None
+    slug: str | None = None
+    title: str | None = None
+    # The document's latest version: where its actions open.
+    latest_version: int | None = None
+    state: InboxState = "open"
+    updated_at: datetime | None = None
+    # Declined: why; done: the version that addressed it.
+    resolution_note: str | None = None
+    addressed_in_version: int | None = None
+    staged_for_version: int | None = None
+    # The status of Oracle's live suggestion on the item, if it has one (open: "Review
+    # suggestions").
     suggestion_status: SuggestionStatus | None = None
+    suggestion_kind: str | None = None
 
 
 class InboxFeedbackCounts(BaseModel):
@@ -405,7 +423,8 @@ class InboxFeedbackCounts(BaseModel):
 
     # Oracle suggestions to accept or dismiss.
     suggestions: int = 0
-    # Accepted suggestions, waiting for a refinement.
+    # Accepted suggestions on open items (C1e: staged section text is not open feedback,
+    # so this is zero unless an item stays open for another reason).
     accepted: int = 0
     # Comments to resolve.
     comments: int = 0
@@ -428,6 +447,30 @@ class InboxDocument(BaseModel):
     items: list[InboxFeedbackItem]
 
 
+class InboxStaged(BaseModel):
+    """'N changes staged for draft N+1' on one document, with the build action."""
+
+    document_id: uuid.UUID
+    slug: str
+    title: str
+    latest_version: int | None = None
+    next_version: int
+    count: int
+    # Staged items whose section is gone from the latest version (not built).
+    gone_count: int = 0
+    # The build in progress or waiting for its preview, if any.
+    draft_job_id: uuid.UUID | None = None
+    draft_job_status: str | None = None
+
+
+class InboxCounts(BaseModel):
+    new: int = 0
+    open: int = 0
+    staged: int = 0
+    declined: int = 0
+    done: int = 0
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Owners only: runs waiting for cost approval, and runs paused on overrun.
@@ -442,9 +485,18 @@ class InboxOut(BaseModel):
     # Owners only: runs whose output Oracle stopped trying to import
     # (RunSummary.import_failed), to Retry.
     imports: list[RunSummary] = []
-    # Approvers and owners: open feedback on documents they can approve.
+    # Approvers and owners: open feedback (not staged) on documents they can approve.
     feedback: list[InboxDocument]
     total: int
+    # Approvers and owners: feedback in every state, newest first (declined and done
+    # capped to the most recent), the counts per state, and the staged rows.
+    items: list[InboxFeedbackItem] = []
+    counts: InboxCounts = InboxCounts()
+    staged: list[InboxStaged] = []
+    # Feedback that needs me: new + open (staged, declined and done do not).
+    needs_me: int = 0
+    # My previous Inbox visit (what 'new' is measured from); None before the first.
+    last_seen_at: datetime | None = None
 
 
 FeatureState = Literal["on", "off", "unknown"]

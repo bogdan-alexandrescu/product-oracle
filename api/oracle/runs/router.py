@@ -258,10 +258,17 @@ async def get_run_artifact(
 
 
 @router.get("/inbox", response_model=InboxOut)
-async def get_inbox(principal: CurrentPrincipal, db: TenantDB) -> InboxOut:
+async def get_inbox(
+    principal: CurrentPrincipal,
+    db: TenantDB,
+    mark_seen: Annotated[
+        bool, Query(description="Record this visit as my last one (what 'new' is measured from)")
+    ] = False,
+) -> InboxOut:
     """What waits on me: checkpoints for my role, runs waiting for an owner's approval
-    or overrun decision, and open feedback on documents I can approve."""
-    return await service.inbox(db, principal)
+    or overrun decision, and feedback on documents I can approve, by state (new, open,
+    staged for the next draft, declined, done) with the staged rows per document."""
+    return await service.inbox(db, principal, mark_seen)
 
 
 @router.post("/internal/tick", response_model=TickOut)

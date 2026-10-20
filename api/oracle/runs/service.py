@@ -132,6 +132,7 @@ from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import VersionSource
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
+from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import schedule
@@ -147,10 +148,12 @@ from oracle.runs.schemas import (
     FlowOut,
     FlowSegmentOut,
     InboxCheckpoint,
+    InboxCounts,
     InboxDocument,
     InboxFeedbackCounts,
     InboxFeedbackItem,
     InboxOut,
+    InboxStaged,
     ItemsCheck,
     KnobsIn,
     KnobsOut,
@@ -5431,7 +5434,8 @@ def _waits_for(item: FeedbackItem, suggestion: str | None) -> str:
     return "other"
 
 
-async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
+async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False) -> InboxOut:
+    """``mark_seen``: record this visit as my last one (after reading what was new)."""
     pending = list(
         await db.scalars(
             select(Checkpoint)
@@ -5472,14 +5476,23 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
         )
 
     feedback: list[InboxDocument] = []
+    states: list[InboxFeedbackItem] = []
+    counts = InboxCounts()
+    staged: list[InboxStaged] = []
+    seen = await inbox_states.last_seen(db, principal.id)
     if has_role(principal.role, "approver"):
+        states, counts = await inbox_states.feedback_states(db, seen)
+        staged = await inbox_states.staged_rows(db)
+        # Open feedback: what still needs a decision (staged, declined and done do not).
+        waiting = {i.id for i in states if i.state in ("new", "open")}
         items = list(
             await db.scalars(
                 select(FeedbackItem)
-                .where(FeedbackItem.status == "open")
+                .where(FeedbackItem.id.in_(waiting))
                 .order_by(FeedbackItem.created_at.desc(), FeedbackItem.id)
             )
         )
+        by_id = {i.id: i for i in states}
         by_doc: dict[uuid.UUID, list[FeedbackItem]] = {}
         for f in items:
             by_doc.setdefault(f.document_id, []).append(f)
@@ -5503,10 +5516,10 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
             )
             for doc_id, doc_items in by_doc.items():
                 d = docs[doc_id]
-                counts = InboxFeedbackCounts()
+                waits = InboxFeedbackCounts()
                 for f in doc_items:
                     field = _waits_for(f, suggestion_status.get(f.id))
-                    setattr(counts, field, getattr(counts, field) + 1)
+                    setattr(waits, field, getattr(waits, field) + 1)
                 # The review panel lists items by version raised on, then age.
                 first = min(
                     (f for f in doc_items if f.section_key),
@@ -5520,20 +5533,9 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
                         title=d.title,
                         latest_version=latest.get(d.id),
                         open_count=len(doc_items),
-                        counts=counts,
+                        counts=waits,
                         first_section_key=first.section_key if first else None,
-                        items=[
-                            InboxFeedbackItem(
-                                id=f.id,
-                                summary=f.summary,
-                                kind=f.kind,  # type: ignore[arg-type]
-                                section_key=f.section_key,
-                                raised_on_version=f.raised_on_version,
-                                created_at=f.created_at,
-                                suggestion_status=suggestion_status.get(f.id),  # type: ignore[arg-type]
-                            )
-                            for f in doc_items[:5]
-                        ],
+                        items=[by_id[f.id] for f in doc_items[:5]],
                     )
                 )
             feedback.sort(key=lambda d: d.items[0].created_at, reverse=True)
@@ -5582,6 +5584,9 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
         ]
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
+    if mark_seen:
+        await inbox_states.mark_seen(db, principal.id)
+        await db.commit()
     return InboxOut(
         checkpoints=checkpoints,
         approvals=approvals,
@@ -5590,10 +5595,17 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
         searches=searches,
         imports=imports,
         feedback=feedback,
+        # Every new or open item (C1e, owner 2026-10-20): the rail badge, = New + Open.
         total=len(checkpoints)
         + len(approvals)
         + len(overruns)
         + len(lookups)
         + len(imports)
-        + len(feedback),
+        + counts.new
+        + counts.open,
+        items=states,
+        counts=counts,
+        staged=staged,
+        needs_me=counts.new + counts.open,
+        last_seen_at=seen,
     )

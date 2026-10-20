@@ -67,7 +67,9 @@ def scratch_db():
 def test_0016_roadmap_follows_the_wave_1_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0014_blockers_snapshot"
-    assert script.get_heads() == [REVISION]
+    # 0016_refinement_batch (C1e) chains on it; still a single head.
+    assert script.get_heads() == ["0016_refinement_batch"]
+    assert script.get_revision("0016_refinement_batch").down_revision == REVISION
 
 
 def _event(tenant: uuid.UUID, subject: str) -> None:

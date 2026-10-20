@@ -44,9 +44,12 @@ export function feedbackKind(f: FeedbackItem): FeedbackKind {
 export function feedbackState(f: FeedbackItem, comment?: Pick<CommentOut, "resolved_at"> | null): FeedbackState {
   if (f.status === "declined") return "declined";
   if (f.status === "addressed" || f.status === "superseded") return "done";
+  // The API's state is the one rule (owner, 2026-10-20), the Inbox's too: an accepted
+  // (staged) suggestion is not open; a dismissed one leaves the item open.
+  if (f.state && f.state !== "open") return f.state;
   const s = liveSuggestion(f);
-  if (s?.status === "applied") return "done";
-  if (s?.status === "accepted") return "staged";
+  if (!f.state && s?.status === "applied") return "done";
+  if (!f.state && s?.status === "accepted") return "staged";
   if (comment?.resolved_at) return "done";
   return "open";
 }
