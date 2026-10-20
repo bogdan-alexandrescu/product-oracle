@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Button, Chip, CostFigure, DataTable, Icon, LinkButton, type Column, type IconName } from "@/components/ds";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 
 import { CHECKPOINT_LABEL, age, shortId, usd, type InboxOut, type RunSummary } from "../runs/_lib";
@@ -239,4 +239,31 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
   });
 
   return { checkpoints, approvals, overruns, feedback };
+}
+
+/**
+ * The questions asked of the signed-in person (I3), one row each with the document they are
+ * about: Home's Needs you and the Inbox's Questions group draw the same rows.
+ */
+export function questionNeeds(questions: Schemas["StakeholderQuestionOut"][], docs: DocumentSummary[]): Need[] {
+  return questions.map((q) => {
+    const doc = docs.find((d) => d.id === q.document_id);
+    return {
+      key: q.id,
+      icon: "ask",
+      kind: "Asked you",
+      item: (
+        <span className="truncate" title={q.prompt}>
+          {q.prompt}
+        </span>
+      ),
+      context: <span className="block truncate">{doc?.title ?? "–"}</span>,
+      at: q.created_at,
+      action: doc ? (
+        <LinkButton href={`/documents/${doc.slug}`} aria-label={`Open ${doc.title}`}>
+          Open
+        </LinkButton>
+      ) : null,
+    };
+  });
 }

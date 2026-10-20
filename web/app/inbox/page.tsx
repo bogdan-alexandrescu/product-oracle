@@ -4,24 +4,35 @@ import { useState } from "react";
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
 import type { InboxOut } from "../runs/_lib";
-import { CountChip, inboxNeeds, NeedTable, type Act } from "./_needs";
+import { CountChip, inboxNeeds, NeedTable, questionNeeds, type Act } from "./_needs";
+
+type Question = Schemas["StakeholderQuestionOut"];
 
 export default function InboxPage() {
-  const q = useQuery("inbox", () => unwrap(api.GET("/v1/inbox")));
+  const q = useQuery("inbox", loadInbox);
+  // Questions asked of me (I3): their own group, counted with the rest as the rail badge counts.
+  const questionsQ = useQuery("inbox|questions", loadMyQuestions);
+  const docsQ = useQuery("inbox|documents", () => unwrap(api.GET("/v1/documents")));
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inbox = q.data;
+  const questions = questionsQ.data ?? [];
+  const waiting = inbox ? inbox.total + questions.length : undefined;
 
   async function act(key: string, call: () => Promise<unknown>) {
     setBusy(key);
     setError(null);
     try {
       await call();
-      await q.reload();
+      invalidateWaiting();
+      const reloads = Promise.all([q.reload(), questionsQ.reload()]);
+      waitingChanged();
+      await reloads;
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -31,7 +42,7 @@ export default function InboxPage() {
 
   return (
     <Page>
-      <PageHeader title="Inbox" status={inbox && inbox.total > 0 && <Chip kind="acc">{inbox.total} waiting</Chip>} />
+      <PageHeader title="Inbox" status={waiting != null && waiting > 0 && <Chip kind="acc">{waiting} waiting</Chip>} />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {q.loading && !inbox && <Loading />}
       {error && (
@@ -39,42 +50,76 @@ export default function InboxPage() {
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
-      {inbox && <Needs inbox={inbox} busy={busy} act={act} />}
+      {inbox && (
+        <Needs
+          inbox={inbox}
+          questions={questions}
+          questionsError={questionsQ.error}
+          docs={docsQ.data ?? []}
+          busy={busy}
+          act={act}
+        />
+      )}
     </Page>
   );
 }
 
-function Needs({ inbox, busy, act }: { inbox: InboxOut; busy: string | null; act: Act }) {
+function Needs({
+  inbox,
+  questions,
+  questionsError,
+  docs,
+  busy,
+  act,
+}: {
+  inbox: InboxOut;
+  questions: Question[];
+  questionsError: string | null;
+  docs: DocumentSummary[];
+  busy: string | null;
+  act: Act;
+}) {
   const { checkpoints, approvals, overruns, feedback } = inboxNeeds(inbox, busy, act);
+  const asked = questionNeeds(questions, docs);
+  const total = inbox.total + asked.length;
 
   return (
     <Panel
       title="Needs you"
-      count={inbox.total}
+      count={total}
       tools={
-        inbox.total > 0 && (
+        total > 0 && (
           <>
             {checkpoints.length > 0 && <CountChip label="Checkpoints" n={checkpoints.length} />}
             {approvals.length + overruns.length > 0 && <CountChip label="Cost" n={approvals.length + overruns.length} />}
             {feedback.length > 0 && <CountChip label="Feedback" n={feedback.length} />}
+            {asked.length > 0 && <CountChip label="Questions" n={asked.length} />}
           </>
         )
       }
     >
-      {inbox.total === 0 ? (
-        <Empty>
-          Nothing waiting{" "}
-          <InfoTip label="the inbox" align="start">
-            Checkpoints that need a decision, such as a run waiting for budget approval or a draft ready for review, land
-            here.
-          </InfoTip>
-        </Empty>
+      {questionsError && (
+        <div className="px-4 pt-3" data-testid="inbox-questions-error">
+          <ErrorNote>{questionsError}</ErrorNote>
+        </div>
+      )}
+      {total === 0 ? (
+        !questionsError && (
+          <Empty>
+            Nothing waiting{" "}
+            <InfoTip label="the inbox" align="start">
+              Checkpoints that need a decision, such as a run waiting for budget approval or a draft ready for review, land
+              here, with the questions asked of you.
+            </InfoTip>
+          </Empty>
+        )
       ) : (
         <>
           <NeedTable title="Checkpoints" testId="inbox-checkpoints" rows={checkpoints} />
           <NeedTable title="Cost approvals" testId="inbox-approvals" rows={approvals} />
           <NeedTable title="Paused on overrun" testId="inbox-overruns" rows={overruns} />
           <NeedTable title="Open feedback" testId="inbox-feedback" rows={feedback} />
+          <NeedTable title="Questions" testId="inbox-questions" rows={asked} />
         </>
       )}
     </Panel>

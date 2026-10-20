@@ -100,7 +100,11 @@ export function Panel({
       {(title || tools) && (
         <div className="flex min-h-12 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2">
           {title && <h2 className="font-display text-lg leading-6 font-bold tracking-heading">{title}</h2>}
-          {count != null && <span className="tnum font-display tracking-heading text-lg leading-6 font-bold text-accent-ink">{count}</span>}
+          {count != null && (
+            <span data-testid="panel-count" className="tnum font-display tracking-heading text-lg leading-6 font-bold text-accent-ink">
+              {count}
+            </span>
+          )}
           <span className="flex-1" />
           {tools && <div className="flex flex-wrap items-center gap-2">{tools}</div>}
         </div>

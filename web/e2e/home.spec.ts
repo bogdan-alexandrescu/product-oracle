@@ -59,9 +59,10 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   const checkout = flights.filter({ hasText: "Checkout redesign PRD" });
   await expect(checkout).toHaveAttribute("aria-selected", "true");
   await expect(checkout.getByTestId("row-journey").getByRole("img")).toHaveAttribute("aria-label", "Journey 8 of 9: Review");
-  await expect(checkout.getByTestId("row-goals")).toHaveText("G1G2");
 
   const inspector = page.getByTestId("home-inspector");
+  // Goal tags load for the selected row only, in the inspector (no trace call per row).
+  await expect(inspector.getByTestId("row-goals")).toHaveText("G1G2");
   await expect(inspector).toContainText("PRD · selected");
   await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
   await expect(inspector.getByTestId("stat-sections")).toContainText("Sections done");

@@ -271,8 +271,8 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-/** GET /v1/<v2 path>[/<id>]; null when the path is not a v2 route. */
-export function routeV2(db: V2Db, req: Request, p: string[], q: URLSearchParams): Response | null {
+/** GET /v1/<v2 path>[/<id>]; null when the path is not a v2 route. `me` is the signed-in user (asked_to=me). */
+export function routeV2(db: V2Db, req: Request, p: string[], q: URLSearchParams, me: string | null = null): Response | null {
   const table = PATHS[p[1]];
   if (!table || req.method !== "GET" || p.length > 3) return null;
   const rows = db[table] as unknown as Record<string, unknown>[];
@@ -287,7 +287,10 @@ export function routeV2(db: V2Db, req: Request, p: string[], q: URLSearchParams)
   const limit = Number(q.get("limit") ?? 100);
   const offset = Number(q.get("offset") ?? 0);
   if (!(limit >= 1 && limit <= 500) || !(offset >= 0)) return json(422, { detail: "limit or offset" });
-  const filters = [...q.entries()].filter(([k]) => k !== "limit" && k !== "offset");
+  if (q.get("asked_to") && q.get("asked_to") !== "me") return json(422, { detail: "asked_to takes only me" });
+  const filters = [...q.entries()]
+    .filter(([k]) => k !== "limit" && k !== "offset")
+    .map(([k, v]): [string, string] => [k, v === "me" ? (me ?? "nobody") : v]);
   const hits = rows
     .filter((r) => filters.every(([k, v]) => String(r[k]) === v))
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));

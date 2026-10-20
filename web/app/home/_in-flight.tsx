@@ -36,26 +36,25 @@ import {
 /** A goal a row serves: its G tag, and whether the goal is still proposed. */
 export type RowGoal = { tag: string; title: string; proposed: boolean };
 
-/** One line of In flight: a PRD in review, or a run in progress. */
-export type Flight =
-  | { kind: "prd"; key: string; doc: DocumentSummary; goals: RowGoal[] }
-  | { kind: "run"; key: string; run: RunSummary; detail: RunOut | undefined; goals: RowGoal[] };
+/**
+ * One line of In flight: a PRD in review, or a run in progress. Everything a line shows
+ * comes from the documents and runs lists (a run's `progress`), so the table costs no call
+ * per row; goal tags, blockers and segments load in the inspector, for the selected row only.
+ */
+export type Flight = { kind: "prd"; key: string; doc: DocumentSummary } | { kind: "run"; key: string; run: RunSummary };
+
+/** Goal id -> the goal's tag and title, as Home's goals strip tags them. */
+export type GoalIndex = Map<string, RowGoal>;
 
 /** A PRD in review stands at the journey's Review step. */
 const REVIEW_STEP = JOURNEY_STEPS.indexOf("Review") + 1;
 
-function segmentsDone(run: RunOut | undefined) {
-  if (!run) return null;
-  return { done: run.segments.filter((s) => s.status === "succeeded").length, total: run.segments.length };
-}
-
 /** What the run does next: the checkpoint it waits on, else the segment under way or next. */
-function runNext(run: RunSummary, detail: RunOut | undefined): string {
+function runNext(run: RunSummary): string {
   if (run.waiting_on) return CHECKPOINT_LABEL[run.waiting_on];
   if (run.status === "awaiting_approval") return "Cost approval";
   if (run.status === "paused_overrun") return "Resume or cancel";
-  const seg = detail?.segments.find((s) => s.status === "running") ?? detail?.segments.find((s) => s.status === "pending");
-  return seg?.title ?? "–";
+  return run.progress?.now ?? "–";
 }
 
 function title(f: Flight) {
@@ -112,8 +111,8 @@ export function flightColumns(phoneHeader: ReactNode): Column<Flight>[] {
         f.kind === "prd" ? (
           <Chip kind="now">Review</Chip>
         ) : (
-          <span className="truncate" title={runNext(f.run, f.detail)}>
-            {runNext(f.run, f.detail)}
+          <span className="truncate" title={runNext(f.run)}>
+            {runNext(f.run)}
           </span>
         ),
     },
@@ -133,16 +132,9 @@ export function flightColumns(phoneHeader: ReactNode): Column<Flight>[] {
             </span>
           );
         }
-        const d = segmentsDone(f.detail);
+        const d = f.run.progress;
         return d ? <Meter value={d.done} max={d.total} label="Segments done" /> : <span className="text-text2">–</span>;
       },
-    },
-    {
-      key: "goals",
-      header: "Goals",
-      width: "92px",
-      phone: "hide",
-      cell: (f) => <GoalTags goals={f.goals} />,
     },
   ];
 }
@@ -153,10 +145,37 @@ const VERDICT_BAR: Record<string, string> = {
   rejected: "bg-crit",
 };
 
+/** The goals a document's latest version traces to, tagged as Home tags them; loaded for the selected row only. */
+function useTracedGoals(slug: string | null | undefined, n: number | null | undefined, goals: GoalIndex): RowGoal[] | undefined {
+  const trace = useQuery(`home|trace|${slug}@${n}`, () =>
+    !slug || n == null
+      ? Promise.resolve(null)
+      : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/trace", { params: { path: { doc: slug, n } } })).catch(() => null),
+  );
+  if (trace.loading) return undefined;
+  const ids = [...new Set(trace.data?.sections.flatMap((s) => s.goals.map((g) => g.id)) ?? [])];
+  return ids
+    .map((id) => goals.get(id))
+    .filter((g): g is RowGoal => !!g)
+    .sort((a, b) => a.tag.localeCompare(b.tag, undefined, { numeric: true }));
+}
+
+function GoalsSection({ goals }: { goals: RowGoal[] | undefined }) {
+  if (!goals || goals.length === 0) return null;
+  return (
+    <InspectorSection label="Goals" testId="inspector-goals" tools={<GoalTags goals={goals} />}>
+      {goals.map((g) => (
+        <InspectorRow key={g.tag}>{g.title}</InspectorRow>
+      ))}
+    </InspectorSection>
+  );
+}
+
 /** The selected PRD: journey, blockers, sections reviewed, open items, its sections and blockers. */
-function PrdInspector({ f, openItems }: { f: Extract<Flight, { kind: "prd" }>; openItems: number | undefined }) {
+function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: "prd" }>; openItems: number | undefined; goalIndex: GoalIndex }) {
   const d = f.doc;
   const n = d.latest_version;
+  const goals = useTracedGoals(d.slug, n, goalIndex);
   const version = useQuery(`home|version|${d.slug}|${n}`, () =>
     n == null ? Promise.resolve(null) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: d.slug, n } } })),
   );
@@ -245,13 +264,7 @@ function PrdInspector({ f, openItems }: { f: Extract<Flight, { kind: "prd" }>; o
           ))}
         </InspectorSection>
       )}
-      {f.goals.length > 0 && (
-        <InspectorSection label="Goals" tools={<GoalTags goals={f.goals} />}>
-          {f.goals.map((g) => (
-            <InspectorRow key={g.tag}>{g.title}</InspectorRow>
-          ))}
-        </InspectorSection>
-      )}
+      <GoalsSection goals={goals} />
     </Inspector>
   );
 }
@@ -267,9 +280,14 @@ function Legend({ cls, label, n }: { cls: string; label: string; n: number }) {
 }
 
 /** The selected run: segments done, what it waits on, its segments; cost as one small figure (P3d). */
-function RunInspector({ f }: { f: Extract<Flight, { kind: "run" }> }) {
+function RunInspector({ f, docs, goalIndex }: { f: Extract<Flight, { kind: "run" }>; docs: DocumentSummary[]; goalIndex: GoalIndex }) {
   const run = f.run;
-  const d = segmentsDone(f.detail);
+  const d = run.progress;
+  // The run's segments and checkpoints: one call, for the selected run only.
+  const detailQ = useQuery(`home|run|${run.id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: run.id } } })));
+  const detail: RunOut | undefined = detailQ.data;
+  const doc = docs.find((x) => x.slug === run.document_slug);
+  const goals = useTracedGoals(doc?.slug, doc?.latest_version, goalIndex);
   return (
     <Inspector
       testId="home-inspector"
@@ -291,15 +309,15 @@ function RunInspector({ f }: { f: Extract<Flight, { kind: "run" }> }) {
       }
       stats={[
         { label: "Segments done", value: d ? d.done : "–", of: d?.total, testId: "stat-segments" },
-        { label: "Checkpoints", value: f.detail ? f.detail.checkpoints.filter((c) => c.status === "pending").length : "–" },
+        { label: "Checkpoints", value: detail ? detail.checkpoints.filter((c) => c.status === "pending").length : "–" },
       ]}
     >
       <InspectorSection label="Next" testId="inspector-next">
-        <InspectorRow>{runNext(run, f.detail)}</InspectorRow>
+        <InspectorRow>{runNext(run)}</InspectorRow>
       </InspectorSection>
-      {f.detail && f.detail.segments.length > 0 && (
+      {detail && detail.segments.length > 0 && (
         <InspectorSection label="Segments" testId="inspector-segments">
-          {f.detail.segments.map((s) => (
+          {detail.segments.map((s) => (
             <InspectorRow key={s.seq} value={<Chip kind={SEGMENT_STATUS_KIND[s.status]}>{SEGMENT_STATUS_LABEL[s.status]}</Chip>}>
               {s.title}
             </InspectorRow>
@@ -309,13 +327,7 @@ function RunInspector({ f }: { f: Extract<Flight, { kind: "run" }> }) {
       <InspectorSection label="Cost">
         <InspectorRow value={<RunCost run={run} />}>{run.status === "awaiting_approval" ? "Estimate" : "Spent"}</InspectorRow>
       </InspectorSection>
-      {f.goals.length > 0 && (
-        <InspectorSection label="Goals" tools={<GoalTags goals={f.goals} />}>
-          {f.goals.map((g) => (
-            <InspectorRow key={g.tag}>{g.title}</InspectorRow>
-          ))}
-        </InspectorSection>
-      )}
+      <GoalsSection goals={goals} />
       {run.document_slug && run.document_id && (
         <InspectorSection>
           <Link href={`/documents/${run.document_slug}`} className="font-medium text-accent-ink hover:underline">
@@ -327,8 +339,22 @@ function RunInspector({ f }: { f: Extract<Flight, { kind: "run" }> }) {
   );
 }
 
-export function FlightInspector({ f, openItems }: { f: Flight; openItems: Map<string, number> }) {
-  return f.kind === "prd" ? <PrdInspector key={f.key} f={f} openItems={openItems.get(f.doc.id)} /> : <RunInspector key={f.key} f={f} />;
+export function FlightInspector({
+  f,
+  openItems,
+  docs,
+  goalIndex,
+}: {
+  f: Flight;
+  openItems: Map<string, number>;
+  docs: DocumentSummary[];
+  goalIndex: GoalIndex;
+}) {
+  return f.kind === "prd" ? (
+    <PrdInspector key={f.key} f={f} openItems={openItems.get(f.doc.id)} goalIndex={goalIndex} />
+  ) : (
+    <RunInspector key={f.key} f={f} docs={docs} goalIndex={goalIndex} />
+  );
 }
 
 export function FlightTable({
@@ -336,14 +362,12 @@ export function FlightTable({
   loading,
   selected,
   onSelect,
-  onActivate,
   header,
 }: {
   rows: Flight[] | undefined;
   loading: boolean;
   selected: string | null;
   onSelect: (key: string) => void;
-  onActivate: (f: Flight) => void;
   header: ReactNode;
 }) {
   return (
@@ -355,8 +379,8 @@ export function FlightTable({
       loading={loading}
       rowKey={(f) => f.key}
       selected={selected}
+      // Enter selects as a click does; the inspector's Open opens the row.
       onSelect={(k) => onSelect(k)}
-      onActivate={(_, f) => onActivate(f)}
       rowProps={(f) => ({ "data-testid": "flight-row", "data-kind": f.kind })}
     />
   );

@@ -8,7 +8,7 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
-import { routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute } from "./connections";
@@ -16,7 +16,7 @@ import { DOCUMENTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
 import { routeQuality, seedQuality, type QualityDb } from "./quality";
 import { routeTrace } from "./trace";
@@ -68,10 +68,13 @@ const STORAGE_KEY = "po-mock-db-v2";
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
 /**
- * Tests and screenshots set this localStorage key to "empty" before the first call to start
- * as a new company: members only, no goals, documents, runs or questions.
+ * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
+ * new company (members only, no goals, documents, runs or questions); "large" as a big one
+ * (30 goals, 50 more active runs, questions asked of the signed-in member).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+/** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
+export const MOCK_FAIL_KEY = "po-mock-fail";
 const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
 
 /** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
@@ -153,6 +156,24 @@ function seedEmpty(): Db {
     v2: emptyV2(),
   };
   db.members = MOCK_MEMBERS.map((m) => ({ ...m, id: m.email === MOCK_LOGIN.email ? db.user_id : uuid() }));
+  return db;
+}
+
+/** A big company: Home must stay within a fixed number of calls however much there is. */
+function seedLarge(): Db {
+  const db = seed();
+  enlargeBaseline(db.baseline, uuid, 27);
+  db.runs = seeded("runs", () => seedRuns(runsContext(db)));
+  enlargeRuns(db.runs, uuid, 50);
+  const v2 = ensureV2(db);
+  const model = v2.questions[0];
+  for (let i = 1; i <= 4; i++) {
+    const at = new Date(Date.parse(model.created_at) + i * 60_000).toISOString();
+    v2.questions.push({ ...model, id: uuid(), prompt: `Which clinics open first in region ${i}?`, priority: 10 + i, created_at: at, updated_at: at });
+  }
+  // Asked of someone else: not the signed-in member's to answer.
+  const other = db.members.find((m) => m.id !== db.user_id)!;
+  v2.questions.push({ ...model, id: uuid(), prompt: "Who owns the pricing page?", asked_to: other.id, created_at: model.created_at, updated_at: model.created_at });
   return db;
 }
 
@@ -450,7 +471,8 @@ function load(): Db {
       // fall through to a fresh seed
     }
   }
-  const db = seeded("db", localStorage.getItem(MOCK_SCENARIO_KEY) === "empty" ? seedEmpty : seed);
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  const db = seeded("db", scenario === "empty" ? seedEmpty : scenario === "large" ? seedLarge : seed);
   save(db);
   return db;
 }
@@ -1030,7 +1052,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
 
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
-  const v2 = routeV2(ensureV2(db), req, p, q);
+  const v2 = routeV2(ensureV2(db), req, p, q, me.id);
   if (v2) return v2;
 
   const handled = await laneF(db, req, p, m);
@@ -1198,7 +1220,14 @@ async function route(db: Db, req: Request): Promise<Response> {
 let queue: Promise<unknown> = Promise.resolve();
 
 export async function mockFetch(req: Request): Promise<Response> {
+  // Every call, in order: tests count them (Home's call budget).
+  const url = new URL(req.url);
+  const log = ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ??= []);
+  log.push(`${req.method} ${url.pathname}${url.search}`);
   await new Promise((r) => setTimeout(r, LATENCY_MS));
+  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_FAIL_KEY)) {
+    return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
+  }
   const next = queue.then(async () => {
     const db = load();
     const res = await route(db, req);

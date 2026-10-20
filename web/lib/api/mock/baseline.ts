@@ -653,7 +653,10 @@ export async function routeBaseline(
       if (action === "revisions" && m === "GET") {
         // Newest first, as the API lists them.
         const mine = (s.revisions ?? []).filter((r) => r.entity_id === e.id);
-        return json(200, [...mine].sort((a, b) => b.created_at.localeCompare(a.created_at)));
+        const limit = q.get("limit");
+        if (limit != null && !(Number(limit) >= 1 && Number(limit) <= 500)) return fail(422, "limit");
+        const newest = [...mine].sort((a, b) => b.created_at.localeCompare(a.created_at));
+        return json(200, limit == null ? newest : newest.slice(0, Number(limit)));
       }
     }
 
@@ -729,4 +732,32 @@ export async function routeBaseline(
     throw e;
   }
   return json(501, { detail: "This baseline route is not available in mock mode" });
+}
+
+/**
+ * The large-company scenario (po-mock-scenario=large): `extra` more goals after the seeded
+ * ones, each with a current value and three monthly revisions, so Home is measured against
+ * a company with many goals.
+ */
+export function enlargeBaseline(s: BaselineState, uuid: () => string, extra: number) {
+  const model = s.entities.find((e) => e.type === "goal")!;
+  for (let i = 1; i <= extra; i++) {
+    const values = [100 + i, 110 + i, 120 + i].map(String);
+    const attrs = { weight: 0.1 - i / 1000, metric: `Clinics live in region ${i}`, target: `${200 + i * 10} clinics`, current: values[2] };
+    const goal: EntityRow = { ...model, id: uuid(), key: `g.region-${i}`, title: `Region ${String(i).padStart(2, "0")} clinics`, attrs, status: "confirmed" };
+    s.entities.push(goal);
+    values.forEach((current, n) => {
+      const after = { type: goal.type, key: goal.key, title: goal.title, body: goal.body, attrs: { ...attrs, current }, status: goal.status };
+      s.revisions!.push({
+        id: uuid(),
+        entity_id: goal.id,
+        edge_id: null,
+        before: null,
+        after,
+        actor: "import",
+        reason: "Monthly metric import",
+        created_at: new Date(Date.UTC(2026, 7 + n, 12, 9)).toISOString(),
+      });
+    });
+  }
 }
