@@ -741,7 +741,19 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
           }
           action={
             version &&
-            (version.approved_at || canDecide) && (
+            (version.approved_at || canDecide) &&
+            (document_?.kind === "prd" && !version.approved_at ? (
+              // T2 publish gate: a PRD is published from the Publish screen, latest version only.
+              <LinkButton
+                variant="primary"
+                icon="check"
+                href={`/documents/${doc}/publish`}
+                aria-description={n !== latest && latest != null ? `Publishes v${latest}, the latest version` : undefined}
+                data-testid="publish-link"
+              >
+                Publish
+              </LinkButton>
+            ) : (
               <ApproveButton
                 doc={doc}
                 n={n}
@@ -752,7 +764,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
                   docQ.reload();
                 }}
               />
-            )
+            ))
           }
         />
 
@@ -781,7 +793,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             </LinkButton>
           )}
           <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
-          {document_?.kind === "prd" && n === latest && (
+          {document_?.kind === "prd" && n === latest && !canDecide && (
             <LinkButton icon="check" href={`/documents/${doc}/publish`}>
               Check readiness
             </LinkButton>
