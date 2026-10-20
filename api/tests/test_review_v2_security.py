@@ -352,7 +352,7 @@ async def test_a_run_token_push_is_an_agent_draft(client):
     agent = replace(DRAFT, "Teams miss shared deadlines.", "The agent's problem.")
     async with mcp_session(token) as c:
         tools = {t.name: t for t in (await c.list_tools()).tools}
-        assert "base_version" in tools["push_draft"].input_schema["required"]
+        assert "base_version" not in tools["push_draft"].input_schema["required"]
         pushed = await c.call_tool("push_draft", {"doc": DOC, "markdown": agent, "base_version": 1})
         assert not pushed.is_error, pushed.content
         via_rest = await c.call_tool(
