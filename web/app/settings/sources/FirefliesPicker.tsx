@@ -328,8 +328,8 @@ export function FirefliesPicker({
         </span>
         <InfoTip label="what a sync takes" align="end">
           A series is a recurring calendar event: it takes its past meetings and every future one, and new meetings arrive on
-          the next sync. A meeting on no calendar is in no series; pick it on its own. A meeting you drop is removed from the
-          source on the next sync.
+          the next sync. A meeting on no calendar is in no series; pick it on its own. Saving a narrower date range removes the
+          meetings outside it at once; a meeting or series you drop is removed on the next sync.
         </InfoTip>
       </div>
 

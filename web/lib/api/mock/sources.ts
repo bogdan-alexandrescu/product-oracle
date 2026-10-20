@@ -183,6 +183,22 @@ function itemOut(i: Item): Schemas["ItemOut"] {
   return out;
 }
 
+/** Narrowing takes effect on save (S5, owner 2026-10-20), as the API's
+ * update_source does: stored items outside the new channels, repos or date range are
+ * soft-deleted at once. */
+function sweep(db: SourcesDb, s: Source) {
+  const config = s.config as Record<string, unknown>;
+  const groups = s.kind === "slack" ? config.channels : s.kind === "github" ? config.repos : null;
+  const allowed = Array.isArray(groups) ? new Set(groups.map((g) => String(g).toLowerCase())) : null;
+  const from = s.kind === "slack" && typeof config.since === "string" ? `${config.since}T00:00:00Z` : null;
+  for (const item of db.items) {
+    if (item.source_id !== s.id || item.deleted_at) continue;
+    const group = item.external_id.includes(":") ? item.external_id.split(":")[0].toLowerCase() : null;
+    const outside = (allowed && group !== null && !allowed.has(group)) || (from && item.occurred_at && item.occurred_at < from);
+    if (outside) item.deleted_at = now();
+  }
+}
+
 function counted(db: SourcesDb, s: Source): Source {
   return { ...s, item_count: db.items.filter((i) => i.source_id === s.id && !i.deleted_at).length };
 }
@@ -314,6 +330,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       if (patch.name) s.name = patch.name;
       if (patch.config) {
         s.config = patch.config;
+        sweep(db, s);
         // A changed selection takes a source in error or needing attention back to active.
         if (s.status === "error" || s.status === "needs_attention") {
           s.status = "active";

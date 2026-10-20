@@ -314,3 +314,38 @@ async def test_a_source_paused_while_it_syncs_stays_paused(a, tenant_id, alice, 
     result = await sync(a, source)
     assert result["source"]["status"] == "paused"
     assert len(await items(tenant_id, source)) == 3
+
+
+# --- Narrowing takes effect on save (S5, owner 2026-10-20) ---------------------------
+
+
+async def test_saving_a_narrower_allowlist_deletes_what_falls_outside_at_once(
+    a, tenant_id, alice, slack
+):
+    source = await add(a, tenant_id, alice, {"channels": BOTH})
+    await sync(a, source)
+    roadmap = f"C0ROADMAP:{ts('2025-10-03')}"
+    assert (await items(tenant_id, source))[roadmap] is True
+
+    saved = await patch(a, source, {"config": {"channels": ["C0PRODUCT"], "since": "2025-10-04"}})
+    # In the save itself, before any sync: the removed channel and the older message.
+    stored = await items(tenant_id, source)
+    assert stored[roadmap] is False
+    assert stored[f"C0PRODUCT:{ts('2025-10-01')}"] is False
+    assert stored[PRICING] is True
+    assert saved["item_count"] == 2
+    # Soft: the versions stay (frozen shares and audit read them).
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(
+            select(SourceItem).where(
+                SourceItem.source_id == uuid.UUID(source["id"]), SourceItem.external_id == roadmap
+            )
+        )
+        assert row.deleted_at is not None
+
+    # The next sync only re-reads what remains.
+    slack.calls.clear()
+    result = await sync(a, source)
+    assert result["deleted"] == 0
+    assert not [p for m, p in slack.calls if p.get("channel") == "C0ROADMAP"]
+    assert sum(live for live in (await items(tenant_id, source)).values()) == 2

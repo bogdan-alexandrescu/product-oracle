@@ -17,7 +17,7 @@ from oracle import changes
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.connections.providers import get_provider
-from oracle.sources import base
+from oracle.sources import base, store
 from oracle.sources.models import SOURCE_KINDS, Source, SourceItem
 from oracle.v2 import links
 
@@ -303,10 +303,17 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
             source.cursor = None
         source.connection_id = connection_id
         source.config = config
+        if reconfigure:
+            # Narrowing takes effect on save (S5, owner 2026-10-20): what the stored items
+            # show to fall outside the new selection is deleted (soft) in this request,
+            # without calling the provider. What only the provider can tell (a Fireflies
+            # series, a Notion sub-page) goes on the next sync's pass.
+            await _sweep(db, source, config)
         # A config change keeps the cursor: the next sync sees the selection changed (its
-        # fingerprint, oracle.sources.sync), deletes what fell outside it and asks the
-        # connector how much of the cursor still holds (rescope_cursor). A sync running
-        # now keeps none of what it reads from here on (its writes are conditional).
+        # fingerprint, oracle.sources.sync), sweeps again (nothing left by then) and asks
+        # the connector how much of the cursor still holds (rescope_cursor), so it only
+        # re-reads what remains. A sync running now keeps none of what it reads from here
+        # on (its writes are conditional).
         if source.status in ("error", "needs_attention"):
             source.status = "active"
             source.last_error = None
@@ -314,6 +321,15 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
         source.name = changes["name"].strip()
     await _commit_unique(db)
     return source
+
+
+async def _sweep(db: AsyncSession, source: Source, config: dict[str, Any]) -> int:
+    """Soft-delete the source's stored items outside ``config`` (the connector's
+    ``scope``), in the caller's transaction; how many."""
+    scope = getattr(connector_for(source.kind), "scope", None)
+    if scope is None:
+        return 0
+    return await store.delete_out_of_scope(db, source, scope(config))
 
 
 def normalize_config(kind: str, config: dict[str, Any]) -> dict[str, Any]:

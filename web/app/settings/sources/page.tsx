@@ -206,7 +206,7 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
           htmlFor={id}
           tip={
             <InfoTip label="saving the allowlist" align="start">
-              Saving a new allowlist syncs this source again from the start. What it no longer covers (a removed channel or repo, messages outside a narrower date range) is deleted on that sync.
+              Saving a narrower allowlist removes what it no longer covers (a removed channel or repo, messages outside a narrower date range) at once. The next sync reads only what remains, and anything new.
             </InfoTip>
           }
         >
@@ -227,7 +227,7 @@ function AllowlistEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
         </Button>
         {Picker && !notion && (
           <InfoTip label="saving the allowlist" align="start">
-            Saving a new allowlist syncs this source again from the start. What it no longer covers (a removed channel or repo, messages outside a narrower date range) is deleted on that sync.
+            Saving a narrower allowlist removes what it no longer covers (a removed channel or repo, messages outside a narrower date range) at once. The next sync reads only what remains, and anything new.
           </InfoTip>
         )}
       </div>
@@ -266,7 +266,7 @@ function FirefliesEditor({ source, onSaved }: { source: Source; onSaved: (s: Sou
           Save meetings
         </Button>
         <InfoTip label="saving meetings" align="start">
-          Saving syncs this source again: what is no longer included is removed, what is already stored is kept.
+          Saving a narrower date range removes the meetings outside it at once; meetings no longer picked are removed on the next sync. What is already stored and still included is kept.
         </InfoTip>
       </div>
     </form>
@@ -536,8 +536,8 @@ function ChoosePages(props: { connectionId: string; value: string[]; onChange: (
       <span className="flex items-center gap-1.5">
         <Label>Choose pages</Label>
         <InfoTip label="choosing pages" align="start">
-          Tick the pages and databases to pull in; their sub-pages and databases come with them. Saving new picks syncs
-          the source again from the start.
+          Tick the pages and databases to pull in; their sub-pages and databases come with them. Pages no longer under
+          your picks are removed on the next sync after saving.
         </InfoTip>
       </span>
       <NotionPicker {...props} />

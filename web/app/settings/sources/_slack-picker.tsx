@@ -18,7 +18,7 @@ export const MAX_CHANNELS = 100;
  * writes `{channels, since, until}` (days, UTC; the same range shape as Fireflies). Only
  * messages from `since` through `until` are read; nothing posted after `until` is, thread
  * replies included (S5, owner 2026-10-20). Narrowing the range removes what falls outside
- * it on the next sync.
+ * it when the source is saved (S5, owner 2026-10-20: narrowing takes effect on save).
  */
 export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
   const sinceId = useId();
@@ -108,7 +108,7 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
           ) : (
             <p id={hintId} className="text-[13px] leading-5 text-text2">
               Optional, in UTC. Nothing posted after Until is read, thread replies included. Narrowing the
-              range removes messages outside it at the next sync.
+              range removes messages outside it when you save.
             </p>
           )}
         </div>
