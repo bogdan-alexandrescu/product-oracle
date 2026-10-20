@@ -224,9 +224,13 @@ async def _check_connection(
     return conn
 
 
-async def _validate(
-    db: AsyncSession, kind: str, config: dict[str, Any], conn: Connection | None
-) -> None:
+def _picks(config: dict[str, Any]) -> dict[str, Any]:
+    """A source's config without the display names of what was picked."""
+    return {k: v for k, v in (config or {}).items() if k != "names"}
+
+
+def _check_shape(kind: str, config: dict[str, Any]) -> None:
+    """The connector's offline check of a config's shape and ids (no provider call)."""
     if kind == "upload":
         return
     connector = connector_for(kind)
@@ -234,13 +238,22 @@ async def _validate(
         raise InvalidError(CONNECTOR_UNAVAILABLE)
     check = getattr(connector, "check_config", None)
     if check is not None:
-        # The shape and ids first: nothing is sent to the provider for a bad id.
         try:
             check(config)
         except base.ConnectorBadInput as e:
             raise BadRequestError(str(e)) from None
         except base.ConnectorError as e:
             raise InvalidError(str(e)) from None
+
+
+async def _validate(
+    db: AsyncSession, kind: str, config: dict[str, Any], conn: Connection | None
+) -> None:
+    if kind == "upload":
+        return
+    connector = connector_for(kind)
+    # The shape and ids first: nothing is sent to the provider for a bad id.
+    _check_shape(kind, config)
     problem = scope_problem(kind, config, conn)
     if problem:
         raise InvalidError(problem)
@@ -340,12 +353,27 @@ PUBLIC_MAIL_DOMAINS = frozenset(
         "googlemail.com",
         "outlook.com",
         "hotmail.com",
+        "hotmail.co.uk",
         "live.com",
+        "msn.com",
         "yahoo.com",
+        "yahoo.co.uk",
+        "aol.com",
         "icloud.com",
         "me.com",
         "proton.me",
         "protonmail.com",
+        "pm.me",
+        "gmx.com",
+        "gmx.de",
+        "gmx.net",
+        "yandex.com",
+        "yandex.ru",
+        "mail.ru",
+        "qq.com",
+        "zoho.com",
+        "fastmail.com",
+        "hey.com",
     }
 )
 
@@ -371,6 +399,14 @@ def _check_config(config: dict[str, Any]) -> None:
 async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any]) -> Source:
     reconnect = "connection_id" in changes and changes["connection_id"] != source.connection_id
     reconfigure = changes.get("config") is not None and changes["config"] != source.config
+    if reconfigure and not reconnect and _picks(changes["config"]) == _picks(source.config):
+        # Only the display names of picked items changed: the ids were validated when
+        # they were picked, so nothing is sent to the provider again, and what the last
+        # sync reported still stands.
+        _check_config(changes["config"])
+        _check_shape(source.kind, changes["config"])
+        source.config = changes["config"]
+        reconfigure = False
     if reconnect or reconfigure:
         connection_id = changes["connection_id"] if reconnect else source.connection_id
         config = changes["config"] if reconfigure else source.config

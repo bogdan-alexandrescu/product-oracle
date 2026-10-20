@@ -8,6 +8,7 @@ import httpx
 import pytest
 
 from oracle.sources.base import (
+    COMPANY_DOMAINS,
     ConnectorAuthError,
     ConnectorConfigError,
     ConnectorRateLimited,
@@ -24,7 +25,8 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "connectors" / "go
 CREDENTIAL = {"access_token": "ya29.test-token", "refresh_token": "1//test-refresh"}
 PRODUCT = "1FolderProductExample"
 SPECS = "1FolderSpecsExample"
-CONFIG = {"folders": [PRODUCT], "docs": ["1DocListedExample"]}
+# The sync engine adds the company's domains; without them every folder doc is skipped.
+CONFIG = {"folders": [PRODUCT], "docs": ["1DocListedExample"], COMPANY_DOMAINS: ["example.com"]}
 EXTENSIONS = {"text/markdown": "md", "text/plain": "txt"}
 # The page cursor list_product_page1 hands out (added by FakeDrive, built from pieces).
 PAGE_2 = "-".join(["page", "2"])
@@ -168,6 +170,22 @@ async def test_validate_caps_how_many_items_a_source_picks():
 async def test_validate_config_errors(config, credential, match):
     with pytest.raises(ConnectorConfigError, match=match):
         await connector(FakeDrive()).validate(config, credential)
+
+
+async def test_without_company_domains_every_folder_doc_is_skipped_and_says_why():
+    """Fails closed: with no company domain known, who owns a folder doc cannot be
+    checked, so none is pulled in; the picked doc still is."""
+    fake = FakeDrive(FULL_ROUTES)
+    config = {k: v for k, v in CONFIG.items() if k != COMPANY_DOMAINS}
+    events = await collect(connector(fake), config)
+    assert [e.external_id for e in events if isinstance(e, ItemUpsert)] == ["1DocListedExample"]
+    skipped = [e for e in events if isinstance(e, ItemUnavailable) and e.status == "skipped"]
+    assert {e.external_id for e in skipped} == {
+        "1DocSpecExample",
+        "1DocPrdExample",
+        "1DocNotesExample",
+    }
+    assert all("domain is not known" in e.reason for e in skipped)
 
 
 async def test_full_sync_recurses_folders_and_falls_back_to_plain_text():

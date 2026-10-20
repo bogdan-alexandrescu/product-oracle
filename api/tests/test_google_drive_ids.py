@@ -11,7 +11,12 @@ from oracle.connections.providers import DRIVE_READONLY
 from oracle.sources import base, service
 from oracle.sources.base import ConnectorBadInput
 from oracle.sources.connectors import google_docs
-from oracle.sources.connectors.google_docs import DRIVE_URL, GoogleDocsConnector, _Drive
+from oracle.sources.connectors.google_docs import (
+    DRIVE_URL,
+    GoogleDocsConnector,
+    _Drive,
+    valid_id,
+)
 from tests.connection_helpers import make_person
 from tests.sources_helpers import client_for, make_connection
 
@@ -57,6 +62,9 @@ async def _post(tenant_id, config):
         {"docs": ["1DocA0000%2F..%2Fabout"]},
         {"docs": ["short"]},
         {"docs": ["x" * 201]},
+        {"docs": ["1DocA000000\n"]},
+        {"folders": ["1FolderA0000\n"]},
+        {"docs": [".."]},
     ],
 )
 async def test_a_bad_id_is_a_400_before_any_drive_call(tenant_id, drive, config):
@@ -116,3 +124,29 @@ async def test_paths_are_quoted_segments():
     assert seen[0].url.raw_path.startswith(b"/drive/v3/files/..%2Fabout%3Fx%3D1?")
     assert seen[1].url.raw_path.startswith(b"/drive/v3/files/a%2F..%2F..%2Fb/export?")
     assert all(str(r.url).startswith(DRIVE_URL) for r in seen)
+
+
+async def test_a_bare_dot_segment_stays_one_segment():
+    """'..' and '.' quote to themselves, and the URL would climb or drop them: they go
+    out percent-encoded, so the request stays under files/."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"id": "x"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        drive = _Drive(client, "token")
+        await drive.file("..")
+        await drive.export("..")
+        await drive.file(".")
+    assert seen[0].url.raw_path.startswith(b"/drive/v3/files/%2E%2E?")
+    assert seen[1].url.raw_path.startswith(b"/drive/v3/files/%2E%2E/export?")
+    assert seen[2].url.raw_path.startswith(b"/drive/v3/files/%2E?")
+
+
+def test_valid_id_matches_the_whole_value():
+    assert valid_id("1DocA000000")
+    assert not valid_id("1DocA000000\n")
+    assert not valid_id("1DocA000000\r\n")
+    assert not valid_id("..")

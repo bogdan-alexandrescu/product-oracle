@@ -65,12 +65,16 @@ class _Started:
 
 async def _hold(db: AsyncSession, started: _Started) -> None:
     """Lock the source's row until the next commit; raise :class:`_Superseded` when its
-    config or connection is no longer the one the sync started with."""
+    config or connection is no longer the one the sync started with.
+
+    FOR NO KEY UPDATE, not FOR UPDATE: writing a source's items takes KEY SHARE on the
+    source row (their foreign key), which FOR UPDATE waits on, so two syncs of one
+    source could each hold the other's lock. Edits of the row still wait."""
     row = (
         await db.execute(
             select(Source.config, Source.connection_id)
             .where(Source.id == started.source_id)
-            .with_for_update()
+            .with_for_update(key_share=True)
         )
     ).one_or_none()
     if row is None or row.config != started.config or row.connection_id != started.connection_id:
@@ -191,6 +195,10 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     except base.ConnectorRateLimited as e:
         # Stop cleanly: keep everything up to the last checkpoint and its cursor.
         await db.rollback()
+        try:
+            await _hold(db, started)
+        except _Superseded:
+            return await _superseded(db, stats)
         stats.outcome = "rate_limited"
         stats.retry_after = e.retry_after
         wait = f" (retry after {e.retry_after:g}s)" if e.retry_after is not None else ""

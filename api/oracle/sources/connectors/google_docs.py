@@ -83,13 +83,17 @@ EXPORTS = ("text/markdown", "text/plain")
 PAGE_SIZE = 100
 # What a Drive file id looks like. Anything else (a query fragment, a path with '..',
 # 'root' for the whole My Drive) is refused before Drive is called.
-DRIVE_ID = re.compile(r"^[A-Za-z0-9_-]{10,200}$")
+# Matched whole (fullmatch: '$' alone would let a trailing newline through).
+DRIVE_ID = re.compile(r"[A-Za-z0-9_-]{10,200}")
 NOT_A_DRIVE_ID = "is not a Drive file or folder id: choose it from Drive"
 # Picked files and folders per source, and how many of them validate checks at once.
 MAX_PICKED = 500
 VALIDATE_BATCH = 8
 # Docs a source pulls in from its folders; past it the listing stops and says so.
 MAX_FOLDER_DOCS = 2000
+# Folders (picked ones and every sub-folder) one sync lists, each at least one Drive call;
+# past it the listing stops and says so, and keeps what came from the folders not reached.
+MAX_FOLDERS_WALKED = 500
 # The folders are listed again at least this often, whatever Drive's change log says.
 RELIST_SECONDS = 6 * 3600
 # Pages of Drive's change log read to decide whether to list the folders again.
@@ -116,12 +120,18 @@ FOLDER_NO_ACCESS = (
 FOLDER_LIMIT = (
     "Only the first {limit:,} docs in this source's folders are synced: pick smaller folders"
 )
+FOLDERS_WALKED_LIMIT = (
+    "Only the first {limit:,} folders in this source are listed: docs in the rest are not "
+    "pulled in (what came from them before is kept). Pick smaller folders"
+)
+# The reason on every folder doc when the company's domains are unknown (fails closed).
+NO_DOMAINS = "the company's email domain is not known, so who owns it cannot be checked"
 # 403 reasons meaning this one file cannot be read (others fail the sync).
 FILE_DENIED = {"insufficientFilePermissions", "cannotDownloadFile", "forbidden"}
 
 
 def valid_id(value: object) -> bool:
-    return isinstance(value, str) and bool(DRIVE_ID.match(value)) and value.lower() != "root"
+    return isinstance(value, str) and bool(DRIVE_ID.fullmatch(value)) and value.lower() != "root"
 
 
 def _ids(config: dict[str, Any], key: str) -> list[str]:
@@ -151,9 +161,18 @@ def query_string(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
+def _segment(value: str) -> str:
+    # '.' and '..' survive quoting and the URL would drop or climb them: send the dots
+    # percent-encoded, which stays one (unknown) file id.
+    if value in (".", ".."):
+        return value.replace(".", "%2E")
+    return quote(value, safe="")
+
+
 def _path(*segments: str) -> str:
-    """A Drive API path, each segment quoted so it cannot add segments or a query."""
-    return "/".join(quote(s, safe="") for s in segments)
+    """A Drive API path, each segment quoted so it cannot add or remove segments or a
+    query."""
+    return "/".join(_segment(s) for s in segments)
 
 
 def _token(credential: dict[str, Any] | None) -> str:
@@ -197,8 +216,11 @@ def _domains(config: dict[str, Any]) -> list[str]:
 def owned_outside(file: dict[str, Any], domains: list[str]) -> bool:
     """Whether a doc's owner is outside the company's ``domains``. A doc in a shared
     drive belongs to the drive (Drive names no owner), so it counts as inside; a doc
-    whose owner's email Drive does not show counts as outside. No domains: no check."""
-    if not domains or file.get("driveId"):
+    whose owner's email Drive does not show counts as outside. No domains known: every
+    doc counts as outside (the check fails closed, and the note says why)."""
+    if not domains:
+        return True
+    if file.get("driveId"):
         return False
     emails = [o.get("emailAddress") or "" for o in file.get("owners") or []]
     return not any(e.rpartition("@")[2].lower() in domains for e in emails if "@" in e)
@@ -206,6 +228,13 @@ def owned_outside(file: dict[str, Any], domains: list[str]) -> bool:
 
 def _outside_label(domains: list[str]) -> str:
     return " or ".join(domains[:3]) + (" …" if len(domains) > 3 else "")
+
+
+def _outside_reason(domains: list[str], skipped: bool) -> str:
+    if not domains:
+        return f"Skipped: {NO_DOMAINS}" if skipped else f"Not checked: {NO_DOMAINS}"
+    label = _outside_label(domains)
+    return f"Skipped: owned outside {label}" if skipped else f"Owned outside {label}"
 
 
 def _listing_key(folders: list[str], docs: list[str], domains: list[str], policy: str) -> str:
@@ -464,7 +493,7 @@ class GoogleDocsConnector:
                 protect_all = False
                 all_folders = set(folders)
                 outside: dict[str, dict[str, Any]] = {}
-                budget = MAX_FOLDER_DOCS
+                budget, folders_left = MAX_FOLDER_DOCS, MAX_FOLDERS_WALKED
                 for root in folders:
                     reason = await self._folder_problem(drive, root)
                     if reason:
@@ -477,17 +506,32 @@ class GoogleDocsConnector:
                             # Which docs came from it is not known: delete nothing now.
                             protect_all = True
                         continue
-                    found, limited = await self._walk(drive, root, budget, all_folders)
-                    if limited:
+                    if folders_left <= 0:
+                        found, limit = [], FOLDERS_WALKED_LIMIT
+                    else:
+                        found, limit, folders_left = await self._walk(
+                            drive, root, budget, folders_left, all_folders
+                        )
+                    if limit:
                         notes.append(
                             {
                                 "external_id": root,
-                                "reason": FOLDER_LIMIT.format(limit=MAX_FOLDER_DOCS),
+                                "reason": limit.format(
+                                    limit=MAX_FOLDER_DOCS
+                                    if limit == FOLDER_LIMIT
+                                    else MAX_FOLDERS_WALKED
+                                ),
                                 "name": names.get(root),
                                 "status": "limited",
                             }
                         )
-                    tree[root] = []
+                    if limit == FOLDERS_WALKED_LIMIT:
+                        # Folders not reached were not listed: keep what came from them.
+                        protected.update(tree.get(root) or [])
+                        kept = [i for i in tree.get(root) or [] if i in known]
+                    else:
+                        kept = []
+                    tree[root] = kept
                     for file in found:
                         if file["id"] in current or file["id"] in outside:
                             continue
@@ -497,7 +541,8 @@ class GoogleDocsConnector:
                             if policy == "skip":
                                 continue
                         current[file["id"]] = file
-                        tree[root].append(file["id"])
+                        if file["id"] not in tree[root]:
+                            tree[root].append(file["id"])
                 for doc in docs:
                     if doc in current:
                         continue
@@ -510,17 +555,12 @@ class GoogleDocsConnector:
                         notes.append({"external_id": doc, "reason": reason})
                     else:
                         current[doc] = file
-                label = _outside_label(domains)
                 for file_id, file in outside.items():
                     skipped = policy == "skip"
                     notes.append(
                         {
                             "external_id": file_id,
-                            "reason": (
-                                f"Skipped: owned outside {label}"
-                                if skipped
-                                else f"Owned outside {label}"
-                            ),
+                            "reason": _outside_reason(domains, skipped),
                             "name": file.get("name"),
                             "status": "skipped" if skipped else "flagged",
                         }
@@ -590,16 +630,20 @@ class GoogleDocsConnector:
         return None
 
     async def _walk(
-        self, drive: _Drive, root: str, budget: int, seen: set[str]
-    ) -> tuple[list[dict[str, Any]], bool]:
-        """The docs under ``root`` (sub-folders included), at most ``budget`` of them, and
-        whether the listing stopped there. Adds every folder walked to ``seen``."""
+        self, drive: _Drive, root: str, budget: int, folders_left: int, seen: set[str]
+    ) -> tuple[list[dict[str, Any]], str | None, int]:
+        """The docs under ``root`` (sub-folders included), at most ``budget`` of them from
+        at most ``folders_left`` folders; the limit the listing stopped at (``None`` when
+        it did not), and the folders left. Adds every folder walked to ``seen``."""
         found: list[dict[str, Any]] = []
         stack, walked = [root], set()
         while stack:
             folder = stack.pop()
             if folder in walked:
                 continue
+            if folders_left <= 0:
+                return found, FOLDERS_WALKED_LIMIT, 0
+            folders_left -= 1
             walked.add(folder)
             seen.add(folder)
             async for file in drive.children(folder, f"nextPageToken,files({FILE_FIELDS})"):
@@ -607,9 +651,9 @@ class GoogleDocsConnector:
                     stack.append(file["id"])
                 elif not file.get("trashed"):
                     if len(found) >= budget:
-                        return found, True
+                        return found, FOLDER_LIMIT, folders_left
                     found.append(file)
-        return found, False
+        return found, None, folders_left
 
     def _item(self, file: dict[str, Any], content: str, flagged: bool = False) -> ItemUpsert:
         editor = file.get("lastModifyingUser") or {}

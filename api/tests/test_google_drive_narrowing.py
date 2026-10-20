@@ -56,6 +56,8 @@ class Drive:
         self.gone: set[str] = set()
         self.calls: list[str] = []
         self.hold: tuple[asyncio.Event, asyncio.Event] | None = None
+        # After a held export is released: answer it 429 (Drive rate limiting).
+        self.limit_after_hold = False
 
     def _change(self, file_id: str, removed: bool = False) -> None:
         parents = [p for p, kids in self.parents.items() if file_id in kids]
@@ -112,6 +114,8 @@ class Drive:
                 self.hold = None
                 started.set()
                 await release.wait()
+                if self.limit_after_hold:
+                    return httpx.Response(429, headers={"Retry-After": "30"}, json={})
             return httpx.Response(200, text=f"# {self.files[file_id]['name']}\n")
         return httpx.Response(200, json=self.files[file_id])
 
@@ -305,6 +309,59 @@ async def test_a_sync_running_across_the_edit_saves_nothing_over_it(tenant_id, d
     assert await _live(tenant_id, source["id"]) == {DOC_A}
 
 
+async def test_a_rate_limited_sync_across_the_edit_writes_no_error_over_it(tenant_id, drive):
+    """The rate-limited stop writes last_error under the same row lock as the other
+    endings: a sync superseded by an edit leaves the edited source as the edit left it."""
+    drive.doc(DOC_A, "A")
+    drive.doc(SENSITIVE, "SENSITIVE")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, SENSITIVE]})
+    await _reset_cursor(tenant_id, source["id"])
+
+    started, release = asyncio.Event(), asyncio.Event()
+    drive.hold, drive.limit_after_hold = (started, release), True
+    running = asyncio.create_task(_sync(pat, source))
+    await asyncio.wait_for(started.wait(), 10)
+    await _patch(pat, source, {"config": {"docs": [DOC_A]}})
+    release.set()
+    first = await asyncio.wait_for(running, 10)
+
+    assert first["outcome"] == "superseded", first
+    assert (await _row(tenant_id, source["id"])).last_error is None
+
+
+async def test_a_rate_limited_sync_says_so_on_the_source(tenant_id, drive):
+    drive.doc(DOC_A, "A")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A]})
+    await _reset_cursor(tenant_id, source["id"])
+    started, release = asyncio.Event(), asyncio.Event()
+    drive.hold, drive.limit_after_hold = (started, release), True
+    release.set()
+    result = await _sync(pat, source)
+    assert result["outcome"] == "rate_limited", result
+    assert "Rate limited" in (await _row(tenant_id, source["id"])).last_error
+
+
+async def test_the_sync_lock_does_not_wait_on_item_writes(tenant_id, drive):
+    """Two syncs of one source: one writing items (which takes KEY SHARE on the source
+    row through the foreign key) must not block the other's row lock, or each could end
+    up waiting on the other. FOR NO KEY UPDATE does not conflict with KEY SHARE."""
+    from sqlalchemy import text
+
+    from oracle.sources.sync import _hold, _Started
+
+    drive.doc(DOC_A, "A")
+    _, source = await _setup(tenant_id, drive, {"docs": [DOC_A]})
+    row = await _row(tenant_id, source["id"])
+    started = _Started(row.id, row.config, row.connection_id)
+    async with tenant_session(tenant_id) as writer, tenant_session(tenant_id) as syncer:
+        writer.add(SourceItem(source_id=row.id, external_id="1DocOther00", kind="doc"))
+        await writer.flush()  # holds KEY SHARE on the source row until rollback
+        await syncer.execute(text("SET LOCAL lock_timeout = '2s'"))
+        await _hold(syncer, started)  # would time out with FOR UPDATE
+        await syncer.rollback()
+        await writer.rollback()
+
+
 async def test_items_left_behind_by_an_earlier_edit_are_deleted_too(tenant_id, drive):
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
@@ -492,3 +549,98 @@ async def test_people_cannot_set_the_company_domains(tenant_id, drive):
                   "config": {"docs": [DOC_A], "_company_domains": ["elsewhere.org"]}},
         )  # fmt: skip
     assert resp.status_code == 422
+
+
+async def test_public_mail_domains_are_not_company_domains(tenant_id):
+    for email in ("pat@example.com", "sam@yahoo.co.uk", "kim@pm.me", "lee@GMX.de"):
+        await make_person(tenant_id, email)
+    async with tenant_session(tenant_id) as s:
+        assert await service.company_domains(s, tenant_id) == ["example.com"]
+    for domain in (
+        "yahoo.co.uk", "hotmail.co.uk", "aol.com", "msn.com", "pm.me", "gmx.com", "gmx.de",
+        "gmx.net", "yandex.com", "yandex.ru", "mail.ru", "qq.com", "zoho.com", "fastmail.com",
+        "hey.com", "proton.me", "protonmail.com", "icloud.com", "me.com", "live.com",
+        "outlook.com",
+    ):  # fmt: skip
+        assert domain in service.PUBLIC_MAIL_DOMAINS
+
+
+async def test_with_no_company_domain_folder_docs_are_skipped_and_say_why(tenant_id, drive):
+    """Every member on a public mail provider: no company domain is known, so the
+    outside-owner check fails closed instead of turning off."""
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Mine", folder=FOLDER)
+    drive.doc(DOC_A, "Picked on its own")
+    pat = (await make_person(tenant_id, "pat@gmail.com")).user
+    conn = await make_connection(tenant_id, pat, "google", scopes=READONLY)
+    async with client_for(pat) as c:
+        resp = await c.post(
+            "/v1/sources",
+            json={"kind": "google_docs", "name": "Docs", "connection_id": str(conn),
+                  "config": {"folders": [FOLDER], "docs": [DOC_A]}},
+        )  # fmt: skip
+        source = resp.json()
+        result = (await c.post(f"/v1/sources/{source['id']}/sync")).json()
+    assert result["outcome"] == "completed", result
+    assert await _live(tenant_id, source["id"]) == {DOC_A}
+    (note,) = (await _row(tenant_id, source["id"])).unavailable_items
+    assert note["external_id"] == IN_FOLDER and note["status"] == "skipped"
+    assert note["reason"].startswith("Skipped: the company's email domain is not known")
+
+
+async def test_folders_walked_per_sync_are_capped_and_keep_what_came_from_the_rest(
+    tenant_id, drive, monkeypatch
+):
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Top", folder=FOLDER)
+    drive.folder(SUB, "Deeper", parent=FOLDER)
+    drive.doc(IN_SUB, "Deep", folder=SUB)
+    pat, source = await _setup(tenant_id, drive, {"folders": [FOLDER]})
+    assert await _live(tenant_id, source["id"]) == {IN_FOLDER, IN_SUB}
+
+    # One folder per sync: the sub-folder is not listed, and what came from it stays.
+    monkeypatch.setattr(google_docs, "MAX_FOLDERS_WALKED", 1)
+    monkeypatch.setattr(google_docs, "RELIST_SECONDS", 0)
+    drive.calls.clear()
+    result = await _sync(pat, source)
+    assert result["outcome"] == "completed", result
+    assert result["deleted"] == 0
+    assert await _live(tenant_id, source["id"]) == {IN_FOLDER, IN_SUB}
+    assert sum(1 for c in drive.calls if c == "files") == 1
+    (note,) = (await _row(tenant_id, source["id"])).unavailable_items
+    assert note["status"] == "limited" and note["external_id"] == FOLDER
+    assert note["reason"].startswith("Only the first 1 folders")
+    # Still kept on the sync after.
+    result = await _sync(pat, source)
+    assert result["deleted"] == 0
+    assert await _live(tenant_id, source["id"]) == {IN_FOLDER, IN_SUB}
+
+
+async def test_renaming_picked_items_does_not_ask_drive_again(tenant_id, drive):
+    drive.doc(DOC_A, "A")
+    drive.doc(DOC_B, "B")
+    drive.doc("1DocMissing", "Unshared later")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, DOC_B, "1DocMissing"]})
+    drive.unshare("1DocMissing")
+    await _sync(pat, source)
+    report = (await _row(tenant_id, source["id"])).unavailable_items
+    assert report
+    drive.calls.clear()
+    names = {DOC_A: "A renamed", DOC_B: "B"}
+    edited = await _patch(
+        pat, source, {"config": {"docs": [DOC_A, DOC_B, "1DocMissing"], "names": names}}
+    )
+    assert drive.calls == []
+    assert edited["config"]["names"] == names
+    # What the last sync reported still stands.
+    assert (await _row(tenant_id, source["id"])).unavailable_items == report
+    # A names-only edit still checks the shape of what it is given.
+    async with client_for(pat) as c:
+        bad = await c.patch(
+            f"/v1/sources/{source['id']}",
+            json={"config": {"docs": [DOC_A, DOC_B, "1DocMissing"], "names": {DOC_A: 1}}},
+        )
+    assert bad.status_code == 422
+    # Changing a pick does ask Drive.
+    await _patch(pat, source, {"config": {"docs": [DOC_A], "names": names}})
+    assert "about" in drive.calls
