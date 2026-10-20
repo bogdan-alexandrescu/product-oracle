@@ -49,7 +49,7 @@ class SourceOut(ORM):
     # Allowlisted items the last completed sync could not read (unshared, removed).
     unavailable_items: list[UnavailableItem] = Field(default_factory=list)
     # Set when the source's connection should be signed in again, e.g. a Google
-    # connection from before the Drive picker: "Reconnect to choose files".
+    # connection without drive.readonly: "Reconnect to choose files".
     reconnect_reason: str | None = None
 
 
@@ -57,7 +57,7 @@ class ConnectionChoice(BaseModel):
     id: uuid.UUID
     account_label: str | None
     status: str
-    # "Reconnect to choose files" for a Google connection without drive.file.
+    # "Reconnect to choose files" for a Google connection without drive.readonly.
     reconnect_reason: str | None = None
 
 
