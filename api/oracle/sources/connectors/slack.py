@@ -1,9 +1,12 @@
 """Slack: the allowlisted public and private channels of one user's workspace.
 
 credential ``{"token"}`` (a user or bot token); config ``{"channels": [channel ids],
-"since"?: "YYYY-MM-DD"}``. With ``since``, no message posted before that day (UTC) is read.
-Narrowing the config (a later ``since``, a removed channel) deletes the items now outside
-it on the next sync (:meth:`SlackConnector.in_scope`).
+"since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD"}``, the date range in the same shape as
+Fireflies'. With ``since``, no message posted before that day (UTC) is read; with
+``until`` (on or after ``since``), none posted after that day, except replies in a thread
+started inside the range. Narrowing the config (a later ``since``, an earlier ``until``,
+a removed channel) deletes the items now outside it on the next sync
+(:meth:`SlackConnector.in_scope`).
 
 Direct messages are never ingested (S3): ``D...`` ids and conversations Slack reports as
 ``is_im`` or ``is_mpim`` are refused by ``validate`` and again by ``sync``.
@@ -27,7 +30,7 @@ position in ``conversations.history``, so each sync re-reads ``THREAD_LOOKBACK``
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -111,18 +114,39 @@ def _channels(config: dict[str, Any]) -> list[str]:
     return channels
 
 
-def _since(config: dict[str, Any]) -> float | None:
-    """``since`` as a Slack timestamp (seconds), or ``None`` when absent."""
-    since = config.get("since")
-    if since is None:
+def _day(config: dict[str, Any], key: str) -> date | None:
+    value = config.get(key)
+    if value is None:
         return None
     try:
-        day = date.fromisoformat(since) if isinstance(since, str) else None
+        day = date.fromisoformat(value) if isinstance(value, str) else None
     except ValueError:
         day = None
     if day is None:
-        raise ConnectorConfigError("since must be a date (YYYY-MM-DD)")
+        raise ConnectorConfigError(f"{key} must be a date (YYYY-MM-DD)")
+    return day
+
+
+def _midnight(day: date) -> float:
     return datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()
+
+
+def _since(config: dict[str, Any]) -> float | None:
+    """``since`` as a Slack timestamp (seconds), or ``None`` when absent."""
+    day = _day(config, "since")
+    return None if day is None else _midnight(day)
+
+
+def _until(config: dict[str, Any]) -> float | None:
+    """Where the range ends (exclusive): the start of the day after ``until``, as a
+    Slack timestamp, or ``None`` when absent. ``until`` must not be before ``since``."""
+    day = _day(config, "until")
+    if day is None:
+        return None
+    since = _day(config, "since")
+    if since is not None and day < since:
+        raise ConnectorConfigError("until must be on or after since")
+    return _midnight(day + timedelta(days=1))
 
 
 def _token(credential: dict[str, Any] | None) -> str:
@@ -270,17 +294,20 @@ class SlackConnector:
             yield _Slack(client, token)
 
     def in_scope(self, config: dict[str, Any], item: StoredItem) -> bool:
-        """Still selected: in an allowlisted channel and, for a thread, started on or
-        after ``since`` (its replies may come later)."""
+        """Still selected: in an allowlisted channel and posted inside the date range (a
+        thread by its first message: replies after ``until`` stay with it)."""
         channel, _, ts = item.external_id.partition(":")
         if channel not in _channels(config):
             return False
-        since = _since(config)
-        return since is None or not ts or float(ts) >= since
+        since, until = _since(config), _until(config)
+        if not ts:
+            return True
+        return (since is None or float(ts) >= since) and (until is None or float(ts) < until)
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         channels = _channels(config)
         _since(config)
+        _until(config)
         async with self._session(credential) as slack:
             await slack.call("auth.test")
             for channel in channels:
@@ -293,7 +320,7 @@ class SlackConnector:
         cursor: dict[str, Any] | None,
     ) -> AsyncIterator[SyncEvent]:
         channels = _channels(config)
-        since = _since(config)
+        since, until = _since(config), _until(config)
         state: dict[str, Any] = {
             "channels": {k: dict(v) for k, v in ((cursor or {}).get("channels") or {}).items()}
         }
@@ -302,7 +329,7 @@ class SlackConnector:
             if base and not base.endswith("/"):
                 base += "/"
             for channel in channels:
-                async for event in self._sync_channel(slack, base, channel, state, since):
+                async for event in self._sync_channel(slack, base, channel, state, since, until):
                     yield event
 
     async def _sync_channel(
@@ -312,6 +339,7 @@ class SlackConnector:
         channel: str,
         state: dict[str, Any],
         since: float | None = None,
+        until: float | None = None,
     ) -> AsyncIterator[SyncEvent]:
         info = await slack.conversation(channel)
         name = info.get("name") or channel
@@ -329,9 +357,19 @@ class SlackConnector:
             params["oldest"] = _ts_shift(oldest, THREAD_LOOKBACK)
         if since is not None and float(params.get("oldest") or 0) < since:
             params["oldest"] = f"{since:.6f}"
+        if until is not None:
+            # Slack's ``latest`` is exclusive. Once the range is behind the newest message
+            # this window only re-reads the threads inside it, for new replies.
+            params["latest"] = f"{until:.6f}"
         messages = [m async for m in slack.paged("conversations.history", "messages", **params)]
         messages = sorted(
-            (m for m in messages if _keep(m) and (since is None or float(m["ts"]) >= since)),
+            (
+                m
+                for m in messages
+                if _keep(m)
+                and (since is None or float(m["ts"]) >= since)
+                and (until is None or float(m["ts"]) < until)
+            ),
             key=lambda m: float(m["ts"]),
         )
 

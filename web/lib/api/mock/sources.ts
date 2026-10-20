@@ -167,6 +167,13 @@ function search(db: SourcesDb, q: URLSearchParams): Schemas["SearchResults"] {
 }
 
 /** Handles /v1/sources*, /v1/source-items*, /v1/snapshots* and /v1/search. */
+/** The API's date range check (Slack's `{since, until}`), as the connector words it. */
+function badRange(config: Record<string, unknown>): string | null {
+  const { since, until } = config;
+  if (typeof since === "string" && typeof until === "string" && until < since) return "until must be on or after since";
+  return null;
+}
+
 export async function routeSources(req: Request, p: string[], q: URLSearchParams): Promise<Response> {
   const db = load();
   const res = await route(db, req, p, q);
@@ -197,6 +204,8 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (m === "GET") return json(200, db.sources.map((s) => counted(db, s)));
     const body = (await req.json()) as Schemas["SourceCreate"];
     if (!AVAILABLE[body.kind]) return json(422, { detail: "connector not available yet" });
+    const invalid = badRange(body.config ?? {});
+    if (invalid) return json(422, { detail: invalid });
     if (db.sources.some((s) => s.name === body.name.trim())) {
       return json(409, { detail: "You already have a source with this name" });
     }
@@ -240,6 +249,8 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     }
     if (m === "PATCH") {
       const patch = (await req.json()) as Schemas["SourcePatch"];
+      const invalid = patch.config ? badRange(patch.config) : null;
+      if (invalid) return json(422, { detail: invalid });
       if (patch.name) s.name = patch.name;
       if (patch.config) s.config = patch.config;
       s.updated_at = now();

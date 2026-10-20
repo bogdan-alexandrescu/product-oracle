@@ -5,70 +5,14 @@ on the next sync. Widening again brings it back.
 The real Slack and GitHub connectors run against httpx.MockTransport providers.
 """
 
-from datetime import UTC, datetime
-from typing import Any
-
 import httpx
 import pytest
 
 from oracle.sources import base
 from oracle.sources.connectors.github import GithubConnector
 from oracle.sources.connectors.slack import SlackConnector
+from tests.slack_world import SlackWorld, ts
 from tests.sources_helpers import client_for, make_connection, make_user
-
-
-def ts(day: str, hour: int = 12) -> str:
-    when = datetime.fromisoformat(day).replace(hour=hour, tzinfo=UTC)
-    return f"{when.timestamp():.6f}"
-
-
-class SlackWorld:
-    """A workspace with two channels; honours ``oldest``/``latest`` as Slack does."""
-
-    def __init__(self):
-        self.channels: dict[str, list[dict[str, Any]]] = {
-            "C0PRODUCT": [
-                {"ts": ts("2025-10-01"), "user": "U0ADA", "text": "kick-off"},
-                {"ts": ts("2025-10-05"), "user": "U0ADA", "text": "pricing idea"},
-                {"ts": ts("2025-10-10"), "user": "U0ADA", "text": "launch plan"},
-            ],
-            "C0ROADMAP": [{"ts": ts("2025-10-03"), "user": "U0ADA", "text": "q4 roadmap"}],
-        }
-        self.replies: dict[str, list[dict[str, Any]]] = {}
-        self.calls: list[tuple[str, dict[str, str]]] = []
-
-    def __call__(self, request: httpx.Request) -> httpx.Response:
-        method = request.url.path.rsplit("/", 1)[-1]
-        params = dict(request.url.params)
-        self.calls.append((method, params))
-        if method == "auth.test":
-            return self.ok(url="https://example.slack.com/")
-        if method == "conversations.info":
-            cid = params["channel"]
-            if cid not in self.channels:
-                return self.ok_false("channel_not_found")
-            name = cid[2:].lower()
-            return self.ok(channel={"id": cid, "name": name, "is_channel": True})
-        if method == "conversations.history":
-            oldest = float(params.get("oldest") or 0)
-            latest = float(params.get("latest") or 1e12)
-            messages = [
-                m for m in self.channels[params["channel"]] if oldest <= float(m["ts"]) < latest
-            ]
-            return self.ok(messages=list(reversed(messages)), response_metadata={})
-        if method == "conversations.replies":
-            return self.ok(messages=self.replies[params["ts"]], response_metadata={})
-        if method == "users.info":
-            return self.ok(user={"id": params["user"], "name": "ada"})
-        raise AssertionError(f"unexpected Slack call {method}")
-
-    @staticmethod
-    def ok(**body: Any) -> httpx.Response:
-        return httpx.Response(200, json={"ok": True, **body})
-
-    @staticmethod
-    def ok_false(error: str) -> httpx.Response:
-        return httpx.Response(200, json={"ok": False, "error": error})
 
 
 class GithubWorld:
@@ -209,6 +153,24 @@ async def test_a_thread_started_before_since_is_deleted(a, tenant_id, alice, sla
     await narrow(a, source, {"channels": ["C0PRODUCT"], "since": "2025-10-02"})
     await sync(a, source)
     assert await removed(a, source) == [f"C0PRODUCT:{parent['ts']}"]
+
+
+async def test_an_earlier_until_deletes_later_messages_but_keeps_threads_in_range(
+    a, tenant_id, alice, slack
+):
+    parent = slack.channels["C0PRODUCT"][1]  # 2025-10-05, replied to on 2025-10-08
+    parent.update(reply_count=1, latest_reply=ts("2025-10-08"), thread_ts=parent["ts"])
+    reply = {"ts": ts("2025-10-08"), "user": "U0ADA", "text": "late", "thread_ts": parent["ts"]}
+    slack.replies[parent["ts"]] = [parent, reply]
+    source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
+    await sync(a, source)
+    assert len(await live(a, source)) == 4
+
+    await narrow(a, source, {"channels": BOTH, "until": "2025-10-06"})
+    result = await sync(a, source)
+    assert result["deleted"] == 1
+    assert await removed(a, source) == [f"C0PRODUCT:{ts('2025-10-10')}"]
+    assert f"C0PRODUCT:{parent['ts']}" in await live(a, source)
 
 
 async def test_removing_a_channel_deletes_its_messages(a, tenant_id, alice, slack):

@@ -118,3 +118,39 @@ test("github picker: search, pick repos, add, edit", async ({ page }) => {
   await repo.getByRole("button", { name: "Save allowlist" }).click();
   await expect(repo).toContainText("example-org/example-app, example-org/docs");
 });
+
+test("slack picker: a date range, since and until", async ({ page }) => {
+  const form = await addForm(page, "slack");
+  const picker = form.getByRole("group", { name: "Slack channels" });
+  await picker.getByRole("checkbox", { name: "#product" }).check();
+  await expect(picker.getByText("Narrowing the range removes messages outside it at the next sync.")).toBeVisible();
+
+  // An until before since is flagged here and refused by the API.
+  await picker.getByLabel("Since").fill("2026-03-01");
+  await picker.getByLabel("Until").fill("2026-02-01");
+  await expect(picker.getByRole("alert")).toHaveText("Until must be on or after Since.");
+  await expect(picker.getByLabel("Until")).toHaveAttribute("min", "2026-03-01");
+  await form.getByLabel("Name").fill("Q1 product chat");
+  await form.getByRole("button", { name: "Add source" }).click();
+  await expect(form.getByText("until must be on or after since")).toBeVisible();
+
+  await picker.getByLabel("Until").fill("2026-03-31");
+  await expect(picker.getByRole("alert")).toHaveCount(0);
+  await form.getByRole("button", { name: "Add source" }).click();
+  const row = page.getByRole("listitem", { name: "Q1 product chat" });
+  await expect(row).toContainText("C0123PRODUCT");
+
+  // Editing reopens the picker with both dates; clearing until keeps since.
+  await row.getByRole("button", { name: "More actions for Q1 product chat" }).click();
+  await row.getByRole("menuitem", { name: "Edit allowlist" }).click();
+  const edit = row.getByRole("group", { name: "Slack channels" });
+  await expect(edit.getByLabel("Since")).toHaveValue("2026-03-01");
+  await expect(edit.getByLabel("Until")).toHaveValue("2026-03-31");
+  await edit.getByLabel("Until").fill("");
+  await row.getByRole("button", { name: "Save allowlist" }).click();
+  await expect(row.getByRole("status")).toHaveText("Allowlist saved.");
+  await row.getByRole("button", { name: "More actions for Q1 product chat" }).click();
+  await row.getByRole("menuitem", { name: "Edit allowlist" }).click();
+  await expect(edit.getByLabel("Since")).toHaveValue("2026-03-01");
+  await expect(edit.getByLabel("Until")).toHaveValue("");
+});

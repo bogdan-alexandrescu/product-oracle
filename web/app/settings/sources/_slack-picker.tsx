@@ -8,14 +8,21 @@ import { api, unwrap } from "@/lib/api/client";
 import { INPUT } from "../_components/fields";
 import { BrowseList, listOf, type BrowsePage, type PickerProps } from "./_browse-list";
 
+const LABEL = "text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2";
+
 /**
  * Slack source picker (S5): public channels and the private ones you are in, never DMs;
- * writes `{channels, since}`. Only messages from `since` (a day, UTC) on are read; moving
- * it later deletes the older ones already pulled in, on the next sync.
+ * writes `{channels, since, until}` (days, UTC; the same range shape as Fireflies). Only
+ * messages from `since` through `until` are read, plus later replies in threads started
+ * inside the range; narrowing the range deletes what falls outside it on the next sync.
  */
 export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
   const sinceId = useId();
+  const untilId = useId();
+  const hintId = useId();
   const since = typeof config.since === "string" ? config.since : "";
+  const until = typeof config.until === "string" ? config.until : "";
+  const backwards = since !== "" && until !== "" && until < since;
 
   async function load(search: string, cursor: string | null): Promise<BrowsePage> {
     const page = await unwrap(
@@ -52,19 +59,52 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
       onPicked={(channels) => onChange({ ...config, channels })}
       load={load}
       extra={
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor={sinceId} className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
-            Since
-          </label>
-          <span className="w-44 max-[600px]:flex-1">
-            <input
-              id={sinceId}
-              type="date"
-              value={since}
-              onChange={(e) => onChange({ ...config, since: e.target.value || undefined })}
-              className={INPUT}
-            />
-          </span>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="flex items-center gap-2 max-[600px]:w-full">
+              <label htmlFor={sinceId} className={`${LABEL} w-10 max-[600px]:w-12`}>
+                Since
+              </label>
+              <span className="w-44 max-[600px]:flex-1">
+                <input
+                  id={sinceId}
+                  type="date"
+                  value={since}
+                  max={until || undefined}
+                  aria-describedby={hintId}
+                  onChange={(e) => onChange({ ...config, since: e.target.value || undefined })}
+                  className={INPUT}
+                />
+              </span>
+            </span>
+            <span className="flex items-center gap-2 max-[600px]:w-full">
+              <label htmlFor={untilId} className={`${LABEL} w-10 max-[600px]:w-12`}>
+                Until
+              </label>
+              <span className="w-44 max-[600px]:flex-1">
+                <input
+                  id={untilId}
+                  type="date"
+                  value={until}
+                  min={since || undefined}
+                  aria-invalid={backwards || undefined}
+                  aria-describedby={hintId}
+                  onChange={(e) => onChange({ ...config, until: e.target.value || undefined })}
+                  className={INPUT}
+                />
+              </span>
+            </span>
+          </div>
+          {backwards ? (
+            <p id={hintId} role="alert" className="text-sm font-medium text-crit">
+              Until must be on or after Since.
+            </p>
+          ) : (
+            <p id={hintId} className="text-[13px] leading-5 text-text2">
+              Optional, in UTC. Later replies in threads started in the range are kept. Narrowing the range removes
+              messages outside it at the next sync.
+            </p>
+          )}
         </div>
       }
     />
