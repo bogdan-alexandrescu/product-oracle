@@ -59,7 +59,7 @@ def test_chains_on_the_roadmap_head():
     assert script.get_revision(REVISION).down_revision == "0016_roadmap"
     # 0017_citation_source_oracle chains on it, and the sources lane's 0016 migrations on
     # that; still a single head.
-    assert script.get_heads() == ["0016_browse_calls"]
+    assert script.get_heads() == ["0017_item_provenance"]
     assert script.get_revision("0017_citation_source_oracle").down_revision == REVISION
 
 
