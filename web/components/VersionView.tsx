@@ -24,6 +24,7 @@ import { ReviewPanel, type PanelTab } from "@/components/review/ReviewPanel";
 import { RoleNote } from "@/components/RoleNote";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { SectionView } from "@/components/SectionView";
+import { BuildDraftButton } from "@/components/NextDraft";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -148,8 +149,13 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
   useEffect(() => {
     const h = window.location.hash || null;
     scrolledTo.current = null;
-    const toFeedback = new URLSearchParams(window.location.search).get("feedback") === "open";
+    const params = new URLSearchParams(window.location.search);
+    // ?feedback=open or ?feedback=staged (the Inbox's link for a document whose items are all staged).
+    const feedbackParam = params.get("feedback");
+    const toFeedback = feedbackParam === "open" || feedbackParam === "staged";
     arrivedAtFeedback.current = toFeedback;
+    // ?tab=reports: where applying a next draft lands, on the version's History (C1e).
+    const toHistory = params.get("tab") === "reports";
     // Next writes an in-app navigation's URL, #hash included, only once the new page has
     // committed, so the hash cannot be read while rendering: read it here. This also runs
     // when Next shows a kept route again.
@@ -158,10 +164,12 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     setHashLink(h ? { n, hash: h } : null);
     if (toFeedback) {
       setTab("feedback");
-      setFilters({ ...DEFAULT_FILTERS, state: "open", scope: "all" });
+      setFilters({ ...DEFAULT_FILTERS, state: feedbackParam === "staged" ? "staged" : "open", scope: "all" });
       setFeedbackFocus(true);
       // On a phone the panel lives in the Review sheet.
       if (window.matchMedia("(max-width: 639px)").matches) setSheet("review");
+    } else if (toHistory) {
+      setTab("history");
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [doc, n]);
@@ -470,6 +478,8 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+      // Not inside a dialog (the sheets, the build sheet, the switcher): its keys are its own.
+      if ((e.target as HTMLElement | null)?.closest?.("[role=dialog]")) return;
       if (e.key === "/") {
         e.preventDefault();
         focusFilter();
@@ -579,6 +589,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       )),
   });
 
+  // A section is locked once its version is approved; before that an approved section is 'Approved'.
   const lockedCount = version?.sections.filter((s) => s.verdict?.verdict === "approved").length ?? 0;
   const reviewedCount = version?.sections.filter((s) => s.verdict).length ?? 0;
   const reviewedShown = shownSections.filter((s) => s.verdict).length;
@@ -706,7 +717,7 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
       version={version}
       doc={doc}
       n={n}
-      stats={{ reviewed: reviewedCount, total: sections.length, locked: lockedCount, openFeedback }}
+      stats={{ reviewed: reviewedCount, total: sections.length, locked: lockedCount, lockedLabel: version?.approved_at ? "Locked" : "Approved", openFeedback }}
       openFeedback={openFeedback}
       tab={tab}
       setTab={openTab}
@@ -783,32 +794,36 @@ export function VersionView({ doc, n }: { doc: string; n: number }) {
             </>
           }
           action={
-            version &&
-            (version.approved_at || canDecide) &&
-            (document_?.kind === "prd" && !version.approved_at ? (
-              // T2 publish gate: a PRD is published from the Publish screen, latest version only.
-              <LinkButton
-                variant="primary"
-                icon="check"
-                href={`/documents/${doc}/publish`}
-                aria-description={n !== latest && latest != null ? `Publishes v${latest}, the latest version` : undefined}
-                data-testid="publish-link"
-              >
-                Publish
-              </LinkButton>
-            ) : (
-              <ApproveButton
-                doc={doc}
-                n={n}
-                approvedAt={version.approved_at}
-                isLatest={n === latest}
-                blockedReason={approveBlocked}
-                onApproved={() => {
-                  verQ.reload();
-                  docQ.reload();
-                }}
-              />
-            ))
+            <>
+              {/* C1e: accepted changes staged for the next draft, built in one job. */}
+              {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
+              {version &&
+                (version.approved_at || canDecide) &&
+                (document_?.kind === "prd" && !version.approved_at ? (
+                  // T2 publish gate: a PRD is published from the Publish screen, latest version only.
+                  <LinkButton
+                    variant="primary"
+                    icon="check"
+                    href={`/documents/${doc}/publish`}
+                    aria-description={n !== latest && latest != null ? `Publishes v${latest}, the latest version` : undefined}
+                    data-testid="publish-link"
+                  >
+                    Publish
+                  </LinkButton>
+                ) : (
+                  <ApproveButton
+                    doc={doc}
+                    n={n}
+                    approvedAt={version.approved_at}
+                    isLatest={n === latest}
+                    blockedReason={approveBlocked}
+                    onApproved={() => {
+                      verQ.reload();
+                      docQ.reload();
+                    }}
+                  />
+                ))}
+            </>
           }
         />
 

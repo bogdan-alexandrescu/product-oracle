@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { login } from "./helpers";
 
-test("inbox lists checkpoints, cost approvals, overruns and open feedback", async ({ page }) => {
+test("inbox lists checkpoints, cost approvals, overruns and feedback by state", async ({ page }) => {
   await login(page);
   await page.getByTestId("nav-inbox").click();
   await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
@@ -12,9 +12,13 @@ test("inbox lists checkpoints, cost approvals, overruns and open feedback", asyn
   await expect(checkpoints).toContainText("Baseline proposal");
   await expect(page.getByTestId("inbox-approvals")).toContainText("usage-alerts-v2");
   await expect(page.getByTestId("inbox-overruns")).toContainText("Spent $14.20 of $9.00 estimated");
-  const feedback = page.getByTestId("inbox-feedback");
-  await expect(feedback).toContainText("Checkout redesign PRD");
-  await expect(feedback).toContainText("1 comment to resolve");
+  // One list by state (C1e): New is the default tab, everything new on a first visit.
+  await expect(page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ })).toHaveAttribute("aria-selected", "true");
+  const feedback = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback");
+  // Feedback is one row per item, with its document and what to do.
+  const comment = feedback.locator("tr[data-row]").filter({ hasText: "Should the most recently used address be selected by default?" });
+  await expect(comment).toContainText("Checkout redesign PRD");
+  await expect(comment.getByRole("link", { name: /^Review comments/ })).toBeVisible();
 
   // Approve the cost from the inbox: the run starts and leaves the list.
   await page.getByTestId("inbox-approvals").getByRole("button", { name: "Approve $53.00" }).click();
@@ -64,7 +68,9 @@ test("inbox: retry importing a run's output Oracle stopped trying to import", as
   await expect(imports).toContainText("Couldn't import team-onboarding's output: DataError");
   await imports.getByRole("link").click();
   await expect(page.getByTestId("run-import-failed")).toContainText("DataError");
+  // A second visit: the row is Open.
   await page.goto("/inbox");
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
   await page.getByTestId("inbox-imports").getByRole("button", { name: "Retry" }).click();
   await expect(page.getByTestId("inbox-imports")).toHaveCount(0);
 });

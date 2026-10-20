@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import type { CitationOut } from "@/lib/api/client";
 import { IGNORE_ATTR } from "@/lib/anchor";
-import { formatDate, SOURCE_LABEL } from "@/lib/format";
+import { citationHref, formatDate, SOURCE_LABEL } from "@/lib/format";
 
 /**
  * Inline citation: shows the source; hover or focus previews title and excerpt,
@@ -16,6 +16,7 @@ export function CitationChip({ citeKey, citation, number }: { citeKey: string; c
   const ref = useRef<HTMLSpanElement>(null);
   const cardId = useId();
   const open = hover || pinned;
+  const href = citation ? citationHref(citation) : null;
 
   useEffect(() => {
     if (!pinned) return;
@@ -77,14 +78,21 @@ export function CitationChip({ citeKey, citation, number }: { citeKey: string; c
             {citation.excerpt && (
               <span className="mt-2 block border-l-[3px] border-accent-mid pl-2 text-text2">“{citation.excerpt}”</span>
             )}
-            <a
-              href={citation.ref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent-ink hover:underline"
-            >
-              Open source ↗
-            </a>
+            {href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent-ink hover:underline"
+              >
+                Open source ↗
+              </a>
+            ) : (
+              // A baseline item named in free text: no link to open.
+              <span className="mt-2 block font-mono text-[13px] text-text2" data-testid="cite-ref">
+                {citation.ref}
+              </span>
+            )}
           </span>
         </span>
       )}

@@ -42,7 +42,8 @@ type OutlineNode = {
  * (its title) stays a row of its own, so its chapters are the roots rather than one fold.
  */
 export function buildOutline(sections: SectionOut[]): OutlineNode[] {
-  const top = Math.min(...sections.map((s) => s.level));
+  // reduce, not Math.min(...spread): no argument limit on a long document.
+  const top = sections.reduce((m, s) => Math.min(m, s.level), Infinity);
   const titled = sections.length > 1 && sections[0].level === top && sections.filter((s) => s.level === top).length === 1;
   const nodes: OutlineNode[] = [];
   const stack: OutlineNode[] = [];
@@ -519,12 +520,17 @@ function usePopoverBox(open: boolean, trigger: RefObject<HTMLElement | null>) {
       if (below >= 280 || below >= above) setBox({ top: t.bottom + 6, left, width, maxHeight: Math.max(160, below) });
       else setBox({ bottom: vh - t.top + 6, left, width, maxHeight: above });
     };
+    // Scrolling the popover's own list does not move its trigger: only other scrolls place it again.
+    const onScroll = (e: Event) => {
+      if (e.target instanceof Element && e.target.closest("[data-testid=switcher-popover]")) return;
+      place();
+    };
     place();
     window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [open, trigger]);
   return box;

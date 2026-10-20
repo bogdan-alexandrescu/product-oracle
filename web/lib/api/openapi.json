@@ -2026,6 +2026,323 @@
         }
       }
     },
+    "/v1/documents/{doc}/staged-changes": {
+      "get": {
+        "tags": [
+          "llm-jobs"
+        ],
+        "summary": "List Staged Changes",
+        "description": "Accepted suggestions waiting for the next draft, from whichever draft they were\nraised on, with who accepted them and when, and the build in progress if any.",
+        "operationId": "list_staged_changes",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "include_gone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also list staged items whose section is gone",
+              "default": false,
+              "title": "Include Gone"
+            },
+            "description": "Also list staged items whose section is gone"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedChanges"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/next-draft": {
+      "post": {
+        "tags": [
+          "llm-jobs"
+        ],
+        "summary": "Build Next Draft",
+        "description": "Build the next draft: one job rewrites every section the chosen staged suggestions\ntouch (default: all staged), over the latest version. Locked sections are refused\n(409, naming them).",
+        "operationId": "build_next_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NextDraftIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/next-draft/{job_id}": {
+      "get": {
+        "tags": [
+          "llm-jobs"
+        ],
+        "summary": "Preview Next Draft",
+        "description": "The combined preview: each revised section with its word diff, notes and\nresolutions. Sections are empty until the build has finished.",
+        "operationId": "preview_next_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextDraftPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/next-draft/{job_id}/apply": {
+      "post": {
+        "tags": [
+          "llm-jobs"
+        ],
+        "summary": "Apply Next Draft",
+        "description": "Apply as ONE new version, without the dropped sections (they stay staged).\nRefused (409) when a newer version appeared since the build started.",
+        "operationId": "apply_next_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NextDraftApply"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{doc}/next-draft/{job_id}/discard": {
+      "post": {
+        "tags": [
+          "llm-jobs"
+        ],
+        "summary": "Discard Next Draft",
+        "description": "Discard a build (cancel it while it runs); every staged item stays staged.",
+        "operationId": "discard_next_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/documents/{doc}/suggestions": {
       "get": {
         "tags": [
@@ -9108,6 +9425,67 @@
         }
       }
     },
+    "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Draft Import",
+        "description": "Import a segment's draft again after its import at segment end was refused\n(``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).\nWhile the run waits at that segment's review: the review's approver role or above, and\nnothing is decided (the review stays open for a person). After the run finished with\nthe review approved past the refusal: owners only, while no version from the run\nexists; the run's checkpoints do not change. Imported, the run names the document and\nthe error is replaced by the import; refused again, by the new error (200 either way:\nread ``draft_import``). 409 when there is nothing to retry (imported already, a version\nfrom the run exists, no draft file, changes requested, the run cancelled or failed).\nAudited. Not the stopped advance of ``retry_import_run``.",
+        "operationId": "retry_draft_import",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "seq",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Seq"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runs/{run_id}/cancel-again": {
       "post": {
         "tags": [
@@ -9228,7 +9606,7 @@
           "runs"
         ],
         "summary": "Decide Checkpoint",
-        "description": "Approve a checkpoint (the next segment starts) or request changes (the segment\nruns again with the note).",
+        "description": "Approve a checkpoint (the next segment starts) or request changes (the segment\nruns again with the note). Approving is refused (409) while the draft its segment left\nis not imported (``cannot_approve``): retry the import, or request changes.",
         "operationId": "decide_checkpoint",
         "security": [
           {
@@ -9369,8 +9747,30 @@
           "runs"
         ],
         "summary": "Get Inbox",
-        "description": "What waits on me: checkpoints for my role, runs waiting for an owner's approval\nor overrun decision, and open feedback on documents I can approve.",
+        "description": "What waits on me: checkpoints for my role, runs waiting for an owner's approval\nor overrun decision, and feedback on documents I can approve, by state (new, open,\nstaged for the next draft, declined, done) with the staged rows per document.",
         "operationId": "get_inbox",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mark_seen",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Record this visit as my last one (what 'new' is measured from)",
+              "default": false,
+              "title": "Mark Seen"
+            },
+            "description": "Record this visit as my last one (what 'new' is measured from)"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -9381,16 +9781,18 @@
                 }
               }
             }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
           },
-          {
-            "APIKeyCookie": []
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        ]
+        }
       }
     },
     "/v1/internal/tick": {
@@ -23198,6 +23600,17 @@
             "title": "Can Decide",
             "default": false
           },
+          "cannot_approve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cannot Approve"
+          },
           "console": {
             "anyOf": [
               {
@@ -23265,7 +23678,8 @@
               "github",
               "fireflies",
               "upload",
-              "web"
+              "web",
+              "oracle"
             ],
             "title": "Source"
           },
@@ -28955,6 +29369,28 @@
                 "type": "null"
               }
             ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "staged",
+              "declined",
+              "done"
+            ],
+            "title": "State",
+            "default": "open"
+          },
+          "staged_for_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged For Version"
           }
         },
         "type": "object",
@@ -30042,6 +30478,17 @@
             "title": "Can Decide",
             "default": false
           },
+          "cannot_approve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cannot Approve"
+          },
           "console": {
             "anyOf": [
               {
@@ -30102,6 +30549,37 @@
           "flow_title"
         ],
         "title": "InboxCheckpoint"
+      },
+      "InboxCounts": {
+        "properties": {
+          "new": {
+            "type": "integer",
+            "title": "New",
+            "default": 0
+          },
+          "open": {
+            "type": "integer",
+            "title": "Open",
+            "default": 0
+          },
+          "staged": {
+            "type": "integer",
+            "title": "Staged",
+            "default": 0
+          },
+          "declined": {
+            "type": "integer",
+            "title": "Declined",
+            "default": 0
+          },
+          "done": {
+            "type": "integer",
+            "title": "Done",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "InboxCounts"
       },
       "InboxDocument": {
         "properties": {
@@ -30237,6 +30715,108 @@
             "format": "date-time",
             "title": "Created At"
           },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "staged",
+              "declined",
+              "done"
+            ],
+            "title": "State",
+            "default": "open"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "resolution_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Note"
+          },
+          "addressed_in_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Addressed In Version"
+          },
+          "staged_for_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged For Version"
+          },
           "suggestion_status": {
             "anyOf": [
               {
@@ -30254,6 +30834,17 @@
               }
             ],
             "title": "Suggestion Status"
+          },
+          "suggestion_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Kind"
           }
         },
         "type": "object",
@@ -30323,6 +30914,49 @@
           "total": {
             "type": "integer",
             "title": "Total"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InboxFeedbackItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "counts": {
+            "$ref": "#/components/schemas/InboxCounts",
+            "default": {
+              "new": 0,
+              "open": 0,
+              "staged": 0,
+              "declined": 0,
+              "done": 0
+            }
+          },
+          "staged": {
+            "items": {
+              "$ref": "#/components/schemas/InboxStaged"
+            },
+            "type": "array",
+            "title": "Staged",
+            "default": []
+          },
+          "needs_me": {
+            "type": "integer",
+            "title": "Needs Me",
+            "default": 0
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
           }
         },
         "type": "object",
@@ -30334,6 +30968,80 @@
           "total"
         ],
         "title": "InboxOut"
+      },
+      "InboxStaged": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "next_version": {
+            "type": "integer",
+            "title": "Next Version"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "gone_count": {
+            "type": "integer",
+            "title": "Gone Count",
+            "default": 0
+          },
+          "draft_job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Job Id"
+          },
+          "draft_job_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Job Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "slug",
+          "title",
+          "next_version",
+          "count"
+        ],
+        "title": "InboxStaged",
+        "description": "'N changes staged for draft N+1' on one document, with the build action."
       },
       "InspectedModule": {
         "properties": {
@@ -32458,7 +33166,8 @@
               "review_comments",
               "reporting",
               "refinement",
-              "quality_review"
+              "quality_review",
+              "refinement_batch"
             ],
             "title": "Kind"
           },
@@ -33815,6 +34524,300 @@
           "added_at"
         ],
         "title": "NewSource"
+      },
+      "NextDraftApply": {
+        "properties": {
+          "drop_sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Drop Sections",
+            "default": []
+          },
+          "edits": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Edits",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "title": "NextDraftApply"
+      },
+      "NextDraftDataPoint": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of",
+            "default": ""
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "NextDraftDataPoint"
+      },
+      "NextDraftFeedback": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "summary"
+        ],
+        "title": "NextDraftFeedback"
+      },
+      "NextDraftIn": {
+        "properties": {
+          "suggestion_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Ids"
+          }
+        },
+        "type": "object",
+        "title": "NextDraftIn"
+      },
+      "NextDraftPreview": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/LlmJobOut"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
+          "next_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Version"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale",
+            "default": false
+          },
+          "applied_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Version"
+          },
+          "discarded": {
+            "type": "boolean",
+            "title": "Discarded",
+            "default": false
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/NextDraftSection"
+            },
+            "type": "array",
+            "title": "Sections",
+            "default": []
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedSection"
+            },
+            "type": "array",
+            "title": "Skipped",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "job"
+        ],
+        "title": "NextDraftPreview",
+        "description": "The combined preview of a next-draft build: one entry per revised section.\n\nSections are empty until the job has succeeded (``job.status`` says where it is)."
+      },
+      "NextDraftResolution": {
+        "properties": {
+          "feedback_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feedback Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "addressed",
+              "declined"
+            ],
+            "title": "Status"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feedback_id",
+          "status"
+        ],
+        "title": "NextDraftResolution"
+      },
+      "NextDraftSection": {
+        "properties": {
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "before_heading": {
+            "type": "string",
+            "title": "Before Heading"
+          },
+          "before_body_md": {
+            "type": "string",
+            "title": "Before Body Md"
+          },
+          "body_md": {
+            "type": "string",
+            "title": "Body Md"
+          },
+          "words": {
+            "items": {
+              "$ref": "#/components/schemas/WordOp"
+            },
+            "type": "array",
+            "title": "Words"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          },
+          "o1c_fixes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "O1C Fixes",
+            "default": []
+          },
+          "data_points": {
+            "items": {
+              "$ref": "#/components/schemas/NextDraftDataPoint"
+            },
+            "type": "array",
+            "title": "Data Points",
+            "default": []
+          },
+          "resolutions": {
+            "items": {
+              "$ref": "#/components/schemas/NextDraftResolution"
+            },
+            "type": "array",
+            "title": "Resolutions",
+            "default": []
+          },
+          "suggestion_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Suggestion Ids",
+            "default": []
+          },
+          "feedback": {
+            "items": {
+              "$ref": "#/components/schemas/NextDraftFeedback"
+            },
+            "type": "array",
+            "title": "Feedback",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_key",
+          "heading",
+          "before_heading",
+          "before_body_md",
+          "body_md",
+          "words"
+        ],
+        "title": "NextDraftSection"
       },
       "NextMilestone": {
         "properties": {
@@ -40287,6 +41290,11 @@
               }
             ]
           },
+          "can_retry_draft_import": {
+            "type": "boolean",
+            "title": "Can Retry Draft Import",
+            "default": false
+          },
           "items_check": {
             "anyOf": [
               {
@@ -40396,6 +41404,39 @@
           "is_default"
         ],
         "title": "SettingOut"
+      },
+      "SkippedSection": {
+        "properties": {
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "suggestion_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Suggestion Ids",
+            "default": []
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "SkippedSection"
       },
       "SlideOut": {
         "properties": {
@@ -41583,6 +42624,171 @@
           "approach_status"
         ],
         "title": "SpecVersionOut"
+      },
+      "StagedChange": {
+        "properties": {
+          "suggestion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Suggestion Id"
+          },
+          "feedback_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feedback Item Id"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "section_heading": {
+            "type": "string",
+            "title": "Section Heading"
+          },
+          "feedback_summary": {
+            "type": "string",
+            "title": "Feedback Summary"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "accepted_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted By"
+          },
+          "accepted_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted By Name"
+          },
+          "accepted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "raised_on_version": {
+            "type": "integer",
+            "title": "Raised On Version"
+          },
+          "suggested_on_version": {
+            "type": "integer",
+            "title": "Suggested On Version"
+          },
+          "section_gone": {
+            "type": "boolean",
+            "title": "Section Gone",
+            "default": false
+          },
+          "section_locked": {
+            "type": "boolean",
+            "title": "Section Locked",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "suggestion_id",
+          "feedback_item_id",
+          "section_key",
+          "section_heading",
+          "feedback_summary",
+          "text",
+          "raised_on_version",
+          "suggested_on_version"
+        ],
+        "title": "StagedChange",
+        "description": "An accepted section-text suggestion not applied in any draft yet."
+      },
+      "StagedChanges": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "next_version": {
+            "type": "integer",
+            "title": "Next Version"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StagedChange"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "gone_count": {
+            "type": "integer",
+            "title": "Gone Count",
+            "default": 0
+          },
+          "estimate_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Usd"
+          },
+          "draft_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LlmJobOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "slug",
+          "next_version",
+          "items"
+        ],
+        "title": "StagedChanges"
       },
       "StakeholderAnswerOut": {
         "properties": {

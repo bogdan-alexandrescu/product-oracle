@@ -10,7 +10,7 @@ import { FeedbackList } from "@/components/review/FeedbackList";
 import { TabBar } from "@/components/review/parts";
 import { ErrorNote, Loading, SpecStateBadge } from "@/components/ui";
 import type { CitationOut, VersionOut } from "@/lib/api/client";
-import { formatDateTime, SOURCE_LABEL } from "@/lib/format";
+import { citationHref, formatDateTime, SOURCE_LABEL } from "@/lib/format";
 
 export type PanelTab = "feedback" | "sources" | "history";
 
@@ -43,7 +43,7 @@ export function ReviewPanel({
   version: VersionOut | undefined;
   doc: string;
   n: number;
-  stats: { reviewed: number; total: number; locked: number; openFeedback: number | null };
+  stats: { reviewed: number; total: number; locked: number; lockedLabel?: string; openFeedback: number | null };
   tab: PanelTab;
   setTab: (t: PanelTab) => void;
   feedback: FeedbackProps;
@@ -80,7 +80,7 @@ export function ReviewPanel({
             {(
               [
                 ["Reviewed", `${stats.reviewed}/${stats.total}`, "stat-reviewed"],
-                ["Locked", stats.locked, "stat-locked"],
+                [stats.lockedLabel ?? "Locked", stats.locked, "stat-locked"],
                 ["Open feedback", stats.openFeedback ?? "–", "stat-open-feedback"],
               ] as const
             ).map(([label, value, testId]) => (
@@ -118,19 +118,27 @@ export function ReviewPanel({
 const ADDED_SOURCE_LABEL = "Proposed · added in an edit";
 
 function sourceRow(c: CitationOut, number: number) {
+  const href = citationHref(c);
   return (
     <li key={c.id} className="flex min-h-8 min-w-0 items-center gap-2.5 text-sm max-[639px]:min-h-11">
       <span className="tnum w-5 flex-none text-right font-semibold text-text2">{number}</span>
       <span className="flex-none text-[13px] font-semibold text-text2">{SOURCE_LABEL[c.source]}</span>
-      <a
-        href={c.ref}
-        target="_blank"
-        rel="noopener noreferrer"
-        title={c.title ?? c.ref}
-        className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
-      >
-        {c.title ?? c.ref}
-      </a>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={c.title ?? c.ref}
+          className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
+        >
+          {c.title ?? c.ref}
+        </a>
+      ) : (
+        // A baseline item named in free text (source oracle): its ref on hover, no link.
+        <span title={c.ref} className="min-w-0 truncate font-medium text-text">
+          {c.title ?? c.ref}
+        </span>
+      )}
     </li>
   );
 }
@@ -199,13 +207,15 @@ function SourcesTab({ version }: { version: VersionOut }) {
 }
 
 function HistoryTab({ doc, n, refreshKey, goTo }: { doc: string; n: number; refreshKey: number; goTo?: GoTo }) {
+  // ?tab=reports (where applying a next draft lands, C1e): Reports opens on What changed.
+  const [landed] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "reports");
   return (
     <div className="flex flex-col" data-testid="history">
       <Fold title="Resolutions" testId="history-resolutions">
         <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} />
       </Fold>
       <Fold title="Reports" testId="history-reports">
-        <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} />
+        <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} initialTab={landed ? "changes" : "resolution"} />
       </Fold>
       <Fold title="Jobs" testId="history-jobs">
         <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />

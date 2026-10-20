@@ -132,6 +132,7 @@ from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import VersionSource
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
+from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import schedule
@@ -147,10 +148,12 @@ from oracle.runs.schemas import (
     FlowOut,
     FlowSegmentOut,
     InboxCheckpoint,
+    InboxCounts,
     InboxDocument,
     InboxFeedbackCounts,
     InboxFeedbackItem,
     InboxOut,
+    InboxStaged,
     ItemsCheck,
     KnobsIn,
     KnobsOut,
@@ -177,7 +180,7 @@ from oracle.swarm import (
     get_runtime,
     redact,
 )
-from oracle.swarm.runtime import MERGE, NOT_REACHED_STATES, NOT_YET
+from oracle.swarm.runtime import MERGE, NOT_YET, not_reached
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates import service as templates_service
 from oracle.templates.builtins import (
@@ -617,11 +620,16 @@ def _checkpoint_out(cp: Checkpoint, principal: Principal | None) -> CheckpointOu
         can_decide=cp.status == "pending"
         and principal is not None
         and has_role(principal.role, cp.approver_role),  # type: ignore[arg-type]
+        cannot_approve=_cannot_approve(cp),
     )
 
 
 def _segment_out(
-    run: Run, segment: RunSegment, knobs: flows.Knobs, kind: str = "prd"
+    run: Run,
+    segment: RunSegment,
+    knobs: flows.Knobs,
+    kind: str = "prd",
+    can_retry_draft_import: bool = False,
 ) -> SegmentOut:
     sdef = _flow(run).segment(segment.name)
     art = segment.artifacts or {}
@@ -643,6 +651,7 @@ def _segment_out(
         artifacts=sorted((art.get("files") or {}).keys()),
         attempts=[SegmentAttempt(**a) for a in art.get("attempts") or []],
         draft_import=DraftImport(**imp) if imp else None,
+        can_retry_draft_import=can_retry_draft_import,
         items_check=ItemsCheck(**check) if check else None,
         started_at=segment.started_at,
         finished_at=segment.finished_at,
@@ -659,6 +668,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     kind = await _target_kind(db, run)
     snapshot = await db.get(Snapshot, run.snapshot_id) if run.snapshot_id else None
     waiting = next((c for c in checkpoints if c.status == "pending"), None)
+    retries = _draft_retries(run, segments, checkpoints, kind, principal)
     runtime = get_runtime()
     notes: list[str] = []
     for s in segments:
@@ -684,7 +694,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         overrun_ceiling_usd=_usd(_ceiling(run)),
         runtime=runtime.name,
         notes=notes,
-        segments=[_segment_out(run, s, knobs, kind) for s in segments],
+        segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
         checkpoints=[_checkpoint_out(c, principal) for c in checkpoints],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
     )
@@ -809,8 +819,8 @@ async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
 
 async def _read_hold(key: _HoldKey) -> str | None:
     """One live read of a workflow's status: whether it reached a review step no
-    checkpoint stands for yet (in any state but :data:`NOT_REACHED_STATES`, or not
-    listed). Bounded by :data:`HOLD_READ_SECONDS`; a read-only answer
+    checkpoint stands for yet (not :func:`not_reached`, or not listed).
+    Bounded by :data:`HOLD_READ_SECONDS`; a read-only answer
     is kept for :data:`HOLD_CACHE_SECONDS`."""
     run_id, workflow_id, reviews = key
     held: str | None = None
@@ -828,13 +838,14 @@ async def _read_hold(key: _HoldKey) -> str | None:
     else:
         for review in reviews:
             step = status.step(review)
-            if step is None or step.state not in NOT_REACHED_STATES:
+            if step is None or not not_reached(step):
                 log.info(
-                    "run %s: token read-only, step %s of %s is %s",
+                    "run %s: token read-only, step %s of %s is %s (park reason %s)",
                     run_id,
                     review,
                     workflow_id,
                     step.state if step else "not listed",
+                    step.park_reason if step else None,
                 )
                 held = HOLD_DECISION
                 break
@@ -4355,6 +4366,9 @@ async def decide_checkpoint(
             )
             await db.commit()
             return
+    if decision == "approved" and (blocked := _cannot_approve(cp)):
+        # Approve, a confirmed console approval and Continue alike: nothing is decided.
+        raise RunError(blocked)
     if decision == "changes_requested" and not note:
         raise Invalid("say what to change: a note is required to request changes")
     cp.status = decision
@@ -5130,6 +5144,183 @@ async def retry_import(db: AsyncSession, principal: Principal, run_id: uuid.UUID
     await db.commit()
 
 
+def _review_of(checkpoints: list[Checkpoint], seq: int) -> Checkpoint | None:
+    """The segment's latest checkpoint (its review), open or decided."""
+    ours = [c for c in checkpoints if (c.payload or {}).get("segment_seq") == seq]
+    return ours[-1] if ours else None
+
+
+# Approving a review is refused while its draft is not imported (owner, 2026-10-20): a
+# run approved past a refused draft finished with no document.
+NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
+
+
+def _cannot_approve(cp: Checkpoint) -> str | None:
+    """Why approving this checkpoint is refused now (web, Inbox and MCP alike): the draft
+    its segment left was refused at import (until Retry import imports it)."""
+    imp = (cp.payload or {}).get("import")
+    if cp.status == "pending" and isinstance(imp, dict) and imp.get("error"):
+        return NOT_IMPORTED
+    return None
+
+
+def _run_version(segments: list[RunSegment], checkpoints: list[Checkpoint]) -> str | None:
+    """A document version this run imported, any attempt (each attempt's import is on its
+    checkpoint's payload, the current one on its segment), as ``slug vN``."""
+    imports = [(s.artifacts or {}).get("import") for s in segments]
+    imports += [(c.payload or {}).get("import") for c in checkpoints]
+    for imp in imports:
+        if isinstance(imp, dict) and imp.get("version") is not None and not imp.get("error"):
+            return f"{imp.get('slug')} v{imp['version']}"
+    return None
+
+
+def _draft_retry_refusal(
+    run: Run,
+    segment: RunSegment,
+    review: Checkpoint | None,
+    kind: str,
+    version: str | None,
+) -> str | None:
+    """Why the segment's draft cannot be imported again now; None when it can: its import
+    at segment end was refused, its draft file is kept, and either the run waits at its
+    review, or the run finished (its review approved past the refusal) with no version
+    imported by any of its attempts (``version``)."""
+    name = flows.draft_file(kind)
+    if not _flow(run).segment(segment.name).imports_draft:
+        return f"{segment.name} imports no draft"
+    art = segment.artifacts or {}
+    imp = art.get("import")
+    if not isinstance(imp, dict) or not imp.get("error"):
+        if isinstance(imp, dict) and imp.get("version") is not None:
+            return f"{name} of {segment.name} was imported ({imp.get('slug')} v{imp['version']})"
+        return f"no import of {segment.name}'s {name} was refused"
+    if run.status in ("cancelled", "failed"):
+        return "the run was cancelled" if run.status == "cancelled" else "the run failed"
+    if run.status == "succeeded":
+        if review is None or review.status == "pending":
+            return f"{segment.name} has no decided review"
+        if version is not None:
+            return f"a version from this run exists ({version})"
+    elif review is not None and review.status != "pending":
+        return f"{segment.name}'s review was decided ({review.status}); it is not waiting"
+    elif review is None or run.status != "awaiting_checkpoint":
+        return f"the run is {run.status}, not waiting at {segment.name}'s review"
+    if (art.get("files") or {}).get(name) is None:
+        return f"the segment left no {name} to import"
+    return None
+
+
+def _draft_retry_role(review: Checkpoint | None) -> str:
+    """Who retries: the review's approver role or above while the run waits at it; once
+    the run finished, owners only."""
+    if review is not None and review.status == "pending":
+        return review.approver_role
+    return "owner"
+
+
+def _draft_retries(
+    run: Run,
+    segments: list[RunSegment],
+    checkpoints: list[Checkpoint],
+    kind: str,
+    principal: Principal | None,
+) -> set[int]:
+    """The segments whose refused draft ``principal`` may import again now (the run page's
+    Retry import)."""
+    if principal is None:
+        return set()
+    version = _run_version(segments, checkpoints)
+    out: set[int] = set()
+    for s in segments:
+        review = _review_of(checkpoints, s.seq)
+        if _draft_retry_refusal(run, s, review, kind, version) is None and has_role(
+            principal.role,
+            _draft_retry_role(review),  # type: ignore[arg-type]
+        ):
+            out.add(s.seq)
+    return out
+
+
+async def retry_draft_import(
+    db: AsyncSession, principal: Principal, run_id: uuid.UUID, seq: int
+) -> None:
+    """Retry import from the run page (owner, 2026-10-20): the draft a segment left, whose
+    import at segment end was refused, is imported again as at segment end (an Oracle that
+    now accepts it, or a cause that went away).
+
+    While the run waits at that segment's review: by the review's approver role or above;
+    the review stays open and its SwarmCloud wait is untouched, so the person still
+    decides. After the run finished (the review was approved past the refusal, before that
+    was refused): owners only, while no version from any of the run's attempts exists; the
+    run's checkpoints do not change, and the new version goes through the document's own
+    review. Refused on a cancelled or failed run.
+
+    Imported, the run names the document and the import replaces the error on the segment
+    and in the review's payload; refused again, the new error replaces the old. Either way
+    noted on the segment and audited. Once imported there is nothing to retry (409).
+    The run's row stays locked through the import, so a second retry waits and then finds
+    nothing to retry."""
+    run = await _get_run(db, run_id, lock=True)
+    segments = await _segments(db, run.id)
+    segment = next((s for s in segments if s.seq == seq), None)
+    if segment is None:
+        raise NotFound(f"run {run_id} has no segment {seq}")
+    checkpoints = await _checkpoints(db, [run.id])
+    review = _review_of(checkpoints, seq)
+    kind = await _target_kind(db, run)
+    refusal = _draft_retry_refusal(run, segment, review, kind, _run_version(segments, checkpoints))
+    if refusal is not None or review is None:
+        raise RunError(f"nothing to retry: {refusal}")
+    role = _draft_retry_role(review)
+    if not has_role(principal.role, role):  # type: ignore[arg-type]
+        if role == "owner":
+            raise Forbidden("Only an owner can retry importing the draft of a finished run")
+        raise Forbidden(f"Requires the {role} role")
+    finished = run.status == "succeeded"
+    name = flows.draft_file(kind)
+    art = _art(segment)
+    previous = art["import"]["error"]
+    imported = await _import_draft(db, run, kind, art["files"][name])
+    who = "An owner" if principal.role == "owner" else "An approver"
+    after = " after the run finished" if finished else ""
+    if imported.get("document_id"):
+        # As at segment end (:func:`_advance`).
+        run.document_id = uuid.UUID(imported["document_id"])
+        _set_knob(run, "document_slug", None)
+        _note_art(
+            art,
+            f"{who} retried importing {name}{after}: imported as {imported.get('slug')} "
+            f"v{imported.get('version')}.",
+        )
+    else:
+        _note_art(
+            art,
+            f"{who} retried importing {name}{after}: still not imported (the segment shows why).",
+        )
+    art["import"] = imported
+    _set_art(segment, art)
+    review.payload = {**(review.payload or {}), "import": imported}
+    await audit.record(
+        db,
+        principal,
+        "run.draft_import_retried",
+        "run",
+        run.id,
+        {
+            "segment": segment.name,
+            "seq": seq,
+            "file": name,
+            "run_status": run.status,
+            "previous_error": previous,
+            "error": imported.get("error"),
+            "document_id": imported.get("document_id"),
+            "version": imported.get("version"),
+        },
+    )
+    await db.commit()
+
+
 async def cancel_again(
     db: AsyncSession, principal: Principal, run_id: uuid.UUID, workflow_id: str
 ) -> None:
@@ -5490,7 +5681,8 @@ def _waits_for(item: FeedbackItem, suggestion: str | None) -> str:
     return "other"
 
 
-async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
+async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False) -> InboxOut:
+    """``mark_seen``: record this visit as my last one (after reading what was new)."""
     pending = list(
         await db.scalars(
             select(Checkpoint)
@@ -5531,14 +5723,23 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
         )
 
     feedback: list[InboxDocument] = []
+    states: list[InboxFeedbackItem] = []
+    counts = InboxCounts()
+    staged: list[InboxStaged] = []
+    seen = await inbox_states.last_seen(db, principal.id)
     if has_role(principal.role, "approver"):
+        states, counts = await inbox_states.feedback_states(db, seen)
+        staged = await inbox_states.staged_rows(db)
+        # Open feedback: what still needs a decision (staged, declined and done do not).
+        waiting = {i.id for i in states if i.state in ("new", "open")}
         items = list(
             await db.scalars(
                 select(FeedbackItem)
-                .where(FeedbackItem.status == "open")
+                .where(FeedbackItem.id.in_(waiting))
                 .order_by(FeedbackItem.created_at.desc(), FeedbackItem.id)
             )
         )
+        by_id = {i.id: i for i in states}
         by_doc: dict[uuid.UUID, list[FeedbackItem]] = {}
         for f in items:
             by_doc.setdefault(f.document_id, []).append(f)
@@ -5562,10 +5763,10 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
             )
             for doc_id, doc_items in by_doc.items():
                 d = docs[doc_id]
-                counts = InboxFeedbackCounts()
+                waits = InboxFeedbackCounts()
                 for f in doc_items:
                     field = _waits_for(f, suggestion_status.get(f.id))
-                    setattr(counts, field, getattr(counts, field) + 1)
+                    setattr(waits, field, getattr(waits, field) + 1)
                 # The review panel lists items by version raised on, then age.
                 first = min(
                     (f for f in doc_items if f.section_key),
@@ -5579,20 +5780,9 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
                         title=d.title,
                         latest_version=latest.get(d.id),
                         open_count=len(doc_items),
-                        counts=counts,
+                        counts=waits,
                         first_section_key=first.section_key if first else None,
-                        items=[
-                            InboxFeedbackItem(
-                                id=f.id,
-                                summary=f.summary,
-                                kind=f.kind,  # type: ignore[arg-type]
-                                section_key=f.section_key,
-                                raised_on_version=f.raised_on_version,
-                                created_at=f.created_at,
-                                suggestion_status=suggestion_status.get(f.id),  # type: ignore[arg-type]
-                            )
-                            for f in doc_items[:5]
-                        ],
+                        items=[by_id[f.id] for f in doc_items[:5]],
                     )
                 )
             feedback.sort(key=lambda d: d.items[0].created_at, reverse=True)
@@ -5641,6 +5831,9 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
         ]
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
+    if mark_seen:
+        await inbox_states.mark_seen(db, principal.id)
+        await db.commit()
     return InboxOut(
         checkpoints=checkpoints,
         approvals=approvals,
@@ -5649,10 +5842,17 @@ async def inbox(db: AsyncSession, principal: Principal) -> InboxOut:
         searches=searches,
         imports=imports,
         feedback=feedback,
+        # Every new or open item (C1e, owner 2026-10-20): the rail badge, = New + Open.
         total=len(checkpoints)
         + len(approvals)
         + len(overruns)
         + len(lookups)
         + len(imports)
-        + len(feedback),
+        + counts.new
+        + counts.open,
+        items=states,
+        counts=counts,
+        staged=staged,
+        needs_me=counts.new + counts.open,
+        last_seen_at=seen,
     )

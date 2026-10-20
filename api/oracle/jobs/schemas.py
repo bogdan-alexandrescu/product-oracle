@@ -6,7 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from oracle.docs.schemas import WordOp
 
-JobKind = Literal["review_comments", "reporting", "refinement", "quality_review"]
+JobKind = Literal[
+    "review_comments", "reporting", "refinement", "quality_review", "refinement_batch"
+]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 Classification = Literal["question", "change_request", "factual_correction", "approval", "other"]
 SuggestionKind = Literal["section_text", "answer", "none", "duplicate"]
@@ -200,3 +202,113 @@ class LlmJobsTick(BaseModel):
     failed: int
     retried: int
     errors: list[str]
+
+
+# --- C1e: staged changes and the next draft ---------------------------------------------
+
+
+class StagedChange(BaseModel):
+    """An accepted section-text suggestion not applied in any draft yet."""
+
+    suggestion_id: uuid.UUID
+    feedback_item_id: uuid.UUID
+    section_key: str
+    # The heading in the latest version, else the one in the draft it was raised on.
+    section_heading: str
+    feedback_summary: str
+    # The accepted text (the approver's edit when there is one).
+    text: str
+    accepted_by: uuid.UUID | None = None
+    accepted_by_name: str | None = None
+    accepted_at: datetime | None = None
+    # The draft the reviewer read, and the one Oracle's suggestion was written against.
+    raised_on_version: int
+    suggested_on_version: int
+    # The section is not in the latest version: not built (excluded by default).
+    section_gone: bool = False
+    # The section is approved (locked) in the latest version: building it is refused.
+    section_locked: bool = False
+
+
+class StagedChanges(BaseModel):
+    document_id: uuid.UUID
+    slug: str
+    latest_version: int | None = None
+    # The draft a build would make (latest + 1).
+    next_version: int
+    items: list[StagedChange]
+    # Staged items whose section is gone (listed only with include_gone).
+    gone_count: int = 0
+    # A typical cost of building these sections, from earlier refinements; None
+    # without history.
+    estimate_usd: float | None = None
+    # The current next-draft build (queued, running, failed, or ready to preview), if any.
+    draft_job: LlmJobOut | None = None
+
+
+class NextDraftIn(BaseModel):
+    # The staged suggestions to build; default: every staged one whose section exists.
+    suggestion_ids: list[uuid.UUID] | None = None
+
+
+class NextDraftFeedback(BaseModel):
+    id: uuid.UUID
+    summary: str
+
+
+class NextDraftResolution(BaseModel):
+    feedback_id: uuid.UUID
+    status: Literal["addressed", "declined"]
+    note: str | None = None
+
+
+class NextDraftDataPoint(BaseModel):
+    value: str
+    as_of: str = ""
+    source: str = ""
+
+
+class NextDraftSection(BaseModel):
+    section_key: str
+    heading: str
+    before_heading: str
+    before_body_md: str
+    body_md: str
+    words: list[WordOp]
+    notes: str = ""
+    o1c_fixes: list[str] = []
+    data_points: list[NextDraftDataPoint] = []
+    resolutions: list[NextDraftResolution] = []
+    suggestion_ids: list[uuid.UUID] = []
+    feedback: list[NextDraftFeedback] = []
+
+
+class SkippedSection(BaseModel):
+    section_key: str | None = None
+    suggestion_ids: list[uuid.UUID] = []
+    reason: str
+
+
+class NextDraftPreview(BaseModel):
+    """The combined preview of a next-draft build: one entry per revised section.
+
+    Sections are empty until the job has succeeded (``job.status`` says where it is)."""
+
+    job: LlmJobOut
+    base_version: int | None = None
+    next_version: int | None = None
+    latest_version: int | None = None
+    # A newer version appeared since the build started: it can no longer be applied.
+    stale: bool = False
+    applied_version: int | None = None
+    discarded: bool = False
+    notes: str = ""
+    sections: list[NextDraftSection] = []
+    skipped: list[SkippedSection] = []
+
+
+class NextDraftApply(BaseModel):
+    # Sections not to change in this draft; their suggestions stay staged.
+    drop_sections: list[str] = []
+    # The approver's own body for a kept section (house rules applied).
+    edits: dict[str, str] = {}

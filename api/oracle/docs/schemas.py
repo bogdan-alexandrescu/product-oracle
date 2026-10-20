@@ -5,7 +5,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 DocumentStatus = Literal["draft", "in_review", "approved"]
-CitationSource = Literal["slack", "notion", "gdocs", "github", "fireflies", "upload", "web"]
+# "oracle": Oracle's own baseline (a goal, decision, constraint or feature); its ``ref`` is
+# free text naming the baseline item, not a link.
+CitationSource = Literal[
+    "slack", "notion", "gdocs", "github", "fireflies", "upload", "web", "oracle"
+]
 Verdict = Literal["approved", "changes_requested", "rejected"]
 # O1f: brief sections make up the brief layer; the full layer is every section.
 Layer = Literal["brief", "detail"]

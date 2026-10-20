@@ -36,6 +36,11 @@ function summary(job: LlmJob): string | null {
   }
   if (job.kind === "reporting") return `Reports for v${job.version_number}`;
   if (out.applied_version) return `Accepted as v${out.applied_version}`;
+  if (job.kind === "refinement_batch") {
+    if (out.discarded_at) return "Discarded";
+    const n = Array.isArray(out.sections) ? out.sections.length : 0;
+    return `Draft v${(job.version_number ?? 0) + 1} ready to review · ${n} section${n === 1 ? "" : "s"}`;
+  }
   return `Revision of #${job.section_key} ready to review`;
 }
 
@@ -156,7 +161,7 @@ function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
         </InfoTip>
       </legend>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-        {(Object.keys(JOB_KIND_LABEL) as (keyof JobSettings)[]).map((k) => (
+        {(Object.keys(q.data!) as (keyof JobSettings)[]).map((k) => (
           <label key={k} className="flex items-center gap-2 text-sm font-medium text-text">
             <input
               type="checkbox"
