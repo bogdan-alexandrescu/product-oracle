@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from oracle.auth.deps import TenantDB
+from oracle.connections import browse
 from oracle.connections.browse import open_connection, provider_error, unreachable
 from oracle.connections.router import ProviderHttp, UserPrincipal
 from oracle.sources.base import ConnectorError
@@ -66,9 +67,13 @@ def _next_page(link: dict[str, Any] | None) -> int | None:
     "/connections/{connection_id}/github/repos",
     response_model=GithubRepoPage,
     responses={
+        403: {"description": "GitHub refused the request (the connection stays usable)"},
         404: {"description": "Not one of your GitHub connections"},
         409: {"description": "The connection needs reconnecting"},
-        429: {"description": "GitHub is rate limiting; retry after Retry-After seconds"},
+        429: {
+            "description": "GitHub is rate limiting, or this connection searched too often; "
+            "retry after Retry-After seconds"
+        },
     },
 )
 async def list_github_repos(
@@ -79,13 +84,21 @@ async def list_github_repos(
     search: Annotated[str, Query(max_length=200)] = "",
     cursor: Annotated[str | None, Query(max_length=10)] = None,
 ) -> GithubRepoPage:
-    """Repos your GitHub sign-in can read, matched on owner/name and description."""
+    """Repos your GitHub sign-in can read, matched on owner/name and description.
+
+    Answers are cached for a minute per connection, and a connection may search GitHub
+    a limited number of times a minute."""
     page: int | None = 1
     if cursor is not None:
         if not cursor.isdigit() or int(cursor) < 1:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown cursor")
         page = int(cursor)
     conn, token = await open_connection(db, principal, connection_id, "github")
+    key = ("github/repos", search, page)
+    hit = browse.cached(conn, key)
+    if hit is not None:
+        return hit
+    browse.admit(conn, "GitHub")
     api = _Api(http, token, API_URL)
     needle = search.strip().lower()
     want = SEARCH_RESULTS if needle else 1
@@ -116,4 +129,6 @@ async def list_github_repos(
         raise await provider_error(db, conn, "GitHub", e) from None
     except (httpx.HTTPError, ValueError):
         raise unreachable("GitHub") from None
-    return GithubRepoPage(repos=found, next_cursor=str(page) if page else None)
+    answer = GithubRepoPage(repos=found, next_cursor=str(page) if page else None)
+    browse.remember(conn, key, answer)
+    return answer

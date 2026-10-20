@@ -45,6 +45,12 @@ class ConnectorAuthError(ConnectorError):
     """The source rejected the credential (revoked, expired, insufficient)."""
 
 
+class ConnectorForbidden(ConnectorAuthError):
+    """The source refused one request (a 403, Slack's ``no_permission``) while the
+    credential itself may still be good. Syncs treat it as a rejection; browsing does
+    not mark the connection expired for it."""
+
+
 class ConnectorRateLimited(ConnectorError):
     """The source asked to slow down; retry no earlier than ``retry_after`` seconds."""
 

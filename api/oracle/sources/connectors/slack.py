@@ -34,6 +34,7 @@ from oracle.sources.base import (
     ConnectorAuthError,
     ConnectorConfigError,
     ConnectorError,
+    ConnectorForbidden,
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemUpsert,
@@ -59,7 +60,6 @@ AUTH_ERRORS = {
     "account_inactive",
     "token_revoked",
     "token_expired",
-    "no_permission",
 }
 # Channel housekeeping, not conversation.
 SKIPPED_SUBTYPES = {
@@ -144,8 +144,10 @@ class _Slack:
             raise ConnectorRateLimited(
                 f"Slack rate limited {method}", retry_after=float(retry) if retry else None
             )
-        if response.status_code in (401, 403):
-            raise ConnectorAuthError(f"Slack rejected the token ({response.status_code})")
+        if response.status_code == 401:
+            raise ConnectorAuthError("Slack rejected the token (401)")
+        if response.status_code == 403:
+            raise ConnectorForbidden(f"Slack refused {method} (403)")
         if response.status_code >= 400:
             raise ConnectorError(f"Slack {method} failed: HTTP {response.status_code}")
         body = response.json()
@@ -153,6 +155,8 @@ class _Slack:
             error = body.get("error", "unknown_error")
             if error in AUTH_ERRORS:
                 raise ConnectorAuthError(f"Slack rejected the token: {error}")
+            if error == "no_permission":
+                raise ConnectorForbidden(f"Slack refused {method}: no_permission")
             if error == "ratelimited":
                 raise ConnectorRateLimited(f"Slack rate limited {method}")
             if error == "missing_scope":

@@ -30,6 +30,7 @@ from oracle.sources.base import (
     ConnectorAuthError,
     ConnectorConfigError,
     ConnectorError,
+    ConnectorForbidden,
     ConnectorRateLimited,
     CursorCheckpoint,
     ItemDelete,
@@ -114,7 +115,7 @@ def _raise_for_status(resp: httpx.Response) -> None:
         retry_after = _retry_after(resp)
         if status == 429 or retry_after is not None or "rate limit" in message.lower():
             raise ConnectorRateLimited(f"GitHub rate limit: {message}", retry_after=retry_after)
-        raise ConnectorAuthError(f"GitHub refused access: {message or 'forbidden'}")
+        raise ConnectorForbidden(f"GitHub refused access: {message or 'forbidden'}")
     raise ConnectorError(f"GitHub API error {status} on {resp.request.url.path}: {message}")
 
 

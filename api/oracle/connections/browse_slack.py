@@ -2,17 +2,19 @@
 
 Public channels and the private channels the person is in, through
 ``conversations.list`` with the user token. Direct messages (``im``, ``mpim``) are
-never asked for and dropped if Slack returns one anyway (S3).
+never asked for and dropped if Slack returns one anyway (S3). A bot token (``xoxb-``)
+is refused: it would list the private channels the bot is in, not the person's.
 """
 
 import uuid
 from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from oracle.auth.deps import TenantDB
+from oracle.connections import browse
 from oracle.connections.browse import open_connection, provider_error, unreachable
 from oracle.connections.router import ProviderHttp, UserPrincipal
 from oracle.sources.base import ConnectorError
@@ -25,6 +27,10 @@ PAGE_SIZE = 200
 # many matches or has read MAX_PAGES pages; the cursor resumes where it stopped.
 SEARCH_RESULTS = 50
 MAX_PAGES = 5
+BOT_TOKEN = (
+    "This Slack connection uses a bot token, which would list the bot's channels rather "
+    "than yours: connect Slack with your own sign-in or a user token (xoxp-)"
+)
 
 
 class SlackChannelOut(BaseModel):
@@ -62,9 +68,13 @@ def _channel(entry: dict[str, Any]) -> SlackChannelOut | None:
     "/connections/{connection_id}/slack/channels",
     response_model=SlackChannelPage,
     responses={
+        403: {"description": "Slack refused the request (the connection stays usable)"},
         404: {"description": "Not one of your Slack connections"},
-        409: {"description": "The connection needs reconnecting"},
-        429: {"description": "Slack is rate limiting; retry after Retry-After seconds"},
+        409: {"description": "The connection needs reconnecting, or holds a bot token"},
+        429: {
+            "description": "Slack is rate limiting, or this connection searched too often; "
+            "retry after Retry-After seconds"
+        },
     },
 )
 async def list_slack_channels(
@@ -76,8 +86,18 @@ async def list_slack_channels(
     cursor: Annotated[str | None, Query(max_length=1000)] = None,
     include_archived: bool = False,
 ) -> SlackChannelPage:
-    """Public channels and the private channels you are in, by name; never DMs."""
+    """Public channels and the private channels you are in, by name; never DMs.
+
+    Answers are cached for a minute per connection, and a connection may search Slack
+    a limited number of times a minute."""
     conn, token = await open_connection(db, principal, connection_id, "slack")
+    if token.startswith("xoxb-"):
+        raise HTTPException(status.HTTP_409_CONFLICT, BOT_TOKEN)
+    key = ("slack/channels", search, cursor, include_archived)
+    hit = browse.cached(conn, key)
+    if hit is not None:
+        return hit
+    browse.admit(conn, "Slack")
     slack = _Slack(http, token)
     needle = search.strip().lstrip("#").lower()
     want = SEARCH_RESULTS if needle else 1
@@ -106,4 +126,6 @@ async def list_slack_channels(
         raise await provider_error(db, conn, "Slack", e) from None
     except (httpx.HTTPError, ValueError):
         raise unreachable("Slack") from None
-    return SlackChannelPage(channels=found, next_cursor=next_cursor)
+    answer = SlackChannelPage(channels=found, next_cursor=next_cursor)
+    browse.remember(conn, key, answer)
+    return answer
