@@ -58,7 +58,7 @@ def test_chains_on_the_roadmap_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0016_roadmap"
     # 0017_citation_source_oracle chains on it; still a single head.
-    assert script.get_heads() == ["0017_citation_source_oracle"]
+    assert script.get_heads() == ["0018_runtime_features"]
     assert script.get_revision("0017_citation_source_oracle").down_revision == REVISION
 
 

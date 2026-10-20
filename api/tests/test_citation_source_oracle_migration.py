@@ -92,7 +92,7 @@ def _cite(t: uuid.UUID, v: uuid.UUID, key: str, source: str) -> None:
 def test_chains_on_the_refinement_batch_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0016_refinement_batch"
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0018_runtime_features"]
 
 
 def test_an_oracle_citation_inserts_after_upgrade(scratch_db):

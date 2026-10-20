@@ -275,6 +275,7 @@ test("confirm dialog: focus is trapped inside and restored on close", async ({ p
 
 test("entry points: the PRD list and the PRD page open Publish", async ({ page }) => {
   await login(page);
+  await page.goto("/documents");
   await page.getByTestId("document-row").filter({ hasText: "Online deposits at booking" }).click();
   await page.getByTestId("document-inspector").getByRole("link", { name: "Publish" }).click();
   await expect(page).toHaveURL(/\/documents\/online-deposits\/publish$/);

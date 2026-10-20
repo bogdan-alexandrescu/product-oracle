@@ -7,6 +7,7 @@ import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Button,
   Chip,
+  confirmInPage,
   Icon,
   InfoTip,
   Inspector,
@@ -178,8 +179,8 @@ export function RunDetail({ id }: { id: string }) {
                   {run.can_retry && (
                     <Button
                       disabled={busy}
-                      onClick={() => {
-                        if (window.confirm(RETRY_CONFIRM)) {
+                      onClick={async () => {
+                        if (await confirmInPage({ action: "Retry", message: RETRY_CONFIRM })) {
                           void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)));
                         }
                       }}
@@ -190,8 +191,8 @@ export function RunDetail({ id }: { id: string }) {
                   {run.can_stop_cancelling && (
                     <Button
                       disabled={busy}
-                      onClick={() => {
-                        if (window.confirm(STOP_CANCELLING_CONFIRM)) {
+                      onClick={async () => {
+                        if (await confirmInPage({ destructive: true, action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
                           void act(() => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path)));
                         }
                       }}
@@ -208,8 +209,8 @@ export function RunDetail({ id }: { id: string }) {
                     <Button
                       key={wid}
                       disabled={busy}
-                      onClick={() => {
-                        if (window.confirm(CANCEL_AGAIN_CONFIRM)) {
+                      onClick={async () => {
+                        if (await confirmInPage({ destructive: true, action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
                           void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path, body: { workflow_id: wid } })));
                         }
                       }}
@@ -280,8 +281,9 @@ export function RunDetail({ id }: { id: string }) {
               {mayManage && !FINAL_STATUSES.includes(run.status) && (
                 <Button
                   disabled={busy}
-                  onClick={() => {
-                    if (window.confirm("Cancel this run? Agents still working are stopped.")) {
+                  data-testid="run-cancel"
+                  onClick={async () => {
+                    if (await confirmInPage({ destructive: true, action: "Cancel run", message: "Cancel this run? Agents still working are stopped." })) {
                       void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel", path)));
                     }
                   }}
