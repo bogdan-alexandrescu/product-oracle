@@ -368,6 +368,5 @@ Maturity key:
 - Feature specs: [`brief-and-full.md`](brief-and-full.md),
   [`roadmap-from-prd.md`](roadmap-from-prd.md), [`llm-jobs.md`](llm-jobs.md),
   [`claude-accounts.md`](claude-accounts.md), [`mvp-app.md`](mvp-app.md).
-- Agent runtime: [`swarmcloud-interface.md`](swarmcloud-interface.md),
-  [`swarmcloud-requests.md`](swarmcloud-requests.md).
+- Agent runtime: [`swarmcloud-interface.md`](swarmcloud-interface.md).
 - Formats research: [`research/`](research/).

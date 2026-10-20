@@ -5,7 +5,7 @@
 
 export type CitationSeed = {
   id: string;
-  source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web";
+  source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web" | "oracle";
   ref: string;
   title: string;
   excerpt: string;

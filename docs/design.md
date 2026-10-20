@@ -7,7 +7,7 @@ Status: DRAFT — owner approval pending
 Mode: Startup (intrapreneurship)
 
 Decision log with every answer and its ID: [`docs/questions.md`](questions.md).
-SwarmCloud requests: [`docs/swarmcloud-requests.md`](swarmcloud-requests.md).
+Agent runtime interface: [`docs/swarmcloud-interface.md`](swarmcloud-interface.md).
 MVP thin app: [`docs/mvp-app.md`](mvp-app.md).
 
 ## Problem Statement

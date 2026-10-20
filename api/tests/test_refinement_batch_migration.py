@@ -57,8 +57,10 @@ def scratch_db():
 def test_chains_on_the_roadmap_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0016_roadmap"
-    # The intake lane's 0014 follows it (merge after #103): one head.
-    assert script.get_revision("0014_intake").down_revision == REVISION
+    # 0017_citation_source_oracle chains on it, then the intake lane's 0014 (merge after
+    # #119): one head.
+    assert script.get_revision("0017_citation_source_oracle").down_revision == REVISION
+    assert script.get_revision("0014_intake").down_revision == "0017_citation_source_oracle"
     assert script.get_heads() == ["0014_intake"]
 
 

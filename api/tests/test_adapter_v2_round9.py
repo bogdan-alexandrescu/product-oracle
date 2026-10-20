@@ -41,7 +41,7 @@ from tests.test_adapter_v2 import (
 )
 from tests.test_adapter_v2 import settings as _v2_settings
 from tests.test_adapter_v2_round7 import _stopped, _wf_cost
-from tests.test_runs import as_user, get, started
+from tests.test_runs import as_user, decide, get, started, tick
 
 # The same environment as test_adapter_v2 (Oracle's public URL, default timings).
 settings = _v2_settings
@@ -393,7 +393,9 @@ async def test_curated_writes_are_refused_while_held_and_write_nothing(
         async def status(workflow_id):
             read = await real(workflow_id)
             steps = tuple(
-                replace(s, state="PARKED") if s.step_id == "baseline-review1" else s
+                replace(s, state="PARKED", park_reason=None)
+                if s.step_id == "baseline-review1"
+                else s
                 for s in read.steps
             )
             return replace(read, steps=steps)
@@ -752,3 +754,135 @@ def test_retrying_a_pending_cancel_is_not_named_like_cancel_again():
     Cancel again (service.cancel_again)."""
     assert callable(service._retry_pending_cancel)
     assert not hasattr(service, "_cancel_again")
+
+
+# ---------------------------------------- a step parked on its dependencies is not reached
+
+
+async def _run_token_writes(token: str) -> bool:
+    """True when the run token's propose_change was refused as held."""
+    async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
+        res = await c.call_tool(
+            "propose_change",
+            {
+                "body": {
+                    "op": "create",
+                    "kind": "entity",
+                    "fields": {"type": "goal", "key": "g-dep", "title": "Dep"},
+                    "reason": "seen",
+                }
+            },
+        )
+    if res.is_error:
+        assert "waiting for" in res.content[0].text, res.content[0].text
+    return res.is_error
+
+
+async def test_a_step_parked_on_its_dependencies_does_not_hold_the_run_token(client, owner):
+    """SwarmCloud makes a task for every step at submission; a step whose dependencies have
+    not finished is PARKED with park_reason DEPENDENCY_INCOMPLETE. That is not reached:
+    the token writes during work steps; it is held only from the open checkpoint on."""
+    _, auth = owner
+    swarm = on()
+    runtime = use(swarm)
+    swarm.steps_per_poll = 0  # the first segment's work step has not run
+    run = await started(client, auth)
+    review = swarm.workflows["wf_1"].step("baseline-review1")
+    assert review.state == "PENDING"
+    status = await runtime.status("wf_1")
+    step = status.step("baseline-review1")
+    assert (step.state, step.park_reason) == ("PARKED", "DEPENDENCY_INCOMPLETE")
+    token = token_of(swarm)
+    assert await _run_token_writes(token) is False
+
+    # The work step runs; the review step opens (AWAITING_INPUT): held.
+    swarm.steps_per_poll = None
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint"
+    assert (await runtime.status("wf_1")).step("baseline-review1").park_reason == "AWAITING_INPUT"
+    assert await _run_token_writes(token) is True
+
+    # After the decision the checkpoint is closed and the next segment's work step is
+    # running (its review is parked on it): released again.
+    swarm.steps_per_poll = 0
+    await decide(client, auth, run)
+    service._hold_cache.clear()
+    assert await _run_token_writes(token) is False
+
+
+@pytest.mark.parametrize(
+    ("state", "reason", "reached"),
+    [
+        ("PENDING", None, False),
+        ("SKIPPED", None, False),
+        ("PARKED", "DEPENDENCY_INCOMPLETE", False),
+        ("PARKED", "AWAITING_INPUT", True),
+        ("PARKED", "CREDENTIAL_MISSING", True),
+        ("PARKED", None, True),
+        ("RUNNING", "DEPENDENCY_INCOMPLETE", True),
+        ("SUCCEEDED", None, True),
+        ("PARKED", "dependency_incomplete", True),
+        ("READY", None, True),
+        ("CANCELLED", None, True),
+        ("DEAD_LETTERED", None, True),
+    ],
+)
+def test_not_reached_counts_a_step_parked_on_its_dependencies(state, reason, reached):
+    from oracle.swarm.runtime import not_reached
+
+    assert not_reached(StepStatus("s", "t", state, park_reason=reason)) is not reached
+
+
+def test_not_reached_fails_closed_without_a_task_or_with_an_opened_wait():
+    from oracle.swarm.runtime import not_reached
+
+    parked = dict(state="PARKED", park_reason="DEPENDENCY_INCOMPLETE")
+    assert not_reached(StepStatus("s", "t", **parked)) is True
+    # The task page had no task for the step: reached (held), whatever the default says.
+    assert not_reached(StepStatus("s", "t", **parked, task_read=False)) is False
+    assert not_reached(StepStatus("s", None, task_read=False)) is False
+    # An opened wait is reached whatever its park reason says.
+    assert not_reached(StepStatus("s", "t", **parked, wait_opened=True)) is False
+
+
+async def test_a_review_step_with_no_task_in_the_page_holds_the_run_token_and_reads_cleanly(
+    monkeypatch,
+):
+    from oracle.swarm.swarmcloud import SwarmCloudRuntime
+
+    rt = object.__new__(SwarmCloudRuntime)
+
+    async def read(workflow_id):
+        return {
+            "workflow": {
+                "state": "running",
+                "steps": [
+                    {"step_id": "r1", "task_id": "t_missing"},
+                    {"step_id": "r2", "task_id": "t_p", "state": "PARKED"},
+                ],
+            },
+            "tasks": [
+                {
+                    "id": "t_p",
+                    "state": "PARKED",
+                    "park_reason": "DEPENDENCY_INCOMPLETE",
+                    "metadata": {"await_input": {"opened_at": "2026-10-20T10:00:00+00:00"}},
+                }
+            ],
+        }
+
+    rt._read = read
+    status = await rt.status("wf_1")
+    missing, opened = status.step("r1"), status.step("r2")
+    assert missing.state == "PENDING" and missing.task_read is False  # display unchanged
+    assert opened.wait_opened is True and opened.park_reason == "DEPENDENCY_INCOMPLETE"
+
+    service._hold_cache.clear()
+    service._hold_reads.clear()
+    for review in ("r1", "r2"):
+        monkeypatch.setattr(service, "get_runtime", lambda: rt)
+        service._hold_cache.clear()
+        assert await service._live_hold(uuid.uuid4(), "wf_1", (review,)) == service.HOLD_DECISION
+    service._hold_cache.clear()
+    service._hold_reads.clear()

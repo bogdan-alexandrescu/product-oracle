@@ -9425,6 +9425,67 @@
         }
       }
     },
+    "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Draft Import",
+        "description": "Import a segment's draft again after its import at segment end was refused\n(``segments[].can_retry_draft_import``; the refusal is ``segments[].draft_import.error``).\nWhile the run waits at that segment's review: the review's approver role or above, and\nnothing is decided (the review stays open for a person). After the run finished with\nthe review approved past the refusal: owners only, while no version from the run\nexists; the run's checkpoints do not change. Imported, the run names the document and\nthe error is replaced by the import; refused again, by the new error (200 either way:\nread ``draft_import``). 409 when there is nothing to retry (imported already, a version\nfrom the run exists, no draft file, changes requested, the run cancelled or failed).\nAudited. Not the stopped advance of ``retry_import_run``.",
+        "operationId": "retry_draft_import",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "seq",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Seq"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runs/{run_id}/cancel-again": {
       "post": {
         "tags": [
@@ -9545,7 +9606,7 @@
           "runs"
         ],
         "summary": "Decide Checkpoint",
-        "description": "Approve a checkpoint (the next segment starts) or request changes (the segment\nruns again with the note).",
+        "description": "Approve a checkpoint (the next segment starts) or request changes (the segment\nruns again with the note). Approving is refused (409) while the draft its segment left\nis not imported (``cannot_approve``): retry the import, or request changes.",
         "operationId": "decide_checkpoint",
         "security": [
           {
@@ -24627,6 +24688,17 @@
             "title": "Can Decide",
             "default": false
           },
+          "cannot_approve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cannot Approve"
+          },
           "console": {
             "anyOf": [
               {
@@ -24694,7 +24766,8 @@
               "github",
               "fireflies",
               "upload",
-              "web"
+              "web",
+              "oracle"
             ],
             "title": "Source"
           },
@@ -32407,6 +32480,17 @@
             "type": "boolean",
             "title": "Can Decide",
             "default": false
+          },
+          "cannot_approve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cannot Approve"
           },
           "console": {
             "anyOf": [
@@ -44274,6 +44358,11 @@
                 "type": "null"
               }
             ]
+          },
+          "can_retry_draft_import": {
+            "type": "boolean",
+            "title": "Can Retry Draft Import",
+            "default": false
           },
           "items_check": {
             "anyOf": [

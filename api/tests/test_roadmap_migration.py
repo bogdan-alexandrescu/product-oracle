@@ -67,9 +67,13 @@ def scratch_db():
 def test_0016_roadmap_follows_the_wave_1_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0014_blockers_snapshot"
-    # 0016_refinement_batch (C1e) chains on it, then the intake lane's 0014: one head.
+    # 0016_refinement_batch (C1e) chains on it, 0017_citation_source_oracle on that, then
+    # the intake lane's 0014: one head.
     assert script.get_revision("0016_refinement_batch").down_revision == REVISION
-    assert script.get_revision("0014_intake").down_revision == "0016_refinement_batch"
+    assert script.get_revision("0017_citation_source_oracle").down_revision == (
+        "0016_refinement_batch"
+    )
+    assert script.get_revision("0014_intake").down_revision == "0017_citation_source_oracle"
     assert script.get_heads() == ["0014_intake"]
 
 

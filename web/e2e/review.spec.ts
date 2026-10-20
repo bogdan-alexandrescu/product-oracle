@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { ADMIN, feedbackState, login, openSection, outlineRow, section, sectionStrip, selectText } from "./helpers";
+import { ADMIN, feedbackState, login, openSection, openTab, outlineRow, section, sectionStrip, selectText } from "./helpers";
 
 test("login: rejects a wrong password, then signs in", async ({ page }) => {
   await page.goto("/documents");
@@ -84,6 +84,44 @@ test("add an anchored comment that survives reload", async ({ page }) => {
   // The comment is also an open feedback item, raised on v2.
   await expect(comment.getByTestId("feedback-state-chip")).toHaveText("Open");
   await expect(comment).toContainText("raised on v2");
+});
+
+test("a citation of Oracle's baseline reads 'Oracle baseline', its ref as text, not a link", async ({ page }) => {
+  await login(page);
+  // Version 2 of checkout-redesign cites a baseline goal in its Problem section.
+  await page.evaluate(() => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    const doc = db.documents.find((d: { slug: string }) => d.slug === "checkout-redesign");
+    const v = db.versions.find((x: { document_id: string; number: number }) => x.document_id === doc.id && x.number === 2);
+    v.citations.push({
+      id: crypto.randomUUID(),
+      cite_key: "o-g1",
+      source: "oracle",
+      ref: "baseline goal g1 (activation), locked",
+      title: "Goal G1: raise first-order completion",
+      excerpt: "Raise first-order completion from 61% to 70% by the end of Q4.",
+      retrieved_at: "2026-10-20T17:02:00Z",
+    });
+    const problem = v.sections.find((s: { section_key: string }) => s.section_key === "problem");
+    problem.body_md += " Serves G1 [c:o-g1].";
+    problem.citation_keys.push("o-g1");
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.goto("/documents/checkout-redesign/v/2");
+
+  const chip = (await openSection(page, "problem")).getByTestId("cite-o-g1");
+  await expect(chip).toHaveText(/Oracle baseline/);
+  await chip.hover();
+  const card = page.getByRole("tooltip");
+  await expect(card).toContainText("Goal G1: raise first-order completion");
+  await expect(card.getByTestId("cite-ref")).toHaveText("baseline goal g1 (activation), locked");
+  await expect(card.getByRole("link")).toHaveCount(0);
+
+  await openTab(page, "Sources");
+  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Oracle baseline" });
+  await expect(row).toContainText("Goal G1: raise first-order completion");
+  await expect(row.getByRole("link")).toHaveCount(0);
 });
 
 test("set a section verdict; approval shows the section as locked", async ({ page }) => {

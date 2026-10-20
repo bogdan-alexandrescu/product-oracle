@@ -985,7 +985,12 @@ function exportHtml(doc: DocumentRow, v: VersionRow): string {
     })
     .join("\n");
   const notes = v.citations
-    .map((c) => `<li><a href="${escapeHtml(c.ref)}">${escapeHtml(c.title ?? c.ref)}</a> (${c.source})</li>`)
+    // As the API's export: an "oracle" citation's ref names a baseline item, not a link.
+    .map((c) =>
+      c.source === "oracle"
+        ? `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`
+        : `<li><a href="${escapeHtml(c.ref)}">${escapeHtml(c.title ?? c.ref)}</a> (${c.source})</li>`,
+    )
     .join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title></head><body><p class="banner">${escapeHtml(banner(doc, v))} · mock export</p>${sections}<ol class="citations">${notes}</ol></body></html>`;
 }

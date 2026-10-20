@@ -10,7 +10,7 @@ import { FeedbackList } from "@/components/review/FeedbackList";
 import { TabBar } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import type { VersionOut } from "@/lib/api/client";
-import { formatDateTime, SOURCE_LABEL } from "@/lib/format";
+import { citationHref, formatDateTime, SOURCE_LABEL } from "@/lib/format";
 
 export type PanelTab = "feedback" | "sources" | "history";
 
@@ -140,21 +140,31 @@ function SourcesTab({ version }: { version: VersionOut }) {
         <p className="text-sm text-text2">No sources cited</p>
       ) : (
         <ol className="flex flex-col" aria-label="Sources" data-testid="sources-list">
-          {version.citations.map((c, i) => (
-            <li key={c.id} className="flex min-h-8 min-w-0 items-center gap-2.5 text-sm max-[639px]:min-h-11">
-              <span className="tnum w-5 flex-none text-right font-semibold text-text2">{i + 1}</span>
-              <span className="flex-none text-[13px] font-semibold text-text2">{SOURCE_LABEL[c.source]}</span>
-              <a
-                href={c.ref}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={c.title ?? c.ref}
-                className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
-              >
-                {c.title ?? c.ref}
-              </a>
-            </li>
-          ))}
+          {version.citations.map((c, i) => {
+            const href = citationHref(c);
+            return (
+              <li key={c.id} className="flex min-h-8 min-w-0 items-center gap-2.5 text-sm max-[639px]:min-h-11">
+                <span className="tnum w-5 flex-none text-right font-semibold text-text2">{i + 1}</span>
+                <span className="flex-none text-[13px] font-semibold text-text2">{SOURCE_LABEL[c.source]}</span>
+                {href ? (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={c.title ?? c.ref}
+                    className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
+                  >
+                    {c.title ?? c.ref}
+                  </a>
+                ) : (
+                  // A baseline item named in free text (source oracle): its ref on hover, no link.
+                  <span title={c.ref} className="min-w-0 truncate font-medium text-text">
+                    {c.title ?? c.ref}
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ol>
       )}
     </div>

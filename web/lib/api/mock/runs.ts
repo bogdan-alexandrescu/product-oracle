@@ -189,6 +189,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     artifacts: [],
     attempts: [],
     draft_import: null,
+    can_retry_draft_import: false,
     items_check: null,
     started_at: null,
     finished_at: null,
@@ -202,11 +203,35 @@ function progressOf(r: RunOut): Schemas["RunProgress"] {
   return { done: r.segments.filter((s) => s.status === "succeeded").length, total: r.segments.length, now: now?.title ?? null };
 }
 
+/** The open review of a segment, if the run waits at it. */
+function reviewOf(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
+  if (r.status !== "awaiting_checkpoint") return undefined;
+  return r.checkpoints.find((c) => c.status === "pending" && c.segment_seq === s.seq);
+}
+
+/** As the API: approving is refused while the draft its segment left is not imported. */
+const NOT_IMPORTED = "the draft was not imported: retry import, or request changes";
+function cannotApprove(c: CheckpointOut): string | null {
+  const imp = (c.payload as { import?: { error?: string | null } } | undefined)?.import;
+  return c.status === "pending" && imp?.error ? NOT_IMPORTED : null;
+}
+
+/** The decided review of a finished run's segment whose draft was refused (owners retry it). */
+function finishedReview(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
+  if (r.status !== "succeeded" || r.segments.some((x) => x.draft_import && !x.draft_import.error)) return undefined;
+  return r.checkpoints.filter((c) => c.segment_seq === s.seq && c.status !== "pending").pop();
+}
+
 function refresh(r: RunOut) {
   r.progress = progressOf(r);
   r.spent_usd = round2(r.segments.reduce((sum, s) => sum + s.cost_usd, 0));
   r.waiting_on = r.checkpoints.find((c) => c.status === "pending")?.kind ?? null;
-  for (const c of r.checkpoints) c.can_decide = c.status === "pending";
+  for (const c of r.checkpoints) Object.assign(c, { can_decide: c.status === "pending", cannot_approve: cannotApprove(c) });
+  // As the API: a refused draft whose file is kept, while the run waits at its review.
+  const file = r.document_kind === "roadmap" ? "roadmap.md" : "prd.md";
+  for (const s of r.segments) {
+    s.can_retry_draft_import = !!s.draft_import?.error && s.artifacts.includes(file) && !!(reviewOf(r, s) ?? finishedReview(r, s));
+  }
 }
 
 function submit(ctx: RunsContext, r: RunOut, s: SegmentOut, note: string | null = null) {
@@ -276,6 +301,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     payload,
     created_at: ctx.now(),
     can_decide: on,
+    cannot_approve: null,
   };
   r.checkpoints.push(cp);
   if (on) r.status = "awaiting_checkpoint";
@@ -631,12 +657,29 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (!cp) return fail(404, "checkpoint not found");
     if (cp.status !== "pending" || r.status !== "awaiting_checkpoint") return fail(409, `checkpoint is ${cp.status}`);
     const { decision, note } = await body<Schemas["CheckpointDecision"]>();
+    const blocked = cannotApprove(cp);
+    if (decision === "approved" && blocked) return fail(409, blocked);
     const text = note?.trim() || null;
     if (decision === "changes_requested" && !text) return fail(422, "say what to change: a note is required to request changes");
     Object.assign(cp, { status: decision, note: text, decided_by: ctx.userId, decided_at: ctx.now() });
     const s = r.segments.find((x) => x.seq === cp.segment_seq)!;
     if (decision === "approved") next(ctx, r, s);
     else submit(ctx, r, s, text);
+    return done();
+  }
+  if (action === "segments" && p[5] === "retry-draft-import" && m === "POST") {
+    const s = r.segments.find((x) => x.seq === Number(p[4]));
+    if (!s) return fail(404, `run ${r.id} has no segment ${p[4]}`);
+    refresh(r);
+    const review = reviewOf(r, s) ?? finishedReview(r, s);
+    if (!s.can_retry_draft_import || !review || !r.document_slug) {
+      return fail(409, `nothing to retry: no refused draft of ${s.name} waits at its review`);
+    }
+    // Imported as at segment end; the review stays open for a person.
+    const imp = ctx.importDraft(r.document_slug, r);
+    s.draft_import = { ...imp, created: true, warnings: [], error: null };
+    r.document_id = imp.document_id ?? null;
+    review.payload = { ...review.payload, import: s.draft_import };
     return done();
   }
   if (action === "segments" && p[5] === "artifacts" && m === "GET") {
@@ -736,7 +779,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
   db.artifacts[`${done.id}|1|prd.md`] = fileContent("prd.md", "next_draft", 1);
   done.checkpoints.push({
     id: ctx.uuid(), run_id: done.id, kind: "prd_review", status: "skipped", approver_role: "approver", segment_seq: 1,
-    decided_by: null, decided_at: "2026-10-16T09:20:00Z", note: "Turned off when the run started.", payload: {}, created_at: "2026-10-16T09:20:00Z", can_decide: false,
+    decided_by: null, decided_at: "2026-10-16T09:20:00Z", note: "Turned off when the run started.", payload: {}, created_at: "2026-10-16T09:20:00Z", can_decide: false, cannot_approve: null,
   });
   Object.assign(done, { status: "succeeded", started_at: "2026-10-16T09:00:00Z", finished_at: "2026-10-16T09:20:00Z", overrun_ceiling_usd: 13.5 });
 
