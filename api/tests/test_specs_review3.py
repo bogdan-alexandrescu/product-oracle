@@ -10,6 +10,7 @@
 """
 
 import json
+import threading
 import time
 import uuid
 
@@ -520,8 +521,12 @@ async def test_the_design_check_runs_off_the_event_loop_with_a_time_cap(
 ):
     from oracle.specs import service
 
+    release = threading.Event()
+
     def stalls(*args, **kwargs):
-        time.sleep(5)
+        # Stalls until the test is over (never past the import's time cap): no thread
+        # outlives the test.
+        release.wait(10)
         raise AssertionError("not reached in time")
 
     monkeypatch.setattr(service, "check_design", stalls)
@@ -529,7 +534,10 @@ async def test_the_design_check_runs_off_the_event_loop_with_a_time_cap(
     world = await make_world(client)
     owner = world.ctx.as_("owner")
     started = time.perf_counter()
-    created = await generated(client, runtime, world)
+    try:
+        created = await generated(client, runtime, world)
+    finally:
+        release.set()
     assert time.perf_counter() - started < 4
     run = await get_run(client, owner, created["run_id"])
     imported = pending(run)["payload"]["import"]
