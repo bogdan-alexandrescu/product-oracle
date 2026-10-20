@@ -177,8 +177,13 @@ def _fireflies_date(value: Any) -> datetime | None:
 
 
 def _out_of_range(value: Any) -> bool:
-    """Whether Fireflies sent a date, but one no meeting can have (see EARLIEST)."""
-    return value not in (None, "") and _fireflies_date(value) is None
+    """Whether Fireflies sent a readable date no meeting can have (before EARLIEST or from
+    LATEST on). An unreadable one is no date, as before."""
+    try:
+        parsed = _parse_date(value)
+    except (ValueError, OverflowError, OSError, TypeError):
+        return False
+    return parsed is not None and not EARLIEST <= parsed < LATEST
 
 
 def _cursor_date(value: Any) -> datetime | None:
