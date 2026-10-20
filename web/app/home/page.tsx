@@ -110,8 +110,9 @@ export default function HomePage() {
   // The API filters (asked of me, still asked): Home counts exactly what the badge counts.
   const questions = questionNeeds(questionsQ.data ?? [], docs);
   const decisions = needs ? [...needs.checkpoints, ...needs.approvals, ...needs.overruns] : [];
-  // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
-  const runs = needs ? [...needs.lookups, ...needs.imports] : [];
+  // Stuck runs, failed imports and (owners) revokes a removal could not make: counted in
+  // the badge, so drawn here too (searches are not).
+  const runs = needs ? [...needs.lookups, ...needs.imports, ...needs.revokeFailures] : [];
   const reviews = needs?.feedback ?? [];
   const shownNeeds = pickNeeds([...decisions, ...runs, ...reviews], questions, MAX_NEEDS);
   // The rail badge's count: the Inbox's rows and the questions asked of me.

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
+import { MOCK_REVOKE_FAILURES_KEY, MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 test("inbox lists checkpoints, cost approvals, overruns and open feedback", async ({ page }) => {
@@ -73,6 +73,7 @@ test("inbox: retry importing a run's output Oracle stopped trying to import", as
 test("inbox: owners retry or dismiss a provider revoke a removed member's disable could not make", async ({
   page,
 }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "1"), MOCK_REVOKE_FAILURES_KEY);
   await login(page);
   await page.goto("/inbox");
   const failures = page.getByTestId("inbox-revoke-failures");
@@ -95,6 +96,7 @@ test("inbox: owners retry or dismiss a provider revoke a removed member's disabl
 });
 
 test("inbox: only owners see revokes a disable could not make", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "1"), MOCK_REVOKE_FAILURES_KEY);
   await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "approver"] as const);
   await login(page);
   await page.goto("/inbox");

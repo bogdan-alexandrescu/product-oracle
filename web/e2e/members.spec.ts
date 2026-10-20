@@ -77,6 +77,7 @@ test("members: remove disables a member, restore lets them sign in again", async
   await expect(memberRow(page, "commenter@example.com")).toHaveAttribute("data-status", "disabled");
 
   // A removed member cannot sign in.
+  await page.getByTestId("user-menu").click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
   await page.getByLabel("Email").fill("commenter@example.com");
