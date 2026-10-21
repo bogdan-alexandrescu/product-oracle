@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
-import { ScrollStrip } from "@/components/ds";
+import { LinkButton, ScrollStrip } from "@/components/ds";
 
 const ITEMS = [
   { label: "Members", href: "/settings/members", testId: "nav-members" },
+  { label: "Company", href: "/settings/company", testId: "nav-company" },
   { label: "Connections", href: "/settings/connections", testId: "nav-connections" },
   { label: "Claude accounts", href: "/settings/claude-accounts", testId: "nav-claude-accounts" },
   { label: "Sources", href: "/settings/sources", testId: "nav-sources" },
@@ -16,10 +17,12 @@ const ITEMS = [
 
 /**
  * Settings' own sections: a strip under the page title (PageHeader draws it, see the
- * settings layout). Evidence search (/sources) lives under Sources.
+ * settings layout). Evidence search (/sources) lives under Sources. Opened from Home's Set
+ * up checklist (?from=setup), it ends with the way back to Home; another tab drops it.
  */
 export function SettingsNav() {
   const pathname = usePathname();
+  const fromSetup = useSearchParams().get("from") === "setup";
   return (
     <nav
       aria-label="Settings"
@@ -46,6 +49,11 @@ export function SettingsNav() {
             </Link>
           );
         })}
+        {fromSetup && (
+          <LinkButton href="/home" variant="ghost" icon="home" className="ml-auto flex-none" data-testid="nav-back-home">
+            Back to Home
+          </LinkButton>
+        )}
       </ScrollStrip>
     </nav>
   );

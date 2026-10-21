@@ -263,7 +263,14 @@ function load(): SourcesDb {
       // fall through to a fresh seed
     }
   }
+  // A new company (the "empty" scenario) has picked no sources yet.
+  if (localStorage.getItem("po-mock-scenario") === "empty") return { sources: [], items: [], snapshots: [] };
   return seeded("sources", seed);
+}
+
+/** How many sources there are (A1's Pick sources step). */
+export function sourceCount(): number {
+  return load().sources.length;
 }
 
 function json(status: number, body: unknown): Response {

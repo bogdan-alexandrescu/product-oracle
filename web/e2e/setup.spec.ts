@@ -134,7 +134,7 @@ test("setup: a change shows Save, a bad span shows the error, Reset reopens the 
   await expect(horizons.getByRole("alert")).toHaveCount(0);
   await expect(horizons.getByRole("button", { name: "Save" })).toHaveCount(0);
   await horizons.getByRole("button", { name: "Reset" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Reset" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Reset" }).click();
   await expect(horizons.getByLabel("From")).toHaveValue("12");
   await expect(horizons.getByRole("button", { name: "Confirm" })).toBeVisible();
   await backToHome(page);

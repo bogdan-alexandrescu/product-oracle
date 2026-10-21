@@ -13,6 +13,7 @@ import { allNeeds, CountChip, NeedTable, questionNeeds, waitingNeeds, type Need,
 import { goalViews, historyOf, shownGoals, type Point } from "./_goals";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
+import { SetupChip, SetupPanel, setupOpen } from "./_setup";
 
 /** Runs that are still going: under way, or waiting on a person. */
 const IN_FLIGHT = new Set(["running", "awaiting_checkpoint", "awaiting_approval", "paused_overrun"]);
@@ -56,8 +57,9 @@ function pickNeeds(rows: StatedNeed[], max: number): Need[] {
  * serves; a block without data says what to do next in one line.
  *
  * First paint costs a fixed number of calls whatever the company's size: five lists (goals,
- * inbox, questions asked of me, PRDs, runs), one trend per goal shown (at most four), and
- * the selected row's inspector. Nothing is fetched per run, per PRD or per hidden goal.
+ * inbox, questions asked of me, PRDs, runs), the setup checklist, one trend per goal shown
+ * (at most four), and the selected row's inspector. Nothing is fetched per run, per PRD or
+ * per hidden goal.
  */
 export default function HomePage() {
   const { role } = useMe();
@@ -69,6 +71,25 @@ export default function HomePage() {
   const questionsQ = useQuery("home|questions", loadMyQuestions);
   const docsQ = useQuery("home|documents", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const runsQ = useQuery("home|runs", () => unwrap(api.GET("/v1/runs")));
+  // A1: the Set up checklist, read live; only the hide choice is stored (a preference).
+  const setupQ = useQuery("home|setup", () => unwrap(api.GET("/v1/setup")));
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  async function hideSetup(hidden: boolean) {
+    setSetupBusy(true);
+    setSetupError(null);
+    const before = setupQ.data;
+    setupQ.setData((s) => (s ? { ...s, hidden } : s));
+    try {
+      await unwrap(api.PATCH("/v1/me/preferences", { body: { setup_hidden: hidden } }));
+    } catch (e) {
+      setupQ.setData(() => before);
+      setSetupError(errorMessage(e));
+    } finally {
+      setSetupBusy(false);
+    }
+  }
+  const setup = setupOpen(setupQ.data) ? setupQ.data : undefined;
 
   const goals = useMemo(() => (goalsQ.data ? goalViews(goalsQ.data) : undefined), [goalsQ.data]);
   const goalIndex: GoalIndex = useMemo(
@@ -163,13 +184,23 @@ export default function HomePage() {
     <Page>
       <PageHeader
         title="Home"
-        status={waiting != null && waiting > 0 && <Chip kind="acc">{waiting} waiting</Chip>}
+        status={
+          ((waiting != null && waiting > 0) || setup?.hidden) && (
+            <>
+              {waiting != null && waiting > 0 && <Chip kind="acc">{waiting} waiting</Chip>}
+              {setup?.hidden && <SetupChip setup={setup} onShow={() => hideSetup(false)} busy={setupBusy} />}
+            </>
+          )
+        }
         // The empty In flight line carries New PRD itself; never draw it twice.
         action={!nothingInFlight && newPrd()}
       />
       <Split
         inspector={selected ? <FlightInspector f={selected} openItems={openItems} docs={docs} goalIndex={goalIndex} /> : undefined}
       >
+        {setupError && <Notice tone="error">{setupError}</Notice>}
+        {setup && !setup.hidden && <SetupPanel setup={setup} onHide={() => hideSetup(true)} busy={setupBusy} />}
+
         <GoalsPanel
           goals={goals}
           history={historyQ.data ?? new Map()}
