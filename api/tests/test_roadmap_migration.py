@@ -72,7 +72,7 @@ def test_0016_roadmap_follows_the_wave_1_head():
     # (0014_review ... 0014_member_follow_up_retry), on to 0020_requests,
     # 0020_question_subjects ... 0014_account_fixes, then 0020_decisions, 0020_prd_scopes
     # and 0021_feedback_agent_staging; one head.
-    assert script.get_heads() == ["0021_feedback_agent_staging"]
+    assert script.get_heads() == ["0022_discussions"]
     assert script.get_revision("0016_refinement_batch").down_revision == REVISION
     assert script.get_revision("0017_citation_source_oracle").down_revision == (
         "0016_refinement_batch"
