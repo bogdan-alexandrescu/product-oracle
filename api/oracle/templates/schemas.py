@@ -4,8 +4,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-TemplateKind = Literal["prd", "roadmap", "vision", "strategy"]
-ThemeKind = Literal["prd", "roadmap", "vision", "strategy", "any"]
+from oracle.docs.schemas import UpdatePeriod
+
+TemplateKind = Literal["prd", "roadmap", "vision", "strategy", "update"]
+ThemeKind = Literal["prd", "roadmap", "vision", "strategy", "update", "any"]
 # The new-draft picker's kinds: a vision or strategy starts on Company › Strategy (H4).
 PickerKind = Literal["prd", "roadmap"]
 KEY_PATTERN = r"^[a-z0-9][a-z0-9-]{0,62}$"
@@ -299,6 +301,10 @@ class StartDraftIn(BaseModel):
     template_version: int | None = Field(default=None, ge=1)
     # Defaults to the template version's suggested theme.
     theme: str | None = None
+    # H8, an update only: the period it covers. Defaults to the day after the period of
+    # the last approved update of the same template (else the first of this month),
+    # through today.
+    period: UpdatePeriod | None = None
 
 
 class StartDraftOut(BaseModel):

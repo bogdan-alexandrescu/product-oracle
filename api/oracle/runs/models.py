@@ -30,6 +30,7 @@ FLOWS = (
     "request_triage",
     "strategy_draft",
     "launch_kit",
+    "update_draft",
 )
 RUN_STATUSES = (
     "draft",
@@ -53,6 +54,7 @@ CHECKPOINT_KINDS = (
     "request_triage",
     "strategy_review",
     "launch_review",
+    "update_review",
 )
 CHECKPOINT_STATUSES = ("pending", "approved", "changes_requested", "skipped")
 
