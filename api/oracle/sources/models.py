@@ -79,6 +79,11 @@ class Source(TenantScoped, Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Connector-defined incremental sync position (oracle.sources.base.CursorCheckpoint).
     cursor: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Allowlisted items the last completed sync could not read:
+    # [{"external_id": ..., "reason": ...}] (oracle.sources.base.ItemUnavailable).
+    unavailable_items: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]", default=list
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

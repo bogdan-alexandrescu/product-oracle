@@ -55,10 +55,15 @@ def scratch_db():
 
 def test_the_chain_ends_here_after_0014_intake():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0017_source_config_version"]
+    assert script.get_heads() == ["0018_source_unavailable_items"]
     assert script.get_revision("0016_source_needs_attention").down_revision == "0014_intake"
     assert script.get_revision("0016_browse_calls").down_revision == "0016_source_needs_attention"
     assert script.get_revision("0017_item_provenance").down_revision == "0016_browse_calls"
+    rev = script.get_revision("0017_source_config_version")
+    assert rev.down_revision == "0017_item_provenance"
+    # The Drive picker's per-item notes chain last (re-chained when #122 merged main).
+    drive = script.get_revision("0018_source_unavailable_items")
+    assert drive.down_revision == "0017_source_config_version"
 
 
 def test_no_table_uses_row_level_security(scratch_db):

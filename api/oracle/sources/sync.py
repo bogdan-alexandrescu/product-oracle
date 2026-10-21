@@ -7,18 +7,36 @@ connector finishes; on any failure they are rolled back and re-read next time.
 
 A sync runs what the database holds when it starts (config, connection, the account that
 connection signs in to, cursor and status, read in one select), not the caller's copy of
-the row. Every write it makes on the source (each cursor save, the end, an error, a rate
-limit, needing attention) is one conditional UPDATE: it matches only while the source
-still has the config, connection and account the sync started with. A source edited
-while its sync runs (a channel removed, a new connection) keeps none of what that sync
-read after the edit: the write matches no row, the transaction is rolled back and the
-sync ends ``superseded``.
+the row; for Google Docs, also the company's email domains and shared drives it judges
+docs by. Before the first item write of each transaction, and before every write it
+makes on the source (each cursor save, the end, an error, a rate limit, needing
+attention), it locks the source's row (:func:`_hold`) and checks that the source still
+has that config, connection and account and, for Google Docs, that the company's Drive
+settings are the same. The write itself is one conditional UPDATE on the same condition.
+A source edited while its sync runs (a channel removed, a new connection, a narrower
+company domain list) keeps none of what that sync read after the edit: the transaction
+is rolled back and the sync ends ``superseded``, so it never writes a cursor, report or
+items made for the old settings over the edit.
 
 The saved cursor carries a fingerprint of the selection (normalised config, connection,
 account) under :data:`~oracle.sources.base.SCOPE_KEY`. When it is missing or differs, the
 selection changed since the last sync: the items now outside it are deleted (soft) and
 the cursor is rescoped (``rescope_cursor``), committed at once, before the connector
 runs, so a rate limit or failure later in the sync cannot roll the sweep back.
+
+Google Docs: saving a narrower allowlist, or narrower company Drive settings, deletes
+what falls outside in that request, with no provider call (S5, narrowing takes effect on
+save; owner 2026-10-20; :func:`oracle.sources.service.update_source`). The save locks the
+source row before it touches items, as this engine does before it writes them, so it
+waits for a running sync's next commit and the sync then finds the source changed. A
+superseded Google Docs sync still deletes, once rolled back, whatever now falls outside
+(:func:`oracle.sources.service.tidy_drive_source`; items whose drive and owner are not
+known only after a company narrowing). Before the connector runs, every live item of the
+source is added to the cursor's ``files`` (with no time, so it is read again) when
+missing; the connector deletes what it knows and no longer finds under the allowlist,
+which also cleans sources narrowed before narrowing took effect on save. Items it cannot
+read (:class:`~oracle.sources.base.ItemUnavailable`) are saved on the source with each
+checkpoint, so a sync that fails later still shows them.
 
 A forbidden request (:class:`~oracle.sources.base.ConnectorForbidden`) fails the source
 and leaves the connection active; only a rejected credential (a 401, a revoked key)
@@ -28,11 +46,12 @@ Credentials are passed to the connector and nowhere else: never stored on the
 source, logged, or echoed in ``last_error`` (connector messages are redacted).
 """
 
+import dataclasses
 import hashlib
 import json
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from sqlalchemy import case, cast, func, select, update
@@ -57,6 +76,8 @@ class SyncStats:
     checkpoints: int = 0
     retry_after: float | None = None
     error: str | None = None
+    # Items the connector could not read (base.ItemUnavailable), in the order reported.
+    unavailable: list[dict[str, str]] = field(default_factory=list)
 
 
 class SyncRefused(Exception):
@@ -64,7 +85,15 @@ class SyncRefused(Exception):
 
 
 class _Superseded(Exception):
-    """The source was edited while it synced: its config or connection changed."""
+    """The source was edited while it synced: its config, connection or the connection's
+    account changed, or (Google Docs) the company's email domains or shared drives did.
+    ``company_narrowed``: those company settings were narrowed (only then does tidy
+    delete items whose drive and owner are not known; a person's own edit hides only
+    what they removed)."""
+
+    def __init__(self, company_narrowed: bool = False) -> None:
+        super().__init__()
+        self.company_narrowed = company_narrowed
 
 
 def fingerprint(
@@ -85,6 +114,9 @@ def fingerprint(
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+Company = tuple[tuple[str, ...], tuple[str, ...]]
+
+
 @dataclass(frozen=True)
 class _Start:
     """The source as the sync runs it, read from the database when it starts (not the
@@ -97,6 +129,10 @@ class _Start:
     account_id: str | None
     cursor: dict[str, Any] | None
     status: str
+    kind: str = ""
+    tenant_id: uuid.UUID | None = None
+    # Google Docs: the company's email domains and shared drives the sync judges docs by.
+    company: Company | None = None
 
 
 async def _start(db: AsyncSession, source_id: uuid.UUID) -> _Start | None:
@@ -109,6 +145,8 @@ async def _start(db: AsyncSession, source_id: uuid.UUID) -> _Start | None:
                 Connection.account_id,
                 Source.cursor,
                 Source.status,
+                Source.kind,
+                Source.tenant_id,
             )
             .outerjoin(Connection, Connection.id == Source.connection_id)
             .where(Source.id == source_id)
@@ -116,7 +154,7 @@ async def _start(db: AsyncSession, source_id: uuid.UUID) -> _Start | None:
     ).one_or_none()
     if row is None:
         return None
-    config, connection_id, account_id, cursor, status = row
+    config, connection_id, account_id, cursor, status, kind, tenant_id = row
     return _Start(
         source_id,
         dict(config or {}),
@@ -124,14 +162,67 @@ async def _start(db: AsyncSession, source_id: uuid.UUID) -> _Start | None:
         account_id,
         dict(cursor) if cursor else None,
         status,
+        kind,
+        tenant_id,
     )
+
+
+async def _company(db: AsyncSession, tenant_id: uuid.UUID | None) -> Company:
+    domains, drives = await service.company_scope(db, tenant_id)  # type: ignore[arg-type]
+    return tuple(domains), tuple(drives)
+
+
+async def _hold(db: AsyncSession, start: _Start) -> None:
+    """Lock the source's row until the transaction's next commit, and raise
+    :class:`_Superseded` when the source no longer has the config, connection and
+    connection account the sync started with or, for Google Docs, the company's Drive
+    settings changed. An owner's narrowing of those settings locks every Google Docs
+    source row before it deletes anything (oracle.sources.service.hide_outside_company),
+    so it waits for this transaction's commit and the next hold sees it.
+
+    Taken before the transaction's first item write, and before every write on the
+    source. A save that edits the source locks the row and then sweeps items; the sync
+    locks the row here and then writes items and its checkpoint. Taking the row first
+    gives both the same order, so neither waits on the other's rows (a deadlock): a save
+    waits for this transaction's next commit, and the hold after it finds the source
+    changed.
+
+    FOR NO KEY UPDATE, not FOR UPDATE: writing a source's items takes KEY SHARE on the
+    source row (their foreign key), which FOR UPDATE waits on, so two syncs of one source
+    could each hold the other's lock. Edits of the row still wait."""
+    account = (
+        select(Connection.account_id).where(Connection.id == Source.connection_id).scalar_subquery()
+    )
+    row = (
+        await db.execute(
+            select(Source.config, Source.connection_id, account.label("account_id"))
+            .where(Source.id == start.source_id)
+            .with_for_update(key_share=True, of=Source)
+        )
+    ).one_or_none()
+    narrowed = changed = False
+    if start.company is not None:
+        now = await _company(db, start.tenant_id)
+        if now != start.company:
+            changed = True
+            (domains, drives), (now_domains, now_drives) = start.company, now
+            narrowed = not set(domains) <= set(now_domains) or not set(drives) <= set(now_drives)
+    if (
+        row is None
+        or dict(row.config or {}) != start.config
+        or row.connection_id != start.connection_id
+        or row.account_id != start.account_id
+        or changed
+    ):
+        raise _Superseded(narrowed)
 
 
 async def _write(db: AsyncSession, start: _Start, **values: Any) -> None:
     """Write ``values`` on the source (with what was stored since the last write) only if
-    it still has the config, connection and account the sync started with; otherwise
-    roll back and raise :class:`_Superseded`. The UPDATE locks the row, so a status it
-    reads (a pause) is the one it writes over."""
+    it still has what the sync started with (:func:`_hold`, which also locks the row, so
+    a status it reads, a pause, is the one it writes over); otherwise raise
+    :class:`_Superseded`. The UPDATE repeats the row's condition."""
+    await _hold(db, start)
     account = (
         select(Connection.account_id).where(Connection.id == Source.connection_id).scalar_subquery()
     )
@@ -147,20 +238,21 @@ async def _write(db: AsyncSession, start: _Start, **values: Any) -> None:
         .execution_options(synchronize_session=False)
     )
     if result.rowcount != 1:
-        await db.rollback()
         raise _Superseded
 
 
-async def _hold(db: AsyncSession, start: _Start) -> None:
-    """Take the source row's key-share lock before the transaction's first item write.
-    A save that narrows the source locks the row (FOR UPDATE) and then sweeps items; the
-    sync locks items and then writes its checkpoint on the row. Taking the row first,
-    here, gives both the same order, so neither waits on the other's rows (a deadlock);
-    a save waits for this transaction's next commit, and the checkpoint after it finds
-    the source changed (_Superseded)."""
-    await db.execute(
-        select(Source.id).where(Source.id == start.source_id).with_for_update(key_share=True)
-    )
+async def _superseded(
+    db: AsyncSession, stats: SyncStats, start: _Start, company_narrowed: bool = False
+) -> SyncStats:
+    """The source changed while it synced: keep nothing since the last checkpoint."""
+    await db.rollback()
+    stats.outcome = "superseded"
+    stats.unavailable = []
+    if start.kind == "google_docs":
+        # Whatever now falls outside: what the edit's save could not judge (rows this
+        # sync held, now rolled back).
+        await service.tidy_drive_source(db, start.source_id, unknown_outside=company_narrowed)
+    return stats
 
 
 def _status(status: str) -> Any:
@@ -176,13 +268,32 @@ async def _failed(
     await db.rollback()
     try:
         await _write(db, start, status=_status(status), last_error=message)
-    except _Superseded:
-        stats.outcome = "superseded"
-        return stats
+    except _Superseded as e:
+        return await _superseded(db, stats, start, e.company_narrowed)
     await db.commit()
     stats.outcome = "error" if status == "error" else "needs_attention"
     stats.error = message
     return stats
+
+
+async def _drive_cursor(
+    db: AsyncSession, source_id: uuid.UUID, cursor: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """The Google Docs cursor with every live item of the source in ``files``."""
+    live = await db.scalars(
+        select(SourceItem.external_id).where(
+            SourceItem.source_id == source_id, SourceItem.deleted_at.is_(None)
+        )
+    )
+    cursor = dict(cursor or {})
+    files = {str(k): str(v) for k, v in (cursor.get("files") or {}).items()}
+    missing = [i for i in live if i not in files]
+    if not missing:
+        return cursor or None
+    for external_id in missing:
+        files[external_id] = ""
+    cursor["files"] = files
+    return cursor
 
 
 async def sync_source(db: AsyncSession, source: Source) -> SyncStats:
@@ -217,6 +328,8 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         stats.outcome = "superseded"
         return stats
     config = start.config
+    if kind == "google_docs":
+        start = dataclasses.replace(start, company=await _company(db, start.tenant_id))
 
     attention = _needs_attention(connector, config)
     if attention is not None:
@@ -232,6 +345,9 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     # The connection the credential is of: an auth error marks this one, whatever the
     # source points at by then.
     used_id = used.id if used is not None else None
+    problem = service.scope_problem(kind, config, used)
+    if problem:
+        return await _failed(db, start, stats, problem)
 
     scope_fp = fingerprint(
         service.normalize_config(kind, config), start.connection_id, start.account_id
@@ -255,6 +371,12 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
 
         extra["known"] = known
 
+    # What the connector reads: Google Docs also gets the company's domains and drives.
+    run_config = dict(config)
+    if start.company is not None:
+        run_config[base.COMPANY_DOMAINS] = list(start.company[0])
+        run_config[base.COMPANY_SHARED_DRIVES] = list(start.company[1])
+
     attentions: list[str] = []
     held = False  # this transaction holds the source row (see _hold)
     try:
@@ -269,7 +391,9 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
             cursor = rescope(cursor or None, config) if rescope is not None else None
             await _write(db, start, cursor=stamped(cursor))
             await db.commit()
-        async for event in connector.sync(dict(config), credential, cursor or None, **extra):
+        if kind == "google_docs":
+            cursor = await _drive_cursor(db, source_id, cursor)
+        async for event in connector.sync(run_config, credential, cursor or None, **extra):
             if isinstance(event, base.ItemUpsert | base.ItemDelete) and not held:
                 await _hold(db, start)
                 held = True
@@ -279,9 +403,21 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
                 stats.versions_written += int(written)
             elif isinstance(event, base.ItemDelete):
                 stats.deleted += int(await store.delete_item(db, source, event))
+            elif isinstance(event, base.ItemUnavailable):
+                stats.unavailable.append(
+                    {
+                        "external_id": event.external_id,
+                        "reason": event.reason[:300],
+                        **({"name": event.name[:300]} if event.name else {}),
+                        **({"status": event.status} if event.status != "unavailable" else {}),
+                    }
+                )
             elif isinstance(event, base.CursorCheckpoint):
                 cursor = dict(event.cursor)
-                await _write(db, start, cursor=stamped(cursor))
+                # The lost-access report so far too, so a sync that fails later shows it.
+                await _write(
+                    db, start, cursor=stamped(cursor), unavailable_items=list(stats.unavailable)
+                )
                 await db.commit()
                 held = False
                 stats.checkpoints += 1
@@ -297,11 +433,11 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
             cursor=stamped(cursor),
             status=_status("needs_attention" if message else "active"),
             last_error=message,
+            unavailable_items=list(stats.unavailable),
             last_synced_at=func.now(),
         )
-    except _Superseded:
-        stats.outcome = "superseded"
-        return stats
+    except _Superseded as e:
+        return await _superseded(db, stats, start, e.company_narrowed)
     except base.ConnectorRateLimited as e:
         # Stop cleanly: keep everything up to the last checkpoint and its cursor.
         await db.rollback()
@@ -310,9 +446,8 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
             await _write(
                 db, start, last_error=f"Rate limited by {kind}; the next sync resumes{wait}"
             )
-        except _Superseded:
-            stats.outcome = "superseded"
-            return stats
+        except _Superseded as superseded:
+            return await _superseded(db, stats, start, superseded.company_narrowed)
         await db.commit()
         stats.outcome = "rate_limited"
         stats.retry_after = e.retry_after

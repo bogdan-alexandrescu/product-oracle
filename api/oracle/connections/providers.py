@@ -211,6 +211,34 @@ async def identify_fireflies(client: httpx.AsyncClient, token: str) -> Identity:
 
 # --- Google -------------------------------------------------------------------------
 
+# People pick Drive files and folders in Google's Drive picker; a picked folder syncs
+# every doc in it, now and later, so Oracle keeps read access to the person's Drive
+# (S5, 'Drive folders', owner 2026-10-19). drive.file was asked for briefly before that
+# decision; such a grant cannot list a folder's docs, so it is asked to reconnect.
+DRIVE_FILE = "https://www.googleapis.com/auth/drive.file"
+DRIVE_READONLY = "https://www.googleapis.com/auth/drive.readonly"
+RECONNECT_TO_CHOOSE_FILES = "Reconnect to choose files"
+
+
+async def _google_scopes(client: httpx.AsyncClient, token: str) -> list[str]:
+    """The scopes granted to an access token, or [] when Google does not say. The token
+    goes in a POST body, so it never lands in a URL (proxy and access logs)."""
+    try:
+        resp = await client.post(
+            "https://oauth2.googleapis.com/tokeninfo", data={"access_token": token}
+        )
+    except httpx.HTTPError:
+        return []
+    if resp.status_code != 200:
+        return []
+    try:
+        data = resp.json()
+    except ValueError:
+        return []
+    if not isinstance(data, dict):
+        return []
+    return [s for s in str(data.get("scope") or "").split() if s]
+
 
 async def identify_google(client: httpx.AsyncClient, token: str) -> Identity:
     resp = await _get(
@@ -221,7 +249,20 @@ async def identify_google(client: httpx.AsyncClient, token: str) -> Identity:
     )
     _check(resp, "Google")
     data = resp.json()
-    return Identity(account_id=data["sub"], label=data.get("email") or data["sub"])
+    return Identity(
+        account_id=data["sub"],
+        label=data.get("email") or data["sub"],
+        scopes=await _google_scopes(client, token),
+    )
+
+
+def reconnect_reason(provider: str, scopes: list[str] | None) -> str | None:
+    """Why a working connection should be reconnected: a Google grant without
+    drive.readonly cannot read picked folders. Scopes Google did not report (an older
+    pasted token) are not judged."""
+    if provider == "google" and scopes and DRIVE_READONLY not in scopes:
+        return RECONNECT_TO_CHOOSE_FILES
+    return None
 
 
 # --- Registry -----------------------------------------------------------------------
@@ -298,11 +339,7 @@ PROVIDERS: dict[str, Provider] = {
             oauth=OAuthMeta(
                 authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
                 token_url="https://oauth2.googleapis.com/token",
-                scopes=[
-                    "openid",
-                    "email",
-                    "https://www.googleapis.com/auth/drive.readonly",
-                ],
+                scopes=["openid", "email", DRIVE_READONLY],
                 authorize_params={"access_type": "offline", "prompt": "consent"},
             ),
         ),

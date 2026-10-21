@@ -188,8 +188,9 @@ test("phone sources: each source's actions stay on one line", async ({ page }) =
   await login(page);
   await page.goto("/settings/sources");
   const cards = page.getByTestId("source-card");
-  // Slack, GitHub, the Slack source needing attention and the Fireflies title rule.
-  await expect(cards).toHaveCount(4);
+  // Slack, GitHub, the Slack source needing attention, the Fireflies title rule and the
+  // two Google Docs sources.
+  await expect(cards).toHaveCount(6);
   for (const card of await cards.all()) {
     const tops = new Set<number>();
     for (const button of await card.locator("div").first().getByRole("button").all()) {
