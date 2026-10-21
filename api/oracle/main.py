@@ -43,8 +43,8 @@ from oracle.quality.router import router as quality_router
 from oracle.review.router import router as review_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
-from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.safe_yaml import ParseBusy
+from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
 from oracle.specs.router import router as specs_router

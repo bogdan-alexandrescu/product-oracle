@@ -3084,6 +3084,10 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats) -> None:
         try:
             await _resume_advance(db, run, resuming, segments, stats)
             return
+        except safe_yaml.ParseBusy:
+            # No free worker: not a failed try (RESUME_TRIES). The tick rolls back, records
+            # parse_busy and the next tick resumes the advance again.
+            raise
         except Exception as exc:  # counted; the workflow is still read below
             run, segments = await _resume_failed(db, run.id, resuming.seq, exc, stats)
         wf = _live(run)

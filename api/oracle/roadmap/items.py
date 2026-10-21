@@ -42,6 +42,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import safe_yaml
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.roadmap import schedule
@@ -688,5 +689,7 @@ async def on_roadmap_version(
                 await import_items(db, version, text, run_id=run.id)
             else:
                 await carry_forward(db, version)
+    except safe_yaml.ParseBusy:
+        raise  # no worker for its items: the import gives up whole, the caller retries
     except Exception:  # noqa: BLE001 - logged; the roadmap version still imports
         log.exception("roadmap items for %s v%s were not stored", document.slug, version.number)

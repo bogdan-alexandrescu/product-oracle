@@ -2,6 +2,8 @@
 never fails a run or refuses an import. The tick rolls back, records ``run <id>: parse_busy``
 and the next tick retries, on a first advance and on a resumed one alike."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from oracle import safe_yaml
@@ -70,7 +72,7 @@ async def test_a_roadmap_version_import_does_not_swallow_parse_busy(monkeypatch)
             return False
 
     async def found(db, document):
-        return "items", object()
+        return "items", SimpleNamespace(id=1)
 
     async def busy(*args, **kwargs):
         raise safe_yaml.ParseBusy("parse_busy")
