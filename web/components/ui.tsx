@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
+import { Chip } from "@/components/ds/Chip";
 import { Page, PageHeader } from "@/components/ds/Layout";
 import type { FeedbackStatus, Verdict } from "@/lib/api/client";
 import { DOC_STATUS_LABEL, STATUS_LABEL, VERDICT_LABEL } from "@/lib/format";
@@ -35,6 +36,26 @@ export function LayerBadge({ layer }: { layer: "brief" | "detail" | null | undef
         {layer === "brief" ? "Brief" : "Detail"}
       </Badge>
     </span>
+  );
+}
+
+/**
+ * E1: the decided/proposed state of a part of a spec version (Oracle's parts are decided
+ * from the approved PRD; a section or source an edit added is "Proposed · added in an edit",
+ * drawn with a dashed edge so it reads apart from Oracle's proposed parts).
+ */
+export function SpecStateBadge({ state }: { state: { label: string; decided: boolean; added?: boolean } }) {
+  return (
+    <Chip
+      wrap
+      kind={state.decided ? "pass" : "warn"}
+      data-testid="spec-state"
+      data-decided={state.decided ? "true" : "false"}
+      data-added={state.added ? "true" : "false"}
+      className={state.added ? "border border-dashed border-warn" : ""}
+    >
+      {state.label}
+    </Chip>
   );
 }
 

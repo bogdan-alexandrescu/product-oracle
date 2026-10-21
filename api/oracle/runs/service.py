@@ -104,7 +104,8 @@ document the run will create), ``spend_ceiling_usd``, and for prd_to_roadmap
 ``theme`` (the roadmap's), ``workflow``: the live v2 workflow's id, label, credential
 expiry and plan (oracle.runs.workflow), ``stuck_lookup`` (a lost submission past the
 lookup cap, for Retry), ``searches`` (submissions given up on, still looked for),
-``post_404`` (404s that prove nothing on an answer post, counted), ``spent_at_end``
+``post_404`` (404s that prove nothing on an answer post, counted), ``planning_horizons``
+(prd_to_roadmap: the company's horizons when the run started, A1), ``spent_at_end``
 (the spend when the run ended) and ``import_failed`` (a resumed advance stopped after
 ``RESUME_TRIES`` failures, for an owner's Retry).
 
@@ -129,7 +130,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, confidence
+from oracle import audit, confidence, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -145,7 +146,7 @@ from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import schedule
-from oracle.runs import flows, reasons, rejection, roadmap, workflow
+from oracle.runs import extensions, flows, reasons, rejection, roadmap, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
@@ -204,6 +205,7 @@ from oracle.templates.builtins import (
 from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.tenancy import current_tenant, tenant_session
 from oracle.tenant_settings import TenantSetting
+from oracle.tenant_settings_api import company_horizons
 
 if TYPE_CHECKING:
     from oracle.members.models import MemberFollowUp
@@ -221,6 +223,8 @@ ORACLE_KNOBS = (
     "template",
     "template_version",
     "theme",
+    # prd_to_spec: the spec request the run writes (oracle.specs).
+    "artifact_request_id",
     # A run started from a product intake (oracle.intake): the intake, the snapshot it
     # pinned (the run reads that one, S4) and, for research, the gaps to look into.
     "intake_id",
@@ -325,6 +329,7 @@ def flow_catalog() -> FlowCatalog:
                 requires_document=f.requires_document,
                 target_kind=f.target_kind,  # type: ignore[arg-type]
                 source_kind=f.source_kind,  # type: ignore[arg-type]
+                entry=f.entry,
                 segments=[
                     FlowSegmentOut(
                         name=s.name,
@@ -1237,8 +1242,9 @@ async def _resolve_source(
         if version is None:
             raise Invalid(f"version {number} of '{document.slug}' not found")
         if version.approved_at is None:
+            target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
             raise Invalid(
-                f"version {number} of '{document.slug}' is not approved: a roadmap is built "
+                f"version {number} of '{document.slug}' is not approved: a {target} is built "
                 f"from an approved {name} version"
             )
         return document, version
@@ -1248,9 +1254,10 @@ async def _resolve_source(
         .limit(1)
     )
     if version is None:
+        target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
         raise Invalid(
             f"'{document.slug}' has no approved version: approve a version of the {name} "
-            "before building its roadmap"
+            f"before building its {target}"
         )
     return document, version
 
@@ -1348,7 +1355,7 @@ async def _resolve_inputs(
     default_slug = None
     if source is not None and inputs.document is None:
         # "<prd>-roadmap": that roadmap's next version, or a new roadmap.
-        base = f"{source[0].slug}-roadmap"
+        base = f"{source[0].slug}-{flow.target_kind or 'roadmap'}"
         existing = await docs_service.find_document(db, base)
         default_slug = (
             base
@@ -1389,12 +1396,17 @@ async def create_run(
     principal: Principal,
     body: RunCreate,
     *,
+    entry_knobs: dict[str, Any] | None = None,
     oracle_knobs: dict[str, Any] | None = None,
     commit: bool = True,
 ) -> uuid.UUID:
-    """A draft run. ``oracle_knobs``: knobs Oracle sets (``ORACLE_KNOBS``), e.g. the
-    intake a run starts from; ``commit=False`` leaves the commit to the caller."""
+    """A draft run. A flow with an ``entry`` route is created only through it, which
+    passes ``entry_knobs`` (what the run builds, e.g. its spec request) and commits.
+    ``oracle_knobs``: knobs Oracle sets (``ORACLE_KNOBS``), e.g. the intake a run starts
+    from; ``commit=False`` leaves the commit to the caller."""
     flow = flows.FLOWS[body.flow]
+    if flow.entry and entry_knobs is None:
+        raise Invalid(f"start a {flow.title} run from {flow.entry}")
     knobs = _resolve_knobs(flow, body.knobs)
     document_id, oracle = await _resolve_inputs(
         db,
@@ -1405,7 +1417,7 @@ async def create_run(
     run = Run(
         flow=flow.key,
         status="draft",
-        knobs={**knobs.as_json(), **oracle, **extra},
+        knobs={**knobs.as_json(), **oracle, **extra, **(entry_knobs or {})},
         document_id=document_id,
         created_by=principal.id,
     )
@@ -1452,6 +1464,8 @@ async def update_run(
     if body.knobs is not None:
         stored = _resolve_knobs(flow, body.knobs).as_json()
     changed = body.model_fields_set & {"document", "source", "source_version", "template", "theme"}
+    if flow.entry and any(getattr(body, k) is not None for k in changed):
+        raise Invalid(f"a {flow.title} run's document and source come from {flow.entry}")
     if any(getattr(body, k) is not None for k in changed):
         current = await _current_inputs(db, run)
         if body.source is not None:
@@ -1534,6 +1548,9 @@ async def start(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
         db.add(snapshot)
         await db.flush()
     run.snapshot_id = snapshot.id
+    if source_id is not None:
+        # Every segment, attempt and change request of the run reads these (A1).
+        _set_knob(run, "planning_horizons", await company_horizons(db))
     if run.estimate_usd > flows.APPROVAL_THRESHOLD_USD:
         run.status = "awaiting_approval"
         await audit.record(
@@ -1607,7 +1624,7 @@ async def _prompt_context(
         document = doc.slug
     document = document or run.knobs.get("document_slug")
     kind = await _target_kind(db, run)
-    source = await _source_context(db, run)
+    source = await _source_context(db, run) if _flow(run).source_prompt else None
     roadmap_ctx = None
     if source is not None and _flow(run).segment(segment.name).imports_draft:
         title = doc.title if doc is not None else f"{source.title} roadmap"
@@ -1685,6 +1702,7 @@ async def _prompt_context(
         kind=kind,
         source=source,
         roadmap=roadmap_ctx,
+        extra_lines=await extensions.prompt_lines(db, run),
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
     )
@@ -1708,6 +1726,15 @@ def _explain(feature: dict[str, Any]) -> str:
     parts += list(explanation.get("steps") or [])[:3]
     parts += list(explanation.get("order") or [])[:2]
     return " ".join(p for p in parts if p)[:400]
+
+
+async def _run_horizons(db: AsyncSession, run: Run) -> dict[str, int]:
+    """The planning horizons pinned when the run started (A1: runs under way keep what
+    they started with); a run started before they were pinned reads the company's."""
+    pinned = (run.knobs or {}).get("planning_horizons")
+    if isinstance(pinned, dict):
+        return dict(pinned)
+    return await company_horizons(db)
 
 
 async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | None:
@@ -1778,6 +1805,7 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     ]
     bases = await schedule.verified_bases(db, version.document_id)
     return flows.SourceContext(
+        horizons=await _run_horizons(db, run),
         schedule_bases=[b.as_json() for b in bases],
         slug=document.slug if document else str(version.document_id),
         title=document.title if document else "",
@@ -3130,6 +3158,24 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
     return out
 
 
+async def _run_importer(
+    db: AsyncSession, run: Run, name: str, files: dict[str, str]
+) -> dict[str, Any]:
+    """A lane's importer (oracle.runs.extensions) on the segment's files, as the run's
+    creator."""
+    tenant_id = current_tenant(db)
+    user = await db.get(User, run.created_by) if run.created_by else None
+    token = None if user or not run.created_by else await db.get(ApiToken, run.created_by)
+    try:
+        principal = _creator(tenant_id, user, token)
+    except LookupError as exc:
+        return {"error": str(exc)}
+    # The importer works in its own transactions (a spec's design check takes up to
+    # DESIGN_CHECK_SECONDS): this session holds none open meanwhile.
+    await db.commit()
+    return await extensions.run_importer(name, db, run, files, principal)
+
+
 async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, Any]:
     """Merge baseline.yaml through the baseline's YAML import, in its own transaction:
     the run's agent writes, as the run's creator; locked items get proposals."""
@@ -3261,6 +3307,8 @@ async def _advance(
             # stays usable.
             async with db.begin_nested():
                 items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
         except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
             log.exception("checking %s of run %s failed", ITEMS_FILE, run.id)
             items_check = reasons.summarize(
@@ -3306,6 +3354,23 @@ async def _advance(
             if imported.get("document_id"):
                 run.document_id = uuid.UUID(imported["document_id"])
                 _set_knob(run, "document_slug", None)
+        art["import"] = imported
+    if sdef.importer:
+        # Committed first: the importer runs in its own transaction.
+        _set_art(segment, art)
+        await db.commit()
+        try:
+            imported = await _run_importer(db, run, sdef.importer, art["files"])
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
+        except Exception as exc:  # the checkpoint must open whatever the importer does
+            log.exception("run %s: importer %s failed", run.id, sdef.importer)
+            imported = {"error": f"the {sdef.importer} import failed ({type(exc).__name__})"}
+        # The commit released the run's row lock: take it again.
+        await db.execute(select(Run.id).where(Run.id == run.id).with_for_update())
+        if imported.get("document_id"):
+            run.document_id = uuid.UUID(imported["document_id"])
+            _set_knob(run, "document_slug", None)
         art["import"] = imported
     attempt["advanced"] = True
     _set_art(segment, art)
@@ -3715,6 +3780,10 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
             try:
                 await _resume_advance(db, run, resuming, segments, stats)
                 return
+            except safe_yaml.ParseBusy:
+                # No free worker: not a failed try (RESUME_TRIES). The tick rolls back,
+                # records parse_busy and the next tick resumes the advance again.
+                raise
             except Exception as exc:  # counted; the workflow is still read below
                 run, segments = await _resume_failed(db, run.id, resuming.seq, exc, stats)
         wf = _live(run)
@@ -5281,36 +5350,44 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
         deadline = loop.time() + TICK_RUN_SECONDS
         stats.pass_id = uuid.uuid4().hex
         try:
-            owed = await _owed_decision(db, run_id)
-            if owed is not None:
-                # An Inbox decision recorded, its post to SwarmCloud not finished: tried
-                # first. Whether or not SwarmCloud takes it, the run's pass still runs
-                # (its cost, the ceiling, its workflow's end): a post that keeps failing
-                # must not stop Oracle from watching the run.
-                try:
-                    await _complete_decision(db, run_id, owed, deadline, stats)
-                except Unavailable as exc:
-                    errors.append(f"run {run_id}: {exc}")
-            # Each replay puts back only what its own unfinished passes counted: what an
-            # earlier one committed (the searches' pause, say) stays counted.
-            await _replay(
-                db,
-                deadline,
-                lambda run_id=run_id: _tick_searches(db, run_id, stats),
-                reset=_resetter(stats),
-            )
-            ran = await _replay(
-                db,
-                deadline,
-                lambda run_id=run_id, deadline=deadline: _tick_one(db, run_id, stats, deadline),
-                reset=_resetter(stats),
-            )
-            if not ran:
-                if owed is None:
-                    continue
-                stats.checked += 1  # counted once: by its pass when that ran
-            if await _has_waiting(db, run_id):
-                await submit_queued(db, run_id, deadline=deadline)
+            # Its parses count against the run (oracle.safe_yaml.MAX_PER_OWNER).
+            with safe_yaml.parse_owner(str(run_id)):
+                owed = await _owed_decision(db, run_id)
+                if owed is not None:
+                    # An Inbox decision recorded, its post to SwarmCloud not finished: tried
+                    # first. Whether or not SwarmCloud takes it, the run's pass still runs
+                    # (its cost, the ceiling, its workflow's end): a post that keeps failing
+                    # must not stop Oracle from watching the run.
+                    try:
+                        await _complete_decision(db, run_id, owed, deadline, stats)
+                    except Unavailable as exc:
+                        errors.append(f"run {run_id}: {exc}")
+                # Each replay puts back only what its own unfinished passes counted: what an
+                # earlier one committed (the searches' pause, say) stays counted.
+                await _replay(
+                    db,
+                    deadline,
+                    lambda run_id=run_id: _tick_searches(db, run_id, stats),
+                    reset=_resetter(stats),
+                )
+                ran = await _replay(
+                    db,
+                    deadline,
+                    lambda run_id=run_id, deadline=deadline: _tick_one(db, run_id, stats, deadline),
+                    reset=_resetter(stats),
+                )
+                if not ran:
+                    if owed is None:
+                        continue
+                    stats.checked += 1  # counted once: by its pass when that ran
+                if await _has_waiting(db, run_id):
+                    await submit_queued(db, run_id, deadline=deadline)
+        except safe_yaml.ParseBusy as exc:
+            # No free worker for its import within the wait: the run stays as it was
+            # (retryable), the tick gives up on it and the next tick tries again. The
+            # run's row lock and transaction end here, not after the wait.
+            await db.rollback()
+            errors.append(f"run {run_id}: {exc.code}")
         except RuntimeUnavailable as exc:
             await db.rollback()
             errors.append(f"run {run_id}: {exc}")
@@ -7549,6 +7626,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
     revising = await _revising(db, principal)
+    from oracle.reports.service import inbox_rows
+
+    reports, report_failures = await inbox_rows(db, principal)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -7564,6 +7644,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         imports=imports,
         feedback=feedback,
         revoke_failures=revoke_failures,
+        reports=reports,
+        report_failures=report_failures,
         # Every new or open item (C1e, owner 2026-10-20): the rail badge, = New + Open.
         total=len(checkpoints)
         + len(approvals)
@@ -7572,7 +7654,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + len(imports)
         + counts.new
         + counts.open
-        + len(revoke_failures),
+        + len(revoke_failures)
+        + sum(1 for r in reports if not r.read)
+        + len(report_failures),
         items=states,
         counts=counts,
         staged=staged,

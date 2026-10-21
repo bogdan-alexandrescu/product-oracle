@@ -3,6 +3,8 @@
  * No real company, product or customer names: this repository is public.
  */
 
+import { PRODUCT_CHAT_ID, seededItemId } from "./ids";
+
 export type CitationSeed = {
   id: string;
   source: "slack" | "notion" | "gdocs" | "github" | "fireflies" | "upload" | "web" | "oracle";
@@ -10,6 +12,9 @@ export type CitationSeed = {
   title: string;
   excerpt: string;
   retrieved_at: string;
+  /** E1: a source an edit added to a spec version (listed under "Added sources"). */
+  added?: boolean;
+  state_label?: string;
   /** What the writer computed (change D): the source item it read, its confidence 0-1 or a note. */
   item?: string;
   confidence?: number | null;
@@ -34,7 +39,9 @@ export type VersionSeed = {
 export type DocumentSeed = {
   slug: string;
   title: string;
-  kind?: "prd" | "roadmap";
+  kind?: "prd" | "roadmap" | "spec";
+  /** A spec's depth: a technical brief or a full engineering spec (E1). */
+  depth?: "brief" | "full";
   template?: string;
   template_version?: string;
   theme?: string;
@@ -498,6 +505,105 @@ const CARTS_V2: SectionSeed[] = CARTS_V1.map((s) =>
     : s,
 );
 
+// E1: the technical brief Oracle wrote from checkout-redesign v1 (version 1), then an edit
+// (version 2) added "Rollout notes" (not in the spec template) and "Proposed architecture"
+// (a template section a technical brief does not have): both read "Proposed · added in an
+// edit", and so does the source the edit cited.
+const REQUIREMENTS_NOTE =
+  "_Decided in the approved PRD: these are product requirements, not engineering choices. Change them in the PRD, not here._";
+const ADDED_IN_AN_EDIT = "Proposed · added in an edit";
+const SPEC_ORACLE_CITATIONS: CitationSeed[] = [
+  {
+    id: "prd-checkout",
+    source: "upload",
+    ref: "/documents/checkout-redesign/v/1",
+    title: "Checkout redesign PRD, version 1",
+    excerpt: "Show the shipping cost on the cart, before the address step.",
+    retrieved_at: "2026-10-17T09:00:00Z",
+  },
+];
+const SPEC_ADDED_CITATIONS: CitationSeed[] = [
+  {
+    id: "quote-latency",
+    source: "web",
+    ref: "https://example.com/carrier-quote-latency",
+    title: "Carrier quote latency, p95",
+    excerpt: "Carrier rate lookups answer in 300 ms at p95.",
+    retrieved_at: "2026-10-19T15:00:00Z",
+    added: true,
+    state_label: ADDED_IN_AN_EDIT,
+  },
+];
+const SPEC_TITLE = (kind: string): SectionSeed => ({
+  key: "spec",
+  level: 1,
+  heading: `Early shipping cost: ${kind}`,
+  body: `${kind[0].toUpperCase()}${kind.slice(1)} for Early shipping cost, from the approved PRD Checkout redesign PRD (version 1) [c:prd-checkout]. Product requirements come from that PRD; the engineering approach is proposed until an engineering approver approves this version.`,
+});
+const SPEC_SUMMARY: SectionSeed = { key: "summary", level: 2, heading: "Summary", body: "Shoppers see the shipping cost on the cart page, before the address step." };
+const SPEC_REQUIREMENTS: SectionSeed = {
+  key: "requirements",
+  level: 2,
+  heading: "Product requirements",
+  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Checkout redesign PRD](/documents/checkout-redesign/v/1), version 1.\n\n- **req-shipping-cost: Show shipping cost on the cart** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Shipping options](/documents/checkout-redesign/v/1#s-5-2)`,
+};
+const SPEC_ROLLOUT: SectionSeed = {
+  key: "rollout-notes",
+  level: 2,
+  heading: "Rollout notes",
+  body: "Ten percent of carts first, then everyone after a week without a rise in quote errors.\n\n![chart](https://example.com/chart.png)\n\n![stored](/uploads/rollout.png)\n\n![evil](/\\evil.com/p.png) ![other](/v1/me) ![up](/uploads/../v1/me) after the images.",
+};
+const SPEC_ARCHITECTURE: SectionSeed = {
+  key: "architecture",
+  level: 2,
+  heading: "Proposed architecture",
+  body: "The cart calls a new quote service; the service asks the carrier and caches the answer per postcode [c:quote-latency].",
+};
+const SPEC_APPROACH: SectionSeed = {
+  key: "approach",
+  level: 2,
+  heading: "Proposed engineering approach",
+  body: "_Proposed engineering approach, based on assumptions: no code capability map was available, so it is not checked against the code (see Assumptions)._\n\nA shipping quote service called from the cart, cached per postcode for ten minutes.",
+};
+const SPEC_OPEN: SectionSeed = { key: "open-decisions", level: 2, heading: "Open engineering decisions", body: "Which carrier rates to cache, and for how long." };
+const SPEC_FULL: SectionSeed = { key: "full", level: 1, heading: "Full version", body: "" };
+/** Oracle's acceptance criteria: the half from the PRD (decided), then the proposed half. */
+const SPEC_ACCEPTANCE: SectionSeed = {
+  key: "acceptance-criteria",
+  level: 2,
+  heading: "Acceptance criteria",
+  body: "In the baseline (decided with the PRD):\n\n- req-shipping-cost: A shopper sees the shipping cost on the cart page.\n\nProposed by this spec (not product requirements until the PRD adopts them):\n\n- The quote refreshes when the cart changes.",
+};
+const SPEC_ASSUMPTIONS: SectionSeed = { key: "assumptions", level: 2, heading: "Assumptions", body: "The cart service can call an internal endpoint." };
+const SPEC_SOURCES: SectionSeed = {
+  key: "sources",
+  level: 2,
+  heading: "Sources and data points",
+  body: "- Product requirements: PRD checkout-redesign version 1, approved 2026-10-17.\n- Code capability map: not available; the approach rests on the assumptions listed above.",
+};
+const SPEC_V1: SectionSeed[] = [
+  SPEC_TITLE("technical brief"), SPEC_SUMMARY, SPEC_REQUIREMENTS, SPEC_APPROACH, SPEC_OPEN,
+  SPEC_FULL, SPEC_ACCEPTANCE, SPEC_ASSUMPTIONS, SPEC_SOURCES,
+];
+const SPEC_V2: SectionSeed[] = [
+  SPEC_TITLE("technical brief"), SPEC_SUMMARY, SPEC_REQUIREMENTS, SPEC_ROLLOUT, SPEC_APPROACH, SPEC_ARCHITECTURE, SPEC_OPEN,
+  SPEC_FULL, SPEC_ACCEPTANCE, SPEC_ASSUMPTIONS, SPEC_SOURCES,
+];
+const SPEC_BRIEF_KEYS = ["summary", "requirements", "rollout-notes", "approach", "architecture", "open-decisions"];
+// E1: a full engineering spec; "Launch checklist" is not in the template (added in an edit).
+const FULL_SPEC_V1: SectionSeed[] = [
+  SPEC_TITLE("engineering spec"), SPEC_SUMMARY, SPEC_REQUIREMENTS, SPEC_APPROACH, SPEC_OPEN,
+  SPEC_FULL,
+  SPEC_ACCEPTANCE,
+  { key: "user-flows", level: 2, heading: "User flows", body: "1. The shopper opens the cart.\n2. The cart asks for a quote and shows it under the subtotal." },
+  SPEC_ARCHITECTURE,
+  { key: "apis-data", level: 2, heading: "APIs and data models", body: "`GET /quotes?postcode=…` returns the cheapest rate and its carrier." },
+  { key: "failure-modes", level: 2, heading: "Failure modes", body: "When the carrier does not answer, the cart shows the flat rate." },
+  { key: "launch-checklist", level: 2, heading: "Launch checklist", body: "- Quote errors under 0.5 percent for a week.\n- Support briefed on the new cart line." },
+  SPEC_ASSUMPTIONS,
+  SPEC_SOURCES,
+];
+
 // C1e: a Galatia-like PRD on its fifth draft, with two accepted changes staged for draft 6
 // (F-38 Outbound check, raised on v5, and Goal trace, raised on v4), one declined, one still
 // open and one addressed in v4 (comments seeded in ./server.ts, suggestions in ./llm-jobs.ts).
@@ -570,7 +676,8 @@ export const DOCUMENTS: DocumentSeed[] = [
         created_at: "2026-10-17T09:20:00Z",
         snapshot: "2026-10-17T09:00Z",
         sections: CHECKOUT_V2,
-        citations: CHECKOUT_CITATIONS,
+        // v2's writer read c1 from the mock's Product chat (its "Customer question" item).
+        citations: CHECKOUT_CITATIONS.map((c) => (c.id === "c1" ? { ...c, item: seededItemId(PRODUCT_CHAT_ID, "m1") } : c)),
       },
     ],
   },
@@ -648,6 +755,48 @@ export const DOCUMENTS: DocumentSeed[] = [
     template: "oracle-default",
     template_version: "1",
     versions: [{ number: 1, created_at: "2026-10-11T09:00:00Z", sections: REMINDERS_V1, citations: [] }],
+  },
+  // E1: a technical brief; version 2 is an edit that added sections and a source.
+  {
+    slug: "checkout-redesign-early-shipping-cost-spec",
+    title: "Early shipping cost: technical brief",
+    kind: "spec",
+    depth: "brief",
+    versions: [
+      {
+        number: 1,
+        created_at: "2026-10-19T10:00:00Z",
+        sections: SPEC_V1,
+        citations: SPEC_ORACLE_CITATIONS,
+        brief: ["summary", "requirements", "approach", "open-decisions"],
+        source: { slug: "checkout-redesign", version: 1 },
+      },
+      {
+        number: 2,
+        created_at: "2026-10-20T09:00:00Z",
+        sections: SPEC_V2,
+        citations: [...SPEC_ORACLE_CITATIONS, ...SPEC_ADDED_CITATIONS],
+        brief: SPEC_BRIEF_KEYS,
+        source: { slug: "checkout-redesign", version: 1 },
+      },
+    ],
+  },
+  // E1: a full engineering spec with a section and a source added in an edit.
+  {
+    slug: "checkout-redesign-early-shipping-cost-engineering-spec",
+    title: "Early shipping cost: engineering spec",
+    kind: "spec",
+    depth: "full",
+    versions: [
+      {
+        number: 1,
+        created_at: "2026-10-20T10:00:00Z",
+        sections: FULL_SPEC_V1,
+        citations: [...SPEC_ORACLE_CITATIONS, ...SPEC_ADDED_CITATIONS],
+        brief: ["summary", "requirements", "approach", "open-decisions"],
+        source: { slug: "checkout-redesign", version: 1 },
+      },
+    ],
   },
 ];
 

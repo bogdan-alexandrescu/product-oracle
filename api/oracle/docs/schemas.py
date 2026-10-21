@@ -41,7 +41,7 @@ Verdict = Literal["approved", "changes_requested", "rejected"]
 # O1f: brief sections make up the brief layer; the full layer is every section.
 Layer = Literal["brief", "detail"]
 BriefSource = Literal["draft", "template", "full_heading", "none"]
-DocumentKind = Literal["prd", "roadmap"]
+DocumentKind = Literal["prd", "roadmap", "spec"]
 
 
 class ORM(BaseModel):
@@ -134,6 +134,11 @@ class CitationOut(ORM):
     title: str | None = None
     excerpt: str | None = None
     retrieved_at: datetime | None = None
+    # E1 (owner, 2026-10-20): a citation an edit added to a spec version. Listed under
+    # 'Added sources' with ``state_label`` ('Proposed · added in an edit'), never in
+    # Oracle's Sources.
+    added: bool = False
+    state_label: str | None = None
     # What the writer computed for the citation: the source item it read (null when the
     # company has no such item), its confidence 0-1 and the low-confidence flag. With no
     # confidence, ``confidence_note`` says why ("owner decision, locked").
@@ -154,6 +159,21 @@ class SectionVerdict(ORM):
     # API token or OAuth grant revoked): it no longer counts, and never will again.
     lapsed_at: datetime | None = None
     lapse_reason: str | None = None
+
+
+class SpecPartState(BaseModel):
+    """E1: the decided/proposed state of a part of a spec version's section, as the
+    document view shows it (the exports and the markdown show the same label)."""
+
+    label: str
+    decided: bool
+    # The template does not have the section: an edit added it ("Proposed · added in an
+    # edit").
+    added: bool = False
+    # The acceptance criteria have two: the half Oracle wrote ("decided") and the proposed
+    # half ("proposed"), which starts at the paragraph ``starts_at``.
+    half: Literal["decided", "proposed"] | None = None
+    starts_at: str | None = None
 
 
 class SectionOut(ORM):
@@ -178,6 +198,9 @@ class SectionOut(ORM):
     # Presenter notes: the section's fenced ``notes`` block only; guidance is never used
     # (O1g).
     notes: str | None = None
+    # Spec versions only (E1): each part's state, in order; empty for other documents and
+    # for a spec's title and "Full version" heading.
+    spec_states: list[SpecPartState] = []
 
 
 class ApprovalLapse(BaseModel):
@@ -239,6 +262,9 @@ class SectionDiff(BaseModel):
     to_layer: Layer | None = None
     # Word-level ops over body_text (and heading); only for status == "changed".
     words: list[WordOp] | None = None
+    # E1: a spec section's states in the newer version (the older one for a removed
+    # section): an added section shows 'Proposed · added in an edit' in the diff too.
+    spec_states: list[SpecPartState] = []
 
 
 class DiffOut(BaseModel):

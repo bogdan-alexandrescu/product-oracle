@@ -55,12 +55,19 @@ from oracle.claude_accounts.models import (  # noqa: E402
 from oracle.connections.models import Connection  # noqa: E402
 from oracle.docs.models import Citation, Document, DocumentVersion, Section  # noqa: E402
 from oracle.intake.models import IntakeProposal, IntakeWithheldItem  # noqa: E402
+from oracle.integrations.models import CompanyIntegration  # noqa: E402
 from oracle.jobs.models import LlmJob, LlmSuggestion  # noqa: E402
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
 from oracle.members.models import Invite, MemberFollowUp  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
 from oracle.priorities.models import PrioritySnapshot  # noqa: E402
 from oracle.quality.models import OutcomeRecord, QualityLearning  # noqa: E402
+from oracle.reports.models import AlignmentReport, AlignmentReportRead  # noqa: E402
+from oracle.requests.models import (  # noqa: E402
+    ProductRequest,
+    RequestCandidate,
+    RequestTheme,
+)
 from oracle.review.models import (  # noqa: E402
     Comment,
     DocumentPublication,
@@ -116,6 +123,8 @@ from oracle.v2.models import (  # noqa: E402
 )
 
 __all__ = [
+    "AlignmentReport",
+    "AlignmentReportRead",
     "ApiToken",
     "ArtifactDependency",
     "ArtifactOutput",
@@ -135,6 +144,7 @@ __all__ = [
     "ClaudeFallbackCredential",
     "ClaudeSweepLease",
     "Comment",
+    "CompanyIntegration",
     "CompositionRevision",
     "Conflict",
     "Connection",
@@ -169,11 +179,14 @@ __all__ = [
     "OAuthToken",
     "OutcomeRecord",
     "PrioritySnapshot",
+    "ProductRequest",
     "ProductIntake",
     "ProductTrack",
     "Proposal",
     "ReviewCampaign",
     "QualityLearning",
+    "RequestCandidate",
+    "RequestTheme",
     "RoadmapItem",
     "Run",
     "RunSegment",

@@ -73,6 +73,9 @@ ROLES: dict[str, AgentRole] = {
         AgentRole("prioritizer", "Prioritizer", "Goal-weighted priority order", Decimal("2.50")),
         AgentRole("writer", "Writer", "Writes the PRD draft", Decimal("6.00")),
         AgentRole("critic", "Critic", "Checks traceability and citations", Decimal("3.00")),
+        AgentRole(
+            "designer", "Designer", "User flows and low-fidelity wireframes", Decimal("4.00")
+        ),
     )
 }
 
@@ -95,6 +98,9 @@ class SegmentDef:
     # Merge the segment's baseline.yaml into the baseline (locked items get proposals).
     imports_baseline: bool = False
     tools: tuple[str, ...] = ()
+    # Hand the segment's files to an importer a lane registered (oracle.runs.extensions)
+    # when the segment succeeds; its result is the checkpoint's "import".
+    importer: str | None = None
 
     def outputs_for(self, kind: str) -> tuple[str, ...]:
         """The files the segment writes for a target document of ``kind``."""
@@ -113,7 +119,7 @@ class SegmentDef:
 
 
 # Document kinds a run writes, and how prompts name them.
-KIND_NAMES = {"prd": "PRD", "roadmap": "roadmap"}
+KIND_NAMES = {"prd": "PRD", "roadmap": "roadmap", "spec": "engineering spec"}
 
 
 def draft_file(kind: str) -> str:
@@ -134,6 +140,12 @@ class FlowDef:
     # The kind of the approved document the run reads (prd_to_roadmap: a PRD); None:
     # the run reads no source document.
     source_kind: str | None = None
+    # The route that starts runs of this flow (it records what the run builds first);
+    # None: POST /v1/runs.
+    entry: str | None = None
+    # False: the flow's prompts describe the source document themselves (a registered
+    # prompt extension), instead of the roadmap's source lines.
+    source_prompt: bool = True
 
     def segment(self, name: str) -> SegmentDef:
         return next(s for s in self.segments if s.name == name)
@@ -328,6 +340,43 @@ FLOWS: dict[str, FlowDef] = {
                 ),
             ),
         ),
+        FlowDef(
+            key="prd_to_spec",
+            title="Engineering spec from an approved PRD",
+            description="A technical brief or full engineering spec for a feature's "
+            "requirements, with SVG user flows and low-fidelity wireframes of 2-4 key screens, "
+            "each linked to its PRD sections and requirement ids.",
+            target_kind="spec",
+            source_kind="prd",
+            entry="POST /v1/spec-requests",
+            source_prompt=False,
+            segments=(
+                SegmentDef(
+                    name="spec_draft",
+                    title="Spec, flows and wireframes",
+                    roles=("architect", "designer", "critic"),
+                    # Read-only: Oracle composes, checks and imports what the run writes.
+                    scopes=(*READ, "read:documents"),
+                    outputs=("spec.md", "design.json"),
+                    checkpoint="eng_review",
+                    importer="spec",
+                    task="Write the engineering spec for the approved PRD requirements below "
+                    "as spec.md, and its user flows and key-screen wireframes as design.json, "
+                    "following the spec contract below. Keep the product requirements (decided "
+                    "in the PRD) apart from your proposed engineering approach: Oracle writes "
+                    "the requirements section itself from the PRD; you propose how to build "
+                    "them.",
+                    tools=(
+                        "get_document",
+                        "get_document_markdown",
+                        "get_baseline",
+                        "trace_feature",
+                        "search",
+                        "get_source_item",
+                    ),
+                ),
+            ),
+        ),
     )
 }
 
@@ -415,6 +464,9 @@ class SourceContext:
     # Verified schedule bases (CR-11): kind, reference, supports_date. The only sources
     # a milestone date may name.
     schedule_bases: list[dict[str, Any]] = field(default_factory=list)
+    # The run's planning horizons (A1, the planning_horizons setting as the run started,
+    # run.knobs["planning_horizons"]); empty: B2's defaults (HORIZONS).
+    horizons: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -432,6 +484,30 @@ HORIZONS = (
     ("next", "medium", "the next two quarters"),
     ("later", "long", "12 to 24 months"),
 )
+# The planning_horizons value HORIZONS words (oracle.tenant_settings_api.DEFAULTS).
+DEFAULT_HORIZONS = {
+    "short_quarters": 1,
+    "medium_quarters": 2,
+    "long_from_months": 12,
+    "long_to_months": 24,
+}
+
+
+def horizon_lines(h: dict[str, int]) -> tuple[tuple[str, str, str], ...]:
+    """(roadmap column, horizon, span) for each horizon of a planning_horizons value. The
+    defaults keep HORIZONS' text word for word, so prompts did not change with A1."""
+    if not h or h == DEFAULT_HORIZONS:
+        return HORIZONS
+    n = h["medium_quarters"]
+    if h["short_quarters"] == 1:
+        short = "the current quarter"
+        medium = "the next quarter" if n == 1 else f"the next {n} quarters"
+    else:
+        # Now holds the next quarter too, so Next never says "next": it starts after Now.
+        short = "the current and next quarter"
+        medium = "the quarter after those two" if n == 1 else f"the {n} quarters after those two"
+    later = f"{h['long_from_months']} to {h['long_to_months']} months"
+    return (("now", "short", short), ("next", "medium", medium), ("later", "long", later))
 
 
 def prd_link(slug: str, version: int, section: str) -> str:
@@ -475,6 +551,8 @@ class PromptContext:
     source: SourceContext | None = None
     # prd_to_roadmap: the target roadmap's template, theme and starting skeleton.
     roadmap: RoadmapContext | None = None
+    # Lines a lane's prompt extension adds (oracle.runs.extensions), e.g. the spec contract.
+    extra_lines: list[str] = field(default_factory=list)
     # A run started from a product intake: its id (agents read it through Oracle's
     # tools, never pasted here) and, for research, the gaps to look into.
     intake_id: str | None = None
@@ -567,6 +645,8 @@ def step_prompt(
         lines += source_lines(ctx.source, paste=not ctx.mcp_attached)
     if ctx.roadmap is not None:
         lines += roadmap_lines(ctx.roadmap, ctx.source)
+    if ctx.extra_lines:
+        lines += ["", *ctx.extra_lines]
     if ctx.mcp_attached:
         if ctx.prior_files:
             lines += [
@@ -642,7 +722,9 @@ def source_lines(src: SourceContext, *, paste: bool = True) -> list[str]:
         "PRD section ids: " + ", ".join(f"{k} ({h})" for k, h in src.sections),
         "",
         "Horizons (B2): "
-        + "; ".join(f"{col} = {name} term, {span}" for col, name, span in HORIZONS)
+        + "; ".join(
+            f"{col} = {name} term, {span}" for col, name, span in horizon_lines(src.horizons)
+        )
         + ". Dated milestones only in now, and only from a source that gives a date or an "
         "estimate (O4).",
     ]

@@ -6,9 +6,10 @@ from pydantic import BaseModel, Field
 
 from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
+from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 
-Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap"]
+Flow = Literal["baseline_to_prd", "feedback_loop", "prd_to_roadmap", "prd_to_spec"]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
     "draft",
@@ -103,6 +104,9 @@ class FlowOut(BaseModel):
     target_kind: DocumentKind | None = None
     # The kind of approved document the run reads (prd_to_roadmap: a PRD).
     source_kind: DocumentKind | None = None
+    # The route that starts runs of this flow (prd_to_spec: POST /v1/spec-requests); None:
+    # POST /v1/runs.
+    entry: str | None = None
     segments: list[FlowSegmentOut]
 
 
@@ -527,6 +531,13 @@ class InboxFeedbackItem(BaseModel):
     # suggestions").
     suggestion_status: SuggestionStatus | None = None
     suggestion_kind: str | None = None
+    # D14: what the row's Accept / Decline act on, when the suggestion is open (else null):
+    # its id, its text (the approver's edit when there is one) and rationale cut to 280
+    # characters, and whether Oracle pushed back (Accept then needs a reason).
+    suggestion_id: uuid.UUID | None = None
+    suggestion_text: str | None = None
+    suggestion_pushback: bool | None = None
+    suggestion_rationale: str | None = None
 
 
 class InboxFeedbackCounts(BaseModel):
@@ -629,6 +640,10 @@ class InboxOut(BaseModel):
     feedback: list[InboxDocument]
     # Owners only: provider revokes a member's disable could not make (Retry, Dismiss).
     revoke_failures: list[InboxRevokeFailure] = []
+    # Owners only (F6): the newest weekly alignment reports, unread ones in ``total``; and
+    # the reports Slack refused for 24 hours (Retry, Dismiss), in ``total`` too.
+    reports: list[InboxReport] = []
+    report_failures: list[InboxReportFailure] = []
     total: int
     # Approvers and owners: feedback in every state, newest first (declined and done
     # capped to the most recent), the counts per state, and the staged rows.

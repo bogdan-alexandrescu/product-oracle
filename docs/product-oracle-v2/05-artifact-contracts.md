@@ -376,3 +376,166 @@ audited (`roadmap.items_imported`, `roadmap.items.<action>`, `schedule_basis.ver
 `schedule_basis.withdrawn`, `tracker.records_imported`, `track.started`, `track.updated`,
 `milestone.created`, `milestone.updated`; the handlers `roadmap.items_marked_stale`). Run
 tokens reach none of these routes. The mock API is `web/lib/api/mock/roadmap.ts`.
+
+## 9. Engineering specs, flows and wireframes (lane `v2-specs`, CR-09, §11.1-§11.2)
+
+The code is in `api/oracle/specs/`. Migration `0015_specs` (after `0016_roadmap`) widens two
+check constraints: `documents.kind` accepts `spec`, `runs.flow` accepts `prd_to_spec`.
+Everything else uses the foundation's artifact tables.
+
+### What is stored where
+
+| Thing | Stored as |
+|---|---|
+| A spec request | `artifact_requests` of kind `tech_brief` (depth `brief`) or `engineering_spec` (`full`): the approved PRD version, the requirement ids, the PRD sections, `params` (document slug and id, depth, design on or off, screens 2-4, engineering approver ids, feature) |
+| Its flows and wireframes | two child requests, kinds `user_flow` and `wireframe` (`params.parent_request_id`) |
+| A spec version | a document of kind `spec` (brief and full layers, versions, diffs, section reviews, comments, exports: the PRD machinery) **and** one `artifact_versions` row per document version, with the provenance and the dependencies. The markdown lives once, in the document version; the artifact output `spec.md` points at it (`storage_ref: document_versions/<id>`) |
+| A flow or wireframe version | `artifact_versions` with one `artifact_outputs` row per file (`image/svg+xml` or `text/html`, size, sha256, sanitised content inline; `meta`: title, screen, PRD section keys, requirement ids, annotations, what the sanitiser removed) |
+| Reviews | the PRD review routes for a spec version; `artifact_review_events` for flows, wireframes and their annotations (`data.output`, `data.annotation_id`) |
+
+### Product requirement apart from proposed engineering approach
+
+Oracle composes every spec version (`oracle.specs.contract.compose`). The agents write the
+engineering sections of `spec.md`; Oracle writes the front matter, the **Product
+requirements** section (each requirement by id, key, title and statement, with links to
+the PRD sections that state it), the decided acceptance criteria from the baseline
+(`verifies` edges; the agents' extra criteria are listed as proposals), and Sources and data
+points (PRD version, requirement ids, run, code capability map). Every section has a part:
+`product_requirement`, `engineering_approach`, `open_decision`, `assumption` or `context`.
+Each engineering approach section opens with a "proposed" label. The view
+(`GET /v1/spec-requests/{id}`) returns each section's part and whether it is decided: product
+requirements always are, the rest only once an engineering approver approves the version.
+
+Brief layer (the technical brief): summary, product requirements, proposed engineering
+approach, open engineering decisions. Full layer adds acceptance criteria, user flows,
+inputs and outputs, proposed architecture, APIs and data models, dependencies, failure
+modes, security/privacy/performance, test strategy, release flags, migration and rollback,
+assumptions. A tech brief needs only the brief sections plus acceptance criteria and
+assumptions.
+
+**No code capability map yet** (S2 and CR-12 belong to `v2-sources`):
+`oracle.specs.capabilities.capability_map()` returns None, so every spec says so, labels its
+approach "based on assumptions", and needs a non-empty Assumptions section. When the map
+lands, only that function changes.
+
+### What a section body may hold (E1, owner, 2026-10-20)
+
+An edit and a run's import are refused (422, every problem at once,
+`oracle.specs.contract.structure_problems`) when a section's heading or body holds raw HTML
+(an HTML block or inline tag, including one a backslash escapes, `\<span>`), HTML comment
+syntax (`<!--` or `-->`, code included), or a data:, javascript: or vbscript: URL in any
+spelling a reader of the raw markdown may follow (`script_url`, `data_url`): every link,
+image, autolink (`<javascript:...>`) and reference definition (in a quote or a list too,
+with an escaped or multi-line label) as markdown-it reads it, entities and escapes decoded
+(`&#106;avascript:`), the scheme read as a browser reads it (control characters and spaces
+in it ignored), plus the decoded raw text (an unescaped `](`, `]:` or `<` right before such a
+scheme, after any spaces or control characters). Text escaped as entities
+(`&lt;script&gt;`) or with a backslash (`\[x\](javascript:...)`) is not refused: it renders
+literally. The web renders a link only for http, https, mailto and relative or anchor
+destinations; any other scheme shows as plain text. Images load only when Oracle stores
+them: a path of the app under `/uploads/` (no backslash, control character, other origin or
+dot segment: a browser reads `/\evil.com/p.png` as evil.com). A remote http(s) image, in the
+web and in exports, is a link showing its alt text and host (`chart (example.com)`), never
+an `<img>`; any other image shows its alt text (owner, 2026-10-20); data: images stay
+refused at import.
+
+Every parse of a draft or edit is bounded (r7 re-review, 2026-10-20). A line over 20,000
+characters (`line_too_long`, any draft's body, not only a spec's) is refused by one linear
+check before any markdown parse (markdown-it's parse is quadratic on one long line of
+tag-like text). A paragraph that leaves more than 20 `[` open (`too_many_open_brackets`,
+markdown-it's own nesting limit) is refused before its inline parse: open brackets are
+what makes markdown-it's link scan slow, about 15 µs per character, whatever the paragraph
+size. Anything else is bounded by the parse cap (`too_slow`, `oracle.parse_budget`): each
+parse may use `PARSE_SECONDS` (5 s) of CPU time in markdown-it from the moment it starts,
+checked as it runs, and stops there, freeing its worker of the parse pool; a wait for a free
+worker does not count. A spec version is at most 200,000 bytes (`too_large`,
+`MAX_SPEC_BYTES`): an edit as submitted, and a version a run composes as it is served. The
+label check reads each
+block as it renders in every output: the body, the body without citation markers, and
+`layers.slide_body(body)` with and without them. Images are no visible text; a task-list
+box or footnote marker before a label, emphasis ending right after 'Decided' or 'Proposed',
+a bare 'Decided', and a label split by a hard break are refused. Citation markers are
+dropped before a heading is compared with a PRD part's title. The request title is one
+escaped line in `# {title} {#spec}` and may not read as a label. The checks never parse
+with markdown-it's HTML rule on (it is quadratic on many unclosed `<!--`), and the comment
+check is one linear pass. The web's `lib/markdown` follows CommonMark where the check
+depends on it: an ordered list interrupts a paragraph only from 1, a line indented four
+spaces stays paragraph text, and a table needs a delimiter row with as many cells as its
+header (rows are cut or padded to that width).
+
+### Generation: the `prd_to_spec` flow
+
+`POST /v1/spec-requests` (approver) checks that the PRD version is approved, that every id is
+a baseline requirement (not rejected), that named sections exist in that version, and that
+engineering approvers are approvers. It adds the sections that link the requirements
+(`document_section_links`), creates the requests and a **draft** run of the code-defined
+flow `prd_to_spec`. The run is estimated and started through the runs routes, so the >$50
+owner approval and the 1.5x overrun pause apply unchanged (`POST /v1/runs` refuses this
+flow: it needs its request). One segment, `spec_draft` (architect, designer, critic; the
+designer is left out when design is off), read-only scopes, writes `spec.md` and
+`design.json`, and stops at the toggleable `eng_review` checkpoint (E1).
+
+When the segment succeeds, the registered importer (`oracle.runs.extensions`) composes and
+checks `spec.md`, imports it as the spec's next version, checks and sanitises `design.json`
+(names, sizes, types, section and requirement links, annotation targets) and stores the flows
+and wireframes. Any design error refuses the whole bundle; the request is then `partial`.
+Provenance on every artifact version: run, flow, runner profile, runtime, prompt version
+(`prd_to_spec/1`), PRD document, version and version id, requirement ids, section keys, source
+snapshot. Never a credential.
+
+### Lineage and staleness
+
+Each spec version depends on its PRD sections (anchored at their hashes) and on every
+requirement entity; each flow or wireframe version on the sections and requirements its
+files link. `oracle.trace`'s handler marks them `potentially_stale` when a section changes in
+a new PRD version or a requirement changes (also through the PRD sections that link it).
+The `specs.lineage` change handler gives every new spec document version its artifact
+version: a run's import records fresh dependencies; a person's edit (`oracle push`, the API)
+copies the previous version's dependencies as they are, so an edit never makes a stale spec
+fresh. A spec document no request owns is refused (`spec_without_request`).
+
+Nothing is rewritten. `POST /v1/spec-requests/{id}/regenerate` (approver) proposes a
+regeneration: a draft run on the latest approved PRD version (or a named one), with the
+stale reasons in its prompt. It writes new versions for review; older unapproved versions
+are superseded, and an approved one stays until a newer one is approved. A version that is
+`potentially_stale` cannot be approved until someone reviews, reconciles
+(`POST /v1/trace/staleness/actions`) or regenerates it.
+
+### Engineering approval
+
+`POST /v1/documents/{spec}/versions/{n}/approve` on a spec is the engineering approval of its
+approach: only the request's engineering approvers may (any approver when none is named; an
+owner always may). Named approvers approve in their own session: an API token's id is not a
+user id, so only an owner token can approve a spec with named approvers. It refuses a
+superseded or stale version, then applies the PRD approval, marks the artifact version
+approved and supersedes the earlier ones (never a newer one). Flows and wireframes are approved, rejected or sent back with
+`POST /v1/design-artifacts/{id}/reviews` under the same rule; commenters comment on a version
+or an annotation.
+
+### Static, offline design outputs (§16.20)
+
+`oracle.specs.sanitize` rebuilds every SVG and HTML file from an allowlist. A script, an
+event handler, a `javascript:` or external URL, an image, frame, object, stylesheet link,
+`base`, refresh, form target, CSS `url()` (SVG keeps `url(#id)`), `@import` or escape is a
+refusal, not a silent fix. Wireframes get a Content-Security-Policy meta tag and a grayscale
+stylesheet after the agents' CSS; flows get a grayscale filter. Buttons never submit.
+`GET /v1/design-artifacts/{id}/outputs/{name}` serves them with `default-src 'none'` and
+`sandbox` (an opaque origin: no scripts, no network, no access to Oracle's cookies or API),
+`nosniff` and `no-store`.
+
+### Routes
+
+| Operation (MCP tool) | Method and path | Role |
+|---|---|---|
+| `create_spec_request` | POST `/v1/spec-requests` | approver |
+| `list_spec_requests` | GET `/v1/spec-requests[?prd=]` | viewer |
+| `get_spec_request` | GET `/v1/spec-requests/{id}` | viewer |
+| `regenerate_spec` | POST `/v1/spec-requests/{id}/regenerate` | approver |
+| `get_design_artifact` | GET `/v1/design-artifacts/{version_id}` | viewer |
+| `get_design_output` | GET `/v1/design-artifacts/{version_id}/outputs/{name}` | viewer |
+| `review_design_artifact` | POST `/v1/design-artifacts/{version_id}/reviews` | commenter (verdicts: engineering approvers, owner) |
+
+All are company-scoped (another company's ids are 404) and every write is audited
+(`spec.requested`, `spec.version_recorded`, `spec.design_recorded`, `spec.design_<kind>`,
+`spec.approach_approved`, `spec.regeneration_proposed`). The mock API serves them from
+`web/lib/api/mock/specs.ts`.

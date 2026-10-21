@@ -70,6 +70,8 @@ function inline(nodes: Inline[], links: (key: string, inner: string) => string):
           return `<em>${inline(n.c, links)}</em>`;
         case "link":
           return n.href.startsWith("#") ? links(n.href.slice(1), inline(n.c, links)) : `<a href="${esc(n.href)}">${inline(n.c, links)}</a>`;
+        case "img":
+          return /^https:\/\//i.test(n.src) ? `<img src="${esc(n.src)}" alt="${esc(n.alt)}">` : "";
         case "cite":
           return "";
       }

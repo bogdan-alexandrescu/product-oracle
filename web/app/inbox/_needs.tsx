@@ -9,6 +9,7 @@ import { formatDateTime } from "@/lib/format";
 import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
 
+import { InboxActions, SuggestionPeek, type OnActed } from "./_actions";
 import {
   CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
@@ -83,7 +84,14 @@ export const NEED_COLUMNS: Column<Need>[] = [
     width: "212px",
     align: "right",
     phone: "action",
-    cell: (n) => <span className="inline-flex flex-wrap justify-end gap-1.5">{n.action}</span>,
+    wrap: true,
+    // D14: a feedback row's actions and their fields go under the row on a phone, full width.
+    className: "max-[600px]:has-[[data-inbox-actions]]:order-5 max-[600px]:has-[[data-inbox-actions]]:basis-full",
+    cell: (n) => (
+      <span className="inline-flex flex-wrap justify-end gap-1.5 has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full">
+        {n.action}
+      </span>
+    ),
   },
 ];
 
@@ -175,6 +183,8 @@ export type NeedGroup =
   | "lookups"
   | "imports"
   | "revoke-failures"
+  | "report-failures"
+  | "reports"
   | "feedback"
   | "questions"
   | "searches"
@@ -199,19 +209,17 @@ export function visitState(item: FeedbackRow, seenBefore: string | null | undefi
   return item.state;
 }
 
-/** The verb on an open item's button: what it waits for. */
-export function reviewVerb(f: Pick<FeedbackRow, "kind" | "suggestion_status">): string {
-  if (f.suggestion_status === "open") return "Review suggestions";
-  if (f.kind === "comment") return "Review comments";
-  return "Review";
-}
-
 /**
  * One row per feedback item, in its state (the owner, 2026-10-20: one Inbox, no second
  * per-document list), and on Staged each document's 'N changes staged for draft N+1' row
  * first, with Build draft N+1.
  */
-export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undefined): StatedNeed[] {
+export function feedbackNeeds(
+  inbox: InboxOut,
+  seenBefore: string | null | undefined,
+  onActed: OnActed,
+  compact = false,
+): StatedNeed[] {
   const docLink = (slug: string, title: string | null | undefined) => (
     <Link href={`/documents/${slug}`} className="block truncate hover:underline">
       {title ?? slug}
@@ -261,7 +269,6 @@ export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undef
       ) : state === "done" ? (
         <Chip kind="pass">{f.addressed_in_version ? `v${f.addressed_in_version}` : "Closed"}</Chip>
       ) : null;
-    const verb = reviewVerb(f);
     return {
       key: f.id,
       icon: state === "declined" ? "x" : state === "done" || state === "staged" ? "check" : "comment",
@@ -271,9 +278,7 @@ export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undef
       group: "feedback",
       item: (
         <>
-          <Link href={href} className="min-w-0 truncate hover:underline" title={f.summary}>
-            {f.summary}
-          </Link>
+          <SuggestionPeek href={href} summary={f.summary} text={live ? f.suggestion_text : null} />
           {f.section_key ? (
             <span className="flex-none font-mono text-[13px] text-text2">#{f.section_key}</span>
           ) : (
@@ -294,9 +299,8 @@ export function feedbackNeeds(inbox: InboxOut, seenBefore: string | null | undef
             Open
           </LinkButton>
         ) : live ? (
-          <LinkButton href={href} aria-label={`${verb}: ${f.summary}`}>
-            {verb}
-          </LinkButton>
+          // D14: decide on Oracle's suggestion here; a remount per state and suggestion.
+          <InboxActions key={`${f.id}-${state}-${f.suggestion_id ?? ""}`} f={f} href={href} compact={compact} onActed={onActed} />
         ) : (
           <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`}>
             Open
@@ -391,6 +395,85 @@ export function revokeNeeds(failures: RevokeFailure[], busy: string | null, act:
             onClick={() =>
               act(`dismiss-${f.id}`, () => unwrap(api.POST("/v1/member-follow-ups/{follow_up_id}/dismiss", path)))
             }
+          >
+            Dismiss
+          </Button>
+        </>
+      ),
+    };
+  });
+}
+
+type InboxReport = NonNullable<InboxOut["reports"]>[number];
+type ReportFailure = NonNullable<InboxOut["report_failures"]>[number];
+
+/**
+ * Owners only (F6): the weekly alignment reports, New while unread and made after my last
+ * visit, Open while unread, Done once opened (C1e). Open shows the report, which marks it read.
+ */
+export function reportNeeds(reports: InboxReport[], seenBefore: string | null | undefined): StatedNeed[] {
+  return reports.map((r) => {
+    const risky = r.summary.at_risk + r.summary.off_track;
+    const label = `${r.title} · ${risky} at risk · ${r.summary.slips} ${r.summary.slips === 1 ? "slip" : "slips"}`;
+    return {
+      key: `report-${r.id}`,
+      icon: "roadmap",
+      kind: "Report",
+      state: r.read ? "done" : isNew(r.created_at, seenBefore) ? "new" : "open",
+      counted: true,
+      group: "reports",
+      item: (
+        <Link href={`/plan/reports/${r.id}`} className="min-w-0 truncate hover:underline" title={r.headline}>
+          {label}
+        </Link>
+      ),
+      context: (
+        <span className="block truncate text-text2" title={r.headline}>
+          {r.headline}
+        </span>
+      ),
+      at: r.created_at,
+      action: (
+        <LinkButton variant={r.read ? "ghost" : undefined} href={`/plan/reports/${r.id}`} aria-label="Open">
+          Open
+        </LinkButton>
+      ),
+    };
+  });
+}
+
+/** Owners only (F6): a report Slack refused for 24 hours, with Retry and Dismiss. */
+export function reportFailureNeeds(failures: ReportFailure[], busy: string | null, act: Act): Need[] {
+  return failures.map((f) => {
+    const path = { params: { path: { report_id: f.id } } };
+    const why = `${f.channel ? `#${f.channel.name} · ` : ""}tried ${f.attempts} time${f.attempts === 1 ? "" : "s"}`;
+    return {
+      key: `report-failure-${f.id}`,
+      icon: "alert",
+      kind: "Couldn't post",
+      item: (
+        <Link href={`/plan/reports/${f.id}`} className="min-w-0 truncate hover:underline" title={f.title}>
+          Report not posted to Slack · {f.error ?? "Slack refused it"}
+        </Link>
+      ),
+      context: (
+        <span className="block truncate text-text2" title={`${f.title} · ${why}`}>
+          {f.title.replace("Report not posted to Slack · ", "")} · {why}
+        </span>
+      ),
+      at: f.created_at,
+      action: (
+        <>
+          <Button
+            disabled={busy !== null}
+            onClick={() => act(`report-retry-${f.id}`, () => unwrap(api.POST("/v1/alignment-reports/{report_id}/slack/retry", path)))}
+          >
+            Retry
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={busy !== null}
+            onClick={() => act(`report-dismiss-${f.id}`, () => unwrap(api.POST("/v1/alignment-reports/{report_id}/slack/dismiss", path)))}
           >
             Dismiss
           </Button>
@@ -760,6 +843,7 @@ export function allNeeds(
   busy: string | null,
   act: Act,
   seenBefore: string | null | undefined,
+  onActed: OnActed,
   compact = false,
 ): StatedNeed[] {
   const n = inboxNeeds(inbox, busy, act, compact);
@@ -772,7 +856,9 @@ export function allNeeds(
     ...stated(n.lookups, "lookups"),
     ...stated(n.imports, "imports"),
     ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
-    ...feedbackNeeds(inbox, seenBefore),
+    ...stated(reportFailureNeeds(inbox.report_failures ?? [], busy, act), "report-failures"),
+    ...reportNeeds(inbox.reports ?? [], seenBefore),
+    ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
     ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),

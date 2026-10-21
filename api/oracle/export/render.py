@@ -36,10 +36,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from oracle import safe_yaml
 from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
-from oracle.docs.parser import CITATION_STRIP_RE
+from oracle.docs.parser import strip_citations
 from oracle.docs.schemas import VersionSource
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates.models import Template, TemplateVersion, Theme
@@ -49,9 +50,9 @@ TEMPLATES = HERE / "templates"
 STATIC = HERE / "static"
 
 # [c:c1] or [c:c1, c2]
-_CITE = re.compile(r"\[c:\s*([A-Za-z0-9_.\-]+(?:\s*,\s*[A-Za-z0-9_.\-]+)*)\s*\]")
+_CITE = re.compile(r"\[c:\s*([A-Za-z0-9_.:\-]+(?:\s*,\s*[A-Za-z0-9_.:\-]+)*)\s*\]")
 # Parsers normally strip the id from the heading; this guards against one that does not.
-_HEADING_ID = re.compile(r"\s*\{#[^}]*\}\s*$")
+_HEADING_ID = re.compile(r"(?<!\s)\s*\{#[^}]*\}\s*$")
 
 
 class NotFound(LookupError):
@@ -87,6 +88,22 @@ class ExportVersion:
     # v2 (§7, §16.9): each section's internal claim-to-source links, for the appendix
     # only ({"key", "links": [{"claim", "label", "kind", "confidence"}]}).
     evidence_links: list[dict] = field(default_factory=list)
+    # The markdown the export serves, when it is not the stored one (a spec's, labelled).
+    markdown: str | None = None
+    # E1: a spec version's states by section key (oracle.specs.contract.PartState), shown
+    # as elements no body can produce, and the citations an edit added (Added sources).
+    spec_states: dict[str, list] = field(default_factory=dict)
+    added_citations: set[str] = field(default_factory=set)
+
+    @property
+    def added_label(self) -> str | None:
+        """The state label of the Added sources list (a spec's only)."""
+        if not self.added_citations:
+            return None
+        from oracle.specs.contract import ADDED_LABEL
+
+        return ADDED_LABEL
+
     # A roadmap (O4 'document dates'): the sections as stored, and the dates marked now
     # (unverified, withdrawn) that ``sections`` carry a marker after.
     stored_sections: list[Section] = field(default_factory=list)
@@ -317,8 +334,64 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
     from oracle.trace.evidence import appendix_links
 
     ev.evidence_links = await appendix_links(db, version)
+    if document.kind == "spec":
+        await _label_spec(db, ev)
     await _resolve_theme(db, ev)
     return ev
+
+
+async def _label_spec(db: AsyncSession, ev: ExportVersion) -> None:
+    """E1: every export of a spec version (HTML, PDF, slides, PPTX, markdown) shows each
+    part's decided/proposed state, 'Proposed · added in an edit' on a section an edit
+    added, and the citations an edit added in their own Added sources list. The HTML,
+    PDF and slides render each label as an element a body can not produce (bodies render
+    without raw HTML), never as body markdown; the markdown carries it as a line."""
+    from oracle.specs import contract, lineage
+
+    approved = await lineage.approach_approved(db, ev.version)
+    oracle = await lineage.oracle_citation_keys(db, ev.version)
+    keys = contract.keys_of(ev.version.front_matter)
+    ev.spec_states = {
+        s.section_key: contract.part_states(s.section_key, s.body_md or "", approved, keys)
+        for s in ev.all_sections
+        if s.section_key not in contract.UNLABELLED
+    }
+    ev.added_citations = {
+        c.cite_key for c in ev.citations if oracle is None or c.cite_key not in oracle
+    }
+    # Off the event loop: the version's text is an edit's (oracle.safe_yaml).
+    ev.markdown = await safe_yaml.run_parse(
+        contract.label_markdown, ev.version.markdown, approved, oracle
+    )
+
+
+def state_html(state) -> str:
+    """A spec part's state label as an export shows it: a classed element of its own."""
+    kind = "added" if state.added else ("decided" if state.decided else "proposed")
+    return (
+        f'<p class="spec-state spec-state-{kind}" data-spec-state="{kind}">'
+        f"{escape(state.label)}</p>"
+    )
+
+
+def section_body_html(ev: ExportVersion, key: str, text: str, render) -> str:
+    """A section's body rendered by ``render`` (markdown -> HTML, without raw HTML), with
+    a spec's state labels inserted as elements: at the top and, for the acceptance
+    criteria, before the proposed half."""
+    states = ev.spec_states.get(key)
+    if not states:
+        return render(text)
+    if len(states) > 1:
+        from oracle.specs.contract import ACCEPTANCE_PROPOSED_LABEL, split_acceptance
+
+        decided, proposed = split_acceptance(text)
+        return (
+            state_html(states[0])
+            + render(decided)
+            + state_html(states[1])
+            + render(f"{ACCEPTANCE_PROPOSED_LABEL}\n\n{proposed or ''}")
+        )
+    return state_html(states[0]) + render(text)
 
 
 async def _marked_dates(
@@ -452,12 +525,55 @@ def _render_citation(renderer, tokens, idx, options, env) -> str:
     return html
 
 
+# Owner decision (2026-10-20): an image loads only when Oracle stores it, a path of this
+# app under STORED_IMAGES. One a browser could read as another host ('/\evil.com', a
+# control character) or that leaves the prefix (a dot segment, '%2e%2e') is not one.
+STORED_IMAGES = "/uploads/"
+_URL_UNSAFE = re.compile(r"[\\\x00-\x20\x7f-\x9f]")
+_DOT_SEGMENT = re.compile(r"(?:^|/)(?:\.|%2e){1,2}(?:/|$)", re.I)
+
+
+def stored_image(src: str) -> bool:
+    """``src`` is an image Oracle stores: a path under :data:`STORED_IMAGES`, with no
+    backslash, control character, space or dot segment."""
+    if not src.startswith(STORED_IMAGES) or _URL_UNSAFE.search(src):
+        return False
+    parts = urlsplit(src)
+    return not (parts.scheme or parts.netloc or _DOT_SEGMENT.search(parts.path))
+
+
+def image_label(src: str, alt: str) -> tuple[str, str | None]:
+    """How an image that does not load shows (owner decision, 2026-10-20): its alt text and
+    the host of an http(s) URL ('chart (example.com)'), with the URL to link; just its alt
+    text, with nothing to link, for anything else."""
+    parts = urlsplit(src)
+    if parts.scheme in ("http", "https") and parts.hostname and not _URL_UNSAFE.search(src):
+        return (f"{alt} ({parts.hostname})" if alt else parts.hostname), src
+    return alt, None
+
+
+def _render_image(self, tokens, idx, options, env) -> str:
+    """A stored image as an image with its alt text; any other as :func:`image_label`: an
+    export's reader never contacts an outside host. Plain strings: a ``Markup`` here would
+    escape the HTML rendered around it."""
+    tok = tokens[idx]
+    src = str(tok.attrGet("src") or "")
+    alt = self.renderInlineAsText(tok.children or [], options, env)
+    if stored_image(src):
+        return f'<img src="{escape(src)}" alt="{escape(alt)}">'
+    label, href = image_label(src, alt)
+    if href is None:
+        return str(escape(label))
+    return f'<a href="{escape(href)}" rel="noopener noreferrer">{escape(label)}</a>'
+
+
 @cache
 def _markdown() -> MarkdownIt:
     # Raw HTML in drafts is not rendered: exports are shared, drafts are agent-written.
     md = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
     md.inline.ruler.before("link", "citation", _citation_rule)
     md.add_render_rule("citation", _render_citation)
+    md.add_render_rule("image", _render_image)
     return md
 
 
@@ -514,7 +630,15 @@ def build_context(ev: ExportVersion) -> dict:
                 # Guidance comments and presenter notes are never exported.
                 body=Markup(
                     absolute_doc_links(
-                        unlink_missing(md.render(layers.slide_body(s.body_md), env), present)
+                        unlink_missing(
+                            section_body_html(
+                                ev,
+                                s.section_key,
+                                layers.slide_body(s.body_md),
+                                lambda text, env=env: md.render(text, env),
+                            ),
+                            present,
+                        )
                     )
                 ),
             )
@@ -541,6 +665,9 @@ def build_context(ev: ExportVersion) -> dict:
     headings = {r.key: r.heading for r in sections}
     v = ev.version
     return {
+        # E1: a spec's citations added in an edit, listed apart from Oracle's Sources.
+        "added_footnotes": [f for f in footnotes if f.key in ev.added_citations],
+        "added_label": ev.added_label,
         "title": ev.title,
         "slug": ev.document.slug,
         "number": v.number,
@@ -551,7 +678,7 @@ def build_context(ev: ExportVersion) -> dict:
         "snapshot": v.snapshot,
         "has_title_section": any(s.level == 1 for s in ev.sections),
         "sections": sections,
-        "footnotes": footnotes,
+        "footnotes": [f for f in footnotes if f.key not in ev.added_citations],
         "evidence_links": [
             {"key": e["key"], "heading": headings[e["key"]], "links": e["links"]}
             for e in ev.evidence_links
@@ -616,6 +743,7 @@ def _themed_markdown(link: bool) -> MarkdownIt:
     md = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
     md.inline.ruler.before("link", "citation", _citation_rule)
     md.add_render_rule("citation", _link_citation if link else _strip_citation)
+    md.add_render_rule("image", _render_image)
     return md
 
 
@@ -727,7 +855,17 @@ def build_themed_context(ev: ExportVersion) -> dict:
             heading=Markup(md.renderInline(heading, env)),
             body=Markup(
                 absolute_doc_links(
-                    unlink_missing(_decorate(md.render(_body_md(s, md is plain), env)), present)
+                    unlink_missing(
+                        _decorate(
+                            section_body_html(
+                                ev,
+                                s.section_key,
+                                _body_md(s, md is plain),
+                                lambda text: md.render(text, env),
+                            )
+                        ),
+                        present,
+                    )
                 )
             ),
             # Roadmap items (cards) that say they serve no confirmed goal get the flag.
@@ -740,7 +878,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         # Guidance comments and presenter notes are never exported.
         text = layers.slide_body(s.body_md or "")
         # O1c: the body renders without citation markers (and the space before them).
-        return CITATION_STRIP_RE.sub("", text) if strip else text
+        return strip_citations(text) if strip else text
 
     rendered = [render(s, plain) for s in body]
     # Group each level-2 section with the level-3 sections under it (cards on a board).
@@ -769,7 +907,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
     headings = {r.key: r.heading for r in rendered}
     by_section = []
     for s in body:
-        keys = [k for k in s.citation_keys or [] if k in by_key]
+        # Oracle's Sources list only Oracle's citations; added ones have their own list.
+        keys = [k for k in s.citation_keys or [] if k in by_key and k not in ev.added_citations]
         if keys:
             by_section.append(
                 {
@@ -801,6 +940,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
         )
         for key, number in sorted(numbers.items(), key=lambda kv: kv[1])
     ]
+    added_source_list = [f for f in source_list if f.key in ev.added_citations]
+    source_list = [f for f in source_list if f.key not in ev.added_citations]
 
     v = ev.version
     body_classes = [
@@ -844,6 +985,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "by_section": by_section,
         "evidence_links": evidence_links,
         "source_list": source_list,
+        "added_source_list": added_source_list,
+        "added_label": ev.added_label,
         "css": Markup(themed_stylesheet()),
         "token_css": Markup(token_css(tokens)),
         "theme_css": Markup(theme.css or ""),
@@ -893,8 +1036,12 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
     from oracle.roadmap import doc_dates
 
     banner = f"<!-- {banner_line(ev)} -->\n"
-    markdown = doc_dates.annotate_markdown(
-        ev.version.markdown, ev.stored_sections or ev.sections, ev.date_marks
+    markdown = (
+        ev.markdown
+        if ev.markdown is not None
+        else doc_dates.annotate_markdown(
+            ev.version.markdown, ev.stored_sections or ev.sections, ev.date_marks
+        )
     )
     if markdown.startswith("---"):
         m = re.compile(r"^---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)", re.S | re.M).match(

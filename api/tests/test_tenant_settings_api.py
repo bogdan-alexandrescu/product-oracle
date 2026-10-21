@@ -1,11 +1,18 @@
 """Company settings: owner only, each known key validated."""
 
+from datetime import date
+
 import pytest
 from sqlalchemy import select
 
 from oracle.models import AuditEvent
 from oracle.tenancy import tenant_session
-from oracle.tenant_settings_api import InvalidSetting, validate_confidence_weights
+from oracle.tenant_settings_api import (
+    DEFAULTS,
+    InvalidSetting,
+    horizon_windows,
+    validate_confidence_weights,
+)
 from tests.connection_helpers import make_person
 
 
@@ -44,6 +51,21 @@ async def test_defaults_and_unknown_keys(client, owner):
         "blocker_risk_review_max_days": 90,
         "company_email_domains": [],
         "company_shared_drives": [],
+        # A1: the B2 Goals framework horizons, until an owner confirms or changes them.
+        "planning_horizons": {
+            "short_quarters": 1,
+            "medium_quarters": 2,
+            "long_from_months": 12,
+            "long_to_months": 24,
+        },
+        # F6: the weekly alignment report, Monday 08:00 Pacific, no Slack channel yet.
+        "alignment_report": {
+            "enabled": True,
+            "weekday": "mon",
+            "time": "08:00",
+            "timezone": "America/Los_Angeles",
+            "slack_channel": None,
+        },
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404
@@ -146,3 +168,65 @@ async def test_company_shared_drives(client, owner):
     for bad in ([{"id": "root"}], [{"id": "../x"}], [{"name": "x"}], ["0AProduct000"], {}):
         resp = await client.put(url, json={"value": bad}, headers=owner.headers)
         assert resp.status_code == 422, bad
+
+
+# --- A1: planning_horizons ------------------------------------------------------------
+
+HORIZONS = {"short_quarters": 1, "medium_quarters": 2, "long_from_months": 12, "long_to_months": 24}
+SHAPE = (
+    "planning_horizons needs short_quarters, medium_quarters, long_from_months and "
+    "long_to_months as whole numbers"
+)
+
+
+async def test_planning_horizons_confirm_and_reset(client, tenant_id, owner):
+    # protects=Confirm stores the defaults as a row, Reset removes it (owner only);
+    # fails_when=confirming leaves is_default true or a non-owner may store it;
+    # no_claim=UI copy.
+    approver = await make_person(tenant_id, "approver@example.com", "approver")
+    url = "/v1/settings/planning_horizons"
+    assert (
+        await client.put(url, json={"value": HORIZONS}, headers=approver.headers)
+    ).status_code == 403
+    got = (await client.get(url, headers=owner.headers)).json()
+    assert got["value"] == HORIZONS and got["is_default"] is True
+    put = await client.put(url, json={"value": HORIZONS}, headers=owner.headers)
+    assert put.status_code == 200, put.text
+    assert put.json()["value"] == HORIZONS and put.json()["is_default"] is False
+    reset = await client.put(url, json={"value": None}, headers=owner.headers)
+    assert reset.json()["is_default"] is True and reset.json()["value"] == HORIZONS
+
+
+@pytest.mark.parametrize(
+    "change, message",
+    [
+        ({"short_quarters": 3}, "short_quarters must be 1 or 2"),
+        ({"medium_quarters": 0}, "medium_quarters must be between 1 and 4"),
+        (
+            {"long_from_months": 6},
+            "long_from_months must start after Next ends (at least 9 months) and be at most 36",
+        ),
+        ({"long_to_months": 12}, "long_to_months must be after long_from_months and at most 60"),
+        ({"extra": 1}, SHAPE),
+        ({"short_quarters": True}, SHAPE),
+    ],
+)
+async def test_planning_horizons_validation(client, owner, change, message):
+    # protects=only a typed, coherent horizon set is stored; fails_when=a bad value is
+    # stored or the message does not say what to fix; no_claim=UI copy.
+    url = "/v1/settings/planning_horizons"
+    resp = await client.put(url, json={"value": {**HORIZONS, **change}}, headers=owner.headers)
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == message
+    assert (await client.get(url, headers=owner.headers)).json()["is_default"] is True
+
+
+def test_horizon_windows_with_the_defaults():
+    # protects=one way to turn horizons into dates for later picks; fails_when=a window
+    # starts or ends on the wrong day; no_claim=agents use them.
+    windows = horizon_windows(DEFAULTS["planning_horizons"], date(2026, 10, 20))
+    assert windows == {
+        "short": (date(2026, 10, 1), date(2026, 12, 31)),
+        "medium": (date(2027, 1, 1), date(2027, 6, 30)),
+        "long": (date(2027, 10, 20), date(2028, 10, 20)),
+    }

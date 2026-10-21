@@ -20,6 +20,7 @@ export function Chip({
   kind = "na",
   dot = false,
   hero = false,
+  wrap = false,
   title,
   className = "",
   children,
@@ -30,6 +31,8 @@ export function Chip({
   dot?: boolean;
   /** Inside an Inspector head. */
   hero?: boolean;
+  /** A long label wraps onto more lines instead of overflowing a narrow screen. */
+  wrap?: boolean;
   title?: string;
   className?: string;
   children: ReactNode;
@@ -40,7 +43,9 @@ export function Chip({
       title={title}
       data-kind={kind}
       {...rest}
-      className={`tnum inline-flex h-[26px] max-w-full items-center gap-1.5 rounded-full px-2.5 text-[13px] leading-none font-semibold whitespace-nowrap ${tone} ${className}`}
+      className={`tnum inline-flex max-w-full items-center gap-1.5 px-2.5 text-[13px] font-semibold ${
+        wrap ? "min-h-[26px] rounded-[13px] py-1 leading-[18px]" : "h-[26px] rounded-full leading-none whitespace-nowrap"
+      } ${tone} ${className}`}
     >
       {dot && <span aria-hidden className="size-2 flex-none rounded-full bg-current" />}
       {children}

@@ -257,6 +257,8 @@ async def check_items_async(text: str, **kwargs: Any) -> ItemsCheck:
         return await safe_yaml.run_parse_within(
             check_items, text, name="roadmap_items.yaml", seconds=PARSE_SECONDS, **kwargs
         )
+    except safe_yaml.ParseBusy:
+        raise  # no worker for it: the caller gives up for now and retries
     except safe_yaml.ParseTimeout:
         out = ItemsCheck()
         out.add(

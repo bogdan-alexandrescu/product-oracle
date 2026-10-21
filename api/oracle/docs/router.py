@@ -166,8 +166,12 @@ async def get_version_markdown(doc: str, n: int, db: TenantDB) -> PlainTextRespo
         version = await service.get_version_row(db, document, n)
     except service.NotFoundError as exc:
         raise _not_found(exc) from exc
-    # A roadmap's flagged dates carry an HTML comment after each (O4 'document dates').
-    markdown, _ = await service.version_markdown(db, version)
+    if await service.is_spec_version(db, version):
+        # E1: a spec version's markdown carries its state labels and Added sources.
+        markdown = await service.spec_markdown(db, version)
+    else:
+        # A roadmap's flagged dates carry an HTML comment after each (O4 'document dates').
+        markdown, _ = await service.version_markdown(db, version)
     return PlainTextResponse(markdown, media_type="text/markdown; charset=utf-8")
 
 

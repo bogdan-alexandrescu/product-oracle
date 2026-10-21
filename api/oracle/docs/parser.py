@@ -19,7 +19,7 @@ from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from oracle import safe_yaml
+from oracle import parse_budget, safe_yaml
 from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.schemas import (
@@ -36,11 +36,38 @@ SECTION_LEVELS = (1, 2, 3)
 # The lookbehind starts a match only at the head of a whitespace run, so a long run that
 # is not followed by an id is scanned once (linear), not once per space.
 SECTION_ID_RE = re.compile(r"(?<!\s)\s*\{#([A-Za-z0-9][A-Za-z0-9_.:-]*)\}\s*$")
-CITATION_RE = re.compile(r"\[c:([^\]\s]+)\]")
+CITATION_RE = re.compile(r"\[c:([^\[\]\s]+)\]")
 # A citation marker plus the horizontal space before it, removed from body_text. Linear:
 # a match starts only at the head of a space run, and a marker's id stops at the next
 # "[c:", so neither a long run nor a flood of "[c:" is rescanned from every position.
 CITATION_STRIP_RE = re.compile(r"(?<![ \t])[ \t]*\[c:(?:[^\]\s\[]|\[(?!c:))++\]")
+
+
+def strip_citations(text: str) -> str:
+    """``text`` without its ``[c:id]`` markers. A nested ``[c:[c:x]a]`` leaves ``[c:a]``
+    after one pass, so strip until the text stops changing (at most 3 passes). Nesting
+    deeper than that is not real text: every "[c:" left is then dropped in one scan, so
+    nothing CITATION_RE reads survives."""
+    for _ in range(3):
+        stripped = CITATION_STRIP_RE.sub("", text)
+        if stripped == text:
+            break
+        text = stripped
+    if CITATION_RE.search(text):
+        text = _drop_citation_openers(text)
+    return text
+
+
+def _drop_citation_openers(text: str) -> str:
+    """``text`` without "[c:", including ones that dropping another assembles."""
+    out: list[str] = []
+    for ch in text:
+        out.append(ch)
+        if ch == ":" and out[-3:] == ["[", "c", ":"]:
+            del out[-3:]
+    return "".join(out)
+
+
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 # The markers an export writes after a roadmap date that rests on no verified basis
@@ -55,7 +82,47 @@ DATE_MARK_COMMENT_RE = re.compile(
 # (oracle.export.render.render_markdown), dropped on import with the markers above.
 EXPORT_BANNER_RE = re.compile(r"^<!-- Product Oracle export: [^\n]*? -->\n", re.M)
 
-_md = MarkdownIt("commonmark", {"html": False}).enable("table")
+# Every parse of a draft is of untrusted text: guarded (oracle.parse_budget), so a parse
+# stops at its CPU budget. The sections come from the block structure alone (headings and
+# their lines need no inline parse); a section's body text from a full parse of its body.
+_md = parse_budget.guard(MarkdownIt("commonmark", {"html": False}).enable("table"))
+_blocks = parse_budget.guard(
+    MarkdownIt("commonmark", {"html": False}).enable("table").disable(["inline", "text_join"])
+)
+
+# The longest line a draft's body may hold (owner decision, 2026-10-20). Checked once,
+# linearly, before any markdown parse: markdown-it's inline parse is quadratic on one long
+# line of tag-like text ('<b>' x 300k, 900 KB, took ~40 s).
+MAX_LINE = 20_000
+# The most '[' an inline block (a paragraph, heading or table cell) may leave open at once:
+# markdown-it's own nesting limit (``maxNesting``), past which it no longer parses nested
+# links as written. Many open brackets are what makes its link scan slow ('![' x 500k
+# took ~35 s), so such a block is refused before its inline parse.
+MAX_OPEN_BRACKETS = 20
+_BRACKET_OR_ESCAPE = re.compile(r"\\.|[\[\]]", re.S)
+
+
+def long_line(text: str) -> int | None:
+    """The 1-based number of the first line of ``text`` over :data:`MAX_LINE` characters,
+    or None. Linear."""
+    for number, line in enumerate(text.split("\n"), start=1):
+        if len(line) > MAX_LINE:
+            return number
+    return None
+
+
+def too_many_open_brackets(text: str) -> bool:
+    """``text`` (one inline block) leaves more than :data:`MAX_OPEN_BRACKETS` '[' open at
+    some point (a backslash-escaped bracket does not count). Linear."""
+    depth = 0
+    for m in _BRACKET_OR_ESCAPE.finditer(text):
+        if m.group() == "[":
+            depth += 1
+            if depth > MAX_OPEN_BRACKETS:
+                return True
+        elif m.group() == "]" and depth:
+            depth -= 1
+    return False
 
 
 class DraftError(ValueError):
@@ -64,10 +131,15 @@ class DraftError(ValueError):
         super().__init__("; ".join(p.message for p in problems))
 
 
+# A citation id: what a [c:id] marker can name, and nothing that could break a line of the
+# markdown it is served in (E1: a spec names its added sources by id).
+CITATION_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$"
+
+
 class CitationIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: str = Field(min_length=1)
+    id: str = Field(pattern=CITATION_ID_PATTERN)
     source: CitationSource
     ref: str = Field(min_length=1)
     title: str | None = None
@@ -98,6 +170,13 @@ class ParsedSection:
     body_text: str
     citation_keys: list[str]
     line: int  # 1-based line of the heading in the whole file
+    # 1-based line in the whole file where the body starts (the parser's token.map[1]):
+    # after the heading line, or after a setext heading's underline.
+    body_line: int = 0
+    # The heading's markup ("#".."###" for ATX, "=" or "-" for setext) and its nesting
+    # (0 at the top level, more inside a list or block quote).
+    markup: str = "#"
+    nesting: int = 0
 
     @property
     def content_hash(self) -> str:
@@ -225,6 +304,7 @@ def body_text(body_md: str) -> str:
     blocks: list[str] = []
     row: list[str] | None = None
     for token in _md.parse(body_md):
+        parse_budget.check()
         if token.type == "tr_open":
             row = []
             continue
@@ -239,7 +319,7 @@ def body_text(body_md: str) -> str:
             text = token.content.rstrip("\n")
         else:
             continue
-        text = CITATION_STRIP_RE.sub("", text).strip()
+        text = strip_citations(text).strip()
         if row is not None:
             row.append(text.replace("|", "\\|"))
         elif text:
@@ -310,6 +390,13 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
     return _jsonable(data)
 
 
+def _shown_id(key: str | None) -> str:
+    """A citation id as a problem names it: JSON-quoted when it is not a valid id."""
+    if not key:
+        return "no id"
+    return key if re.fullmatch(CITATION_ID_PATTERN, key) else json.dumps(key[:100])
+
+
 def _citation_field(error: Any) -> str:
     """What is wrong with one field of a citation: the field, a source this Oracle does not
     accept by name, and a confidence that is not a number from 0 to 1 (the run page groups
@@ -332,6 +419,7 @@ def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn
     citations: list[CitationIn] = []
     seen: set[str] = set()
     for i, item in enumerate(raw):
+        parse_budget.check()
         key = str(item.get("id")) if isinstance(item, dict) and item.get("id") else None
         try:
             citation = CitationIn.model_validate(
@@ -339,10 +427,12 @@ def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn
             )
         except ValidationError as exc:
             fields = ", ".join(_citation_field(e) for e in exc.errors())
+            if any(e["loc"] == ("id",) for e in exc.errors()):
+                fields += " (letters, digits and _ . : -, up to 100, from a letter or digit)"
             problems.append(
                 ImportProblem(
                     code="invalid_citation",
-                    message=f"citation #{i + 1} ({key or 'no id'}) is invalid: {fields}",
+                    message=f"citation #{i + 1} ({_shown_id(key)}) is invalid: {fields}",
                     cite_key=key,
                 )
             )
@@ -371,6 +461,7 @@ def _parse_resolutions(raw: Any, problems: list[ImportProblem]) -> list[Resoluti
         return []
     resolutions: list[Resolution] = []
     for i, item in enumerate(raw):
+        parse_budget.check()
         try:
             resolutions.append(Resolution.model_validate(item))
         except ValidationError as exc:
@@ -390,7 +481,27 @@ def _parse_sections(
     lines = body.split("\n")
     # (heading line index, body start index, level, heading text or None, key or None)
     heads: list[tuple[int, int, int, str, str | None]] = []
-    for token_index, token in enumerate(tokens := _md.parse(body)):
+    shape: dict[int, tuple[str, int]] = {}
+    tokens = _blocks.parse(body)
+    crowded = next(
+        (t for t in tokens if t.type == "inline" and too_many_open_brackets(t.content)), None
+    )
+    if crowded is not None:
+        # Refused before any inline parse (the body text below is one per section).
+        line = crowded.map[0] + 1 + line_offset if crowded.map else None
+        raise DraftError(
+            [
+                *problems,
+                ImportProblem(
+                    code="too_many_open_brackets",
+                    message=f"a paragraph leaves more than {MAX_OPEN_BRACKETS} '[' open: "
+                    "close them, or write a literal one as '\\['",
+                    line=line,
+                ),
+            ]
+        )
+    for token_index, token in enumerate(tokens):
+        parse_budget.check()
         if token.type != "heading_open" or token.map is None:
             continue
         level = int(token.tag[1])
@@ -399,6 +510,7 @@ def _parse_sections(
         raw = tokens[token_index + 1].content.strip()
         match = SECTION_ID_RE.search(raw)
         start, end = token.map
+        shape[start] = (token.markup, token.level)
         if match is None:
             problems.append(
                 ImportProblem(
@@ -428,6 +540,7 @@ def _parse_sections(
     sections: list[ParsedSection] = []
     seen: set[str] = set()
     for i, (start, body_start, level, heading, key) in enumerate(heads):
+        parse_budget.check()
         body_end = heads[i + 1][0] if i + 1 < len(heads) else len(lines)
         if key is None:
             continue
@@ -455,6 +568,9 @@ def _parse_sections(
                 body_text=body_text(body_md),
                 citation_keys=citation_keys,
                 line=line,
+                body_line=body_start + 1 + line_offset,
+                markup=shape[start][0],
+                nesting=shape[start][1],
             )
         )
     return sections
@@ -479,17 +595,66 @@ def _check_citations(
                 )
 
 
+def prepared(markdown: str) -> str:
+    """A draft's text as :func:`parse_draft` reads it: an export's banner and date marker
+    comments dropped, then :func:`normalize`."""
+    return normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
+
+
+def body_problems(text: str) -> list[ImportProblem]:
+    """What refuses a draft (``text`` as :func:`prepared` reads it) before any markdown
+    parse: a body line over :data:`MAX_LINE` characters. Linear. (The front matter is
+    YAML, with caps of its own: :mod:`oracle.safe_yaml`.)"""
+    _, body, offset = split_front_matter(text)
+    number = long_line(body)
+    if number is None:
+        return []
+    return [
+        ImportProblem(
+            code="line_too_long",
+            message=f"line {number + offset} is over {MAX_LINE:,} characters: break it into "
+            "paragraphs or list items",
+            line=number + offset,
+        )
+    ]
+
+
 def parse_draft(markdown: str) -> ParsedDraft:
     """Parse and validate a draft. Raises :class:`DraftError` listing every problem.
 
-    CPU-bound: async callers run it with :func:`parse_draft_async`."""
+    Bounded: a body line over :data:`MAX_LINE` characters is refused before any markdown
+    parse, a paragraph with too many open brackets before its inline parse, and the parse
+    stops at its CPU budget (:mod:`oracle.parse_budget`: the caller's, else
+    ``PARSE_SECONDS`` of its own, refused as ``too_slow``). CPU-bound: async callers run it
+    with :func:`parse_draft_async`."""
+    if parse_budget.active():
+        return _parse_draft(markdown)
+    seconds = safe_yaml.PARSE_SECONDS
+    try:
+        with parse_budget.limit(seconds):
+            return _parse_draft(markdown)
+    except parse_budget.Exceeded:
+        raise DraftError(
+            [
+                ImportProblem(
+                    code="too_slow",
+                    message=f"the draft took more than {seconds:g} s to read; keep it small "
+                    "and plain",
+                )
+            ]
+        ) from None
+
+
+def _parse_draft(markdown: str) -> ParsedDraft:
     # The request body is capped (413); a run's file is not, so the draft is too.
     limit = get_settings().max_body_bytes
     if len(markdown.encode("utf-8")) > limit:
         raise DraftError(
             [ImportProblem(code="draft_too_large", message=f"draft is larger than {limit} bytes")]
         )
-    text = normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
+    text = prepared(markdown)
+    if refused := body_problems(text):
+        raise DraftError(refused)
     problems: list[ImportProblem] = []
 
     yaml_text, body, offset = split_front_matter(text)

@@ -14,6 +14,7 @@ flow); tests of v2 drive :class:`oracle.swarm.SwarmCloudRuntime` against a fake
 SwarmCloud API instead (``tests/swarmcloud_fake.py``).
 """
 
+import json
 import re
 import secrets
 from dataclasses import dataclass, field
@@ -41,7 +42,26 @@ SEGMENT_FILES: dict[str, tuple[str, ...]] = {
     "next_draft": ("prd.md", "resolutions.yaml"),
     "roadmap_items": ("roadmap_items.yaml",),
     "roadmap_draft": ("roadmap.md",),
+    "spec_draft": ("spec.md", "design.json"),
 }
+# The machine-readable line a spec prompt carries (oracle.specs.service.prompt_lines).
+_SPEC_INPUTS = re.compile(r"^Spec inputs \(JSON\): (\{.*\})$", re.M)
+_SPEC_SECTIONS = (
+    ("summary", "Summary"),
+    ("approach", "Proposed engineering approach"),
+    ("open-decisions", "Open engineering decisions"),
+    ("user-flows", "User flows"),
+    ("inputs-outputs", "Inputs and outputs"),
+    ("architecture", "Proposed architecture"),
+    ("apis-data", "APIs and data models"),
+    ("dependencies", "Dependencies"),
+    ("failure-modes", "Failure modes"),
+    ("security-privacy-performance", "Security, privacy and performance"),
+    ("test-strategy", "Test strategy"),
+    ("release-flags", "Release flags"),
+    ("migration-rollback", "Migration and rollback"),
+    ("assumptions", "Assumptions"),
+)
 
 
 @dataclass(frozen=True)
@@ -67,8 +87,73 @@ class _Record:
     cancelled: bool = False
 
 
-def _default_files(segment: str, attempt: int, outputs: tuple[str, ...] = ()) -> dict[str, str]:
+def _spec_inputs(prompt: str) -> dict:
+    m = _SPEC_INPUTS.search(prompt)
+    if m is None:
+        return {}
+    try:
+        return json.loads(m.group(1))
+    except ValueError:
+        return {}
+
+
+def _spec_md(attempt: int) -> str:
+    parts = [
+        f"## {title} {{#{key}}}\n\nWritten by the local agent runtime (attempt {attempt})."
+        for key, title in _SPEC_SECTIONS
+    ]
+    return "\n\n".join(parts) + "\n"
+
+
+def _design_json(inputs: dict) -> str:
+    """Placeholder flows and wireframes linked to the prompt's sections and requirements."""
+    if not inputs.get("design", True):
+        return json.dumps({"version": 1, "flows": [], "wireframes": []})
+    sections = list(inputs.get("section_keys") or [])[:1]
+    reqs = list(inputs.get("requirement_ids") or [])[:1]
+    screens = max(2, min(4, int(inputs.get("screens") or 2)))
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80">'
+        '<rect id="step-1" x="10" y="20" width="120" height="40" fill="#eee" stroke="#333"/>'
+        '<text x="70" y="45" text-anchor="middle">Start</text>'
+        '<rect id="step-2" x="190" y="20" width="120" height="40" fill="#eee" stroke="#333"/>'
+        '<text x="250" y="45" text-anchor="middle">Done</text>'
+        '<line x1="130" y1="40" x2="190" y2="40" stroke="#333"/></svg>'
+    )
+    note = {
+        "id": "a1",
+        "target": "step-1",
+        "note": "Placeholder step.",
+        "section_key": sections[0] if sections else None,
+        "requirement_ids": reqs,
+    }
+    flows = [
+        {
+            "name": "main-flow.svg",
+            "title": "Main flow",
+            "svg": svg,
+            "section_keys": sections,
+            "requirement_ids": reqs,
+            "annotations": [note],
+        }
+    ]
+    wireframes = [
+        {"name": f"screen-{n}.html", "title": f"Screen {n}", "screen": f"screen-{n}",
+         "html": f'<h1 id="title-{n}">Screen {n}</h1><p>Placeholder content.</p>'
+                 '<button>Continue</button>',
+         "section_keys": sections, "requirement_ids": reqs,
+         "annotations": [{**note, "target": f"title-{n}"}]}
+        for n in range(1, screens + 1)
+    ]  # fmt: skip
+    return json.dumps({"version": 1, "flows": flows, "wireframes": wireframes})
+
+
+def _default_files(
+    segment: str, attempt: int, outputs: tuple[str, ...] = (), prompt: str = ""
+) -> dict[str, str]:
     files = {}
+    if segment == "spec_draft":
+        return {"spec.md": _spec_md(attempt), "design.json": _design_json(_spec_inputs(prompt))}
     names = SEGMENT_FILES.get(segment, ("summary.md",))
     # A segment whose draft file depends on the document's kind (the feedback loop on a
     # roadmap writes roadmap.md): the spec's outputs say which.
@@ -261,7 +346,8 @@ class FakeRuntime:
         if record.outcome.artifacts is not None:
             return dict(record.outcome.artifacts)
         outputs = tuple(record.spec.outputs) if record.spec is not None else ()
-        return _default_files(record.segment, record.attempt, outputs)
+        prompt = record.spec.steps[-1].prompt if record.spec and record.spec.steps else ""
+        return _default_files(record.segment, record.attempt, outputs, prompt)
 
     async def cancel(self, workflow_id: str) -> None:
         self._record(workflow_id).cancelled = True

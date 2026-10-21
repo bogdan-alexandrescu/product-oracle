@@ -13,6 +13,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import safe_yaml
 from oracle.auth import iap, service
 from oracle.auth.jwks import KeysUnavailable
 from oracle.auth.models import Role, User
@@ -189,14 +190,18 @@ async def get_principal(
     if run_token is not None:
         principal = await _for_run(principal, run_token)
     run_id = _run_of(request, principal)
-    if run_id is None:
-        return principal
-    if principal.run_id is not None and principal.run_id != run_id:
+    if run_id is not None and principal.run_id is not None and principal.run_id != run_id:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             f"{RUN_HEADER} and {RUN_TOKEN_HEADER} name different runs",
         )
-    return replace(principal, run_id=run_id)
+    if run_id is not None:
+        principal = replace(principal, run_id=run_id)
+    # Parses of this request count against one person: the user, else the token; a run
+    # token's, the run (oracle.safe_yaml.MAX_PER_OWNER).
+    owner = principal.run_id or principal.user_id or principal.token_id
+    safe_yaml.PARSE_OWNER.set(str(owner) if owner is not None else None)
+    return principal
 
 
 async def _authenticate(

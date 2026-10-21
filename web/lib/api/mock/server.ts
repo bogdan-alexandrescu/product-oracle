@@ -13,7 +13,7 @@ import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./bl
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
-import { connectionsRoute } from "./connections";
+import { connectionsRoute, setupFacts } from "./connections";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, roadmapFromPrd, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -22,18 +22,21 @@ import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { enlargeRuns, routeRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
-import { routeSources, SOURCES_STORAGE_KEY } from "./sources";
+import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake } from "./intake";
+import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
+import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { dateMarks, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { routeTrace } from "./trace";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /** latest_version, approved_version and source are read off the versions. */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source">;
 export type VersionRow = Omit<Schemas["VersionOut"], "sections" | "date_marks"> & {
-  sections: Omit<Schemas["SectionOut"], "verdict">[];
+  sections: (Omit<Schemas["SectionOut"], "verdict" | "spec_states"> & Partial<Pick<Schemas["SectionOut"], "spec_states">>)[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
 /** A stored section review; a spec may mark an approval lapsed (C2). */
@@ -78,11 +81,18 @@ export interface Db {
   inbox_seen?: Record<string, string>;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
+  /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
+  specs?: SpecsDb;
+  /** Requests, their themes and the found items of the seed owner (./requests.ts, C1). */
+  requests?: RequestsDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
    * "revoke-failures" scenario only. */
   revoke_failures?: RevokeFailureRow[];
+  /** Alignment reports, their reads and Oracle's Slack install (./reports.ts, F6); seeded in
+   * the "alignment-report" scenario only. */
+  reports?: ReportsDb;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -161,6 +171,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * default company plus a PRD with three open Oracle suggestions (fleet-next); "big-prd" adds a PRD
  * of 100+ sections in nested chapters (platform-handbook, ./big-prd.ts); "revoke-failures" as the
  * default company plus two provider revokes a removed member's disable could not make (C2);
+ * "alignment-report" as the default company plus two weekly alignment reports and Oracle's
+ * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
  * next tick (recorded, the decide call answers 503; ./runs.ts); "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
@@ -194,6 +206,7 @@ const now = () => new Date().toISOString();
 function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
   const id = uuid();
   const layered = resolveBrief(seed.sections.map((s) => ({ section_key: s.key, level: s.level })), seed.brief);
+  const depth = (DOCUMENTS as DocumentSeed[]).find((d) => d.slug === doc.slug)?.depth ?? "full";
   const sections = seed.sections.map((s, ordinal) => ({
     id: uuid(),
     section_key: s.key,
@@ -203,9 +216,10 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     body_md: s.body,
     body_text: plainText(s.body),
     content_hash: hash(s.heading + "\n" + s.body),
-    citation_keys: [...new Set([...s.body.matchAll(/\[c:([\w.-]+)\]/g)].map((m) => m[1]))],
+    citation_keys: [...new Set([...s.body.matchAll(/\[c:([\w.:-]+)\]/g)].map((m) => m[1]))],
     layer: layered.brief.has(s.key) ? ("brief" as const) : ("detail" as const),
     notes: layered.brief.has(s.key) ? presenterNotes(s.body) : null,
+    spec_states: doc.kind === "spec" ? specStates(s.key, s.body, false, depth) : [],
   }));
   return {
     id,
@@ -230,6 +244,8 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
       title: c.title,
       excerpt: c.excerpt,
       retrieved_at: c.retrieved_at,
+      added: c.added ?? false,
+      state_label: c.state_label ?? null,
       // A mock company has no source items: the writer's item id shows as given.
       item_id: c.item ?? null,
       confidence: c.confidence ?? null,
@@ -353,6 +369,53 @@ function seedSuggestions(): Db {
       text: x.text,
       edited_text: null,
       rationale: x.rationale,
+      pushback: null,
+      status: "open",
+      override_reason: null,
+      decided_by: null,
+      decided_at: null,
+      applied_in_version: null,
+      created_at,
+      updated_at: created_at,
+    });
+  });
+  // D14: a question Oracle answered and a remark with nothing to change, on Team workspaces,
+  // so the Inbox has a row of every kind to act on (Send answer, Close).
+  const w2 = findVersion(db, findDocument(db, "team-workspaces")!, 2)!;
+  const replies: [string, Schemas["TextQuoteSelector"], "answer" | "none", string | null, string][] = [
+    [
+      "Who can see a workspace's billing page?",
+      { exact: "One invoice per workspace", prefix: "", suffix: ", with seats" },
+      "answer",
+      "Workspace owners and billing admins see it; members do not.",
+      "The roles section says who manages billing.",
+    ],
+    [
+      "The scope reads well as it is.",
+      { exact: "Move existing projects into a workspace", prefix: "", suffix: "." },
+      "none",
+      null,
+      "A remark that approves the section: nothing to change.",
+    ],
+  ];
+  replies.forEach(([body, anchor, kind, text, rationale], i) => {
+    const created_at = `2026-10-13T11:1${i}:00Z`;
+    addComment(db, w2, { section_key: "scope", anchor, body }, { created_at });
+    const f = db.feedback.at(-1)!;
+    llm.suggestions.push({
+      id: uuid(),
+      document_id: f.document_id,
+      feedback_item_id: f.id,
+      job_id: null,
+      version_number: w2.number,
+      classification: kind === "answer" ? "question" : "approval",
+      group_key: null,
+      duplicate_of: null,
+      kind,
+      section_key: "scope",
+      text,
+      edited_text: null,
+      rationale,
       pushback: null,
       status: "open",
       override_reason: null,
@@ -696,6 +759,8 @@ function importSections(
       title: c.title ?? "",
       excerpt: c.excerpt ?? "",
       retrieved_at: c.retrieved_at ?? "",
+      added: c.added,
+      state_label: c.state_label ?? undefined,
       item: c.item_id ?? undefined,
       confidence: c.confidence,
       confidence_note: c.confidence_note ?? undefined,
@@ -926,6 +991,7 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
       const r = latestReview(db, v.id, s.section_key);
       return {
         ...s,
+        spec_states: s.spec_states ?? [],
         verdict: r
           ? {
               verdict: r.verdict,
@@ -1165,6 +1231,38 @@ function meOut(db: Db, m: MemberRow): Schemas["Me"] {
   return { kind: "user", tenant_id: db.tenant_id, user_id: m.id, email: m.email, role: m.role };
 }
 
+/**
+ * GET /v1/setup (A1), as oracle.setup: the caller's steps from the mock's own stores. The
+ * connections and sources stores are the company's in the mock, not each person's.
+ */
+function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
+  const facts = setupFacts();
+  const sources = sourceCount();
+  const people = db.members.filter((x) => x.status !== "disabled").length;
+  const invites = db.invites.filter((i) => i.status === "open").length;
+  const personal: Schemas["SetupStep"][] = [
+    { key: "connect", done: facts.connections > 0, count: facts.connections, detail: null },
+    { key: "sources", done: sources > 0, count: sources, detail: null },
+  ];
+  const owner: Schemas["SetupStep"][] = [
+    { key: "invite", done: people >= 2 || invites >= 1, count: people, detail: null },
+    {
+      key: "domains",
+      done: facts.domains.length > 0,
+      count: facts.domains.length,
+      detail: facts.domains.length === 1 ? facts.domains[0] : null,
+    },
+    { key: "horizons", done: facts.horizons, count: null, detail: null },
+  ];
+  const steps = me.role === "owner" ? [...personal, ...owner] : me.role === "viewer" ? [] : personal;
+  return {
+    steps,
+    done: steps.filter((st) => st.done).length,
+    total: steps.length,
+    hidden: db.preferences?.[me.email]?.setup_hidden === true,
+  };
+}
+
 /** Members, invites: owners only, as in the API. */
 async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): Promise<Response> {
   if (!atLeast(me.role, "owner")) return forbidden("owner");
@@ -1304,6 +1402,53 @@ function goalLinks(db: Db): V2Db["section_links"] {
 }
 
 /** The v2 rows, seeded on first use against the first mock PRD. */
+/** Every use of a source item (A2 coverage): baseline evidence, citations and section links. */
+function itemUses(db: Db): Schemas["UsedIn"][] {
+  const uses: Schemas["UsedIn"][] = [];
+  const entity = (id: string | null | undefined) => db.baseline.entities.find((e) => e.id === id);
+  const docOut = (id: string) => {
+    const d = db.documents.find((x) => x.id === id);
+    return d ? { slug: d.slug, title: d.title, kind: d.kind } : null;
+  };
+  for (const ev of db.baseline.evidence) {
+    if (!ev.source_item) continue;
+    const e = entity(ev.entity_id) ?? entity(db.baseline.edges.find((x) => x.id === ev.edge_id)?.src_id);
+    uses.push({
+      kind: "evidence",
+      at: ev.created_at,
+      item: { id: ev.source_item.id, title: ev.source_item.title ?? null },
+      entity: e ? { id: e.id, type: e.type, key: e.key, title: e.title, status: e.status } : null,
+    });
+  }
+  for (const v of db.versions) {
+    for (const c of v.citations) {
+      if (!c.item_id) continue;
+      uses.push({
+        kind: "citation",
+        at: v.created_at,
+        item: { id: c.item_id, title: c.title ?? null },
+        document: docOut(v.document_id),
+        version: v.number,
+        cite_key: c.cite_key,
+      });
+    }
+  }
+  for (const l of db.v2?.section_links ?? []) {
+    if (!l.source_item_id) continue;
+    const v = db.versions.find((x) => x.id === l.version_id);
+    uses.push({
+      kind: "section_link",
+      at: l.created_at,
+      item: { id: l.source_item_id, title: null },
+      document: docOut(l.document_id),
+      version: v?.number ?? null,
+      section_key: l.section_key,
+      section_title: v?.sections.find((x) => x.section_key === l.section_key)?.heading ?? null,
+    });
+  }
+  return uses;
+}
+
 function ensureV2(db: Db): V2Db {
   if (!db.v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
@@ -1315,6 +1460,42 @@ function ensureV2(db: Db): V2Db {
     });
   }
   return db.v2;
+}
+
+function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
+  return {
+    userId,
+    role,
+    goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
+    features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
+    documents: () =>
+      db.documents
+        .filter((d) => d.kind === "prd")
+        .map((d) => {
+          const latest = docVersions(db, d).at(-1);
+          const sections = latest?.sections.length ?? 0;
+          return {
+            id: d.id,
+            slug: d.slug,
+            title: d.title,
+            latest_version: latest?.number ?? null,
+            sections,
+            reviewed_sections: latest?.approved_at ? sections : 0,
+          };
+        }),
+  };
+}
+
+/** The requests rows, seeded on first use against the baseline's confirmed goals. */
+function ensureRequests(db: Db): RequestsDb {
+  db.requests ??= seeded("requests", () =>
+    seedRequests({
+      ownerId: db.user_id,
+      goals: db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed"),
+      features: db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
+    }),
+  );
+  return db.requests;
 }
 
 function ensureBlockers(db: Db): BlockersDb {
@@ -1365,14 +1546,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (reviewV2) return reviewV2;
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
-    const mine = (db.preferences[me.email] ??= { document_view: "brief" });
+    const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false });
     if (m === "PATCH") {
       const patch = await body<Schemas["PreferencesUpdate"]>();
       if (patch.document_view && !["brief", "full"].includes(patch.document_view)) return json(422, { detail: "document_view" });
       if (patch.document_view) mine.document_view = patch.document_view;
+      if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
     }
+    mine.setup_hidden ??= false; // saved before A1
     return json(200, mine);
   }
+  if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
   // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
@@ -1405,7 +1589,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf }, req, p.slice(2), q);
   }
   // Sources and connections belong to each user: every role manages their own.
-  if (["sources", "source-items", "snapshots", "search"].includes(p[1])) return routeSources(req, p, q);
+  if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {
+    return routeSources(req, p, q, {
+      scenario: localStorage.getItem(MOCK_SCENARIO_KEY),
+      me: { email: me.email, role: me.role },
+      members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, disabled: x.status === "disabled" })),
+      uses: () => itemUses(db),
+    });
+  }
   const fireflies = routeFirefliesBrowse(p, q);
   if (fireflies) return fireflies;
   // Company settings are the owner's, as in the API (tenant_settings_api.py).
@@ -1417,6 +1608,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role);
   if (pool) return pool;
+  // Alignment reports and the company Slack install check roles themselves (./reports.ts).
+  const reports = await reportsRoute(db, db.user_id, me, req, p, q);
+  if (reports) return reports;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
   db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   const llm = llmContext(db, me.id, me.role);
@@ -1439,6 +1633,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   };
   const quality = await routeQuality(qualityCtx, req, p, q);
   if (quality) return quality;
+  // Specs, flows and wireframes (./specs.ts) check roles themselves.
+  if (p[1] === "spec-requests" || p[1] === "design-artifacts") {
+    db.specs ??= seedSpecs();
+    const specs = await routeSpecs({ db: db.specs, userId: me.id, role: me.role, uuid, now }, req, p, q);
+    if (specs) return specs;
+  }
   // Modules and compositions check roles themselves (viewers may ask for a recommendation).
   if (!db.modules) {
     const prd = db.documents.find((d) => d.kind === "prd");
@@ -1471,6 +1671,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun }, req, p, q);
     if (intake) return intake;
+  }
+  // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.
+  if (["requests", "request-themes", "request-candidates"].includes(p[1])) {
+    const requests = await routeRequests(ensureRequests(db), requestsContext(db, me.id, me.role), req, p, q);
+    if (requests) return requests;
   }
   // The API's role checks: viewers read, commenters comment, approvers decide.
   const need: Role | null =
@@ -1561,7 +1766,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     const failures = atLeast(me.role, "owner")
       ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
       : [];
-    return json(200, { ...inbox, revoke_failures: failures, total: inbox.total + failures.length });
+    // Owners also get the weekly alignment reports and the posts Slack refused (F6).
+    const reported = inboxReports(ensureReports(db, db.user_id), me);
+    return json(200, {
+      ...inbox,
+      revoke_failures: failures,
+      reports: reported.reports,
+      report_failures: reported.report_failures,
+      total: inbox.total + failures.length + reported.unread,
+    });
   }
   if (runs) return runs;
 

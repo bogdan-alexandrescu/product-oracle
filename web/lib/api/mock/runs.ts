@@ -114,7 +114,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
 };
 
 const THRESHOLD = 50;
-const KIND_NAME: Record<Kind, string> = { prd: "PRD", roadmap: "roadmap" };
+const KIND_NAME: Record<Kind, string> = { prd: "PRD", roadmap: "roadmap", spec: "engineering spec" };
 // O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
 const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
 const FACTOR = 1.5;
@@ -506,6 +506,9 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     imports,
     feedback,
     revoke_failures: [],
+    // The weekly alignment reports and their failed posts: the server adds them (./reports.ts).
+    reports: [],
+    report_failures: [],
     // Every new or open item (C1e, 2026-10-20): the server adds the feedback items' New + Open (./next-draft.ts).
     total: checkpoints.length + approvals.length + overruns.length + lookups.length + imports.length,
     // Feedback states (C1e) are added by the server, which holds the suggestions (./next-draft.ts).

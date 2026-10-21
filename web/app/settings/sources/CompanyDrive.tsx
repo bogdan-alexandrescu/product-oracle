@@ -123,7 +123,12 @@ function CompanyDomains() {
   }
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2.5 px-4 py-3 max-[600px]:px-3" data-testid="company-domains">
+    <section
+      id="company-domains"
+      aria-labelledby={headingId}
+      className="flex scroll-mt-4 flex-col gap-2.5 px-4 py-3 max-[600px]:px-3"
+      data-testid="company-domains"
+    >
       <Heading
         id={headingId}
         title="Company email domains"

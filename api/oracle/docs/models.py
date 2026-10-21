@@ -23,7 +23,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from oracle.db import Base, TenantScoped
 
 DOCUMENT_STATUSES = ("draft", "in_review", "approved")
-DOCUMENT_KINDS = ("prd", "roadmap")
+# "spec": a technical brief or engineering spec built from an approved PRD (CR-09).
+DOCUMENT_KINDS = ("prd", "roadmap", "spec")
 # O1f: a section belongs to the brief layer or is detail (oracle.docs.layers).
 SECTION_LAYERS = ("brief", "detail")
 BRIEF_SOURCES = ("draft", "template", "full_heading", "none")
@@ -41,7 +42,7 @@ class Document(TenantScoped, Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "slug"),
         CheckConstraint(_in("status", DOCUMENT_STATUSES), name="status"),
-        CheckConstraint("kind IN ('prd', 'roadmap')", name="kind"),
+        CheckConstraint(_in("kind", DOCUMENT_KINDS), name="kind"),
     )
 
     slug: Mapped[str] = mapped_column(Text, nullable=False)

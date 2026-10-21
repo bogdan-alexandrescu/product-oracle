@@ -85,7 +85,47 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   // mock company's members are all @example.com.
   company_email_domains: ["example.com"],
   company_shared_drives: [],
+  // A1, B2 Goals framework: Now = the current quarter, Next = the next 2, Later = 12-24 months.
+  planning_horizons: { short_quarters: 1, medium_quarters: 2, long_from_months: 12, long_to_months: 24 },
+  // F6: the weekly alignment report, Monday 08:00 Pacific; the channel once Slack is connected.
+  alignment_report: { enabled: true, weekday: "mon", time: "08:00", timezone: "America/Los_Angeles", slack_channel: null },
 };
+
+/** A company setting's value as stored, else its default (./reports.ts reads the report's channel). */
+export function mockSettingValue(key: string): unknown {
+  const db = load();
+  return key in db.settings ? db.settings[key] : SETTING_DEFAULTS[key];
+}
+
+/** Stores a company setting's value, as PUT /v1/settings/{key} would. */
+export function setMockSetting(key: string, value: unknown) {
+  const db = load();
+  db.settings[key] = value;
+  save(db);
+}
+
+const HORIZON_KEYS = ["short_quarters", "medium_quarters", "long_from_months", "long_to_months"];
+
+/** As oracle.tenant_settings_api.validate_planning_horizons: the message, or null when valid. */
+function horizonsError(value: unknown): string | null {
+  const v = value as Record<string, unknown>;
+  if (
+    !v ||
+    typeof v !== "object" ||
+    Array.isArray(v) ||
+    Object.keys(v).length !== HORIZON_KEYS.length ||
+    !HORIZON_KEYS.every((k) => Number.isInteger(v[k]))
+  ) {
+    return "planning_horizons needs short_quarters, medium_quarters, long_from_months and long_to_months as whole numbers";
+  }
+  const [short, medium, from, to] = HORIZON_KEYS.map((k) => v[k] as number);
+  if (short < 1 || short > 2) return "short_quarters must be 1 or 2";
+  if (medium < 1 || medium > 4) return "medium_quarters must be between 1 and 4";
+  const nextEnds = 3 * (short + medium);
+  if (from < nextEnds || from > 36) return `long_from_months must start after Next ends (at least ${nextEnds} months) and be at most 36`;
+  if (to <= from || to > 60) return "long_to_months must be after long_from_months and at most 60";
+  return null;
+}
 
 /** A mail provider anyone can sign up with, which the API refuses as a company domain. */
 function publicMailDomain(domain: string): boolean {
@@ -191,6 +231,20 @@ function settingOut(db: ConnDb, key: string): Schemas["SettingOut"] {
   };
 }
 
+/**
+ * What the Set up checklist reads from this store (A1): active connections, the company's
+ * domains and whether the horizons were confirmed (a stored row).
+ */
+export function setupFacts(): { connections: number; domains: string[]; horizons: boolean } {
+  const db = load();
+  const domains = ("company_email_domains" in db.settings ? db.settings.company_email_domains : SETTING_DEFAULTS.company_email_domains) as string[];
+  return {
+    connections: db.connections.filter((c) => c.status === "active").length,
+    domains,
+    horizons: "planning_horizons" in db.settings,
+  };
+}
+
 /** Handles /v1/connections… and /v1/settings…; null for other routes. */
 export async function connectionsRoute(req: Request, p: string[]): Promise<Response | null> {
   if (p[1] !== "connections" && p[1] !== "settings") return null;
@@ -210,7 +264,15 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
     if (!(key in SETTING_DEFAULTS)) return json(404, { detail: `Unknown setting '${key}'` });
     if (m === "GET") return json(200, settingOut(db, key));
     if (m === "PUT") {
-      const { value } = await body<Schemas["SettingIn"]>();
+      const { value: given } = await body<Schemas["SettingIn"]>();
+      let value = given;
+      if (key === "alignment_report" && value && typeof value === "object") {
+        // As the API: a partial value takes the defaults for the rest.
+        value = { ...(SETTING_DEFAULTS.alignment_report as object), ...(value as object) };
+        const v = value as { weekday: string; time: string };
+        if (!["mon", "tue", "wed", "thu", "fri", "sat", "sun"].includes(v.weekday)) return json(422, { detail: "alignment_report.weekday must be one of mon, tue, wed, thu, fri, sat, sun" });
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v.time)) return json(422, { detail: "alignment_report.time must be HH:MM, 00:00 to 23:59" });
+      }
       if (key === "company_email_domains" && Array.isArray(value)) {
         const domain = value.map((d) => String(d).trim().toLowerCase().replace(/^@/, "")).find(publicMailDomain);
         if (domain) {
@@ -218,6 +280,10 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
             detail: `company_email_domains: ${domain} is a public mail provider, where anyone can have an address; enter the company's own domain`,
           });
         }
+      }
+      if (key === "planning_horizons" && value !== null && value !== undefined) {
+        const error = horizonsError(value);
+        if (error) return json(422, { detail: error });
       }
       if (value === null || value === undefined) delete db.settings[key];
       else db.settings[key] = value;

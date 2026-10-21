@@ -875,12 +875,16 @@ async def feedback_package(session: AsyncSession, doc: str, n: int) -> FeedbackP
             .order_by(Section.ordinal)
         )
     ).all()
+    # oracle.docs.service imports this module.
+    from oracle.docs import service as docs_service
+
     return FeedbackPackage(
         document_id=document.id,
         slug=document.slug,
         title=document.title,
         version=version.number,
-        markdown=version.markdown,
+        # A spec version's markdown carries its state labels (E1), as everywhere it is served.
+        markdown=await docs_service.spec_markdown(session, version),
         open_items=await feedback_out(session, items),
         locked_section_keys=[k for k in ordered if k in locked],
         generated_at=_now(),

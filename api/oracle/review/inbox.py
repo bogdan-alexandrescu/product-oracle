@@ -26,6 +26,14 @@ from oracle.runs.schemas import InboxCounts, InboxFeedbackItem, InboxStaged
 LAST_SEEN = "inbox_last_seen_at"
 #: Declined and done items listed at most (the counts are always complete).
 SETTLED_LIMIT = 100
+#: An Inbox row shows this much of a suggestion's text and rationale; the document has the rest.
+EXCERPT = 280
+
+
+def _excerpt(text: str | None) -> str | None:
+    if text is None:
+        return None
+    return text if len(text) <= EXCERPT else text[:EXCERPT] + "…"
 
 
 async def last_seen(db: AsyncSession, principal_id: uuid.UUID) -> datetime | None:
@@ -129,6 +137,7 @@ async def feedback_states(
         else:
             settled_listed += 1
         d = docs.get(f.document_id)
+        acting = s if s is not None and s.status == "open" else None
         items.append(
             InboxFeedbackItem(
                 id=f.id,
@@ -150,6 +159,10 @@ async def feedback_states(
                 else None,
                 suggestion_status=s.status if s else None,  # type: ignore[arg-type]
                 suggestion_kind=s.kind if s else None,
+                suggestion_id=acting.id if acting else None,
+                suggestion_text=_excerpt(acting.edited_text or acting.text) if acting else None,
+                suggestion_pushback=acting.pushback is not None if acting else None,
+                suggestion_rationale=_excerpt(acting.rationale) if acting else None,
             )
         )
     items.sort(key=lambda i: (i.created_at, str(i.id)), reverse=True)

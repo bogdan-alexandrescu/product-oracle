@@ -43,8 +43,11 @@ async function editDb(page: Page, edit: string, arg?: unknown) {
   );
 }
 
-/** Home's first paint makes at most this many calls, however large the company. */
-const CALL_BUDGET = 13;
+/**
+ * Home's first paint makes at most this many calls, however large the company. A1 added
+ * one: the Set up checklist (/v1/setup), a fixed call whatever the company's size.
+ */
+const CALL_BUDGET = 14;
 
 test("Home: a large company's first paint stays within the call budget", async ({ page }) => {
   await openHome(page, "large");

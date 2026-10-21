@@ -9,6 +9,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged } from "@/lib/waiting";
 
+import { useActed } from "./_actions";
 import { allNeeds, NeedTable, questionNeeds, sourceNeeds, STATE_TABS, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 
 type Source = Schemas["SourceOut"];
@@ -48,8 +49,11 @@ export default function InboxPage() {
     }
   }
 
+  // D14: a feedback row's own actions; what they did shows above the rows, Undo with it.
+  const { onActed, notice } = useActed(() => Promise.all([q.reload(), questionsQ.reload()]));
+
   const seenBefore = arrived ? arrivalQ.data : inbox?.last_seen_at;
-  const rows = inbox ? allNeeds(inbox, questionNeeds(questions, docsQ.data ?? []), busy, act, seenBefore) : null;
+  const rows = inbox ? allNeeds(inbox, questionNeeds(questions, docsQ.data ?? []), busy, act, seenBefore, onActed) : null;
   const waiting = rows ? waitingNeeds(rows).length : undefined;
 
   return (
@@ -62,7 +66,7 @@ export default function InboxPage() {
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
-      {inbox && rows && <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} />}
+      {inbox && rows && <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} />}
       {sourcesQ.data && <SourcesNeedingAttention sources={sourcesQ.data} />}
     </Page>
   );
@@ -108,6 +112,8 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "lookups", title: "Stuck runs" },
   { id: "imports", title: "Couldn't import" },
   { id: "revoke-failures", title: "Couldn't revoke access" },
+  { id: "report-failures", title: "Report not posted to Slack" },
+  { id: "reports", title: "Reports" },
   { id: "feedback", title: "Feedback" },
   { id: "questions", title: "Questions" },
   { id: "revising", title: "Sent back by Oracle" },
@@ -123,10 +129,12 @@ function InboxTabs({
   rows,
   waiting,
   questionsError,
+  notice,
 }: {
   rows: ReturnType<typeof allNeeds>;
   waiting: number;
   questionsError: string | null;
+  notice: ReactNode;
 }) {
   const [tab, setTab] = useState<InboxState>("new");
   const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).length;
@@ -147,13 +155,15 @@ function InboxTabs({
           <ErrorNote>{questionsError}</ErrorNote>
         </div>
       )}
+      {notice}
       <div role="tabpanel" aria-label={label} data-testid={`inbox-tab-${tab}`}>
         {shown.length === 0 ? (
           <Empty>
             Nothing {label.toLowerCase()}{" "}
             {tab === "new" && (
               <InfoTip label="the inbox" align="start">
-                Checkpoints that need a decision, cost approvals, feedback to review and the questions asked of you land here.
+                Checkpoints that need a decision, cost approvals, feedback to review, the questions asked of you and, for owners,
+                the weekly alignment report land here.
               </InfoTip>
             )}
           </Empty>

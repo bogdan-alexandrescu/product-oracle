@@ -3,8 +3,9 @@ import contextlib
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 
@@ -20,9 +21,12 @@ from oracle.connections.browse_slack import router as slack_browse_router
 from oracle.connections.notion_pages import router as notion_pages_router
 from oracle.connections.router import router as connections_router
 from oracle.db import dispose_engine, get_engine
+from oracle.docs.parser import DraftError
 from oracle.docs.router import router as docs_router
+from oracle.docs.schemas import ImportErrorResponse
 from oracle.export.router import router as export_router
 from oracle.intake.router import router as intake_router
+from oracle.integrations.router import router as company_integrations_router
 from oracle.jobs.router import router as llm_jobs_router
 from oracle.jobs.worker import (
     JOB_OVERHEAD_SECONDS,
@@ -38,13 +42,18 @@ from oracle.modules.service import seed_all_companies
 from oracle.preferences.router import router as preferences_router
 from oracle.priorities.router import router as priorities_router
 from oracle.quality.router import router as quality_router
+from oracle.reports.router import router as reports_router
+from oracle.requests.router import router as requests_router
 from oracle.review.router import router as review_router
 from oracle.review.v2_router import router as review_v2_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
+from oracle.safe_yaml import ParseBusy
+from oracle.setup import router as setup_router
 from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
+from oracle.specs.router import router as specs_router
 from oracle.swarm import close_runtime
 from oracle.templates.router import router as templates_router
 from oracle.tenant_settings_api import router as settings_router
@@ -123,6 +132,27 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.exception_handler(DraftError)
+    async def draft_rejected(_request: Request, exc: DraftError) -> JSONResponse:
+        # M3: a version that can not be served as it must be (a spec version that can not
+        # carry its state labels) is a 422 on every read path (the markdown, the exports,
+        # the feedback package, MCP), never a 500. Routes that import drafts answer the
+        # same body themselves.
+        body = ImportErrorResponse(
+            detail=f"draft rejected: {len(exc.problems)} problem(s)", errors=exc.problems
+        )
+        return JSONResponse(body.model_dump(mode="json"), 422)
+
+    @app.exception_handler(ParseBusy)
+    async def parse_busy(_request: Request, exc: ParseBusy) -> JSONResponse:
+        # The parse pool would not take an import now (owner, 2026-10-20): 429 for a person
+        # with two parses already, 503 after a 10 s wait for a free worker.
+        return JSONResponse(
+            {"code": exc.code, "message": exc.message},
+            exc.status,
+            headers={"Retry-After": "5"},
+        )
+
     @app.get("/healthz", response_model=Health, tags=["health"])
     async def healthz(response: Response) -> Health:
         # Engine-level check on purpose: it is not tenant data, so no tenant session.
@@ -149,6 +179,8 @@ def create_app() -> FastAPI:
     app.include_router(drive_browse_router)
     app.include_router(notion_pages_router)
     app.include_router(settings_router)
+    # A1: Home's Set up checklist.
+    app.include_router(setup_router)
     app.include_router(claude_accounts_router)
     app.include_router(sources_router)
     app.include_router(fireflies_browse_router)
@@ -166,7 +198,13 @@ def create_app() -> FastAPI:
     app.include_router(modules_router)
     app.include_router(trace_router)
     app.include_router(blockers_router)
+    # CR-09: engineering specs, user flows and wireframes from an approved PRD.
+    app.include_router(specs_router)
     app.include_router(roadmap_router)
+    # F6: the weekly alignment report and the company's Slack install it posts through.
+    app.include_router(reports_router)
+    app.include_router(company_integrations_router)
+    app.include_router(requests_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).

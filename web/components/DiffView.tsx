@@ -6,7 +6,7 @@ import { useState } from "react";
 import { DocToolbar } from "@/components/DocToolbar";
 import { Chip, Empty, InfoTip, LinkButton, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
-import { ErrorNote, LayerBadge, Loading } from "@/components/ui";
+import { ErrorNote, LayerBadge, Loading, SpecStateBadge } from "@/components/ui";
 import { api, unwrap, type SectionDiff } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
@@ -233,6 +233,8 @@ function DiffSection({ d, doc, to, showLayer }: { d: SectionDiff; doc: string; t
           {heading}
         </h2>
         <Chip kind={STATUS[d.status].kind}>{STATUS[d.status].label}</Chip>
+        {/* E1: a spec section's state (an added section reads "Proposed · added in an edit"). */}
+        {d.spec_states?.[0] && <SpecStateBadge state={d.spec_states[0]} />}
         {showLayer && <DiffLayer d={d} />}
         {d.moved && (
           <Chip kind="acc" title={`Position ${(d.from_ordinal ?? 0) + 1} → ${(d.to_ordinal ?? 0) + 1}`}>

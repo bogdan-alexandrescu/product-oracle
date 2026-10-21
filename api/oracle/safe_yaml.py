@@ -20,17 +20,20 @@ Every failure, including a ``RecursionError``/``ValueError``/``OverflowError`` f
 inside the loader, is one :class:`SafeYamlError` (a ``yaml.YAMLError``) whose ``problem``
 says what is wrong and whose ``code`` names it for a problem list (``duplicate_key``,
 ``too_large``...). :func:`run_parse` runs a parse on a small dedicated thread pool, so a
-slow one never blocks the event loop; :func:`run_parse_within` also gives up after
-``PARSE_SECONDS`` (a run's roadmap files, a draft), as a :class:`ParseTimeout`.
+slow one never blocks the event loop; :func:`run_parse_within` also caps it at
+``PARSE_SECONDS`` from the moment it starts (a run's roadmap files, a draft, a spec edit),
+refused as a :class:`ParseTimeout`.
 """
 
 import asyncio
+import contextlib
 import contextvars
 import functools
 import math
 import re
+import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -40,6 +43,8 @@ from yaml.constructor import SafeConstructor
 from yaml.events import AliasEvent, DocumentStartEvent, ScalarEvent
 from yaml.nodes import MappingNode
 from yaml.resolver import Resolver
+
+from oracle import parse_budget
 
 try:  # libyaml's event parser: the same events, much faster than the pure-Python one.
     from yaml.cyaml import CParser as _EventParser
@@ -57,8 +62,17 @@ MAX_DEPTH = 32
 MAX_NODES = 50_000
 MAX_SCALAR_CHARS = 256 * 1024
 MAX_DIGITS = 30
-# run_parse_within waits at most this long for a parse (the whole wait, queue included).
+# run_parse_within's cap on one parse: this much CPU time of its markdown parses
+# (oracle.parse_budget), counted from the moment the parse starts; a queue wait does not
+# count. As a backstop for anything else, the caller stops waiting WALL_FACTOR times this
+# long after the parse started (the worker thread is not freed by that: it runs to its end).
 PARSE_SECONDS = 5.0
+WALL_FACTOR = 4
+# Owner decision 2026-10-20: a parse that waits more than QUEUE_SECONDS for a free worker is
+# refused (ParseBusy 503), and one person (the principal's user id; a run token's run) has at
+# most MAX_PER_OWNER parses running or queued: a further one is refused at once (429).
+QUEUE_SECONDS = 10.0
+MAX_PER_OWNER = 2
 
 # What YAML's reader accepts (tab, LF, CR and printable Unicode); anything else is refused,
 # in the input and in the value of an escaped ("\x00") double-quoted scalar.
@@ -323,10 +337,55 @@ _EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="safe-yaml")
 
 async def run_parse[T](fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
     """``fn(*args, **kwargs)`` on the parse pool (4 threads), so a slow parse of untrusted
-    text never stalls other requests. Exceptions propagate unchanged."""
+    text never stalls other requests. Exceptions propagate unchanged. Under the queue policy
+    (:func:`_queued`): :class:`ParseBusy` when this person has :data:`MAX_PER_OWNER` parses
+    or no worker frees within :data:`QUEUE_SECONDS`. No CPU cap of its own (see
+    :func:`run_parse_within`)."""
     ctx = contextvars.copy_context()
-    call = functools.partial(ctx.run, fn, *args, **kwargs)
-    return await asyncio.get_running_loop().run_in_executor(_EXECUTOR, call)
+    return await _queued(functools.partial(ctx.run, fn, *args, **kwargs), wall=None)
+
+
+# Who the parses of this request/tick count against (set by oracle.auth.deps.get_principal and
+# the run tick); None: not limited per person.
+PARSE_OWNER: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "parse_owner", default=None
+)
+_active: dict[str, int] = {}
+_active_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def parse_owner(key: str | None) -> Iterator[None]:
+    """Within the block, parses count against ``key`` (see :data:`MAX_PER_OWNER`)."""
+    token = PARSE_OWNER.set(key)
+    try:
+        yield
+    finally:
+        PARSE_OWNER.reset(token)
+
+
+class ParseBusy(Exception):  # noqa: N818 - read as safe_yaml.ParseBusy
+    """The parse pool would not take this parse now. Not a SafeYamlError: it says nothing
+    about the text, so nothing may report it as a bad file. ``status`` is the HTTP answer
+    (429: this person already has :data:`MAX_PER_OWNER` parses; 503: no free worker within
+    :data:`QUEUE_SECONDS`); a run tick that gets it gives up for this tick and retries on the
+    next."""
+
+    _WHAT = {
+        "parse_busy_you": (
+            429,
+            "Another import of yours is still being checked. Try again when it finishes.",
+        ),
+        "parse_busy": (
+            503,
+            "Oracle is busy checking other imports. Try again in a moment.",
+        ),
+    }
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        self.status, self.message = self._WHAT[code]
+        super().__init__(self.message)
 
 
 class ParseTimeout(SafeYamlError):
@@ -347,12 +406,110 @@ async def run_parse_within[T](
     seconds: float | None = None,
     **kwargs: Any,
 ) -> T:
-    """:func:`run_parse`, waiting at most ``seconds`` (``PARSE_SECONDS``): a run's file or a
-    draft that is too slow to read is a refusal (:class:`ParseTimeout`, ``name`` starts its
-    message), never a stalled tick. The abandoned parse finishes on the pool; its cost is
-    bounded by :func:`load`'s caps."""
+    """:func:`run_parse`, capped at ``seconds`` (``PARSE_SECONDS``) from the moment the
+    parse starts on the pool: a run's file, a draft or an edit too slow to read is a refusal
+    (:class:`ParseTimeout`, ``name`` starts its message), never a stalled tick.
+
+    The cap is CPU time of its markdown parses (:mod:`oracle.parse_budget`): a parse past
+    it stops at its next check (a few milliseconds past the cap, once the parse is between
+    two steps), so the worker is freed then. Waiting for a free worker does not count against
+    that cap (the queue has its own, below). The checks run inside markdown-it and in the
+    per-block loops of the draft parser; a single regex call is not interruptible (Python
+    holds the GIL for its whole run), so every regex that reads untrusted text must be linear
+    (``tests/test_quadratic_regex.py``). As a backstop for work outside those checks, the
+    *caller* stops waiting ``WALL_FACTOR`` times the cap after the parse started: the caller
+    is refused at that point, but the worker thread keeps running the parse to its end and is
+    not freed (a thread can not be killed). The pool can therefore still be held by work no
+    check reaches; this bounds the caller's wait, not the worker's time.
+
+    Queue policy (owner, 2026-10-20): at most :data:`MAX_PER_OWNER` parses per person running
+    or queued (:class:`ParseBusy` 429 beyond), and a wait of more than :data:`QUEUE_SECONDS`
+    for a free worker is :class:`ParseBusy` 503."""
     limit = PARSE_SECONDS if seconds is None else seconds
+    ctx = contextvars.copy_context()
+
+    def bounded() -> T:
+        # Entered inside the copied context: the budget is a ContextVar, so a limit set
+        # around ctx.run would not be seen by fn.
+        with parse_budget.limit(limit):
+            return fn(*args, **kwargs)
+
     try:
-        return await asyncio.wait_for(run_parse(fn, *args, **kwargs), timeout=limit)
-    except TimeoutError:
+        return await _queued(functools.partial(ctx.run, bounded), wall=limit * WALL_FACTOR)
+    except (TimeoutError, parse_budget.Exceeded):
         raise ParseTimeout(name, limit) from None
+
+
+async def _queued[T](call: Callable[[], T], *, wall: float | None) -> T:
+    """The queue policy (owner, 2026-10-20) around one pool call, for every parse of
+    untrusted text: at most :data:`MAX_PER_OWNER` per person (:data:`PARSE_OWNER`) running or
+    queued, else :class:`ParseBusy` 429; a wait of more than :data:`QUEUE_SECONDS` for a free
+    worker is :class:`ParseBusy` 503, and the queued call is cancelled. ``wall``: the caller
+    stops waiting this long after the call started (the worker keeps running it).
+
+    HOOK: a parse that does not go through :func:`run_parse` or :func:`run_parse_within`
+    (roadmap ``_render_body`` and export rendering, moved into the pool by
+    fix/roadmap-render-budget) must call one of them so it is counted here."""
+    owner = PARSE_OWNER.get()
+    if owner is not None:
+        with _active_lock:
+            if _active.get(owner, 0) >= MAX_PER_OWNER:
+                raise ParseBusy("parse_busy_you")
+            _active[owner] = _active.get(owner, 0) + 1
+    loop = asyncio.get_running_loop()
+    started = loop.create_future()
+    abandoned = threading.Event()
+
+    def mark_started() -> None:
+        if not started.done():
+            started.set_result(None)
+
+    def job() -> T:
+        if abandoned.is_set():  # its caller gave up while it was queued
+            raise ParseBusy("parse_busy")
+        with contextlib.suppress(RuntimeError):  # the loop is gone (shutdown)
+            loop.call_soon_threadsafe(mark_started)
+        return call()
+
+    def release(_: object) -> None:
+        # The slot is free when the job is over (finished, or cancelled before it ever
+        # started), not when its caller stops waiting: a worker still running a parse is
+        # still that person's. Runs on the worker thread (or the cancelling thread).
+        if owner is not None:
+            with _active_lock:
+                left = _active.get(owner, 1) - 1
+                if left > 0:
+                    _active[owner] = left
+                else:
+                    _active.pop(owner, None)
+
+    try:
+        job_future = _EXECUTOR.submit(job)
+    except BaseException:
+        # Not submitted, or queued and then failed (e.g. no thread could start): either way
+        # nothing will free the slot, and a job left in the queue must not run without it.
+        abandoned.set()
+        release(None)
+        raise
+    job_future.add_done_callback(release)
+    parse = asyncio.wrap_future(job_future, loop=loop)
+    # An abandoned parse's outcome is read, never reported as unretrieved.
+    parse.add_done_callback(lambda f: f.cancelled() or f.exception())
+    try:
+        await asyncio.wait(
+            {started, parse}, timeout=QUEUE_SECONDS, return_when=asyncio.FIRST_COMPLETED
+        )
+    except BaseException:
+        # The caller is gone (cancelled) while its job may still be queued: the job must
+        # not run later. A job already running is unaffected and frees the slot at its end.
+        abandoned.set()
+        parse.cancel()
+        raise
+    if not started.done() and not parse.done():
+        abandoned.set()
+        parse.cancel()  # frees the slot only if the job had not started (else at its end)
+        raise ParseBusy("parse_busy")
+    if wall is None:
+        # shield: a cancelled caller must not cancel the future the slot hangs on
+        return await asyncio.shield(parse)
+    return await asyncio.wait_for(asyncio.shield(parse), timeout=wall)

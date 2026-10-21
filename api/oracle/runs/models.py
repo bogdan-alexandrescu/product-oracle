@@ -20,7 +20,9 @@ from oracle.auth.models import ROLES
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-FLOWS = ("baseline_to_prd", "feedback_loop", "prd_to_roadmap")
+# request_triage (C1 Requests, migration 0020_requests): its flow definition comes with
+# the triage lane; the database already allows it.
+FLOWS = ("baseline_to_prd", "feedback_loop", "prd_to_roadmap", "prd_to_spec", "request_triage")
 RUN_STATUSES = (
     "draft",
     "awaiting_approval",
@@ -40,6 +42,7 @@ CHECKPOINT_KINDS = (
     "eng_review",
     "roadmap_items",
     "roadmap_review",
+    "request_triage",
 )
 CHECKPOINT_STATUSES = ("pending", "approved", "changes_requested", "skipped")
 

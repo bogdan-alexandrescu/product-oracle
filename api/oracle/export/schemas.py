@@ -34,6 +34,9 @@ class SlideOut(BaseModel):
     html: str
     notes: str | None = None
     expand: list[ExpandOut] = []
+    # E1: a spec slide's state label (also in ``html``): a section's, or 'Proposed · added
+    # in an edit' on the Added sources slides.
+    state: str | None = None
 
 
 class DeckOut(BaseModel):

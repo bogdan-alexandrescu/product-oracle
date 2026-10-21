@@ -32,6 +32,7 @@ from oracle.review.schemas import (
     SectionReviewIn,
     SectionReviewOut,
 )
+from oracle.specs import service as spec_service
 
 # Viewers read everything; commenters comment, reply and resolve their own threads;
 # approvers set verdicts, triage feedback and approve versions.
@@ -186,8 +187,10 @@ async def approve_version(
     """Approve (publish) a version. A PRD version is refused with a 409 naming the blocks
     when its readiness verdict for purpose ``publish`` is blocked, or when it is not the
     latest version; nothing is recorded then."""
+    # A spec's approval is the engineering approval of its approach (oracle.specs).
+    approve = spec_service.approve_version if await spec_service.is_spec(db, doc) else None
     try:
-        document, version = await _call(service.approve_version(db, principal, doc, n))
+        document, version = await _call((approve or service.approve_version)(db, principal, doc, n))
     except publish_gate.PublishBlocked as e:
         await db.rollback()
         out = PublishBlockedOut(detail=e.message, blocking=e.blocking, dates=e.dates)
