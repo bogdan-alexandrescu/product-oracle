@@ -15,13 +15,16 @@ DocumentView = Literal["brief", "full"]
 
 class Preferences(BaseModel):
     """What the signed-in user (or API token) chose. ``document_view``: the layer
-    documents open on; brief unless they switched to the full document."""
+    documents open on; brief unless they switched to the full document. ``setup_hidden``:
+    they hid Home's Set up checklist (A1); a header chip shows it again."""
 
     document_view: DocumentView = "brief"
+    setup_hidden: bool = False
 
 
 class PreferencesUpdate(BaseModel):
     document_view: DocumentView | None = None
+    setup_hidden: bool | None = None
 
 
 router = APIRouter(prefix="/v1/me", tags=["auth"])

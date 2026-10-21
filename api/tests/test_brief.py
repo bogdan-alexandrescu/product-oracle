@@ -606,7 +606,9 @@ async def test_document_view_is_remembered_per_user(client, tenant_id):
     viewer = await _token(tenant_id, "viewer")
     other = await _token(tenant_id, "owner")
     assert (await client.get("/v1/me/preferences", headers=viewer)).json() == {
-        "document_view": "brief"
+        "document_view": "brief",
+        # A1: Home's Set up checklist is shown until they hide it.
+        "setup_hidden": False,
     }
     resp = await client.patch("/v1/me/preferences", json={"document_view": "full"}, headers=viewer)
     assert resp.status_code == 200 and resp.json()["document_view"] == "full"

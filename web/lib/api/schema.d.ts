@@ -1746,6 +1746,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Setup
+         * @description Home's Set up checklist: the caller's setup steps, which are done, and whether they
+         *     hid the checklist. Owners get every step; approvers and commenters connecting tools
+         *     and picking sources; viewers none.
+         */
+        get: operations["get_setup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/claude-accounts": {
         parameters: {
             query?: never;
@@ -13596,7 +13618,8 @@ export interface components {
         /**
          * Preferences
          * @description What the signed-in user (or API token) chose. ``document_view``: the layer
-         *     documents open on; brief unless they switched to the full document.
+         *     documents open on; brief unless they switched to the full document. ``setup_hidden``:
+         *     they hid Home's Set up checklist (A1); a header chip shows it again.
          */
         Preferences: {
             /**
@@ -13605,11 +13628,18 @@ export interface components {
              * @enum {string}
              */
             document_view: "brief" | "full";
+            /**
+             * Setup Hidden
+             * @default false
+             */
+            setup_hidden: boolean;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
             /** Document View */
             document_view?: ("brief" | "full") | null;
+            /** Setup Hidden */
+            setup_hidden?: boolean | null;
         };
         /** PriorityRanking */
         PriorityRanking: {
@@ -16301,6 +16331,28 @@ export interface components {
             is_default: boolean;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** SetupOut */
+        SetupOut: {
+            /** Steps */
+            steps: components["schemas"]["SetupStep"][];
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+            /** Hidden */
+            hidden: boolean;
+        };
+        /** SetupStep */
+        SetupStep: {
+            /** Key */
+            key: string;
+            /** Done */
+            done: boolean;
+            /** Count */
+            count?: number | null;
+            /** Detail */
+            detail?: string | null;
         };
         /** SharedDriveList */
         SharedDriveList: {
@@ -22125,6 +22177,33 @@ export interface operations {
             };
             /** @description Invalid value */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_setup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupOut"];
+                };
+            };
+            /** @description Not a person */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

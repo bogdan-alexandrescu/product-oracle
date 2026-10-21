@@ -203,6 +203,7 @@ from oracle.templates.builtins import (
 from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.tenancy import current_tenant, tenant_session
 from oracle.tenant_settings import TenantSetting
+from oracle.tenant_settings_api import company_horizons
 
 if TYPE_CHECKING:
     from oracle.members.models import MemberFollowUp
@@ -1732,6 +1733,7 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     ]
     bases = await schedule.verified_bases(db, version.document_id)
     return flows.SourceContext(
+        horizons=await company_horizons(db),
         schedule_bases=[b.as_json() for b in bases],
         slug=document.slug if document else str(version.document_id),
         title=document.title if document else "",

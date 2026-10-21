@@ -42,6 +42,7 @@ from oracle.review.router import router as review_router
 from oracle.review.v2_router import router as review_v2_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
+from oracle.setup import router as setup_router
 from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
@@ -149,6 +150,8 @@ def create_app() -> FastAPI:
     app.include_router(drive_browse_router)
     app.include_router(notion_pages_router)
     app.include_router(settings_router)
+    # A1: Home's Set up checklist.
+    app.include_router(setup_router)
     app.include_router(claude_accounts_router)
     app.include_router(sources_router)
     app.include_router(fireflies_browse_router)
