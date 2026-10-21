@@ -5808,6 +5808,27 @@ async def _may_manage(db: AsyncSession, principal: Principal, run: Run) -> bool:
     )
 
 
+async def _still_manages(
+    db: AsyncSession, principal: Principal, run_id: uuid.UUID, what: str
+) -> Run:
+    """After a runtime call made with nothing held: the review gate taken again (shared),
+    the run locked and read as it is now, and the caller re-read under the gate (CR-06),
+    as :func:`cancel` does: the transaction that checked them ended before the call, and a
+    disable or a demotion may have committed while SwarmCloud answered. 403 if they may no
+    longer ``what``."""
+    from oracle.auth.service import caller_refusal
+    from oracle.review import publish
+
+    await publish.gate_lock(db, shared=True)
+    run = await _get_run(db, run_id, lock=True)
+    if not await _may_manage(db, principal, run):
+        raise Forbidden(f"Only an owner or the approver who created the run can {what}")
+    refusal = await caller_refusal(db, principal, "approver")
+    if refusal is not None:
+        raise Forbidden(refusal)
+    return run
+
+
 def _manages(principal: Principal, run: Run) -> bool:
     """:func:`_may_manage` by the role the request authenticated with: for what the
     Inbox lists (every action re-reads the role)."""
@@ -5947,8 +5968,8 @@ async def retry_lookup(db: AsyncSession, principal: Principal, run_id: uuid.UUID
     cancelling = _found_cancels(entry)
     out = await _found_call(entry)
 
-    # Under the lock, as the run is now.
-    run = await _get_run(db, run_id, lock=True)
+    # Under the gate and the lock, as the run and the caller are now.
+    run = await _still_manages(db, principal, run_id, "retry this")
     segments = await _segments(db, run.id, fresh=True)
     entries = copy.deepcopy((run.knobs or {}).get("searches") or [])
     e = next((x for x in entries if x.get("id") == wid), None)
@@ -6571,8 +6592,8 @@ async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     except RuntimeUnavailable as exc:
         log.warning("run %s: retry: %s still not resolved: %s", run_id, label, exc)
 
-    # Under the lock, as the run is now.
-    run = await _get_run(db, run_id, lock=True)
+    # Under the gate and the lock, as the run and the caller are now.
+    run = await _still_manages(db, principal, run_id, "retry it")
     stuck = (run.knobs or {}).get("stuck_lookup")
     segments = await _segments(db, run.id)
     segment = next((s for s in segments if s.seq == (stuck or {}).get("seq")), None)
