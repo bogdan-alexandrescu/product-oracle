@@ -277,6 +277,76 @@ async def test_a_sync_running_while_a_channel_is_removed_keeps_nothing_of_it(
     assert await removed(a, source) == [f"C0SECRET:{ts('2025-10-04')}"]
 
 
+async def test_a_sync_running_while_only_names_change_completes(a, tenant_id, alice, monkeypatch):
+    """Names only name things (A4): a labels-only save while a sync runs does not stop
+    it. Card: protects=a rename is free and safe; fails_when=the sync ends superseded;
+    no_claim=the real Slack API (SlackWorld stands in)."""
+    world = SlackWorld()
+    edit: dict = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("conversations.history") and edit.get("armed"):
+            edit["armed"] = False
+            async with tenant_session(tenant_id) as s:
+                source = await service.get_source(s, alice.id, uuid.UUID(edit["id"]))
+                labels = {"C0PRODUCT": "#product", "C0ROADMAP": "#roadmap"}
+                await service.update_source(
+                    s, source, {"config": {"channels": BOTH, "labels": labels}}
+                )
+        return world(request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setitem(base._registry, "slack", SlackConnector(client))
+    source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
+    edit["id"] = source["id"]
+    world.channels["C0PRODUCT"].append({"ts": ts("2025-10-12"), "user": "U0ADA", "text": "new"})
+
+    edit["armed"] = True
+    running = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
+
+    assert edit["armed"] is False  # the save landed while the sync ran
+    assert running["outcome"] == "completed", running
+    assert running["source"]["config"]["labels"] == {
+        "C0PRODUCT": "#product",
+        "C0ROADMAP": "#roadmap",
+    }
+    assert f"C0PRODUCT:{ts('2025-10-12')}" in await live(a, source)
+
+
+async def test_names_saved_with_a_narrowing_still_delete_on_save_without_slack(
+    a, tenant_id, alice, slack
+):
+    """A4, AC 7: changing picks and names together is a narrowing as before. Card:
+    protects=names do not hide a change of picks; fails_when=the narrowing calls Slack or
+    deletes nothing; no_claim=the real Slack API."""
+    source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
+    await sync(a, source)
+    slack.calls.clear()
+
+    on_save = await narrow(
+        a, source, {"channels": ["C0PRODUCT"], "labels": {"C0PRODUCT": "#product"}}
+    )
+
+    assert on_save == [f"C0ROADMAP:{ts('2025-10-03')}"]
+    assert slack.calls == []
+    got = (await a.get(f"/v1/sources/{source['id']}")).json()
+    assert got["config"] == {"channels": ["C0PRODUCT"], "labels": {"C0PRODUCT": "#product"}}
+
+
+async def test_names_saved_with_a_widening_are_still_checked_with_slack(a, tenant_id, alice, slack):
+    """A4, AC 7: a new pick with names is validated with the provider, as before."""
+    source = await add(a, tenant_id, alice, "slack", {"channels": ["C0PRODUCT"]})
+    slack.calls.clear()
+
+    resp = await patch_source(
+        a, source["id"], {"config": {"channels": BOTH, "labels": {"C0ROADMAP": "#roadmap"}}}
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert slack.count("auth.test") == 1
+    assert resp.json()["config"]["labels"] == {"C0ROADMAP": "#roadmap"}
+
+
 # --- A rate limit right after narrowing (M2) ------------------------------------------
 
 
