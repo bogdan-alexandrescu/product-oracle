@@ -11316,6 +11316,14 @@ export interface components {
             suggestion_status?: ("open" | "accepted" | "dismissed" | "applied" | "superseded") | null;
             /** Suggestion Kind */
             suggestion_kind?: string | null;
+            /** Suggestion Id */
+            suggestion_id?: string | null;
+            /** Suggestion Text */
+            suggestion_text?: string | null;
+            /** Suggestion Pushback */
+            suggestion_pushback?: boolean | null;
+            /** Suggestion Rationale */
+            suggestion_rationale?: string | null;
         };
         /** InboxOut */
         InboxOut: {

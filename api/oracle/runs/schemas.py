@@ -467,6 +467,13 @@ class InboxFeedbackItem(BaseModel):
     # suggestions").
     suggestion_status: SuggestionStatus | None = None
     suggestion_kind: str | None = None
+    # D14: what the row's Accept / Decline act on, when the suggestion is open (else null):
+    # its id, its text (the approver's edit when there is one) and rationale cut to 280
+    # characters, and whether Oracle pushed back (Accept then needs a reason).
+    suggestion_id: uuid.UUID | None = None
+    suggestion_text: str | None = None
+    suggestion_pushback: bool | None = None
+    suggestion_rationale: str | None = None
 
 
 class InboxFeedbackCounts(BaseModel):
