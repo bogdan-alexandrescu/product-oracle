@@ -2088,9 +2088,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Launches and changelog (H6) check roles themselves: a task's owner edits their task.
   const launches = await routeLaunches(launchesContext(db, me), ensureLaunches(db), req, p, q);
   if (launches) return launches;
-  // The API's role checks: viewers read, commenters comment, approvers decide.
+  // The API's role checks: viewers read, commenters comment, approvers decide. A checkpoint's
+  // shared draft (D8, ./runs.ts) checks its own: commenters suggest, approvers stage.
+  const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note");
   const need: Role | null =
-    m === "GET"
+    m === "GET" || draftWrite
       ? null
       : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST")
         ? "commenter"

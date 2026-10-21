@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { MOCK_REVIEW_CHANGE_KEY } from "../lib/api/mock/server";
-import { login, seedRoadmapReview } from "./helpers";
+import { login, seedRoadmapReview, signOut } from "./helpers";
 
 /**
  * D8 Shared draft decision: the Roadmap items checkpoint's draft lives on the server. Its note
@@ -10,7 +10,8 @@ import { login, seedRoadmapReview } from "./helpers";
  * approver has not seen is refused.
  *
  * The mock keeps its data in one browser context's localStorage, so a second reviewer is a
- * second tab of that context signed in as someone else (each tab keeps its own sign-in).
+ * second tab of that context signed in as someone else (each tab keeps its own sign-in; a
+ * new tab starts as the last one signed in).
  */
 
 /** Opens the seeded roadmap review run from the runs list, as a person would. */
@@ -55,7 +56,10 @@ test("a commenter's suggestion shows on the approver's page within one poll", as
   const budget = page.getByTestId("item-reasons").filter({ hasText: "Budget caps" });
   await expect(budget.getByTestId("draft-action")).toHaveCount(0);
 
+  // A second tab opens signed in as the owner: sign out there, then in as the commenter.
   const other = await context.newPage();
+  await other.goto("/home");
+  await signOut(other);
   await login(other, "commenter@example.com");
   await openRun(other);
   const theirs = other.getByTestId("item-reasons").filter({ hasText: "Budget caps" });
