@@ -18,7 +18,18 @@ from oracle.runs.models import Checkpoint
 from oracle.tenancy import tenant_session
 from tests.fixtures import seed_auth
 from tests.review_v2_helpers import person
-from tests.test_adapter_v2 import _ceiling, _decide_raw, _knobs_of, _waiting, on
+from tests.swarmcloud_fake import EGRESS
+from tests.test_adapter_v2 import (
+    LB,
+    _ceiling,
+    _decide_raw,
+    _draft_markdown,
+    _knobs_of,
+    _waiting,
+    mcp_session,
+    on,
+    token_of,
+)
 from tests.test_adapter_v2 import settings as _v2_settings
 from tests.test_adapter_v2_round7 import _wf_cost
 from tests.test_review_v2_security_3 import member_token
@@ -418,3 +429,62 @@ async def test_a_run_delivering_a_decision_says_so(client, owner):
     await tick(client, auth)
     got = await get(client, auth, run["id"])
     assert got["delivering"] is None, got
+
+
+# --- W5: a decision being delivered holds the run token ----------------------------------
+
+
+async def _push(token: str) -> str:
+    """What the run's agents get back for a draft push and a version import."""
+    async with mcp_session(token, f"{EGRESS[0]}, {LB}") as c:
+        out = []
+        for name, args in (
+            ("push_draft", {"doc": "w5", "markdown": _draft_markdown(), "base_version": 0}),
+            ("import_version", {"doc": "w5-2", "body": _draft_markdown()}),
+        ):
+            res = await c.call_tool(name, args)
+            out.append(("ERROR " if res.is_error else "OK ") + res.content[0].text)
+    return "\n".join(out)
+
+
+async def test_a_decision_being_delivered_keeps_the_run_token_read_only(client, owner):
+    """Owner decision 2026-10-20: while a recorded decision is owed to the workflow
+    ("Delivering decision"), the run token stays read-only; it may write once the tick
+    delivers the decision."""
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    token = token_of(swarm)
+    swarm.steps_per_poll = 0  # the revision (and the wait after it) waits for the test
+    swarm.fail_next_answer = httpx.Response(503, json=_UNAVAILABLE)
+    resp = await _decide_raw(client, auth, run, "changes_requested", "Add a metric")
+    assert resp.status_code == 503 and "recorded" in resp.text, resp.text
+    run = await get(client, auth, run["id"])
+    assert run["delivering"] is not None and run["token_read_only"] is True, run
+    held = await _push(token)
+    assert held.count("waiting for approval") == 2, held
+    await tick(client, auth)
+    assert len(swarm.answers) == 1
+    run = await get(client, auth, run["id"])
+    assert run["delivering"] is None and run["token_read_only"] is False, run
+    assert "waiting for approval" not in await _push(token)
+
+
+async def test_a_voided_owed_decision_keeps_the_run_token_read_only(client, owner):
+    """The owed decision is voided (its approver disabled): the checkpoint waits for a
+    decision again, and the token stays read-only throughout."""
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    token = token_of(swarm)
+    approver = await person(tenant_id, "approver", "approver")
+    swarm.fail_next_answer = httpx.Response(503, json=_UNAVAILABLE)
+    resp = await _decide_raw(client, approver.headers, run, "approved")
+    assert resp.status_code == 503 and "recorded" in resp.text, resp.text
+    assert "waiting for approval" in await _push(token)
+    await _lose_standing(client, auth, "disabled", approver.user_id, None)
+    await tick(client, auth)
+    assert swarm.answers == []
+    run = await get(client, auth, run["id"])
+    assert pending(run)["decided_by"] is None and run["token_read_only"] is True, run
+    assert (await _push(token)).count("waiting for approval") == 2
