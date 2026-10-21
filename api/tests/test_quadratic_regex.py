@@ -61,13 +61,11 @@ async def test_honest_import_after_four_big_posts(client, shape):
     _, auth = await seed_auth()
     big = SHAPES[shape](50)  # ~1 MB
     assert len(big.encode()) < 1024 * 1024
-    await import_draft(client, auth, PRD, doc="warm-up")
+    await import_draft(client, auth, PRD)
     start = time.perf_counter()
-    posts = [
-        asyncio.create_task(import_draft(client, auth, big, doc=f"big-{i}")) for i in range(4)
-    ]
+    posts = [asyncio.create_task(import_draft(client, auth, big)) for _ in range(4)]
     await asyncio.sleep(0)
-    honest = await import_draft(client, auth, PRD, doc="honest")
+    honest = await import_draft(client, auth, PRD)
     took = time.perf_counter() - start
     assert honest.status_code == 201, honest.text
     assert took < 10, f"the honest import took {took:.1f}s behind four big posts"
