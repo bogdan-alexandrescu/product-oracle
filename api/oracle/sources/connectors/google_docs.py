@@ -163,15 +163,21 @@ def _ids(config: dict[str, Any], key: str) -> list[str]:
     return ids
 
 
-def _options(config: dict[str, Any]) -> tuple[list[str], list[str]]:
+def _options(config: dict[str, Any], check_names: bool = True) -> tuple[list[str], list[str]]:
+    """The picked folders and docs. ``check_names`` refuses bad display names (saves); a
+    sync passes False so a config stored with them still syncs."""
     folders, docs = _ids(config, "folders"), _ids(config, "docs")
     names = config.get("names") or {}
-    if not isinstance(names, dict) or not all(isinstance(v, str) for v in names.values()):
+    if check_names and (
+        not isinstance(names, dict) or not all(isinstance(v, str) for v in names.values())
+    ):
         raise ConnectorConfigError("names must map Drive ids to file names")
     if not folders and not docs:
         raise ConnectorConfigError("allowlist at least one folder or doc")
     if len(folders) + len(docs) > MAX_PICKED:
         raise ConnectorConfigError(f"choose at most {MAX_PICKED} files and folders per source")
+    if not check_names:
+        return folders, docs
     if not set(names) <= set(folders) | set(docs):
         raise ConnectorConfigError("names may only name the picked files and folders")
     if any(len(name) > MAX_NAME for name in names.values()):
@@ -565,8 +571,14 @@ class GoogleDocsConnector:
         credential: dict[str, Any] | None,
         cursor: dict[str, Any] | None,
     ) -> AsyncIterator[SyncEvent]:
-        folders, docs = _options(config)
-        names = config.get("names") or {}
+        folders, docs = _options(config, check_names=False)
+        picked = set(folders) | set(docs)
+        raw_names = config.get("names")
+        names = {
+            k: v[:MAX_NAME]
+            for k, v in (raw_names if isinstance(raw_names, dict) else {}).items()
+            if k in picked and isinstance(v, str)
+        }
         domains = _domains(config)
         shared_drives = _shared_drives(config)
         policy = get_settings().drive_docs_owned_outside
