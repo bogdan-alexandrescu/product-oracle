@@ -428,12 +428,14 @@ async def run_parse_within[T](
     limit = PARSE_SECONDS if seconds is None else seconds
     ctx = contextvars.copy_context()
 
-    def job() -> T:
+    def bounded() -> T:
+        # Entered inside the copied context: the budget is a ContextVar, so a limit set
+        # around ctx.run would not be seen by fn.
         with parse_budget.limit(limit):
-            return ctx.run(fn, *args, **kwargs)
+            return fn(*args, **kwargs)
 
     try:
-        return await _queued(job, wall=limit * WALL_FACTOR)
+        return await _queued(functools.partial(ctx.run, bounded), wall=limit * WALL_FACTOR)
     except (TimeoutError, parse_budget.Exceeded):
         raise ParseTimeout(name, limit) from None
 
@@ -484,13 +486,25 @@ async def _queued[T](call: Callable[[], T], *, wall: float | None) -> T:
     try:
         job_future = _EXECUTOR.submit(job)
     except BaseException:
-        release(None)  # never submitted: nothing will run to free the slot
+        # Not submitted, or queued and then failed (e.g. no thread could start): either way
+        # nothing will free the slot, and a job left in the queue must not run without it.
+        abandoned.set()
+        release(None)
         raise
     job_future.add_done_callback(release)
     parse = asyncio.wrap_future(job_future, loop=loop)
     # An abandoned parse's outcome is read, never reported as unretrieved.
     parse.add_done_callback(lambda f: f.cancelled() or f.exception())
-    await asyncio.wait({started, parse}, timeout=QUEUE_SECONDS, return_when=asyncio.FIRST_COMPLETED)
+    try:
+        await asyncio.wait(
+            {started, parse}, timeout=QUEUE_SECONDS, return_when=asyncio.FIRST_COMPLETED
+        )
+    except BaseException:
+        # The caller is gone (cancelled) while its job may still be queued: the job must
+        # not run later. A job already running is unaffected and frees the slot at its end.
+        abandoned.set()
+        parse.cancel()
+        raise
     if not started.done() and not parse.done():
         abandoned.set()
         parse.cancel()  # frees the slot only if the job had not started (else at its end)

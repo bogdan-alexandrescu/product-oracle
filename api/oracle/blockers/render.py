@@ -21,7 +21,7 @@ from datetime import datetime
 
 from oracle.blockers.policy import LIMIT_KIND_LABELS
 from oracle.blockers.schemas import BlockerCitation, BlockerGate, BlockerModuleRender, BlockerSpec
-from oracle.docs.parser import CITATION_STRIP_RE
+from oracle.docs.parser import strip_citations
 
 MODULE_KEY = "constraints.solutions"
 BRIEF_SECTION_ID = "constraints-solutions"
@@ -133,7 +133,7 @@ def _inline(text: str | None) -> str:
     """User text safe for one line of a section body: no citations, anchors or breaks."""
     if not text:
         return ""
-    text = CITATION_STRIP_RE.sub("", text)
+    text = strip_citations(text)
     text = _ANCHOR.sub("", text)
     return " ".join(text.split())
 

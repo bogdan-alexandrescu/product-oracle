@@ -21,6 +21,8 @@ the tests apply. The download route also serves it with a sandboxing CSP.
 Every check is linear in the size of the file (an agent's file must not stall the API):
 sizes are checked before any pattern runs, and no pattern can backtrack over a run of
 '<', spaces or names (possessive quantifiers, scans by position instead of lazy ``.*?``).
+Each also checks the parse budget (:mod:`oracle.parse_budget`) once per element and per
+text run, so a design check under a budget stops at its cap.
 """
 
 import html
@@ -29,6 +31,8 @@ import xml.etree.ElementTree as ET
 from bisect import bisect_left
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
+
+from oracle import parse_budget
 
 SVG_NS = "http://www.w3.org/2000/svg"
 XLINK_NS = "http://www.w3.org/1999/xlink"
@@ -303,6 +307,7 @@ class _HtmlRebuilder(HTMLParser):
         return kept
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        parse_budget.check()
         tag = tag.lower()
         self.nodes += 1
         if self.skip_depth:
@@ -378,6 +383,7 @@ class _HtmlRebuilder(HTMLParser):
                 break
 
     def handle_data(self, data: str) -> None:
+        parse_budget.check()
         if self.skip_depth:
             return
         if self.in_style:
@@ -438,6 +444,8 @@ def sanitize_wireframe(
     try:
         parser.feed(candidate)
         parser.close()
+    except parse_budget.Exceeded:
+        raise
     except Exception as exc:  # HTMLParser is lenient; anything else is a broken input
         return Sanitized("", blocked=[f"unreadable HTML: {type(exc).__name__}"])
     if parser.nodes > MAX_NODES:
@@ -528,6 +536,7 @@ def sanitize_svg(candidate: str, *, title: str) -> Sanitized:
     def copy(src: ET.Element, depth: int) -> ET.Element | None:
         nonlocal count
         count += 1
+        parse_budget.check()
         ns, tag = _local(src.tag)
         if tag in SVG_BLOCKED:
             note(blocked, f"<{tag}> element")
@@ -684,12 +693,15 @@ def static_problems(content: str, kind: str) -> list[str]:
     decoded (&#114;efresh is a refresh) and with CSS escapes read (\\75rl( is url()."""
     if len(content.encode("utf-8")) > MAX_FILE_BYTES:
         return [f"is over {MAX_FILE_BYTES} bytes: not checked"]
+    parse_budget.check()
     tags, styles = _TAG.findall(content), _style_texts(content)
     # Fails closed: text that decodes to a tag (&lt;script&gt;) is read as one too.
     whole = html.unescape(content)
     pieces = tags + styles + _TAG.findall(whole) + _style_texts(whole)
+    parse_budget.check()
     decoded = [html.unescape(p) for p in pieces]
     readings = pieces + decoded + [css_unescape(p) for p in decoded if "\\" in p]
+    parse_budget.check()
     out = [f"contains {what}" for what, rx in _STATIC_CHECKS if any(rx.search(p) for p in readings)]
     if any(_ANY_URL.search(p) for p in readings):
         out.append("contains a CSS url() that is not an in-document reference")

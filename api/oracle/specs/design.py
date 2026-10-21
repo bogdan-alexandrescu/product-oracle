@@ -26,6 +26,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from oracle import parse_budget
 from oracle.specs.contract import Problem
 from oracle.specs.sanitize import MAX_FILE_BYTES, Sanitized, sanitize_svg, sanitize_wireframe
 
@@ -141,7 +142,11 @@ def check_design(
     screens: int = 3,
 ) -> DesignCheck:
     """Parse and check ``design.json`` against the PRD version's sections and the request's
-    requirements; ``screens`` is how many key screens the request asked for (2-4)."""
+    requirements; ``screens`` is how many key screens the request asked for (2-4).
+
+    Checks the parse budget (:mod:`oracle.parse_budget`) per artifact and annotation (and
+    the sanitisers per element), so under a budget it stops near its cap
+    (:class:`~oracle.parse_budget.Exceeded`)."""
     out = DesignCheck()
     if text is None:
         _err(out, "missing_file", "the run left no design.json")
@@ -184,6 +189,7 @@ def check_design(
         ("html", w) for w in bundle.wireframes
     ]
     for ext, item in items:
+        parse_budget.check()
         where = item.name
         if not NAME[ext].fullmatch(item.name):
             _err(
@@ -237,6 +243,7 @@ def check_design(
             _err(out, "unsafe_content", f"{item.name}: {b}", where)
         ids: set[str] = set()
         for a in item.annotations:
+            parse_budget.check()
             if a.id in ids:
                 _err(out, "duplicate_annotation", f"{item.name}: annotation {a.id} twice", where)
             ids.add(a.id)

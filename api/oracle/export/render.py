@@ -40,7 +40,7 @@ from oracle import safe_yaml
 from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
-from oracle.docs.parser import CITATION_STRIP_RE
+from oracle.docs.parser import strip_citations
 from oracle.docs.schemas import VersionSource
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates.models import Template, TemplateVersion, Theme
@@ -875,7 +875,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         # Guidance comments and presenter notes are never exported.
         text = layers.slide_body(s.body_md or "")
         # O1c: the body renders without citation markers (and the space before them).
-        return CITATION_STRIP_RE.sub("", text) if strip else text
+        return strip_citations(text) if strip else text
 
     rendered = [render(s, plain) for s in body]
     # Group each level-2 section with the level-3 sections under it (cards on a board).
