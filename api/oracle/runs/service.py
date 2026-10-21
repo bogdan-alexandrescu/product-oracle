@@ -4451,6 +4451,9 @@ async def _take_answer(
       checkpoint stays open with the findings for an approver's Redo or Continue."""
     round_ = int(wait.get("round") or 1)
     ours = record.answer_id == str(cp.id) and record.by_oracle
+    # Oracle's own post of a decision voided while it was delivered (its decider lost
+    # standing, :func:`_void_owed`): it landed, but it is never the decision on its own.
+    voided = ours and isinstance(wait.get("voided"), dict)
     at = record.answered_at.isoformat() if record.answered_at else _now().isoformat()
     findings = list(record.findings)
     applied = "; ".join(findings) or None
@@ -4459,11 +4462,18 @@ async def _take_answer(
     entry = _plan_entry(wf, segment.seq) or {}
     approved = record.verdict == MERGE
     revise = round_ <= len(entry.get("revises") or [])
-    member, reason = (
-        (None, None)
-        if ours
-        else await _console_member(db, cp, by, altered=record.answered_by_altered)
-    )
+    if voided:
+        ours = False
+        member, reason = (
+            None,
+            "Oracle posted it for a decision that was voided because its decider lost standing",
+        )
+    else:
+        member, reason = (
+            (None, None)
+            if ours
+            else await _console_member(db, cp, by, altered=record.answered_by_altered)
+        )
     counted = ours or reason is None
     if not counted or (not approved and not revise):
         console = _console_record(run, segment, record, at, revise)
@@ -5021,14 +5031,23 @@ async def decide_checkpoint(
                 **wait,
                 "posting": {
                     "redo": redo,
+                    # Who decided, as they authenticated: re-read under the gate before
+                    # each try (_finish_decision_now), so a decider who lost standing
+                    # meanwhile never has the decision delivered.
                     "user_id": str(principal.user_id) if principal.user_id else None,
+                    "token_id": str(principal.token_id) if principal.token_id else None,
+                    "grant_id": str(principal.grant_id) if principal.grant_id else None,
                     "at": _now().isoformat(),
                     "tries": 0,
                 },
             },
         )
         await db.commit()
-        await _complete_decision(db, run_id, cp.id, None)
+        checkpoint_id = cp.id
+        await _complete_decision(db, run_id, checkpoint_id, None)
+        voided = await _voided_while_delivered(db, checkpoint_id)
+        if voided is not None:
+            raise Forbidden(f"{voided}: the decision was voided before it reached the run")
         return
     await _continue_decided(db, run, cp, segment, segments, later, decision, note)
     if _cancel_pending(run):
@@ -5150,6 +5169,13 @@ async def _finish_decision(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: u
 async def _finish_decision_now(
     db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID
 ) -> None:
+    from oracle.review import publish
+
+    # Under the review gate, every pass (each try, and each replay after a runtime call):
+    # the decider is read again, so a decision whose decider lost standing since it was
+    # recorded is never delivered (a disable and a demotion also void it as they commit,
+    # void_owed_decisions). The gate is released with every runtime call (_replay).
+    await publish.gate_lock(db, shared=True)
     run = await _get_run(db, run_id, lock=True)
     cp = await db.scalar(
         select(Checkpoint).where(Checkpoint.id == checkpoint_id, Checkpoint.run_id == run.id)
@@ -5163,6 +5189,11 @@ async def _finish_decision_now(
         # Voided, or the run ended meanwhile (cancelled, failed): nothing is owed.
         wait.pop("posting")
         _set_wait(cp, wait)
+        await db.commit()
+        return
+    refusal = await _decider_refusal(db, posting, cp.approver_role)
+    if refusal is not None:
+        await _void_owed(db, None, run, cp, refusal, {"via": "decision.recheck"})
         await db.commit()
         return
     segments = await _segments(db, run.id)
@@ -5204,7 +5235,144 @@ async def _finish_decision_now(
 def _finished_posting(cp: Checkpoint) -> None:
     wait = dict((cp.payload or {}).get("wait") or {})
     wait.pop("posting", None)
+    wait.pop("voided", None)
     _set_wait(cp, wait)
+
+
+def _posting_id(posting: dict[str, Any], key: str) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(posting[key])) if posting.get(key) else None
+    except ValueError:
+        return None
+
+
+async def _decider_refusal(db: AsyncSession, posting: dict[str, Any], role: str) -> str | None:
+    """Why the decider of an owed decision may no longer decide a checkpoint of ``role``,
+    read now (the caller holds the gate), or None: their API token or grant still active,
+    the person behind it still an active member with the role. A decision that names no
+    decider is never delivered."""
+    from oracle.auth.service import caller_refusal
+
+    user_id = _posting_id(posting, "user_id")
+    token_id = _posting_id(posting, "token_id")
+    if user_id is None and token_id is None:
+        return "The decision names no decider"
+    decider = Principal(
+        tenant_id=current_tenant(db),
+        kind="user" if user_id is not None else "token",
+        role=role,  # type: ignore[arg-type]
+        user_id=user_id,
+        token_id=token_id,
+        grant_id=_posting_id(posting, "grant_id"),
+    )
+    return await caller_refusal(db, decider, role)  # type: ignore[arg-type]
+
+
+async def _void_owed(
+    db: AsyncSession,
+    principal: Principal | None,
+    run: Run,
+    cp: Checkpoint,
+    why: str,
+    via: dict[str, str],
+) -> None:
+    """Undo a decision recorded and not delivered yet (both locked by the caller, who
+    commits): the checkpoint waits for a decision again, nothing of the decision is
+    posted or submitted. ``voided`` stays on the wait: should the post have landed in
+    SwarmCloud while its decider lost standing, the tick never follows that answer on its
+    own (an approver confirms it in the Inbox, :func:`_take_answer`)."""
+    wait = dict((cp.payload or {}).get("wait") or {})
+    wait.pop("posting", None)
+    wait["voided"] = {"decided_by": str(cp.decided_by), "why": why, "at": _now().isoformat()}
+    _set_wait(cp, wait)
+    decided_by, kind = cp.decided_by, cp.status
+    cp.status = "pending"
+    cp.decided_by = None
+    cp.decided_at = None
+    cp.note = None
+    segments = await _segments(db, run.id)
+    target = next((s for s in segments if s.seq == (cp.payload or {}).get("segment_seq")), None)
+    if target is not None:
+        _note(
+            target,
+            f"The decision at {cp.kind} was voided before it reached the run ({why}): "
+            "the checkpoint waits for an approver's decision again.",
+        )
+    await audit.record(
+        db, principal, "checkpoint.decision_voided", "checkpoint", cp.id,
+        {"run_id": str(run.id), "decision": kind, "decided_by": str(decided_by),
+         "reason": why, **via},
+    )  # fmt: skip
+
+
+async def void_owed_decisions(
+    db: AsyncSession,
+    principal: Principal | None,
+    deciders: set[uuid.UUID],
+    why: str,
+    via: dict[str, str],
+    *,
+    role: str | None = None,
+) -> list[uuid.UUID]:
+    """Void the decisions ``deciders`` recorded that are not delivered to their run yet
+    (``wait.posting``): a disable (every one), or a demotion to ``role`` (those whose
+    checkpoint needs more than ``role``). The caller holds the gate exclusively and
+    commits; a delivery under way re-reads the checkpoint under the gate and finds nothing
+    owed (:func:`_finish_decision_now`). Returns the checkpoints voided."""
+    if not deciders:
+        return []
+    candidates = list(
+        await db.execute(
+            select(Checkpoint.id, Checkpoint.run_id)
+            .where(
+                Checkpoint.status.in_(DECIDED),
+                Checkpoint.payload["wait"].has_key("posting"),
+                Checkpoint.decided_by.in_(deciders),
+            )
+            .order_by(Checkpoint.run_id, Checkpoint.id)
+        )
+    )
+    voided: list[uuid.UUID] = []
+    for checkpoint_id, run_id in candidates:
+        fresh = {"populate_existing": True}
+        run = await db.scalar(
+            select(Run).where(Run.id == run_id).with_for_update().execution_options(**fresh)
+        )
+        cp = await db.scalar(
+            select(Checkpoint)
+            .where(Checkpoint.id == checkpoint_id)
+            .with_for_update()
+            .execution_options(**fresh)
+        )
+        if run is None or cp is None or cp.status not in DECIDED or run.status in FINAL:
+            continue  # an ended run drops what it owed (_finish_decision_now)
+        if not isinstance(((cp.payload or {}).get("wait") or {}).get("posting"), dict):
+            continue
+        if cp.decided_by not in deciders:
+            continue
+        if role is not None and has_role(role, cp.approver_role):  # type: ignore[arg-type]
+            continue  # the new role still decides this checkpoint
+        await _void_owed(db, principal, run, cp, why, via)
+        voided.append(cp.id)
+    return voided
+
+
+async def _voided_while_delivered(db: AsyncSession, checkpoint_id: uuid.UUID) -> str | None:
+    """Why the decision just recorded on ``checkpoint_id`` was voided while Oracle
+    delivered it (its decider lost standing), or None."""
+    cp = await db.scalar(
+        select(Checkpoint)
+        .where(Checkpoint.id == checkpoint_id)
+        .execution_options(populate_existing=True)
+    )
+    voided = (((cp.payload or {}).get("wait") or {}).get("voided")) if cp is not None else None
+    why = (
+        str(voided.get("why") or "its decider lost standing")
+        if cp is not None and cp.status == "pending" and isinstance(voided, dict)
+        else None
+    )
+    await db.rollback()
+    return why
 
 
 async def void_decision(

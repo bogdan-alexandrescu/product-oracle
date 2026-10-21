@@ -108,6 +108,7 @@ async def set_role(
     promotion never revives them."""
     from oracle.authz import has_role
     from oracle.review.state import lapse_approvals
+    from oracle.runs.service import void_owed_decisions
 
     await _gate(session, principal)
     user = await session.get(User, user_id, with_for_update=True)
@@ -127,6 +128,19 @@ async def set_role(
     if has_role(before, "approver") and not has_role(role, "approver"):
         await lapse_approvals(
             session, principal, reviewer_id=user.id, reason=f"approver demoted to {role}"
+        )
+    if not has_role(role, before):
+        # A checkpoint decision they recorded that is not delivered to its run yet, on a
+        # checkpoint the new role may not decide: never delivered now. Theirs in person
+        # and through their API tokens (which act with the person's role).
+        tokens = set(await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user.id)))
+        await void_owed_decisions(
+            session,
+            principal,
+            {user.id, *tokens},
+            f"its decider was demoted to {role}",
+            {"via": "member.role", "member_id": str(user.id)},
+            role=role,
         )
     # Review gates read approvers' current roles; the change event tells every lane.
     await changes.record_change(
@@ -168,7 +182,7 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     from oracle.review.publish import record_source_revocation
     from oracle.review.state import lapse_approvals
     from oracle.runs.models import Run
-    from oracle.runs.service import FINAL, stop_run
+    from oracle.runs.service import FINAL, stop_run, void_owed_decisions
     from oracle.sources.models import Source
 
     await _gate(session, principal)
@@ -240,6 +254,11 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     jobs = await _cancel_llm_jobs(session, acted_as, at)
     voided = await _void_spend_approvals(session, principal, acted_as, user.id, via)
     decisions = await _void_checkpoint_decisions(session, principal, acted_as, via)
+    # Decisions recorded and not delivered to their run yet (SwarmCloud did not take the
+    # post): never delivered now.
+    decisions += await void_owed_decisions(
+        session, principal, acted_as, "its decider was removed (disabled)", via
+    )
     lapsed = await lapse_approvals(
         session, principal, reviewer_id=user.id, reason="member was removed (disabled)"
     )

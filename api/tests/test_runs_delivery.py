@@ -137,8 +137,8 @@ async def test_an_owed_decision_of_a_decider_who_lost_standing_is_not_delivered(
     assert cp["decided_by"] is None
     assert len(swarm.submissions()) == 1
     assert not [s for s in run["segments"] if s["status"] == "pending" and s["error"]]
-    decider = str(token_id if how == "token_revoked" else approver.user_id)
-    assert [v["decided_by"] for v in await _voided(tenant_id)] == [decider]
+    # A member's API token acts as the member: the decision is theirs either way.
+    assert [v["decided_by"] for v in await _voided(tenant_id)] == [str(approver.user_id)]
     # Another approver decides it; this one is delivered.
     other = await person(tenant_id, "approver", "other")
     resp = await _decide_raw(client, other.headers, run, "approved")
