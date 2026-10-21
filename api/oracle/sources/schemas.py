@@ -27,7 +27,8 @@ class SourcePatch(BaseModel):
     config: dict[str, Any] | None = None
     # The config_version the form loaded. When given and the source has changed since
     # (another save), the save is refused with 409 source_changed and nothing changes.
-    # Omitted: last write wins.
+    # Required (422 base_version_required) when config or connection_id change; a rename
+    # or pause may omit it, and if given it is checked.
     base_version: int | None = Field(default=None, ge=1)
 
 

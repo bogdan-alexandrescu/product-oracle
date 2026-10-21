@@ -1377,7 +1377,10 @@ export interface paths {
         delete: operations["delete_source"];
         options?: never;
         head?: never;
-        /** Update Source */
+        /**
+         * Update Source
+         * @description Read the source first (get_source) and pass its `config_version` as `base_version`: it is required whenever `config` or `connection_id` changes, and a source saved since you read it is refused (409 source_changed). Without it a change of those is refused with 422 {"code": "base_version_required"}. A rename or a pause needs none, but if given it is checked.
+         */
         patch: operations["update_source"];
         trace?: never;
     };

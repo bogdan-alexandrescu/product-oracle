@@ -337,9 +337,20 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
           message: "This source changed since you opened it. Reload to see the current picks.",
         });
       }
+      // A config or connection change says which version it read (owner 2026-10-20).
+      if ((patch.config != null || "connection_id" in patch) && patch.base_version == null) {
+        return json(422, {
+          code: "base_version_required",
+          message: "Say which version of the source you read (base_version); get it from the source.",
+        });
+      }
       const invalid = patch.config ? badConfig(s.kind, patch.config) : null;
       if (invalid) return json(422, { detail: invalid });
-      s.config_version += 1;
+      const renamed = patch.name != null && patch.name.trim() !== s.name;
+      const reconfigured =
+        patch.config != null && JSON.stringify(patch.config) !== JSON.stringify(s.config);
+      // Only a save that changes something bumps the version (as the API does).
+      if (renamed || reconfigured) s.config_version += 1;
       if (patch.name) s.name = patch.name;
       if (patch.config) {
         s.config = patch.config;

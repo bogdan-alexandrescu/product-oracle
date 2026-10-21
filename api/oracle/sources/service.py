@@ -359,14 +359,18 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
     if renamed:
         source.name = name.strip()
     if reconnect or reconfigure or renamed:
-        source.config_version += 1
+        # In SQL: a rename-only save holds no lock, so the row may have moved on since it
+        # was read at request start; add one to what is stored now.
+        source.config_version = Source.config_version + 1
     await _commit_unique(db)
+    await db.refresh(source)  # config_version was an SQL expression
     return source
 
 
 def _check_base(source: Source, base_version: int | None) -> None:
     """Refuse (nothing is changed yet) a save that loaded another version than the
-    locked row has. Omitted: last write wins."""
+    locked row has. Omitted (the API requires it when config or connection change; a
+    rename or pause may leave it out): not checked."""
     if base_version is not None and base_version != source.config_version:
         raise StaleError
 

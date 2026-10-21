@@ -407,7 +407,7 @@ async def test_a_rename_with_a_stale_base_version_is_still_checked(
 
 
 async def test_a_rename_without_a_lock_adds_one_to_the_current_version(
-    tenant_id, alice, notion_conn
+    tenant_id, alice, notion_fake, notion_conn
 ):
     """The rename-only path takes no lock: it must bump the version the row has now, not
     the one read at request start (that would hand two versions the same number)."""

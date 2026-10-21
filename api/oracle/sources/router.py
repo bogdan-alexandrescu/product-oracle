@@ -183,6 +183,13 @@ async def get_source(source_id: uuid.UUID, principal: CurrentPrincipal, db: Tena
 @router.patch(
     "/sources/{source_id}",
     response_model=SourceOut,
+    description=(
+        "Read the source first (get_source) and pass its `config_version` as `base_version`: "
+        "it is required whenever `config` or `connection_id` changes, and a source saved "
+        "since you read it is refused (409 source_changed). Without it a change of those is "
+        'refused with 422 {"code": "base_version_required"}. A rename or a pause needs '
+        "none, but if given it is checked."
+    ),
     responses={
         409: {
             "description": "base_version is not the source's config_version, or the name is "
@@ -195,8 +202,21 @@ async def update_source(
     source_id: uuid.UUID, body: SourcePatch, principal: SourceWriter, db: TenantDB
 ) -> SourceOut | JSONResponse:
     source = await _owned(db, principal, source_id)
+    changes = body.model_dump(exclude_unset=True)
+    # Owner 2026-10-20: a change of config or connection says which version it read.
+    if ("connection_id" in changes or changes.get("config") is not None) and changes.get(
+        "base_version"
+    ) is None:
+        return JSONResponse(
+            {
+                "code": "base_version_required",
+                "message": "Say which version of the source you read (base_version); "
+                "get it from the source.",
+            },
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
     try:
-        source = await service.update_source(db, source, body.model_dump(exclude_unset=True))
+        source = await service.update_source(db, source, changes)
     except service.StaleError as e:
         return JSONResponse({"code": e.code, "message": str(e)}, status.HTTP_409_CONFLICT)
     except _ERRORS as e:
