@@ -27,7 +27,7 @@ import { enlargeRuns, routeRuns, seedFeatureSetRun, seedRuns, type RunsContext, 
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake, type SubjectLookup } from "./intake";
+import { routeIntake, seedBeforeDrafting, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
@@ -225,7 +225,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
- * problem (C6, saved-addresses).
+ * problem (C6, saved-addresses);
+ * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
+ * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -389,6 +391,14 @@ function seedQuestions(): Db {
       asked_to: approver.id, asked_by: db.user_id, section_key: "metrics", status: "delegated", ...at("2026-10-18T10:00:00Z"),
     },
   );
+  return db;
+}
+
+/** The default company plus a brief before drafting (C5): see MOCK_SCENARIO_KEY. */
+function seedBeforeDraftingScenario(): Db {
+  const db = seed();
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  seedBeforeDrafting(ensureV2(db), db.user_id, approver.id);
   return db;
 }
 
@@ -1195,6 +1205,8 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "next-draft" || scenario === "next-draft-costly"
             ? () => seedNextDraft(scenario === "next-draft-costly")
+          : scenario === "before-drafting"
+            ? seedBeforeDraftingScenario
           : scenario === "questions"
             ? seedQuestions
             : scenario === "private-finding"
