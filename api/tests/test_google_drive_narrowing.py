@@ -60,6 +60,8 @@ class Drive:
         self.refuse: dict[str, tuple[int, str]] = {}
         # File ids whose metadata call times out.
         self.slow: set[str] = set()
+        # File ids whose export times out (the metadata is fine).
+        self.export_slow: set[str] = set()
         self.calls: list[str] = []
         self.hold: tuple[asyncio.Event, asyncio.Event] | None = None
         # After a held export is released: answer it 429 (Drive rate limiting).
@@ -126,6 +128,9 @@ class Drive:
         if file_id not in self.files or file_id in self.gone:
             return httpx.Response(404, json={"error": {"message": "File not found"}})
         if path.endswith("/export"):
+            if file_id in self.export_slow:
+                self.calls.append(f"export-timeout:{file_id}")
+                raise httpx.ReadTimeout("timed out", request=request)
             if self.hold is not None:
                 started, release = self.hold
                 self.hold = None
@@ -435,9 +440,11 @@ async def test_a_sync_running_across_the_edit_saves_nothing_over_it(tenant_id, d
 
     assert first["outcome"] == "superseded", first
     row = await _row(tenant_id, source["id"])
-    # The edit's cleared report and cursor stand.
+    # The edit's cleared report stands; the sync's early checkpoint (its deletes, before
+    # any export) left no finished listing and nothing of what the edit removed.
     assert row.unavailable_items == []
-    assert row.cursor is None
+    assert not (row.cursor or {}).get("listing")
+    assert SENSITIVE not in (row.cursor or {}).get("files", {})
     assert await _live(tenant_id, source["id"]) == {DOC_A}
 
     result = await _sync(pat, source)
@@ -1011,3 +1018,28 @@ async def test_a_stored_source_with_bad_names_still_syncs(tenant_id, drive):
     result = await _sync(pat, source)
     assert result["outcome"] == "completed", result
     assert await _live(tenant_id, source["id"]) == {DOC_A}
+
+
+async def test_hides_commit_before_exports_so_a_failing_export_cannot_roll_them_back(
+    tenant_id, drive
+):
+    """Owner 2026-10-20: folder X is refused (404) while doc Y keeps timing out on export.
+    X's docs are hidden after the sync and stay hidden on the next one, and Y is retried
+    each sync (the listing is not marked done) and shows as the source's error."""
+    drive.folder(FOLDER, "Specs")
+    drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
+    drive.doc(DOC_A, "A")
+    pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A], "folders": [FOLDER]})
+    assert await _live(tenant_id, source["id"]) == {DOC_A, IN_FOLDER}
+
+    drive.unshare(FOLDER)
+    drive.files[DOC_A]["modifiedTime"] = LATER
+    drive.export_slow.add(DOC_A)
+    drive._change(DOC_A)
+    for _ in range(2):
+        drive.calls.clear()
+        result = await _sync(pat, source)
+        assert result["outcome"] == "error", result
+        assert await _live(tenant_id, source["id"]) == {DOC_A}
+        assert f"export-timeout:{DOC_A}" in drive.calls  # retried
+        assert (await _row(tenant_id, source["id"])).last_error
