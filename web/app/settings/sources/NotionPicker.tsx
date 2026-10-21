@@ -7,6 +7,7 @@ import { api, type Schemas, unwrap } from "@/lib/api/client";
 import { errorMessage, useAuthRedirect } from "@/lib/use-query";
 
 import { INPUT } from "../_components/fields";
+import { pickedLabels, sameLabels } from "./_browse-list";
 
 export type NotionPage = Schemas["NotionPageOut"];
 
@@ -186,16 +187,22 @@ function useNotionPages(connectionId: string, search: string) {
 /**
  * Choose pages: the pages and databases the person shared with Product Oracle in Notion,
  * as a tree by parent, to tick roots. A ticked page brings its sub-pages and databases, so
- * those show as included and cannot be ticked on their own.
+ * those show as included and cannot be ticked on their own. `labels` are the picks' saved
+ * titles; `onLabels` gets the picks' titles whenever the picks change or a loaded page
+ * titles a pick that had none.
  */
 export function NotionPicker({
   connectionId,
   value,
   onChange,
+  labels = {},
+  onLabels,
 }: {
   connectionId: string;
   value: string[];
   onChange: (roots: string[]) => void;
+  labels?: Record<string, string>;
+  onLabels?: (labels: Record<string, string>) => void;
 }) {
   const searchId = useId();
   const [search, setSearch] = useState("");
@@ -207,6 +214,18 @@ export function NotionPicker({
   const known = list.known;
 
   const picked = useMemo(() => new Set(value), [value]);
+
+  const labelsRef = useRef({ labels, onLabels });
+  useEffect(() => {
+    labelsRef.current = { labels, onLabels };
+  });
+  useEffect(() => {
+    const { labels: saved, onLabels: report } = labelsRef.current;
+    if (!report) return;
+    const next = pickedLabels(value, (id) => known.get(id)?.title, saved);
+    if (!sameLabels(next, saved)) report(next);
+    // Reports only a change, so a new array of the same picks settles at once.
+  }, [value, known]);
 
   const tree = useMemo(() => {
     const ids = new Set(list.items.map((p) => p.id));
@@ -400,10 +419,10 @@ export function NotionPicker({
         <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-3 py-2.5" aria-label="Picked pages" role="list">
           {value.map((id) => {
             const p = known.get(id);
-            const title = p?.title ?? `Page ${id.slice(0, 8)}…`;
+            const title = p?.title ?? labels[id] ?? `Page ${id.slice(0, 8)}…`;
             return (
               <span role="listitem" key={id} className="inline-flex h-[30px] max-w-full items-center gap-1 rounded-full bg-accent-soft pr-1 pl-2.5 text-[13px] font-semibold text-accent-ink">
-                <span className="min-w-0 truncate" title={p ? title : id}>
+                <span className="min-w-0 truncate" title={p || labels[id] ? title : id}>
                   {title}
                 </span>
                 <button

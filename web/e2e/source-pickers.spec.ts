@@ -51,7 +51,9 @@ test("slack picker: search, pick channels and a since date, add the source", asy
   const row = page.getByRole("listitem", { name: "Feedback chat" });
   // AC 9: the row names the channels; no id is on the page.
   await expect(row.getByTestId("source-picks")).toHaveText("#customer-feedback, #roadmap");
-  await expect(page.getByText("C0456FEEDBACK")).toHaveCount(0);
+  // (The seeded "Product chat", saved without names, still shows its ids: AC 12.)
+  await expect(row).not.toContainText("C0456FEEDBACK");
+  await expect(form).not.toContainText("C0456FEEDBACK");
   expect((await savedConfig(page, "Feedback chat"))?.labels).toEqual({
     C0456FEEDBACK: "#customer-feedback",
     G0789ROADMAP: "#roadmap",
@@ -235,9 +237,9 @@ test("named picks: the row menus and the save read in plain words (AC 11)", asyn
     const row = page.getByRole("listitem", { name });
     await row.getByRole("button", { name: `More actions for ${name}` }).click();
     await expect(row.getByRole("menuitem", { name: item })).toBeVisible();
+    await expect(row.getByRole("menuitem", { name: /allowlist/i })).toHaveCount(0);
     await page.keyboard.press("Escape");
   }
-  await expect(page.getByText(/allowlist/i)).toHaveCount(0);
 
   const chat = page.getByRole("listitem", { name: "Product chat" });
   await chat.getByRole("button", { name: "More actions for Product chat" }).click();
@@ -246,6 +248,7 @@ test("named picks: the row menus and the save read in plain words (AC 11)", asyn
   await chat.getByRole("button", { name: "More actions for Product chat" }).click();
   await expect(chat.getByRole("menuitem", { name: "Close channels" })).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(chat.getByRole("button", { name: /allowlist/i })).toHaveCount(0);
   await chat.getByRole("button", { name: "Save channels" }).click();
   await expect(chat.getByRole("status")).toHaveText("Channels saved.");
 });
