@@ -18,6 +18,10 @@ import { login, openSection, openTab } from "./helpers";
  *   fails_when=the Feedback tab shows no question or no answer; no_claim=other subjects.
  * - "Home": protects=Home's Needs you draws the same row and Answer; fails_when=Home has no
  *   Answer; no_claim=Home's other rows.
+ * - "private finding": protects=S6 on Ask someone (a private finding's question stays with
+ *   its author); fails_when=the delegate is accepted, the row settles or the approver's Inbox
+ *   gets it; no_claim=sharing the finding (the "private-finding" scenario: "questions" plus a
+ *   private finding's question asked of admin, its author).
  * - "phone": protects=answering on a 390 px screen; fails_when=the sheet lacks a path or the
  *   page scrolls sideways; no_claim=other phone layouts.
  */
@@ -176,6 +180,34 @@ test("Home: Needs you shows the same question row, answered in place", async ({ 
   await form.getByRole("button", { name: "Send answer" }).click();
   await expect(row).toContainText("Answered ✓");
   await expect(badge(page)).toHaveText("11");
+});
+
+test("private finding: Ask someone is refused until it is shared, and the question stays mine", async ({ page }) => {
+  const hidden = "Is the pilot limited to two clinics?";
+  // Read when the mock first seeds its data; the questions scenario's init script runs first.
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "private-finding"));
+  await login(page);
+  await openInbox(page);
+  const row = questionRow(page, hidden);
+  await expect(row).toContainText("Oracle asks");
+  const before = await badge(page).textContent();
+
+  await row.getByRole("button", { name: "Answer" }).click();
+  const form = page.getByTestId("answer-question");
+  await form.getByRole("button", { name: /^Ask someone/ }).click();
+  await form.getByLabel("Find a person").fill("appr");
+  await form.getByRole("option", { name: /Approver/ }).click();
+  await expect(form).toContainText("Share this finding first to ask someone else");
+  await expect(row).not.toContainText("Asked Approver ✓");
+  await expect(badge(page)).toHaveText(before!);
+
+  // Still mine after a reload; the approver is never asked it.
+  await page.reload();
+  await expect(questionRow(page, hidden)).toContainText("Oracle asks");
+  await signOut(page);
+  await login(page, "approver@example.com");
+  await openInbox(page);
+  await expect(page.getByTestId("inbox-needs")).not.toContainText(hidden);
 });
 
 test.describe("phone", () => {

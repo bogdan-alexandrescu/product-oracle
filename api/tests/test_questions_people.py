@@ -549,3 +549,188 @@ async def test_run_tokens_are_refused_on_every_new_route(client):
     assert set(calls) <= names
     async with tenant_session(ctx.tenant_id) as s:
         assert (await s.get(StakeholderQuestion, uuid.UUID(q["id"]))).status == "asked"
+
+
+# --- review fixes: who a question may reach ------------------------------------------
+
+
+async def asked_private_question(client, ctx, fake) -> StakeholderQuestion:
+    """A private finding's question (the model gap), asked of its author."""
+    await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
+    await add_author(ctx, "commenter")
+    await make_item(ctx, "author", content=EXCERPT_A, title=TITLE_A)
+    fake(_model)
+    out = await create_intake(client, ctx, who="author", ai_extraction=True, batch_size=1)
+    tick = await worker.run_pending(ctx.tenant_id)
+    assert tick.succeeded == 1, tick.errors
+    intake_id = out["intake"]["id"]
+    while True:
+        resp = await client.post(
+            f"/v1/intakes/{intake_id}/question-batches", json={"size": 10},
+            headers=ctx.as_("author"),
+        )  # fmt: skip
+        if resp.status_code == 409:
+            break
+        assert resp.status_code == 200, resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        q = await s.scalar(
+            select(StakeholderQuestion).where(
+                StakeholderQuestion.intake_id == uuid.UUID(intake_id),
+                StakeholderQuestion.prompt.contains("42%"),
+            )
+        )
+    assert q is not None and (q.status, q.asked_to) == ("asked", ctx.users["author"].id)
+    return q
+
+
+async def test_delegating_a_private_findings_question_is_refused(client, fake):
+    """protects=S6 on the Inbox's "Ask someone" (delegate); fails_when=a private
+    finding's question is delegated to someone who cannot see it; no_claim=sharing."""
+    ctx = await company()
+    q = await asked_private_question(client, ctx, fake)
+    resp = await client.post(
+        f"/v1/questions/{q.id}/answers",
+        json={"kind": "delegate", "delegated_to": uid(ctx, "approver")},
+        headers=ctx.as_("author"),
+    )
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == "Share this finding first to ask someone else"
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(StakeholderQuestion, q.id)
+        assert (row.status, row.asked_to) == ("asked", ctx.users["author"].id)
+        from oracle.v2.models import KnowledgeGap, StakeholderAnswer
+
+        assert (await s.get(KnowledgeGap, row.gap_id)).owner_id != ctx.users["approver"].id
+        assert (
+            await s.scalars(
+                select(StakeholderAnswer).where(StakeholderAnswer.question_id == q.id)
+            )
+        ).all() == []
+    assert str(q.id) in {r["question"]["id"] for r in await inbox(client, ctx, "author")}
+    assert await inbox(client, ctx, "approver") == []
+
+
+async def test_delegating_to_a_disabled_member_is_refused(client):
+    """protects=a delegated question reaches someone who can answer; fails_when=a
+    disabled member is delegated to; no_claim=restoring members."""
+    ctx = await company()
+    out = await create_intake(client, ctx, "approver", batch_size=1)
+    [q] = await questions_of(client, ctx, out["intake"]["id"], "asked")
+    resp = await client.post(
+        f"/v1/members/{uid(ctx, 'commenter')}/disable", headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    for target in (uid(ctx, "commenter"), uid(ctx, "viewer"), str(uuid.uuid4())):
+        resp = await client.post(
+            f"/v1/questions/{q['id']}/answers",
+            json={"kind": "delegate", "delegated_to": target},
+            headers=ctx.as_("approver"),
+        )
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"] == "Delegate to a person of this company who can answer"
+    [still] = await questions_of(client, ctx, out["intake"]["id"], "asked")
+    assert still["asked_to"] == uid(ctx, "approver")
+
+
+async def ask_until_asked(client, ctx, intake_id: str, question_id: str, who: str) -> dict:
+    for _ in range(20):
+        asked = {q["id"]: q for q in await questions_of(client, ctx, intake_id, "asked")}
+        if question_id in asked:
+            return asked[question_id]
+        resp = await client.post(
+            f"/v1/intakes/{intake_id}/question-batches", json={"size": 10},
+            headers=ctx.as_(who),
+        )  # fmt: skip
+        assert resp.status_code == 200, resp.text
+    raise AssertionError("never asked")
+
+
+async def owned_gap_question(client, ctx, intake_id: str, owner: str) -> str:
+    resp = await client.post(
+        "/v1/gaps",
+        json={"intake_id": intake_id, "category": "ownership", "importance": "high",
+              "statement": "Who signs off the rollout?", "owner_id": uid(ctx, owner)},
+        headers=ctx.as_("commenter"),
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    gap_id = resp.json()["id"]
+    [draft] = [
+        q for q in await questions_of(client, ctx, intake_id, "draft") if q["gap_id"] == gap_id
+    ]
+    assert draft["asked_to"] == uid(ctx, owner)
+    return draft["id"]
+
+
+async def test_batch_skips_a_gap_owner_who_can_no_longer_answer(client):
+    """protects=C2 every asked question reaches a person who can answer; fails_when=the
+    batch falls back to a disabled or demoted gap owner; no_claim=who owns the gap."""
+    ctx = await company()
+    out = await create_intake(client, ctx, "commenter", batch_size=1)
+    intake_id = out["intake"]["id"]
+    disabled = await owned_gap_question(client, ctx, intake_id, "approver")
+    resp = await client.post(
+        f"/v1/members/{uid(ctx, 'approver')}/disable", headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    q = await ask_until_asked(client, ctx, intake_id, disabled, "commenter")
+    # The intake's author is asked instead.
+    assert q["asked_to"] == uid(ctx, "commenter")
+
+
+async def test_batch_skips_a_gap_owner_demoted_to_viewer(client):
+    ctx = await company()
+    out = await create_intake(client, ctx, "commenter", batch_size=1)
+    intake_id = out["intake"]["id"]
+    demoted = await owned_gap_question(client, ctx, intake_id, "approver")
+    resp = await client.patch(
+        f"/v1/members/{uid(ctx, 'approver')}", json={"role": "viewer"},
+        headers=ctx.as_("owner"),
+    )  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    q = await ask_until_asked(client, ctx, intake_id, demoted, "commenter")
+    assert q["asked_to"] == uid(ctx, "commenter")
+
+
+async def test_batch_asks_the_approver_asking_when_the_author_cannot_answer(client):
+    """The owner and the author cannot answer: the approver who asks the batch is
+    asked (they may always ask it, so they can answer it)."""
+    ctx = await company()
+    out = await create_intake(client, ctx, "commenter", batch_size=1)
+    intake_id = out["intake"]["id"]
+    resp = await client.post(
+        "/v1/gaps",
+        json={"intake_id": intake_id, "category": "ownership", "importance": "high",
+              "statement": "Who signs off the rollout?", "owner_id": uid(ctx, "viewer")},
+        headers=ctx.as_("commenter"),
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    resp = await client.post(
+        f"/v1/members/{uid(ctx, 'commenter')}/disable", headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    drafts = await questions_of(client, ctx, intake_id, "draft")
+    resp = await client.post(
+        f"/v1/intakes/{intake_id}/question-batches", json={"size": 10},
+        headers=ctx.as_("approver"),
+    )  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    asked = {c["question"]["id"]: c["question"] for c in resp.json()["questions"]}
+    assert asked and set(asked) <= {d["id"] for d in drafts}
+    assert {q["asked_to"] for q in asked.values()} == {uid(ctx, "approver")}
+
+
+async def test_research_on_a_general_question_is_refused(client):
+    """protects=Research this is offered only on a gap's question; fails_when=the API
+    accepts research on a question with no gap; no_claim=research on gaps."""
+    ctx = await company()
+    _, doc_id = await document_id(client, ctx)
+    q = await ask(
+        client, ctx, prompt="Which tiers get caps?", asked_to=uid(ctx, "approver"),
+        subject=section_subject(doc_id),
+    )  # fmt: skip
+    resp = await client.post(
+        f"/v1/questions/{q['id']}/answers", json={"kind": "research"},
+        headers=ctx.as_("approver"),
+    )  # fmt: skip
+    assert resp.status_code == 422, resp.text
+    assert [r["question"]["status"] for r in await inbox(client, ctx, "approver")] == ["asked"]
