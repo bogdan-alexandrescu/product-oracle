@@ -425,6 +425,7 @@ function RunInspector({ run }: { run: RunOut }) {
       <InspectorSection label="Details">
         <InspectorRow value={<span className="capitalize">{run.knobs.depth}</span>}>Depth</InspectorRow>
         <InspectorRow value={formatDateTime(run.created_at)}>Created</InspectorRow>
+        <ProposalsRow run={run} />
         {run.snapshot_as_of && <InspectorRow value={formatDateTime(run.snapshot_as_of)}>Sources as of</InspectorRow>}
         <InspectorRow
           value={
@@ -447,6 +448,35 @@ function RunInspector({ run }: { run: RunOut }) {
         </InspectorRow>
       </InspectorSection>
     </Inspector>
+  );
+}
+
+/** "Baseline proposals: 2 open · Review": what the run proposed that still waits for a person. */
+function ProposalsRow({ run }: { run: RunOut }) {
+  const open = run.open_proposals ?? 0;
+  // RunOut counts open proposals only: a run that has started says "none open" once all were decided.
+  if (open === 0 && !run.started_at) return null;
+  return (
+    <div data-testid="run-proposals-row">
+      <InspectorRow
+        value={
+          <span data-testid="run-proposals">
+            {open > 0 ? (
+              <>
+                {open} open ·{" "}
+                <Link href={`/baseline?tab=proposals&run=${run.id}`} className="text-accent-ink hover:underline">
+                  Review
+                </Link>
+              </>
+            ) : (
+              "none open"
+            )}
+          </span>
+        }
+      >
+        Baseline proposals
+      </InspectorRow>
+    </div>
   );
 }
 

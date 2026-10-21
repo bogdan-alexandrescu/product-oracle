@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, type Kpi } from "@/components/ds";
@@ -14,10 +14,23 @@ import { ConflictsTab } from "./_components/ConflictsTab";
 import { EntityDrawer } from "./_components/EntityDrawer";
 import { FlaggedTab } from "./_components/FlaggedTab";
 import { GraphTab } from "./_components/GraphTab";
-import { ProposalsTab } from "./_components/ProposalsTab";
+import { ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
 
 type Tab = "graph" | "flagged" | "conflicts" | "proposals";
+const TABS: readonly Tab[] = ["graph", "flagged", "conflicts", "proposals"];
+
+/** ?tab=<tab> opens that tab; ?run=<run id or none> filters the proposals (a run page's Review links here). */
+function TabFromUrl({ onTab, onFrom }: { onTab: (tab: Tab) => void; onFrom: (from: FromFilter) => void }) {
+  const params = useSearchParams();
+  const tab = params.get("tab");
+  const run = params.get("run") ?? "";
+  useEffect(() => {
+    if (tab && (TABS as readonly string[]).includes(tab)) onTab(tab as Tab);
+  }, [tab, onTab]);
+  useEffect(() => onFrom(run), [run, onFrom]);
+  return null;
+}
 
 /** ?entity=<id> opens that item (Publish's Resolve links here). */
 function OpenFromUrl({ onOpen }: { onOpen: (id: string) => void }) {
@@ -37,11 +50,27 @@ export default function BaselinePage() {
   const graph = useQuery("baseline-graph", () => unwrap(api.GET("/v1/baseline/graph")));
   const trace = useQuery("baseline-trace", () => unwrap(api.GET("/v1/baseline/trace")));
   const conflicts = useQuery("baseline-conflicts", () => unwrap(api.GET("/v1/baseline/conflicts")));
+  const router = useRouter();
+  const [tab, setTab] = useState<Tab>("graph");
+  const [from, setFrom] = useState<FromFilter>("");
+  // Every open proposal (the tab's count and the From select's runs), and the From filter's.
   const proposals = useQuery("baseline-proposals", () =>
     unwrap(api.GET("/v1/baseline/proposals", { params: { query: { status: "open" } } })),
   );
+  const filtered = useQuery(
+    `baseline-proposals-from:${from}`,
+    () =>
+      from
+        ? unwrap(api.GET("/v1/baseline/proposals", { params: { query: { status: "open", run_id: from } } }))
+        : Promise.resolve(null),
+    { keepPrevious: true },
+  );
+  const chooseFrom = (next: FromFilter) => {
+    setFrom(next);
+    router.replace(next ? `/baseline?tab=proposals&run=${encodeURIComponent(next)}` : "/baseline?tab=proposals", { scroll: false });
+  };
+  const shown = from ? (filtered.data ?? undefined) : proposals.data;
 
-  const [tab, setTab] = useState<Tab>("graph");
   const [openId, setOpenId] = useState<string | null>(null);
   // A suggested blocker opened from its Promote button opens on the blocker form (B4).
   const [promoteId, setPromoteId] = useState<string | null>(null);
@@ -53,9 +82,10 @@ export default function BaselinePage() {
   const { reload: reloadTrace } = trace;
   const { reload: reloadConflicts } = conflicts;
   const { reload: reloadProposals } = proposals;
+  const { reload: reloadFiltered } = filtered;
   const refresh = useCallback(() => {
-    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals()]);
-  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals]);
+    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered()]);
+  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered]);
   const close = useCallback(() => {
     setOpenId(null);
     setPromoteId(null);
@@ -114,6 +144,12 @@ export default function BaselinePage() {
   const openEntity = openId ? graph.data?.entities.find((e) => e.id === openId) : undefined;
   const low = trace.data?.low;
   const tags = useMemo(() => goalTags(graph.data), [graph.data]);
+  // The From select's runs: each run with open proposals, newest first, and the one chosen.
+  const runs = useMemo(() => {
+    const seen = new Map<string, NonNullable<ProposalOut["run"]>>();
+    for (const p of [...(proposals.data ?? []), ...(filtered.data ?? [])]) if (p.run) seen.set(p.run.id, p.run);
+    return [...seen.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }, [proposals.data, filtered.data]);
 
   // The count strip: only what the graph and the trace report say.
   const s = trace.data?.summary;
@@ -142,6 +178,7 @@ export default function BaselinePage() {
     <Page>
       <Suspense fallback={null}>
         <OpenFromUrl onOpen={setOpenId} />
+        <TabFromUrl onTab={setTab} onFrom={setFrom} />
       </Suspense>
       <PageHeader
         title="Baseline"
@@ -242,11 +279,14 @@ export default function BaselinePage() {
           )}
           {tab === "proposals" && (
             <>
-              {proposals.error && <Notice tone="error">{proposals.error}</Notice>}
-              {proposals.loading && !proposals.data && <Loading />}
-              {proposals.data && (
+              {(from ? filtered : proposals).error && <Notice tone="error">{(from ? filtered : proposals).error}</Notice>}
+              {!shown && <Loading />}
+              {shown && (
                 <ProposalsTab
-                  proposals={proposals.data}
+                  proposals={shown}
+                  runs={runs}
+                  from={from}
+                  onFrom={chooseFrom}
                   graph={graph.data}
                   canWrite={canWrite}
                   busy={busy}
